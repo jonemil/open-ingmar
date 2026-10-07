@@ -16,9 +16,10 @@ Use Garmin's compiler to generate reference specimens and Garmin's simulator as 
 - The same launcher now provides `--interactive` for a persistent X11/Xwayland desktop window. Local lifecycle and launch-argument checks passed; the actual host desktop connection remains to be verified.
 - [SDK manager inspection](investigations/sdk-manager-device-endpoint.md) identified authenticated device download endpoints. The user has now supplied the `fr265` package and fonts under `scratch/garmin-data/`.
 - A [standalone browser-login device downloader](../scripts/README.md) is available, with six passing offline tests. The actual package is present; the agent has not observed the user's live sign-in flow.
-- External implementations have not yet been inspected in this repository.
-- No PRG format, opcode, or integrity-field claims have been verified here.
-- The original Garmin-generated PRG has a verified simulator baseline. No Rust implementation, PRG round trip, or modified-bytecode acceptance experiment has been completed.
+- [Initial research and Rust implementation](investigations/rust-bootstrap.md) now cover pinned Ghidra plugin and optimizer sources, observed PRG framing, and the opcode subset present in two compiled specimens.
+- The Cargo workspace contains working `ciq-prg`, `ciq-mc`, `ciq-dis`, and `ciq-asm` crates. Ten Rust tests and Clippy pass; there are no external Rust dependencies.
+- [Minimal Console](../examples/minimal-console/README.md) compiles for `fr265`; its target `hello()` function contains only `System.println("Hello!")`, within the required watch-app scaffolding.
+- Both reference PRGs have completed byte-identical full-code disassembly/reassembly and container reconstruction. The original Hello World has verified simulator behavior; newly emitted PRGs still need a host-side simulator run. No changed-bytecode acceptance experiment has been completed.
 
 ## Milestones
 
@@ -33,12 +34,12 @@ Do not begin a Monkey C parser, barrel linker, LLVM backend, or independent VM b
 
 ## Next investigation
 
-Inspect these primary implementation sources, pinning the exact revision in the investigation notes:
+The initial survey of these primary sources is pinned in [the bootstrap investigation](investigations/rust-bootstrap.md):
 
 - [Gualdimar/MonkeyC-Ghidra-Plugin](https://github.com/Gualdimar/MonkeyC-Ghidra-Plugin)
 - [markw65/monkeyc-optimizer](https://github.com/markw65/monkeyc-optimizer)
 
-Produce a local technical reconnaissance covering:
+Next, run the reassembled Minimal Console PRG in the simulator and then test a same-size `41` to `42` edit in Hello World. Extend the reconnaissance to cover:
 
 - PRG headers, sections, endianness, lengths, and version fields.
 - Opcode definitions, operand widths, and instruction boundaries.
@@ -47,4 +48,4 @@ Produce a local technical reconnaissance covering:
 - Integrity, checksum, or signature behavior after modifications.
 - A minimum evidence-based Rust API and the smallest observable reference application.
 
-Cross-check source-derived findings against tiny Garmin-generated specimens when the SDK is available. Simulator acceptance remains an experiment to perform, not an inference from another project's serializer.
+Continue cross-checking source-derived findings against tiny Garmin-generated specimens. Equal-length replacement avoids relocating offsets but does not address signature handling. Verify changed-bytecode acceptance and behavior experimentally before implementing a different function body or length-changing assembly.

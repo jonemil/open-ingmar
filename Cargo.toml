@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/ciq-prg", "crates/ciq-mc", "crates/ciq-dis", "crates/ciq-asm"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+ciq-prg = { path = "crates/ciq-prg" }
+ciq-mc = { path = "crates/ciq-mc" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

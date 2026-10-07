@@ -1,0 +1,13 @@
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application id="b67c1691c9a5422a9d3202a0c016870c"
+                    type="watch-app"
+                    name="@Strings.AppName"
+                    entry="MinimalConsoleApp"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    minApiLevel="3.0.0">
+        <iq:products><iq:product id="fr265" /></iq:products>
+        <iq:permissions />
+        <iq:languages />
+        <iq:barrels />
+    </iq:application>
+</iq:manifest>

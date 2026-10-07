@@ -121,7 +121,7 @@ def main():
             print("Session captured in scratch/simulator/: screen.png, simulator.log, monkeydo.log.", flush=True)
             if console.poll() is not None and console.returncode:
                 raise RuntimeError(f"monkeydo exited with code {console.returncode}; inspect the capture and logs.")
-            print("Inspect the capture and logs to confirm the greeting and 41; an active console alone does not confirm execution.")
+            print("Inspect the capture and logs against the chosen example's expected output; an active console alone does not confirm execution.")
         finally:
             stop_process(console)
             stop_process(simulator)

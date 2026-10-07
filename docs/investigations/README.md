@@ -1,7 +1,8 @@
 # Investigation index
 
-- [Local SDK inventory](sdk-inventory.md): SDK 9.2.0 files, launcher interface, and execution-environment readiness. No successful compilation or simulator execution yet.
-- [Hello World reference build](hello-world-build.md): successful SDK 9.2.0 build using project-local `fr265` device data, with artifact hashes recorded. Simulator execution pending.
-- [Simulator container readiness](simulator-container.md): native launch failed on missing libraries; display unavailable. Separate Ubuntu/Xvfb container recipe prepared for a host-side trial.
+- [Local SDK inventory](sdk-inventory.md): SDK 9.2.0 files, launcher interface, and initial execution-environment limitations.
+- [Hello World reference build](hello-world-build.md): successful SDK 9.2.0 build using project-local `fr265` device data, with artifact hashes recorded; baseline simulator behavior verified.
+- [Simulator container](simulator-container.md): verified Ubuntu/Xvfb baseline and prepared interactive desktop mode.
+- [Initial Rust workspace and PRG round trip](rust-bootstrap.md): pinned Ghidra/optimizer research, smaller console specimen, local framing/opcode specs, four working crates, and byte-identical round trips for both examples.
 
-The next planned record is a reconnaissance of the MonkeyC Ghidra plugin and monkeyc-optimizer, as described in [the plan](../plan.md). Follow [the research conventions](../research.md) when recording findings.
+Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).

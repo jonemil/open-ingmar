@@ -4,7 +4,17 @@ An independent Rust toolchain for Garmin Connect IQ PRG containers and VM byteco
 
 The first compatibility milestone is to read a Garmin-generated trivial PRG, change a simple instruction or constant, write the PRG, and observe the changed behavior in Garmin's official simulator.
 
-This repository currently contains planning and research documentation. No format claims have been verified here yet, and no Rust crates have been created.
+The Rust workspace now reads and writes PRG section streams and disassembles/reassembles the instruction subset observed in two reference examples. Both examples round-trip byte for byte. The original Hello World also has verified simulator behavior; running the newly emitted PRGs remains the next host-side check.
+
+Build and validate the workspace:
+
+```sh
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+Rust 1.85 or newer is required by the manifest (tested here with 1.99). There are no external Rust dependencies. See [the architecture](docs/architecture.md) for crate responsibilities and [the initial experiment](docs/investigations/rust-bootstrap.md) for assembly commands, evidence, and limits.
 
 - [Working instructions](AGENTS.md)
 - [Plan and current status](docs/plan.md)
@@ -15,7 +25,7 @@ This repository currently contains planning and research documentation. No forma
 - [SDK support scripts](scripts/README.md)
 - [Original session handoff](connect-iq-rust-toolchain-codex-handoff.md)
 
-The repository root is intended to become a Cargo workspace with members under `crates/`. Create the workspace manifest alongside the first working crate rather than adding placeholder implementations before researching the format.
+Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-dis`, and `ciq-asm`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.
 

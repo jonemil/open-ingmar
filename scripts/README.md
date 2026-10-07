@@ -1,5 +1,16 @@
 # SDK support scripts
 
+## Build an example
+
+Each example's `build.sh` delegates to the shared `scripts/build-example.sh`:
+
+```sh
+examples/hello-world/build.sh
+examples/minimal-console/build.sh
+```
+
+The helper uses the repository-local SDK, signing key, and downloaded device data by default, with `CIQ_SDK_HOME`, `CIQ_DEVELOPER_KEY`, and `CIQ_DATA_HOME` overrides. It retains debug information and disables optimization. See [example documentation](../examples/README.md) and [the initial Rust experiment](../docs/investigations/rust-bootstrap.md) for the disassembly/reassembly workflow.
+
 ## Use the simulator interactively
 
 From a terminal on your Linux desktop, where Podman and `xauth` are installed:
