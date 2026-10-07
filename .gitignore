@@ -1,0 +1,46 @@
+# Downloaded third-party research repositories (never vendored into our repo).
+/references/
+
+# Local SDK artifacts, PRG specimens, and experiment output.
+/scratch/
+/tmp/
+/connectiq/
+/connectiq-sdk-*
+/sdks.json
+
+# Download archives kept at the repository root.
+/*.zip
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.tar.xz
+
+# Local signing keys and generated example artifacts.
+*.der
+*.pem
+*.key
+*.p12
+*.pfx
+/examples/*/build/
+*.prg
+*.prg.debug.xml
+*.iq
+*.bar
+*.bar.debug.xml
+
+# Rust build output, including future workspace members.
+target/
+
+# Python script bytecode caches.
+__pycache__/
+*.py[cod]
+
+# Editor swap files and backup copies.
+*.swp
+*.swo
+*~
+
+# Local credentials and environment configuration.
+.env
+.env.*
+!.env.example
