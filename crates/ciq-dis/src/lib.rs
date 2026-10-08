@@ -31,6 +31,38 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             return Err("named DATA export changed bytes".into());
         }
     }
+    let code_labels = project_code_labels(prg, data.as_ref());
+    let label_bindings = code_labels
+        .iter()
+        .map(|(offset, alias)| (alias.clone(), *offset))
+        .collect();
+    if let Some(source) = data.as_mut() {
+        use ciq_prg::data::classes::source::Reference;
+        for fragment in &mut source.fragments {
+            let Fragment::Class(c) = fragment else {
+                continue;
+            };
+            for field in &mut c.fields {
+                if let (6, Reference::Raw(value)) = (field.kind, &field.value) {
+                    if value >> 24 == 0x10 {
+                        if let Some(alias) = code_labels.get(&(value & 0xffffff)) {
+                            field.value = Reference::Code(alias.clone());
+                        }
+                    }
+                }
+            }
+        }
+        let bindings = structured
+            .as_ref()
+            .map(Source::bindings)
+            .transpose()?
+            .unwrap_or_default();
+        if source.encode_with_references(&bindings, &label_bindings)?.0
+            != prg.unique_section(DATA)?.payload()
+        {
+            return Err("code-labeled DATA export changed bytes".into());
+        }
+    }
     let strings = data.as_ref().map(string_declarations).unwrap_or_default();
     let mut entries = Vec::new();
     let mut files = Vec::new();
@@ -45,7 +77,16 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 structured.is_some(),
                 &strings,
             ) {
-                Ok(text) => (Encoding::Assembly, text.into_bytes()),
+                Ok(text) => {
+                    let mut labeled = String::new();
+                    for (instruction, line) in decode(section.payload())?.iter().zip(text.lines()) {
+                        if let Some(alias) = code_labels.get(&(instruction.offset as u32)) {
+                            writeln!(labeled, "{alias}:").unwrap();
+                        }
+                        writeln!(labeled, "{line}").unwrap();
+                    }
+                    (Encoding::Assembly, labeled.into_bytes())
+                }
                 Err(error) => {
                     eprintln!("Section {index} CODE exported as raw binary: {error}");
                     (Encoding::Raw, section.payload().to_vec())
@@ -115,6 +156,58 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     fs::write(&temporary_manifest, annotated)?;
     fs::rename(temporary_manifest, directory.join(FILE_NAME))?;
     Ok(manifest)
+}
+
+fn project_code_labels(
+    prg: &Prg,
+    data: Option<&DataSource>,
+) -> std::collections::BTreeMap<u32, String> {
+    use ciq_prg::data::classes::source::{Key, Reference};
+    use std::collections::{BTreeMap, BTreeSet};
+    let Some(data) = data else {
+        return BTreeMap::new();
+    };
+    let Some(boundaries) = prg
+        .unique_section(CODE)
+        .ok()
+        .and_then(|s| decode(s.payload()).ok())
+    else {
+        return BTreeMap::new();
+    };
+    let starts: BTreeSet<_> = boundaries.iter().map(|i| i.offset as u32).collect();
+    let mut candidates: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    for fragment in &data.fragments {
+        let Fragment::Class(c) = fragment else {
+            continue;
+        };
+        for field in &c.fields {
+            if let (6, Reference::Raw(value)) = (field.kind, &field.value) {
+                if value >> 24 != 0x10 || !starts.contains(&(value & 0xffffff)) {
+                    continue;
+                }
+                let alias = match &field.key {
+                    Key::Symbol { alias, .. } => Some(alias.clone()),
+                    _ => None,
+                };
+                candidates.entry(value & 0xffffff).or_insert(alias);
+            }
+        }
+    }
+    let mut counts = BTreeMap::new();
+    for name in candidates.values().flatten() {
+        *counts.entry(name.clone()).or_insert(0usize) += 1;
+    }
+    candidates
+        .into_iter()
+        .map(|(offset, name)| {
+            let alias = name
+                .filter(|name| {
+                    counts[name] == 1 && !name.starts_with("code_") && !name.starts_with("sym_")
+                })
+                .unwrap_or_else(|| format!("code_{offset:08x}"));
+            (offset, alias)
+        })
+        .collect()
 }
 
 fn string_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, StringDeclaration> {

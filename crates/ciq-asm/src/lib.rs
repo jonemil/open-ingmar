@@ -63,11 +63,31 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         inputs.push(bytes);
     }
     let bindings = symbol_source.bindings()?;
+    let mut labels = std::collections::BTreeMap::new();
+    for (entry, bytes) in manifest.entries.iter().zip(&inputs) {
+        if entry.encoding == Encoding::Assembly {
+            for (alias, offset) in code_labels(std::str::from_utf8(bytes)?)? {
+                if labels.insert(alias.clone(), offset).is_some() {
+                    return Err(format!("duplicate project code label {alias}").into());
+                }
+            }
+        }
+    }
+    if !labels.is_empty()
+        && manifest
+            .entries
+            .iter()
+            .filter(|e| e.kind == ciq_prg::CODE)
+            .count()
+            != 1
+    {
+        return Err("code labels require a unique CODE section".into());
+    }
     let data_source = data_text
-        .map(|text| DataSource::parse_with_symbols(&text, &bindings))
+        .map(|text| DataSource::parse_with_references(&text, &bindings, &labels))
         .transpose()?
         .unwrap_or_default();
-    let (data_payload, strings) = data_source.encode_with_symbols(&bindings)?;
+    let (data_payload, strings) = data_source.encode_with_references(&bindings, &labels)?;
     let mut sections = Vec::new();
     for (entry, bytes) in manifest.entries.iter().zip(inputs) {
         let payload = match entry.encoding {
@@ -98,7 +118,25 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         }
         sections.push(Section::new(entry.kind, payload)?);
     }
-    Ok(Prg::from_sections(sections))
+    let prg = Prg::from_sections(sections);
+    if !labels.is_empty() {
+        let length = prg.unique_section(ciq_prg::CODE)?.payload().len();
+        for fragment in &data_source.fragments {
+            if let ciq_prg::data::Fragment::Class(c) = fragment {
+                for field in &c.fields {
+                    if let ciq_prg::data::classes::source::Reference::Code(alias) = &field.value {
+                        if labels[alias] as usize >= length {
+                            return Err(format!(
+                                "method code label {alias} points past the final instruction"
+                            )
+                            .into());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(prg)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +152,43 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// Instruction-aligned CODE labels; labels must occupy their own source line.
+pub fn code_labels(text: &str) -> Result<std::collections::BTreeMap<String, u32>, Error> {
+    let mut labels = std::collections::BTreeMap::new();
+    let mut offset = 0u32;
+    for (index, line) in text.lines().enumerate() {
+        let fail = |message: String| Error {
+            line: index + 1,
+            message,
+        };
+        let fields = tokens(line).map_err(|e| fail(e.to_string()))?;
+        if fields.is_empty() || matches!(fields[0].as_str(), ".symbol" | ".string") {
+            continue;
+        }
+        if let Some(alias) = fields[0].strip_suffix(':') {
+            if fields.len() != 1 || !ciq_prg::symbols::source::valid_alias(alias) {
+                return Err(fail("expected label: on its own line".into()));
+            }
+            if labels.insert(alias.into(), offset).is_some() {
+                return Err(fail(format!("duplicate code label {alias}")));
+            }
+            continue;
+        }
+        let opcode = Opcode::ALL
+            .iter()
+            .find(|op| op.mnemonic() == fields[0])
+            .ok_or_else(|| fail(format!("unsupported mnemonic {:?}", fields[0])))?;
+        if fields.len() - 1 != opcode.operand_widths().len() {
+            return Err(fail("incorrect instruction operand count".into()));
+        }
+        offset = offset
+            .checked_add(1 + opcode.operand_widths().iter().sum::<usize>() as u32)
+            .filter(|n| *n <= 0x1000000)
+            .ok_or_else(|| fail("CODE exceeds 24-bit address space".into()))?;
+    }
+    Ok(labels)
+}
 
 pub fn assemble(text: &str) -> Result<Vec<u8>, Error> {
     assemble_with_bindings(text, &std::collections::BTreeMap::new())
@@ -131,6 +206,7 @@ pub fn assemble_with_references(
     external: &std::collections::BTreeMap<String, u32>,
     external_strings: &std::collections::BTreeMap<String, u32>,
 ) -> Result<Vec<u8>, Error> {
+    code_labels(text)?;
     let fail = |line, message: String| Error { line, message };
     let mut lines = Vec::new();
     let mut declarations = Source::default();
@@ -157,6 +233,8 @@ pub fn assemble_with_references(
                     format!("duplicate string alias {}", declaration.alias),
                 ));
             }
+        } else if fields.len() == 1 && fields[0].ends_with(':') {
+            // Validated and accounted for by code_labels; labels emit no bytes.
         } else if !fields.is_empty() {
             lines.push((index + 1, fields));
         }

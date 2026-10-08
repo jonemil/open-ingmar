@@ -128,6 +128,14 @@ impl Source {
     }
 
     pub fn parse_with_symbols(text: &str, symbols: &BTreeMap<String, u32>) -> Result<Self, Error> {
+        Self::parse_with_references(text, symbols, &BTreeMap::new())
+    }
+
+    pub fn parse_with_references(
+        text: &str,
+        symbols: &Bindings,
+        code: &Bindings,
+    ) -> Result<Self, Error> {
         let mut source = Self::default();
         let mut class: Option<classes::source::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
@@ -184,7 +192,7 @@ impl Source {
         if class.is_some() {
             return Err(Error("unterminated .class declaration".into()));
         }
-        source.encode_with_symbols(symbols)?;
+        source.encode_with_references(symbols, code)?;
         Ok(source)
     }
 
@@ -366,12 +374,22 @@ impl Source {
         &self,
         symbols: &BTreeMap<String, u32>,
     ) -> Result<(Vec<u8>, BTreeMap<String, u32>), Error> {
+        self.encode_with_references(symbols, &BTreeMap::new())
+    }
+
+    pub fn encode_with_references(
+        &self,
+        symbols: &Bindings,
+        code: &Bindings,
+    ) -> Result<(Vec<u8>, Bindings), Error> {
         let (strings, classes) = self.layout()?;
         let mut payload = Vec::new();
         for fragment in &self.fragments {
             match fragment {
                 Fragment::Bytes { bytes, .. } => payload.extend(bytes),
-                Fragment::Class(c) => payload.extend(c.encode_with(symbols, &classes, &strings)?),
+                Fragment::Class(c) => {
+                    payload.extend(c.encode_with_code(symbols, &classes, &strings, code)?)
+                }
                 Fragment::String(s) => {
                     payload.push(1);
                     payload.extend((s.value.len() as u16).to_be_bytes());

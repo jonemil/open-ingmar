@@ -14,9 +14,16 @@ pub enum Reference {
     Symbol(String),
     Class(String),
     String(String),
+    Code(String),
 }
 impl Reference {
     fn parse(text: &str) -> Result<Self, Error> {
+        if let Some(alias) = text.strip_prefix("code:") {
+            if !valid_alias(alias) {
+                return Err(Error("invalid code label".into()));
+            }
+            return Ok(Self::Code(alias.into()));
+        }
         for (prefix, kind) in [('@', 0), ('%', 1), ('&', 2)] {
             if let Some(alias) = text.strip_prefix(prefix) {
                 if !valid_alias(alias) {
@@ -37,6 +44,7 @@ impl Reference {
             Self::Symbol(a) => format!("@{a}"),
             Self::Class(a) => format!("%{a}"),
             Self::String(a) => format!("&{a}"),
+            Self::Code(a) => format!("code:{a}"),
         }
     }
     fn resolve(
@@ -44,12 +52,22 @@ impl Reference {
         symbols: &Bindings,
         classes: &Bindings,
         strings: &Bindings,
+        code: &Bindings,
     ) -> Result<u32, Error> {
         let (map, alias, role) = match self {
             Self::Raw(n) => return Ok(*n),
             Self::Symbol(a) => (symbols, a, "symbol"),
             Self::Class(a) => (classes, a, "class"),
             Self::String(a) => (strings, a, "string"),
+            Self::Code(a) => {
+                let offset = *code
+                    .get(a)
+                    .ok_or_else(|| Error(format!("undefined code label {a}")))?;
+                if offset >= 0x1000000 {
+                    return Err(Error("code label exceeds 24-bit address space".into()));
+                }
+                return Ok(0x10000000 | offset);
+            }
         };
         map.get(alias)
             .copied()
@@ -222,6 +240,7 @@ impl Declaration {
                 Reference::Raw(_) => {}
                 Reference::Class(_) if f.kind == 7 => {}
                 Reference::String(_) if f.kind == 3 => {}
+                Reference::Code(_) if f.kind == 6 => {}
                 _ => {
                     return Err(Error(
                         "typed field value does not match class/string field type".into(),
@@ -253,6 +272,16 @@ impl Declaration {
         classes: &Bindings,
         strings: &Bindings,
     ) -> Result<Vec<u8>, Error> {
+        self.encode_with_code(symbols, classes, strings, &Bindings::new())
+    }
+
+    pub fn encode_with_code(
+        &self,
+        symbols: &Bindings,
+        classes: &Bindings,
+        strings: &Bindings,
+        code: &Bindings,
+    ) -> Result<Vec<u8>, Error> {
         self.encoded_length()?;
         let mut bytes = vec![0xc0 + self.version, 0xa5, 0x5d, 0xef];
         if self.version == 2 {
@@ -264,7 +293,11 @@ impl Declaration {
             );
         }
         for reference in self.references.iter().flatten() {
-            bytes.extend(reference.resolve(symbols, classes, strings)?.to_be_bytes());
+            bytes.extend(
+                reference
+                    .resolve(symbols, classes, strings, code)?
+                    .to_be_bytes(),
+            );
         }
         bytes.extend(self.app_flags.to_be_bytes());
         if self.version == 1 {
@@ -289,7 +322,11 @@ impl Declaration {
             if self.version == 2 {
                 bytes.push(f.kind);
             }
-            bytes.extend(f.value.resolve(symbols, classes, strings)?.to_be_bytes());
+            bytes.extend(
+                f.value
+                    .resolve(symbols, classes, strings, code)?
+                    .to_be_bytes(),
+            );
         }
         Ok(bytes)
     }
