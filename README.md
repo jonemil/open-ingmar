@@ -13,7 +13,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings and class/module declarations with opaque fallback spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code and class fields share named symbols; DATA uses class aliases and typed class/string references. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
+The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings and class/module declarations with opaque fallback spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code and class fields share named symbols; DATA uses class aliases, typed class/string references, and shared CODE labels for methods. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
 
 Reassemble with your developer key, or sign an existing PRG separately (outputs must be new files):
 
@@ -59,6 +59,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). Containe
 - [Developer signing](docs/specs/developer-signatures.md)
 - [Instruction reference](docs/specs/instructions.md)
 - [Symbol assembly and named operands](docs/specs/symbol-assembly.md)
+- [Shared CODE labels](docs/specs/code-labels.md)
 - [DATA class/module inspection](docs/specs/data-classes.md)
 - [DATA string assembly](docs/specs/data-strings.md)
 - [Resource string inspection](docs/specs/resources.md)

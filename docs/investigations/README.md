@@ -23,4 +23,6 @@
 
 - [Named class declarations and typed DATA references](named-classes.md): shared symbol aliases, class/string references, optional placement, and byte-identical exports.
 
+- [Shared CODE labels and controlled size comparisons](code-labels-and-relocation.md): verified method/line relocation observations and a prepared appended 24-byte replacement awaiting host execution.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; structured class/method declarations and relocation research are next, as described in [the plan](../plan.md).

@@ -57,7 +57,7 @@ For sections or embedded records with unknown references, retain raw bytes and t
 
 The remaining work can proceed in bounded steps:
 
-1. DATA strings and class record boundaries are implemented; class/module field inspection is now implemented; numeric class declarations now serialize losslessly; named class aliases and typed class/string/symbol references are implemented; code labels, remaining reference spaces, and relocation still require investigation.
+1. DATA strings and class record boundaries are implemented; class/module field inspection is now implemented; numeric class declarations now serialize losslessly; named class aliases and typed class/string/symbol references are implemented; shared code labels now resolve method targets; remaining reference spaces and general relocation still require investigation.
 2. Done: declarations and typed symbol references resolve existing IDs while retaining the surrounding known layout.
 3. Done: symbol serialization supports deterministic automatic or explicitly constrained record layout and table order.
 4. DATA strings now serialize with pinned opaque spans. Class serialization preserves numeric keys/types/values and resolves named class, string, and field-symbol references with optional placement. Extend typed class/resource references and relocation only where we can update references completely.

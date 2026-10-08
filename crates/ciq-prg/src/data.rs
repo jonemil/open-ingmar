@@ -683,3 +683,32 @@ mod named_class_tests {
         assert!(matches!(c.fields[0].value, Reference::Class(_)));
     }
 }
+
+#[cfg(test)]
+mod code_reference_tests {
+    use super::*;
+    #[test]
+    fn method_code_references_are_typed_and_24_bit() {
+        let text = ".class app version=0x02 extends=none statics=none parent=none module=none app_flags=0x0\n.field key=0x8146 type=0x06 value=code:probe\n.endclass\n";
+        let labels = BTreeMap::from([("probe".into(), 0x30)]);
+        let source = Source::parse_with_references(text, &BTreeMap::new(), &labels).unwrap();
+        let (bytes, _) = source
+            .encode_with_references(&BTreeMap::new(), &labels)
+            .unwrap();
+        let classes::Record::Class(c) = &classes::records(&bytes).unwrap()[0] else {
+            panic!()
+        };
+        assert_eq!(c.fields[0].value, 0x10000030);
+        assert!(Source::parse(text).is_err());
+        assert!(
+            Source::parse_with_references(
+                &text.replace("type=0x06", "type=0x07"),
+                &BTreeMap::new(),
+                &labels
+            )
+            .is_err()
+        );
+        let oversized = BTreeMap::from([("probe".into(), 0x1000000)]);
+        assert!(Source::parse_with_references(text, &BTreeMap::new(), &oversized).is_err());
+    }
+}

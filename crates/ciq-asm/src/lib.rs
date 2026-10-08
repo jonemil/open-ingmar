@@ -416,3 +416,33 @@ mod symbolic_tests {
         assert!(assemble(".symbol s \"a\" id=0x1\n.symbol s \"b\" id=0x2").is_err());
     }
 }
+
+#[cfg(test)]
+mod label_tests {
+    use super::*;
+    #[test]
+    fn labels_are_zero_size_and_track_instruction_boundaries() {
+        let text = "first:\nargc 0x01\nprobe:\nipush1 0x2a\nreturn\nend:\n";
+        assert_eq!(
+            code_labels(text).unwrap(),
+            std::collections::BTreeMap::from([
+                ("first".into(), 0),
+                ("probe".into(), 2),
+                ("end".into(), 5)
+            ])
+        );
+        assert_eq!(
+            assemble(text).unwrap(),
+            assemble("argc 0x01\nipush1 0x2a\nreturn").unwrap()
+        );
+        for text in [
+            "a:\na:\nreturn",
+            "1bad:\nreturn",
+            "a: return",
+            "a:\ninvalid",
+            "a:\nargc",
+        ] {
+            assert!(assemble(text).is_err(), "{text}");
+        }
+    }
+}

@@ -416,3 +416,38 @@ fn class_sidecar_is_inspection_only_and_never_changes_project_import() {
     fs::write(sidecar, "edited inspection text, not assembly").unwrap();
     assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
 }
+
+#[test]
+fn shared_method_labels_roundtrip_and_reject_missing_or_end_targets() {
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("labels");
+    let data = ciq_prg::data::Source::parse(".class app version=0x02 extends=none statics=none parent=none module=none app_flags=0x0\n.field key=0x8146 type=0x06 value=0x10000000\n.endclass\n").unwrap().encode().unwrap().0;
+    let original = Prg::from_sections(vec![
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x35, 1, 0x38, 42, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    let data_path = directory.join(&manifest.entries[0].file);
+    let code_path = directory.join(&manifest.entries[1].file);
+    let text = fs::read_to_string(&data_path).unwrap();
+    assert!(text.contains("value=code:code_00000000"));
+    assert!(
+        fs::read_to_string(&code_path)
+            .unwrap()
+            .starts_with("code_00000000:\n")
+    );
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    fs::write(
+        &data_path,
+        text.replace("code:code_00000000", "code:missing"),
+    )
+    .unwrap();
+    assert!(ciq_asm::assemble_project(&directory).is_err());
+    fs::write(&data_path, text.replace("code:code_00000000", "code:end")).unwrap();
+    fs::write(
+        &code_path,
+        "code_00000000:\nargc 0x01\nipush1 0x2a\nreturn\nend:\n",
+    )
+    .unwrap();
+    assert!(ciq_asm::assemble_project(&directory).is_err());
+}
