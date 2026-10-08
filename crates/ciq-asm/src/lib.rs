@@ -45,7 +45,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     {
         return Err("structured DATA requires a single DATA section".into());
     }
-    let mut data_source = DataSource::default();
+    let mut data_text = None;
     let mut inputs = Vec::new();
     let mut symbol_source = Source::default();
     for entry in &manifest.entries {
@@ -58,12 +58,16 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
             symbol_source = Source::parse(std::str::from_utf8(&bytes)?)?;
         }
         if entry.encoding == Encoding::Data {
-            data_source = DataSource::parse(std::str::from_utf8(&bytes)?)?;
+            data_text = Some(std::str::from_utf8(&bytes)?.to_owned());
         }
         inputs.push(bytes);
     }
     let bindings = symbol_source.bindings()?;
-    let (data_payload, strings) = data_source.encode()?;
+    let data_source = data_text
+        .map(|text| DataSource::parse_with_symbols(&text, &bindings))
+        .transpose()?
+        .unwrap_or_default();
+    let (data_payload, strings) = data_source.encode_with_symbols(&bindings)?;
     let mut sections = Vec::new();
     for (entry, bytes) in manifest.entries.iter().zip(inputs) {
         let payload = match entry.encoding {

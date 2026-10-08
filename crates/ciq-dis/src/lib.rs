@@ -19,7 +19,18 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
         let bytes = source.encode().ok()?;
         (bytes == prg.unique_section(SYMBOLS).ok()?.payload()).then_some(source)
     });
-    let data = referenced_data(prg);
+    let mut data = referenced_data(prg);
+    if let Some(source) = data.as_mut() {
+        source.name_classes(symbols.as_ref(), structured.is_some())?;
+        let bindings = structured
+            .as_ref()
+            .map(Source::bindings)
+            .transpose()?
+            .unwrap_or_default();
+        if source.encode_with_symbols(&bindings)?.0 != prg.unique_section(DATA)?.payload() {
+            return Err("named DATA export changed bytes".into());
+        }
+    }
     let strings = data.as_ref().map(string_declarations).unwrap_or_default();
     let mut entries = Vec::new();
     let mut files = Vec::new();
@@ -165,9 +176,10 @@ fn referenced_data(prg: &Prg) -> Option<DataSource> {
 }
 
 pub fn data_source(prg: &Prg) -> Result<String, Box<dyn StdError>> {
-    Ok(referenced_data(prg)
-        .ok_or("no supported, unambiguous referenced DATA strings")?
-        .to_text())
+    let mut source = referenced_data(prg).ok_or("no supported, unambiguous DATA source")?;
+    // Standalone DATA retains numeric symbol IDs; project source shares SYMBOLS bindings.
+    source.name_classes(optional_symbols(prg).as_ref(), false)?;
+    Ok(source.to_text())
 }
 
 /// Inspect class/module records; the listing never becomes assembly input.
@@ -200,8 +212,9 @@ pub fn classes(prg: &Prg) -> Result<String, Box<dyn StdError>> {
                 .map(|instruction| instruction.offset)
                 .collect::<BTreeSet<_>>()
         });
-    let mut text =
-        String::from("# Inspection only: DATA class/module records retain raw assembly spans.\n");
+    let mut text = String::from(
+        "# Inspection only: edit the manifest-selected DATA assembly to change records.\n",
+    );
     for record in &records {
         let Record::Class(c) = record else { continue };
         writeln!(

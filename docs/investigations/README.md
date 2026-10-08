@@ -21,4 +21,6 @@
 
 - [Lossless class assembly and relocation inventory](class-assembly.md): authoritative class/field declarations, byte-identical full exports, and evidence boundaries for code references.
 
+- [Named class declarations and typed DATA references](named-classes.md): shared symbol aliases, class/string references, optional placement, and byte-identical exports.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; structured class/method declarations and relocation research are next, as described in [the plan](../plan.md).

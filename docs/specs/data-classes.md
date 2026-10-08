@@ -48,10 +48,30 @@ Implemented on 2026-10-08; [serialization and relocation investigation](../inves
 .endclass
 ```
 
-This is an illustrative method declaration; the real record may have additional fields. Header attributes must appear in the shown order. Integers use hexadecimal `0x` prefixes. `none` means an absent header reference and is distinct from present zero. Version is 1 or 2; v1 requires all four references, whereas v2 derives its presence byte from the present references. App flags fit u16. `at` is a required DATA-relative 24-bit placement constraint and must equal the next serialized offset.
+This is an illustrative method declaration; the real record may have additional fields. Header attributes must appear in the shown order. Integers use hexadecimal `0x` prefixes. `none` means an absent header reference and is distinct from present zero. Version is 1 or 2; v1 requires all four references, whereas v2 derives its presence byte from the present references. App flags fit u16. `at` is an optional DATA-relative 24-bit placement constraint and, when present, must equal the next serialized offset. Without it, classes append in source order.
 
 Each `.field` has a full u32 `key`, u8 `type`, and u32 `value`, in that order. Field order, repeated keys, shared targets, unknown types, flag bits, and raw references are preserved. V1 requires `type` to equal the key's low nibble; v2 stores it separately. Field counts are derived from declarations and must fit u8 (v1) or u16 (v2). `.endclass` closes the block. Nested classes, other directives inside a class, missing terminators, and extra attributes are errors.
 
-The source model serializes independently of the borrowed inspection model. Parsed record offsets are inspection metadata; field offsets are recomputed from the serialized layout. Header values and field values remain numeric: symbolic field names, class aliases, and code labels are future work. No field is automatically rewritten based on a matching numeric value.
+The source model serializes independently of the borrowed inspection model. Parsed record offsets are inspection metadata; field offsets are recomputed from the serialized layout. The named forms below resolve typed class/string/symbol references. Numeric fallbacks remain supported; code labels are future work. Numeric values are not automatically relocated.
 
 Complete DATA walks export classes and strings only after checking that re-encoding reproduces the original payload. Unsupported walks retain the previous referenced-string/opaque-span fallback or raw DATA. Standalone `ciq-asm data` accepts this grammar; complete project import still enforces section lengths. Editing a method target or field is a program modification and must be re-signed and runtime-validated. Serialization does not establish that a chosen target has the right calling convention, and does not enable relocation.
+
+## Named declarations and references
+
+Implemented on 2026-10-08; [named class investigation](../investigations/named-classes.md). An optional alias follows `.class`, before optional `at`. Aliases obey symbol/string identifier rules but use a separate class namespace.
+
+```text
+.class globals at=0x0000047b version=0x02 extends=none statics=none parent=none module=@globals app_flags=0x007f
+.field symbol=@HelloWorldApp bits=0x50 type=0x07 value=%HelloWorldApp
+.field symbol=@probe bits=0x10 type=0x06 value=0x10000030 # CODE+0x30
+# Remaining fields omitted in this excerpt.
+.endclass
+```
+
+`symbol=@alias bits=0xNN` replaces `key=0x...`: the resolved ID must fit 24 bits; the low-byte `bits` is preserved independently. Both key syntaxes work for v1 and v2. Header `parent` and `module` accept `@symbol` or raw integers; other header roles remain raw. Field `value=%class` is accepted only for type 7; `value=&string` only for type 3. Raw values remain valid for all types. Undefined/mismatched references are errors.
+
+Class and string addresses are computed in a layout pass before serialization, so forward references work. Optional placement constraints are checked; gaps/overlaps are not silently introduced. This updates explicitly named references within the authored DATA source, not unknown numeric pointers or cross-section metadata. Complete project lengths remain enforced.
+
+Project exports reuse aliases from authoritative SYMBOLS source, which import loads before DATA resolution. Names for class records derive from known module headers or incoming class fields; collisions use `class_<offset>` fallbacks. Exports retain pinned offsets, ordered fields, flag bits, and numeric values for unknown types/address spaces. Field comments show DATA offsets and known CODE targets for comparison with inspection listings.
+
+Standalone `data-source` retains numeric symbol keys/header values so `ciq-asm data` can consume it without a separate SYMBOLS file; it still names classes and strings. Library callers use `Source::parse_with_symbols` and `encode_with_symbols` for external symbol bindings; plain `parse`/`encode` operate without such bindings.

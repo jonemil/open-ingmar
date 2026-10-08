@@ -7,6 +7,7 @@ use std::fmt::Write;
 pub mod classes;
 
 pub const ADDRESS_LIMIT: usize = 0x0100_0000;
+type Bindings = BTreeMap<String, u32>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringDeclaration {
@@ -123,6 +124,10 @@ impl StringDeclaration {
 
 impl Source {
     pub fn parse(text: &str) -> Result<Self, Error> {
+        Self::parse_with_symbols(text, &BTreeMap::new())
+    }
+
+    pub fn parse_with_symbols(text: &str, symbols: &BTreeMap<String, u32>) -> Result<Self, Error> {
         let mut source = Self::default();
         let mut class: Option<classes::source::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
@@ -179,7 +184,7 @@ impl Source {
         if class.is_some() {
             return Err(Error("unterminated .class declaration".into()));
         }
-        source.encode()?;
+        source.encode_with_symbols(symbols)?;
         Ok(source)
     }
 
@@ -205,6 +210,113 @@ impl Source {
             return Err(Error("structured DATA representation changed bytes".into()));
         }
         Ok(source)
+    }
+
+    /// Name only verified class/string targets and known symbol-bearing fields.
+    pub fn name_classes(
+        &mut self,
+        symbols: Option<&crate::symbols::Symbols<'_>>,
+        named_symbols: bool,
+    ) -> Result<(), Error> {
+        use classes::source::{Key, Reference};
+        let symbol_alias = |id| {
+            symbols.and_then(|table| {
+                table
+                    .get(id)
+                    .map(|_| crate::symbols::source::Source::alias(table, id))
+            })
+        };
+        let mut candidates = BTreeMap::new();
+        for fragment in &self.fragments {
+            let Fragment::Class(c) = fragment else {
+                continue;
+            };
+            let Some(at) = c.at else { continue };
+            let alias = match &c.references[3] {
+                Some(Reference::Raw(id)) => symbol_alias(*id),
+                _ => None,
+            };
+            candidates.insert(at, alias);
+        }
+        // A class name can live in a referring field rather than its own header.
+        for fragment in &self.fragments {
+            let Fragment::Class(c) = fragment else {
+                continue;
+            };
+            for field in &c.fields {
+                if let (7, Key::Raw(key), Reference::Raw(target)) =
+                    (field.kind, &field.key, &field.value)
+                {
+                    if let Some(candidate) = candidates.get_mut(target) {
+                        if candidate.is_none() {
+                            *candidate = symbol_alias(key >> 8);
+                        }
+                    }
+                }
+            }
+        }
+        let mut counts = BTreeMap::new();
+        for alias in candidates.values().flatten() {
+            *counts.entry(alias.clone()).or_insert(0usize) += 1;
+        }
+        let aliases: BTreeMap<_, _> = candidates
+            .into_iter()
+            .map(|(at, candidate)| {
+                let alias = candidate
+                    .filter(|a| counts[a] == 1 && !a.starts_with("class_"))
+                    .unwrap_or_else(|| format!("class_{at:08x}"));
+                (at, alias)
+            })
+            .collect();
+        let strings: BTreeMap<_, _> = self
+            .fragments
+            .iter()
+            .filter_map(|f| match f {
+                Fragment::String(s) => s.at.map(|at| (at, s.alias.clone())),
+                _ => None,
+            })
+            .collect();
+        for fragment in &mut self.fragments {
+            let Fragment::Class(c) = fragment else {
+                continue;
+            };
+            if let Some(at) = c.at {
+                c.alias = aliases.get(&at).cloned();
+            }
+            if named_symbols {
+                for reference in &mut c.references[2..] {
+                    if let Some(Reference::Raw(id)) = reference {
+                        if let Some(alias) = symbol_alias(*id) {
+                            *reference = Some(Reference::Symbol(alias));
+                        }
+                    }
+                }
+            }
+            for field in &mut c.fields {
+                if named_symbols {
+                    if let Key::Raw(key) = field.key {
+                        if let Some(alias) = symbol_alias(key >> 8) {
+                            field.key = Key::Symbol {
+                                alias,
+                                bits: (key & 255) as u8,
+                            };
+                        }
+                    }
+                }
+                if let Reference::Raw(target) = field.value {
+                    if field.kind == 7 {
+                        if let Some(alias) = aliases.get(&target) {
+                            field.value = Reference::Class(alias.clone());
+                        }
+                    } else if field.kind == 3 {
+                        if let Some(alias) = strings.get(&target) {
+                            field.value = Reference::String(alias.clone());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Build a partial structural representation using instruction-derived addresses.
@@ -247,36 +359,51 @@ impl Source {
     }
 
     pub fn encode(&self) -> Result<(Vec<u8>, BTreeMap<String, u32>), Error> {
+        self.encode_with_symbols(&BTreeMap::new())
+    }
+
+    pub fn encode_with_symbols(
+        &self,
+        symbols: &BTreeMap<String, u32>,
+    ) -> Result<(Vec<u8>, BTreeMap<String, u32>), Error> {
+        let (strings, classes) = self.layout()?;
         let mut payload = Vec::new();
-        let mut bindings = BTreeMap::new();
         for fragment in &self.fragments {
-            let at = match fragment {
-                Fragment::Bytes { at, .. } => Some(*at),
-                Fragment::String(s) => s.at,
-                Fragment::Class(c) => Some(c.at),
-            };
-            if at.is_some_and(|at| at as usize != payload.len()) {
-                return Err(Error(format!(
-                    "pinned DATA offset does not match next offset 0x{:08x}; relocation is unsupported",
-                    payload.len()
-                )));
-            }
             match fragment {
-                Fragment::Class(c) => {
-                    let bytes = c.encode()?;
-                    if bytes.len() > ADDRESS_LIMIT - payload.len() {
-                        return Err(Error("DATA payload exceeds supported address range".into()));
-                    }
-                    payload.extend(bytes);
+                Fragment::Bytes { bytes, .. } => payload.extend(bytes),
+                Fragment::Class(c) => payload.extend(c.encode_with(symbols, &classes, &strings)?),
+                Fragment::String(s) => {
+                    payload.push(1);
+                    payload.extend((s.value.len() as u16).to_be_bytes());
+                    payload.extend(s.value.as_bytes());
+                    payload.push(0);
                 }
-                Fragment::Bytes { bytes, .. } => {
-                    if bytes.len() > ADDRESS_LIMIT - payload.len() {
-                        return Err(Error("DATA payload exceeds supported address range".into()));
+            }
+        }
+        Ok((payload, strings))
+    }
+
+    fn layout(&self) -> Result<(Bindings, Bindings), Error> {
+        let mut offset = 0usize;
+        let mut strings = BTreeMap::new();
+        let mut classes = BTreeMap::new();
+        for fragment in &self.fragments {
+            let (at, size) = match fragment {
+                Fragment::Bytes { at, bytes } => (Some(*at), bytes.len()),
+                Fragment::Class(c) => {
+                    if let Some(alias) = &c.alias {
+                        if !valid_alias(alias)
+                            || classes.insert(alias.clone(), offset as u32).is_some()
+                        {
+                            return Err(Error(format!("invalid or duplicate class alias {alias}")));
+                        }
                     }
-                    payload.extend_from_slice(bytes);
+                    (c.at, c.encoded_length()?)
                 }
                 Fragment::String(s) => {
-                    if !valid_alias(&s.alias) || bindings.contains_key(&s.alias) {
+                    if !valid_alias(&s.alias)
+                        || strings.insert(s.alias.clone(), offset as u32).is_some()
+                    {
                         return Err(Error(format!(
                             "invalid or duplicate string alias {}",
                             s.alias
@@ -285,18 +412,20 @@ impl Source {
                     if s.value.len() > u16::MAX as usize {
                         return Err(Error("string UTF-8 byte length exceeds u16".into()));
                     }
-                    if s.value.len() + 4 > ADDRESS_LIMIT - payload.len() {
-                        return Err(Error("DATA payload exceeds supported address range".into()));
-                    }
-                    bindings.insert(s.alias.clone(), payload.len() as u32);
-                    payload.push(1);
-                    payload.extend_from_slice(&(s.value.len() as u16).to_be_bytes());
-                    payload.extend_from_slice(s.value.as_bytes());
-                    payload.push(0);
+                    (s.at, s.value.len() + 4)
                 }
+            };
+            if at.is_some_and(|at| at as usize != offset) {
+                return Err(Error(format!(
+                    "pinned DATA offset does not match next offset 0x{offset:08x}; relocation is unsupported"
+                )));
             }
+            if size > ADDRESS_LIMIT - offset {
+                return Err(Error("DATA payload exceeds supported address range".into()));
+            }
+            offset += size;
         }
-        Ok((payload, bindings))
+        Ok((strings, classes))
     }
 
     pub fn to_text(&self) -> String {
@@ -426,5 +555,113 @@ mod record_walk_tests {
         v1.extend_from_slice(&[0; 19]);
         v1.extend_from_slice(&[1, 0, 0, 0]);
         assert_eq!(record_string_offsets(&v1).unwrap(), vec![23]);
+    }
+}
+
+#[cfg(test)]
+mod named_class_tests {
+    use super::*;
+    use crate::symbols::{Symbols, source::Source as SymbolSource};
+    use classes::{
+        Record,
+        source::{Key, Reference},
+    };
+
+    const HEADER: &str =
+        "version=0x02 extends=none statics=none parent=none module=none app_flags=0x0";
+
+    #[test]
+    fn forward_class_and_string_references_allocate_and_follow_layout() {
+        let symbols = BTreeMap::from([("child".into(), 0x81)]);
+        let text = format!(
+            ".class root {HEADER}\n.field symbol=@child bits=0x50 type=0x07 value=%target\n.field key=0x80001000 type=0x03 value=&target\n.endclass\n.class target {HEADER}\n.endclass\n.string target \"hi\"\n"
+        );
+        let source = Source::parse_with_symbols(&text, &symbols).unwrap();
+        let (bytes, strings) = source.encode_with_symbols(&symbols).unwrap();
+        assert_eq!(strings["target"], 36);
+        let records = classes::records(&bytes).unwrap();
+        let Record::Class(root) = &records[0] else {
+            panic!()
+        };
+        assert_eq!(root.fields[0].key, 0x8150);
+        assert_eq!(root.fields[0].value, 27);
+        assert_eq!(root.fields[1].value, 36);
+        assert_eq!(
+            Source::parse_with_symbols(&source.to_text(), &symbols).unwrap(),
+            source
+        );
+        assert!(Source::parse(&text).is_err()); // external symbols are required
+        let moved = text.replace(".class root", ".string prefix \"x\"\n.class root");
+        let (bytes, _) = Source::parse_with_symbols(&moved, &symbols)
+            .unwrap()
+            .encode_with_symbols(&symbols)
+            .unwrap();
+        let Record::Class(root) = &classes::records(&bytes).unwrap()[1] else {
+            panic!()
+        };
+        assert_eq!(root.fields[0].value, 32);
+        assert_eq!(root.fields[1].value, 41);
+    }
+
+    #[test]
+    fn rejects_wrong_namespaces_unknown_aliases_duplicate_classes_and_oversized_ids() {
+        let base = format!(
+            ".class root {HEADER}\n.field symbol=@child bits=0x00 type=0x07 value=%target\n.endclass\n.class target {HEADER}\n.endclass\n"
+        );
+        let symbols = BTreeMap::from([("child".into(), 0x81)]);
+        for text in [
+            base.replace("%target", "&target"),
+            base.replace("%target", "%missing"),
+            base.replace("@child", "@missing"),
+            base.replace("type=0x07", "type=0x06"),
+            base.replace(".class target", ".class root"),
+            base.replace("bits=0x00", "bits=0x100"),
+        ] {
+            assert!(
+                Source::parse_with_symbols(&text, &symbols).is_err(),
+                "{text}"
+            );
+        }
+        let oversized = BTreeMap::from([("child".into(), 0x1000000)]);
+        assert!(Source::parse_with_symbols(&base, &oversized).is_err());
+        assert!(
+            Source::parse(&format!(
+                ".class a {}\n.endclass",
+                HEADER.replace("extends=none", "extends=@child")
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn exported_names_preserve_bytes_and_use_verified_reference_kinds() {
+        let symbol_bytes = SymbolSource::parse(".symbol globals \"globals\" id=0x8002e6\n.symbol child \"Child\" id=0x81\n.symbol title \"title\" id=0x82\n").unwrap().encode().unwrap();
+        let symbols = Symbols::parse(&symbol_bytes).unwrap();
+        let bindings = SymbolSource::from_symbols(&symbols).bindings().unwrap();
+        let numeric = format!(
+            ".class at=0x0 {}\n.field key=0x8150 type=0x07 value=0x1f\n.field key=0x8200 type=0x03 value=0x28\n.endclass\n.class at=0x1f {HEADER}\n.endclass\n.string title \"hi\" at=0x28\n",
+            HEADER.replace("module=none", "module=0x8002e6")
+        );
+        let bytes = Source::parse(&numeric).unwrap().encode().unwrap().0;
+        let mut source = Source::from_records(&bytes).unwrap();
+        source.name_classes(Some(&symbols), true).unwrap();
+        let text = source.to_text();
+        assert!(text.contains(".class globals at=0x00000000"));
+        assert!(text.contains(".class Child at=0x0000001f"));
+        assert!(text.contains("symbol=@Child bits=0x50 type=0x07 value=%Child"));
+        assert!(text.contains("value=&str_00000028"));
+        assert_eq!(
+            Source::parse_with_symbols(&text, &bindings)
+                .unwrap()
+                .encode_with_symbols(&bindings)
+                .unwrap()
+                .0,
+            bytes
+        );
+        let Fragment::Class(c) = &source.fragments[0] else {
+            panic!()
+        };
+        assert!(matches!(c.fields[0].key, Key::Symbol { .. }));
+        assert!(matches!(c.fields[0].value, Reference::Class(_)));
     }
 }

@@ -1,15 +1,81 @@
-//! Lossless class declarations; see docs/specs/data-classes.md.
-use super::{Class, Field};
-use crate::{data::address, symbols::source::Error};
-use std::fmt::Write;
+//! Named, lossless class declarations; see docs/specs/data-classes.md.
+use super::Class;
+use crate::{
+    data::address,
+    symbols::source::{Error, valid_alias},
+};
+use std::{collections::BTreeMap, fmt::Write};
+
+type Bindings = BTreeMap<String, u32>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reference {
+    Raw(u32),
+    Symbol(String),
+    Class(String),
+    String(String),
+}
+impl Reference {
+    fn parse(text: &str) -> Result<Self, Error> {
+        for (prefix, kind) in [('@', 0), ('%', 1), ('&', 2)] {
+            if let Some(alias) = text.strip_prefix(prefix) {
+                if !valid_alias(alias) {
+                    return Err(Error("invalid reference alias".into()));
+                }
+                return Ok(match kind {
+                    0 => Self::Symbol(alias.into()),
+                    1 => Self::Class(alias.into()),
+                    _ => Self::String(alias.into()),
+                });
+            }
+        }
+        Ok(Self::Raw(number(text)?))
+    }
+    fn text(&self) -> String {
+        match self {
+            Self::Raw(n) => format!("0x{n:08x}"),
+            Self::Symbol(a) => format!("@{a}"),
+            Self::Class(a) => format!("%{a}"),
+            Self::String(a) => format!("&{a}"),
+        }
+    }
+    fn resolve(
+        &self,
+        symbols: &Bindings,
+        classes: &Bindings,
+        strings: &Bindings,
+    ) -> Result<u32, Error> {
+        let (map, alias, role) = match self {
+            Self::Raw(n) => return Ok(*n),
+            Self::Symbol(a) => (symbols, a, "symbol"),
+            Self::Class(a) => (classes, a, "class"),
+            Self::String(a) => (strings, a, "string"),
+        };
+        map.get(alias)
+            .copied()
+            .ok_or_else(|| Error(format!("undefined {role} alias {alias}")))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Key {
+    Raw(u32),
+    Symbol { alias: String, bits: u8 },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldDeclaration {
+    pub key: Key,
+    pub kind: u8,
+    pub value: Reference,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declaration {
-    pub at: u32,
+    pub alias: Option<String>,
+    pub at: Option<u32>,
     pub version: u8,
-    pub references: [Option<u32>; 4],
+    pub references: [Option<Reference>; 4],
     pub app_flags: u16,
-    pub fields: Vec<Field>,
+    pub fields: Vec<FieldDeclaration>,
 }
 
 fn number(text: &str) -> Result<u32, Error> {
@@ -21,55 +87,78 @@ fn number(text: &str) -> Result<u32, Error> {
     }
     u32::from_str_radix(hex, 16).map_err(|_| Error("class integer exceeds u32".into()))
 }
-
 fn value<'a>(fields: &'a [String], index: usize, name: &str) -> Result<&'a str, Error> {
     fields
         .get(index)
         .and_then(|s| s.strip_prefix(name))
         .ok_or_else(|| Error(format!("expected class attribute {name}")))
 }
+fn byte(text: &str) -> Result<u8, Error> {
+    u8::try_from(number(text)?).map_err(|_| Error("class attribute exceeds u8".into()))
+}
 
 impl Declaration {
     pub fn from_record(class: &Class<'_>) -> Result<Self, Error> {
         Ok(Self {
-            at: u32::try_from(class.offset)
-                .map_err(|_| Error("class offset exceeds u32".into()))?,
+            alias: None,
+            at: Some(
+                u32::try_from(class.offset)
+                    .map_err(|_| Error("class offset exceeds u32".into()))?,
+            ),
             version: class.version,
-            references: [class.extends, class.statics, class.parent, class.module],
+            references: [class.extends, class.statics, class.parent, class.module]
+                .map(|r| r.map(Reference::Raw)),
             app_flags: class.app_flags,
             fields: class
                 .fields
                 .iter()
-                .map(|field| Field {
-                    offset: 0,
-                    ..field.clone()
+                .map(|f| FieldDeclaration {
+                    key: Key::Raw(f.key),
+                    kind: f.kind,
+                    value: Reference::Raw(f.value),
                 })
                 .collect(),
         })
     }
-
     pub fn parse_header(fields: &[String]) -> Result<Self, Error> {
-        if fields.len() != 8 || fields[0] != ".class" {
-            return Err(Error("expected .class at=... version=... extends=... statics=... parent=... module=... app_flags=...".into()));
+        let mut index = 1;
+        let alias = if fields.get(index).is_some_and(|s| !s.contains('=')) {
+            let alias = fields[index].clone();
+            index += 1;
+            if !valid_alias(&alias) {
+                return Err(Error("invalid class alias".into()));
+            }
+            Some(alias)
+        } else {
+            None
+        };
+        let at = if fields.get(index).is_some_and(|s| s.starts_with("at=")) {
+            let at = address(value(fields, index, "at=")?)?;
+            index += 1;
+            Some(at)
+        } else {
+            None
+        };
+        if fields.first().map(String::as_str) != Some(".class") || fields.len() != index + 6 {
+            return Err(Error("expected .class [alias] [at=...] version=... extends=... statics=... parent=... module=... app_flags=...".into()));
         }
-        let at = address(value(fields, 1, "at=")?)?;
-        let version = u8::try_from(number(value(fields, 2, "version=")?)?)
-            .map_err(|_| Error("class version exceeds u8".into()))?;
-        let mut references = [None; 4];
-        for (index, name) in ["extends=", "statics=", "parent=", "module="]
+        let version = byte(value(fields, index, "version=")?)?;
+        let mut references = [None, None, None, None];
+        for (i, name) in ["extends=", "statics=", "parent=", "module="]
             .iter()
             .enumerate()
         {
-            let text = value(fields, index + 3, name)?;
-            references[index] = if text == "none" {
+            let text = value(fields, index + i + 1, name)?;
+            references[i] = if text == "none" {
                 None
             } else {
-                Some(number(text)?)
+                Some(Reference::parse(text)?)
             };
         }
-        let app_flags = u16::try_from(number(value(fields, 7, "app_flags=")?)?)
+        let app_flags = u16::try_from(number(value(fields, index + 5, "app_flags=")?)?)
             .map_err(|_| Error("class app_flags exceeds u16".into()))?;
         Ok(Self {
+            alias,
             at,
             version,
             references,
@@ -77,24 +166,35 @@ impl Declaration {
             fields: Vec::new(),
         })
     }
-
     pub fn push_field(&mut self, fields: &[String]) -> Result<(), Error> {
-        if fields.len() != 4 || fields[0] != ".field" {
-            return Err(Error(
-                "expected .field key=0x... type=0x... value=0x...".into(),
-            ));
-        }
-        self.fields.push(Field {
-            offset: 0,
-            key: number(value(fields, 1, "key=")?)?,
-            kind: u8::try_from(number(value(fields, 2, "type=")?)?)
-                .map_err(|_| Error("class field type exceeds u8".into()))?,
-            value: number(value(fields, 3, "value=")?)?,
+        let (key, index) = if fields.len() == 4
+            && fields[0] == ".field"
+            && fields[1].starts_with("key=")
+        {
+            (Key::Raw(number(value(fields, 1, "key=")?)?), 2)
+        } else if fields.len() == 5 && fields[0] == ".field" {
+            let alias = value(fields, 1, "symbol=")?
+                .strip_prefix('@')
+                .filter(|s| valid_alias(s))
+                .ok_or_else(|| Error("expected symbol=@alias".into()))?;
+            (
+                Key::Symbol {
+                    alias: alias.into(),
+                    bits: byte(value(fields, 2, "bits=")?)?,
+                },
+                3,
+            )
+        } else {
+            return Err(Error("expected .field key=... type=... value=... or .field symbol=@alias bits=... type=... value=...".into()));
+        };
+        self.fields.push(FieldDeclaration {
+            key,
+            kind: byte(value(fields, index, "type=")?)?,
+            value: Reference::parse(value(fields, index + 1, "value=")?)?,
         });
         Ok(())
     }
-
-    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+    pub fn encoded_length(&self) -> Result<usize, Error> {
         if !matches!(self.version, 1 | 2)
             || (self.version == 1 && self.references.iter().any(Option::is_none))
         {
@@ -102,68 +202,158 @@ impl Declaration {
                 "class requires version 1 or 2; version 1 requires all header references".into(),
             ));
         }
+        if self.fields.len() > if self.version == 1 { 255 } else { 65535 } {
+            return Err(Error("class field count exceeds format width".into()));
+        }
+        if self.alias.as_ref().is_some_and(|a| !valid_alias(a)) {
+            return Err(Error("invalid class alias".into()));
+        }
+        for (i, r) in self.references.iter().enumerate() {
+            if r.as_ref().is_some_and(|r| {
+                !matches!(r, Reference::Raw(_)) && !(i >= 2 && matches!(r, Reference::Symbol(_)))
+            }) {
+                return Err(Error(
+                    "only parent/module headers accept symbol references".into(),
+                ));
+            }
+        }
+        for f in &self.fields {
+            match &f.value {
+                Reference::Raw(_) => {}
+                Reference::Class(_) if f.kind == 7 => {}
+                Reference::String(_) if f.kind == 3 => {}
+                _ => {
+                    return Err(Error(
+                        "typed field value does not match class/string field type".into(),
+                    ));
+                }
+            }
+            let bits = match &f.key {
+                Key::Raw(k) => (k & 255) as u8,
+                Key::Symbol { bits, .. } => *bits,
+            };
+            if self.version == 1 && f.kind != bits & 15 {
+                return Err(Error(
+                    "version 1 field type must match key's low nibble".into(),
+                ));
+            }
+        }
+        Ok(if self.version == 1 {
+            23 + self.fields.len() * 8
+        } else {
+            9 + self.references.iter().flatten().count() * 4 + self.fields.len() * 9
+        })
+    }
+    pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        self.encode_with(&Bindings::new(), &Bindings::new(), &Bindings::new())
+    }
+    pub fn encode_with(
+        &self,
+        symbols: &Bindings,
+        classes: &Bindings,
+        strings: &Bindings,
+    ) -> Result<Vec<u8>, Error> {
+        self.encoded_length()?;
         let mut bytes = vec![0xc0 + self.version, 0xa5, 0x5d, 0xef];
         if self.version == 2 {
             bytes.push(
                 self.references
                     .iter()
                     .enumerate()
-                    .fold(0, |flags, (i, reference)| {
-                        flags | (u8::from(reference.is_some()) << i)
-                    }),
+                    .fold(0, |flags, (i, r)| flags | (u8::from(r.is_some()) << i)),
             );
         }
         for reference in self.references.iter().flatten() {
-            bytes.extend(reference.to_be_bytes());
+            bytes.extend(reference.resolve(symbols, classes, strings)?.to_be_bytes());
         }
         bytes.extend(self.app_flags.to_be_bytes());
         if self.version == 1 {
-            bytes.push(
-                u8::try_from(self.fields.len())
-                    .map_err(|_| Error("version 1 field count exceeds u8".into()))?,
-            );
+            bytes.push(self.fields.len() as u8);
         } else {
-            bytes.extend(
-                u16::try_from(self.fields.len())
-                    .map_err(|_| Error("version 2 field count exceeds u16".into()))?
-                    .to_be_bytes(),
-            );
+            bytes.extend((self.fields.len() as u16).to_be_bytes());
         }
-        for field in &self.fields {
-            bytes.extend(field.key.to_be_bytes());
-            if self.version == 1 {
-                if field.kind != (field.key & 15) as u8 {
-                    return Err(Error(
-                        "version 1 field type must match key's low nibble".into(),
-                    ));
+        for f in &self.fields {
+            let key = match &f.key {
+                Key::Raw(k) => *k,
+                Key::Symbol { alias, bits } => {
+                    let id = symbols
+                        .get(alias)
+                        .ok_or_else(|| Error(format!("undefined symbol alias {alias}")))?;
+                    if *id > 0xffffff {
+                        return Err(Error("class field symbol ID exceeds 24 bits".into()));
+                    }
+                    (id << 8) | u32::from(*bits)
                 }
-            } else {
-                bytes.push(field.kind);
+            };
+            bytes.extend(key.to_be_bytes());
+            if self.version == 2 {
+                bytes.push(f.kind);
             }
-            bytes.extend(field.value.to_be_bytes());
+            bytes.extend(f.value.resolve(symbols, classes, strings)?.to_be_bytes());
         }
         Ok(bytes)
     }
-
     pub fn to_text(&self) -> String {
-        let mut text = format!(".class at=0x{:08x} version=0x{:02x}", self.at, self.version);
-        for (name, reference) in ["extends", "statics", "parent", "module"]
-            .iter()
-            .zip(self.references)
-        {
-            match reference {
-                Some(reference) => write!(text, " {name}=0x{reference:08x}").unwrap(),
-                None => write!(text, " {name}=none").unwrap(),
-            }
+        let mut text = String::from(".class");
+        if let Some(alias) = &self.alias {
+            write!(text, " {alias}").unwrap();
         }
-        writeln!(text, " app_flags=0x{:04x}", self.app_flags).unwrap();
-        for field in &self.fields {
-            writeln!(
+        if let Some(at) = self.at {
+            write!(text, " at=0x{at:08x}").unwrap();
+        }
+        write!(text, " version=0x{:02x}", self.version).unwrap();
+        for (name, r) in ["extends", "statics", "parent", "module"]
+            .iter()
+            .zip(&self.references)
+        {
+            write!(
                 text,
-                ".field key=0x{:08x} type=0x{:02x} value=0x{:08x}",
-                field.key, field.kind, field.value
+                " {name}={}",
+                r.as_ref()
+                    .map(Reference::text)
+                    .unwrap_or_else(|| "none".into())
             )
             .unwrap();
+        }
+        writeln!(text, " app_flags=0x{:04x}", self.app_flags).unwrap();
+        for (index, f) in self.fields.iter().enumerate() {
+            match &f.key {
+                Key::Raw(k) => write!(text, ".field key=0x{k:08x}").unwrap(),
+                Key::Symbol { alias, bits } => {
+                    write!(text, ".field symbol=@{alias} bits=0x{bits:02x}").unwrap()
+                }
+            }
+            write!(text, " type=0x{:02x} value={}", f.kind, f.value.text()).unwrap();
+            let mut comment = false;
+            if let Some(at) = self.at {
+                let header = if self.version == 1 {
+                    23
+                } else {
+                    9 + self.references.iter().flatten().count() * 4
+                };
+                let width = if self.version == 1 { 8 } else { 9 };
+                write!(
+                    text,
+                    " # DATA+0x{:08x}",
+                    u64::from(at) + (header + index * width) as u64
+                )
+                .unwrap();
+                comment = true;
+            }
+            if f.kind == 6 {
+                if let Reference::Raw(n) = f.value {
+                    if n >> 24 == 0x10 {
+                        write!(
+                            text,
+                            "{}CODE+0x{:08x}",
+                            if comment { " -> " } else { " # " },
+                            n & 0xffffff
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            text.push('\n');
         }
         text.push_str(".endclass\n");
         text
@@ -186,24 +376,23 @@ mod tests {
                     continue;
                 }
                 let declaration = Declaration {
-                    at: 0,
+                    at: Some(0),
+                    alias: None,
                     version,
                     references: std::array::from_fn(|i| {
-                        (presence & (1 << i) != 0).then_some(0x40000000 + i as u32)
+                        (presence & (1 << i) != 0).then_some(Reference::Raw(0x40000000 + i as u32))
                     }),
                     app_flags: 0x807f,
                     fields: vec![
-                        Field {
-                            offset: 0,
-                            key: 0x80006746,
+                        FieldDeclaration {
+                            key: Key::Raw(0x80006746),
                             kind: 6,
-                            value: 0x10000030,
+                            value: Reference::Raw(0x10000030),
                         },
-                        Field {
-                            offset: 0,
-                            key: 0x8000674e,
+                        FieldDeclaration {
+                            key: Key::Raw(0x8000674e),
                             kind: if version == 1 { 14 } else { 254 },
-                            value: 0xdeadbeef,
+                            value: Reference::Raw(0xdeadbeef),
                         },
                     ],
                 };
@@ -241,24 +430,23 @@ mod tests {
             assert!(Source::parse(&format!("{invalid}.endclass\n")).is_err());
         }
         let mut legacy = Declaration {
-            at: 0,
+            at: Some(0),
+            alias: None,
             version: 1,
-            references: [Some(0); 4],
+            references: std::array::from_fn(|_| Some(Reference::Raw(0))),
             app_flags: 0,
-            fields: vec![Field {
-                offset: 0,
-                key: 6,
+            fields: vec![FieldDeclaration {
+                key: Key::Raw(6),
                 kind: 7,
-                value: 0,
+                value: Reference::Raw(0),
             }],
         };
         assert!(legacy.encode().is_err());
         legacy.fields = vec![
-            Field {
-                offset: 0,
-                key: 6,
+            FieldDeclaration {
+                key: Key::Raw(6),
                 kind: 6,
-                value: 0
+                value: Reference::Raw(0)
             };
             256
         ];
@@ -266,11 +454,10 @@ mod tests {
         legacy.version = 2;
         legacy.fields.resize(
             65536,
-            Field {
-                offset: 0,
-                key: 6,
+            FieldDeclaration {
+                key: Key::Raw(6),
                 kind: 6,
-                value: 0,
+                value: Reference::Raw(0),
             },
         );
         assert!(legacy.encode().is_err());
