@@ -13,7 +13,17 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings with opaque byte spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code uses named symbol operands and supported string references. See [the project format](docs/specs/section-project.md). Re-signing and relocation are not implemented yet; current project import preserves signing material and enforces the declared payload lengths. Keep exports under ignored `scratch/`.
+The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings with opaque byte spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code uses named symbol operands and supported string references. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
+
+Reassemble with your developer key, or sign an existing PRG separately (outputs must be new files):
+
+```sh
+cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-signed.prg -y developer_key.der
+cargo run -p ciq-asm -- sign examples/minimal-console/build/fr265/minimal-console.prg scratch/minimal-resigned.prg -y developer_key.der
+cargo run -p ciq-asm -- verify scratch/minimal-signed.prg -y developer_key.der
+```
+
+See [the signing experiment](docs/investigations/developer-signing.md). Both SDK specimens verify; unchanged Minimal Console re-signs byte identically with our key. The signed `41` → `42` Hello World is prepared, with simulator execution pending on the host.
 
 Inspect resolved symbols or annotated code (use `symbol-source` for symbol assembly or `code-symbolic` for self-contained named code and pinned strings):
 
@@ -40,12 +50,13 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Rust 1.85 or newer is required by the manifest (tested here with 1.99). There are no external Rust dependencies. See [the architecture](docs/architecture.md) for crate responsibilities and [the initial experiment](docs/investigations/rust-bootstrap.md) for assembly commands, evidence, and limits.
+Rust 1.85 or newer is required by the manifest (tested here with 1.99). Container and instruction libraries use only the standard library; the separate signing crate uses RustCrypto RSA and digest libraries. See [the architecture](docs/architecture.md) for crate responsibilities and [the initial experiment](docs/investigations/rust-bootstrap.md) for assembly commands, evidence, and limits.
 
 - [Working instructions](AGENTS.md)
 - [Plan and current status](docs/plan.md)
 - [Architecture](docs/architecture.md)
 - [Research and documentation conventions](docs/research.md)
+- [Developer signing](docs/specs/developer-signatures.md)
 - [Instruction reference](docs/specs/instructions.md)
 - [Symbol assembly and named operands](docs/specs/symbol-assembly.md)
 - [DATA class/module inspection](docs/specs/data-classes.md)
@@ -56,7 +67,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). There ar
 - [SDK support scripts](scripts/README.md)
 - [Original session handoff](connect-iq-rust-toolchain-codex-handoff.md)
 
-Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-dis`, and `ciq-asm`. Keep `Cargo.lock` in version control for the command-line tools.
+Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, and `ciq-asm`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.
 

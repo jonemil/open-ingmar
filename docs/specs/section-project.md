@@ -23,7 +23,7 @@ section 0x5717b015 95991 symbols 010-symbols-5717b015.mcasm
 
 All versions require each reconstructed payload to match the manifest length, because relocation is not implemented. It regenerates section wrappers and the eight-byte terminator. The terminator is implicit in the project format rather than exported as a separate file. Names and original section offsets are comments for inspection, not input semantics. Export writes the manifest last so interrupted exports are not mistaken for complete projects.
 
-This interface reconstructs all sections but does not decode all payload structures or regenerate signatures. Re-signing with a user-supplied key remains a separate planned feature. Exact-byte comparisons apply to unedited preservation tests, not future tests that intentionally replace signatures or transform the program.
+Project reconstruction does not decode all payload structures. Without `-y`, signatures are preserved. `ciq-asm project <directory> <new-output.prg> -y <key.der>` signs after reconstruction: original developer/store signatures are removed and one developer signature is appended. Manifest payload-length checks still apply before signing; the final signing stage may change the section count or signature payload length. Keys are never part of the export. See [developer signatures](developer-signatures.md). Exact-byte comparisons apply to unedited preservation tests; signed transformations compare program content and signature validity separately.
 
 ## DATA source in version 3
 

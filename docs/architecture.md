@@ -4,7 +4,7 @@
 
 Use LLVM's separation of concerns as an architectural inspiration without introducing an LLVM dependency initially. Keep container handling and VM instruction definitions independently usable by a future compiler or runtime.
 
-The Cargo workspace now contains four crates:
+The Cargo workspace now contains five crates:
 
 ```text
 Cargo.toml                 # workspace manifest, resolver 3 / edition 2024
@@ -12,6 +12,7 @@ Cargo.lock                 # committed for reproducible CLI builds
 crates/
   ciq-prg/                 # container reader and writer
   ciq-mc/                  # instruction model and encoding/decoding
+  ciq-sign/                # developer signatures and key handling
   ciq-asm/                 # assembly library and CLI
   ciq-dis/                 # disassembly library and CLI
 docs/
@@ -26,15 +27,16 @@ scratch/                   # ignored local SDK specimens and experiments
 | `ciq-prg` | Read/write ordered opaque PRG sections and section-project manifests; preserve unknown payloads and duplicate identifiers | Standard library |
 | `ciq-mc` | Decode/encode the observed instruction subset, preserving operand bit patterns | Standard library |
 | `ciq-dis` | Print section inventory/code assembly, or export all sections to a project directory | `ciq-prg`, `ciq-mc` |
-| `ciq-asm` | Parse assembly; reconstruct a complete section project or replace equal-length code in a PRG template | `ciq-prg`, `ciq-mc` |
+| `ciq-sign` | Independently encode/verify developer signatures; load private keys | `ciq-prg`, RustCrypto RSA/SHA-1/SHA-256, OS randomness |
+| `ciq-asm` | Parse assembly; reconstruct a complete section project or replace equal-length code; optional signing and verification | `ciq-prg`, `ciq-mc`, `ciq-sign` |
 
-This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. We have no compiler intermediate representation yet. These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished and have no external Rust dependencies.
+This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. We have no compiler intermediate representation yet. These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished. Container and instruction libraries remain standard-library-only; cryptographic dependencies belong in `ciq-sign`. The assembler CLI uses this crate after reconstruction, without coupling cryptography to the assembly library or container parser.
 
 ## Initial implementation
 
 The container model supports lossless preservation of data it does not understand. The tools decode ordinary code, symbols, DATA strings, and read-only class/module fields while preserving opaque DATA spans and other section payloads. Symbol declarations resolve typed named code operands. Structured symbol source can reconstruct known table layouts; numeric operands remain supported. Assembly can reconstruct a complete exported section project without the original PRG, or use the earlier code-only template workflow. It does not yet build an executable from a single function alone. Length-changing edits require evidence about every affected offset, reference, and integrity field before implementation. Same-length edits still require signature and runtime validation.
 
-Bytecode decoding and encoding are symmetrical. The current operand model preserves raw bits without resolving references. Future symbolic assembly should preserve symbolic references until layout and encoding; derive reference and fixup kinds from observed data rather than assuming conventional addresses or linker semantics. Labels, branch relocation, extended code, and signature generation are deferred.
+Bytecode decoding and encoding are symmetrical. The current operand model preserves raw bits without resolving references. Future symbolic assembly should preserve symbolic references until layout and encoding; derive reference and fixup kinds from observed data rather than assuming conventional addresses or linker semantics. Labels, branch relocation, and extended code remain deferred. Developer signature generation and verification are implemented separately in `ciq-sign`.
 
 The agreed assembly direction is one language and shared model for handwritten source, compiler output, and disassembly. Declarations describe content and references; optional constraints pin identifiers or placement when needed. Without placement constraints, use deterministic legal allocation. Symbol identity and name-record location must be represented separately. See [assembly source and optional layout constraints](design/assembly-source.md) for the proposed syntax and implementation sequence.
 
@@ -46,9 +48,9 @@ The future compiler can perform whole-program analysis over applicable Monkey C 
 
 Implemented on 2026-10-08: export undecoded sections as raw binary, with a manifest retaining identifiers and order. Ordinary code is represented as assembly when supported, otherwise raw binary. Import reconstructs the complete container from these files without requiring the original PRG as a template. See [the project format](specs/section-project.md) and [verification record](investigations/section-project.md).
 
-Keep signing as a separate implementation stage, exposed through the assembler's intended `-y <developer-key>` option. Assembly with this option should reconstruct the program, sign the result using the supplied key, and replace the original developer signature and associated public-key components. Original signature payloads can be retained as raw evidence for preservation tests; they are not the output signing identity when `-y` is supplied. Private keys remain external to the exported project and Git. This option is a planned interface, not currently implemented.
+Signing is a separate stage, exposed through the assembler's `-y <developer-key>` option. Assembly with this option reconstructs the program, then signs it using the supplied key, removes original developer/store signing sections, and appends one developer signature with the supplied public-key components. Original signature payloads can be retained as raw evidence for preservation tests; they are not the output signing identity when `-y` is supplied. Private keys remain external to the exported project and Git. Standalone `sign` and `verify` commands are also implemented. See [developer signatures](specs/developer-signatures.md) for supported key formats, signature variants, and verification limits.
 
-User clarification (2026-10-08): the original developer's private key and signature identity are unnecessary for the intended reassembly workflow. The objective is signing our output with our own key, not reproducing another developer's signature. Byte differences caused by code reconstruction or replacing signatures are acceptable. Support for generating PRG signatures still needs implementation and validation; the earlier interpretation that all signing work was deferred was too broad. SDK 9.2.0 `monkeyc --help` advertises `-y/--private-key` for signing compiler builds, but does not expose a standalone existing-PRG resign operation in that help output.
+User clarification (2026-10-08): the original developer's private key and signature identity are unnecessary for the intended reassembly workflow. The objective is signing our output with our own key, not reproducing another developer's signature. Byte differences caused by code reconstruction or replacing signatures are acceptable. Signature generation now reproduces the SDK output for unchanged Minimal Console; changed-program simulator validation remains pending. SDK 9.2.0 `monkeyc --help` advertises `-y/--private-key` for signing compiler builds, but does not expose a standalone existing-PRG resign operation in that help output.
 
 Garmin's [getting-started documentation](https://developer.garmin.com/connect-iq/connect-iq-basics/getting-started/) specifies developer-key signing and requires the original key for updates to an existing store app. Signing a research output with our own key therefore does not make it an update signed by the original developer.
 
@@ -59,7 +61,7 @@ Separate two test modes:
 - **Opaque preservation:** reading and writing unchanged sections without resigning should retain every byte, including existing signatures. This remains possible for an externally obtained PRG without possessing its signing key, because no new signature is generated.
 - **Reassembly with signing:** when `-y` supplies a different key, differences in the regenerated developer signature and associated public-key fields are expected and must not fail the test. Verify the new signature against the supplied key, verify the intended code/data and raw-section preservation, and test the resulting behavior in the simulator. Do not require equality to the input signature or key.
 
-For an otherwise unchanged reconstruction, compare preserved non-signature sections separately from regenerated signing material. For intentional program changes, assert the expected decoded changes and retain checks on unrelated raw sections. This is a targeted allowance for expected differences, not permission to ignore arbitrary binary mismatches or invalid output signatures. These signing tests become executable when signing support is implemented; current exact-byte tests exercise only opaque preservation and unchanged code reassembly.
+For an otherwise unchanged reconstruction, compare preserved non-signature sections separately from regenerated signing material. For intentional program changes, assert the expected decoded changes and retain checks on unrelated raw sections. This is a targeted allowance for expected differences, not permission to ignore arbitrary binary mismatches or invalid output signatures. Executable signing tests now cover both payload variants, key replacement, expected code changes, raw-section preservation, tampering, malformed inputs, and CLI workflows. Independent public-RSA checks verify the real SDK examples and the prepared modified output; runtime acceptance is still pending.
 
 ## Local specifications
 

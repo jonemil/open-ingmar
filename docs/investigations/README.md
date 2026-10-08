@@ -15,4 +15,6 @@
 
 - [DATA class/module fields and method bindings](data-classes.md): read-only record/field inspection, verified method references, inspection sidecars, byte-identical real projects, and 47 passing tests.
 
+- [Developer signing and the prepared `41` → `42` edit](developer-signing.md): independently verified SDK signature coverage, own-key assembly, exact unchanged re-signing, 52 passing tests, and pending host simulator validation.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).
