@@ -25,7 +25,7 @@ Use Garmin's compiler to generate reference specimens and Garmin's simulator as 
 
 1. Survey existing research: inspect the MonkeyC Ghidra plugin and monkeyc-optimizer. Document PRG layout, instruction encodings, references, available serializers, and integrity/version handling. Identify differences and unknowns.
 2. Read a minimal Garmin PRG: implement the smallest useful `ciq-prg` and `ciq-mc` crates based on the observed format.
-3. Round trip: preserve all bytes, including unknown sections, and test the emitted artifact in the official simulator.
+3. Round trip: reconstruct a complete runnable PRG, keeping undecoded sections raw, and test it in the official simulator. Byte-identical preservation is one test mode; successful assembly may emit different bytes and use our own signing key.
 4. Modify one instruction: change a visible result such as `41` to `42`, keeping instruction length unchanged initially, and verify execution.
 5. Replace a function: emit a complete instruction sequence while preserving the surrounding known-good container.
 6. Construct a minimal independent PRG, then extend toward a textual assembler with symbolic references and fixups.
@@ -39,7 +39,11 @@ The initial survey of these primary sources is pinned in [the bootstrap investig
 - [Gualdimar/MonkeyC-Ghidra-Plugin](https://github.com/Gualdimar/MonkeyC-Ghidra-Plugin)
 - [markw65/monkeyc-optimizer](https://github.com/markw65/monkeyc-optimizer)
 
-Next, run the reassembled Minimal Console PRG in the simulator and then test a same-size `41` to `42` edit in Hello World. Extend the reconnaissance to cover:
+Next, run the reassembled Minimal Console PRG in the simulator and then test a same-size `41` to `42` edit in Hello World.
+
+Also implement complete section export/import: assembly for decoded ordinary code, raw binary for undecoded sections, and a manifest preserving identifiers and order. Plan an assembler `-y <developer-key>` option that signs reconstructed output with our own key and replaces the original developer signature. Matching the original signature or obtaining its private key is not part of this objective. The signing option is not implemented yet.
+
+Extend the reconnaissance to cover:
 
 - PRG headers, sections, endianness, lengths, and version fields.
 - Opcode definitions, operand widths, and instruction boundaries.
@@ -48,4 +52,4 @@ Next, run the reassembled Minimal Console PRG in the simulator and then test a s
 - Integrity, checksum, or signature behavior after modifications.
 - A minimum evidence-based Rust API and the smallest observable reference application.
 
-Continue cross-checking source-derived findings against tiny Garmin-generated specimens. Equal-length replacement avoids relocating offsets but does not address signature handling. Verify changed-bytecode acceptance and behavior experimentally before implementing a different function body or length-changing assembly.
+Continue cross-checking source-derived findings against tiny Garmin-generated specimens. Equal-length replacement avoids relocating offsets but does not make an old signature valid for changed bytes. Verify changed-bytecode acceptance and behavior experimentally before implementing a different function body or length-changing assembly. The signing boundary and current SDK CLI limitation are recorded in [the architecture](architecture.md#complete-section-export-and-signing-boundary).
