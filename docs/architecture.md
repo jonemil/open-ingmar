@@ -36,6 +36,8 @@ The container model supports lossless preservation of data it does not understan
 
 Bytecode decoding and encoding are symmetrical. The current operand model preserves raw bits without resolving references. Future symbolic assembly should preserve symbolic references until layout and encoding; derive reference and fixup kinds from observed data rather than assuming conventional addresses or linker semantics. Labels, branch relocation, extended code, and signature generation are deferred.
 
+The agreed assembly direction is one language and shared model for handwritten source, compiler output, and disassembly. Declarations describe content and references; optional constraints pin identifiers or placement when needed. Without placement constraints, use deterministic legal allocation. Symbol identity and name-record location must be represented separately. See [assembly source and optional layout constraints](design/assembly-source.md) for the proposed syntax and implementation sequence.
+
 Byte-identical disassembly/reassembly is a useful preservation test and has already passed for both specimens. It is not a requirement for successful assembly: the intended output is a runnable program with the intended behavior, signed with the user's supplied key. Test a same-size instruction edit (`41` to `42`), and subsequently an equivalent but different function body. Semantic equivalence is judged through observed simulator behavior.
 
 The future compiler can perform whole-program analysis over applicable Monkey C source files. Do not require topological source ordering or introduce a separate object format without evidence that it is needed.

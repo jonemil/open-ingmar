@@ -22,6 +22,7 @@ Use Garmin's compiler to generate reference specimens and Garmin's simulator as 
 - Both reference PRGs have completed byte-identical full-code disassembly/reassembly and container reconstruction. The original Hello World has verified simulator behavior; newly emitted PRGs still need a host-side simulator run. No changed-bytecode acceptance experiment has been completed.
 - [Complete section export/import](investigations/section-project.md) is implemented: each specimen exports 13 ordered sections as code assembly and raw binary payloads, then reconstructs an identical PRG without reading the original template. Signing with our own key is still pending.
 - [Symbol decoding](investigations/symbols.md) now resolves names from the PRG, annotates symbol operands, and adds an inspection listing to exports. Both annotated exports round-trip correctly. Data pointers and string literals are next; named assembly is not implemented yet.
+- [Assembly source design](design/assembly-source.md) now specifies one language for human/compiler/disassembler output, with optional layout constraints. Symbol IDs, name-record placement, and entry order are distinct; unconstrained placement should be deterministic. Syntax is proposed, not implemented.
 
 ## Milestones
 
