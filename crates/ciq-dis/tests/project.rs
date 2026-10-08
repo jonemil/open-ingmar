@@ -177,3 +177,82 @@ fn import_rejects_section_and_manifest_symlinks_outside_project() {
             .contains("outside")
     );
 }
+
+#[test]
+fn structured_symbols_are_authoritative_and_named_code_tracks_alias_changes() {
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, vec![0x45, 0, 0x80, 0, 5, 0, 0x80, 0, 0x67, 0x16]).unwrap(),
+        Section::new(SYMBOLS, symbol_payload()).unwrap(),
+    ]);
+    let standalone = ciq_dis::disassemble_symbolic(&original).unwrap();
+    assert!(standalone.contains("getmv @Toybox_System @sym_00800067"));
+    assert_eq!(
+        ciq_asm::assemble(&standalone).unwrap(),
+        original.sections()[0].payload()
+    );
+    let text = ciq_dis::symbol_source(&original).unwrap();
+    assert_eq!(
+        ciq_prg::symbols::source::Source::parse(&text)
+            .unwrap()
+            .encode()
+            .unwrap(),
+        original.sections()[1].payload()
+    );
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[1].encoding, Encoding::Symbols);
+    assert!(
+        fs::read_to_string(directory.join(FILE_NAME))
+            .unwrap()
+            .starts_with("ciq-project 2\n")
+    );
+    let code_path = directory.join(&manifest.entries[0].file);
+    let symbol_path = directory.join(&manifest.entries[1].file);
+    let code = fs::read_to_string(&code_path).unwrap();
+    let symbols = fs::read_to_string(&symbol_path).unwrap();
+    fs::write(&code_path, code.replace("@Toybox_System", "@system")).unwrap();
+    fs::write(
+        &symbol_path,
+        symbols.replace(".symbol Toybox_System ", ".symbol system "),
+    )
+    .unwrap();
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    // Equal-width content editing is consumed, while unrelated sections are preserved.
+    let symbols = fs::read_to_string(&symbol_path).unwrap();
+    fs::write(
+        &symbol_path,
+        symbols.replace("\"Toybox_System\"", "\"Toybox_Systen\""),
+    )
+    .unwrap();
+    let edited = ciq_asm::assemble_project(&directory).unwrap();
+    assert_eq!(edited.sections()[0], original.sections()[0]);
+    let parsed = ciq_prg::symbols::Symbols::parse(edited.sections()[1].payload()).unwrap();
+    assert_eq!(parsed.get(0x800005).unwrap().name, "Toybox_Systen");
+    fs::write(&symbol_path, symbols.replace("\"Toybox_System\"", "\"X\"")).unwrap();
+    assert!(ciq_asm::assemble_project(&directory).is_err());
+}
+
+#[test]
+fn unreferenced_names_and_duplicate_symbol_sections_fall_back_to_raw() {
+    let mut payload = symbol_payload();
+    payload.extend_from_slice(&[1, 0, 1, b'x', 0]);
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, vec![0x43, 0, 0x80, 0, 5]).unwrap(),
+        Section::new(SYMBOLS, payload).unwrap(),
+    ]);
+    assert!(ciq_dis::symbol_source(&original).is_err());
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("orphan");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[1].encoding, Encoding::Raw);
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let duplicate = Prg::from_sections(vec![
+        Section::new(SYMBOLS, symbol_payload()).unwrap(),
+        Section::new(SYMBOLS, symbol_payload()).unwrap(),
+    ]);
+    let directory = temporary.0.join("duplicate");
+    let manifest = ciq_dis::export_project(&duplicate, &directory).unwrap();
+    assert!(manifest.entries.iter().all(|e| e.encoding == Encoding::Raw));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), duplicate);
+}

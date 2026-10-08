@@ -6,7 +6,7 @@ This reference covers each of the 28 opcodes currently encoded and decoded by `c
 
 All encodings below occur in our SDK 9.2.0, `fr265`, `-O 0` debug builds. Instruction presence and operand widths are **experimentally observed**. Execution descriptions and abstract stack effects are **source-derived**, with compiled source/bytecode supporting their interpretation. We have not traced individual instructions inside Garmin's VM. The original Hello World runs in the simulator; this does not validate every opcode's edge cases or every generated function's execution. Compatibility with other SDK/device versions is unverified for every entry.
 
-An opcode occupies one byte. `u8` occupies one byte; `u32be` occupies four bytes, most significant first. Length includes the opcode. Numeric assembly operands currently preserve bit patterns; names and expressions in these descriptions are explanatory, not accepted assembly syntax.
+An opcode occupies one byte. `u8` occupies one byte; `u32be` occupies four bytes, most significant first. Length includes the opcode. Numeric assembly operands currently preserve bit patterns; declared `@alias` operands are supported in symbol-ID fields as described in [symbol assembly](symbol-assembly.md). Stack expressions in these descriptions remain explanatory.
 
 Stack notation puts the top at the right. `...` means unchanged lower values. “Local” denotes a frame slot, separate from the abstract evaluation stack. Stack effects summarize successful execution, excluding exceptions and physical frame mechanics. Member IDs refer to [symbols](symbols.md); string data addresses are a different reference kind. None of these 28 encodings has an immediate branch target.
 

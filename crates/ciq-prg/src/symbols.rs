@@ -1,5 +1,7 @@
 //! Observed symbol-table payload format. See docs/specs/symbols.md.
 
+pub mod source;
+
 use crate::Error;
 use std::collections::BTreeMap;
 
@@ -7,6 +9,7 @@ use std::collections::BTreeMap;
 pub struct Symbol<'a> {
     pub id: u32,
     pub name_offset: u32,
+    pub entry_index: usize,
     pub name: &'a str,
 }
 
@@ -84,6 +87,7 @@ impl<'a> Symbols<'a> {
                     Symbol {
                         id,
                         name_offset,
+                        entry_index: index,
                         name,
                     },
                 )

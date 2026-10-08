@@ -8,4 +8,4 @@ Name records fill the rest of the payload. Each has a one-byte tag `0x01`, a u16
 
 Our decoder checks bounds, record tags, UTF-8, terminators, duplicate symbol identifiers, and references pointing to actual record boundaries. It resolves names only for symbol operand fields of known instructions: `spush`, `getselfv`, `getsv`, both fields of `getmv`, and the second field of `getlocalv`. It does not treat every numeric operand as a symbol.
 
-Names are currently inspection/annotation data. Assembly operands remain hexadecimal, and annotations use escaped names inside `#` comments. The exported symbol payload remains raw binary; an accompanying `.symbols.txt` listing is for inspection and is not consumed during reassembly. Named assembly and structured symbol-table editing remain future steps.
+Symbols now have [assembly declarations and named instruction operands](symbol-assembly.md). Export pins IDs, table entry indexes, and name offsets, then verifies exact serialization before choosing the structured source as authoritative. Unrepresentable tables retain raw bytes. The `.symbols.txt` listing remains inspection-only.

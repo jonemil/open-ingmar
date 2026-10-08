@@ -1,6 +1,6 @@
 //! Section project manifest, documented in docs/specs/section-project.md.
 
-use crate::CODE;
+use crate::{CODE, SYMBOLS};
 use std::{fmt, fmt::Write};
 
 pub const FILE_NAME: &str = "sections.ciq";
@@ -9,6 +9,7 @@ pub const FILE_NAME: &str = "sections.ciq";
 pub enum Encoding {
     Raw,
     Assembly,
+    Symbols,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +52,7 @@ impl Manifest {
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut entries = Vec::new();
         let mut version_seen = false;
+        let mut version = "1";
         for (index, line) in text.lines().enumerate() {
             let fail = |message| Error {
                 line: index + 1,
@@ -61,15 +63,16 @@ impl Manifest {
                 continue;
             }
             if !version_seen {
-                if fields != ["ciq-project", "1"] {
-                    return Err(fail("expected ciq-project 1 header"));
+                if fields != ["ciq-project", "1"] && fields != ["ciq-project", "2"] {
+                    return Err(fail("expected ciq-project 1 or 2 header"));
                 }
+                version = fields[1];
                 version_seen = true;
                 continue;
             }
             if fields.len() != 5 || fields[0] != "section" {
                 return Err(fail(
-                    "expected section <hex-id> <length> <raw|assembly> <file>",
+                    "expected section <hex-id> <length> <raw|assembly|symbols> <file>",
                 ));
             }
             let hex = fields[1]
@@ -94,9 +97,10 @@ impl Manifest {
             let encoding = match fields[3] {
                 "raw" => Encoding::Raw,
                 "assembly" if kind == CODE => Encoding::Assembly,
+                "symbols" if kind == SYMBOLS && version == "2" => Encoding::Symbols,
                 _ => {
                     return Err(fail(
-                        "unsupported encoding or assembly used for a non-code section",
+                        "unsupported encoding for this version or section kind",
                     ));
                 }
             };
@@ -113,20 +117,26 @@ impl Manifest {
         if !version_seen {
             return Err(Error {
                 line: 1,
-                message: "missing ciq-project 1 header",
+                message: "missing ciq-project 1 or 2 header",
             });
         }
         Ok(Self { entries })
     }
 
     pub fn to_text(&self) -> String {
-        let mut text = String::from(
-            "ciq-project 1\n# Ordered sections: identifier, original payload length, encoding, file\n",
+        let version = if self.entries.iter().any(|e| e.encoding == Encoding::Symbols) {
+            2
+        } else {
+            1
+        };
+        let mut text = format!(
+            "ciq-project {version}\n# Ordered sections: identifier, original payload length, encoding, file\n"
         );
         for entry in &self.entries {
             let encoding = match entry.encoding {
                 Encoding::Raw => "raw",
                 Encoding::Assembly => "assembly",
+                Encoding::Symbols => "symbols",
             };
             writeln!(
                 text,
@@ -182,10 +192,24 @@ mod tests {
         for text in [
             "",
             "# comment",
-            "ciq-project 2",
+            "ciq-project 3",
             "section 0x12345678 0 raw empty.bin",
         ] {
             assert!(Manifest::parse(text).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod symbol_manifest_tests {
+    use super::*;
+    #[test]
+    fn symbols_require_version_two_and_the_symbol_section_identifier() {
+        let text = "ciq-project 2\nsection 0x5717b015 2 symbols symbols.mcasm\n";
+        let manifest = Manifest::parse(text).unwrap();
+        assert_eq!(manifest.entries[0].encoding, Encoding::Symbols);
+        assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
+        assert!(Manifest::parse(&text.replace("project 2", "project 1")).is_err());
+        assert!(Manifest::parse(&text.replace("5717b015", "c0debabe")).is_err());
     }
 }

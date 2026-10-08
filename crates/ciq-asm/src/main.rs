@@ -11,7 +11,22 @@ use std::{
 fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = env::args_os().skip(1).collect();
     if args.len() != 3 {
-        return Err("Usage: ciq-asm <template.prg> <code.mcasm> <new-output.prg>\n       ciq-asm project <project-directory> <new-output.prg>".into());
+        return Err("Usage: ciq-asm <template.prg> <code.mcasm> <new-output.prg>\n       ciq-asm project <project-directory> <new-output.prg>\n       ciq-asm symbols <symbols.mcasm> <new-payload.bin>".into());
+    }
+    if args[0] == "symbols" {
+        let source = ciq_prg::symbols::source::Source::parse(&fs::read_to_string(&args[1])?)?;
+        let bytes = source.encode()?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&args[2])?;
+        file.write_all(&bytes)?;
+        eprintln!(
+            "Assembled {} symbols into {} payload bytes.",
+            source.declarations.len(),
+            bytes.len()
+        );
+        return Ok(());
     }
     let project = args[0] == "project";
     let (prg, changed) = if project {

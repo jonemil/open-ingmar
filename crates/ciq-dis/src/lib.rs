@@ -4,7 +4,7 @@ use ciq_mc::{Error, decode};
 use ciq_prg::{
     CODE, Prg, SYMBOLS,
     manifest::{Encoding, Entry, FILE_NAME, Manifest},
-    symbols::Symbols,
+    symbols::{Symbols, source::Source},
 };
 use std::fmt::Write;
 use std::{error::Error as StdError, fs, path::Path};
@@ -12,6 +12,12 @@ use std::{error::Error as StdError, fs, path::Path};
 /// Export every section, falling back to raw bytes for unsupported code.
 pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn StdError>> {
     let symbols = optional_symbols(prg);
+    // Only use structured symbols when declarations can reproduce the complete payload.
+    let structured = symbols.as_ref().and_then(|table| {
+        let source = Source::from_symbols(table);
+        let bytes = source.encode().ok()?;
+        (bytes == prg.unique_section(SYMBOLS).ok()?.payload()).then_some(source)
+    });
     let mut entries = Vec::new();
     let mut files = Vec::new();
     let mut comments = Vec::new();
@@ -19,19 +25,24 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     for (index, section) in prg.sections().iter().enumerate() {
         let name = section.name().unwrap_or("UNKNOWN");
         let (encoding, payload) = if section.kind() == CODE {
-            match disassemble_with_symbols(section.payload(), symbols.as_ref()) {
+            match disassemble_named(section.payload(), symbols.as_ref(), structured.is_some()) {
                 Ok(text) => (Encoding::Assembly, text.into_bytes()),
                 Err(error) => {
                     eprintln!("Section {index} CODE exported as raw binary: {error}");
                     (Encoding::Raw, section.payload().to_vec())
                 }
             }
+        } else if section.kind() == SYMBOLS && structured.is_some() {
+            (
+                Encoding::Symbols,
+                structured.as_ref().unwrap().to_text().into_bytes(),
+            )
         } else {
             (Encoding::Raw, section.payload().to_vec())
         };
         let extension = match encoding {
             Encoding::Raw => "bin",
-            Encoding::Assembly => "mcasm",
+            Encoding::Assembly | Encoding::Symbols => "mcasm",
         };
         let file = format!(
             "{index:03}-{}-{:08x}.{extension}",
@@ -49,7 +60,7 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
         if section.kind() == SYMBOLS {
             if let Ok(table) = Symbols::parse(section.payload()) {
                 let mut listing = String::from(
-                    "# Inspection only: reassembly consumes the corresponding raw .bin payload.\n",
+                    "# Inspection only: reassembly consumes the manifest-selected symbol source.\n",
                 );
                 listing.push_str(&format_symbols(&table));
                 files.push((
@@ -115,6 +126,50 @@ pub fn disassemble_prg(prg: &Prg) -> Result<String, Box<dyn StdError>> {
     )?)
 }
 
+/// Print authoritative symbol source only when it preserves every record.
+pub fn symbol_source(prg: &Prg) -> Result<String, Box<dyn StdError>> {
+    let payload = prg.unique_section(SYMBOLS)?.payload();
+    let table = Symbols::parse(payload)?;
+    let source = Source::from_symbols(&table);
+    if source.encode()? != payload {
+        return Err(
+            "symbol source cannot preserve unreferenced name records; use raw export".into(),
+        );
+    }
+    Ok(source.to_text())
+}
+
+/// Self-contained symbolic code for the template workflow; declarations resolve IDs only.
+pub fn disassemble_symbolic(prg: &Prg) -> Result<String, Box<dyn StdError>> {
+    let Some(symbols) = optional_symbols(prg) else {
+        return disassemble_prg(prg);
+    };
+    let code = prg.unique_section(CODE)?.payload();
+    let mut ids = std::collections::BTreeSet::new();
+    for located in decode(code)? {
+        let ins = located.instruction;
+        let mut start = 0;
+        for (field, &width) in ins.opcode().operand_widths().iter().enumerate() {
+            if ins.opcode().symbol_operands().contains(&field) {
+                ids.insert(u32::from_be_bytes(
+                    ins.operands()[start..start + width].try_into().unwrap(),
+                ));
+            }
+            start += width;
+        }
+    }
+    let mut source = Source::from_symbols(&symbols);
+    source.declarations.retain(|d| ids.contains(&d.id));
+    for d in &mut source.declarations {
+        d.name_at = None;
+        d.entry_index = None;
+    }
+    let mut text = source.to_text();
+    text.push('\n');
+    text.push_str(&disassemble_named(code, Some(&symbols), true)?);
+    Ok(text)
+}
+
 pub fn format_symbols(symbols: &Symbols<'_>) -> String {
     let mut text = String::new();
     for symbol in symbols.iter() {
@@ -132,13 +187,33 @@ pub fn disassemble_with_symbols(
     code: &[u8],
     symbols: Option<&Symbols<'_>>,
 ) -> Result<String, Error> {
+    disassemble_named(code, symbols, false)
+}
+
+fn disassemble_named(
+    code: &[u8],
+    symbols: Option<&Symbols<'_>>,
+    named: bool,
+) -> Result<String, Error> {
     let mut text = String::new();
     // Validate the full stream before producing any output.
     for located in decode(code)? {
         let instruction = located.instruction;
         text.push_str(instruction.opcode().mnemonic());
         let mut start = 0;
-        for &width in instruction.opcode().operand_widths() {
+        for (field, &width) in instruction.opcode().operand_widths().iter().enumerate() {
+            if named && instruction.opcode().symbol_operands().contains(&field) {
+                let id = u32::from_be_bytes(
+                    instruction.operands()[start..start + width]
+                        .try_into()
+                        .unwrap(),
+                );
+                if symbols.and_then(|s| s.get(id)).is_some() {
+                    write!(text, " @{}", Source::alias(symbols.unwrap(), id)).unwrap();
+                    start += width;
+                    continue;
+                }
+            }
             text.push_str(" 0x");
             for byte in &instruction.operands()[start..start + width] {
                 write!(text, "{byte:02x}").unwrap();

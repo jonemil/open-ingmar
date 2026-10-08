@@ -1,6 +1,6 @@
 # Assembly source and optional layout constraints
 
-Status: design direction agreed on 2026-10-08; example syntax below is a proposal, not implemented grammar. The current numeric grammar remains documented in [the bytecode specification](../specs/bytecode-subset.md).
+Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). Data declarations, includes, ID allocation, and general relocation remain proposals.
 
 ## One language and shared model
 
@@ -20,7 +20,7 @@ A symbol declaration should distinguish:
 
 Symbol ID, table order, and name-record location are different properties. The second column in today's inspection listing is the name-record location, not the symbol ID or table slot. An offset identifies the record's tag byte, as described in [the symbol format](../specs/symbols.md).
 
-Proposed content-oriented source:
+Implemented content-oriented source:
 
 ```text
 .symbol system "Toybox_System" id=0x00800005
@@ -29,7 +29,7 @@ Proposed content-oriented source:
 getmv @system, @println
 ```
 
-An export requesting layout preservation could add constraints to the same declarations:
+An export preserving layout adds constraints to the same declarations:
 
 ```text
 # Illustrative positions, not offsets measured from a reference PRG.
@@ -49,17 +49,17 @@ Declarations may live beside code or in a separate file using the same grammar. 
 
 Strings/data should follow the same pattern: content plus an alias, optional explicit placement, and a typed reference. For example, proposed `.string greeting "Hello!"` and `news &greeting` distinguish a data-address reference from a symbol-ID reference such as `@println`. An inline string operand could be shorthand for a generated data declaration, once the actual layout and identity semantics are understood. Do not assume equal string contents imply that records can always be merged.
 
-The complete project manifest still handles section order and raw sections. A future project-format version can select structured assembly as the authoritative input for decoded symbols/data. Do not make both a raw payload and a structured listing independently authoritative for the same section. Today's `.symbols.txt` is inspection-only.
+The complete project manifest still handles section order and raw sections. Project format version 2 selects structured symbol source as authoritative; structured data remains future work. Do not make both a raw payload and a structured listing independently authoritative for the same section. The `.symbols.txt` sidecar remains inspection-only.
 
 ## Preservation and implementation sequence
 
 For sections or embedded records with unknown references, retain raw bytes and the placement needed to keep those references valid. Automatic layout cannot move a record safely while an opaque structure still holds an unrelocated pointer to it. Report unsupported relocation rather than silently produce inconsistent output.
 
-Implementation can proceed in bounded steps:
+The remaining work can proceed in bounded steps:
 
 1. Decode data strings/class references and distinguish reference kinds with evidence.
-2. Introduce declarations and typed symbol references, initially resolving existing IDs while retaining the surrounding known layout.
-3. Add symbol serialization with automatic or explicitly constrained record layout and table order.
+2. Done: declarations and typed symbol references resolve existing IDs while retaining the surrounding known layout.
+3. Done: symbol serialization supports deterministic automatic or explicitly constrained record layout and table order.
 4. Extend data serialization and relocation only for references we can update completely.
 
 Test handwritten and printed source through the same parser/model; test deterministic allocation and clear conflicts for explicit constraints. Exact-byte checks apply to preservation cases; own-key signed output and intentionally transformed code are checked for expected content and behavior instead.
