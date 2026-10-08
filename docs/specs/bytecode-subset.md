@@ -37,6 +37,12 @@ An instruction starts with a one-byte opcode and is followed by its fixed-width 
 
 Unsupported opcode bytes cause an error at their code offset. They are never guessed to be one-byte instructions. A truncated operand also causes an error.
 
+## Instruction behavior
+
+See [the instruction reference](instructions.md) for an individual section for every supported opcode, including operands, abstract stack effects, examples, and unresolved semantics. The [evidence record](../investigations/instruction-semantics.md) distinguishes source-derived behavior from compiled observations.
+
+## Assembly syntax
+
 Assembly uses one mnemonic per line, followed by one hexadecimal bit-pattern operand per field. Each operand must start with `0x` and fit its field width. `#` starts a comment. Blank lines are allowed. For example:
 
 ```text

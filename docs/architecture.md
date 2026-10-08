@@ -63,6 +63,6 @@ For an otherwise unchanged reconstruction, compare preserved non-signature secti
 
 ## Local specifications
 
-The specs include [PRG framing](specs/prg-container.md), [the bytecode subset and assembly grammar](specs/bytecode-subset.md), [section projects](specs/section-project.md), and [symbol tables](specs/symbols.md). Symbol editing, data layouts, and calling conventions remain research topics. Each specification should explain the behavior directly and link to local investigation records for its evidence.
+The specs include [PRG framing](specs/prg-container.md), [the bytecode subset and assembly grammar](specs/bytecode-subset.md), [the per-instruction reference](specs/instructions.md), [section projects](specs/section-project.md), and [symbol tables](specs/symbols.md). Symbol editing, data layouts, and calling conventions remain research topics. Each specification should explain the behavior directly and link to local investigation records for its evidence.
 
 Checked-in code should stand on its own and reference local specifications when an explanation is needed. Keep external repository paths and comparison details in research notes. Preserve attribution and any licensing obligations if material is ever incorporated; documenting findings locally does not erase their provenance.

@@ -36,6 +36,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). There ar
 - [Plan and current status](docs/plan.md)
 - [Architecture](docs/architecture.md)
 - [Research and documentation conventions](docs/research.md)
+- [Instruction reference](docs/specs/instructions.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)
 - [SDK support scripts](scripts/README.md)

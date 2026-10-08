@@ -24,6 +24,8 @@ Use Garmin's compiler to generate reference specimens and Garmin's simulator as 
 - [Symbol decoding](investigations/symbols.md) now resolves names from the PRG, annotates symbol operands, and adds an inspection listing to exports. Both annotated exports round-trip correctly. Data pointers and string literals are next; named assembly is not implemented yet.
 - [Assembly source design](design/assembly-source.md) now specifies one language for human/compiler/disassembler output, with optional layout constraints. Symbol IDs, name-record placement, and entry order are distinct; unconstrained placement should be deterministic. Syntax is proposed, not implemented.
 
+- [Instruction reference](specs/instructions.md) now covers all 28 supported opcodes individually, with encodings, abstract stack effects, observed examples, and explicit uncertainty; [the investigation](investigations/instruction-semantics.md) records evidence and calling-frame conflicts.
+
 ## Milestones
 
 1. Survey existing research: inspect the MonkeyC Ghidra plugin and monkeyc-optimizer. Document PRG layout, instruction encodings, references, available serializers, and integrity/version handling. Identify differences and unknowns.

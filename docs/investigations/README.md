@@ -7,4 +7,6 @@
 - [Complete section export/import](section-project.md): all section payloads plus an ordered manifest, reconstruction without the original template, raw fallback for unsupported code, and 17 passing tests.
 - [Symbol decoding and instruction annotations](symbols.md): experimentally verified symbol records, names resolved from PRGs, escaped annotations and inspection sidecars, and 22 passing tests.
 
+- [Supported instruction semantics](instruction-semantics.md): all 28 supported opcodes, compiled occurrence evidence, abstract stack effects, and unresolved calling/frame conventions.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).
