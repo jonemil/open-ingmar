@@ -2,14 +2,16 @@
 
 use ciq_mc::{Error, decode};
 use ciq_prg::{
-    CODE, Prg,
+    CODE, Prg, SYMBOLS,
     manifest::{Encoding, Entry, FILE_NAME, Manifest},
+    symbols::Symbols,
 };
 use std::fmt::Write;
 use std::{error::Error as StdError, fs, path::Path};
 
 /// Export every section, falling back to raw bytes for unsupported code.
 pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn StdError>> {
+    let symbols = optional_symbols(prg);
     let mut entries = Vec::new();
     let mut files = Vec::new();
     let mut comments = Vec::new();
@@ -17,7 +19,7 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     for (index, section) in prg.sections().iter().enumerate() {
         let name = section.name().unwrap_or("UNKNOWN");
         let (encoding, payload) = if section.kind() == CODE {
-            match disassemble(section.payload()) {
+            match disassemble_with_symbols(section.payload(), symbols.as_ref()) {
                 Ok(text) => (Encoding::Assembly, text.into_bytes()),
                 Err(error) => {
                     eprintln!("Section {index} CODE exported as raw binary: {error}");
@@ -44,6 +46,18 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             file: file.clone(),
         });
         files.push((file, payload));
+        if section.kind() == SYMBOLS {
+            if let Ok(table) = Symbols::parse(section.payload()) {
+                let mut listing = String::from(
+                    "# Inspection only: reassembly consumes the corresponding raw .bin payload.\n",
+                );
+                listing.push_str(&format_symbols(&table));
+                files.push((
+                    format!("{index:03}-symbols.symbols.txt"),
+                    listing.into_bytes(),
+                ));
+            }
+        }
         offset += 8 + section.payload().len();
     }
     let manifest = Manifest { entries };
@@ -70,6 +84,54 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
 }
 
 pub fn disassemble(code: &[u8]) -> Result<String, Error> {
+    disassemble_with_symbols(code, None)
+}
+
+fn optional_symbols(prg: &Prg) -> Option<Symbols<'_>> {
+    if !prg
+        .sections()
+        .iter()
+        .any(|section| section.kind() == SYMBOLS)
+    {
+        return None;
+    }
+    match prg
+        .unique_section(SYMBOLS)
+        .and_then(|section| Symbols::parse(section.payload()))
+    {
+        Ok(symbols) => Some(symbols),
+        Err(error) => {
+            eprintln!("Symbol annotations unavailable; numeric operands retained: {error}");
+            None
+        }
+    }
+}
+
+pub fn disassemble_prg(prg: &Prg) -> Result<String, Box<dyn StdError>> {
+    let symbols = optional_symbols(prg);
+    Ok(disassemble_with_symbols(
+        prg.unique_section(CODE)?.payload(),
+        symbols.as_ref(),
+    )?)
+}
+
+pub fn format_symbols(symbols: &Symbols<'_>) -> String {
+    let mut text = String::new();
+    for symbol in symbols.iter() {
+        writeln!(
+            text,
+            "0x{:08x} @0x{:08x} {:?}",
+            symbol.id, symbol.name_offset, symbol.name
+        )
+        .unwrap();
+    }
+    text
+}
+
+pub fn disassemble_with_symbols(
+    code: &[u8],
+    symbols: Option<&Symbols<'_>>,
+) -> Result<String, Error> {
     let mut text = String::new();
     // Validate the full stream before producing any output.
     for located in decode(code)? {
@@ -83,7 +145,30 @@ pub fn disassemble(code: &[u8]) -> Result<String, Error> {
             }
             start += width;
         }
-        writeln!(text, " # CODE+0x{:06x}", located.offset).unwrap();
+        write!(text, " # CODE+0x{:06x}", located.offset).unwrap();
+        if let Some(symbols) = symbols {
+            let mut start = 0;
+            for (field, &width) in instruction.opcode().operand_widths().iter().enumerate() {
+                if instruction.opcode().symbol_operands().contains(&field) {
+                    let id = u32::from_be_bytes(
+                        instruction.operands()[start..start + width]
+                            .try_into()
+                            .unwrap(),
+                    );
+                    if let Some(symbol) = symbols.get(id) {
+                        use ciq_mc::Opcode;
+                        let role = match (instruction.opcode(), field) {
+                            (Opcode::Getmv, 0) => "module",
+                            (Opcode::Getmv, 1) | (Opcode::Getlocalv, 1) => "member",
+                            _ => "symbol",
+                        };
+                        write!(text, "; {role}={:?}", symbol.name).unwrap();
+                    }
+                }
+                start += width;
+            }
+        }
+        text.push('\n');
     }
     Ok(text)
 }

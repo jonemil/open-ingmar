@@ -13,7 +13,14 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The export contains a manifest, assembly for supported ordinary code, and raw binary payloads for every other section. See [the project format](docs/specs/section-project.md). Re-signing and relocation are not implemented yet; current project import preserves signing material and enforces the declared payload lengths. Keep exports under ignored `scratch/`.
+The export contains a manifest, assembly for supported ordinary code, and raw binary payloads for every other section. Supported symbol tables also produce an inspection listing, and code comments resolve symbol names. See [the project format](docs/specs/section-project.md). Re-signing and relocation are not implemented yet; current project import preserves signing material and enforces the declared payload lengths. Keep exports under ignored `scratch/`.
+
+Inspect resolved symbols or annotated code:
+
+```sh
+cargo run -p ciq-dis -- symbols examples/minimal-console/build/fr265/minimal-console.prg
+cargo run -p ciq-dis -- code examples/minimal-console/build/fr265/minimal-console.prg
+```
 
 Build and validate the workspace:
 

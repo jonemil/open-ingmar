@@ -57,6 +57,18 @@ opcodes! {
     Argcincsp = 0x4a, "argcincsp", [1, 1];
 }
 
+impl Opcode {
+    /// Zero-based operand fields that encode symbol identifiers.
+    pub fn symbol_operands(self) -> &'static [usize] {
+        match self {
+            Self::Spush | Self::Getselfv | Self::Getsv => &[0],
+            Self::Getmv => &[0, 1],
+            Self::Getlocalv => &[1],
+            _ => &[],
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     pub offset: usize,

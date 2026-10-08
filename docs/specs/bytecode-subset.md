@@ -45,4 +45,4 @@ ipush1 0x29           # integer 41 in the reference probe
 return
 ```
 
-Disassembly emits fixed-width operands and code-offset comments. Reassembly reproduces the original operand bits. Strings, symbol names, labels, directives, and expressions are not part of this initial grammar. `ciq-asm` replaces an entire ordinary code payload in an existing PRG template; it is not yet a standalone PRG builder or a Monkey C compiler.
+Disassembly emits fixed-width operands and code-offset comments. When the PRG contains a supported symbol table, comments also annotate symbol operands using escaped names; assembly ignores those comments and reproduces the original operand bits. Symbol names and string literals are not yet operand syntax. Labels, directives, and expressions are also not part of this initial grammar. `ciq-asm` can replace an entire ordinary code payload in a PRG template or reconstruct a [complete section project](section-project.md); it is not a Monkey C compiler.

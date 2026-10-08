@@ -17,10 +17,11 @@ Use Garmin's compiler to generate reference specimens and Garmin's simulator as 
 - [SDK manager inspection](investigations/sdk-manager-device-endpoint.md) identified authenticated device download endpoints. The user has now supplied the `fr265` package and fonts under `scratch/garmin-data/`.
 - A [standalone browser-login device downloader](../scripts/README.md) is available, with six passing offline tests. The actual package is present; the agent has not observed the user's live sign-in flow.
 - [Initial research and Rust implementation](investigations/rust-bootstrap.md) now cover pinned Ghidra plugin and optimizer sources, observed PRG framing, and the opcode subset present in two compiled specimens.
-- The Cargo workspace contains working `ciq-prg`, `ciq-mc`, `ciq-dis`, and `ciq-asm` crates. Seventeen Rust tests and Clippy pass; there are no external Rust dependencies.
+- The Cargo workspace contains working `ciq-prg`, `ciq-mc`, `ciq-dis`, and `ciq-asm` crates. Twenty-two Rust tests and Clippy pass; there are no external Rust dependencies.
 - [Minimal Console](../examples/minimal-console/README.md) compiles for `fr265`; its target `hello()` function contains only `System.println("Hello!")`, within the required watch-app scaffolding.
 - Both reference PRGs have completed byte-identical full-code disassembly/reassembly and container reconstruction. The original Hello World has verified simulator behavior; newly emitted PRGs still need a host-side simulator run. No changed-bytecode acceptance experiment has been completed.
 - [Complete section export/import](investigations/section-project.md) is implemented: each specimen exports 13 ordered sections as code assembly and raw binary payloads, then reconstructs an identical PRG without reading the original template. Signing with our own key is still pending.
+- [Symbol decoding](investigations/symbols.md) now resolves names from the PRG, annotates symbol operands, and adds an inspection listing to exports. Both annotated exports round-trip correctly. Data pointers and string literals are next; named assembly is not implemented yet.
 
 ## Milestones
 

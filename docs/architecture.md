@@ -32,7 +32,7 @@ This follows LLVM's useful division between a binary container layer, a machine 
 
 ## Initial implementation
 
-The container model supports lossless preservation of data it does not understand. The tools decode ordinary code, leaving the remaining sections opaque. Assembly can reconstruct a complete exported section project without the original PRG, or use the earlier code-only template workflow. It does not yet build an executable from a single function alone. Length-changing edits require evidence about every affected offset, reference, and integrity field before implementation. Same-length edits still require signature and runtime validation.
+The container model supports lossless preservation of data it does not understand. The tools decode ordinary code and symbol tables for inspection, retaining non-code payloads as raw assembly inputs. Symbol names annotate numeric code operands; they are not yet accepted as assembly operands. Assembly can reconstruct a complete exported section project without the original PRG, or use the earlier code-only template workflow. It does not yet build an executable from a single function alone. Length-changing edits require evidence about every affected offset, reference, and integrity field before implementation. Same-length edits still require signature and runtime validation.
 
 Bytecode decoding and encoding are symmetrical. The current operand model preserves raw bits without resolving references. Future symbolic assembly should preserve symbolic references until layout and encoding; derive reference and fixup kinds from observed data rather than assuming conventional addresses or linker semantics. Labels, branch relocation, extended code, and signature generation are deferred.
 
@@ -61,6 +61,6 @@ For an otherwise unchanged reconstruction, compare preserved non-signature secti
 
 ## Local specifications
 
-The initial specs are [PRG framing](specs/prg-container.md) and [the bytecode subset and assembly grammar](specs/bytecode-subset.md), supported by [the Rust bootstrap investigation](investigations/rust-bootstrap.md). Symbols and calling conventions remain research topics. Each specification should explain the behavior directly and link to local investigation records for its evidence.
+The specs include [PRG framing](specs/prg-container.md), [the bytecode subset and assembly grammar](specs/bytecode-subset.md), [section projects](specs/section-project.md), and [symbol tables](specs/symbols.md). Symbol editing, data layouts, and calling conventions remain research topics. Each specification should explain the behavior directly and link to local investigation records for its evidence.
 
 Checked-in code should stand on its own and reference local specifications when an explanation is needed. Keep external repository paths and comparison details in research notes. Preserve attribution and any licensing obligations if material is ever incorporated; documenting findings locally does not erase their provenance.

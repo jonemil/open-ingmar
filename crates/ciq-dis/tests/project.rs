@@ -1,5 +1,5 @@
 use ciq_prg::{
-    CODE, Prg, Section,
+    CODE, Prg, SYMBOLS, Section,
     manifest::{Encoding, FILE_NAME, Manifest},
 };
 use std::{
@@ -22,6 +22,63 @@ impl TemporaryDirectory {
         fs::create_dir(&path).unwrap();
         Self(path)
     }
+}
+
+fn symbol_payload() -> Vec<u8> {
+    let mut bytes = vec![0, 2];
+    bytes.extend_from_slice(&0x800005u32.to_be_bytes());
+    bytes.extend_from_slice(&18u32.to_be_bytes());
+    bytes.extend_from_slice(&0x800067u32.to_be_bytes());
+    bytes.extend_from_slice(&35u32.to_be_bytes());
+    for name in ["Toybox_System", "print\n\"ln"] {
+        bytes.push(1);
+        bytes.extend_from_slice(&(name.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(name.as_bytes());
+        bytes.push(0);
+    }
+    bytes
+}
+
+#[test]
+fn symbol_annotations_are_escaped_and_do_not_change_assembled_bytes() {
+    let code = vec![
+        0x45, 0, 0x80, 0, 5, 0, 0x80, 0, 0x67, 0x18, 0, 0x80, 0, 5, 0x38, 5, 0x16,
+    ];
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, code.clone()).unwrap(),
+        Section::new(SYMBOLS, symbol_payload()).unwrap(),
+    ]);
+    let listing = ciq_dis::disassemble_prg(&original).unwrap();
+    assert!(listing.contains("module=\"Toybox_System\"; member=\"print\\n\\\"ln\""));
+    assert_eq!(listing.lines().count(), 4);
+    // A pointer and immediate with matching numeric values aren't symbol operands.
+    assert!(!listing.lines().nth(1).unwrap().contains("symbol="));
+    assert!(!listing.lines().nth(2).unwrap().contains("symbol="));
+    assert_eq!(ciq_asm::assemble(&listing).unwrap(), code);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    ciq_dis::export_project(&original, &directory).unwrap();
+    let symbols = fs::read_to_string(directory.join("001-symbols.symbols.txt")).unwrap();
+    assert!(symbols.contains("print\\n\\\"ln"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+}
+
+#[test]
+fn missing_or_malformed_symbols_do_not_prevent_raw_preservation() {
+    let code = vec![0x43, 0, 0, 0, 0x80, 0x16];
+    let without = Prg::from_sections(vec![Section::new(CODE, code.clone()).unwrap()]);
+    let expected = ciq_dis::disassemble(&code).unwrap();
+    assert_eq!(ciq_dis::disassemble_prg(&without).unwrap(), expected);
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, code).unwrap(),
+        Section::new(SYMBOLS, vec![0, 1]).unwrap(),
+    ]);
+    assert_eq!(ciq_dis::disassemble_prg(&original).unwrap(), expected);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    ciq_dis::export_project(&original, &directory).unwrap();
+    assert!(!directory.join("001-symbols.symbols.txt").exists());
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
 }
 
 impl Drop for TemporaryDirectory {

@@ -1,4 +1,4 @@
-use ciq_prg::{CODE, Prg};
+use ciq_prg::{Prg, SYMBOLS, symbols::Symbols};
 use std::{
     env,
     error::Error,
@@ -10,10 +10,11 @@ use std::{
 
 fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = env::args_os().skip(1).collect();
-    let inventory = args.len() == 2 && (args[0] == "sections" || args[0] == "code");
+    let inventory =
+        args.len() == 2 && (args[0] == "sections" || args[0] == "code" || args[0] == "symbols");
     let export = args.len() == 3 && args[0] == "all";
     if !inventory && !export {
-        return Err("Usage: ciq-dis sections|code <input.prg>\n       ciq-dis all <input.prg> <new-project-directory>".into());
+        return Err("Usage: ciq-dis sections|code|symbols <input.prg>\n       ciq-dis all <input.prg> <new-project-directory>".into());
     }
     let prg = Prg::parse(&fs::read(&args[1])?)?;
     if export {
@@ -39,8 +40,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             offset += 8 + section.payload().len();
         }
         writeln!(stdout, "{offset:08x}  00000000  terminator")?;
+    } else if args[0] == "symbols" {
+        let symbols = Symbols::parse(prg.unique_section(SYMBOLS)?.payload())?;
+        stdout.write_all(ciq_dis::format_symbols(&symbols).as_bytes())?;
     } else {
-        stdout.write_all(ciq_dis::disassemble(prg.unique_section(CODE)?.payload())?.as_bytes())?;
+        stdout.write_all(ciq_dis::disassemble_prg(&prg)?.as_bytes())?;
     }
     Ok(())
 }

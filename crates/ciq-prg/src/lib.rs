@@ -3,8 +3,10 @@
 use std::fmt;
 
 pub mod manifest;
+pub mod symbols;
 
 pub const CODE: u32 = 0xc0de_babe;
+pub const SYMBOLS: u32 = 0x5717_b015;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
