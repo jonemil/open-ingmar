@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+pub mod manifest;
+
 pub const CODE: u32 = 0xc0de_babe;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +27,16 @@ pub struct Section {
 }
 
 impl Section {
+    pub fn new(kind: u32, payload: Vec<u8>) -> Result<Self, Error> {
+        if kind == 0 || u32::try_from(payload.len()).is_err() {
+            return Err(Error {
+                offset: 0,
+                message: "section identifier must be nonzero and payload length must fit u32",
+            });
+        }
+        Ok(Self { kind, payload })
+    }
+
     pub fn kind(&self) -> u32 {
         self.kind
     }
@@ -61,6 +73,10 @@ pub struct Prg {
 }
 
 impl Prg {
+    pub fn from_sections(sections: Vec<Section>) -> Self {
+        Self { sections }
+    }
+
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         let mut offset = 0;
         let mut sections = Vec::new();
@@ -139,7 +155,7 @@ impl Prg {
         let mut bytes = Vec::new();
         for section in &self.sections {
             bytes.extend_from_slice(&section.kind.to_be_bytes());
-            // All sections originate from bounded u32 lengths in parse().
+            // parse() and Section::new() enforce u32 payload lengths.
             bytes.extend_from_slice(&(section.payload.len() as u32).to_be_bytes());
             bytes.extend_from_slice(&section.payload);
         }

@@ -1,7 +1,44 @@
 //! Initial assembly grammar; see docs/specs/bytecode-subset.md.
 
 use ciq_mc::{Instruction, Opcode};
+use ciq_prg::{
+    Prg, Section,
+    manifest::{Encoding, FILE_NAME, Manifest},
+};
 use std::fmt;
+use std::{error::Error as StdError, fs, path::Path};
+
+/// Reconstruct all sections without reading an original PRG template.
+pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
+    let directory = directory.canonicalize()?;
+    let manifest_path = directory.join(FILE_NAME).canonicalize()?;
+    if !manifest_path.starts_with(&directory) {
+        return Err("manifest resolves outside the project directory".into());
+    }
+    let manifest = Manifest::parse(&fs::read_to_string(manifest_path)?)?;
+    let mut sections = Vec::new();
+    for entry in manifest.entries {
+        let path = directory.join(&entry.file).canonicalize()?;
+        if !path.starts_with(&directory) {
+            return Err(format!("{} resolves outside the project directory", entry.file).into());
+        }
+        let payload = match entry.encoding {
+            Encoding::Raw => fs::read(&path)?,
+            Encoding::Assembly => assemble(&fs::read_to_string(&path)?)?,
+        };
+        if payload.len() != entry.length as usize {
+            return Err(format!(
+                "{} produced {} bytes; manifest requires {} (relocation is unsupported)",
+                entry.file,
+                payload.len(),
+                entry.length
+            )
+            .into());
+        }
+        sections.push(Section::new(entry.kind, payload)?);
+    }
+    Ok(Prg::from_sections(sections))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {

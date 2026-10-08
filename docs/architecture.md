@@ -23,16 +23,16 @@ scratch/                   # ignored local SDK specimens and experiments
 
 | Crate | Current responsibility | Dependencies |
 |---|---|---|
-| `ciq-prg` | Read/write ordered opaque PRG sections; preserve unknown payloads and duplicate identifiers | Standard library |
+| `ciq-prg` | Read/write ordered opaque PRG sections and section-project manifests; preserve unknown payloads and duplicate identifiers | Standard library |
 | `ciq-mc` | Decode/encode the observed instruction subset, preserving operand bit patterns | Standard library |
-| `ciq-dis` | Print section inventory or ordinary code as assembly text | `ciq-prg`, `ciq-mc` |
-| `ciq-asm` | Parse assembly and replace equal-length ordinary code in an existing PRG template | `ciq-prg`, `ciq-mc` |
+| `ciq-dis` | Print section inventory/code assembly, or export all sections to a project directory | `ciq-prg`, `ciq-mc` |
+| `ciq-asm` | Parse assembly; reconstruct a complete section project or replace equal-length code in a PRG template | `ciq-prg`, `ciq-mc` |
 
 This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. We have no compiler intermediate representation yet. These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished and have no external Rust dependencies.
 
 ## Initial implementation
 
-The container model supports lossless preservation of data it does not understand. The first tools decode ordinary code, leaving the remaining sections opaque. Assembly reuses a known-good PRG template; it does not yet build an independent executable from a single function. Length-changing edits require evidence about every affected offset, reference, and integrity field before implementation. Same-length edits still require signature and runtime validation.
+The container model supports lossless preservation of data it does not understand. The tools decode ordinary code, leaving the remaining sections opaque. Assembly can reconstruct a complete exported section project without the original PRG, or use the earlier code-only template workflow. It does not yet build an executable from a single function alone. Length-changing edits require evidence about every affected offset, reference, and integrity field before implementation. Same-length edits still require signature and runtime validation.
 
 Bytecode decoding and encoding are symmetrical. The current operand model preserves raw bits without resolving references. Future symbolic assembly should preserve symbolic references until layout and encoding; derive reference and fixup kinds from observed data rather than assuming conventional addresses or linker semantics. Labels, branch relocation, extended code, and signature generation are deferred.
 
@@ -42,7 +42,7 @@ The future compiler can perform whole-program analysis over applicable Monkey C 
 
 ## Complete section export and signing boundary
 
-Agreed direction (2026-10-08): export undecoded sections as raw binary, with a manifest retaining identifiers and order. Ordinary code can be represented as assembly. Import should reconstruct the complete container from these files without requiring the original PRG as a template. This export/import interface is planned, not yet implemented.
+Implemented on 2026-10-08: export undecoded sections as raw binary, with a manifest retaining identifiers and order. Ordinary code is represented as assembly when supported, otherwise raw binary. Import reconstructs the complete container from these files without requiring the original PRG as a template. See [the project format](specs/section-project.md) and [verification record](investigations/section-project.md).
 
 Keep signing as a separate implementation stage, exposed through the assembler's intended `-y <developer-key>` option. Assembly with this option should reconstruct the program, sign the result using the supplied key, and replace the original developer signature and associated public-key components. Original signature payloads can be retained as raw evidence for preservation tests; they are not the output signing identity when `-y` is supplied. Private keys remain external to the exported project and Git. This option is a planned interface, not currently implemented.
 

@@ -9,5 +9,8 @@ publish.workspace = true
 ciq-prg.workspace = true
 ciq-mc.workspace = true
 
+[dev-dependencies]
+ciq-asm = { path = "../ciq-asm" }
+
 [lints]
 workspace = true

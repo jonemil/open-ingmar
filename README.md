@@ -6,6 +6,15 @@ The first compatibility milestone is to read a Garmin-generated trivial PRG, cha
 
 The Rust workspace now reads and writes PRG section streams and disassembles/reassembles the instruction subset observed in two reference examples. Both examples round-trip byte for byte. The original Hello World also has verified simulator behavior; running the newly emitted PRGs remains the next host-side check.
 
+Export all sections and reassemble without the original PRG template (use a new output directory and filename):
+
+```sh
+cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console.prg scratch/minimal-project
+cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
+```
+
+The export contains a manifest, assembly for supported ordinary code, and raw binary payloads for every other section. See [the project format](docs/specs/section-project.md). Re-signing and relocation are not implemented yet; current project import preserves signing material and enforces the declared payload lengths. Keep exports under ignored `scratch/`.
+
 Build and validate the workspace:
 
 ```sh
