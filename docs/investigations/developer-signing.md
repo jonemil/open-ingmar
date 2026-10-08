@@ -1,6 +1,6 @@
 # Developer signing and a same-size instruction edit
 
-Date: 2026-10-08. Target: SDK 9.2.0, Forerunner 265 (`fr265`). Runtime validation of the changed program remains pending.
+Date: 2026-10-08. Target: SDK 9.2.0, Forerunner 265 (`fr265`). Runtime validation of the changed program succeeded on the host; console and screen evidence were inspected by the agent.
 
 ## Sources and independent observations
 
@@ -50,20 +50,27 @@ Observed output: 122668 bytes, 13 sections, SHA-256 `8774c0ab49d7d1aecca35d900ec
 
 Ignored `scratch/signing/inspect-signatures.py` and `signature-observations.json` hold the local independent-check script and observations. The algorithm, inputs, and expected hashes above allow reproduction without checking in those artifacts or private keys.
 
-## Automated checks and remaining runtime check
+## Automated checks and host runtime validation
 
 `cargo test --workspace --quiet` passes 52 tests; `cargo clippy --workspace --all-targets -- -D warnings` passes. Signing tests use fresh ephemeral RSA keys, not the user's key. They cover both signature variants, unchanged deterministic re-signing, different-key replacement, tampered code/signatures/exponents, malformed input, store-signature removal, raw-section preservation, project/template workflows, verify, invalid keys, and overwrite refusal. The legacy 1028-byte variant is tested synthetically; no claim of legacy simulator validation is made.
 
-Attempting the simulator launcher here stops because Podman is unavailable. Run on the host:
+Attempting the simulator launcher in the agent container stopped because Podman is unavailable. The user subsequently ran this command successfully on the host:
 
 ```sh
 sh scripts/run-simulator-container.sh --prg scratch/signing/hello-42.prg
 ```
 
-Expected: console `Hello from Monkey C!` and `42`, with the captured screen showing `42`. Inspect fresh `scratch/simulator/monkeydo.log`, `simulator.log`, and `screen.png`; older baseline captures showing `41` do not validate this output. For desktop interaction:
+Observed: `scratch/simulator/monkeydo.log` contains `Hello from Monkey C!` and `42`. The agent visually inspected `scratch/simulator/screen.png`: it shows `Hello world!` and `42`. Capture files were updated on 2026-10-08 at 23:11; `simulator.log` contains image-handler/layout debug messages. The PRG still matches the prepared SHA-256 hash above.
+
+Capture SHA-256 hashes (captures remain ignored):
+
+- Console log: `b02f243853f712d3baf359332103eb9536423921b300c61b9e33304bd55b674c`.
+- Screen: `bc99ef1b2602410cbb751aab2e263d36968ce3974d1c5f25e293099a0d5fa111`.
+
+For desktop interaction:
 
 ```sh
 sh scripts/run-simulator-container.sh --interactive --prg scratch/signing/hello-42.prg
 ```
 
-Until that host run confirms execution, cryptographic validity and preserved layout are established, but changed-bytecode runtime acceptance remains unverified. Do not proceed to length-changing relocation or replacement functions based solely on passing signature checks.
+This completes the initial same-size instruction-modification milestone: our disassembly, section-project reconstruction, and developer signing produce a program Garmin accepts and executes with the intended visible change. Evidence applies to SDK 9.2.0 / `fr265` and this artifact; it does not establish store signing, legacy signature compatibility, or relocation. Next test a different small function body with unchanged byte length and entry point. Length-changing edits remain deferred until affected references and metadata are understood.

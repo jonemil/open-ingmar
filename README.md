@@ -4,7 +4,7 @@ An independent Rust toolchain for Garmin Connect IQ PRG containers and VM byteco
 
 The first compatibility milestone is to read a Garmin-generated trivial PRG, change a simple instruction or constant, write the PRG, and observe the changed behavior in Garmin's official simulator.
 
-The Rust workspace now reads and writes PRG section streams and disassembles/reassembles the instruction subset observed in two reference examples. Both examples round-trip byte for byte. The original Hello World also has verified simulator behavior; running the newly emitted PRGs remains the next host-side check.
+The Rust workspace now reads and writes PRG section streams and disassembles/reassembles the instruction subset observed in two reference examples. Both examples round-trip byte for byte. The modified, reassembled Hello World also runs in Garmin’s simulator: the own-key signed `41` → `42` edit is confirmed in both console output and the captured screen.
 
 Export all sections and reassemble without the original PRG template (use a new output directory and filename):
 
@@ -23,7 +23,7 @@ cargo run -p ciq-asm -- sign examples/minimal-console/build/fr265/minimal-consol
 cargo run -p ciq-asm -- verify scratch/minimal-signed.prg -y developer_key.der
 ```
 
-See [the signing experiment](docs/investigations/developer-signing.md). Both SDK specimens verify; unchanged Minimal Console re-signs byte identically with our key. The signed `41` → `42` Hello World is prepared, with simulator execution pending on the host.
+See [the signing experiment](docs/investigations/developer-signing.md). Both SDK specimens verify; unchanged Minimal Console re-signs byte identically with our key. The signed `41` → `42` Hello World runs successfully on the host simulator; console output and the captured screen both show `42`. A [complete same-size function replacement](docs/investigations/function-replacement.md) that computes `40 + 2` through a local variable also runs successfully.
 
 Inspect resolved symbols or annotated code (use `symbol-source` for symbol assembly or `code-symbolic` for self-contained named code and pinned strings):
 

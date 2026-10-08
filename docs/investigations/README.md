@@ -15,6 +15,8 @@
 
 - [DATA class/module fields and method bindings](data-classes.md): read-only record/field inspection, verified method references, inspection sidecars, byte-identical real projects, and 47 passing tests.
 
-- [Developer signing and the prepared `41` → `42` edit](developer-signing.md): independently verified SDK signature coverage, own-key assembly, exact unchanged re-signing, 52 passing tests, and pending host simulator validation.
+- [Developer signing and the verified `41` → `42` edit](developer-signing.md): independently verified SDK signature coverage, own-key assembly, exact unchanged re-signing, 52 passing tests, and confirmed host simulator execution with console/display `42`.
 
-Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).
+- [Same-size arithmetic function replacement](function-replacement.md): a complete 13-byte `probe()` replacement, signature and preservation checks, and successful host execution of arithmetic/local-frame instructions.
+
+Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; structured class/method declarations and relocation research are next, as described in [the plan](../plan.md).

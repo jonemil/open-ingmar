@@ -377,3 +377,7 @@ Observed encoding: `4a 02 02` at CODE+`0x00004c` in **hello-world**, HelloWorldV
 
 **Limits:** The exact physical stack-pointer/frame-pointer changes and storage unit are unverified. These operands are counts, not symbol IDs or code addresses.
 
+
+## Runtime evidence for arithmetic and local-frame instructions
+
+The [same-size function replacement](../investigations/function-replacement.md) executes `argcincsp 0x01 0x01; ipush1 0x28; ipush1 0x02; addv; lputv 0x01; lgetv 0x01; return` in SDK 9.2.0's `fr265` simulator and prints/displays `42`. This supports integer addition, local slot 1 storage/retrieval, and the combined prologue for this particular body. Exact physical frame layout and the broader calling convention remain unverified.
