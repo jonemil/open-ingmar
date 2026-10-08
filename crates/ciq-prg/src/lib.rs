@@ -2,9 +2,13 @@
 
 use std::fmt;
 
+pub mod data;
 pub mod manifest;
+pub mod resources;
 pub mod symbols;
 
+pub const DATA: u32 = 0xda7a_babe;
+pub const RESOURCES: u32 = 0xf00d_600d;
 pub const CODE: u32 = 0xc0de_babe;
 pub const SYMBOLS: u32 = 0x5717_b015;
 

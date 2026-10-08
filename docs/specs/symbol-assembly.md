@@ -56,7 +56,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/symbol-project scratch/symbol-project.prg
 ```
 
-The [version 2 manifest](section-project.md) chooses `symbols` encoding for the authoritative symbol `.mcasm` file. Code files reference those declarations even when the symbol section follows CODE in the manifest. There must be exactly one symbol section when structured symbols are used. Code may add inline declarations with distinct aliases; only the manifest-selected symbol source is serialized into SYMBOLS. Inline declarations resolve code IDs and do not implicitly add table entries. An include mechanism is not implemented.
+The [version 2+ manifest](section-project.md) chooses `symbols` encoding for the authoritative symbol `.mcasm` file. Code files reference those declarations even when the symbol section follows CODE in the manifest. There must be exactly one symbol section when structured symbols are used. Code may add inline declarations with distinct aliases; only the manifest-selected symbol source is serialized into SYMBOLS. Inline declarations resolve code IDs and do not implicitly add table entries. An include mechanism is not implemented.
 
 The `.symbols.txt` sidecar remains inspection-only. Raw and structured payloads are never both authoritative for the same section. Existing version 1/raw-symbol projects continue to work.
 
@@ -76,7 +76,7 @@ cargo run -p ciq-dis -- code-symbolic examples/minimal-console/build/fr265/minim
 cargo run -p ciq-asm -- examples/minimal-console/build/fr265/minimal-console.prg scratch/code-symbolic.mcasm scratch/code-symbolic.prg
 ```
 
-This code includes only referenced symbol declarations and resolves their IDs. It preserves the template's symbol table. `ciq-dis code` retains the existing numeric output with name annotations. Missing/malformed symbol metadata leaves code operands numeric.
+This code includes referenced symbol declarations and resolves their IDs. It preserves the template's symbol table. It also emits inline pinned DATA string declarations when supported; [template assembly](data-strings.md) consumes same-length string edits. `ciq-dis code` retains the existing numeric output with name annotations. Missing/malformed symbol metadata leaves code operands numeric.
 
 ## Editing boundaries
 

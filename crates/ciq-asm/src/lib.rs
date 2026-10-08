@@ -3,6 +3,7 @@
 use ciq_mc::{Instruction, Opcode};
 use ciq_prg::{
     Prg, Section,
+    data::{Source as DataSource, StringDeclaration},
     manifest::{Encoding, FILE_NAME, Manifest},
     symbols::source::{Declaration, Source, tokens},
 };
@@ -31,6 +32,20 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     {
         return Err("structured symbols require a single symbol section".into());
     }
+    if manifest
+        .entries
+        .iter()
+        .any(|e| e.encoding == Encoding::Data)
+        && manifest
+            .entries
+            .iter()
+            .filter(|e| e.kind == ciq_prg::DATA)
+            .count()
+            != 1
+    {
+        return Err("structured DATA requires a single DATA section".into());
+    }
+    let mut data_source = DataSource::default();
     let mut inputs = Vec::new();
     let mut symbol_source = Source::default();
     for entry in &manifest.entries {
@@ -42,15 +57,31 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         if entry.encoding == Encoding::Symbols {
             symbol_source = Source::parse(std::str::from_utf8(&bytes)?)?;
         }
+        if entry.encoding == Encoding::Data {
+            data_source = DataSource::parse(std::str::from_utf8(&bytes)?)?;
+        }
         inputs.push(bytes);
     }
     let bindings = symbol_source.bindings()?;
+    let (data_payload, strings) = data_source.encode()?;
     let mut sections = Vec::new();
     for (entry, bytes) in manifest.entries.iter().zip(inputs) {
         let payload = match entry.encoding {
             Encoding::Raw => bytes,
-            Encoding::Assembly => assemble_with_bindings(std::str::from_utf8(&bytes)?, &bindings)?,
+            Encoding::Assembly => {
+                let text = std::str::from_utf8(&bytes)?;
+                for line in text.lines() {
+                    if tokens(line)?.first().is_some_and(|f| f == ".string") {
+                        return Err(
+                            "project string declarations belong in the authoritative DATA source"
+                                .into(),
+                        );
+                    }
+                }
+                assemble_with_references(text, &bindings, &strings)?
+            }
             Encoding::Symbols => symbol_source.encode()?,
+            Encoding::Data => data_payload.clone(),
         };
         if payload.len() != entry.length as usize {
             return Err(format!(
@@ -88,15 +119,40 @@ pub fn assemble_with_bindings(
     text: &str,
     external: &std::collections::BTreeMap<String, u32>,
 ) -> Result<Vec<u8>, Error> {
+    assemble_with_references(text, external, &std::collections::BTreeMap::new())
+}
+
+pub fn assemble_with_references(
+    text: &str,
+    external: &std::collections::BTreeMap<String, u32>,
+    external_strings: &std::collections::BTreeMap<String, u32>,
+) -> Result<Vec<u8>, Error> {
     let fail = |line, message: String| Error { line, message };
     let mut lines = Vec::new();
     let mut declarations = Source::default();
+    let mut strings = external_strings.clone();
     for (index, line) in text.lines().enumerate() {
         let fields = tokens(line).map_err(|e| fail(index + 1, e.to_string()))?;
         if fields.first().is_some_and(|f| f == ".symbol") {
             declarations
                 .declarations
                 .push(Declaration::parse(&fields).map_err(|e| fail(index + 1, e.to_string()))?);
+        } else if fields.first().is_some_and(|f| f == ".string") {
+            let declaration =
+                StringDeclaration::parse(&fields).map_err(|e| fail(index + 1, e.to_string()))?;
+            let at = declaration.at.ok_or_else(|| {
+                fail(
+                    index + 1,
+                    "inline code strings require at=0x...; automatic layout belongs in DATA source"
+                        .into(),
+                )
+            })?;
+            if strings.insert(declaration.alias.clone(), at).is_some() {
+                return Err(fail(
+                    index + 1,
+                    format!("duplicate string alias {}", declaration.alias),
+                ));
+            }
         } else if !fields.is_empty() {
             lines.push((index + 1, fields));
         }
@@ -142,11 +198,22 @@ pub fn assemble_with_bindings(
                     .get(alias)
                     .ok_or_else(|| fail(line, format!("undefined symbol alias {alias}")))?
                     as u64
+            } else if let Some(alias) = value.strip_prefix('&') {
+                if opcode != Opcode::News || field != 0 {
+                    return Err(fail(
+                        line,
+                        "string reference used in a non-string operand".into(),
+                    ));
+                }
+                *strings
+                    .get(alias)
+                    .ok_or_else(|| fail(line, format!("undefined string alias {alias}")))?
+                    as u64
             } else {
                 let hex = value.strip_prefix("0x").ok_or_else(|| {
                     fail(
                         line,
-                        "operands must start with 0x or use a declared @alias".into(),
+                        "operands must start with 0x or use a declared @alias or &alias".into(),
                     )
                 })?;
                 if hex.is_empty() || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -168,6 +235,42 @@ pub fn assemble_with_bindings(
             .encode_into(&mut code);
     }
     Ok(code)
+}
+
+/// Apply same-length code and inline string edits to an existing template.
+pub fn assemble_template(mut prg: Prg, text: &str) -> Result<Prg, Box<dyn StdError>> {
+    let code = assemble(text)?;
+    let mut patches = Vec::new();
+    for line in text.lines() {
+        let fields = tokens(line)?;
+        if fields.first().is_some_and(|f| f == ".string") {
+            patches.push(StringDeclaration::parse(&fields)?);
+        }
+    }
+    if !patches.is_empty() {
+        let mut payload = prg.unique_section(ciq_prg::DATA)?.payload().to_vec();
+        let mut ranges = Vec::new();
+        for declaration in patches {
+            let at = declaration.at.ok_or("inline string lacks placement")?;
+            let (old, end) = ciq_prg::data::string_at(&payload, at)?;
+            if old.len() != declaration.value.len() {
+                return Err(
+                    "inline string edit changes record length; relocation is unsupported".into(),
+                );
+            }
+            if ranges
+                .iter()
+                .any(|&(start, previous_end)| (at as usize) < previous_end && end > start)
+            {
+                return Err("overlapping inline string declarations".into());
+            }
+            ranges.push((at as usize, end));
+            payload[at as usize + 3..end - 1].copy_from_slice(declaration.value.as_bytes());
+        }
+        prg.replace_same_length(ciq_prg::DATA, &payload)?;
+    }
+    prg.replace_same_length(ciq_prg::CODE, &code)?;
+    Ok(prg)
 }
 
 #[cfg(test)]

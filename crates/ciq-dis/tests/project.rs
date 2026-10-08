@@ -1,5 +1,5 @@
 use ciq_prg::{
-    CODE, Prg, SYMBOLS, Section,
+    CODE, DATA, Prg, SYMBOLS, Section,
     manifest::{Encoding, FILE_NAME, Manifest},
 };
 use std::{
@@ -254,5 +254,104 @@ fn unreferenced_names_and_duplicate_symbol_sections_fall_back_to_raw() {
     let directory = temporary.0.join("duplicate");
     let manifest = ciq_dis::export_project(&duplicate, &directory).unwrap();
     assert!(manifest.entries.iter().all(|e| e.encoding == Encoding::Raw));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), duplicate);
+}
+
+fn string_specimen() -> Prg {
+    // The prefix is opaque, so extraction must use the news reference.
+    Prg::from_sections(vec![
+        Section::new(DATA, vec![0xff, 0xc1, 1, 0, 2, b'h', b'i', 0, 0xee]).unwrap(),
+        Section::new(CODE, vec![0x18, 0, 0, 0, 2, 0x16]).unwrap(),
+        Section::new(ciq_prg::RESOURCES, vec![0, 0]).unwrap(),
+        Section::new(0xe1c0de12, vec![0xaa, 0xbb]).unwrap(),
+    ])
+}
+
+#[test]
+fn data_source_is_authoritative_preserves_opaque_bytes_and_rejects_relocation() {
+    let original = string_specimen();
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Data);
+    let code = fs::read_to_string(directory.join(&manifest.entries[1].file)).unwrap();
+    assert!(code.contains("news &str_00000002"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let path = directory.join(&manifest.entries[0].file);
+    let text = fs::read_to_string(&path).unwrap();
+    fs::write(&path, text.replace("\"hi\"", "\"yo\"")).unwrap();
+    let edited = ciq_asm::assemble_project(&directory).unwrap();
+    assert_eq!(
+        edited.sections()[0].payload(),
+        [0xff, 0xc1, 1, 0, 2, b'y', b'o', 0, 0xee]
+    );
+    assert_eq!(edited.sections()[1..], original.sections()[1..]);
+    fs::write(&path, text.replace("\"hi\"", "\"longer\"")).unwrap();
+    assert!(ciq_asm::assemble_project(&directory).is_err());
+    fs::write(&path, text).unwrap();
+    fs::write(
+        directory.join(&manifest.entries[1].file),
+        format!(".string inline \"hi\" at=0x2\n{code}"),
+    )
+    .unwrap();
+    assert!(
+        ciq_asm::assemble_project(&directory)
+            .unwrap_err()
+            .to_string()
+            .contains("authoritative DATA")
+    );
+}
+
+#[test]
+fn symbolic_template_applies_inline_string_edits_with_typed_references() {
+    let original = string_specimen();
+    let text = ciq_dis::disassemble_symbolic(&original).unwrap();
+    assert!(text.contains(".string str_00000002 \"hi\" at=0x00000002"));
+    assert_eq!(
+        ciq_asm::assemble_template(original.clone(), &text).unwrap(),
+        original
+    );
+    let edited =
+        ciq_asm::assemble_template(original.clone(), &text.replace("\"hi\"", "\"yo\"")).unwrap();
+    assert_eq!(
+        ciq_prg::data::string_at(edited.sections()[0].payload(), 2)
+            .unwrap()
+            .0,
+        "yo"
+    );
+    assert_eq!(edited.sections()[1..], original.sections()[1..]);
+    assert!(ciq_asm::assemble_template(original, &text.replace("\"hi\"", "\"longer\"")).is_err());
+    for instruction in ["getselfv &x", "argc &x", "news @x", "news &missing"] {
+        assert!(ciq_asm::assemble(&format!(".string x \"hi\" at=0x2\n{instruction}")).is_err());
+    }
+    assert!(ciq_asm::assemble(".string x \"hi\"\nnews &x").is_err());
+}
+
+#[test]
+fn invalid_data_references_and_duplicate_sections_preserve_raw_input() {
+    for payload in [vec![1, 0, 1, b'x'], vec![2, 0, 0, 0]] {
+        let original = Prg::from_sections(vec![
+            Section::new(DATA, payload).unwrap(),
+            Section::new(CODE, vec![0x18, 0, 0, 0, 0]).unwrap(),
+        ]);
+        let temporary = TemporaryDirectory::new();
+        let directory = temporary.0.join("invalid");
+        let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+        assert_eq!(manifest.entries[0].encoding, Encoding::Raw);
+        assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    }
+    let duplicate = Prg::from_sections(vec![
+        Section::new(DATA, vec![1, 0, 0, 0]).unwrap(),
+        Section::new(DATA, vec![1, 0, 0, 0]).unwrap(),
+    ]);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("duplicate");
+    let manifest = ciq_dis::export_project(&duplicate, &directory).unwrap();
+    assert!(
+        manifest
+            .entries
+            .iter()
+            .all(|entry| entry.encoding == Encoding::Raw)
+    );
     assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), duplicate);
 }

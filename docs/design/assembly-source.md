@@ -1,6 +1,6 @@
 # Assembly source and optional layout constraints
 
-Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). Data declarations, includes, ID allocation, and general relocation remain proposals.
+Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). DATA string declarations and pinned opaque spans are also implemented; resource assembly, includes, ID allocation, and general relocation remain future work.
 
 ## One language and shared model
 
@@ -47,9 +47,9 @@ Numeric IDs need a separate rule: external/API symbols must retain or resolve to
 
 Declarations may live beside code or in a separate file using the same grammar. A proposed include mechanism could load `symbols.mcasm`; file boundaries should not change resolution or introduce a different symbol language. An include mechanism and its path semantics have not been implemented.
 
-Strings/data should follow the same pattern: content plus an alias, optional explicit placement, and a typed reference. For example, proposed `.string greeting "Hello!"` and `news &greeting` distinguish a data-address reference from a symbol-ID reference such as `@println`. An inline string operand could be shorthand for a generated data declaration, once the actual layout and identity semantics are understood. Do not assume equal string contents imply that records can always be merged.
+Strings/data should follow the same pattern: content plus an alias, optional explicit placement, and a typed reference. Implemented `.string greeting "Hello!"` and `news &greeting` distinguish a data-address reference from a symbol-ID reference such as `@println`. An inline string operand could be shorthand for a generated data declaration, once the actual layout and identity semantics are understood. Do not assume equal string contents imply that records can always be merged.
 
-The complete project manifest still handles section order and raw sections. Project format version 2 selects structured symbol source as authoritative; structured data remains future work. Do not make both a raw payload and a structured listing independently authoritative for the same section. The `.symbols.txt` sidecar remains inspection-only.
+The complete project manifest still handles section order and raw sections. Project format version 2 selects structured symbol source as authoritative; version 3 selects DATA strings and opaque spans; resource assembly remains future work. Do not make both a raw payload and a structured listing independently authoritative for the same section. The `.symbols.txt` sidecar remains inspection-only.
 
 ## Preservation and implementation sequence
 
@@ -57,9 +57,9 @@ For sections or embedded records with unknown references, retain raw bytes and t
 
 The remaining work can proceed in bounded steps:
 
-1. Decode data strings/class references and distinguish reference kinds with evidence.
+1. DATA strings and class record boundaries are implemented; class-field references still require investigation.
 2. Done: declarations and typed symbol references resolve existing IDs while retaining the surrounding known layout.
 3. Done: symbol serialization supports deterministic automatic or explicitly constrained record layout and table order.
-4. Extend data serialization and relocation only for references we can update completely.
+4. DATA strings now serialize with pinned opaque spans. Extend class/resource serialization and relocation only for references we can update completely.
 
 Test handwritten and printed source through the same parser/model; test deterministic allocation and clear conflicts for explicit constraints. Exact-byte checks apply to preservation cases; own-key signed output and intentionally transformed code are checked for expected content and behavior instead.

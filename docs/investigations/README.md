@@ -11,4 +11,6 @@
 
 - [Symbol assembly and named-code round trips](symbol-assembly.md): authoritative symbol declarations, optional layout constraints, version 2 projects, both real PRGs reconstructed identically, and 31 passing tests.
 
+- [DATA strings and initial resource inspection](data-and-resources.md): class record framing, 52/53 string records, typed references, constrained edits, byte-identical projects, read-only resource indexes, and 42 passing tests.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).

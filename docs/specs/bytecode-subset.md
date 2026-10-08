@@ -43,7 +43,7 @@ See [the instruction reference](instructions.md) for an individual section for e
 
 ## Assembly syntax
 
-Assembly uses one mnemonic per line, followed by one operand per field: a hexadecimal bit pattern or a declared `@alias` in a known symbol-ID field. Numeric operands must start with `0x` and fit their field widths. `#` starts a comment. Blank lines are allowed. For example:
+Assembly uses one mnemonic per line, followed by one operand per field: a hexadecimal bit pattern, a declared `@alias` in a known symbol-ID field, or `&alias` in the `news` string-address field. Numeric operands must start with `0x` and fit their field widths. `#` starts a comment. Blank lines are allowed. For example:
 
 ```text
 argc 0x01             # CODE+0x000000
@@ -51,4 +51,4 @@ ipush1 0x29           # integer 41 in the reference probe
 return
 ```
 
-Disassembly emits fixed-width operands and code-offset comments. When the PRG contains a supported symbol table, comments also annotate symbol operands using escaped names; assembly ignores those comments and reproduces the original operand bits. [Symbol declarations](symbol-assembly.md) resolve named operands. Optional commas separate fields. String/data declarations, labels, includes, and expressions are not implemented. `ciq-asm` can replace an entire ordinary code payload in a PRG template or reconstruct a [complete section project](section-project.md); it is not a Monkey C compiler.
+Disassembly emits fixed-width operands and code-offset comments. When the PRG contains a supported symbol table, comments also annotate symbol operands using escaped names; assembly ignores those comments and reproduces the original operand bits. [Symbol declarations](symbol-assembly.md) resolve named operands. Optional commas separate fields. [String declarations](data-strings.md) resolve DATA addresses; labels, includes, and expressions are not implemented. `ciq-asm` can replace an entire ordinary code payload in a PRG template or reconstruct a [complete section project](section-project.md); it is not a Monkey C compiler.

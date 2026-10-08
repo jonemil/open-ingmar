@@ -6,7 +6,7 @@ This reference covers each of the 28 opcodes currently encoded and decoded by `c
 
 All encodings below occur in our SDK 9.2.0, `fr265`, `-O 0` debug builds. Instruction presence and operand widths are **experimentally observed**. Execution descriptions and abstract stack effects are **source-derived**, with compiled source/bytecode supporting their interpretation. We have not traced individual instructions inside Garmin's VM. The original Hello World runs in the simulator; this does not validate every opcode's edge cases or every generated function's execution. Compatibility with other SDK/device versions is unverified for every entry.
 
-An opcode occupies one byte. `u8` occupies one byte; `u32be` occupies four bytes, most significant first. Length includes the opcode. Numeric assembly operands currently preserve bit patterns; declared `@alias` operands are supported in symbol-ID fields as described in [symbol assembly](symbol-assembly.md). Stack expressions in these descriptions remain explanatory.
+An opcode occupies one byte. `u8` occupies one byte; `u32be` occupies four bytes, most significant first. Length includes the opcode. Numeric assembly operands currently preserve bit patterns; declared `@alias` operands are supported in symbol-ID fields as described in [symbol assembly](symbol-assembly.md), and `news` accepts `&alias` references as described in [DATA strings](data-strings.md). Stack expressions in these descriptions remain explanatory.
 
 Stack notation puts the top at the right. `...` means unchanged lower values. “Local” denotes a frame slot, separate from the abstract evaluation stack. Stack effects summarize successful execution, excluding exceptions and physical frame mechanics. Member IDs refer to [symbols](symbols.md); string data addresses are a different reference kind. None of these 28 encodings has an immediate branch target.
 
@@ -207,7 +207,7 @@ The big-endian u32 operand is a data address, not a symbol ID or a symbol-name o
 
 Observed encoding: `18 00 00 32 79` at CODE+`0x000038` in **minimal-console**, /hello.
 
-**Limits:** The specimen has a zero address prefix and a data-relative offset. General address-space rules, allocation versus interning, and other string representations are not specified yet.
+**Limits:** The specimen has a zero address prefix and a data-relative offset. [String records and pinned assembly](data-strings.md) are now supported. General address-space rules, runtime allocation versus interning, and other string representations remain unresolved.
 
 ## spush
 
