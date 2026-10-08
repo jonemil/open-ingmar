@@ -19,4 +19,6 @@
 
 - [Same-size arithmetic function replacement](function-replacement.md): a complete 13-byte `probe()` replacement, signature and preservation checks, and successful host execution of arithmetic/local-frame instructions.
 
+- [Lossless class assembly and relocation inventory](class-assembly.md): authoritative class/field declarations, byte-identical full exports, and evidence boundaries for code references.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; structured class/method declarations and relocation research are next, as described in [the plan](../plan.md).

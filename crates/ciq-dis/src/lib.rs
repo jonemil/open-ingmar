@@ -119,6 +119,9 @@ fn string_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, S
 
 fn referenced_data(prg: &Prg) -> Option<DataSource> {
     let payload = prg.unique_section(DATA).ok()?.payload();
+    if let Ok(source) = DataSource::from_records(payload) {
+        return Some(source);
+    }
     let mut addresses: std::collections::BTreeSet<u32> = match ciq_prg::data::record_string_offsets(
         payload,
     ) {

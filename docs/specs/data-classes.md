@@ -1,6 +1,6 @@
 # DATA class/module record inspection
 
-Implemented read-only on 2026-10-08. Evidence: [class/module investigation](../investigations/data-classes.md). Records belong to DATA (`0xda7ababe`), interleaved with [string records](data-strings.md). All multibyte values are big-endian.
+Inspection and constrained assembly implemented on 2026-10-08. Evidence: [class/module investigation](../investigations/data-classes.md). Records belong to DATA (`0xda7ababe`), interleaved with [string records](data-strings.md). All multibyte values are big-endian.
 
 ## Framing
 
@@ -36,4 +36,22 @@ cargo run -p ciq-dis -- classes examples/hello-world/build/fr265/hello-world.prg
 
 The listing contains class version, record offset/size, presence flags, app flags, header values, field offsets, keys, resolved symbol names, types, and values. Names and string annotations use escaped quoted text. Missing/malformed symbols leave numeric output available. Missing/unsupported CODE leaves method-boundary checks unavailable. Missing/duplicate DATA or unsupported DATA framing is an error for this command.
 
-Complete export adds `NNN-data.classes.txt` when inspection succeeds. It is an inspection-only sidecar, excluded from `sections.ciq`. Editing it never changes reassembly. Authoritative DATA source still consists of string declarations plus opaque class spans (or raw binary fallback); class assembly and relocation are not implemented. No signing material or executable bytes are changed by inspection.
+Complete export adds `NNN-data.classes.txt` when inspection succeeds. It is an inspection-only sidecar, excluded from `sections.ciq`. Editing it never changes reassembly. Authoritative DATA source now uses the class assembly described below when the full walk succeeds; partial/raw fallbacks remain supported. Relocation is not implemented. No signing material or executable bytes are changed by inspection.
+
+## Class assembly
+
+Implemented on 2026-10-08; [serialization and relocation investigation](../investigations/class-assembly.md). Complete supported DATA exports now put class declarations alongside string declarations in the authoritative version 3 DATA source. Older `.bytes` class spans remain valid input. The class inspection sidecar is still not assembly input.
+
+```text
+.class at=0x0000047b version=0x02 extends=none statics=none parent=none module=0x008002e6 app_flags=0x0000
+.field key=0x00008146 type=0x06 value=0x10000030
+.endclass
+```
+
+This is an illustrative method declaration; the real record may have additional fields. Header attributes must appear in the shown order. Integers use hexadecimal `0x` prefixes. `none` means an absent header reference and is distinct from present zero. Version is 1 or 2; v1 requires all four references, whereas v2 derives its presence byte from the present references. App flags fit u16. `at` is a required DATA-relative 24-bit placement constraint and must equal the next serialized offset.
+
+Each `.field` has a full u32 `key`, u8 `type`, and u32 `value`, in that order. Field order, repeated keys, shared targets, unknown types, flag bits, and raw references are preserved. V1 requires `type` to equal the key's low nibble; v2 stores it separately. Field counts are derived from declarations and must fit u8 (v1) or u16 (v2). `.endclass` closes the block. Nested classes, other directives inside a class, missing terminators, and extra attributes are errors.
+
+The source model serializes independently of the borrowed inspection model. Parsed record offsets are inspection metadata; field offsets are recomputed from the serialized layout. Header values and field values remain numeric: symbolic field names, class aliases, and code labels are future work. No field is automatically rewritten based on a matching numeric value.
+
+Complete DATA walks export classes and strings only after checking that re-encoding reproduces the original payload. Unsupported walks retain the previous referenced-string/opaque-span fallback or raw DATA. Standalone `ciq-asm data` accepts this grammar; complete project import still enforces section lengths. Editing a method target or field is a program modification and must be re-signed and runtime-validated. Serialization does not establish that a chosen target has the right calling convention, and does not enable relocation.

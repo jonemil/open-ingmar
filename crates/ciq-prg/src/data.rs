@@ -19,6 +19,7 @@ pub struct StringDeclaration {
 pub enum Fragment {
     Bytes { at: u32, bytes: Vec<u8> },
     String(StringDeclaration),
+    Class(classes::source::Declaration),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -123,10 +124,22 @@ impl StringDeclaration {
 impl Source {
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut source = Self::default();
+        let mut class: Option<classes::source::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
-            let parse = || -> Result<Option<Fragment>, Error> {
+            let mut parse = || -> Result<Option<Fragment>, Error> {
                 let fields = tokens(line)?;
                 if fields.is_empty() {
+                    return Ok(None);
+                }
+                if let Some(declaration) = class.as_mut() {
+                    if fields == [".endclass"] {
+                        return Ok(Some(Fragment::Class(class.take().unwrap())));
+                    }
+                    declaration.push_field(&fields)?;
+                    return Ok(None);
+                }
+                if fields[0] == ".class" {
+                    class = Some(classes::source::Declaration::parse_header(&fields)?);
                     return Ok(None);
                 }
                 if fields[0] == ".string" {
@@ -134,7 +147,7 @@ impl Source {
                 }
                 if fields.len() != 3 || fields[0] != ".bytes" {
                     return Err(Error(
-                        "expected .string declaration or .bytes at=0x... <hex-bytes>".into(),
+                        "expected .class, .string, or .bytes at=0x... <hex-bytes>".into(),
                     ));
                 }
                 let at = address(
@@ -163,7 +176,34 @@ impl Source {
                 source.fragments.push(fragment);
             }
         }
+        if class.is_some() {
+            return Err(Error("unterminated .class declaration".into()));
+        }
         source.encode()?;
+        Ok(source)
+    }
+
+    /// Serialize a complete supported DATA walk, retaining all class keys and references.
+    pub fn from_records(payload: &[u8]) -> Result<Self, Error> {
+        let mut source = Self::default();
+        for record in classes::records(payload)? {
+            source.fragments.push(match record {
+                classes::Record::String { offset, value } => Fragment::String(StringDeclaration {
+                    alias: format!("str_{offset:08x}"),
+                    value: value.into(),
+                    at: Some(
+                        u32::try_from(offset)
+                            .map_err(|_| Error("DATA offset exceeds u32".into()))?,
+                    ),
+                }),
+                classes::Record::Class(class) => {
+                    Fragment::Class(classes::source::Declaration::from_record(&class)?)
+                }
+            });
+        }
+        if source.encode()?.0 != payload {
+            return Err(Error("structured DATA representation changed bytes".into()));
+        }
         Ok(source)
     }
 
@@ -213,6 +253,7 @@ impl Source {
             let at = match fragment {
                 Fragment::Bytes { at, .. } => Some(*at),
                 Fragment::String(s) => s.at,
+                Fragment::Class(c) => Some(c.at),
             };
             if at.is_some_and(|at| at as usize != payload.len()) {
                 return Err(Error(format!(
@@ -221,6 +262,13 @@ impl Source {
                 )));
             }
             match fragment {
+                Fragment::Class(c) => {
+                    let bytes = c.encode()?;
+                    if bytes.len() > ADDRESS_LIMIT - payload.len() {
+                        return Err(Error("DATA payload exceeds supported address range".into()));
+                    }
+                    payload.extend(bytes);
+                }
                 Fragment::Bytes { bytes, .. } => {
                     if bytes.len() > ADDRESS_LIMIT - payload.len() {
                         return Err(Error("DATA payload exceeds supported address range".into()));
@@ -256,6 +304,7 @@ impl Source {
         for fragment in &self.fragments {
             match fragment {
                 Fragment::String(s) => text.push_str(&s.to_text()),
+                Fragment::Class(c) => text.push_str(&c.to_text()),
                 Fragment::Bytes { at, bytes } => {
                     for (index, chunk) in bytes.chunks(32).enumerate() {
                         write!(text, ".bytes at=0x{:08x} ", *at as usize + index * 32).unwrap();

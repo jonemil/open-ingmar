@@ -13,7 +13,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings with opaque byte spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code uses named symbol operands and supported string references. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
+The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings and class/module declarations with opaque fallback spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code uses named symbol operands and supported string references. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
 
 Reassemble with your developer key, or sign an existing PRG separately (outputs must be new files):
 

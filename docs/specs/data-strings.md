@@ -16,7 +16,7 @@ Minimal Console's literal record is at DATA+`0x3279`:
 
 ## Discovering record boundaries
 
-The complete record walk recognizes string records and the framing of class/module records. Class fields remain opaque; walking their boundaries does not constitute a class-definition decoder or relocation implementation.
+The complete record walk recognizes string records and the framing of class/module records. Class fields have a lossless decoder and constrained serializer; see [class assembly](data-classes.md). Record walking does not implement relocation.
 
 | Class form | Boundary encoding |
 |---|---|
@@ -29,7 +29,7 @@ When the full walk is unavailable, the exporter can still validate string record
 
 ## Assembly source and layout
 
-DATA source combines strings with opaque bytes, using the shared quoted-string escapes documented in [symbol assembly](symbol-assembly.md):
+DATA source combines strings with [class declarations](data-classes.md) and opaque bytes, using the shared quoted-string escapes documented in [symbol assembly](symbol-assembly.md):
 
 ```text
 .bytes at=0x00000000 ffc1
@@ -68,8 +68,8 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/string-project scratch/string-project.prg
 ```
 
-`strings` prints DATA offsets, UTF-8 byte lengths, and escaped values. `data-source` requires at least one supported string. The standalone `.bin` is a payload without a section header. Complete export retains raw DATA if it cannot represent supported strings safely. Imports still enforce manifest lengths. Resource strings have a separate inspection command described in [RESOURCES](resources.md).
+`strings` prints DATA offsets, UTF-8 byte lengths, and escaped values. `data-source` accepts a complete supported class/string walk, including class-only or empty DATA; partial fallback requires a supported string. The standalone `.bin` is a payload without a section header. Complete export retains raw DATA if it cannot represent supported strings safely. Imports still enforce manifest lengths. Resource strings have a separate inspection command described in [RESOURCES](resources.md).
 
-Changing string content is a program modification. Signature regeneration, runtime acceptance, references within opaque class/module records, and general relocation remain separate work.
+Changing string content is a program modification. Own-key signing is implemented; runtime acceptance of a particular string change and general relocation remain separate checks.
 
-Class/module records have [read-only field inspection](data-classes.md). Their original bytes remain opaque `.bytes` spans in DATA assembly; the class listing does not become authoritative source.
+Class/module records have [field inspection and constrained assembly](data-classes.md). Full supported exports use `.class` blocks; partial exports may retain opaque `.bytes` spans. The class inspection listing does not become authoritative source.

@@ -1,6 +1,6 @@
 # Assembly source and optional layout constraints
 
-Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). DATA string declarations and pinned opaque spans are also implemented; resource assembly, includes, ID allocation, and general relocation remain future work.
+Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). DATA string declarations, pinned class/field declarations, and opaque spans are also implemented; resource assembly, includes, ID allocation, and general relocation remain future work.
 
 ## One language and shared model
 
@@ -57,9 +57,9 @@ For sections or embedded records with unknown references, retain raw bytes and t
 
 The remaining work can proceed in bounded steps:
 
-1. DATA strings and class record boundaries are implemented; class/module field inspection is now implemented; assembly declarations, remaining reference spaces, and relocation still require investigation.
+1. DATA strings and class record boundaries are implemented; class/module field inspection is now implemented; numeric class declarations now serialize losslessly; typed aliases, remaining reference spaces, and relocation still require investigation.
 2. Done: declarations and typed symbol references resolve existing IDs while retaining the surrounding known layout.
 3. Done: symbol serialization supports deterministic automatic or explicitly constrained record layout and table order.
-4. DATA strings now serialize with pinned opaque spans. Extend class/resource serialization and relocation only for references we can update completely.
+4. DATA strings now serialize with pinned opaque spans. Class serialization now preserves numeric keys/types/values. Extend typed class/resource references and relocation only where we can update references completely.
 
 Test handwritten and printed source through the same parser/model; test deterministic allocation and clear conflicts for explicit constraints. Exact-byte checks apply to preservation cases; own-key signed output and intentionally transformed code are checked for expected content and behavior instead.

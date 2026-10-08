@@ -1,5 +1,6 @@
 //! Read-only DATA class/module framing. See docs/specs/data-classes.md.
 use crate::symbols::source::Error;
+pub mod source;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
