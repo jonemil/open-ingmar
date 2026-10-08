@@ -64,6 +64,11 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             file: file.clone(),
         });
         files.push((file, payload));
+        if section.kind() == DATA {
+            if let Ok(listing) = classes(prg) {
+                files.push((format!("{index:03}-data.classes.txt"), listing.into_bytes()));
+            }
+        }
         if section.kind() == SYMBOLS {
             if let Ok(table) = Symbols::parse(section.payload()) {
                 let mut listing = String::from(
@@ -160,6 +165,112 @@ pub fn data_source(prg: &Prg) -> Result<String, Box<dyn StdError>> {
     Ok(referenced_data(prg)
         .ok_or("no supported, unambiguous referenced DATA strings")?
         .to_text())
+}
+
+/// Inspect class/module records; the listing never becomes assembly input.
+pub fn classes(prg: &Prg) -> Result<String, Box<dyn StdError>> {
+    use ciq_prg::data::classes::{Record, records};
+    use std::collections::{BTreeMap, BTreeSet};
+    let payload = prg.unique_section(DATA)?.payload();
+    let records = records(payload)?;
+    let symbols = optional_symbols(prg);
+    let strings: BTreeMap<_, _> = records
+        .iter()
+        .filter_map(|record| match record {
+            Record::String { offset, value } => Some((*offset, *value)),
+            _ => None,
+        })
+        .collect();
+    let class_offsets: BTreeSet<_> = records
+        .iter()
+        .filter_map(|record| match record {
+            Record::Class(c) => Some(c.offset),
+            _ => None,
+        })
+        .collect();
+    let boundaries = prg
+        .unique_section(CODE)
+        .ok()
+        .and_then(|section| decode(section.payload()).ok())
+        .map(|code| {
+            code.into_iter()
+                .map(|instruction| instruction.offset)
+                .collect::<BTreeSet<_>>()
+        });
+    let mut text =
+        String::from("# Inspection only: DATA class/module records retain raw assembly spans.\n");
+    for record in &records {
+        let Record::Class(c) = record else { continue };
+        writeln!(
+            text,
+            "DATA+0x{:08x} class-v{} bytes={} presence={} app_flags=0x{:04x} fields={}",
+            c.offset,
+            c.version,
+            c.raw.len(),
+            c.presence
+                .map(|f| format!("0x{f:02x}"))
+                .unwrap_or_else(|| "fixed".into()),
+            c.app_flags,
+            c.fields.len()
+        )?;
+        for (label, value) in [
+            ("extends", c.extends),
+            ("statics", c.statics),
+            ("parent", c.parent),
+            ("module", c.module),
+        ] {
+            if let Some(value) = value {
+                write!(text, "  {label}=0x{value:08x}")?;
+                // Only these two header roles have symbol-ID evidence in our specimens.
+                if matches!(label, "parent" | "module") {
+                    if let Some(symbol) = symbols.as_ref().and_then(|table| table.get(value)) {
+                        write!(text, " {:?}", symbol.name)?;
+                    }
+                }
+                text.push('\n');
+            }
+        }
+        for field in &c.fields {
+            write!(
+                text,
+                "  DATA+0x{:08x} key=0x{:08x} symbol=0x{:08x}",
+                field.offset,
+                field.key,
+                field.symbol_id()
+            )?;
+            if let Some(symbol) = symbols
+                .as_ref()
+                .and_then(|table| table.get(field.symbol_id()))
+            {
+                write!(text, " {:?}", symbol.name)?;
+            }
+            write!(
+                text,
+                " key_bits=0x{:02x} type=0x{:02x} value=0x{:08x}",
+                field.key & 0xff,
+                field.kind,
+                field.value
+            )?;
+            if let Some(offset) = field.code_offset() {
+                write!(text, " -> CODE+0x{offset:08x}")?;
+                match boundaries.as_ref() {
+                    Some(starts) if !starts.contains(&(offset as usize)) => {
+                        text.push_str(" [not an instruction boundary]")
+                    }
+                    None => text.push_str(" [boundary unchecked]"),
+                    _ => {}
+                }
+            } else if field.kind == 7 && class_offsets.contains(&(field.value as usize)) {
+                write!(text, " -> DATA+0x{:08x} class", field.value)?;
+            } else if field.kind == 3 {
+                if let Some(value) = strings.get(&(field.value as usize)) {
+                    write!(text, " -> DATA+0x{:08x} {:?}", field.value, value)?;
+                }
+            }
+            text.push('\n');
+        }
+    }
+    Ok(text)
 }
 
 pub fn resource_strings(prg: &Prg) -> Result<String, Box<dyn StdError>> {

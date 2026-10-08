@@ -4,6 +4,8 @@ use crate::symbols::source::{Error, tokens, valid_alias};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+pub mod classes;
+
 pub const ADDRESS_LIMIT: usize = 0x0100_0000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,52 +67,15 @@ pub fn string_at(payload: &[u8], at: u32) -> Result<(&str, usize), Error> {
 /// Walk known record boundaries while keeping class/module fields uninterpreted.
 /// An unknown record aborts this walk; callers can still use validated code references.
 pub fn record_string_offsets(payload: &[u8]) -> Result<Vec<u32>, Error> {
-    let mut at = 0usize;
-    let mut offsets = Vec::new();
-    while at < payload.len() {
-        match payload[at] {
-            1 => {
-                let offset =
-                    u32::try_from(at).map_err(|_| Error("DATA offset exceeds u32".into()))?;
-                let (_, end) = string_at(payload, offset)?;
-                offsets.push(offset);
-                at = end;
+    classes::records(payload)?
+        .into_iter()
+        .filter_map(|record| match record {
+            classes::Record::String { offset, .. } => {
+                Some(u32::try_from(offset).map_err(|_| Error("DATA offset exceeds u32".into())))
             }
-            0xc1 | 0xc2 => {
-                let variable = payload[at] == 0xc2;
-                if payload.len() - at < 4 || payload[at + 1..at + 4] != [0xa5, 0x5d, 0xef] {
-                    return Err(Error("unsupported class record magic".into()));
-                }
-                let (prefix, count_width, field_width) = if variable {
-                    let flags = *payload
-                        .get(at + 4)
-                        .ok_or_else(|| Error("truncated class presence flags".into()))?;
-                    if flags & 0xf0 != 0 {
-                        return Err(Error("unsupported class presence flags".into()));
-                    }
-                    (5 + flags.count_ones() as usize * 4 + 2, 2, 9)
-                } else {
-                    (4 + 16 + 2, 1, 8)
-                };
-                if payload.len() - at < prefix + count_width {
-                    return Err(Error("truncated class header".into()));
-                }
-                let fields = if variable {
-                    u16::from_be_bytes(payload[at + prefix..at + prefix + 2].try_into().unwrap())
-                        as usize
-                } else {
-                    payload[at + prefix] as usize
-                };
-                let length = prefix + count_width + fields * field_width;
-                if length > payload.len() - at {
-                    return Err(Error("class fields exceed DATA payload".into()));
-                }
-                at += length;
-            }
-            _ => return Err(Error(format!("unknown DATA record at 0x{at:08x}"))),
-        }
-    }
-    Ok(offsets)
+            classes::Record::Class(_) => None,
+        })
+        .collect()
 }
 
 impl StringDeclaration {

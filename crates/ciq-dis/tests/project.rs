@@ -355,3 +355,64 @@ fn invalid_data_references_and_duplicate_sections_preserve_raw_input() {
     );
     assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), duplicate);
 }
+
+fn class_specimen() -> Prg {
+    let mut data = vec![0xc2, 0xa5, 0x5d, 0xef, 0, 0, 0, 0, 4];
+    for (kind, value) in [
+        (6, 0x10000002u32),
+        (6, 0x10000001),
+        (3, 45),
+        (6, 0x40010024),
+    ] {
+        data.extend_from_slice(&0x80006710u32.to_be_bytes());
+        data.push(kind);
+        data.extend_from_slice(&value.to_be_bytes());
+    }
+    data.extend_from_slice(&[1, 0, 3, b'x', b'\n', b'"', 0]);
+    Prg::from_sections(vec![
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x38, 1, 0x16]).unwrap(),
+        Section::new(SYMBOLS, symbol_payload()).unwrap(),
+    ])
+}
+
+#[test]
+fn class_listing_resolves_typed_references_and_checks_instruction_boundaries() {
+    let original = class_specimen();
+    let listing = ciq_dis::classes(&original).unwrap();
+    assert!(listing.contains("symbol=0x00800067 \"print\\n\\\"ln\""));
+    assert!(listing.contains("value=0x10000002 -> CODE+0x00000002\n"));
+    assert!(listing.contains("CODE+0x00000001 [not an instruction boundary]"));
+    assert!(listing.contains("DATA+0x0000002d \"x\\n\\\"\""));
+    assert!(listing.contains("value=0x40010024\n"));
+    let without_symbols = Prg::from_sections(original.sections()[..2].to_vec());
+    assert!(
+        ciq_dis::classes(&without_symbols)
+            .unwrap()
+            .contains("symbol=0x00800067 key_bits=")
+    );
+    let without_code = Prg::from_sections(vec![original.sections()[0].clone()]);
+    assert!(
+        ciq_dis::classes(&without_code)
+            .unwrap()
+            .contains("[boundary unchecked]")
+    );
+}
+
+#[test]
+fn class_sidecar_is_inspection_only_and_never_changes_project_import() {
+    let original = class_specimen();
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    let sidecar = directory.join("000-data.classes.txt");
+    assert!(fs::read_to_string(&sidecar).unwrap().contains("class-v2"));
+    assert!(
+        manifest
+            .entries
+            .iter()
+            .all(|entry| !entry.file.ends_with(".classes.txt"))
+    );
+    fs::write(sidecar, "edited inspection text, not assembly").unwrap();
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+}

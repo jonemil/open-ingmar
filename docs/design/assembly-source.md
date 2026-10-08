@@ -57,7 +57,7 @@ For sections or embedded records with unknown references, retain raw bytes and t
 
 The remaining work can proceed in bounded steps:
 
-1. DATA strings and class record boundaries are implemented; class-field references still require investigation.
+1. DATA strings and class record boundaries are implemented; class/module field inspection is now implemented; assembly declarations, remaining reference spaces, and relocation still require investigation.
 2. Done: declarations and typed symbol references resolve existing IDs while retaining the surrounding known layout.
 3. Done: symbol serialization supports deterministic automatic or explicitly constrained record layout and table order.
 4. DATA strings now serialize with pinned opaque spans. Extend class/resource serialization and relocation only for references we can update completely.

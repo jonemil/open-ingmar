@@ -35,3 +35,5 @@ section 0x5717b015 95991 symbols 010-symbols-5717b015.mcasm
 ```
 
 Structured DATA requires a unique DATA section. Its strings and opaque spans reproduce the section bytes; declarations are resolved before code assembly. Code uses `news &alias` for supported string references. Project code files cannot contain inline `.string` declarations: content belongs in the authoritative DATA source. Unsupported DATA remains raw. RESOURCES remains raw regardless of read-only string inspection. See [DATA strings](data-strings.md) and [RESOURCES](resources.md).
+
+Supported DATA also gets an inspection-only `NNN-data.classes.txt` listing from [class/module inspection](data-classes.md). It is absent from the manifest and ignored by import, like the symbol listing. Class bytes retain their authoritative DATA opaque spans or raw payload.

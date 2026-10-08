@@ -13,4 +13,6 @@
 
 - [DATA strings and initial resource inspection](data-and-resources.md): class record framing, 52/53 string records, typed references, constrained edits, byte-identical projects, read-only resource indexes, and 42 passing tests.
 
+- [DATA class/module fields and method bindings](data-classes.md): read-only record/field inspection, verified method references, inspection sidecars, byte-identical real projects, and 47 passing tests.
+
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the reassembled specimens and a same-size bytecode edit are next, as described in [the plan](../plan.md).

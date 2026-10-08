@@ -18,10 +18,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             || args[0] == "code-symbolic"
             || args[0] == "strings"
             || args[0] == "data-source"
+            || args[0] == "classes"
             || args[0] == "resource-strings");
     let export = args.len() == 3 && args[0] == "all";
     if !inventory && !export {
-        return Err("Usage: ciq-dis sections|code|code-symbolic|symbols|symbol-source|strings|data-source|resource-strings <input.prg>\n       ciq-dis all <input.prg> <new-project-directory>".into());
+        return Err("Usage: ciq-dis sections|code|code-symbolic|symbols|symbol-source|strings|data-source|resource-strings|classes <input.prg>\n       ciq-dis all <input.prg> <new-project-directory>".into());
     }
     let prg = Prg::parse(&fs::read(&args[1])?)?;
     if export {
@@ -49,6 +50,8 @@ fn run() -> Result<(), Box<dyn Error>> {
         writeln!(stdout, "{offset:08x}  00000000  terminator")?;
     } else if args[0] == "resource-strings" {
         stdout.write_all(ciq_dis::resource_strings(&prg)?.as_bytes())?;
+    } else if args[0] == "classes" {
+        stdout.write_all(ciq_dis::classes(&prg)?.as_bytes())?;
     } else if args[0] == "strings" {
         stdout.write_all(ciq_dis::strings(&prg)?.as_bytes())?;
     } else if args[0] == "data-source" {

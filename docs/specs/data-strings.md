@@ -71,3 +71,5 @@ cargo run -p ciq-asm -- project scratch/string-project scratch/string-project.pr
 `strings` prints DATA offsets, UTF-8 byte lengths, and escaped values. `data-source` requires at least one supported string. The standalone `.bin` is a payload without a section header. Complete export retains raw DATA if it cannot represent supported strings safely. Imports still enforce manifest lengths. Resource strings have a separate inspection command described in [RESOURCES](resources.md).
 
 Changing string content is a program modification. Signature regeneration, runtime acceptance, references within opaque class/module records, and general relocation remain separate work.
+
+Class/module records have [read-only field inspection](data-classes.md). Their original bytes remain opaque `.bytes` spans in DATA assembly; the class listing does not become authoritative source.

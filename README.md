@@ -22,9 +22,10 @@ cargo run -p ciq-dis -- symbols examples/minimal-console/build/fr265/minimal-con
 cargo run -p ciq-dis -- code examples/minimal-console/build/fr265/minimal-console.prg
 ```
 
-Inspect DATA strings and resource strings separately:
+Inspect DATA classes, literal strings, and resource strings separately:
 
 ```sh
+cargo run -p ciq-dis -- classes examples/minimal-console/build/fr265/minimal-console.prg
 cargo run -p ciq-dis -- strings examples/minimal-console/build/fr265/minimal-console.prg
 cargo run -p ciq-dis -- resource-strings examples/minimal-console/build/fr265/minimal-console.prg
 ```
@@ -47,6 +48,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). There ar
 - [Research and documentation conventions](docs/research.md)
 - [Instruction reference](docs/specs/instructions.md)
 - [Symbol assembly and named operands](docs/specs/symbol-assembly.md)
+- [DATA class/module inspection](docs/specs/data-classes.md)
 - [DATA string assembly](docs/specs/data-strings.md)
 - [Resource string inspection](docs/specs/resources.md)
 - [Investigation index](docs/investigations/README.md)
