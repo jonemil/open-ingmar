@@ -1,6 +1,6 @@
 # Shared code labels and controlled function-size experiments
 
-Date: 2026-10-08. SDK 9.2.0, `fr265`, debug builds, `-O 0`. Follow-up to [named classes](named-classes.md) and [the arithmetic replacement](function-replacement.md). New runtime experiment is prepared, not yet executed.
+Date: 2026-10-08. SDK 9.2.0, `fr265`, debug builds, `-O 0`. Follow-up to [named classes](named-classes.md) and [the arithmetic replacement](function-replacement.md). The appended larger-body experiment was successfully executed on the host on 2026-10-09; fresh console and screen captures were inspected by the agent.
 
 ## Shared labels
 
@@ -46,7 +46,7 @@ Grown RESOURCES equals the entire baseline payload plus eight zero bytes. Existi
 
 Ignored `scratch/relocation/sdk-variant/compare.py` independently parses section wrappers and v2 method fields; `comparison.json`, snapshots, and compiler logs retain the local experiment. Format source attribution remains pinned in [the class assembly investigation](class-assembly.md); no external implementation was copied.
 
-## Prepared larger-body method relocation
+## Validated larger-body method relocation
 
 To test a larger function before shifting existing line PCs, append a new body to the original Hello World CODE and redirect its method field with the shared label. This is an explicit bounded experiment, not automatic general relocation.
 
@@ -85,7 +85,9 @@ Run on the host (Podman is unavailable in the agent container):
 sh scripts/run-simulator-container.sh --prg scratch/relocation/hello-grown.prg
 ```
 
-Expected console: greeting and `43`; screen: `Hello world!` and `43`. This distinguishes the new target from the retained old `41` body and previous `42` experiments. Record fresh host results before claiming larger-body runtime acceptance.
+Host result, 2026-10-09: the user reported success. Fresh captures updated at 19:53 show console `Hello from Monkey C!` and `43`, and the agent visually confirmed `Hello world!` and `43` on the watch screen. The PRG hash still matches the output above. Console SHA-256: `eae7e6208c3b17ff50600fa4759cfd1a35bd5f207f9844c0580d2718923f046f`; screen SHA-256: `373154adacb17b10405bcf9b56db99824f39bf2b367d86bbcc11528e84db970d`. Captures remain ignored under `scratch/simulator/`.
+
+The value `43` distinguishes execution of the new appended target from the retained original `41` body and prior `42` experiments. This validates the 24-byte function, its label-resolved method binding at CODE `0x2e8`, and the chosen packaging/padding for this artifact. It does not establish general in-place relocation or a universal alignment requirement.
 
 ## Remaining relocation work
 

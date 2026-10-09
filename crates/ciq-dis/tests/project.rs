@@ -451,3 +451,88 @@ fn shared_method_labels_roundtrip_and_reject_missing_or_end_targets() {
     .unwrap();
     assert!(ciq_asm::assemble_project(&directory).is_err());
 }
+
+#[test]
+fn structured_debug_and_line_labels_roundtrip_and_move_together() {
+    use ciq_prg::debug::{DebugSource, LineSource, Pc, StringRef};
+    let debug = DebugSource::parse(".string file \"file.mc\"\n.string function \"probe\"\n")
+        .unwrap()
+        .encode()
+        .unwrap()
+        .0;
+    let lines = LineSource::parse(".line pc=0x10000000 file=0x0 function=0xb line=1\n.line pc=0x10000002 file=0x0 function=0xb line=2\n").unwrap().encode(&Default::default(),&Default::default()).unwrap();
+    let original = Prg::from_sections(vec![
+        Section::new(0xc0de7ab1, lines).unwrap(),
+        Section::new(0xd0000d1e, debug).unwrap(),
+        Section::new(CODE, vec![0x38, 42, 0x16]).unwrap(),
+    ]);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("metadata");
+    let mut manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Lines);
+    assert_eq!(manifest.entries[1].encoding, Encoding::Debug);
+    assert!(manifest.to_text().starts_with("ciq-project 4"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let code_path = directory.join(&manifest.entries[2].file);
+    let text = fs::read_to_string(&code_path).unwrap();
+    fs::write(&code_path, format!("ipushz\npopv\n{text}")).unwrap();
+    manifest.entries[2].length += 2;
+    fs::write(directory.join(FILE_NAME), manifest.to_text()).unwrap();
+    let changed = ciq_asm::assemble_project(&directory).unwrap();
+    let lines =
+        LineSource::from_payload(changed.unique_section(0xc0de7ab1).unwrap().payload()).unwrap();
+    assert_eq!(lines.entries[0].pc, Pc::Raw(0x10000002));
+    assert_eq!(lines.entries[1].pc, Pc::Raw(0x10000004));
+    assert_eq!(
+        changed.unique_section(0xd0000d1e).unwrap(),
+        original.unique_section(0xd0000d1e).unwrap()
+    );
+    let line_path = directory.join(&manifest.entries[0].file);
+    let text = fs::read_to_string(&line_path).unwrap();
+    let debug_path = directory.join(&manifest.entries[1].file);
+    fs::write(
+        &debug_path,
+        ".string dbg_00000000 \"x\"\n.string dbg_0000000b \"probe\"\n",
+    )
+    .unwrap();
+    manifest.entries[1].length -= 6;
+    fs::write(directory.join(FILE_NAME), manifest.to_text()).unwrap();
+    let changed = ciq_asm::assemble_project(&directory).unwrap();
+    let lines =
+        LineSource::from_payload(changed.unique_section(0xc0de7ab1).unwrap().payload()).unwrap();
+    assert_eq!(lines.entries[0].function, StringRef::Raw(5));
+    assert_eq!(lines.entries[1].function, StringRef::Raw(5));
+    fs::write(
+        &code_path,
+        format!("{}end:\n", fs::read_to_string(&code_path).unwrap()),
+    )
+    .unwrap();
+    fs::write(&line_path, text.replace("code:code_00000000", "code:end")).unwrap();
+    assert!(
+        ciq_asm::assemble_project(&directory)
+            .unwrap_err()
+            .to_string()
+            .contains("not an instruction")
+    );
+    fs::write(
+        &line_path,
+        text.replace("code:code_00000000", "code:missing"),
+    )
+    .unwrap();
+    assert!(ciq_asm::assemble_project(&directory).is_err());
+}
+
+#[test]
+fn malformed_debug_and_line_sections_fall_back_to_raw() {
+    let original = Prg::from_sections(vec![
+        Section::new(0xd0000d1e, vec![3, 0]).unwrap(),
+        Section::new(0xc0de7ab1, vec![0, 1]).unwrap(),
+        Section::new(CODE, vec![0x16]).unwrap(),
+    ]);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("raw_metadata");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Raw);
+    assert_eq!(manifest.entries[1].encoding, Encoding::Raw);
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+}

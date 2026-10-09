@@ -1,6 +1,6 @@
 # Assembly source and optional layout constraints
 
-Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). DATA string declarations, pinned class/field declarations, and opaque spans are also implemented; resource assembly, includes, ID allocation, and general relocation remain future work.
+Status: symbol declarations, typed symbol operands, and optional symbol layout constraints are implemented on 2026-10-08; see [the implemented grammar](../specs/symbol-assembly.md). DATA string declarations, pinned class/field declarations, opaque spans, DEBUG strings, and code-label-based line mappings are also implemented; resource assembly, includes, ID allocation, and general relocation remain future work.
 
 ## One language and shared model
 
@@ -49,7 +49,7 @@ Declarations may live beside code or in a separate file using the same grammar. 
 
 Strings/data should follow the same pattern: content plus an alias, optional explicit placement, and a typed reference. Implemented `.string greeting "Hello!"` and `news &greeting` distinguish a data-address reference from a symbol-ID reference such as `@println`. An inline string operand could be shorthand for a generated data declaration, once the actual layout and identity semantics are understood. Do not assume equal string contents imply that records can always be merged.
 
-The complete project manifest still handles section order and raw sections. Project format version 2 selects structured symbol source as authoritative; version 3 selects DATA strings and opaque spans; resource assembly remains future work. Do not make both a raw payload and a structured listing independently authoritative for the same section. The `.symbols.txt` sidecar remains inspection-only.
+The complete project manifest still handles section order and raw sections. Project format version 2 selects structured symbol source as authoritative; version 3 selects DATA strings and opaque spans; version 4 selects structured DEBUG and line mappings; resource assembly remains future work. Do not make both a raw payload and a structured listing independently authoritative for the same section. The `.symbols.txt` sidecar remains inspection-only.
 
 ## Preservation and implementation sequence
 
@@ -63,3 +63,7 @@ The remaining work can proceed in bounded steps:
 4. DATA strings now serialize with pinned opaque spans. Class serialization preserves numeric keys/types/values and resolves named class, string, and field-symbol references with optional placement. Extend typed class/resource references and relocation only where we can update references completely.
 
 Test handwritten and printed source through the same parser/model; test deterministic allocation and clear conflicts for explicit constraints. Exact-byte checks apply to preservation cases; own-key signed output and intentionally transformed code are checked for expected content and behavior instead.
+
+## Placement decision, 2026-10-09
+
+Retain `at=` and its current meaning. The user's intent is to observe multi-file sources and barrel/bundle behavior before deciding whether a linker is needed; pinned placement can serve part of the final layout role. An option to ignore selected pins is an idea to evaluate later, not an implemented or agreed default. CODE labels already remove numeric method/line address maintenance while keeping DATA and DEBUG pins. The current [in-place experiment](../investigations/line-metadata.md) preserves these constraints and explicitly edits manifest lengths; it does not introduce automatic general relocation.

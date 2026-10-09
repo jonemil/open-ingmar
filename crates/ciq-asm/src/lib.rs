@@ -18,6 +18,16 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         return Err("manifest resolves outside the project directory".into());
     }
     let manifest = Manifest::parse(&fs::read_to_string(manifest_path)?)?;
+    for (encoding, kind, role) in [
+        (Encoding::Debug, 0xd0000d1e, "DEBUG"),
+        (Encoding::Lines, 0xc0de7ab1, "LINE_NUMBERS"),
+    ] {
+        if manifest.entries.iter().any(|e| e.encoding == encoding)
+            && manifest.entries.iter().filter(|e| e.kind == kind).count() != 1
+        {
+            return Err(format!("structured {role} requires a unique section").into());
+        }
+    }
     // Read all inputs first: code can refer to declarations in a later section.
     if manifest
         .entries
@@ -46,6 +56,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         return Err("structured DATA requires a single DATA section".into());
     }
     let mut data_text = None;
+    let mut debug_source = ciq_prg::debug::DebugSource::default();
     let mut inputs = Vec::new();
     let mut symbol_source = Source::default();
     for entry in &manifest.entries {
@@ -59,6 +70,9 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         }
         if entry.encoding == Encoding::Data {
             data_text = Some(std::str::from_utf8(&bytes)?.to_owned());
+        }
+        if entry.encoding == Encoding::Debug {
+            debug_source = ciq_prg::debug::DebugSource::parse(std::str::from_utf8(&bytes)?)?;
         }
         inputs.push(bytes);
     }
@@ -88,6 +102,8 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         .transpose()?
         .unwrap_or_default();
     let (data_payload, strings) = data_source.encode_with_references(&bindings, &labels)?;
+    let (debug_payload, debug_strings) = debug_source.encode()?;
+    let mut line_targets = Vec::new();
     let mut sections = Vec::new();
     for (entry, bytes) in manifest.entries.iter().zip(inputs) {
         let payload = match entry.encoding {
@@ -106,6 +122,16 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
             }
             Encoding::Symbols => symbol_source.encode()?,
             Encoding::Data => data_payload.clone(),
+            Encoding::Debug => debug_payload.clone(),
+            Encoding::Lines => {
+                let source = ciq_prg::debug::LineSource::parse(std::str::from_utf8(&bytes)?)?;
+                for line in &source.entries {
+                    if let ciq_prg::debug::Pc::Code(alias) = &line.pc {
+                        line_targets.push(alias.clone());
+                    }
+                }
+                source.encode(&labels, &debug_strings)?
+            }
         };
         if payload.len() != entry.length as usize {
             return Err(format!(
@@ -121,6 +147,11 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     let prg = Prg::from_sections(sections);
     if !labels.is_empty() {
         let length = prg.unique_section(ciq_prg::CODE)?.payload().len();
+        for alias in line_targets {
+            if labels[&alias] as usize >= length {
+                return Err(format!("line code label {alias} is not an instruction").into());
+            }
+        }
         for fragment in &data_source.fragments {
             if let ciq_prg::data::Fragment::Class(c) = fragment {
                 for field in &c.fields {

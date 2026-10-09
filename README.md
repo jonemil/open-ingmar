@@ -13,7 +13,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings and class/module declarations with opaque fallback spans, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code and class fields share named symbols; DATA uses class aliases, typed class/string references, and shared CODE labels for methods. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths; relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
+The export contains a manifest, assembly for supported ordinary code, structured symbol declarations, DATA strings and class/module declarations with opaque fallback spans, DEBUG strings and CODE-label-based line mappings, and raw binary payloads for the remaining sections. Losslessly representable symbol tables produce assembly input and an inspection listing; code and class fields share named symbols; DATA uses class aliases, typed class/string references, and shared CODE labels for methods. See [the project format](docs/specs/section-project.md). Project import enforces the declared payload lengths and resolves named method/line references; general relocation is not implemented. Without `-y`, signing material is preserved. With `-y`, the assembler replaces it with signatures from the supplied developer key. Keep exports under ignored `scratch/`.
 
 Reassemble with your developer key, or sign an existing PRG separately (outputs must be new files):
 
@@ -23,7 +23,7 @@ cargo run -p ciq-asm -- sign examples/minimal-console/build/fr265/minimal-consol
 cargo run -p ciq-asm -- verify scratch/minimal-signed.prg -y developer_key.der
 ```
 
-See [the signing experiment](docs/investigations/developer-signing.md). Both SDK specimens verify; unchanged Minimal Console re-signs byte identically with our key. The signed `41` → `42` Hello World runs successfully on the host simulator; console output and the captured screen both show `42`. A [complete same-size function replacement](docs/investigations/function-replacement.md) that computes `40 + 2` through a local variable also runs successfully.
+See [the signing experiment](docs/investigations/developer-signing.md). Both SDK specimens verify; unchanged Minimal Console re-signs byte identically with our key. The signed `41` → `42` Hello World runs successfully on the host simulator; console output and the captured screen both show `42`. A [complete same-size function replacement](docs/investigations/function-replacement.md) that computes `40 + 2` through a local variable also runs successfully. A [larger appended function](docs/investigations/code-labels-and-relocation.md), selected through a shared code label, now prints and displays `43`. [Structured DEBUG and line metadata](docs/investigations/line-metadata.md) preserve both example PRGs byte for byte and support prepared in-place grow/shrink experiments awaiting simulator checks.
 
 Inspect resolved symbols or annotated code (use `symbol-source` for symbol assembly or `code-symbolic` for self-contained named code and pinned strings):
 
@@ -60,6 +60,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). Containe
 - [Instruction reference](docs/specs/instructions.md)
 - [Symbol assembly and named operands](docs/specs/symbol-assembly.md)
 - [Shared CODE labels](docs/specs/code-labels.md)
+- [DEBUG strings and line mappings](docs/specs/line-numbers-and-debug.md)
 - [DATA class/module inspection](docs/specs/data-classes.md)
 - [DATA string assembly](docs/specs/data-strings.md)
 - [Resource string inspection](docs/specs/resources.md)

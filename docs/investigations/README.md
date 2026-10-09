@@ -23,6 +23,8 @@
 
 - [Named class declarations and typed DATA references](named-classes.md): shared symbol aliases, class/string references, optional placement, and byte-identical exports.
 
-- [Shared CODE labels and controlled size comparisons](code-labels-and-relocation.md): verified method/line relocation observations and a prepared appended 24-byte replacement awaiting host execution.
+- [Shared CODE labels and controlled size comparisons](code-labels-and-relocation.md): verified method/line relocation observations and a successfully executed appended 24-byte replacement showing `43` in console and screen.
 
-Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; structured class/method declarations and relocation research are next, as described in [the plan](../plan.md).
+- [Structured DEBUG and line metadata](line-metadata.md): version 4 projects, exact real-example round trips, 67 passing tests, and signed in-place grow/shrink variants awaiting host runtime checks.
+
+Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; the larger appended function is also confirmed; structured DEBUG/line metadata is implemented and bounded in-place size experiments await simulator validation, as described in [the plan](../plan.md).

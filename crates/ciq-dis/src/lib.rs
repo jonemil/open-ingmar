@@ -31,11 +31,55 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             return Err("named DATA export changed bytes".into());
         }
     }
-    let code_labels = project_code_labels(prg, data.as_ref());
+    let debug_source = prg
+        .unique_section(0xd0000d1e)
+        .ok()
+        .and_then(|s| ciq_prg::debug::DebugSource::from_payload(s.payload()).ok());
+    let mut line_source = prg
+        .unique_section(0xc0de7ab1)
+        .ok()
+        .and_then(|s| ciq_prg::debug::LineSource::from_payload(s.payload()).ok());
+    let mut code_labels = project_code_labels(prg, data.as_ref());
+    if let (Some(lines), Some(code)) = (
+        &line_source,
+        prg.unique_section(CODE)
+            .ok()
+            .and_then(|s| decode(s.payload()).ok()),
+    ) {
+        let boundaries: std::collections::BTreeSet<_> =
+            code.iter().map(|i| i.offset as u32).collect();
+        for line in &lines.entries {
+            if let ciq_prg::debug::Pc::Raw(pc) = line.pc {
+                let offset = pc & 0xffffff;
+                if pc >> 24 == 0x10 && boundaries.contains(&offset) {
+                    code_labels
+                        .entry(offset)
+                        .or_insert_with(|| format!("code_{offset:08x}"));
+                }
+            }
+        }
+    }
     let label_bindings = code_labels
         .iter()
         .map(|(offset, alias)| (alias.clone(), *offset))
         .collect();
+    let debug_bindings = debug_source
+        .as_ref()
+        .map(|s| s.encode().map(|(_, bindings)| bindings))
+        .transpose()?
+        .unwrap_or_default();
+    let debug_offsets = debug_bindings
+        .iter()
+        .map(|(alias, offset)| (*offset, alias.clone()))
+        .collect();
+    if let Some(source) = line_source.as_mut() {
+        source.name_references(&code_labels, &debug_offsets);
+        if source.encode(&label_bindings, &debug_bindings)?
+            != prg.unique_section(0xc0de7ab1)?.payload()
+        {
+            return Err("structured line export changed bytes".into());
+        }
+    }
     if let Some(source) = data.as_mut() {
         use ciq_prg::data::classes::source::Reference;
         for fragment in &mut source.fragments {
@@ -93,15 +137,33 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 }
             }
         } else {
-            match (section.kind(), data.as_ref(), structured.as_ref()) {
-                (DATA, Some(source), _) => (Encoding::Data, source.to_text().into_bytes()),
-                (SYMBOLS, _, Some(source)) => (Encoding::Symbols, source.to_text().into_bytes()),
+            match (
+                section.kind(),
+                data.as_ref(),
+                structured.as_ref(),
+                debug_source.as_ref(),
+                line_source.as_ref(),
+            ) {
+                (0xd0000d1e, _, _, Some(source), _) => {
+                    (Encoding::Debug, source.to_text().into_bytes())
+                }
+                (0xc0de7ab1, _, _, _, Some(source)) => {
+                    (Encoding::Lines, source.to_text().into_bytes())
+                }
+                (DATA, Some(source), _, _, _) => (Encoding::Data, source.to_text().into_bytes()),
+                (SYMBOLS, _, Some(source), _, _) => {
+                    (Encoding::Symbols, source.to_text().into_bytes())
+                }
                 _ => (Encoding::Raw, section.payload().to_vec()),
             }
         };
         let extension = match encoding {
             Encoding::Raw => "bin",
-            Encoding::Assembly | Encoding::Symbols | Encoding::Data => "mcasm",
+            Encoding::Assembly
+            | Encoding::Symbols
+            | Encoding::Data
+            | Encoding::Debug
+            | Encoding::Lines => "mcasm",
         };
         let file = format!(
             "{index:03}-{}-{:08x}.{extension}",

@@ -1,5 +1,6 @@
 //! Ordered, opaque PRG sections. See docs/specs/prg-container.md.
 
+pub mod debug;
 use std::fmt;
 
 pub mod data;
