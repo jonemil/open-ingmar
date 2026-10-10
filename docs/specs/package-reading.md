@@ -15,7 +15,7 @@ cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacke
 
 `unpack` creates a **new** destination; an existing directory, file, or symlink is refused. The destination's parent must already exist. It writes the archive's actual tree, preserving every ordinary member's bytes, including unknown files, XML whitespace, signatures, resources, and external debug metadata. It creates directories and empty files, but does not restore archive timestamps, ownership, executable bits, or other permissions. Inspection reports go to stdout, not into the extracted package.
 
-Both commands print `Signatures were not verified.` Package signature verification, PRG validation, packing, re-signing, and automatic disassembly are later stages. Pass an extracted PRG to the existing tools explicitly:
+Both commands print `Signatures were not verified.` The separate [verify command](package-verification.md) now checks the modern developer IQ profile and its PRGs. Packing, package re-signing, and automatic disassembly are later stages. Pass an extracted PRG to the existing tools explicitly:
 
 ```sh
 cargo run -p ciq-dis -- all scratch/unpacked-application/006-B4257-00/barrel-app.prg scratch/unpacked-prg-project
@@ -31,7 +31,7 @@ Detect container by magic, not extension. ZIP is accepted as a barrel; 7z is acc
 
 Barrels require `barrel.jungle` and the observed canonical `content/manifest.xml`; outer/content manifests must agree on barrel kind, `id`, `module`, and `version`. Other attributes and raw XML can differ. There is no Jungle evaluator or arbitrary build-manifest path selection yet.
 
-IQ manifests must enumerate at least one direct `application/products/product`, each with nonempty `filename` and `partNumber`. Every filename must select an existing ordinary member with a safe relative path. All descriptors are retained; multiple descriptors may select the same member. No mapping from part number to marketing device ID is assumed. `sig`, `sig2`, and other attributes are opaque at this stage.
+IQ manifests must enumerate at least one direct `application/products/product`, each with nonempty `filename` and `partNumber`. Every filename must select an existing ordinary member with a safe relative path. All descriptors are retained; multiple descriptors may select the same member. No mapping from part number to marketing device ID is assumed. The reader retains `sig`, `sig2`, and other attributes as strings; the separate verification stage interprets the supported signing attributes.
 
 ## Resource bounds and supported codecs
 

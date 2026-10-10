@@ -1,6 +1,6 @@
 # ciq-package design
 
-Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stage 1 is implemented:** library plus `list`/`unpack` CLI for the supported profile. Stages 2–5 remain planned. See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
+Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stages 1–2 are implemented:** library plus `list`/`unpack` and modern developer IQ `verify`. Stages 3–5 remain planned. See [verification behavior](../specs/package-verification.md). See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
 
 ## Boundary and model
 
@@ -20,7 +20,7 @@ An archive model retains container kind, ordered member metadata, and access to 
 
 Typed package views retain **raw manifest bytes** alongside parsed library/product fields. Untouched manifests are never parsed and reserialized merely to repack them. IQ signing operates on finalized raw bytes; XML layout is part of the signature message. Package-level aliases do not become VM symbols.
 
-Initial Rust dependencies: `zip` for ZIP/Deflate, `sevenz-rust2` for 7z/LZMA2, and an XML library such as `quick-xml`. Use maintained codec implementations rather than implementing ZIP/7z compression or binding libarchive in our Rust code. `ciq-prg` supports product validation; `ciq-sign` is introduced when verification/signing is implemented. Cryptography must not spread into the archive adapters.
+Initial Rust dependencies: `zip` for ZIP/Deflate, `sevenz-rust2` for 7z/LZMA2, and an XML library such as `quick-xml`. Use maintained codec implementations rather than implementing ZIP/7z compression or binding libarchive in our Rust code. `ciq-prg` supports product validation; The stage 2 verifier uses `ciq-prg` and `ciq-sign`. Cryptography must not spread into the archive adapters.
 
 The implementation retains Rust 1.85 using pinned `zip 6.0.0`, `sevenz-rust2 0.20.2`, and patched `quick-xml 0.41.0`. Actual full workspace tests with Rust 1.85.0 pass. Published runtime dependency licenses and all locked registry versions were reviewed; XML advisory findings changed the initial candidate version before acceptance. See [the reader investigation](../investigations/package-reading.md) for evidence and the existing RSA advisory outside this new dependency boundary. Use that review process when upgrading libraries; do not silently raise the workspace compiler requirement.
 
@@ -37,14 +37,14 @@ Deterministic writers use a specified stable member order, stable timestamps/att
 ## Stages and acceptance criteria
 
 1. **Read/list/unpack both formats — implemented for the initial profile.** Create the crate and CLI, detect container by magic, inspect package type from the manifest, expose member inventory and product attributes, and perform bounded safe extraction. Validate our ZIP barrel and 7z IQ members byte for byte against independently obtained payloads. Synthetic cases cover traversal, links, duplicates, CRC/truncation failures, unsupported codecs/encryption, size limits, and an IQ with multiple product descriptors. Do not depend on SDK binaries in unit tests.
-2. **Package verification.** Extend `ciq-sign` with public-SPKI import/export and narrowly scoped detached SHA-1/SHA-256 signing/verification APIs, keeping the private key opaque. Independently verify the real SDK modern IQ profile, product signature attribute equality, PRG key consistency, exact-byte manifest signing, and optional expected key. Test tampered manifest, PRG, signature attributes, public key, and missing members; use generated ephemeral keys, never the user's private key.
+2. **Package verification — implemented for the modern developer profile.** Extend `ciq-sign` with public-SPKI import/export and narrowly scoped detached SHA-1/SHA-256 signing/verification APIs, keeping the private key opaque. Independently verify the real SDK modern IQ profile, product signature attribute equality, PRG key consistency, exact-byte manifest signing, and optional expected key. Test tampered manifest, PRG, signature attributes, public key, and missing members; use generated ephemeral keys, never the user's private key.
 3. **Barrel packer.** Start from a canonical unpacked package layout; retain manifest/Jungle/source/resource bytes and emit deterministic ZIP/Deflate. Repack our code-only and resource specimens. Acceptance is successful SDK consumption and identical resulting CODE/DATA, already demonstrated experimentally for two independently created ZIP variants. Add a project-to-content mapper later, with explicit source/resource inputs; avoid an incomplete implicit Jungle interpreter.
 4. **Unchanged IQ repacking.** Rebuild a package with all signed bytes unchanged, preserving signing identity without a key. Verify before/after and compare every member. Exercise the chosen 7z writer and deterministic output. Keep this distinct from editing/resigning and do not claim store acceptance from simulator checks.
 5. **Own-key IQ creation/editing.** Implement the signing sequence in the IQ spec: sign PRGs, update product attributes and public key, serialize/sign the final manifest, then archive and verify. Begin with a supplied SDK manifest/product metadata rather than generating device/version metadata from guesses. Capture multi-device and legacy/store variants before claiming general compatibility. Reassembled extracted PRGs must still run in the official simulator; validate a rebuilt distribution package with the applicable SDK/install/upload workflow when available and authorized.
 
 ## Proposed commands
 
-`list` and `unpack` exist. The other spellings below remain planned; they are not CLI options yet:
+`list`, `unpack`, and `verify` exist. The other spellings below remain planned; they are not CLI options yet:
 
 ```sh
 ciq-package list library.barrel
@@ -52,7 +52,7 @@ ciq-package unpack library.barrel scratch/library
 ciq-package pack-barrel scratch/library scratch/library-repacked.barrel
 ciq-package list application.iq
 ciq-package unpack application.iq scratch/application
-ciq-package verify application.iq
+ciq-package verify application.iq [--expected-key publisher-public.der]
 ciq-package repack-iq scratch/application scratch/unchanged.iq
 ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
 ```
@@ -68,4 +68,4 @@ ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
 - Whether SDK/install tooling accepts independently produced 7z packages with different archive settings; exact member/signature verification alone does not answer this.
 - External `debug.xml` updates after assembly edits. Preserve/omit with explicit supported policy; do not publish stale mappings as newly correct.
 
-Stage 1 is complete for its documented supported profile. Next implement stage 2. The verified detached signature rules remove an investigation blocker for stages 2 and 5; they do not make those stages implemented.
+Stages 1–2 are complete for their documented supported profiles; [verification evidence](../investigations/package-verification.md) records acceptance checks. Next implement stage 3, deterministic canonical-layout barrel packing. IQ writers remain planned.

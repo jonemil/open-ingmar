@@ -38,3 +38,11 @@ cargo run -p ciq-asm -- verify scratch/resigned.prg -y developer_key.der
 ```
 
 Output files must not already exist. `-y` is optional for project/template assembly and required for `sign`; it is rejected for standalone `symbols` or `data` payload assembly. Without `-y`, assembly preserves original signing material. Project length constraints and equal-length template edits are unchanged: signing does not implement relocation.
+
+## Public keys and detached signatures
+
+`ciq-sign::PublicKey` imports/exports DER SubjectPublicKeyInfo RSA-4096 keys, including the observed `rsaEncryption` profile. Import rejects malformed/trailing DER, oversized input (over 4096 bytes), other key sizes, and exponents which cannot fit the PRG u32 field. `DeveloperKey::public_key()` supplies this public view without exposing private components.
+
+`DeveloperKey::sign_detached(HashAlgorithm, message)` and `PublicKey::verify_detached(HashAlgorithm, message, signature)` use RSA-4096 PKCS#1 v1.5 with explicit SHA-1/SHA-256 selection. They hash the exact caller-supplied bytes, accept/produce 512-byte signatures, and do not canonicalize XML or guess which PRG sections to cover. Signing retains OS-random blinding. SHA-1 exists for the observed legacy PRG message; its availability does not imply support for legacy IQ manifest profiles.
+
+`developer_signatures(prg)` exposes structurally checked signature/key fields and format without cryptographically verifying them. `verify(prg)` checks those fields with the shared detached-verification operations; the existing PRG signing/verification policy is unchanged. Package checks use these APIs as specified in [IQ verification](package-verification.md). No private key is required by the package verifier.

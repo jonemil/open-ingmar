@@ -2,6 +2,8 @@
 mod manifest;
 mod paths;
 mod preflight;
+mod verify;
+pub use verify::{Check, ProductVerification, VerificationReport};
 
 pub use manifest::{Manifest, Product};
 use std::{
@@ -230,9 +232,12 @@ impl Package {
             .ok_or_else(|| Error::new(format!("missing package member: {name}")))
     }
     fn read_manifest(&mut self, name: &str) -> Result<Vec<u8>> {
+        self.read_member(name, self.limits.manifest_bytes)
+    }
+    pub(crate) fn read_member(&mut self, name: &str, limit: u64) -> Result<Vec<u8>> {
         let size = self.require_file(name)?.size;
-        if size > self.limits.manifest_bytes {
-            return Err(Error::new("manifest exceeds size limit"));
+        if size > limit {
+            return Err(Error::new("requested member exceeds size limit"));
         }
         let mut output = Vec::new();
         match &mut self.backend {
@@ -314,11 +319,18 @@ impl Package {
         Ok(())
     }
     fn extract_to(&mut self, stage: &Path) -> Result<()> {
+        self.visit_members(|member, reader| extract_member(stage, member, reader))
+    }
+    /// Internal streaming adapter: callbacks must consume the complete member.
+    fn visit_members(
+        &mut self,
+        mut visitor: impl FnMut(&Member, &mut dyn Read) -> Result<()>,
+    ) -> Result<()> {
         match &mut self.backend {
             Backend::Zip(archive) => {
                 for (i, member) in self.members.iter().enumerate() {
                     let mut reader = archive.by_index(i).map_err(backend_error)?;
-                    extract_member(stage, member, &mut reader)?;
+                    visitor(member, &mut reader)?;
                 }
             }
             Backend::SevenZ(archive) => {
@@ -333,9 +345,13 @@ impl Package {
                                 .ok_or_else(|| {
                                     sevenz_rust2::Error::Other("unexpected decoded member".into())
                                 })?;
-                        extract_member(stage, member, reader)
+                        if !visited.insert(entry.name.clone()) {
+                            return Err(sevenz_rust2::Error::Other(
+                                "duplicate decoded member".into(),
+                            ));
+                        }
+                        visitor(member, reader)
                             .map_err(|e| sevenz_rust2::Error::Other(e.to_string().into()))?;
-                        visited.insert(entry.name.clone());
                         Ok(true)
                     })
                     .map_err(backend_error)?;

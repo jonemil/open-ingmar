@@ -51,7 +51,7 @@ cargo run -p ciq-package -- list scratch/barrels/barrel-app.iq
 cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacked-application
 ```
 
-The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. Package signatures are not yet verified; writers follow later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
+The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Writers follow later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
 
 Build and validate the workspace:
 
@@ -77,6 +77,7 @@ Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). C
 - [Resource string inspection](docs/specs/resources.md)
 - [Barrel package profile](docs/specs/barrel-package.md)
 - [IQ package/signing profile](docs/specs/iq-package.md)
+- [IQ verification commands and reports](docs/specs/package-verification.md)
 - [Package crate design and remaining stages](docs/design/package-crate.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)

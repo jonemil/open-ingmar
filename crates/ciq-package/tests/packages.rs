@@ -538,3 +538,301 @@ fn iq_products_may_share_one_ordinary_member() {
     package.unpack(temp.output()).unwrap();
     assert_eq!(fs::read(temp.output().join("app.prg")).unwrap(), b"opaque");
 }
+
+mod verification {
+    use super::*;
+    use ciq_package::Check;
+    use ciq_prg::{CODE, Prg, Section};
+    use ciq_sign::{DeveloperKey, HashAlgorithm, PublicKey};
+    use rand_core::OsRng;
+    use rsa::{RsaPrivateKey, pkcs8::EncodePrivateKey};
+    use std::sync::OnceLock;
+    fn keys() -> &'static [DeveloperKey; 2] {
+        static KEYS: OnceLock<[DeveloperKey; 2]> = OnceLock::new();
+        KEYS.get_or_init(|| {
+            std::array::from_fn(|_| {
+                let key = RsaPrivateKey::new(&mut OsRng, 4096).unwrap();
+                DeveloperKey::from_pkcs8_der(key.to_pkcs8_der().unwrap().as_bytes()).unwrap()
+            })
+        })
+    }
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+    struct Fixture {
+        entries: Vec<(String, Vec<u8>)>,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let key = &keys()[0];
+            let prg = ciq_sign::resign(
+                &Prg::from_sections(vec![Section::new(CODE, vec![0x38, 41, 0x16]).unwrap()]),
+                key,
+            )
+            .unwrap();
+            let fields = ciq_sign::developer_signatures(&prg).unwrap();
+            let product = format!(
+                "sigFormat='rsa-4096' sig='{}' sig2='{}'",
+                hex(fields.sha1),
+                hex(fields.sha256.unwrap())
+            );
+            let xml = format!("<manifest xmlns='http://www.garmin.com/xml/connectiq' version='3'><application id='our-ephemeral-fixture'><products><product filename='a/app.prg' partNumber='a' {product}/><product filename='b/app.prg' partNumber='b' {product}/></products><unknown retained='yes'/></application></manifest>").into_bytes();
+            let signature = key.sign_detached(HashAlgorithm::Sha256, &xml).unwrap();
+            Self {
+                entries: vec![
+                    ("manifest.xml".into(), xml),
+                    ("manifest.sig2".into(), signature),
+                    (
+                        "dev_key.pub".into(),
+                        key.public_key().to_spki_der().unwrap(),
+                    ),
+                    ("a/app.prg".into(), prg.to_bytes()),
+                    ("b/app.prg".into(), prg.to_bytes()),
+                    ("a/debug.xml".into(), b"<opaque unsigned='true'/>".to_vec()),
+                ],
+            }
+        }
+        fn member(&mut self, name: &str) -> &mut Vec<u8> {
+            &mut self.entries.iter_mut().find(|(n, _)| n == name).unwrap().1
+        }
+        fn resign_manifest(&mut self) {
+            let signature = keys()[0]
+                .sign_detached(HashAlgorithm::Sha256, self.member("manifest.xml"))
+                .unwrap();
+            *self.member("manifest.sig2") = signature;
+        }
+        fn bytes(&self) -> Vec<u8> {
+            seven_z(
+                &self
+                    .entries
+                    .iter()
+                    .map(|(n, b)| (n.as_str(), b.as_slice()))
+                    .collect::<Vec<_>>(),
+            )
+        }
+        fn report(&self, expected: Option<&PublicKey>) -> ciq_package::VerificationReport {
+            open(self.bytes()).unwrap().verify(expected)
+        }
+    }
+    #[test]
+    fn modern_iq_checks_multiple_products_and_optional_identity() {
+        let fixture = Fixture::new();
+        let report = fixture.report(None);
+        assert!(report.verified(), "{report:?}");
+        assert!(report.expected_key.is_none());
+        assert_eq!(report.products.len(), 2);
+        assert_eq!(report.crc_only_members, ["a/debug.xml"]);
+        assert!(fixture.report(Some(&keys()[0].public_key())).verified());
+        let wrong = fixture.report(Some(&keys()[1].public_key()));
+        assert!(!wrong.verified());
+        assert!(matches!(wrong.expected_key, Some(Check::Failed(_))));
+    }
+    #[test]
+    fn exact_manifest_bytes_and_detached_signature_tampering_fail() {
+        let mut fixture = Fixture::new();
+        fixture.member("manifest.xml").push(b'\n');
+        let report = fixture.report(None);
+        assert!(!report.verified());
+        assert!(matches!(report.manifest_signature, Check::Failed(_)));
+        assert!(report.archive_integrity.passed());
+        fixture.resign_manifest();
+        assert!(fixture.report(None).verified());
+        fixture.member("manifest.sig2")[0] ^= 1;
+        assert!(!fixture.report(None).manifest_signature.passed());
+    }
+    #[test]
+    fn product_code_and_signature_attributes_are_checked_separately() {
+        let mut fixture = Fixture::new();
+        let mut prg = Prg::parse(fixture.member("a/app.prg")).unwrap();
+        prg.replace_same_length(CODE, &[0x38, 42, 0x16]).unwrap();
+        *fixture.member("a/app.prg") = prg.to_bytes();
+        let report = fixture.report(None);
+        assert!(!report.verified());
+        assert!(report.manifest_signature.passed());
+        assert!(matches!(
+            report.products[0].prg_signatures,
+            Check::Failed(_)
+        ));
+        assert!(report.products[1].verified());
+        let mut fixture = Fixture::new();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone()).unwrap();
+        let at = xml.find(" sig='").unwrap() + 6;
+        let mut xml = xml.into_bytes();
+        xml[at] = if xml[at] == b'0' { b'1' } else { b'0' };
+        *fixture.member("manifest.xml") = xml;
+        fixture.resign_manifest();
+        let report = fixture.report(None);
+        assert!(!report.verified());
+        assert!(report.manifest_signature.passed());
+        assert!(report.products[0].prg_signatures.passed());
+        assert!(matches!(
+            report.products[0].product_signatures,
+            Check::Failed(_)
+        ));
+    }
+    #[test]
+    fn substituted_package_key_and_independently_signed_product_fail_consistency() {
+        let mut fixture = Fixture::new();
+        *fixture.member("dev_key.pub") = keys()[1].public_key().to_spki_der().unwrap();
+        let report = fixture.report(None);
+        assert!(!report.verified());
+        assert!(!report.manifest_signature.passed());
+        assert!(report.products.iter().all(|p| !p.key_consistency.passed()));
+        let mut fixture = Fixture::new();
+        let prg = ciq_sign::resign(
+            &Prg::parse(fixture.member("a/app.prg")).unwrap(),
+            &keys()[1],
+        )
+        .unwrap();
+        let old = Prg::parse(fixture.member("a/app.prg")).unwrap();
+        let old_fields = ciq_sign::developer_signatures(&old).unwrap();
+        let new_fields = ciq_sign::developer_signatures(&prg).unwrap();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone())
+            .unwrap()
+            .replacen(&hex(old_fields.sha1), &hex(new_fields.sha1), 1)
+            .replacen(
+                &hex(old_fields.sha256.unwrap()),
+                &hex(new_fields.sha256.unwrap()),
+                1,
+            );
+        *fixture.member("manifest.xml") = xml.into_bytes();
+        *fixture.member("a/app.prg") = prg.to_bytes();
+        fixture.resign_manifest();
+        let report = fixture.report(None);
+        assert!(report.manifest_signature.passed());
+        assert!(report.products[0].prg_signatures.passed());
+        assert!(report.products[0].product_signatures.passed());
+        assert!(!report.products[0].key_consistency.passed());
+        assert!(!report.verified());
+    }
+    #[test]
+    fn missing_malformed_and_unsupported_signing_profiles_never_pass() {
+        for member in ["manifest.sig2", "dev_key.pub"] {
+            let mut fixture = Fixture::new();
+            fixture.entries.retain(|(name, _)| name != member);
+            assert!(!fixture.report(None).verified());
+        }
+        let mut fixture = Fixture::new();
+        fixture.entries.retain(|(name, _)| name != "a/app.prg");
+        assert!(open(fixture.bytes()).is_err());
+        for value in [vec![0; 511], vec![0; 513]] {
+            let mut fixture = Fixture::new();
+            *fixture.member("manifest.sig2") = value;
+            assert!(!fixture.report(None).verified());
+        }
+        let mut fixture = Fixture::new();
+        *fixture.member("dev_key.pub") = vec![1, 2, 3];
+        assert!(!fixture.report(None).verified());
+        let mut fixture = Fixture::new();
+        fixture.entries.push(("manifest.sig".into(), vec![0; 512]));
+        assert!(matches!(
+            fixture.report(None).manifest_signature,
+            Check::Unsupported(_)
+        ));
+        let mut fixture = Fixture::new();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone())
+            .unwrap()
+            .replace("rsa-4096", "unknown");
+        *fixture.member("manifest.xml") = xml.into_bytes();
+        fixture.resign_manifest();
+        let report = fixture.report(None);
+        assert!(report.manifest_signature.passed());
+        assert!(matches!(report.products[0].profile, Check::Unsupported(_)));
+        assert!(!report.verified());
+        let mut fixture = Fixture::new();
+        let mut prg = Prg::parse(fixture.member("a/app.prg"))
+            .unwrap()
+            .sections()
+            .to_vec();
+        prg.push(Section::new(ciq_sign::STORE_SIGNATURE, vec![0; 512]).unwrap());
+        *fixture.member("a/app.prg") = Prg::from_sections(prg).to_bytes();
+        assert!(matches!(
+            fixture.report(None).products[0].prg_signatures,
+            Check::Unsupported(_)
+        ));
+    }
+    #[test]
+    fn invalid_hex_and_legacy_prg_profiles_are_explicit_failures() {
+        let mut fixture = Fixture::new();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone()).unwrap();
+        let at = xml.find(" sig='").unwrap() + 6;
+        let mut xml = xml.into_bytes();
+        xml[at] = b'z';
+        *fixture.member("manifest.xml") = xml;
+        fixture.resign_manifest();
+        let report = fixture.report(None);
+        assert!(report.manifest_signature.passed());
+        assert!(matches!(
+            report.products[0].product_signatures,
+            Check::Failed(_)
+        ));
+        assert!(!report.verified());
+        let mut fixture = Fixture::new();
+        let original = Prg::parse(fixture.member("a/app.prg")).unwrap();
+        let mut sections = original.sections().to_vec();
+        let last = sections.pop().unwrap();
+        sections.push(
+            Section::new(
+                ciq_sign::DEVELOPER_SIGNATURE,
+                last.payload()[..1028].to_vec(),
+            )
+            .unwrap(),
+        );
+        *fixture.member("a/app.prg") = Prg::from_sections(sections).to_bytes();
+        let report = fixture.report(None);
+        assert!(report.products[0].prg_signatures.passed());
+        assert!(matches!(report.products[0].profile, Check::Unsupported(_)));
+        assert!(!report.verified());
+    }
+    #[test]
+    fn unsigned_debug_edits_pass_signatures_but_archive_damage_does_not() {
+        let mut fixture = Fixture::new();
+        *fixture.member("a/debug.xml") = b"unsigned edit".to_vec();
+        assert!(fixture.report(None).verified());
+        let mut data = fixture.bytes();
+        let at = data
+            .windows(13)
+            .position(|b| b == b"unsigned edit")
+            .unwrap();
+        data[at] ^= 1;
+        let report = open(data).unwrap().verify(None);
+        assert!(matches!(report.archive_integrity, Check::Failed(_)));
+        assert!(!report.verified());
+        let mut barrel = open(zip(&barrel_entries())).unwrap();
+        let report = barrel.verify(None);
+        assert!(report.archive_integrity.passed());
+        assert!(matches!(report.manifest_signature, Check::Unsupported(_)));
+        assert!(!report.verified());
+    }
+    #[test]
+    fn verify_cli_reports_checks_and_fails_for_wrong_expected_key() {
+        let fixture = Fixture::new();
+        let temp = Temp::new();
+        let archive = temp.0.join("application.iq");
+        fs::write(&archive, fixture.bytes()).unwrap();
+        let expected = temp.0.join("expected.pub");
+        fs::write(&expected, keys()[0].public_key().to_spki_der().unwrap()).unwrap();
+        let result = Command::new(env!("CARGO_BIN_EXE_ciq-package"))
+            .arg("verify")
+            .arg(&archive)
+            .arg("--expected-key")
+            .arg(&expected)
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{:?}", result);
+        let output = String::from_utf8(result.stdout).unwrap();
+        assert!(output.contains("Manifest SHA-256 signature: passed"));
+        assert!(output.contains("Expected public key: passed"));
+        assert!(output.contains("a/debug.xml"));
+        fs::write(&expected, keys()[1].public_key().to_spki_der().unwrap()).unwrap();
+        let result = Command::new(env!("CARGO_BIN_EXE_ciq-package"))
+            .arg("verify")
+            .arg(&archive)
+            .arg("--expected-key")
+            .arg(expected)
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 2);
+    }
+}

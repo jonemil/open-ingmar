@@ -72,8 +72,12 @@ version = "0.1.0"
 name = "ciq-package"
 version = "0.1.0"
 dependencies = [
+ "ciq-prg",
+ "ciq-sign",
  "crc32fast",
  "quick-xml",
+ "rand_core",
+ "rsa",
  "sevenz-rust2",
  "zip",
 ]

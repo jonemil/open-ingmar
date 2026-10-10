@@ -34,3 +34,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Barrel/IQ format and packaging research](package-formats.md): independent ZIP repacking accepted by the SDK, resource placement, 7z coder/header inspection, verified exact-byte manifest signing, and the proposed `ciq-package` stages.
 
 - [Rust package reading and safe extraction](package-reading.md): sixth workspace crate, exact barrel/IQ member preservation, 18 new tests, bounded archive adapters, and actual Rust 1.85.0 validation.
+
+- [Modern IQ package signature verification](package-verification.md): public SPKI/detached signing APIs, per-product integrity/key checks, optional expected identity, SDK/independent-RSA agreement, and 94 passing tests.

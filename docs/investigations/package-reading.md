@@ -60,3 +60,5 @@ Tests construct classic stored ZIP and solid Copy 7z archives independently in R
 **Implementation limits:** [the reading specification](../specs/package-reading.md) records the accepted archive profile, output lifecycle, default limits, Linux verification boundary, and unsupported ZIP64/encoded-header/coder-graph cases. This stage reads the observed canonical barrel manifest path rather than evaluating Jungle. Parsed metadata is a view; exact raw members remain authoritative. Simple solid Copy is tested synthetically; additional real solid/LZMA/older/multi-device specimens are needed before claiming broader Garmin compatibility.
 
 Next implement stage 2: SPKI/detached signature APIs in `ciq-sign`, then package verification with separate manifest, PRG/product, key-consistency, and optional expected-key results. Barrel packing follows verification in the agreed sequence.
+
+Follow-up: [package signature verification](package-verification.md) implements stage 2. The test/dependency boundary above records the reader milestone; current workspace status is in the plan.
