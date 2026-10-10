@@ -48,8 +48,9 @@ and placement are distinct; optional constraints pin layout, while unconstrained
 allocation must be deterministic.
 
 CODE labels resolve supported DATA method targets and line PCs. DEBUG aliases
-resolve line filename/function offsets. General relocation, branch/exception
-fixups, extended CODE, resource assembly, and automatic symbol ID allocation
+resolve line filename/function offsets. Named relative branches also resolve
+after CODE layout. General relocation, exception fixups, extended CODE,
+resource assembly, and automatic symbol ID allocation
 remain incomplete. Every length-changing edit must account for affected
 references and integrity fields. Equal length alone does not prove validity.
 

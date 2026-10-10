@@ -17,8 +17,9 @@ All simulator runs use the original device profile and memory allowance.
   inserted into the Hello World scaffold as described below.
 
 External sources inform encoding interpretations; no implementation code was
-copied. Production Rust support is unchanged: the new instructions cause CODE
-export to retain its raw fallback. EXCEPTIONS also remains raw.
+copied. At this research checkpoint the new instructions required raw CODE
+export. [Subsequent branch-label support](branch-labels.md) adds those encodings
+and structured CODE; EXCEPTIONS remains raw.
 
 ## SDK observations
 

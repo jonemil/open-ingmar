@@ -62,6 +62,9 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             }
         }
     }
+    if let Ok(section) = prg.unique_section(CODE) {
+        name_branch_targets(section.payload(), &mut code_labels);
+    }
     let label_bindings = code_labels
         .iter()
         .map(|(offset, alias)| (alias.clone(), *offset))
@@ -123,17 +126,9 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 symbols.as_ref(),
                 structured.is_some(),
                 &strings,
+                &code_labels,
             ) {
-                Ok(text) => {
-                    let mut labeled = String::new();
-                    for (instruction, line) in decode(section.payload())?.iter().zip(text.lines()) {
-                        if let Some(alias) = code_labels.get(&(instruction.offset as u32)) {
-                            writeln!(labeled, "{alias}:").unwrap();
-                        }
-                        writeln!(labeled, "{line}").unwrap();
-                    }
-                    (Encoding::Assembly, labeled.into_bytes())
-                }
+                Ok(text) => (Encoding::Assembly, text.into_bytes()),
                 Err(error) => {
                     eprintln!("Section {index} CODE exported as raw binary: {error}");
                     (Encoding::Raw, section.payload().to_vec())
@@ -308,6 +303,25 @@ fn project_code_labels(
             (offset, alias)
         })
         .collect()
+}
+
+fn name_branch_targets(code: &[u8], labels: &mut std::collections::BTreeMap<u32, String>) {
+    let Ok(instructions) = decode(code) else {
+        return;
+    };
+    let boundaries: std::collections::BTreeSet<_> = instructions.iter().map(|i| i.offset).collect();
+    for instruction in &instructions {
+        if let Some(target) = instruction
+            .relative_target()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|n| boundaries.contains(n))
+            .and_then(|n| u32::try_from(n).ok())
+        {
+            labels
+                .entry(target)
+                .or_insert_with(|| format!("code_{target:08x}"));
+        }
+    }
 }
 
 fn string_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, StringDeclaration> {
@@ -588,7 +602,15 @@ pub fn disassemble_symbolic(prg: &Prg) -> Result<String, Box<dyn StdError>> {
     for declaration in strings.values() {
         text.push_str(&declaration.to_text());
     }
-    text.push_str(&disassemble_named(code, symbols.as_ref(), true, &strings)?);
+    let mut labels = std::collections::BTreeMap::new();
+    name_branch_targets(code, &mut labels);
+    text.push_str(&disassemble_named(
+        code,
+        symbols.as_ref(),
+        true,
+        &strings,
+        &labels,
+    )?);
     Ok(text)
 }
 
@@ -609,7 +631,13 @@ pub fn disassemble_with_symbols(
     code: &[u8],
     symbols: Option<&Symbols<'_>>,
 ) -> Result<String, Error> {
-    disassemble_named(code, symbols, false, &std::collections::BTreeMap::new())
+    disassemble_named(
+        code,
+        symbols,
+        false,
+        &std::collections::BTreeMap::new(),
+        &std::collections::BTreeMap::new(),
+    )
 }
 
 fn disassemble_named(
@@ -617,14 +645,31 @@ fn disassemble_named(
     symbols: Option<&Symbols<'_>>,
     named: bool,
     strings: &std::collections::BTreeMap<u32, StringDeclaration>,
+    labels: &std::collections::BTreeMap<u32, String>,
 ) -> Result<String, Error> {
     let mut text = String::new();
     // Validate the full stream before producing any output.
     for located in decode(code)? {
+        if let Some(alias) = u32::try_from(located.offset)
+            .ok()
+            .and_then(|n| labels.get(&n))
+        {
+            writeln!(text, "{alias}:").unwrap();
+        }
+        let target = located
+            .relative_target()
+            .and_then(|n| u32::try_from(n).ok());
         let instruction = located.instruction;
         text.push_str(instruction.opcode().mnemonic());
         let mut start = 0;
         for (field, &width) in instruction.opcode().operand_widths().iter().enumerate() {
+            if field == 0 && instruction.opcode().has_relative_target() {
+                if let Some(alias) = target.and_then(|n| labels.get(&n)) {
+                    write!(text, " code:{alias}").unwrap();
+                    start += width;
+                    continue;
+                }
+            }
             if instruction.opcode() == ciq_mc::Opcode::News {
                 let at = u32::from_be_bytes(instruction.operands().try_into().unwrap());
                 if let Some(string) = strings.get(&at) {

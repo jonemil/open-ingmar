@@ -61,8 +61,8 @@ relocation safety.
 
 ## Implementation order
 
-1. Add observed instruction encodings and branch-label binding/export. Test a
-   branch-only edited application in the official simulator.
+1. Completed: observed instruction encodings and branch-label binding/export,
+   with an [assembler-produced simulator edit](../investigations/branch-labels.md).
 2. Add lossless exception parsing, writing, and project source. Reproduce the
    moved-function experiment through our assembler with named references.
 3. Extend semantic IR and frontend conditions after documenting control-flow

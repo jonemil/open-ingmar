@@ -10,6 +10,33 @@ use std::{
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn branch_targets_export_as_labels_and_invalid_targets_retain_numeric_bits() {
+    // Forward to return, backward to start, inside an operand, negative, and beyond CODE.
+    let code = vec![
+        0x29, 0, 12, 0x19, 0xff, 0xfa, 0x19, 0xff, 0xff, 0x19, 0xff, 0xf3, 0x23, 0x7f, 0xff, 0x16,
+    ];
+    let original = Prg::from_sections(vec![Section::new(CODE, code.clone()).unwrap()]);
+    let symbolic = ciq_dis::disassemble_symbolic(&original).unwrap();
+    assert!(symbolic.contains("bf code:code_0000000f"));
+    assert!(symbolic.contains("goto code:code_00000000"));
+    for bits in ["goto 0xffff", "goto 0xfff3", "jsr 0x7fff"] {
+        assert!(symbolic.contains(bits));
+    }
+    assert_eq!(ciq_asm::assemble(&symbolic).unwrap(), code);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("project");
+    ciq_dis::export_project(&original, &directory).unwrap();
+    let exported = fs::read_to_string(directory.join("000-code-c0debabe.mcasm")).unwrap();
+    assert!(exported.contains("bf code:code_0000000f"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let end_target = Prg::from_sections(vec![Section::new(CODE, vec![0x19, 0, 0]).unwrap()]);
+    let listing = ciq_dis::disassemble_symbolic(&end_target).unwrap();
+    assert!(listing.contains("goto 0x0000"));
+    assert!(!listing.contains("code:"));
+    assert_eq!(ciq_asm::assemble(&listing).unwrap(), [0x19, 0, 0]);
+}
+
 struct TemporaryDirectory(PathBuf);
 
 impl TemporaryDirectory {

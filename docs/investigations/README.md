@@ -135,4 +135,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   nonempty exception tables, and simulator-confirmed branch inversion, loop
   redirection, and a moved exception-bearing function.
 
+- [Branch-label assembly](branch-labels.md): typed/text relative CODE references,
+  symbolic target export, byte-identical control-flow reconstruction, and an
+  assembler-produced loop edit displaying `45` in the simulator.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

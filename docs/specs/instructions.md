@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 28 opcodes currently encoded and decoded by
+This reference covers each of the 38 opcodes currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -9,7 +9,9 @@ reference.
 
 ## Scope and notation
 
-All encodings below occur in our SDK 9.2.0, `fr265`, `-O 0` debug builds.
+Encodings below occur in SDK 9.2.0, `fr265`, `-O 0` debug builds,
+including the [control-flow specimen](../investigations/control-flow.md),
+except `bt`, tested through a controlled opcode replacement.
 Instruction presence and operand widths are **experimentally observed**.
 Execution descriptions and abstract stack effects are **source-derived**, with
 compiled source/bytecode supporting their interpretation. We have not traced
@@ -30,8 +32,8 @@ Stack notation puts the top at the right. `...` means unchanged lower values.
 “Local” denotes a frame slot, separate from the abstract evaluation stack. Stack
 effects summarize successful execution, excluding exceptions and physical frame
 mechanics. Member IDs refer to [symbols](symbols.md); string data addresses are
-a different reference kind. None of these 28 encodings has an immediate branch
-target.
+a different reference kind. Relative branch and subroutine operands identify
+CODE instruction targets, independently of symbols and DATA addresses.
 
 ## Index
 
@@ -63,6 +65,16 @@ target.
 - [`getsv`](#getsv): load a member of a stacked receiver.
 - [`invokemz`](#invokemz): invoke a callable with no explicit arguments.
 - [`argcincsp`](#argcincsp): set up arguments and reserve local-frame space.
+- [`goto`](#goto): jump unconditionally.
+- [`bt`](#bt): branch on a true condition.
+- [`bf`](#bf): branch on a false condition.
+- [`eq`](#eq): compare two values for equality.
+- [`gt`](#gt): compare two values for greater-than.
+- [`jsr`](#jsr): call a local subroutine.
+- [`ret`](#ret): return from a local subroutine.
+- [`throw`](#throw): raise an exception.
+- [`btpush`](#btpush): push Boolean true.
+- [`bfpush`](#bfpush): push Boolean false.
 
 ## popv
 
@@ -537,6 +549,83 @@ HelloWorldView/onUpdate.
 unit are unverified. These operands are counts, not symbol IDs or code
 addresses.
 
+
+## goto
+
+**Jump unconditionally.** Opcode `0x19`; length **3 bytes**. Operand:
+signed i16 big-endian displacement from the end of the instruction. The raw
+operand preserves its two-byte bit pattern; `code:label` resolves during
+assembly. Evaluation-stack effect is source-derived as unchanged.
+Observed `19 ff e8` at CODE+`0xa1` targets the loop test at `0x8c`.
+Changing the displacement to zero runs the body once, returning `2`.
+
+## bt
+
+**Branch if true.** Opcode `0x28`; length **3 bytes**. Operand: the same signed
+relative displacement as `goto`. Source-derived effect consumes one condition
+value. Replacing `bf` at CODE+`0xb5` with `bt`, retaining `0006`, swaps the
+observed return values for `choose(0)` and `choose(1)`. General truth conversion
+for non-Boolean values remains unverified.
+
+## bf
+
+**Branch if false.** Opcode `0x29`; length **3 bytes**. Operand: signed relative
+displacement as `goto`. Source-derived effect consumes one condition value.
+Observed `29 00 06` at CODE+`0xb5` jumps to `0xbe` when `value == 0` is false;
+otherwise execution falls through. General truth conversion is unverified.
+
+## eq
+
+**Compare equality.** Opcode `0x1a`; length **1 byte**; no operands.
+Source-derived stack effect: `[..., left, right] → [..., Boolean(left == right)]`.
+Observed at CODE+`0xb4`, after an integer parameter and zero are loaded.
+Both comparison outcomes execute in the simulator. Object/string equality and
+mixed-type behavior remain unverified.
+
+## gt
+
+**Compare greater-than.** Opcode `0x1d`; length **1 byte**; no operands.
+Source-derived stack effect: `[..., left, right] → [..., Boolean(left > right)]`.
+Observed at CODE+`0x8f`, testing the countdown parameter against zero.
+The loop executes three times and exits at zero. Other operand types remain
+unverified.
+
+## jsr
+
+**Call a local subroutine.** Opcode `0x23`; length **3 bytes**. Operand: signed
+relative displacement as `goto`. Observed `23 00 1d` at CODE+`0x30` targets
+`ret` at `0x50` in the try/catch function. Source-derived behavior transfers
+control and retains a continuation; its physical storage and stack/frame
+interaction are unresolved. This is distinct from `invokem` and `invokemz`.
+
+## ret
+
+**Return from a local subroutine.** Opcode `0x17`; length **1 byte**; no operands.
+Observed at CODE+`0x50`, shared by several `jsr` sites. Source-derived behavior
+resumes their continuation, rather than returning the containing function.
+Exact continuation storage and invalid-call behavior remain unresolved.
+
+## throw
+
+**Raise an exception.** Opcode `0x33`; length **1 byte**; no operands.
+Source-derived effect consumes the thrown value and transfers control through
+exception handling. Observed at CODE+`0x2a` after constructing `Lang.Exception`;
+the selected handler returns `43`. CODE+`0x4f` also contains a rethrow path.
+Handler stack setup, unwinding, and uncaught behavior remain unresolved.
+
+## btpush
+
+**Push Boolean true.** Opcode `0x3e`; length **1 byte**; no operands.
+Source-derived stack effect: `[...] → [..., true]`. Observed at CODE+`0x206`
+as the argument to `caught(true)`, which takes the explicit throw path.
+Physical Boolean representation is unverified.
+
+## bfpush
+
+**Push Boolean false.** Opcode `0x3f`; length **1 byte**; no operands.
+Source-derived stack effect: `[...] → [..., false]`. Observed at CODE+`0x1f0`
+as the argument to `caught(false)`, which returns without throwing.
+Physical Boolean representation is unverified.
 
 ## Runtime evidence for arithmetic and local-frame instructions
 

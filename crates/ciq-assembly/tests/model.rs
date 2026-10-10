@@ -3,6 +3,94 @@ use ciq_mc::Opcode;
 use std::collections::BTreeMap;
 
 #[test]
+fn branch_labels_bind_in_memory_and_text_and_follow_layout_edits() {
+    let source = "start:\nbtpush\nbf code:done\njsr code:helper\ngoto code:start\nhelper:\nret\ndone:\nipush1 0x2b\nreturn\n";
+    let program = Program::parse(source).unwrap();
+    let bytes = program.encode().unwrap();
+    assert_eq!(
+        bytes,
+        [
+            0x3e, 0x29, 0, 7, 0x23, 0, 3, 0x19, 0xff, 0xf6, 0x17, 0x38, 43, 0x16
+        ]
+    );
+    assert_eq!(program, Program::parse(&program.to_text()).unwrap());
+    assert_eq!(
+        bytes,
+        Program::new(program.items().to_vec())
+            .unwrap()
+            .encode()
+            .unwrap()
+    );
+    let changed = Program::parse(&source.replace("helper:\nret", "popv\nhelper:\nret")).unwrap();
+    let decoded = ciq_mc::decode(&changed.encode().unwrap()).unwrap();
+    assert_eq!(decoded[1].relative_target(), Some(12));
+    assert_eq!(decoded[2].relative_target(), Some(11));
+    assert_eq!(decoded[3].relative_target(), Some(0));
+}
+
+#[test]
+fn invalid_named_branch_targets_fail_but_numeric_bits_are_preserved() {
+    for source in ["argc code:x", "goto code:bad.name", "news code:x"] {
+        assert!(Program::parse(source).is_err());
+    }
+    for source in ["goto code:missing", "goto code:end\nend:"] {
+        assert!(Program::parse(source).unwrap().encode().is_err());
+    }
+    let typed = Program::new(vec![Item::Instruction {
+        opcode: Opcode::Argc,
+        operands: vec![Operand::Code("x".into())],
+    }]);
+    assert!(typed.is_err());
+    assert_eq!(
+        Program::parse("goto 0xffff").unwrap().encode().unwrap(),
+        [0x19, 0xff, 0xff]
+    );
+}
+
+#[test]
+fn branch_displacement_endpoints_fit_and_overflow_is_rejected() {
+    fn forward(padding: usize) -> Program {
+        let mut items = vec![Item::Instruction {
+            opcode: Opcode::Goto,
+            operands: vec![Operand::Code("target".into())],
+        }];
+        items.extend((0..padding).map(|_| Item::Instruction {
+            opcode: Opcode::Popv,
+            operands: vec![],
+        }));
+        items.push(Item::Label("target".into()));
+        items.push(Item::Instruction {
+            opcode: Opcode::Return,
+            operands: vec![],
+        });
+        Program::new(items).unwrap()
+    }
+    fn backward(padding: usize) -> Program {
+        let mut items = vec![
+            Item::Label("target".into()),
+            Item::Instruction {
+                opcode: Opcode::Return,
+                operands: vec![],
+            },
+        ];
+        items.extend((0..padding).map(|_| Item::Instruction {
+            opcode: Opcode::Popv,
+            operands: vec![],
+        }));
+        items.push(Item::Instruction {
+            opcode: Opcode::Goto,
+            operands: vec![Operand::Code("target".into())],
+        });
+        Program::new(items).unwrap()
+    }
+    assert_eq!(&forward(32767).encode().unwrap()[..3], &[0x19, 0x7f, 0xff]);
+    assert!(forward(32768).encode().is_err());
+    let bytes = backward(32764).encode().unwrap();
+    assert_eq!(&bytes[bytes.len() - 3..], &[0x19, 0x80, 0]);
+    assert!(backward(32765).encode().is_err());
+}
+
+#[test]
 fn typed_references_declarations_and_layout_survive_text_roundtrip() {
     let text = "start:\ngetmv @system @println\nnews &greeting\nreturn\nend:\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol println \"println\" id=0x00800067\n.string greeting \"Hello\\n\\\"there\\\"\" at=0x00000010\n";
     let model = Program::parse(text).unwrap();

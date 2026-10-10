@@ -2,7 +2,7 @@
 //!
 //! Parses, prints, and encodes ordinary CODE assembly through [`Program`].
 //! Text parsing and typed construction use the same validation. Encoding
-//! resolves symbol/string aliases and produces raw instruction bytes; PRG
+//! resolves symbol/string aliases and relative CODE labels into instruction bytes; PRG
 //! reconstruction and signing belong to the assembler tool.
 use ciq_mc::{Instruction, Opcode};
 use ciq_prg::{
@@ -29,6 +29,8 @@ pub enum Operand {
     Bits(u64),
     Symbol(String),
     String(String),
+    /// A local CODE label resolved to a signed relative instruction operand.
+    Code(String),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item {
@@ -43,7 +45,7 @@ pub enum Item {
 
 /// A validated CODE assembly program containing instructions and declarations.
 ///
-/// Symbol and string aliases are resolved during encoding. Equality compares
+/// Symbol/string aliases and CODE labels resolve during encoding. Equality compares
 /// program content and ignores source line numbers.
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -60,8 +62,8 @@ impl Eq for Program {}
 impl Program {
     /// Construct and validate a CODE assembly program from typed items.
     ///
-    /// Applies the same operand and layout checks as [`Self::parse`]. Symbol
-    /// and string aliases may remain unresolved until encoding. Errors use line
+    /// Applies the same operand and layout checks as [`Self::parse`]. Symbol,
+    /// string, and CODE references may remain unresolved until encoding. Errors use line
     /// zero because the items have no source line numbers.
     pub fn new(items: Vec<Item>) -> Result<Self, Error> {
         let program = Self {
@@ -83,8 +85,8 @@ impl Program {
     }
     /// Parse CODE `.mcasm` text into a validated assembly program.
     ///
-    /// Rejects unsupported syntax and invalid operands or layout. Symbol and
-    /// string aliases are retained for later binding. Errors identify the input
+    /// Rejects unsupported syntax and invalid operands or layout. Symbol, string,
+    /// and CODE references are retained for binding. Errors identify the input
     /// line; comments and whitespace are not retained in the program.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut program = Self {
@@ -124,11 +126,11 @@ impl Program {
                         if let Some(alias) = value.strip_prefix('&') {
                             return Ok(Operand::String(alias.into()));
                         }
+                        if let Some(alias) = value.strip_prefix("code:") {
+                            return Ok(Operand::Code(alias.into()));
+                        }
                         let hex = value.strip_prefix("0x").ok_or_else(|| {
-                            fail(
-                                "operands must start with 0x or use a declared @alias or &alias"
-                                    .into(),
-                            )
+                            fail("operands must use 0x, @alias, &alias, or code:label".into())
                         })?;
                         if hex.is_empty() || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
                             return Err(fail(format!("invalid hexadecimal operand {value:?}")));
@@ -198,6 +200,13 @@ impl Program {
                             {
                                 return Err(fail("invalid string reference or non-string operand"));
                             }
+                            Operand::Code(alias)
+                                if !opcode.has_relative_target()
+                                    || field != 0
+                                    || !valid_alias(alias) =>
+                            {
+                                return Err(fail("invalid CODE reference or non-relative operand"));
+                            }
                             _ => (),
                         }
                     }
@@ -258,6 +267,7 @@ impl Program {
                             }
                             Operand::Symbol(alias) => text.push_str(&format!("@{alias}")),
                             Operand::String(alias) => text.push_str(&format!("&{alias}")),
+                            Operand::Code(alias) => text.push_str(&format!("code:{alias}")),
                         }
                     }
                     text.push('\n');
@@ -281,11 +291,25 @@ impl Program {
     /// errors. Output contains instructions only, not symbol or string records.
     /// Unplaced literal declarations require an external binding when referenced;
     /// their content must be materialized separately in DATA by the caller.
+    /// CODE labels resolve locally to instruction boundaries. Missing labels,
+    /// end-of-CODE targets, and signed 16-bit displacement overflow are errors;
+    /// numeric relative operands preserve their bits without target validation.
     pub fn encode_with_references(
         &self,
         external: &BTreeMap<String, u32>,
         external_strings: &BTreeMap<String, u32>,
     ) -> Result<Vec<u8>, Error> {
+        let labels = self.labels()?;
+        let code_length: usize = self
+            .items
+            .iter()
+            .map(|item| match item {
+                Item::Instruction { opcode, .. } => {
+                    1 + opcode.operand_widths().iter().sum::<usize>()
+                }
+                _ => 0,
+            })
+            .sum();
         let mut declarations = Source::default();
         let mut strings = external_strings.clone();
         for (index, item) in self.items.iter().enumerate() {
@@ -324,6 +348,19 @@ impl Program {
             for (operand, width) in operands.iter().zip(opcode.operand_widths()) {
                 let value = match operand {
                     Operand::Bits(value) => *value,
+                    Operand::Code(alias) => {
+                        let target = *labels.get(alias).ok_or_else(|| {
+                            self.error(index, format!("undefined code label {alias}"))
+                        })?;
+                        if target as usize >= code_length {
+                            return Err(self.error(index, "CODE target must denote an instruction"));
+                        }
+                        let displacement = i64::from(target) - code.len() as i64 - 3;
+                        let displacement = i16::try_from(displacement).map_err(|_| {
+                            self.error(index, "relative CODE displacement exceeds signed 16 bits")
+                        })?;
+                        displacement as u16 as u64
+                    }
                     Operand::Symbol(alias) => *bindings.get(alias).ok_or_else(|| {
                         self.error(index, format!("undefined symbol alias {alias}"))
                     })? as u64,

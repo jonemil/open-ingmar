@@ -61,8 +61,9 @@ identities, not new VM symbols or evidence of a complete function signature.
 
 [Structured line mappings](line-numbers-and-debug.md) now share these labels in
 version 4 projects. Export adds labels for verified line-PC instruction
-boundaries; named PCs move when those labels move. Branch operands, exception
-intervals, header offsets, and opaque metadata are not automatically relocated.
+boundaries; named PCs move when those labels move. Named branch operands also
+follow layout as described below. Exception intervals, header offsets, numeric
+operands, and opaque metadata are not automatically relocated.
 Project import still checks manifest lengths. Explicitly changing those lengths
 does not validate other affected references. The append-only experiment in the
 investigation tests a larger body without shifting existing instructions; it
@@ -72,3 +73,23 @@ branch-free code with empty exceptions and zero background/glance offsets, with
 confirmed shrunk-variant simulator execution returning `45`.
 
 [ref-label-and-relocation-investigation]: ../investigations/code-labels-and-relocation.md
+
+## Relative instruction operands
+
+`goto`, `bt`, `bf`, and `jsr` accept `code:label` as their sole operand. The
+assembler resolves local labels after layout, emitting the signed 16-bit
+big-endian displacement `target - (instruction_offset + 3)`. Forward and
+backward targets are supported. Undefined labels, targets at the end of CODE,
+and displacements outside `-32768..32767` fail encoding. Other instructions
+reject CODE-label operands. There is no automatic long-branch expansion.
+
+Numeric operands remain unsigned hexadecimal bit patterns; for example,
+`goto 0xffe8` carries displacement `-24`. Their target validity is unchecked,
+and they do not change when labels move. This preserves unfamiliar or invalid
+input without silently rewriting it.
+
+Project export and `code-symbolic` name branch targets only when they denote
+verified instruction boundaries. Project export reuses method/line labels,
+adding `code_<offset>` names for remaining targets. Numeric `code` listings
+retain original operand bits. EXCEPTIONS remains raw at this milestone. See
+[the implementation experiment](../investigations/branch-labels.md).

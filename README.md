@@ -34,6 +34,13 @@ general relocation is not implemented. Without `-y`, signing material is
 preserved. With `-y`, the assembler replaces it with signatures from the
 supplied developer key. Keep exports under ignored `scratch/`.
 
+Relative branches and local subroutine calls now accept `code:label`, with
+signed 16-bit displacement checks. Project export shares these targets with
+method and line labels. The control-flow specimen reconstructs byte for byte;
+an assembled loop-target edit displays simulator-confirmed `45`. See
+[branch-label evidence](docs/investigations/branch-labels.md). Exception sections
+remain raw until the next milestone.
+
 Reassemble with your developer key, or sign an existing PRG separately (outputs
 must be new files):
 

@@ -18,22 +18,28 @@ describe planned behavior and investigations record the supporting evidence.
   with structured supported metadata and opaque fallback.
 - Named symbols, DATA strings/classes, method CODE labels, DEBUG strings, and
   line mappings support the documented constrained assembly profiles.
+- Named branch/subroutine operands resolve signed relative displacements;
+  symbolic CODE export shares method/line/branch labels. An assembler-produced
+  loop edit is simulator-verified; exception sections remain raw.
 - Own-key PRG signing/verification and supported barrel/IQ reading, packing,
   verification, and IQ creation are implemented.
 - Source → IR → assembly → CODE works in memory and through saved text. Integer
   arithmetic, initialized locals, user-module calls, integer parameters,
   positional arguments, string literals/locals, and `System.println` statements
   are simulator-verified.
-- The latest implementation checkpoint passes 155 Rust tests, Clippy, and
+- The latest implementation checkpoint passes 160 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Implement [branch-label fixups](design/control-flow.md), then lossless
-   exception-table assembly/disassembly, before frontend conditions or general
-   relocation. The [control-flow investigation](investigations/control-flow.md)
+1. Implement lossless exception-table assembly/disassembly following the
+   [control-flow design](design/control-flow.md), before frontend conditions or
+   general relocation. The
+   [control-flow investigation](investigations/control-flow.md)
    verifies opposite conditional branches, a changed loop target, and a moved
    exception-bearing function. Keep unknown metadata and placement constraints.
+   [Branch-label fixups](investigations/branch-labels.md) are implemented and
+   simulator-verified.
 2. Revisit DATA string authoring after establishing shared address-region rules.
    The [boundary experiment](investigations/string-address-boundary.md) proves
    a working `0x01000000` literal offset with raised simulator memory; the upper

@@ -9,10 +9,11 @@ or signing.
 `Program` is an ordered sequence of immutable items: labels, instructions,
 inline symbol declarations, and inline string declarations with optional
 placement. An instruction has an `Opcode` and typed operand fields: `Bits(u64)`,
-`Symbol(alias)`, or `String(alias)`. Semantic value IDs from compiler IR are
-absent here. Symbol/string references remain symbolic until encoding receives
-declarations or external bindings. Branch operands/fixups are not added by this
-change.
+`Symbol(alias)`, `String(alias)`, or `Code(alias)`. Semantic value IDs from
+compiler IR are absent here. Symbol/string references await declarations or
+external bindings; CODE references resolve locally to signed relative operands
+after layout. See
+[branch-label rules](../specs/code-labels.md#relative-instruction-operands).
 
 Both `Program::new(items)` and `Program::parse(text)` apply the same structural
 validation: identifier syntax, operand count/width, allowed reference kinds,

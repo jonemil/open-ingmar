@@ -2,15 +2,16 @@
 
 Evidence and provenance:
 [initial Rust investigation](../investigations/rust-bootstrap.md). The following
-instruction encodings occur in the locally compiled Hello World and Minimal
-Console ordinary code sections. Widths were cross-checked with the pinned
+instruction encodings occur in Hello World, Minimal Console, and the
+[control-flow specimen](../investigations/control-flow.md).
+Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
 An instruction starts with a one-byte opcode and is followed by its fixed-width
 operand fields. Fields are big-endian. The `ciq-mc` instruction model preserves
-operand bytes; it does not assign signedness, resolve symbols, relocate
-branches, or interpret the stack. Symbol reference resolution occurs in the
-assembler.
+operand bytes. A separate target query interprets relative operands as signed
+16-bit displacements; encoding still preserves raw bits. Symbol and CODE-label
+resolution occur in assembly, without stack interpretation.
 
 | Opcode | Mnemonic | Operand field widths in bytes |
 |---|---|---|
@@ -27,14 +28,24 @@ assembler.
 | `14` | `newa` | none |
 | `15` | `newc` | none |
 | `16` | `return` | none |
+| `17` | `ret` | none |
 | `18` | `news` | 4 |
+| `19` | `goto` | 2 |
+| `1a` | `eq` | none |
+| `1d` | `gt` | none |
+| `23` | `jsr` | 2 |
 | `27` | `spush` | 4 |
+| `28` | `bt` | 2 |
+| `29` | `bf` | 2 |
 | `2a` | `frpush` | none |
 | `2e` | `dup` | 1 |
 | `30` | `getm` | none |
+| `33` | `throw` | none |
 | `35` | `argc` | 1 |
 | `37` | `ipushz` | none |
 | `38` | `ipush1` | 1 |
+| `3e` | `btpush` | none |
+| `3f` | `bfpush` | none |
 | `43` | `getselfv` | 4 |
 | `44` | `getself` | none |
 | `45` | `getmv` | 4, 4 |
@@ -58,7 +69,8 @@ source-derived behavior from compiled observations.
 
 Assembly uses one mnemonic per line, followed by one operand per field: a
 hexadecimal bit pattern, a declared `@alias` in a known symbol-ID field, or
-`&alias` in the `news` string-address field. Numeric operands must start with
+`&alias` in the `news` string-address field, or `code:label` in a relative
+branch/subroutine operand. Numeric operands must start with
 `0x` and fit their field widths. `#` starts a comment. Blank lines are allowed.
 For example:
 
@@ -74,7 +86,8 @@ escaped names; assembly ignores those comments and reproduces the original
 operand bits. [Symbol declarations](symbol-assembly.md) resolve named operands.
 Optional commas separate fields. [String declarations](data-strings.md) resolve
 DATA addresses; [shared CODE labels](code-labels.md) identify instruction
-boundaries; includes, branch fixups, and expressions are not implemented.
+boundaries and resolve signed 16-bit branch fixups. Includes and expressions
+are not implemented.
 `ciq-asm` can replace an entire ordinary code payload in a PRG template or
 reconstruct a [complete section project](section-project.md); it is not a Monkey
 C compiler.
