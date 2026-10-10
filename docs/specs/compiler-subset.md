@@ -12,10 +12,12 @@ Identifiers use ASCII letters/underscore followed by ASCII letters/digits/unders
 
 Diagnostics identify the input byte offset and one-based line/column (columns count Unicode scalar values). The caller supplies the filename. Unsupported input never silently generates a partial function. There is no type inference, symbol resolver, whole-program analysis, or optimizer yet.
 
-The IR contains an integer constant definition and a return using its value ID, with source spans. Lowering emits a label from the function name, `argc 0x01`, `ipushz` for zero or `ipush1` for a positive supported literal, then `return`. The frame count follows the observed parameterless/global-function context slot; omitting SDK global-resolution instructions is limited to this context-independent body. It does not establish the frame layout or valid setup for arbitrary functions.
+The IR contains an integer constant definition and a return using its value ID, with optional source spans. Source compilation supplies them; IR text may omit them. Lowering emits a label from the function name, `argc 0x01`, `ipushz` for zero or `ipush1` for a positive supported literal, then `return`. The frame count follows the observed parameterless/global-function context slot; omitting SDK global-resolution instructions is limited to this context-independent body. It does not establish the frame layout or valid setup for arbitrary functions.
 
 ```sh
 cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcasm
 ```
 
-CLI output must be a new file; existing output is never overwritten. Output is ordinary assembly, not a complete PRG. Library `compile(source)` returns an inspectable immutable `Function` IR; `Function::assembly()` lowers/prints it. Public IR types are preliminary, and external IR construction is not supported yet. Existing assembler/signing commands consume the output after explicitly integrating it into an application section project.
+CLI output must be a new file; existing output is never overwritten. Output is ordinary assembly, not a complete PRG. Library `compile(source)` returns an inspectable immutable `Function` IR; `Function::assembly()` lowers/prints it. Public IR types are preliminary. `Function::new` validates explicitly constructed operations, `parse_ir` resumes [IR text](compiler-ir-text.md), and `Function::lower()` constructs the [shared assembly model](assembly-model.md) directly. Existing assembler/signing commands consume the output after explicitly integrating it into an application section project.
+
+The compiler CLI now supports `--from source|ir|assembly` and `--emit ir|assembly|code`. The default two-path invocation still emits assembly from source. CODE output is a raw payload, not a PRG. See [pipeline commands and limits](compiler-ir-text.md#command-line-stages).

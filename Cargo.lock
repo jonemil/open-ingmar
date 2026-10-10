@@ -48,7 +48,7 @@ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 name = "ciq-asm"
 version = "0.1.0"
 dependencies = [
- "ciq-mc",
+ "ciq-assembly",
  "ciq-prg",
  "ciq-sign",
  "rand_core",
@@ -56,10 +56,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciq-assembly"
+version = "0.1.0"
+dependencies = [
+ "ciq-mc",
+ "ciq-prg",
+]
+
+[[package]]
 name = "ciq-compiler"
 version = "0.1.0"
 dependencies = [
  "ciq-asm",
+ "ciq-assembly",
  "ciq-mc",
 ]
 

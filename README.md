@@ -62,6 +62,8 @@ The [first Monkey C frontend](docs/specs/compiler-subset.md) now compiles a para
 cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcasm
 ```
 
+The [compiler pipeline](docs/specs/compiler-ir-text.md) can also emit IR (`--emit ir`), resume it (`--from ir`), or encode raw CODE directly (`--emit code`). Both the native path and saved `.mcasm` use the [shared assembly model](docs/specs/assembly-model.md).
+
 The output is a function, requiring explicit application scaffold integration. Generated `41` and `42` bodies both print/display their result in Garmin's simulator; see [the experiment and commands](docs/investigations/first-compiler.md). Arithmetic, calls, and complete-project compilation remain future work.
 
 Build and validate the workspace:
@@ -99,7 +101,7 @@ Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). C
 
 [Multi-file and barrel examples](docs/investigations/multi-file-and-barrels.md) now round-trip and run: the multi-file assembly edit shows `47`, and reconstructed barrel/package programs show `46`. Barrel source/archive consumption produces identical CODE and DATA; the SDK creates distribution packages separately.
 
-Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, `ciq-asm`, `ciq-package`, and `ciq-compiler`. Keep `Cargo.lock` in version control for the command-line tools.
+Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, `ciq-asm`, `ciq-package`, `ciq-compiler`, and `ciq-assembly`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.
 

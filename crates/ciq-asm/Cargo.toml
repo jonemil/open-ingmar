@@ -6,8 +6,8 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ciq-assembly.workspace = true
 ciq-prg.workspace = true
-ciq-mc.workspace = true
 ciq-sign.workspace = true
 
 [dev-dependencies]

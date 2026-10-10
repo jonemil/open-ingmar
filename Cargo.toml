@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ciq-prg", "crates/ciq-mc", "crates/ciq-dis", "crates/ciq-asm", "crates/ciq-sign", "crates/ciq-package", "crates/ciq-compiler"]
+members = ["crates/ciq-prg", "crates/ciq-mc", "crates/ciq-dis", "crates/ciq-asm", "crates/ciq-sign", "crates/ciq-package", "crates/ciq-compiler", "crates/ciq-assembly"]
 resolver = "3"
 
 [workspace.package]
@@ -9,6 +9,7 @@ rust-version = "1.85"
 publish = false
 
 [workspace.dependencies]
+ciq-assembly = { path = "crates/ciq-assembly" }
 ciq-prg = { path = "crates/ciq-prg" }
 ciq-mc = { path = "crates/ciq-mc" }
 ciq-sign = { path = "crates/ciq-sign" }

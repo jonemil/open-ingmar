@@ -35,3 +35,5 @@ Readable `.mcasm` remains the low-level inspection boundary whichever internal d
 5. Generate application scaffolding, classes/symbols, resources, and required metadata independently. Connect this to [Jungle-driven project builds](project-builds.md), including application and barrel workflows.
 
 Acceptance is the expected function behavior and a valid signed program, not equality to Garmin's optimized bytecode. Preserve unrelated scaffold sections and test assembly output through the existing encoder. Compare small SDK examples to distinguish specified behavior from hypotheses. Compiler tests must not require the SDK; real SDK/simulator experiments provide separate compatibility evidence.
+
+Before arithmetic work, the [native/text pipeline checkpoint](../investigations/compiler-pipeline.md) now proves both composition routes. IR text and assembly text are optional intermediate representations, each parsed into the same models used by the native route. Extend this pipeline and its round-trip/equivalence tests whenever the IR changes; the exact IR syntax remains provisional.

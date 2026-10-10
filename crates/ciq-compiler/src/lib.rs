@@ -1,6 +1,8 @@
 //! Restricted Monkey C frontend. See docs/specs/compiler-subset.md.
 
+mod ir_text;
 mod parser;
+pub use ir_text::parse_ir;
 
 use ciq_mc::Opcode;
 use std::fmt;
@@ -52,10 +54,22 @@ pub enum Operation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocatedOperation {
     pub operation: Operation,
-    pub span: Span,
+    pub span: Option<Span>,
 }
 
-/// Validated subset IR. Construction is restricted to the frontend for now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrError {
+    pub operation: Option<usize>,
+    pub message: String,
+}
+impl fmt::Display for IrError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+impl std::error::Error for IrError {}
+
+/// Validated subset IR, constructible from source, text, or typed operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
@@ -71,26 +85,95 @@ impl Function {
         &self.operations
     }
 
-    /// Lower semantic operations to the shared readable assembly language.
-    pub fn assembly(&self) -> String {
-        let mut text = format!("{}:\n{} 0x01\n", self.name, Opcode::Argc.mnemonic());
-        // The initial frontend creates one value, immediately consumed by return.
-        // General scheduling, local allocation and control-flow joins are deferred.
-        for operation in &self.operations {
-            match operation.operation {
-                Operation::Integer { value: 0, .. } => {
-                    text.push_str(Opcode::Ipushz.mnemonic());
-                    text.push('\n');
-                }
-                Operation::Integer { value, .. } => {
-                    text.push_str(&format!("{} 0x{value:02x}\n", Opcode::Ipush1.mnemonic()));
-                }
-                Operation::Return { .. } => {
-                    text.push_str(Opcode::Return.mnemonic());
-                    text.push('\n');
-                }
+    /// Construct IR through the same validation used by its text reader.
+    pub fn new(name: String, operations: Vec<LocatedOperation>) -> Result<Self, IrError> {
+        let valid_name = name
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+        if !valid_name {
+            return Err(IrError {
+                operation: None,
+                message: "invalid function name".into(),
+            });
+        }
+        for (index, operation) in operations.iter().enumerate() {
+            if operation.span.is_some_and(|span| span.start > span.end) {
+                return Err(IrError {
+                    operation: Some(index),
+                    message: "source span ends before it starts".into(),
+                });
             }
         }
+        let [constant, returned] = operations.as_slice() else {
+            return Err(IrError {
+                operation: None,
+                message: "supported IR requires one integer definition followed by one return"
+                    .into(),
+            });
+        };
+        let Operation::Integer { result, value } = constant.operation else {
+            return Err(IrError {
+                operation: Some(0),
+                message: "first operation must define an integer".into(),
+            });
+        };
+        if !(0..=127).contains(&value) {
+            return Err(IrError {
+                operation: Some(0),
+                message: "supported integer range is 0..=127".into(),
+            });
+        }
+        if returned.operation != (Operation::Return { value: result }) {
+            return Err(IrError {
+                operation: Some(1),
+                message: "return must use the defined integer value".into(),
+            });
+        }
+        Ok(Self { name, operations })
+    }
+
+    /// Lower directly to the shared typed assembly model, without printing/parsing.
+    pub fn lower(&self) -> ciq_assembly::Program {
+        use ciq_assembly::{Item, Operand, Program};
+        let mut items = vec![
+            Item::Label(self.name.clone()),
+            Item::Instruction {
+                opcode: Opcode::Argc,
+                operands: vec![Operand::Bits(1)],
+            },
+        ];
+        for operation in &self.operations {
+            let (opcode, operands) = match operation.operation {
+                Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
+                Operation::Integer { value, .. } => {
+                    (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
+                }
+                Operation::Return { .. } => (Opcode::Return, vec![]),
+            };
+            items.push(Item::Instruction { opcode, operands });
+        }
+        Program::new(items).expect("validated constant-return IR lowers to valid assembly")
+    }
+    pub fn assembly(&self) -> String {
+        self.lower().to_text()
+    }
+
+    /// Provisional, versioned text representation of the semantic IR.
+    pub fn to_ir_text(&self) -> String {
+        let mut text = format!("ciq-ir 1\n.function {}\n", self.name);
+        for operation in &self.operations {
+            text.push_str(&match operation.operation {
+                Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
+                Operation::Return { value } => format!(".return %{}", value.0),
+            });
+            if let Some(span) = operation.span {
+                text.push_str(&format!(" span={}:{}", span.start, span.end));
+            }
+            text.push('\n');
+        }
+        text.push_str(".end\n");
         text
     }
 }
@@ -98,20 +181,21 @@ impl Function {
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     let ast = parser::parse(source)?;
     let value = ValueId(0);
-    Ok(Function {
-        name: ast.name,
-        operations: vec![
+    Function::new(
+        ast.name,
+        vec![
             LocatedOperation {
                 operation: Operation::Integer {
                     result: value,
                     value: ast.integer,
                 },
-                span: ast.integer_span,
+                span: Some(ast.integer_span),
             },
             LocatedOperation {
                 operation: Operation::Return { value },
-                span: ast.return_span,
+                span: Some(ast.return_span),
             },
         ],
-    })
+    )
+    .map_err(|error| Diagnostic::at(source, 0, error.message))
 }

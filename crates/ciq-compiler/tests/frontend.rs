@@ -19,11 +19,11 @@ fn semantic_ir_preserves_value_identity_and_source_spans() {
         Operation::Return { value: ValueId(0) }
     );
     assert_eq!(
-        &source[operations[0].span.start..operations[0].span.end],
+        &source[operations[0].span.unwrap().start..operations[0].span.unwrap().end],
         "41"
     );
     assert_eq!(
-        &source[operations[1].span.start..operations[1].span.end],
+        &source[operations[1].span.unwrap().start..operations[1].span.unwrap().end],
         "return 41;"
     );
 }

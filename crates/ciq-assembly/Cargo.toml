@@ -1,0 +1,13 @@
+[package]
+name = "ciq-assembly"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ciq-prg.workspace = true
+ciq-mc.workspace = true
+
+[lints]
+workspace = true

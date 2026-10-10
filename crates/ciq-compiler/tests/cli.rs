@@ -27,3 +27,42 @@ fn cli_refuses_overwrite_and_creates_no_output_for_invalid_input() {
     assert!(diagnostic.contains("probe.mc:1:16:"));
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn cli_can_stop_and_resume_each_pipeline_stage() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-pipeline-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    fs::write(&source, "function probe() { return 42; }").unwrap();
+    let run = |from: &str, emit: &str, input: &std::path::Path, output: &std::path::Path| {
+        Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", emit])
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap()
+    };
+    let ir = dir.join("probe.ciqir");
+    let asm = dir.join("probe.mcasm");
+    let direct = dir.join("direct.bin");
+    let via_ir = dir.join("via-ir.bin");
+    let via_asm = dir.join("via-asm.bin");
+    assert!(run("source", "ir", &source, &ir).status.success());
+    assert!(run("ir", "assembly", &ir, &asm).status.success());
+    assert!(run("source", "code", &source, &direct).status.success());
+    assert!(run("ir", "code", &ir, &via_ir).status.success());
+    assert!(run("assembly", "code", &asm, &via_asm).status.success());
+    assert_eq!(fs::read(&direct).unwrap(), [0x35, 1, 0x38, 42, 0x16]);
+    assert_eq!(fs::read(&direct).unwrap(), fs::read(&via_ir).unwrap());
+    assert_eq!(fs::read(&direct).unwrap(), fs::read(&via_asm).unwrap());
+    let invalid = dir.join("invalid.bin");
+    fs::write(
+        &ir,
+        "ciq-ir 1\n.function probe\n.integer %0 42\n.return %1\n.end",
+    )
+    .unwrap();
+    assert!(!run("ir", "code", &ir, &invalid).status.success());
+    assert!(!invalid.exists());
+    assert!(!run("assembly", "ir", &asm, &invalid).status.success());
+    fs::remove_dir_all(dir).unwrap();
+}

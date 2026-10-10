@@ -1,13 +1,11 @@
 //! Initial assembly grammar; see docs/specs/bytecode-subset.md.
 
-use ciq_mc::{Instruction, Opcode};
 use ciq_prg::{
     Prg, Section,
     data::{Source as DataSource, StringDeclaration},
     manifest::{Encoding, FILE_NAME, Manifest},
-    symbols::source::{Declaration, Source, tokens},
+    symbols::source::{Source, tokens},
 };
-use std::fmt;
 use std::{error::Error as StdError, fs, path::Path};
 
 /// Reconstruct all sections without reading an original PRG template.
@@ -170,185 +168,9 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     Ok(prg)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Error {
-    pub line: usize,
-    pub message: String,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "assembly line {}: {}", self.line, self.message)
-    }
-}
-
-impl std::error::Error for Error {}
-
-/// Instruction-aligned CODE labels; labels must occupy their own source line.
-pub fn code_labels(text: &str) -> Result<std::collections::BTreeMap<String, u32>, Error> {
-    let mut labels = std::collections::BTreeMap::new();
-    let mut offset = 0u32;
-    for (index, line) in text.lines().enumerate() {
-        let fail = |message: String| Error {
-            line: index + 1,
-            message,
-        };
-        let fields = tokens(line).map_err(|e| fail(e.to_string()))?;
-        if fields.is_empty() || matches!(fields[0].as_str(), ".symbol" | ".string") {
-            continue;
-        }
-        if let Some(alias) = fields[0].strip_suffix(':') {
-            if fields.len() != 1 || !ciq_prg::symbols::source::valid_alias(alias) {
-                return Err(fail("expected label: on its own line".into()));
-            }
-            if labels.insert(alias.into(), offset).is_some() {
-                return Err(fail(format!("duplicate code label {alias}")));
-            }
-            continue;
-        }
-        let opcode = Opcode::ALL
-            .iter()
-            .find(|op| op.mnemonic() == fields[0])
-            .ok_or_else(|| fail(format!("unsupported mnemonic {:?}", fields[0])))?;
-        if fields.len() - 1 != opcode.operand_widths().len() {
-            return Err(fail("incorrect instruction operand count".into()));
-        }
-        offset = offset
-            .checked_add(1 + opcode.operand_widths().iter().sum::<usize>() as u32)
-            .filter(|n| *n <= 0x1000000)
-            .ok_or_else(|| fail("CODE exceeds 24-bit address space".into()))?;
-    }
-    Ok(labels)
-}
-
-pub fn assemble(text: &str) -> Result<Vec<u8>, Error> {
-    assemble_with_bindings(text, &std::collections::BTreeMap::new())
-}
-
-pub fn assemble_with_bindings(
-    text: &str,
-    external: &std::collections::BTreeMap<String, u32>,
-) -> Result<Vec<u8>, Error> {
-    assemble_with_references(text, external, &std::collections::BTreeMap::new())
-}
-
-pub fn assemble_with_references(
-    text: &str,
-    external: &std::collections::BTreeMap<String, u32>,
-    external_strings: &std::collections::BTreeMap<String, u32>,
-) -> Result<Vec<u8>, Error> {
-    code_labels(text)?;
-    let fail = |line, message: String| Error { line, message };
-    let mut lines = Vec::new();
-    let mut declarations = Source::default();
-    let mut strings = external_strings.clone();
-    for (index, line) in text.lines().enumerate() {
-        let fields = tokens(line).map_err(|e| fail(index + 1, e.to_string()))?;
-        if fields.first().is_some_and(|f| f == ".symbol") {
-            declarations
-                .declarations
-                .push(Declaration::parse(&fields).map_err(|e| fail(index + 1, e.to_string()))?);
-        } else if fields.first().is_some_and(|f| f == ".string") {
-            let declaration =
-                StringDeclaration::parse(&fields).map_err(|e| fail(index + 1, e.to_string()))?;
-            let at = declaration.at.ok_or_else(|| {
-                fail(
-                    index + 1,
-                    "inline code strings require at=0x...; automatic layout belongs in DATA source"
-                        .into(),
-                )
-            })?;
-            if strings.insert(declaration.alias.clone(), at).is_some() {
-                return Err(fail(
-                    index + 1,
-                    format!("duplicate string alias {}", declaration.alias),
-                ));
-            }
-        } else if fields.len() == 1 && fields[0].ends_with(':') {
-            // Validated and accounted for by code_labels; labels emit no bytes.
-        } else if !fields.is_empty() {
-            lines.push((index + 1, fields));
-        }
-    }
-    let mut bindings = external.clone();
-    for (alias, id) in declarations
-        .bindings()
-        .map_err(|e| fail(1, e.to_string()))?
-    {
-        if bindings.insert(alias.clone(), id).is_some() {
-            return Err(fail(1, format!("duplicate symbol alias {alias}")));
-        }
-    }
-    let mut code = Vec::new();
-    for (line, fields) in lines {
-        let mnemonic = &fields[0];
-        let opcode = Opcode::ALL
-            .iter()
-            .copied()
-            .find(|opcode| opcode.mnemonic() == mnemonic)
-            .ok_or_else(|| fail(line, format!("unsupported mnemonic {mnemonic:?}")))?;
-        let values = &fields[1..];
-        if values.len() != opcode.operand_widths().len() {
-            return Err(fail(
-                line,
-                format!(
-                    "{} requires {} operand fields",
-                    mnemonic,
-                    opcode.operand_widths().len()
-                ),
-            ));
-        }
-        let mut operands = Vec::new();
-        for (field, (value, &width)) in values.iter().zip(opcode.operand_widths()).enumerate() {
-            let number = if let Some(alias) = value.strip_prefix('@') {
-                if !opcode.symbol_operands().contains(&field) {
-                    return Err(fail(
-                        line,
-                        "symbol reference used in a non-symbol operand".into(),
-                    ));
-                }
-                *bindings
-                    .get(alias)
-                    .ok_or_else(|| fail(line, format!("undefined symbol alias {alias}")))?
-                    as u64
-            } else if let Some(alias) = value.strip_prefix('&') {
-                if opcode != Opcode::News || field != 0 {
-                    return Err(fail(
-                        line,
-                        "string reference used in a non-string operand".into(),
-                    ));
-                }
-                *strings
-                    .get(alias)
-                    .ok_or_else(|| fail(line, format!("undefined string alias {alias}")))?
-                    as u64
-            } else {
-                let hex = value.strip_prefix("0x").ok_or_else(|| {
-                    fail(
-                        line,
-                        "operands must start with 0x or use a declared @alias or &alias".into(),
-                    )
-                })?;
-                if hex.is_empty() || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    return Err(fail(line, format!("invalid hexadecimal operand {value:?}")));
-                }
-                u64::from_str_radix(hex, 16)
-                    .map_err(|_| fail(line, format!("operand {value:?} is too large")))?
-            };
-            if number >= (1u64 << (width * 8)) {
-                return Err(fail(
-                    line,
-                    format!("operand {value:?} exceeds {width}-byte field"),
-                ));
-            }
-            operands.extend_from_slice(&number.to_be_bytes()[8 - width..]);
-        }
-        Instruction::new(opcode, operands)
-            .map_err(|e| fail(line, e.to_string()))?
-            .encode_into(&mut code);
-    }
-    Ok(code)
-}
+pub use ciq_assembly::{
+    Error, Program, assemble, assemble_with_bindings, assemble_with_references, code_labels,
+};
 
 /// Apply same-length code and inline string edits to an existing template.
 pub fn assemble_template(mut prg: Prg, text: &str) -> Result<Prg, Box<dyn StdError>> {
