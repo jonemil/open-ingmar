@@ -48,3 +48,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [First Rust Monkey C frontend](first-compiler.md): small semantic IR, constant-return assembly generation, explicit scaffold integration, and simulator-verified source changes from `41` to `42`.
 
 - [Native/text compiler pipeline](compiler-pipeline.md): provisional IR parser/printer, shared CODE model, native/text byte equivalence, and simulator-confirmed edited IR returning `43`.
+
+- [Compiler integer arithmetic](compiler-arithmetic.md): grouped add/subtract, dependency-based VM lowering, native/text equivalence, and simulator-confirmed `43` and `-3`.

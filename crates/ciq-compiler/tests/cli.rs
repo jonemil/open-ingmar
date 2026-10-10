@@ -66,3 +66,35 @@ fn cli_can_stop_and_resume_each_pipeline_stage() {
     assert!(!run("assembly", "ir", &asm, &invalid).status.success());
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn cli_resumes_saved_arithmetic_ir_and_assembly() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-arithmetic-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let ir = dir.join("probe.ciqir");
+    let asm = dir.join("probe.mcasm");
+    let direct = dir.join("native.bin");
+    let text = dir.join("text.bin");
+    fs::write(&source, "function probe() { return 40 + (8 - 5); }").unwrap();
+    for (options, input, output) in [
+        (vec!["--emit", "ir"], &source, &ir),
+        (vec!["--from", "ir"], &ir, &asm),
+        (vec!["--emit", "code"], &source, &direct),
+        (vec!["--from", "assembly", "--emit", "code"], &asm, &text),
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(options)
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(direct).unwrap(), fs::read(text).unwrap());
+    fs::remove_dir_all(dir).unwrap();
+}

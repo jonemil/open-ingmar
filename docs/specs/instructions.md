@@ -381,3 +381,5 @@ Observed encoding: `4a 02 02` at CODE+`0x00004c` in **hello-world**, HelloWorldV
 ## Runtime evidence for arithmetic and local-frame instructions
 
 The [same-size function replacement](../investigations/function-replacement.md) executes `argcincsp 0x01 0x01; ipush1 0x28; ipush1 0x02; addv; lputv 0x01; lgetv 0x01; return` in SDK 9.2.0's `fr265` simulator and prints/displays `42`. This supports integer addition, local slot 1 storage/retrieval, and the combined prologue for this particular body. Exact physical frame layout and the broader calling convention remain unverified.
+
+The [compiler arithmetic experiment](../investigations/compiler-arithmetic.md) executes `40 + (8 - 5)` as pushes followed by `subv`, `addv`, returning `43`; `2 - 5` returns `-3`. Console and screen captures support left-minus-right operand order and a negative integer result for these operands. This does not establish overflow or type-promotion behavior.

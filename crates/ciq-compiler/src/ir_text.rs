@@ -1,4 +1,4 @@
-use crate::{Diagnostic, Function, LocatedOperation, Operation, Span, ValueId};
+use crate::{BinaryOp, Diagnostic, Function, LocatedOperation, Operation, Span, ValueId};
 
 /// Parse the provisional IR format and apply the shared semantic validator.
 pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
@@ -39,20 +39,30 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         let (kind, width) = match fields.first().copied() {
             Some(".integer") => (0, 3),
             Some(".return") => (1, 2),
-            _ => return Err(fail(*at, "expected .integer, .return, or .end")),
+            Some(".add") => (2, 4),
+            Some(".subtract") => (3, 4),
+            _ => {
+                return Err(fail(
+                    *at,
+                    "expected .integer, .add, .subtract, .return, or .end",
+                ));
+            }
         };
         if fields.len() < width || fields.len() > width + 1 {
             return Err(fail(*at, "incorrect IR operation field count"));
         }
-        let digits = fields[1]
-            .strip_prefix('%')
-            .filter(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
-            .ok_or_else(|| fail(*at, "value IDs use % followed by decimal u32"))?;
-        let value_id = ValueId(
-            digits
-                .parse()
-                .map_err(|_| fail(*at, "value ID exceeds u32"))?,
-        );
+        let parse_value = |text: &str| -> Result<ValueId, Diagnostic> {
+            let digits = text
+                .strip_prefix('%')
+                .filter(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+                .ok_or_else(|| fail(*at, "value IDs use % followed by decimal u32"))?;
+            Ok(ValueId(
+                digits
+                    .parse()
+                    .map_err(|_| fail(*at, "value ID exceeds u32"))?,
+            ))
+        };
+        let value_id = parse_value(fields[1])?;
         let span = if let Some(field) = fields.get(width) {
             let (start, end) = field
                 .strip_prefix("span=")
@@ -84,8 +94,19 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                     .parse()
                     .map_err(|_| fail(*at, "integer exceeds i32"))?,
             }
-        } else {
+        } else if kind == 1 {
             Operation::Return { value: value_id }
+        } else {
+            Operation::Binary {
+                result: value_id,
+                kind: if kind == 2 {
+                    BinaryOp::Add
+                } else {
+                    BinaryOp::Subtract
+                },
+                left: parse_value(fields[2])?,
+                right: parse_value(fields[3])?,
+            }
         };
         operations.push(LocatedOperation { operation, span });
         operation_offsets.push(*at);

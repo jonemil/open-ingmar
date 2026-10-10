@@ -68,7 +68,7 @@ fn unsupported_programs_are_rejected_completely() {
         "function probe() { return 999999999999999999999999; }",
         "function probe() { return -1; }",
         "function probe() { return 0x29; }",
-        "function probe() { return 40 + 1; }",
+        "function probe() { return 40 * 1; }",
         "function probe() { return true; }",
         "function probe() { return 41; return 42; }",
         "function probe() { return 41; } function other() { return 42; }",

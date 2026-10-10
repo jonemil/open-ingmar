@@ -2,12 +2,24 @@ use crate::{Diagnostic, Span};
 
 pub(crate) struct ParsedFunction {
     pub name: String,
-    pub integer: i32,
-    pub integer_span: Span,
+    pub expression: Expression,
     pub return_span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Expression {
+    pub kind: ExpressionKind,
+    pub span: Span,
+}
+pub(crate) enum ExpressionKind {
+    Integer(i32),
+    Binary {
+        kind: crate::BinaryOp,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind<'a> {
     Word(&'a str),
     Integer(&'a str),
@@ -23,6 +35,8 @@ struct Token<'a> {
 struct Parser<'a> {
     source: &'a str,
     offset: usize,
+    lookahead: Option<Token<'a>>,
+    expressions: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -30,7 +44,7 @@ impl<'a> Parser<'a> {
         Diagnostic::at(self.source, offset, message)
     }
 
-    fn token(&mut self) -> Result<Token<'a>, Diagnostic> {
+    fn read_token(&mut self) -> Result<Token<'a>, Diagnostic> {
         loop {
             while let Some(c) = self.source[self.offset..].chars().next() {
                 if !c.is_whitespace() {
@@ -67,7 +81,7 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';')) => {
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -82,6 +96,88 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn token(&mut self) -> Result<Token<'a>, Diagnostic> {
+        if let Some(token) = self.lookahead.take() {
+            Ok(token)
+        } else {
+            self.read_token()
+        }
+    }
+    fn peek(&mut self) -> Result<Kind<'a>, Diagnostic> {
+        if self.lookahead.is_none() {
+            self.lookahead = Some(self.read_token()?);
+        }
+        Ok(self.lookahead.as_ref().unwrap().kind)
+    }
+    fn node(&mut self, kind: ExpressionKind, span: Span) -> Result<Expression, Diagnostic> {
+        self.expressions += 1;
+        if self.expressions >= crate::MAX_OPERATIONS {
+            return Err(self.error(span.start, "expression exceeds 1024-operation limit"));
+        }
+        Ok(Expression { kind, span })
+    }
+    fn expression(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let mut left = self.primary(depth)?;
+        loop {
+            let kind = match self.peek()? {
+                Kind::Punctuation('+') => crate::BinaryOp::Add,
+                Kind::Punctuation('-') => crate::BinaryOp::Subtract,
+                _ => break,
+            };
+            self.token()?;
+            let right = self.primary(depth)?;
+            let span = Span {
+                start: left.span.start,
+                end: right.span.end,
+            };
+            left = self.node(
+                ExpressionKind::Binary {
+                    kind,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+                span,
+            )?;
+        }
+        Ok(left)
+    }
+    fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let token = self.token()?;
+        match token.kind {
+            Kind::Integer(digits) => {
+                let value = digits
+                    .parse::<i32>()
+                    .ok()
+                    .filter(|value| *value <= 127)
+                    .ok_or_else(|| {
+                        self.error(
+                            token.span.start,
+                            "supported integer literal range is 0..=127",
+                        )
+                    })?;
+                self.node(ExpressionKind::Integer(value), token.span)
+            }
+            Kind::Punctuation('(') => {
+                if depth >= 64 {
+                    return Err(
+                        self.error(token.span.start, "expression nesting exceeds 64 levels")
+                    );
+                }
+                let mut expression = self.expression(depth + 1)?;
+                let close = self.expect(Kind::Punctuation(')'), "')'")?;
+                expression.span = Span {
+                    start: token.span.start,
+                    end: close.span.end,
+                };
+                Ok(expression)
+            }
+            _ => Err(self.error(
+                token.span.start,
+                "expected a decimal integer or parenthesized expression",
+            )),
+        }
+    }
+
     fn expect(&mut self, expected: Kind<'a>, description: &str) -> Result<Token<'a>, Diagnostic> {
         let token = self.token()?;
         if token.kind != expected {
@@ -92,7 +188,12 @@ impl<'a> Parser<'a> {
 }
 
 pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
-    let mut parser = Parser { source, offset: 0 };
+    let mut parser = Parser {
+        source,
+        offset: 0,
+        lookahead: None,
+        expressions: 0,
+    };
     parser.expect(Kind::Word("function"), "'function'")?;
     let name = parser.token()?;
     let Kind::Word(identifier) = name.kind else {
@@ -105,16 +206,8 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::Punctuation(')'), "')' (parameters are unsupported)")?;
     parser.expect(Kind::Punctuation('{'), "'{'")?;
     let returned = parser.expect(Kind::Word("return"), "'return'")?;
-    let integer = parser.token()?;
-    let Kind::Integer(digits) = integer.kind else {
-        return Err(parser.error(integer.span.start, "expected a decimal integer in 0..=127"));
-    };
-    let value = digits
-        .parse::<i32>()
-        .ok()
-        .filter(|value| *value <= 127)
-        .ok_or_else(|| parser.error(integer.span.start, "supported integer range is 0..=127"))?;
-    let semi = parser.expect(Kind::Punctuation(';'), "';' (expressions are unsupported)")?;
+    let expression = parser.expression(0)?;
+    let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
     parser.expect(
         Kind::Punctuation('}'),
         "'}' (additional statements are unsupported)",
@@ -122,8 +215,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(ParsedFunction {
         name: identifier.to_owned(),
-        integer: value,
-        integer_span: integer.span,
+        expression,
         return_span: Span {
             start: returned.span.start,
             end: semi.span.end,

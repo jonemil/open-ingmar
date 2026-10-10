@@ -64,7 +64,7 @@ cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcas
 
 The [compiler pipeline](docs/specs/compiler-ir-text.md) can also emit IR (`--emit ir`), resume it (`--from ir`), or encode raw CODE directly (`--emit code`). Both the native path and saved `.mcasm` use the [shared assembly model](docs/specs/assembly-model.md).
 
-The output is a function, requiring explicit application scaffold integration. Generated `41` and `42` bodies both print/display their result in Garmin's simulator; see [the experiment and commands](docs/investigations/first-compiler.md). Arithmetic, calls, and complete-project compilation remain future work.
+The output is a function, requiring explicit application scaffold integration. Generated `41` and `42` bodies both print/display their result in Garmin's simulator; see [the experiment and commands](docs/investigations/first-compiler.md). Integer `+`, `-`, and parentheses are also supported: [arithmetic.mc](examples/compiler-probe/arithmetic.mc) produces simulator-confirmed `43`; `2 - 5` produces `-3`. See [arithmetic evidence and reproduction](docs/investigations/compiler-arithmetic.md). Locals, calls, and complete-project compilation remain future work.
 
 Build and validate the workspace:
 

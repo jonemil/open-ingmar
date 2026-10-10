@@ -12,3 +12,11 @@ This emits a labeled five-byte function returning `41`. It is not a complete wat
 See [the supported grammar](../../docs/specs/compiler-subset.md) and [IR design](../../docs/design/compiler-ir.md). Keep generated assembly and binaries under ignored `scratch/`.
 
 You can also emit semantic IR with `--emit ir`, resume it with `--from ir`, or generate raw CODE bytes with `--emit code`. These routes share the same models/encoder; see [complete stop/resume commands](../../docs/specs/compiler-ir-text.md#command-line-stages) and [the pipeline experiment](../../docs/investigations/compiler-pipeline.md).
+
+[arithmetic.mc](arithmetic.mc) returns `40 + (8 - 5)`. Compile it with:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/arithmetic.mc scratch/compiler-example/arithmetic.mcasm
+```
+
+The eleven-byte body executes `subv` then `addv`, without constant folding. [The arithmetic experiment](../../docs/investigations/compiler-arithmetic.md) records simulator results `43` and `-3`, integration commands, and pipeline equivalence.

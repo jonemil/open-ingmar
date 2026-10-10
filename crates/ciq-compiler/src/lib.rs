@@ -1,10 +1,10 @@
 //! Restricted Monkey C frontend. See docs/specs/compiler-subset.md.
 
+pub mod backend;
 mod ir_text;
 mod parser;
 pub use ir_text::parse_ir;
 
-use ciq_mc::Opcode;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,13 +42,32 @@ impl fmt::Display for Diagnostic {
 impl std::error::Error for Diagnostic {}
 
 /// A semantic value identity, independent of VM stack slots and symbols.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValueId(pub u32);
+
+pub(crate) const MAX_OPERATIONS: usize = 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Subtract,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
-    Integer { result: ValueId, value: i32 },
-    Return { value: ValueId },
+    Integer {
+        result: ValueId,
+        value: i32,
+    },
+    Binary {
+        result: ValueId,
+        kind: BinaryOp,
+        left: ValueId,
+        right: ValueId,
+    },
+    Return {
+        value: ValueId,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,64 +117,82 @@ impl Function {
                 message: "invalid function name".into(),
             });
         }
-        for (index, operation) in operations.iter().enumerate() {
-            if operation.span.is_some_and(|span| span.start > span.end) {
-                return Err(IrError {
-                    operation: Some(index),
-                    message: "source span ends before it starts".into(),
-                });
-            }
-        }
-        let [constant, returned] = operations.as_slice() else {
+        if operations.len() < 2 || operations.len() > MAX_OPERATIONS {
             return Err(IrError {
                 operation: None,
-                message: "supported IR requires one integer definition followed by one return"
-                    .into(),
-            });
-        };
-        let Operation::Integer { result, value } = constant.operation else {
-            return Err(IrError {
-                operation: Some(0),
-                message: "first operation must define an integer".into(),
-            });
-        };
-        if !(0..=127).contains(&value) {
-            return Err(IrError {
-                operation: Some(0),
-                message: "supported integer range is 0..=127".into(),
+                message: "IR requires 2..=1024 operations with a final return".into(),
             });
         }
-        if returned.operation != (Operation::Return { value: result }) {
+        let mut definitions = std::collections::BTreeMap::new();
+        let mut uses = std::collections::BTreeMap::new();
+        for (index, located) in operations.iter().enumerate() {
+            let fail = |message: &str| IrError {
+                operation: Some(index),
+                message: message.into(),
+            };
+            if located.span.is_some_and(|span| span.start > span.end) {
+                return Err(fail("source span ends before it starts"));
+            }
+            let (result, operands) = match located.operation {
+                Operation::Integer { result, value } => {
+                    if !(0..=127).contains(&value) {
+                        return Err(fail("supported integer literal range is 0..=127"));
+                    }
+                    (Some(result), vec![])
+                }
+                Operation::Binary {
+                    result,
+                    left,
+                    right,
+                    ..
+                } => (Some(result), vec![left, right]),
+                Operation::Return { value } => {
+                    if index + 1 != operations.len() {
+                        return Err(fail("return must be the final operation"));
+                    }
+                    (None, vec![value])
+                }
+            };
+            for operand in operands {
+                if !definitions.contains_key(&operand) {
+                    return Err(fail(
+                        "operand must refer to an earlier defined integer value",
+                    ));
+                }
+                *uses.entry(operand).or_insert(0usize) += 1;
+            }
+            if let Some(result) = result {
+                if definitions.insert(result, index).is_some() {
+                    return Err(fail("duplicate value definition"));
+                }
+            }
+        }
+        if !matches!(
+            operations.last().unwrap().operation,
+            Operation::Return { .. }
+        ) {
             return Err(IrError {
-                operation: Some(1),
-                message: "return must use the defined integer value".into(),
+                operation: None,
+                message: "IR requires a final return".into(),
             });
+        }
+        for (value, index) in definitions {
+            if uses.get(&value) != Some(&1) {
+                return Err(IrError {
+                    operation: Some(index),
+                    message: "supported expression IR requires exactly one use per defined value"
+                        .into(),
+                });
+            }
         }
         Ok(Self { name, operations })
     }
 
     /// Lower directly to the shared typed assembly model, without printing/parsing.
     pub fn lower(&self) -> ciq_assembly::Program {
-        use ciq_assembly::{Item, Operand, Program};
-        let mut items = vec![
-            Item::Label(self.name.clone()),
-            Item::Instruction {
-                opcode: Opcode::Argc,
-                operands: vec![Operand::Bits(1)],
-            },
-        ];
-        for operation in &self.operations {
-            let (opcode, operands) = match operation.operation {
-                Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
-                Operation::Integer { value, .. } => {
-                    (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
-                }
-                Operation::Return { .. } => (Opcode::Return, vec![]),
-            };
-            items.push(Item::Instruction { opcode, operands });
-        }
-        Program::new(items).expect("validated constant-return IR lowers to valid assembly")
+        backend::lower(self)
     }
+
     pub fn assembly(&self) -> String {
         self.lower().to_text()
     }
@@ -166,6 +203,21 @@ impl Function {
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
+                Operation::Binary {
+                    result,
+                    kind,
+                    left,
+                    right,
+                } => format!(
+                    ".{} %{} %{} %{}",
+                    match kind {
+                        BinaryOp::Add => "add",
+                        BinaryOp::Subtract => "subtract",
+                    },
+                    result.0,
+                    left.0,
+                    right.0
+                ),
                 Operation::Return { value } => format!(".return %{}", value.0),
             });
             if let Some(span) = operation.span {
@@ -180,22 +232,35 @@ impl Function {
 
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     let ast = parser::parse(source)?;
-    let value = ValueId(0);
-    Function::new(
-        ast.name,
-        vec![
-            LocatedOperation {
-                operation: Operation::Integer {
-                    result: value,
-                    value: ast.integer,
-                },
-                span: Some(ast.integer_span),
+    fn emit(expression: parser::Expression, operations: &mut Vec<LocatedOperation>) -> ValueId {
+        let operation = match expression.kind {
+            parser::ExpressionKind::Integer(value) => Operation::Integer {
+                result: ValueId(operations.len() as u32),
+                value,
             },
-            LocatedOperation {
-                operation: Operation::Return { value },
-                span: Some(ast.return_span),
-            },
-        ],
-    )
-    .map_err(|error| Diagnostic::at(source, 0, error.message))
+            parser::ExpressionKind::Binary { kind, left, right } => {
+                let left = emit(*left, operations);
+                let right = emit(*right, operations);
+                Operation::Binary {
+                    result: ValueId(operations.len() as u32),
+                    kind,
+                    left,
+                    right,
+                }
+            }
+        };
+        let result = ValueId(operations.len() as u32);
+        operations.push(LocatedOperation {
+            operation,
+            span: Some(expression.span),
+        });
+        result
+    }
+    let mut operations = Vec::new();
+    let value = emit(ast.expression, &mut operations);
+    operations.push(LocatedOperation {
+        operation: Operation::Return { value },
+        span: Some(ast.return_span),
+    });
+    Function::new(ast.name, operations).map_err(|error| Diagnostic::at(source, 0, error.message))
 }
