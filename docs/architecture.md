@@ -4,7 +4,7 @@
 
 Use LLVM's separation of concerns as an architectural inspiration without introducing an LLVM dependency initially. Keep container handling and VM instruction definitions independently usable by a future compiler or runtime.
 
-The Cargo workspace now contains six crates:
+The Cargo workspace now contains seven crates:
 
 ```text
 Cargo.toml                 # workspace manifest, resolver 3 / edition 2024
@@ -16,6 +16,7 @@ crates/
   ciq-asm/                 # assembly library and CLI
   ciq-dis/                 # disassembly library and CLI
   ciq-package/             # barrel/IQ inventory and safe extraction
+  ciq-compiler/            # restricted Monkey C frontend and VM lowering
 docs/
   investigations/          # evidence and experiment records
   specs/                   # local format and instruction specifications
@@ -30,9 +31,10 @@ scratch/                   # ignored local SDK specimens and experiments
 | `ciq-dis` | Print section inventory/code assembly, or export all sections to a project directory | `ciq-prg`, `ciq-mc` |
 | `ciq-sign` | Encode/verify PRG and detached developer signatures; private-key and public-SPKI handling | `ciq-prg`, RustCrypto RSA/SHA-1/SHA-256, OS randomness |
 | `ciq-asm` | Parse assembly; reconstruct a complete section project or replace equal-length code; optional signing and verification | `ciq-prg`, `ciq-mc`, `ciq-sign` |
+| `ciq-compiler` | Parse the restricted source subset, build semantic value IR, emit readable VM assembly | `ciq-mc` |
 | `ciq-package` | Inventory/extract barrels and IQ archives; verify the modern developer IQ profile | `ciq-prg`, `ciq-sign`, `zip`, `sevenz-rust2`, `quick-xml` |
 
-This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. We have no compiler intermediate representation yet. These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished. Container and instruction libraries remain standard-library-only; cryptographic dependencies belong in `ciq-sign`. The assembler CLI uses this crate after reconstruction, without coupling cryptography to the assembly library or container parser.
+This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. The first frontend now uses a small value-based semantic IR, described in [the compiler decision](design/compiler-ir.md). These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished. Container and instruction libraries remain standard-library-only; cryptographic dependencies belong in `ciq-sign`. The assembler CLI uses this crate after reconstruction, without coupling cryptography to the assembly library or container parser.
 
 ## Initial implementation
 
@@ -83,4 +85,4 @@ These observations support collecting source declarations before complete-progra
 
 `ciq-package` is the sixth workspace member, implementing library/CLI inventory and safe extraction for ZIP barrels and 7z IQ archives. It owns bounded archive adapters, package manifest/product views, and extraction lifecycle; PRG decoding remains in `ciq-prg` and cryptographic primitives in `ciq-sign`. The package verifier uses both crates to check the documented modern developer IQ profile. It never loads a private key; optional expected identity is an external SPKI public key. Separate reports cover CRCs, manifest/product signatures, attribute equality, and key consistency; unsigned extras are identified. [The reading specification](specs/package-reading.md) records supported profiles and limits; [reader evidence](investigations/package-reading.md) includes exact SDK member comparisons and dependency checks; [verification evidence](investigations/package-verification.md) adds independent RSA agreement and 94 passing workspace tests with Rust 1.85.0 and 1.99. Raw manifest bytes are retained because manifest signing does not canonicalize XML. Archive/XML dependencies stay isolated from the standard-library-only PRG/instruction crates. [The design](design/package-crate.md) now includes implemented [deterministic barrel packing](specs/barrel-packing.md), and [verified unchanged IQ repacking](specs/iq-repacking.md), and [own-key IQ creation](specs/iq-creation.md). The IQ creator stages generated PRGs and changes only product signing attributes in raw XML; signing primitives remain in `ciq-sign`. Bounded single-LZMA encoded-header decoding runs before archive metadata allocation. The barrel writer preserves raw manifests and streams ordinary source/resource payloads into a bounded ZIP buffer; it uses no private key.
 
-The [first compiler milestone](design/first-compiler.md) emits a tiny Monkey C function into the shared assembly representation, initially using known-good application scaffolding. Language parsing/lowering remains separate from layout/encoding, project configuration, signing, and packaging; The initial compiler investigation will decide between direct source-to-assembly lowering and a small intervening IR; no internal representation is selected yet. Readable `.mcasm` remains available for debugging generated VM instructions in either direction. Compiler crate/API choices follow that decision.
+The [first compiler milestone](design/first-compiler.md) emits a tiny Monkey C function into the shared assembly representation, initially using known-good application scaffolding. Language parsing/lowering remains separate from layout/encoding, project configuration, signing, and packaging; The initial investigation chose a small value-based IR; `ciq-compiler` implements one constant-return function and lowers it to VM assembly. Readable `.mcasm` remains available for debugging generated VM instructions in either direction. The preliminary compiler API separates inspectable semantic operations from assembly printing; a stable serialized IR is not defined.

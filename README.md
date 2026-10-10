@@ -56,6 +56,14 @@ cargo run -p ciq-package -- pack-iq scratch/unpacked-application scratch/applica
 
 The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Deterministic `pack-barrel` now repacks a canonical extracted tree; both code and resource barrels are SDK-validated. See [packing behavior](docs/specs/barrel-packing.md). Verified [unchanged IQ repacking](docs/specs/iq-repacking.md) is also implemented; [own-key IQ creation](docs/specs/iq-creation.md) is also implemented, with external debug XML omitted by default. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
 
+The [first Monkey C frontend](docs/specs/compiler-subset.md) now compiles a parameterless integer-return function through a [small semantic IR](docs/design/compiler-ir.md) into readable assembly:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcasm
+```
+
+The output is a function, requiring explicit application scaffold integration. Generated `41` and `42` bodies both print/display their result in Garmin's simulator; see [the experiment and commands](docs/investigations/first-compiler.md). Arithmetic, calls, and complete-project compilation remain future work.
+
 Build and validate the workspace:
 
 ```sh
@@ -91,7 +99,7 @@ Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). C
 
 [Multi-file and barrel examples](docs/investigations/multi-file-and-barrels.md) now round-trip and run: the multi-file assembly edit shows `47`, and reconstructed barrel/package programs show `46`. Barrel source/archive consumption produces identical CODE and DATA; the SDK creates distribution packages separately.
 
-Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, `ciq-asm`, and `ciq-package`. Keep `Cargo.lock` in version control for the command-line tools.
+Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, `ciq-asm`, `ciq-package`, and `ciq-compiler`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.
 

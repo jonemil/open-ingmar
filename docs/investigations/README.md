@@ -44,3 +44,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Own-key IQ creation](iq-creation.md): controlled XML signing-attribute edits, alternate-key tests, debug policy, independently decoded output, and simulator-confirmed assembly edit returning `47`.
 
 - [Repeated module method names](module-method-names.md): shared member IDs, owner-qualified assembly labels, byte-identical reconstruction, and a simulator-verified edit affecting only Left.
+
+- [First Rust Monkey C frontend](first-compiler.md): small semantic IR, constant-return assembly generation, explicit scaffold integration, and simulator-verified source changes from `41` to `42`.

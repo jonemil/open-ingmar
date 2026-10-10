@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ciq-prg", "crates/ciq-mc", "crates/ciq-dis", "crates/ciq-asm", "crates/ciq-sign", "crates/ciq-package"]
+members = ["crates/ciq-prg", "crates/ciq-mc", "crates/ciq-dis", "crates/ciq-asm", "crates/ciq-sign", "crates/ciq-package", "crates/ciq-compiler"]
 resolver = "3"
 
 [workspace.package]

@@ -56,6 +56,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciq-compiler"
+version = "0.1.0"
+dependencies = [
+ "ciq-asm",
+ "ciq-mc",
+]
+
+[[package]]
 name = "ciq-dis"
 version = "0.1.0"
 dependencies = [

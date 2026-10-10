@@ -1,7 +1,8 @@
 # Monkey C examples
 
-Each directory is a standalone Connect IQ project containing its own manifest, Jungle configuration, source, resources, and build instructions. These are independently written reference inputs for Garmin's SDK and future Rust toolchain experiments.
+Application/library directories are standalone Connect IQ projects containing their own manifest, Jungle configuration, source, resources, and build instructions. These are independently written reference inputs for Garmin's SDK and future Rust toolchain experiments.
 
+- [compiler-probe](compiler-probe/README.md): a standalone function input to our Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a greeting and a numeric probe.
 - [minimal-console](minimal-console/README.md): one target function calling `println("Hello!")`, with basic watch-app lifecycle scaffolding and no custom rendering.
 - [multi-file](multi-file/README.md): three source files sharing a module function, with console/display `46`.
