@@ -1,6 +1,6 @@
 # Structured line metadata and in-place function sizes
 
-Date: 2026-10-09. SDK 9.2.0 / `fr265`, unoptimized debug Hello World and Minimal Console. Follow-up to [shared CODE labels and controlled SDK comparisons](code-labels-and-relocation.md). Both new runtime experiments are prepared; host simulator execution is **pending**.
+Date: 2026-10-09. SDK 9.2.0 / `fr265`, unoptimized debug Hello World and Minimal Console. Follow-up to [shared CODE labels and controlled SDK comparisons](code-labels-and-relocation.md). The user reported success after the grow/shrink instructions. Fresh host console and screen captures confirm the **shrunk variant returning 45**; no separate capture of the grown variant returning 44 is retained.
 
 ## Evidence and implementation
 
@@ -109,7 +109,7 @@ Independent payload comparisons against the original assert:
 
 These hashes depend on the original build and local key; a different key legitimately changes signing material. Generated exports, comparison JSON, and PRGs remain ignored under `scratch/line-metadata/`.
 
-## Next runtime check
+## Host runtime result and follow-up
 
 Podman is unavailable in the agent container. Run on the host, checking each capture before the next run overwrites it:
 
@@ -120,4 +120,6 @@ sh scripts/run-simulator-container.sh --prg scratch/line-metadata/hello-inplace-
 # Expected: greeting and 45 in both console and watch screen.
 ```
 
-Current saved captures are from the previously verified appended function returning 43. They are not evidence for these new variants. Record fresh logs/screens and PRG hashes after execution. Next investigate more complex multi-file source and barrel/bundle specimens before choosing placement relaxation, automatic layout, or a separate linker design.
+Host result, 2026-10-09: the user reported that it worked. The latest console capture (20:53:04 UTC) contains `Hello from Monkey C!` and `45`; the screen capture (20:53:14 UTC) visually shows `Hello world!` and `45`. The agent inspected both, and the shrunk PRG hash still matches the prepared artifact above. Console SHA-256: `d96580222908c949508f13924ca5a15c5c1a6192cc8fed2d9a8e495c1102d0b0`; screen SHA-256: `5ba67e62fcb3d9d960a7493a7b553b128e1a40e25542dd6d7c76e71210a4eeb0`. Captures remain ignored under `scratch/simulator/`.
+
+This confirms runtime acceptance of the in-place 13 → 5 byte replacement, including execution through later moved methods. It does not independently validate debugger breakpoint behavior or every line mapping. The latest captures cover the shrunk variant; no separate grown-variant capture is retained, so agent-observed `44` execution remains unverified. Next investigate more complex multi-file source and barrel/bundle specimens before choosing placement relaxation, automatic layout, or a separate linker design.

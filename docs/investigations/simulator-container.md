@@ -78,6 +78,28 @@ Inputs: SDK 9.2.0, target `fr265`, the project-local device package and fonts, a
 
 Captures remain ignored local evidence and are overwritten by subsequent sessions. No PRG rewrite or instruction modification has yet been tested; this result provides the baseline for those experiments.
 
+## Broker execution verification
+
+Experimentally observed on 2026-10-10: the MCP adapter started the
+`garmin_simulator` setup through the host container broker, then executed:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py
+```
+
+The setup uses `localhost/ciq-simulator:9.2.0`, a writable shared-label mount of
+the host Garmin repository at `/workspace/garmin`, keep-id UID/GID 1000, and a
+`/bin/sleep infinity` entrypoint. Running Xvfb through broker exec keeps its
+launcher away from PID 1. No host desktop socket or X authority cookie is mounted.
+
+The simulator command returned exit code 0. Console output showed
+`Hello from Monkey C!` and `41`; direct screenshot inspection showed
+`Hello world!` and `41` on the simulated Forerunner 265. The PRG, screenshot,
+and console-log hashes exactly match the baseline artifact table above.
+The broker successfully stopped and removed the test workspace; its instance
+list was empty afterward. This verifies headless execution and cleanup through
+the broker, without establishing desktop interactive support.
+
 ## Interactive desktop route
 
 The same Ubuntu image can now run directly on the host's X11/Xwayland desktop, without rebuilding or modifying the agent container:
@@ -95,3 +117,42 @@ The session first checks display connectivity using `xdpyinfo`, then launches th
 Local synthetic-process checks verified that the interactive session outlives the observation timeout, a console-client exit leaves the simulator open, closing the simulator ends the session and stops a live client, and headless capture still works. A mocked Podman/xauth check with a real local Unix socket verified desktop mount arguments, entry-point selection, preservation of the display screen number, temporary-cookie cleanup, and rejection of a missing display. Shell and Python syntax checks passed. These checks do not establish a real host display connection; that remains the next host-side experiment.
 
 The virtual-display route needs no host X access or X authority changes.
+
+## Broker desktop connection
+
+Experimentally observed on 2026-10-10: MCP `broker_start` launched the
+`garmin_simulator_desktop` profile using `localhost/ciq-simulator:9.2.0` with
+`python3 scripts/simulator-session.py --interactive` and a container init process.
+The broker used its inherited desktop environment, copied the current display's
+X authority cookie with FamilyWild, and mounted the cookie and X11 socket
+read-only. This profile uses `label=disable`; it does not set `GDK_BACKEND`.
+
+The initial `xdpyinfo` check succeeded, the simulator shell became ready, and
+both broker logs and `scratch/simulator-interactive/monkeydo.log` showed
+`Hello from Monkey C!` and `41`. The container remained running and was left
+open for the user. This establishes desktop connectivity and app console
+execution without a forced GTK backend. Visible window/rendering confirmation
+is pending the user's observation; no desktop screenshot was taken.
+
+The user subsequently reported no visible window. Inspection inside the running
+container confirmed `--interactive`, no Xvfb process, and `DISPLAY=:0`.
+`xwininfo` found the simulator window (485 by 700 pixels at X=880, Y=125) with
+`Map State: IsViewable`; `xprop` reported normal state and the simulator PID.
+A window-manager activation request was sent. These observations establish an
+X11 window on that display but do not establish that it is the user's expected
+desktop session; comparison with the host terminal's `DISPLAY` is pending.
+
+The user clarified that the terminal was accessed through SSH and `screen`,
+so the host desktop was not visible. A fresh `ssh -X` connection successfully
+ran `xterm`. After passing that SSH session's display and authority path into
+the broker's separate `BROKER_SSH_DISPLAY` and `BROKER_SSH_XAUTHORITY` variables
+and restarting the service, MCP launched `garmin_simulator_ssh` on 2026-10-10.
+This profile uses host networking to reach sshd's loopback X11 proxy and mounts
+only the copied display cookie, with no host X11 socket directory.
+
+Inspection inside the running SSH profile confirmed `DISPLAY=localhost:10.0`.
+The initial `xdpyinfo` check succeeded and the simulator shell became ready.
+The workspace was left running, and the user confirmed that the simulator
+window appeared on their local computer. Broker logs also showed
+`Hello from Monkey C!` and `41`. This establishes successful interactive
+SSH-forwarded simulator launch without setting `GDK_BACKEND`.
