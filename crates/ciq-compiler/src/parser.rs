@@ -22,6 +22,12 @@ pub(crate) enum Statement {
         value: Expression,
         span: Span,
     },
+    Break {
+        span: Span,
+    },
+    Continue {
+        span: Span,
+    },
     While {
         condition: Expression,
         body: Vec<Statement>,
@@ -43,6 +49,8 @@ impl Statement {
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
             | Self::If { span, .. }
+            | Self::Break { span }
+            | Self::Continue { span }
             | Self::While { span, .. } => *span,
         }
     }
@@ -217,7 +225,16 @@ impl<'a> Parser<'a> {
             Kind::Word(name)
                 if !matches!(
                     name,
-                    "function" | "return" | "var" | "if" | "else" | "while" | "true" | "false"
+                    "function"
+                        | "return"
+                        | "var"
+                        | "if"
+                        | "else"
+                        | "while"
+                        | "break"
+                        | "continue"
+                        | "true"
+                        | "false"
                 ) =>
             {
                 Ok(token)
@@ -296,7 +313,16 @@ impl<'a> Parser<'a> {
             Kind::Word(name)
                 if !matches!(
                     name,
-                    "function" | "return" | "var" | "if" | "else" | "while" | "true" | "false"
+                    "function"
+                        | "return"
+                        | "var"
+                        | "if"
+                        | "else"
+                        | "while"
+                        | "break"
+                        | "continue"
+                        | "true"
+                        | "false"
                 ) =>
             {
                 if self.peek()? == Kind::Punctuation('.') {
@@ -380,7 +406,10 @@ impl<'a> Parser<'a> {
         while self.peek()? != Kind::Punctuation('}') {
             let start = self.lookahead.as_ref().unwrap().span.start;
             // A print's call node or assignment target already counts its sink.
-            if matches!(self.peek()?, Kind::Word("var" | "return" | "if" | "while")) {
+            if matches!(
+                self.peek()?,
+                Kind::Word("var" | "return" | "if" | "while" | "break" | "continue")
+            ) {
                 self.expressions += 1;
             }
             if self.expressions > crate::MAX_OPERATIONS {
@@ -414,6 +443,19 @@ impl<'a> Parser<'a> {
                         span: Span { start, end },
                     }
                 }
+                Kind::Word("break" | "continue") => {
+                    let keyword = self.token()?.kind;
+                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                    if keyword == Kind::Word("break") {
+                        Statement::Break {
+                            span: Span { start, end },
+                        }
+                    } else {
+                        Statement::Continue {
+                            span: Span { start, end },
+                        }
+                    }
+                }
                 Kind::Word("while") => {
                     self.token()?;
                     self.expect(Kind::Punctuation('('), "'('")?;
@@ -434,9 +476,13 @@ impl<'a> Parser<'a> {
                     self.expect(Kind::Punctuation('('), "'('")?;
                     let condition = self.expression(0)?;
                     self.expect(Kind::Punctuation(')'), "')'")?;
-                    let (on_true, _) = self.block(depth + 1)?;
-                    self.expect(Kind::Word("else"), "'else' (both arms are required)")?;
-                    let (on_false, body_span) = self.block(depth + 1)?;
+                    let (on_true, true_span) = self.block(depth + 1)?;
+                    let (on_false, body_span) = if self.peek()? == Kind::Word("else") {
+                        self.token()?;
+                        self.block(depth + 1)?
+                    } else {
+                        (Vec::new(), true_span)
+                    };
                     Statement::If {
                         condition,
                         on_true,

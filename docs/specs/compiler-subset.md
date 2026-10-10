@@ -20,8 +20,9 @@ statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | "return" expression ";"
-          | "if" "(" expression ")" block "else" block
+          | "if" "(" expression ")" block ("else" block)?
           | "while" "(" expression ")" block
+          | "break" ";" | "continue" ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = decimal-integer | string-literal | parameter-or-local-identifier
@@ -30,7 +31,8 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `return`, `var`, `if`, `else`, `true`,
-`while`, and `false` are reserved. Boolean literals are not supported yet.
+`while`, `break`, `continue`, and `false` are reserved. Boolean literals are not
+supported yet.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
 The accepted literal domain is `0..=127`; computed results may be negative or
 exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
@@ -229,8 +231,10 @@ DATA allocation and method metadata remain explicit scaffold work.
 ## Terminal conditions
 
 A function may end with `if (<condition>) { return <integer-expression>; } else
-{ return <integer-expression>; }`. Both braces and `else` are required. Arms may
-also contain local declarations, print statements, and nested conditions, as
+{ return <integer-expression>; }`. Braces are required; `else` is optional.
+An omitted false arm continues to the next statement, which must eventually
+return. Arms may also contain local declarations, print statements, and nested
+conditions, as
 described below. Loop syntax is specified separately below.
 
 `==` and `>` compare integer expressions and produce Booleans. Arithmetic has
@@ -254,12 +258,13 @@ Conditions may appear between statements; combined `if`/`while` nesting is
 limited to 64 levels. Empty arms are
 allowed; `else if` without braces is not accepted. Each arm has its own local
 scope. The function must return an integer on every fallthrough path. Statements
-after a
-return, or after a conditional whose arms both return, are rejected as
-unreachable. A path with no return is rejected at the function's closing brace.
+after `return`, `break`, `continue`, or a conditional whose arms both terminate
+are rejected as unreachable. A path with no return is rejected at the function's
+closing brace.
 
-Continuing arms jump to a shared block after both arms. Returning arms do not
-contribute an edge to that join; when both arms return, no join is generated.
+Continuing arms jump to a shared block after both arms. Returning or loop-control
+arms do not contribute an edge to that join; when both arms terminate, no join
+is generated.
 Only enclosing locals are visible after the condition. Even if both arms
 declare the same name, those distinct declarations do not define a result at
 the join. Enclosing locals can carry results using assignment; no phi values or
@@ -274,7 +279,7 @@ before the branch. This uses existing version-2 IR without new directives.
 
 See [nested-conditions.mc](../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator evidence][nested]. Full language scoping,
-optional `else`, other loop forms, and standalone blocks remain future work.
+other loop forms and standalone blocks remain future work.
 
 [nested]: ../investigations/compiler-nested-conditions.md
 
@@ -311,7 +316,7 @@ Assignment-containing IR uses the conservative schedule specified in
 iteration. The condition must be an integer `==` or `>` comparison, with the
 same Boolean/type rules as `if`. Braces are required; the body may be empty or
 contain locals, assignments, prints, nested conditions/loops, and early returns.
-`break`, `continue`, `for`, and `do/while` are unsupported.
+`for` and `do/while` are unsupported.
 
 Body locals are visible within that body and nested scopes, but not after the
 loop or in its condition. Their existing slots are initialized anew on each
@@ -334,3 +339,22 @@ See [loops.mc](../../examples/compiler-probe/loops.mc) and
 [zero/multiple-iteration simulator evidence][loops].
 
 [loops]: ../investigations/compiler-loops.md
+
+## Loop control
+
+`break;` exits the innermost enclosing `while`; `continue;` jumps to its test,
+reevaluating the condition before another iteration. Both require semicolons
+and an enclosing loop, including when nested within conditional arms. They
+terminate their current path and carry no expression values across the edge.
+A nested loop's controls never target an outer loop. Labeled controls are
+unsupported.
+
+A loop may still run zero times, so its body cannot satisfy the function's
+fallthrough return requirement. Mixed returning/breaking/continuing arms omit
+a join when all paths terminate, but the loop's false-condition exit remains.
+Skipped declarations stay scoped to their body/arm; initialized enclosing
+locals retain their slots and fixed types. These statements emit existing
+version-2 `.jump` operations; no new IR directives or VM opcodes are needed.
+
+See [loop-control.mc](../../examples/compiler-probe/loop-control.mc) and
+[simulator evidence](../investigations/compiler-loop-control.md).

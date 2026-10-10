@@ -31,28 +31,25 @@ describe planned behavior and investigations record the supporting evidence.
   Conditions support scoped arm locals, early returns, and forward joins.
   Fixed-type integer/string reassignment is [also simulator-verified][assignments].
   `while` loops with mutable locals and nested branches are [verified][loops],
-  including zero and multiple iterations.
-- The latest implementation checkpoint passes 185 Rust tests, Clippy, and
+  including zero and multiple iterations. Innermost `break`/`continue` and
+  optional `else` are [also verified](investigations/compiler-loop-control.md).
+- The latest implementation checkpoint passes 189 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Add loop control (`break`/`continue`) and optional `else` in the bounded
-   frontend. Reuse explicit targets and cyclic initialization checks; preserve
-   scopes, empty stacks on edges, and conservative return analysis. Keep nested
-   loop target selection and code after termination covered by native/text tests
-   and simulator evidence. Exception source lowering still needs stack/frame
-   research.
-2. Revisit DATA string authoring after establishing shared address-region rules.
+1. Revisit DATA string authoring after establishing shared address-region rules.
    The [boundary experiment](investigations/string-address-boundary.md) proves
    a working `0x01000000` literal offset with raised simulator memory; the upper
    limit remains unverified. Expand parsing/layout/binding together without
    extrapolating to CODE/method offsets. Device budgets remain a separate
    [build-layer concern](design/project-builds.md#target-constraints-and-section-layout).
-3. Build complete applications once required DATA/resource/module structures are
+2. Build complete applications once required DATA/resource/module structures are
    understood. Add cross-function binding and arity/type checks.
-4. Implement [Jungle-driven project builds](design/project-builds.md), including
+3. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
+
+Exception source lowering still needs stack/frame research.
 
 Broader package variants, a separate linker, LLVM, and a full VM are deferred.
 Possible IR/codegen crate extraction follows demonstrated need, not a naming

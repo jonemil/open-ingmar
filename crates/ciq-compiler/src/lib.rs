@@ -635,8 +635,8 @@ impl Function {
 
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
-/// Resolves parameters and scoped locals, lowers conditions/while loops to
-/// blocks, and retains source spans. Requires an integer return on every
+/// Resolves parameters and scoped locals, lowers conditions and while loops
+/// (including innermost break/continue) to blocks, and retains source spans. Requires an integer return on every
 /// fallthrough path and rejects unreachable statements or local/parameter
 /// shadowing. Assignments
 /// require a visible initialized local and preserve its integer/string type.

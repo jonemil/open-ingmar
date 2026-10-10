@@ -99,9 +99,10 @@ function, including mutually exclusive paths. This avoids introducing phi values
 or a general stack-merge policy before they are needed.
 
 The frontend emits structured `if/else` and `while` statements into the same
-graph. Continuing arms jump to a join declared after both arms; returning arms
-have no join edge. Nested arms preserve this declaration order. Omit joins when
-both arms return and reject unreachable following statements. All fallthrough
+graph. Falling-through arms jump to a join declared after both arms. Arms
+ending in `return`, `break`, or `continue` have no join edge. An omitted `else`
+supplies an empty false arm. Nested arms preserve declaration order. Omit joins when both
+arms terminate and reject unreachable following statements. All fallthrough
 paths must return an integer.
 
 Name resolution gives each arm an inherited environment and discards its local
@@ -150,7 +151,9 @@ have fixed types.
 
 A `while` statement jumps to a test block, evaluates its comparison on each
 visit, branches to the body or exit, and sends continuing body paths back to
-the test. A returning body path has no backedge. Body declarations have a nested
+the test. `continue` explicitly targets that test; `break` targets the exit.
+The source builder tracks enclosing loop targets and selects the innermost pair.
+A terminated body path has no implicit backedge. Body declarations have a nested
 source scope and fixed slots; their initializers execute on every iteration.
 The exit remains reachable in the source analysis even when the body returns,
 since the condition may initially be false. No iteration cap or termination
@@ -176,6 +179,8 @@ Types remain fixed by unique initializers, and source construction satisfies
 the textual declaration-before-use rule. A general type inference or SSA
 framework is unnecessary here. [Loop evidence][loops] covers zero/multiple
 iterations, reused body slots, nested conditions, and native/text parity.
+[Loop-control evidence](../investigations/compiler-loop-control.md) also covers
+innermost targets, optional false arms, and mixed terminating paths.
 
 ## Rationale and evidence
 

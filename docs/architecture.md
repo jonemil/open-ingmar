@@ -94,7 +94,8 @@ and encoding and must remain equivalent as representations evolve.
 calls/prints/writes, blocks and cyclic edges, integer/string/Boolean
 validation, fixed-type local reassignment, fixed-point initialization, and source
 diagnostics. Its internal
-source builder resolves arm scopes and emits structured statements into IR;
+source builder resolves arm scopes and innermost loop targets, emitting
+structured statements into IR;
 parsing and VM instruction selection remain separate.
 `backend::lower()` selects VM instructions and assigns frame/local slots;
 `Function::lower()` delegates to it. Assembly receives already-selected

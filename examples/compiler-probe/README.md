@@ -116,8 +116,8 @@ cargo run -p ciq-compiler -- examples/compiler-probe/nested-conditions.mc scratc
 ```
 
 [The nested-condition experiment][nested] verifies both nested outcomes and
-continuing arms, with displays `53` and `46`. Braces and `else` remain required;
-loop control statements remain unsupported.
+continuing arms, with displays `53` and `46`. Braces remain required; `else` is
+now optional.
 
 [nested]: ../../docs/investigations/compiler-nested-conditions.md
 
@@ -132,7 +132,7 @@ cargo run -p ciq-compiler -- examples/compiler-probe/assignments.mc scratch/comp
 Raw CODE needs explicit symbol and DATA bindings for the generated literals.
 [The assignment experiment][assignments] records native/text parity, integration,
 and simulator returns `44`/`48` with display `54`. Parameters remain read-only;
-compound assignment and loop control statements are unsupported.
+compound assignment remains unsupported.
 
 [assignments]: ../../docs/investigations/compiler-assignments.md
 
@@ -146,6 +146,20 @@ cargo run -p ciq-compiler -- examples/compiler-probe/loops.mc scratch/compiler-e
 Its [runtime experiment][loops] verifies three/four iterations returning `49`/`53`
 and a zero/one-iteration variant returning `40`/`41`. Shared scaffold displays
 are `59` and `47`. Conditions are reevaluated each visit; there is no generated
-iteration cap. Body locals do not escape, and `break`/`continue` remain unsupported.
+iteration cap. Body locals do not escape.
 
 [loops]: ../../docs/investigations/compiler-loops.md
+
+## Loop control
+
+[loop-control.mc](loop-control.mc) uses optional `else`, outer and inner
+`continue`, and inner and outer `break`. The innermost loop supplies each
+control's target. Arguments `0` and `1` produce totals `4` and `6`, returning
+`44` and `46`. The [simulator experiment][loop-control] confirms display `52`
+and a zero-iteration variant displaying `48`.
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/loop-control.mc scratch/compiler-example/loop-control.mcasm
+```
+
+[loop-control]: ../../docs/investigations/compiler-loop-control.md

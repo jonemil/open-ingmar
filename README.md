@@ -164,8 +164,10 @@ confirms branch writes and a later increment, displaying `54`.
 [`while` loops](examples/compiler-probe/loops.mc) support mutable locals, nested
 conditions, and early returns. [Loop evidence][loops] verifies zero and multiple
 iterations with displays `47` and `59`.
-Loop control, general string/object operations, and complete-project compilation
-remain future work.
+[Loop control](examples/compiler-probe/loop-control.mc) and optional `else` are
+[simulator-verified](docs/investigations/compiler-loop-control.md), with nested
+loop targets and displays `52`/`48`. General string/object operations and
+complete-project compilation remain future work.
 
 Build and validate the workspace:
 

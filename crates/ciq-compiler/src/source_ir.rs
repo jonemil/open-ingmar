@@ -98,6 +98,7 @@ struct Builder<'a> {
     operations: Vec<LocatedOperation>,
     next_local: u32,
     next_block: u32,
+    loops: Vec<(BlockId, BlockId)>,
 }
 
 impl Builder<'_> {
@@ -123,21 +124,22 @@ impl Builder<'_> {
         )
     }
 
-    /// Emit a sequence into the current block, returning whether every path
-    /// returns. Each arm inherits names but its declarations stay in that arm.
+    /// Emit a statement sequence and report whether all paths terminate the
+    /// current block with return, break, or continue. Declarations stay scoped
+    /// to the sequence; loop jumps select the innermost test or exit.
     fn sequence(
         &mut self,
         statements: Vec<parser::Statement>,
         locals: &mut BTreeMap<String, LocalId>,
     ) -> Result<bool, Diagnostic> {
-        let mut returned = false;
+        let mut terminated = false;
         for statement in statements {
             let span = statement.span();
-            if returned {
+            if terminated {
                 return Err(Diagnostic::at(
                     self.source,
                     span.start,
-                    "unreachable statement after all paths return",
+                    "unreachable statement after all paths terminate",
                 ));
             }
             match statement {
@@ -207,7 +209,23 @@ impl Builder<'_> {
                 parser::Statement::Return { value, .. } => {
                     let value = self.value(value, locals)?;
                     self.push(Operation::Return { value }, Some(span));
-                    returned = true;
+                    terminated = true;
+                }
+                parser::Statement::Break { .. } | parser::Statement::Continue { .. } => {
+                    let &(test, exit) = self.loops.last().ok_or_else(|| {
+                        Diagnostic::at(
+                            self.source,
+                            span.start,
+                            "break/continue requires an enclosing loop",
+                        )
+                    })?;
+                    let target = if matches!(statement, parser::Statement::Break { .. }) {
+                        exit
+                    } else {
+                        test
+                    };
+                    self.push(Operation::Jump { target }, Some(span));
+                    terminated = true;
                 }
                 parser::Statement::While {
                     condition, body, ..
@@ -227,8 +245,10 @@ impl Builder<'_> {
                         Some(span),
                     );
                     self.push(Operation::Block { block: body_block }, None);
-                    let body_returns = self.sequence(body, &mut locals.clone())?;
-                    if !body_returns {
+                    self.loops.push((test, exit));
+                    let body_terminates = self.sequence(body, &mut locals.clone())?;
+                    self.loops.pop();
+                    if !body_terminates {
                         self.push(Operation::Jump { target: test }, Some(span));
                     }
                     self.push(Operation::Block { block: exit }, None);
@@ -253,17 +273,17 @@ impl Builder<'_> {
                         Some(span),
                     );
                     self.push(Operation::Block { block: true_block }, None);
-                    let true_returns = self.sequence(on_true, &mut locals.clone())?;
-                    if !true_returns {
+                    let true_terminates = self.sequence(on_true, &mut locals.clone())?;
+                    if !true_terminates {
                         self.push(Operation::Jump { target: join }, Some(span));
                     }
                     self.push(Operation::Block { block: false_block }, None);
-                    let false_returns = self.sequence(on_false, &mut locals.clone())?;
-                    if !false_returns {
+                    let false_terminates = self.sequence(on_false, &mut locals.clone())?;
+                    if !false_terminates {
                         self.push(Operation::Jump { target: join }, Some(span));
                     }
-                    returned = true_returns && false_returns;
-                    if !returned {
+                    terminated = true_terminates && false_terminates;
+                    if !terminated {
                         self.push(Operation::Block { block: join }, None);
                     }
                 }
@@ -276,12 +296,12 @@ impl Builder<'_> {
                 ));
             }
         }
-        Ok(returned)
+        Ok(terminated)
     }
 }
 
 /// Resolve source names and emit validated semantic IR, requiring an integer
-/// return on every path and rejecting unreachable statements.
+/// return on every fallthrough path and rejecting unreachable statements.
 pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Function, Diagnostic> {
     let mut builder = Builder {
         source,
@@ -294,6 +314,7 @@ pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Functio
         operations: Vec::new(),
         next_local: 0,
         next_block: 1,
+        loops: Vec::new(),
     };
     // Nested control flow necessarily occurs beneath a top-level if or while.
     if ast.statements.iter().any(|s| {

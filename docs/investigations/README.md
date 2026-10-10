@@ -159,4 +159,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   initialization, repeated body-local initialization, native/text parity, and
   simulator-confirmed zero/multiple iterations with nested branches.
 
+- [Compiler loop control](compiler-loop-control.md): innermost break/continue,
+  optional false arms, mixed terminators, native/text parity, and simulator
+  execution of nested targets and zero iterations.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

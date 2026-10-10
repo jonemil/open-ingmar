@@ -94,7 +94,6 @@ fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages
 fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
     for source in [
         "function f(x) { if (x) { return 1; } else { return 2; } }",
-        "function f(x) { if (x == 0) { return 1; } return 2; }",
         "function f(x) { if (x == 0) return 1; else return 2; }",
         "function f(x) { if (x == 0) { return 1; } else { return 2; } return 3; }",
         "function f(x) { if (\"x\" == x) { return 1; } else { return 2; } }",
@@ -589,8 +588,6 @@ fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
         "function f(x) { while (x > 0) { var n = 1; } return n; }",
         "function f(x) { while (x > 0) { var n = 1; } n = 2; return 1; }",
         "function f(x) { var n = 1; while (x > 0) { var n = 2; } return n; }",
-        "function f(x) { while (x > 0) { break; } return 1; }",
-        "function f(x) { while (x > 0) { continue; } return 1; }",
         "function f() { var while = 1; return while; }",
         "function while() { return 1; }",
     ] {
@@ -639,4 +636,106 @@ fn loop_effects_and_text_pipeline_remain_inside_test_body_and_exit_blocks() {
     let strings = compile("function f(x) { var text = \"first\"; var n = x; while (n > 0) { System.println(text); text = \"next\"; n = n - 1; } System.println(text); return 1; }").unwrap();
     assert_eq!(strings, parse_ir(&strings.to_ir_text()).unwrap());
     assert!(compile("function f() { while (0 == 0) {} return 1; }").is_ok());
+}
+
+#[test]
+fn nested_loop_control_selects_innermost_targets_and_preserves_pipeline() {
+    let source = include_str!("../../../examples/compiler-probe/loop-control.mc")
+        .replace("    System.println(total);\n", "");
+    let f = compile(&source).unwrap();
+    for (argument, expected) in [(0, 44), (1, 46), (2, 48), (5, 54)] {
+        assert_eq!(execute(&f, argument), expected);
+    }
+    let restored = compile("function f(x) { var n = x; while (n > 0) { while (n > 0) { break; } n = n - 1; continue; } return n; }").unwrap();
+    for argument in 0..4 {
+        assert_eq!(execute(&restored, argument), 0);
+    }
+    let zero = compile(&source.replace("value + 4", "value")).unwrap();
+    for (argument, expected) in [(0, 40), (1, 42), (2, 42), (3, 42), (4, 44)] {
+        assert_eq!(execute(&zero, argument), expected);
+    }
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(
+        f.lower().encode().unwrap(),
+        ciq_assembly::Program::parse(&f.assembly())
+            .unwrap()
+            .encode()
+            .unwrap()
+    );
+}
+
+#[test]
+fn mixed_loop_terminators_omit_joins_without_hiding_loop_exit() {
+    for (source, results) in [
+        (
+            "function f(x) { var n = x; while (n > 0) { n = n - 1; if (n > 1) { continue; } else { break; } } return n; }",
+            [0, 0, 1, 1],
+        ),
+        (
+            "function f(x) { var n = x; while (n > 0) { n = n - 1; if (n > 1) { continue; } else { return 7; } } return 9; }",
+            [9, 7, 7, 7],
+        ),
+        (
+            "function f(x) { while (x > 0) { if (x == 1) { break; } else { return 7; } } return 9; }",
+            [9, 9, 7, 7],
+        ),
+    ] {
+        let f = compile(source).unwrap();
+        for (argument, expected) in results.into_iter().enumerate() {
+            assert_eq!(execute(&f, argument as i32), expected);
+        }
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    }
+}
+
+#[test]
+fn optional_else_preserves_false_path_scope_and_return_requirements() {
+    let f = compile(
+        "function f(x) { var n = 3; if (x == 0) { return 7; } if (x > 1) { n = 9; } return n; }",
+    )
+    .unwrap();
+    for (argument, expected) in [(0, 7), (1, 3), (2, 9)] {
+        assert_eq!(execute(&f, argument), expected);
+    }
+    let f = compile(
+        "function f(x) { if (x == 0) { if (x > 1) { return 1; } } else { return 2; } return 3; }",
+    )
+    .unwrap();
+    assert_eq!(execute(&f, 0), 3);
+    assert_eq!(execute(&f, 1), 2);
+    for source in [
+        "function f(x) { if (x == 0) { return 1; } }",
+        "function f(x) { if (x == 0) { var n = 1; } return n; }",
+        "function f(x) { if (x == 0) { return 1; } else if (x > 0) { return 2; } return 3; }",
+        "function f(x) { while (x > 0) { break; } }",
+        "function f(x) { while (x > 0) { continue; } }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn loop_control_rejects_outside_targets_reserved_names_and_unreachable_code() {
+    for keyword in ["break", "continue"] {
+        for source in [
+            format!("function f() {{ {keyword}; return 1; }}"),
+            format!("function f(x) {{ if (x > 0) {{ {keyword}; }} return 1; }}"),
+            format!("function f(x) {{ while (x > 0) {{ break; }} {keyword}; return 1; }}"),
+            format!("function f() {{ var {keyword} = 1; return 1; }}"),
+            format!("function {keyword}() {{ return 1; }}"),
+            format!("function f(x) {{ while (x > 0) {{ {keyword} }} return 1; }}"),
+        ] {
+            assert!(compile(&source).is_err(), "{source}");
+        }
+        let source =
+            format!("function f(x) {{ while (x > 0) {{ {keyword}; return 1; }} return 2; }}");
+        assert!(
+            compile(&source)
+                .unwrap_err()
+                .message
+                .contains("unreachable")
+        );
+    }
+    let source = "function f(x) { while (x > 0) { if (x == 1) { break; } else { continue; } return 1; } return 2; }";
+    assert!(compile(source).unwrap_err().message.contains("unreachable"));
 }
