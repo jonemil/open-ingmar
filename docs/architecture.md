@@ -92,7 +92,9 @@ and encoding and must remain equivalent as representations evolve.
 
 `ciq-compiler` owns semantic values and locals, positional parameters, ordered
 calls/prints, forward-only blocks and terminators, integer/string/Boolean
-validation, definite local initialization, and source diagnostics.
+validation, definite local initialization, and source diagnostics. Its internal
+source builder resolves arm scopes and emits structured statements into IR;
+parsing and VM instruction selection remain separate.
 `backend::lower()` selects VM instructions and assigns frame/local slots;
 `Function::lower()` delegates to it. Assembly receives already-selected
 instructions and handles layout/binding/encoding through `ciq-mc`. See [compiler

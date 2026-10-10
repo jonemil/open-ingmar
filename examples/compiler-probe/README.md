@@ -103,7 +103,20 @@ cargo run -p ciq-compiler -- examples/compiler-probe/conditions.mc scratch/compi
 ```
 
 `--emit ir` produces version-2 text with explicit blocks and a Boolean branch.
-Both `==` and `>` have [simulator evidence][conditions]; branch-local statements
-and nested conditions are not supported yet.
+Both `==` and `>` have [simulator evidence][conditions].
 
 [conditions]: ../../docs/investigations/compiler-conditions.md
+
+[nested-conditions.mc](nested-conditions.mc) adds arm-local declarations, prints,
+nested comparisons, early returns, and a continuing path to a shared return.
+Sibling arms can reuse names; their locals do not escape the arm. Compile with:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/nested-conditions.mc scratch/compiler-example/nested-conditions.mcasm
+```
+
+[The nested-condition experiment][nested] verifies both nested outcomes and
+continuing arms, with displays `53` and `46`. Braces and `else` remain required;
+reassignment and loops are still unsupported.
+
+[nested]: ../../docs/investigations/compiler-nested-conditions.md

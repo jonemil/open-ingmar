@@ -4,21 +4,34 @@ pub(crate) struct ParsedFunction {
     pub name: String,
     pub parameters: Vec<String>,
     pub statements: Vec<Statement>,
-    pub expression: Expression,
-    pub return_span: Span,
-    pub conditional: Option<Conditional>,
-}
-
-pub(crate) struct Conditional {
-    pub condition: Expression,
-    pub returned: Expression,
-    pub return_span: Span,
-    pub span: Span,
+    pub body_span: Span,
 }
 
 pub(crate) enum Statement {
     Local(LocalDeclaration),
-    Println { argument: Expression, span: Span },
+    Println {
+        argument: Expression,
+        span: Span,
+    },
+    Return {
+        value: Expression,
+        span: Span,
+    },
+    If {
+        condition: Expression,
+        on_true: Vec<Statement>,
+        on_false: Vec<Statement>,
+        span: Span,
+    },
+}
+
+impl Statement {
+    pub fn span(&self) -> Span {
+        match self {
+            Self::Local(local) => local.span,
+            Self::Println { span, .. } | Self::Return { span, .. } | Self::If { span, .. } => *span,
+        }
+    }
 }
 
 pub(crate) struct LocalDeclaration {
@@ -179,7 +192,7 @@ impl<'a> Parser<'a> {
     }
     fn node(&mut self, kind: ExpressionKind, span: Span) -> Result<Expression, Diagnostic> {
         self.expressions += 1;
-        if self.expressions >= crate::MAX_OPERATIONS {
+        if self.expressions > crate::MAX_OPERATIONS {
             return Err(self.error(span.start, "expression exceeds 1024-operation limit"));
         }
         Ok(Expression { kind, span })
@@ -339,6 +352,101 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a braced statement sequence, bounding conditional nesting and total
+    /// source operations before semantic construction.
+    fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), Diagnostic> {
+        let start = self
+            .expect(Kind::Punctuation('{'), "'{' (blocks require braces)")?
+            .span
+            .start;
+        if depth > 64 {
+            return Err(self.error(start, "conditional nesting exceeds 64 levels"));
+        }
+        let mut statements = Vec::new();
+        while self.peek()? != Kind::Punctuation('}') {
+            let start = self.lookahead.as_ref().unwrap().span.start;
+            // A print's parsed call node already counts its statement sink.
+            if matches!(self.peek()?, Kind::Word("var" | "return" | "if")) {
+                self.expressions += 1;
+            }
+            if self.expressions > crate::MAX_OPERATIONS {
+                return Err(self.error(start, "function exceeds 1024-operation limit"));
+            }
+            let statement = match self.peek()? {
+                Kind::Word("var") => {
+                    self.token()?;
+                    let token = self.identifier()?;
+                    let Kind::Word(name) = token.kind else {
+                        unreachable!()
+                    };
+                    self.expect(
+                        Kind::Punctuation('='),
+                        "'=' (locals require an initializer)",
+                    )?;
+                    let initializer = self.expression(0)?;
+                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                    Statement::Local(LocalDeclaration {
+                        name: name.into(),
+                        initializer,
+                        span: Span { start, end },
+                    })
+                }
+                Kind::Word("return") => {
+                    self.token()?;
+                    let value = self.expression(0)?;
+                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                    Statement::Return {
+                        value,
+                        span: Span { start, end },
+                    }
+                }
+                Kind::Word("if") => {
+                    self.token()?;
+                    self.expect(Kind::Punctuation('('), "'('")?;
+                    let condition = self.expression(0)?;
+                    self.expect(Kind::Punctuation(')'), "')'")?;
+                    let (on_true, _) = self.block(depth + 1)?;
+                    self.expect(Kind::Word("else"), "'else' (both arms are required)")?;
+                    let (on_false, body_span) = self.block(depth + 1)?;
+                    Statement::If {
+                        condition,
+                        on_true,
+                        on_false,
+                        span: Span {
+                            start,
+                            end: body_span.end,
+                        },
+                    }
+                }
+                Kind::End => return Err(self.error(start, "expected '}' before end of input")),
+                _ => {
+                    let expression = self.expression(0)?;
+                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                    let ExpressionKind::ModuleCall {
+                        module,
+                        member,
+                        mut arguments,
+                    } = expression.kind
+                    else {
+                        return Err(
+                            self.error(start, "only System.println is supported as a statement")
+                        );
+                    };
+                    if module != "System" || member != "println" || arguments.len() != 1 {
+                        return Err(self.error(start, "expected System.println with one argument"));
+                    }
+                    Statement::Println {
+                        argument: arguments.remove(0),
+                        span: Span { start, end },
+                    }
+                }
+            };
+            statements.push(statement);
+        }
+        let end = self.token()?.span.end;
+        Ok((statements, Span { start, end }))
+    }
+
     fn expect(&mut self, expected: Kind<'a>, description: &str) -> Result<Token<'a>, Diagnostic> {
         let token = self.token()?;
         if token.kind != expected {
@@ -387,119 +495,12 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         }
     }
     parser.expect(Kind::Punctuation(')'), "')'")?;
-    parser.expect(Kind::Punctuation('{'), "'{'")?;
-    let mut locals = Vec::new();
-    let mut statements = Vec::new();
-    while !matches!(parser.peek()?, Kind::Word("return" | "if")) {
-        if parser.peek()? != Kind::Word("var") {
-            let expression = parser.expression(0)?;
-            let end = parser.expect(Kind::Punctuation(';'), "';'")?.span.end;
-            let start = expression.span.start;
-            let ExpressionKind::ModuleCall {
-                module,
-                member,
-                mut arguments,
-            } = expression.kind
-            else {
-                return Err(parser.error(start, "only System.println is supported as a statement"));
-            };
-            if module != "System" || member != "println" || arguments.len() != 1 {
-                return Err(parser.error(start, "expected System.println with one argument"));
-            }
-            statements.push(Statement::Println {
-                argument: arguments.remove(0),
-                span: Span { start, end },
-            });
-            continue;
-        }
-        let start = parser.token()?.span.start;
-        if locals.len() >= crate::MAX_LOCALS {
-            return Err(parser.error(start, "function exceeds 255-local limit"));
-        }
-        let name = parser.identifier()?;
-        let Kind::Word(name) = name.kind else {
-            unreachable!()
-        };
-        if parameters.iter().any(|parameter| parameter == name) {
-            return Err(parser.error(start, "local declaration shadows a parameter"));
-        }
-        if parameters.len() + locals.len() >= crate::MAX_LOCALS {
-            return Err(parser.error(start, "parameters plus locals exceed 255-slot limit"));
-        }
-        if locals.iter().any(|local: &String| local == name) {
-            return Err(parser.error(start, format!("duplicate local declaration {name:?}")));
-        }
-        parser.expect(
-            Kind::Punctuation('='),
-            "'=' (locals require an initializer)",
-        )?;
-        let initializer = parser.expression(0)?;
-        let end = parser.expect(Kind::Punctuation(';'), "';'")?.span.end;
-        // A local initialization consumes one additional semantic operation.
-        parser.expressions += 1;
-        if parser.expressions >= crate::MAX_OPERATIONS {
-            return Err(parser.error(start, "function exceeds 1024-operation limit"));
-        }
-        locals.push(name.to_owned());
-        statements.push(Statement::Local(LocalDeclaration {
-            name: name.into(),
-            initializer,
-            span: Span { start, end },
-        }));
-    }
-    let conditional = if parser.peek()? == Kind::Word("if") {
-        let start = parser.token()?.span.start;
-        parser.expect(Kind::Punctuation('('), "'('")?;
-        let condition = parser.expression(0)?;
-        let condition_end = parser.expect(Kind::Punctuation(')'), "')'")?.span.end;
-        parser.expect(
-            Kind::Punctuation('{'),
-            "'{' (return-only arms require braces)",
-        )?;
-        let returned = parser.expect(Kind::Word("return"), "'return' (return-only arm)")?;
-        let expression = parser.expression(0)?;
-        let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
-        parser.expect(Kind::Punctuation('}'), "'}' (return-only arm)")?;
-        parser.expect(Kind::Word("else"), "'else' (both arms must return)")?;
-        parser.expect(Kind::Punctuation('{'), "'{'")?;
-        Some(Conditional {
-            condition,
-            returned: expression,
-            return_span: Span {
-                start: returned.span.start,
-                end: semi.span.end,
-            },
-            span: Span {
-                start,
-                end: condition_end,
-            },
-        })
-    } else {
-        None
-    };
-    let returned = parser.expect(Kind::Word("return"), "'return'")?;
-    let expression = parser.expression(0)?;
-    let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
-    parser.expect(
-        Kind::Punctuation('}'),
-        "'}' (additional statements are unsupported)",
-    )?;
-    if conditional.is_some() {
-        parser.expect(
-            Kind::Punctuation('}'),
-            "'}' (conditional must be the final statement)",
-        )?;
-    }
+    let (statements, body_span) = parser.block(0)?;
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(ParsedFunction {
         name: identifier.to_owned(),
         parameters,
         statements,
-        expression,
-        return_span: Span {
-            start: returned.span.start,
-            end: semi.span.end,
-        },
-        conditional,
+        body_span,
     })
 }

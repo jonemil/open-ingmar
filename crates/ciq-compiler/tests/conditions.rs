@@ -34,11 +34,16 @@ fn execute(function: &Function, argument: i32) -> i32 {
                 });
             }
             Opcode::Bf => {
-                if stack.pop().unwrap() == 0 {
+                let condition = stack.pop().unwrap();
+                assert!(stack.is_empty(), "branch carries expression values");
+                if condition == 0 {
                     pc = located.relative_target().unwrap() as usize;
                 }
             }
-            Opcode::Goto => pc = located.relative_target().unwrap() as usize,
+            Opcode::Goto => {
+                assert!(stack.is_empty(), "jump carries expression values");
+                pc = located.relative_target().unwrap() as usize;
+            }
             Opcode::Return => {
                 let value = stack.pop().unwrap();
                 assert!(stack.is_empty());
@@ -91,7 +96,6 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
         "function f(x) { if (x) { return 1; } else { return 2; } }",
         "function f(x) { if (x == 0) { return 1; } return 2; }",
         "function f(x) { if (x == 0) return 1; else return 2; }",
-        "function f(x) { if (x == 0) { var a = 1; return a; } else { return 2; } }",
         "function f(x) { if (x == 0) { return 1; } else { return 2; } return 3; }",
         "function f(x) { if (\"x\" == x) { return 1; } else { return 2; } }",
         "function f(x) { return (x == 0) + 1; }",
@@ -180,4 +184,160 @@ fn effects_remain_in_order_and_inside_the_selected_block() {
     swapped.swap(left, right);
     assert!(parse_ir(&swapped.join("\n")).is_err());
     assert!(parse_ir(&text.replacen("ciq-ir 2", "ciq-ir 1", 1)).is_err());
+}
+
+#[test]
+fn nested_arms_scoped_locals_early_returns_and_joins_execute_correctly() {
+    let source = "function f(x) {
+        var common = 40;
+        if (x == 0) {
+            var amount = 3;
+            if (amount > 2) {
+                var result = common + amount;
+                return result;
+            } else { return common; }
+        } else { var amount = 5; }
+        var result = common + 7;
+        return result;
+    }";
+    let f = compile(source).unwrap();
+    assert_eq!(execute(&f, 0), 43);
+    assert_eq!(execute(&f, 1), 47);
+    assert_eq!(
+        execute(
+            &compile(&source.replace("amount > 2", "amount > 3")).unwrap(),
+            0
+        ),
+        40
+    );
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(
+        f.lower().encode().unwrap(),
+        ciq_assembly::Program::parse(&f.assembly())
+            .unwrap()
+            .encode()
+            .unwrap()
+    );
+    assert!(
+        f.operations()
+            .iter()
+            .any(|o| matches!(o.operation, ciq_compiler::Operation::Jump { .. }))
+    );
+    // Both arms continue and repeated conditions read common locals at joins.
+    let f = compile("function f(x) { var common = 7; if (x == 0) { var n = common + 1; } else { var n = common + 2; } if (x > 0) { return common + 1; } else { return common; } }").unwrap();
+    assert_eq!(execute(&f, 0), 7);
+    assert_eq!(execute(&f, 1), 8);
+    // Returning only from the false arm still leaves a valid true-arm join.
+    let f = compile("function f(x) { if (x == 0) { var n = 1; } else { return 2; } return 3; }")
+        .unwrap();
+    assert_eq!(execute(&f, 0), 3);
+    assert_eq!(execute(&f, 1), 2);
+}
+
+#[test]
+fn source_arm_scopes_missing_returns_and_unreachable_statements_are_rejected() {
+    for source in [
+        "function f(x) { if (x == 0) { var n = 1; } else { var n = 2; } return n; }",
+        "function f(x) { if (x == 0) { var n = 1; return n; } else { return n; } }",
+        "function f(x) { var n = 1; if (x == 0) { var n = 2; return n; } else { return n; } }",
+        "function f(x) { if (x == 0) { var x = 1; return x; } else { return 2; } }",
+        "function f(x) { if (x == 0) { var n = 1; var n = 2; return n; } else { return 2; } }",
+        "function f(x) { if (x == 0) { return 1; } else {} }",
+        "function f(x) { if (x == 0) {} else {} }",
+        "function f(x) { if (x == 0) { return 1; var n = 2; } else { return 3; } }",
+        "function f(x) { if (x == 0) { return 1; } else { return 2; } return 3; }",
+        "function f(x) { if (x == 0) {} else { if (x > 1) {} else {} } }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let source = "function f(x) { if (x == 0) { var n = 1; } else {}\n return n; }";
+    let error = compile(source).unwrap_err();
+    assert_eq!(&source[error.offset..error.offset + 1], "n");
+    assert_eq!(error.line, 2);
+    let error = compile("function f(x) { if (x == 0) { return 1; } else {} }").unwrap_err();
+    assert!(error.message.contains("every path"));
+}
+
+#[test]
+fn nested_effects_text_resumption_and_arm_local_ids_preserve_order() {
+    let source = include_str!("../../../examples/compiler-probe/nested-conditions.mc");
+    let f = compile(source).unwrap();
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let assembly = f.assembly();
+    assert_eq!(f.lower(), ciq_assembly::Program::parse(&assembly).unwrap());
+    let locals: Vec<_> = f
+        .operations()
+        .iter()
+        .filter_map(|o| match o.operation {
+            ciq_compiler::Operation::LocalInitialize { local, .. } => Some(local.0),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(locals, [0, 1, 2, 3, 4]);
+    // An effectful initializer in a continuing arm remains ahead of its print.
+    let f = compile("function f(x) { if (x == 0) { var n = Numbers.first(); System.println(n); } else { var n = Numbers.second(); System.println(n); } return Numbers.after(); }").unwrap();
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let assembly = f.assembly();
+    assert!(
+        assembly.find("__ciq_member_first").unwrap() < assembly.find("__ciq_block_f_2:").unwrap()
+    );
+    assert!(
+        assembly.find("__ciq_member_second").unwrap() < assembly.find("__ciq_block_f_3:").unwrap()
+    );
+    assert!(
+        assembly.find("__ciq_member_after").unwrap() > assembly.find("__ciq_block_f_3:").unwrap()
+    );
+    // Boolean and string type restrictions still apply to branch-local uses.
+    assert!(
+        compile("function f(x) { if (x == 0) { var n = \"str\"; return n; } else { return 1; } }")
+            .is_err()
+    );
+    assert!(
+        compile("function f(x) { if (x == 0) { var n = x > 1; return 1; } else { return 2; } }")
+            .is_err()
+    );
+}
+
+#[test]
+fn condition_nesting_and_global_frame_operation_limits_are_bounded() {
+    let nested = |count: usize| {
+        format!(
+            "function f(x) {{ {}return 1; {} }}",
+            "if (x == 0) {".repeat(count),
+            "} else { return 2; }".repeat(count)
+        )
+    };
+    assert!(compile(&nested(64)).is_ok());
+    assert!(
+        compile(&nested(65))
+            .unwrap_err()
+            .message
+            .contains("nesting")
+    );
+    let locals = (0..128)
+        .map(|i| format!("var n{i} = 1;"))
+        .collect::<String>();
+    let error = compile(&format!(
+        "function f(x) {{ if (x == 0) {{ {locals} }} else {{ {locals} }} return 1; }}"
+    ))
+    .unwrap_err();
+    assert!(error.message.contains("slot limit"));
+    // Printing has one argument definition and one sink, with no call result.
+    let prints = "System.println(1);".repeat(511);
+    let f = compile(&format!("function f() {{ {prints}return 1; }}")).unwrap();
+    assert_eq!(f.operations().len(), 1024);
+    assert!(
+        compile(&format!(
+            "function f() {{ {prints}System.println(1); return 1; }}"
+        ))
+        .is_err()
+    );
+    // Many empty joins consume real block and terminator operations, not only expressions.
+    let body = "if (x == 0) {} else {}".repeat(160);
+    assert!(
+        compile(&format!("function f(x) {{ {body}return 1; }}"))
+            .unwrap_err()
+            .message
+            .contains("operation limit")
+    );
 }

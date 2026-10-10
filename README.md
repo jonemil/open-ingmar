@@ -155,6 +155,9 @@ Terminal `if/else` returns with integer `==`/`>` comparisons are supported:
 [conditions.mc](examples/compiler-probe/conditions.mc) exercises both arms.
 [Condition evidence](docs/investigations/compiler-conditions.md) records explicit
 IR blocks, native/text parity, and simulator displays `55` and `53`.
+[Nested conditions](examples/compiler-probe/nested-conditions.mc) also support
+arm-local declarations, prints, early returns, and continued execution through
+joins. See [scope rules and simulator evidence][nested-conditions].
 Reassignment, general string/object operations, and complete-project compilation
 remain future work.
 
@@ -227,3 +230,5 @@ do not remove files already tracked by Git.
 [ref-larger-appended-function]: docs/investigations/code-labels-and-relocation.md
 [ref-arithmetic-evidence-and-reproduction]: docs/investigations/compiler-arithmetic.md
 [ref-multi-file-and-barrel-examples]: docs/investigations/multi-file-and-barrels.md
+
+[nested-conditions]: docs/investigations/compiler-nested-conditions.md

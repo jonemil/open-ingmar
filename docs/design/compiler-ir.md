@@ -94,9 +94,23 @@ unique, with no reassignment; frame slots are allocated across the whole
 function, including mutually exclusive paths. This avoids introducing phi values
 or a general stack-merge policy before they are needed.
 
-The typed/text IR supports forward joins, while the first source subset only
-emits a terminal `if/else` with one integer return per arm. Extend source arms
-and nesting before considering backward edges, mutable locals, or value joins.
+The frontend emits structured `if/else` statements into the same forward-only
+graph. Continuing arms jump to a join declared after both arms; returning arms
+have no join edge. Nested arms preserve this declaration order. Omit joins when
+both arms return and reject unreachable following statements. All paths must
+return an integer.
+
+Name resolution gives each arm an inherited environment and discards its local
+declarations on exit. Sibling declarations may reuse names but receive distinct
+local identities and slots. Shadowing an enclosing local or parameter remains
+rejected. The source builder is separate from parsing and VM lowering. Names
+and source scopes are resolved there; IR text and assembly retain identities
+rather than source environments.
+
+This supports nested statements and early returns without mutable locals or
+value joins. [The nested-condition experiment][nested] verifies selected prints
+and continuing paths in the simulator. Define reassignment and type rules before
+adding backward edges or loops.
 [Condition experiments](../investigations/compiler-conditions.md) verify both
 comparison outcomes in the official simulator and native/text CODE parity.
 
@@ -154,3 +168,5 @@ textual stages without allocating application metadata in the frontend.
 VM result follow observed SDK output; arbitrary SDK names and return types are
 not inferred. [The experiment](../investigations/compiler-strings.md) documents
 this boundary and generated UTF-8 output in the simulator.
+
+[nested]: ../investigations/compiler-nested-conditions.md

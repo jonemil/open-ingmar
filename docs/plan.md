@@ -27,20 +27,19 @@ describe planned behavior and investigations record the supporting evidence.
 - Source → IR → assembly → CODE works in memory and through saved text. Integer
   arithmetic, initialized locals, user-module calls, integer parameters,
   positional arguments, string literals/locals, `System.println` statements,
-  and terminal integer `if/else` returns using `==` or `>` are simulator-verified.
-- The latest implementation checkpoint passes 171 Rust tests, Clippy, and
+  and nested `if/else` statements using `==` or `>` are simulator-verified.
+  Conditions support scoped arm locals, early returns, and forward joins.
+- The latest implementation checkpoint passes 175 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Extend the bounded condition frontend with branch statements and nesting.
-   Forward-only semantic blocks, comparisons, terminators, definite-local joins,
-   and native/text parity are implemented; terminal `if/else` returns are
-   [simulator-verified](investigations/compiler-conditions.md). Preserve empty
-   evaluation stacks on edges before considering loops or value joins.
-   [Branch-label fixups](investigations/branch-labels.md)
-   and [exception sources](investigations/exception-assembly.md) are implemented
-   and simulator-verified; preserve unknown metadata and placement constraints.
+1. Design local reassignment and its type/initialization rules before adding
+   bounded `while` loops. Nested condition statements, early returns, scoped
+   locals, and forward joins are [simulator-verified][nested]. Keep expression
+   values block-local and preserve empty evaluation stacks on edges. Backward
+   edges need revised reachability/definite-initialization checks; exception
+   source lowering still needs stack/frame research.
 2. Revisit DATA string authoring after establishing shared address-region rules.
    The [boundary experiment](investigations/string-address-boundary.md) proves
    a working `0x01000000` literal offset with raised simulator memory; the upper
@@ -91,3 +90,5 @@ Use [SDK support scripts](../scripts/README.md) for device downloads, reference
 builds, and simulator sessions. The build helpers default to ignored
 `scratch/garmin-data/` for device definitions/fonts. Temporary artifacts are
 reproducible inputs/outputs, not checked-in evidence requirements.
+
+[nested]: investigations/compiler-nested-conditions.md

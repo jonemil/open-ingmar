@@ -40,7 +40,9 @@ in-memory composition and editable stage resumption.
    [The plan](../plan.md) links their runtime evidence.
 2. Terminal conditional returns with `==`/`>` and forward-only semantic blocks
    are [implemented and simulator-verified](../investigations/compiler-conditions.md).
-   Extend branch statements/nesting next. Branch-label and exception assembly
+   Nested statements, scoped arm locals, early returns, and continuing joins are
+   [also verified](../investigations/compiler-nested-conditions.md). Define
+   reassignment before adding loops. Branch-label and exception assembly
    are implemented; exception source compilation still needs stack/frame
    research. See the [control-flow design](control-flow.md).
 3. Independent application DATA/classes/symbols/resources and other required

@@ -147,4 +147,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   blocks and definite-local joins, version-2 IR/native parity, and both outcomes
   of generated equality/greater-than functions in the simulator.
 
+- [Compiler nested statements and joins](compiler-nested-conditions.md): scoped
+  arm locals, early returns, selected print order, native/text parity, and
+  simulator execution of nested outcomes and continuing joins.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

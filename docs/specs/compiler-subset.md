@@ -12,15 +12,14 @@ Initial restricted frontend, 2026-10-10. Design:
 Input is exactly one top-level function:
 
 ```text
-function = "function" identifier "(" parameter-list? ")"
-           "{" statement* terminal "}"
-terminal = "return" expression ";"
-         | "if" "(" expression ")" "{" "return" expression ";" "}"
-           "else" "{" "return" expression ";" "}"
+function = "function" identifier "(" parameter-list? ")" block
+block = "{" statement* "}"
 parameter-list = identifier ("," identifier)*
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
+          | "return" expression ";"
+          | "if" "(" expression ")" block "else" block
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = decimal-integer | string-literal | parameter-or-local-identifier
@@ -41,9 +40,9 @@ immediate behavior.
 Diagnostics identify the input byte offset and one-based line/column (columns
 count Unicode scalar values). The caller supplies the filename. Unsupported
 input never silently generates a partial function. Name resolution currently
-covers parameters and earlier initialized function locals. There is no general
-type inference, global/member resolver, whole-program analysis, or optimizer
-yet.
+covers parameters and earlier initialized locals in the current arm and its
+enclosing scopes. There is no general type inference, global/member resolver,
+whole-program analysis, or optimizer yet.
 
 The IR contains integer/string constants, binary add/subtract definitions,
 parameter reads, local initialization/read, module calls, print statements, and
@@ -89,10 +88,11 @@ Semantic IR contains pure integer add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
 definitions are unique, operands refer to earlier definitions, every defined
 value has exactly one use, and initialization statements, branches, prints, or
-returns consume expression results within the same block. General shared-value graphs and unused definitions
-remain rejected until their scheduling policy is implemented. For pure-only
-functions, definition order need not be VM stack order: the backend traverses
-each initializer/return expression and emits left operand, right operand, then
+returns consume expression results within the same block. General shared-value
+graphs and unused definitions remain rejected until their scheduling policy is
+implemented. For pure-only functions, definition order need not be VM stack
+order: the backend traverses each initializer/return expression and emits left
+operand, right operand, then
 `addv`/`subv`, preserving subtraction order. No constant folding is performed.
 VM selection lives in `ciq_compiler::backend::lower`; `Function::lower()`
 delegates to it. Source parsing, IR validation/text I/O, and assembly encoding
@@ -100,12 +100,15 @@ share the existing stage boundaries.
 
 ## Local declarations and reads
 
-The frontend accepts zero or more `var <identifier> = <expression>;` statements
-before the final return. Expressions can read earlier initialized locals
-repeatedly; duplicate declarations, self/forward/unknown reads, uninitialized
-declarations, reassignment, nested scopes, and other call forms are rejected.
-Locals are function-scoped and retain their initializer value. This restricted
-subset does not imply Monkey C `var` is immutable generally.
+`var <identifier> = <expression>;` initializes an integer or string local.
+Expressions may read it repeatedly after initialization. Duplicate declarations
+in one scope, shadowing an enclosing local or parameter, self/forward/unknown
+reads, uninitialized declarations, and reassignment are rejected. An arm's
+locals are visible within that arm and nested arms, but not in a sibling or
+after the condition. Disjoint arms may reuse a name; each declaration receives
+a distinct semantic local and VM slot. A later outer declaration may also reuse
+a name that has gone out of scope. Standalone braced blocks are unsupported.
+This restricted subset does not imply Monkey C `var` is immutable generally.
 
 IR distinguishes semantic `LocalId` from `ValueId` and physical VM slots.
 `LocalInitialize` consumes an expression value and declares a unique local;
@@ -224,10 +227,9 @@ DATA allocation and method metadata remain explicit scaffold work.
 ## Terminal conditions
 
 A function may end with `if (<condition>) { return <integer-expression>; } else
-{ return <integer-expression>; }` after its common prefix of local declarations
-and prints. Both braces and `else` are required. Each arm contains exactly one
-return; branch-local statements, nested conditions, loops, and statements after
-the conditional are rejected.
+{ return <integer-expression>; }`. Both braces and `else` are required. Arms may
+also contain local declarations, print statements, and nested conditions, as
+described below. Loops remain unsupported.
 
 `==` and `>` compare integer expressions and produce Booleans. Arithmetic has
 higher precedence, so `value + 1 > 2` compares the sum. At most one comparison
@@ -237,9 +239,36 @@ locals, parameters, literals, print arguments, call arguments, arithmetic, and
 returns are rejected. Integer truthiness, other comparison operators, and
 short-circuit operators are not supported.
 
-Lowering emits an entry block, the common statements, comparison, and branch,
-then separate integer-return blocks. Both arms may read parameters and common
-locals. The [version-2 IR rules](compiler-ir-text.md#version-2-control-flow)
-validate block-local values and initialization on every path. See
+Lowering emits an entry block, comparison, and branch, then separate arm
+blocks. Both arms may read parameters and enclosing locals. The
+[version-2 IR rules](compiler-ir-text.md#version-2-control-flow) validate
+block-local values and initialization on every path. See
 [conditions.mc](../../examples/compiler-probe/conditions.mc) and
-[simulator evidence](../investigations/compiler-conditions.md).
+[initial simulator evidence](../investigations/compiler-conditions.md).
+
+## Statement arms and joins
+
+Conditions may appear between statements and nest to 64 levels. Empty arms are
+allowed; `else if` without braces is not accepted. Each arm has its own local
+scope. The function must return an integer on every path. Statements after a
+return, or after a conditional whose arms both return, are rejected as
+unreachable. A path with no return is rejected at the function's closing brace.
+
+Continuing arms jump to a shared block after both arms. Returning arms do not
+contribute an edge to that join; when both arms return, no join is generated.
+Only enclosing locals are visible after the condition. Even if both arms
+declare the same name, those distinct declarations do not define a result at
+the join. No phi values, reassignment, or shared stack values are introduced.
+
+The semantic 1024-operation limit includes generated block markers and
+terminators. The 255 parameter/local slots count all declarations across the
+function, including mutually exclusive arms; slots are not reused. Local
+initializers, prints, comparison operands, and module call arguments retain
+source evaluation order within the selected path. Common initializers run once
+before the branch. This uses existing version-2 IR without new directives.
+
+See [nested-conditions.mc](../../examples/compiler-probe/nested-conditions.mc)
+and [nested/continuing-arm simulator evidence][nested]. Full language scoping,
+mutable locals, optional `else`, loops, and standalone blocks remain future work.
+
+[nested]: ../investigations/compiler-nested-conditions.md

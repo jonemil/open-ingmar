@@ -328,5 +328,7 @@ functions retain left-to-right expression and statement order within each
 block; block markers and jumps participate in schedule validation. Branches
 consume their comparisons, and no evaluation-stack values are carried over an
 edge. Source parsing, typed construction, and text resumption use these same
-checks. Typed/text IR supports forward joins with `.jump`; the source subset
-currently only generates a terminal conditional with one return per arm.
+checks. Source conditions use these same forward joins with `.jump` for
+continuing arms, including nested statements and early returns. Source local
+names/scopes are resolved before serialization; the IR only retains globally
+unique local identities. See [the source subset](compiler-subset.md).
