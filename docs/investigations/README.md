@@ -32,3 +32,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Multi-file source, barrels, and IQ packages](multi-file-and-barrels.md): three new examples, source/archive comparison, exact PRG reconstruction, assembly-edited cross-file calls, and four successful simulator checks through container-broker.
 
 - [Barrel/IQ format and packaging research](package-formats.md): independent ZIP repacking accepted by the SDK, resource placement, 7z coder/header inspection, verified exact-byte manifest signing, and the proposed `ciq-package` stages.
+
+- [Rust package reading and safe extraction](package-reading.md): sixth workspace crate, exact barrel/IQ member preservation, 18 new tests, bounded archive adapters, and actual Rust 1.85.0 validation.

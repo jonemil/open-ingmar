@@ -4,7 +4,7 @@
 
 Use LLVM's separation of concerns as an architectural inspiration without introducing an LLVM dependency initially. Keep container handling and VM instruction definitions independently usable by a future compiler or runtime.
 
-The Cargo workspace now contains five crates:
+The Cargo workspace now contains six crates:
 
 ```text
 Cargo.toml                 # workspace manifest, resolver 3 / edition 2024
@@ -15,6 +15,7 @@ crates/
   ciq-sign/                # developer signatures and key handling
   ciq-asm/                 # assembly library and CLI
   ciq-dis/                 # disassembly library and CLI
+  ciq-package/             # barrel/IQ inventory and safe extraction
 docs/
   investigations/          # evidence and experiment records
   specs/                   # local format and instruction specifications
@@ -29,6 +30,7 @@ scratch/                   # ignored local SDK specimens and experiments
 | `ciq-dis` | Print section inventory/code assembly, or export all sections to a project directory | `ciq-prg`, `ciq-mc` |
 | `ciq-sign` | Independently encode/verify developer signatures; load private keys | `ciq-prg`, RustCrypto RSA/SHA-1/SHA-256, OS randomness |
 | `ciq-asm` | Parse assembly; reconstruct a complete section project or replace equal-length code; optional signing and verification | `ciq-prg`, `ciq-mc`, `ciq-sign` |
+| `ciq-package` | Inventory and safely extract source barrels and IQ distribution archives; preserve raw member/XML bytes | `zip`, `sevenz-rust2`, `quick-xml` |
 
 This follows LLVM's useful division between a binary container layer, a machine instruction layer, and tools that share them. We have no compiler intermediate representation yet. These initial APIs can change as research exposes symbol, reference, and relocation requirements. All packages are currently unpublished. Container and instruction libraries remain standard-library-only; cryptographic dependencies belong in `ciq-sign`. The assembler CLI uses this crate after reconstruction, without coupling cryptography to the assembly library or container parser.
 
@@ -75,6 +77,6 @@ Checked-in code should stand on its own and reference local specifications when 
 
 These observations support collecting source declarations before complete-program layout. They do not require a separate linker or an option to ignore placement constraints. Multiple-module name collisions, branch/exception fixups, resource libraries, annotations, and multi-device distribution remain bounded follow-up investigations.
 
-## Planned package crate
+## Package crate
 
-The user approved a separate `ciq-package` boundary on 2026-10-10. [The design](design/package-crate.md) plans a library and CLI for ZIP barrels and 7z IQ archives, keeping PRG decoding in `ciq-prg` and cryptographic primitives in `ciq-sign`. It will be a sixth workspace crate when implemented; it is not yet a workspace member. The first stage is inventory and safe extraction with exact manifest/member preservation, followed by verification and writers. [Independent package experiments](investigations/package-formats.md) confirm barrel repacks compile and establish the modern IQ detached-signature rules. Raw manifest bytes must be retained because the manifest signature does not canonicalize XML. Archive dependencies stay isolated from the standard-library-only PRG/instruction crates.
+`ciq-package` is the sixth workspace member, implementing library/CLI inventory and safe extraction for ZIP barrels and 7z IQ archives. It owns bounded archive adapters, package manifest/product views, and extraction lifecycle; PRG decoding remains in `ciq-prg` and cryptographic primitives in `ciq-sign`. Package reading currently has no dependency on those crates and does not verify signatures. [The reading specification](specs/package-reading.md) records supported profiles and limits; [reader evidence](investigations/package-reading.md) includes exact SDK member comparisons, 85 passing workspace tests with Rust 1.85.0, and dependency checks. Raw manifest bytes are retained because manifest signing does not canonicalize XML. Archive/XML dependencies stay isolated from the standard-library-only PRG/instruction crates. [The design](design/package-crate.md) retains the subsequent verification, barrel packing, unchanged IQ repacking, and own-key creation stages.

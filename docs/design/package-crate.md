@@ -1,12 +1,12 @@
-# Planned ciq-package crate
+# ciq-package design
 
-Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **This is a plan, not an implemented crate or available command.** Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
+Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stage 1 is implemented:** library plus `list`/`unpack` CLI for the supported profile. Stages 2–5 remain planned. See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
 
 ## Boundary and model
 
 `ciq-package` owns archive detection/codec adapters, member inventory, package manifests, extraction/writing, and product/member relationships. `ciq-prg` continues owning an individual PRG and its section project. `ciq-sign` owns cryptographic operations and key parsing. A package is not a VM object and this work does not introduce a linker, Monkey C compiler, or Jungle evaluator.
 
-Proposed modules:
+Logical boundaries for later expansion (the initial implementation uses `lib`, `preflight`, `paths`, `manifest`, and `main`):
 
 ```text
 archive   # ZIP/7z adapters and common member metadata/limits
@@ -16,13 +16,13 @@ extract   # filesystem extraction policy and output lifecycle
 main      # ciq-package CLI
 ```
 
-An archive model retains container kind, ordered member metadata, and access to exact uncompressed bytes. Preserve unknown ordinary members and unknown manifest fields. Do not eagerly decompress every member for `list`; decompression/extraction must have explicit entry-count, per-member, total-byte, and codec-memory limits. Some solid/encoded 7z metadata may require bounded decoding even to inventory entries. The library should accept `Read + Seek` input and controlled output sinks, with filesystem handling in a separate layer.
+An archive model retains container kind, ordered member metadata, and access to exact uncompressed bytes. Preserve unknown ordinary members and unknown manifest fields. Do not eagerly decompress every member for `list`; decompression/extraction must have explicit entry-count, per-member, total-byte, and codec-memory limits. Some solid/encoded 7z metadata may require bounded decoding even to inventory entries. The initial library accepts `Read` input, buffering a bounded archive for seekable codecs, and exposes filesystem extraction. A public controlled member-output sink remains future work.
 
 Typed package views retain **raw manifest bytes** alongside parsed library/product fields. Untouched manifests are never parsed and reserialized merely to repack them. IQ signing operates on finalized raw bytes; XML layout is part of the signature message. Package-level aliases do not become VM symbols.
 
 Initial Rust dependencies: `zip` for ZIP/Deflate, `sevenz-rust2` for 7z/LZMA2, and an XML library such as `quick-xml`. Use maintained codec implementations rather than implementing ZIP/7z compression or binding libarchive in our Rust code. `ciq-prg` supports product validation; `ciq-sign` is introduced when verification/signing is implemented. Cryptography must not spread into the archive adapters.
 
-The workspace currently advertises Rust 1.85. Candidate releases `zip 6.0.0` (declared MSRV 1.83) and `sevenz-rust2 0.20.2` (declared MSRV 1.85) can preserve that boundary, but must undergo advisory/transitive-dependency/MSRV checks before adoption. Current `sevenz-rust2 0.23.0` requires 1.93 and current ZIP releases can require 1.88; do not silently introduce them under the 1.85 promise. Dependency choice remains an implementation gate: either validate compatible maintained versions or explicitly revise the documented compiler requirement. No Cargo dependency changes are made during this planning task.
+The implementation retains Rust 1.85 using pinned `zip 6.0.0`, `sevenz-rust2 0.20.2`, and patched `quick-xml 0.41.0`. Actual full workspace tests with Rust 1.85.0 pass. Published runtime dependency licenses and all locked registry versions were reviewed; XML advisory findings changed the initial candidate version before acceptance. See [the reader investigation](../investigations/package-reading.md) for evidence and the existing RSA advisory outside this new dependency boundary. Use that review process when upgrading libraries; do not silently raise the workspace compiler requirement.
 
 Disable unnecessary codec/encryption defaults. The initial verified read profile needs ZIP Store/Deflate and 7z LZMA2; supported 7z Copy/LZMA, solid streams, and encoded headers can be enabled where the backend handles them with resource bounds. Enable writers only for the stages that need them. Check crate and transitive licenses; candidate ZIP is MIT and sevenz-rust2 Apache-2.0. Pin actual resolved versions in Cargo.lock.
 
@@ -36,7 +36,7 @@ Deterministic writers use a specified stable member order, stable timestamps/att
 
 ## Stages and acceptance criteria
 
-1. **Read/list/unpack both formats.** Create the crate and CLI, detect container by magic, inspect package type from the manifest, expose all member/product metadata, and perform bounded safe extraction. Validate our ZIP barrel and 7z IQ members byte for byte against independently obtained payloads. Synthetic cases cover traversal, links, duplicates, CRC/truncation failures, unsupported codecs/encryption, size limits, and an IQ with multiple product descriptors. Do not depend on SDK binaries in unit tests.
+1. **Read/list/unpack both formats — implemented for the initial profile.** Create the crate and CLI, detect container by magic, inspect package type from the manifest, expose member inventory and product attributes, and perform bounded safe extraction. Validate our ZIP barrel and 7z IQ members byte for byte against independently obtained payloads. Synthetic cases cover traversal, links, duplicates, CRC/truncation failures, unsupported codecs/encryption, size limits, and an IQ with multiple product descriptors. Do not depend on SDK binaries in unit tests.
 2. **Package verification.** Extend `ciq-sign` with public-SPKI import/export and narrowly scoped detached SHA-1/SHA-256 signing/verification APIs, keeping the private key opaque. Independently verify the real SDK modern IQ profile, product signature attribute equality, PRG key consistency, exact-byte manifest signing, and optional expected key. Test tampered manifest, PRG, signature attributes, public key, and missing members; use generated ephemeral keys, never the user's private key.
 3. **Barrel packer.** Start from a canonical unpacked package layout; retain manifest/Jungle/source/resource bytes and emit deterministic ZIP/Deflate. Repack our code-only and resource specimens. Acceptance is successful SDK consumption and identical resulting CODE/DATA, already demonstrated experimentally for two independently created ZIP variants. Add a project-to-content mapper later, with explicit source/resource inputs; avoid an incomplete implicit Jungle interpreter.
 4. **Unchanged IQ repacking.** Rebuild a package with all signed bytes unchanged, preserving signing identity without a key. Verify before/after and compare every member. Exercise the chosen 7z writer and deterministic output. Keep this distinct from editing/resigning and do not claim store acceptance from simulator checks.
@@ -44,7 +44,7 @@ Deterministic writers use a specified stable member order, stable timestamps/att
 
 ## Proposed commands
 
-These spellings are planned examples, not existing CLI options:
+`list` and `unpack` exist. The other spellings below remain planned; they are not CLI options yet:
 
 ```sh
 ciq-package list library.barrel
@@ -61,11 +61,11 @@ ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
 
 ## Outstanding research
 
-- Validate backend limits and error behavior before picking the dependency versions; actually test Rust 1.85 if retaining it.
+- Extend bounded backend support beyond classic ZIP and unencoded single-coder 7z headers; add real solid/LZMA specimens and controlled member-output sinks. Dependency/MSRV checks are recorded for the initial implementation.
 - Additional real SDK products, multi-device exports, older SHA-1 manifest signing, store-specific metadata, and optional signatures/public-key formats.
 - Barrel annotations, dependent barrels, localization/device resources, optional metadata, multiple Jungles, and project-to-package path rewriting.
-- Package manifests' unknown XML preservation and duplicated/shared product-file semantics.
+- Additional unknown XML variants and real SDK examples with duplicated/shared product filenames; exact raw XML and synthetic shared-file descriptors are already covered.
 - Whether SDK/install tooling accepts independently produced 7z packages with different archive settings; exact member/signature verification alone does not answer this.
 - External `debug.xml` updates after assembly edits. Preserve/omit with explicit supported policy; do not publish stale mappings as newly correct.
 
-Start implementation with stage 1. The verified detached signature rules remove an investigation blocker for stages 2 and 5; they do not make those stages implemented.
+Stage 1 is complete for its documented supported profile. Next implement stage 2. The verified detached signature rules remove an investigation blocker for stages 2 and 5; they do not make those stages implemented.

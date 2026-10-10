@@ -42,6 +42,17 @@ cargo run -p ciq-dis -- resource-strings examples/minimal-console/build/fr265/mi
 
 `data-source` prints reassemblable DATA classes and strings with opaque fallback spans; `ciq-asm data <source.mcasm> <new-payload.bin>` serializes that section independently.
 
+List or unpack source barrels and IQ distribution packages (destinations must be new):
+
+```sh
+cargo run -p ciq-package -- list examples/number-barrel/build/number-barrel.barrel
+cargo run -p ciq-package -- unpack examples/number-barrel/build/number-barrel.barrel scratch/unpacked-library
+cargo run -p ciq-package -- list scratch/barrels/barrel-app.iq
+cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacked-application
+```
+
+The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. Package signatures are not yet verified; writers follow later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
+
 Build and validate the workspace:
 
 ```sh
@@ -50,7 +61,7 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Rust 1.85 or newer is required by the manifest (tested here with 1.99). Container and instruction libraries use only the standard library; the separate signing crate uses RustCrypto RSA and digest libraries. See [the architecture](docs/architecture.md) for crate responsibilities and [the initial experiment](docs/investigations/rust-bootstrap.md) for assembly commands, evidence, and limits.
+Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). Container and instruction libraries use only the standard library; the separate signing crate uses RustCrypto RSA and digest libraries, and `ciq-package` isolates ZIP/7z/XML dependencies. See [the architecture](docs/architecture.md) for crate responsibilities and [the initial experiment](docs/investigations/rust-bootstrap.md) for assembly commands, evidence, and limits.
 
 - [Working instructions](AGENTS.md)
 - [Plan and current status](docs/plan.md)
@@ -66,7 +77,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). Containe
 - [Resource string inspection](docs/specs/resources.md)
 - [Barrel package profile](docs/specs/barrel-package.md)
 - [IQ package/signing profile](docs/specs/iq-package.md)
-- [Planned package crate](docs/design/package-crate.md)
+- [Package crate design and remaining stages](docs/design/package-crate.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)
 - [SDK support scripts](scripts/README.md)
@@ -74,7 +85,7 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). Containe
 
 [Multi-file and barrel examples](docs/investigations/multi-file-and-barrels.md) now round-trip and run: the multi-file assembly edit shows `47`, and reconstructed barrel/package programs show `46`. Barrel source/archive consumption produces identical CODE and DATA; the SDK creates distribution packages separately.
 
-Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, and `ciq-asm`. Keep `Cargo.lock` in version control for the command-line tools.
+Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, `ciq-asm`, and `ciq-package`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.
 

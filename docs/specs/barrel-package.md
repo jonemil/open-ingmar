@@ -1,6 +1,6 @@
 # Monkey Barrel package: observed ZIP profile
 
-Status: documented 2026-10-10; Rust reader/writer planned. Evidence: [package investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`, and the earlier [library experiment](../investigations/multi-file-and-barrels.md). This is the verified profile of our specimens, not a claim about every historical SDK.
+Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); writing remains planned. Evidence: [package investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`, and the earlier [library experiment](../investigations/multi-file-and-barrels.md). This is the verified profile of our specimens, not a claim about every historical SDK.
 
 ## Archive and members
 
@@ -34,7 +34,7 @@ Monkey C source and resource members are packaged unchanged. An independently au
 
 ## Reader/writer scope
 
-Planned reader: recognize ZIP framing, inventory members, parse library identity and selected build-manifest path, expose source/resources as opaque member bytes, and extract safely. Unknown ordinary members remain available for preservation. Validate CRCs and reject duplicate or conflicting paths, unsupported compression/encryption, links, and out-of-root paths rather than overwriting another entry.
+Implemented reader: recognize ZIP framing, inventory members, parse library identity and the canonical `content/manifest.xml`, and extract source/resources as opaque member bytes. Arbitrary Jungle-selected manifest paths are deferred. Unknown ordinary members remain available for preservation. Validate CRCs and reject duplicate or conflicting paths, unsupported compression/encryption, links, and out-of-root paths rather than overwriting another entry.
 
 Planned first writer: repack an already canonical extracted package tree, validating the required manifests and `barrel.jungle`, then emit deterministic ZIP/Deflate with stable order/timestamps. Its success criterion is equal member bytes and SDK consumption, not identical compressed archive bytes. A later project-to-barrel builder can construct the `content/` mapping explicitly; arbitrary Jungle interpretation, source syntax checking, and compilation are separate work.
 
