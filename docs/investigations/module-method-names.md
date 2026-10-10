@@ -56,3 +56,13 @@ A member ID alone is not a globally unique executable method identity in this sp
 The exported owner remains a DATA alias. Mapping path-like aliases to pleasant source module names, nested module lookup, inheritance overrides, overloaded method behavior, and separate compilation remain unverified. Shared stubs must not inherit whichever binding appeared first. Four new Rust tests cover qualification, shared-target ordering, generated-label collisions, and full-project reconstruction with a shared member ID. All 111 workspace tests pass with Rust 1.99; formatting and Clippy with warnings denied pass.
 
 Next start the restricted constant-return Monkey C compiler milestone; investigate branch/exception fixups alongside its later extensions. Full relocation is not required for the first straight-line body.
+
+## MIR follow-up
+
+Local SDK 9.2.0 build output also contains `build/fr265/mir/source/Left.mir`. Observed: it retains the `module Left` and `function answer()` structure, source-location annotations and generated labels, but expresses the return through a temporary assignment (`%tmp.1 = 21;`) followed by `ret %tmp.1;`. The corresponding ordinary CODE contains the module prologue described above followed by `ipush1 0x15` and `return`. MIR is therefore at a higher abstraction level than our bytecode assembly; this comparison does not specify its full grammar or lowering rules.
+
+Other observed build paths include `internal-mir/Rez.mir` (generated resource declarations), and `external-mir/` for barrel-consumer inputs. The installed `connectiq/bin/api.mir` contains Toybox API declarations, types, documentation, and empty function bodies. The same extension therefore covers declaration-oriented content as well as generated function bodies. Neither our documented barrel nor IQ archive specimens contains a MIR member. These observations do not rule out other package profiles carrying it.
+
+Primary corroboration: [Garmin Connect IQ team's compiler-debugging response](https://forums.garmin.com/developer/connect-iq/f/discussion/396955/odd-compiler-errors-with-sdk-7-4-1/1868511) distinguishes generated MIR in intermediate logs from original Monkey C files in verbose logs. Read locally on 2026-10-10 alongside the SDK 9.2.0 artifacts.
+
+Interpretation for our toolchain: a future source compiler may use its own intermediate representation before emitting `.mcasm`; our assembler currently consumes bytecode assembly, not Garmin MIR. There is no evidence here that preserving or implementing Garmin MIR is required for PRG reassembly or the first constant-return compiler milestone. MIR could be a useful source-to-bytecode research aid or an eventual compatibility input, separately scoped from package preservation.
