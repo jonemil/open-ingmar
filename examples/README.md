@@ -7,7 +7,7 @@ Application/library directories are standalone Connect IQ projects containing th
 - [minimal-console](minimal-console/README.md): one target function calling `println("Hello!")`, with basic watch-app lifecycle scaffolding and no custom rendering.
 - [multi-file](multi-file/README.md): three source files sharing a module function, with console/display `46`.
 - [module-names](module-names/README.md): two modules with the same `answer()` spelling, returning `21` and `22`.
-- [compiler-probe](compiler-probe/README.md): standalone inputs for the Rust frontend, including literal returns, grouped integer arithmetic, and initialized locals.
+- [compiler-probe](compiler-probe/README.md): standalone inputs for the Rust frontend, including literal returns, grouped integer arithmetic, initialized locals, and external zero-argument module calls.
 - [number-barrel](number-barrel/README.md): the numeric module packaged as a source library.
 - [barrel-app](barrel-app/README.md): the library consumed through an archive or source-project Jungle.
 

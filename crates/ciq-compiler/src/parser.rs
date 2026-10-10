@@ -20,6 +20,10 @@ pub(crate) struct Expression {
 pub(crate) enum ExpressionKind {
     Integer(i32),
     Local(String),
+    ModuleCall {
+        module: String,
+        member: String,
+    },
     Binary {
         kind: crate::BinaryOp,
         left: Box<Expression>,
@@ -89,7 +93,7 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=')) => {
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -173,7 +177,36 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::Integer(value), token.span)
             }
             Kind::Word(name) if !matches!(name, "function" | "return" | "var") => {
-                self.node(ExpressionKind::Local(name.into()), token.span)
+                if self.peek()? == Kind::Punctuation('.') {
+                    self.token()?;
+                    let member = self.identifier()?;
+                    let Kind::Word(member) = member.kind else {
+                        unreachable!()
+                    };
+                    self.expect(
+                        Kind::Punctuation('('),
+                        "'(' (only module calls are supported)",
+                    )?;
+                    let end = self
+                        .expect(
+                            Kind::Punctuation(')'),
+                            "')' (call arguments are unsupported)",
+                        )?
+                        .span
+                        .end;
+                    self.node(
+                        ExpressionKind::ModuleCall {
+                            module: name.into(),
+                            member: member.into(),
+                        },
+                        Span {
+                            start: token.span.start,
+                            end,
+                        },
+                    )
+                } else {
+                    self.node(ExpressionKind::Local(name.into()), token.span)
+                }
             }
             Kind::Punctuation('(') => {
                 if depth >= 64 {

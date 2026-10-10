@@ -52,3 +52,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Compiler integer arithmetic](compiler-arithmetic.md): grouped add/subtract, dependency-based VM lowering, native/text equivalence, and simulator-confirmed `43` and `-3`.
 
 - [Compiler initialized locals](compiler-locals.md): semantic local identities, ordered initialization, repeated reads, controlled SDK slot comparison, and simulator-confirmed `37` and `-6`.
+
+- [Compiler zero-argument module calls](compiler-calls.md): SDK invocation/binding comparison, effect order validation, native/text equivalence, and simulator-confirmed `49`/`2` with ordered helper logs.

@@ -43,10 +43,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".subtract") => (3, 4),
             Some(".local") => (4, 3),
             Some(".read") => (5, 3),
+            Some(".call") => (6, 4),
             _ => {
                 return Err(fail(
                     *at,
-                    "expected .integer, .add, .subtract, .local, .read, .return, or .end",
+                    "expected .integer, .add, .subtract, .local, .read, .call, .return, or .end",
                 ));
             }
         };
@@ -119,6 +120,12 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Operation::LocalRead {
                 result: parse_value(fields[1])?,
                 local: parse_local(fields[2])?,
+            }
+        } else if kind == 6 {
+            Operation::ModuleCall {
+                result: parse_value(fields[1])?,
+                module: fields[2].into(),
+                member: fields[3].into(),
             }
         } else {
             Operation::Binary {

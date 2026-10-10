@@ -16,7 +16,8 @@ pub fn lower(function: &Function) -> Program {
         match &located.operation {
             Operation::Integer { result, .. }
             | Operation::Binary { result, .. }
-            | Operation::LocalRead { result, .. } => {
+            | Operation::LocalRead { result, .. }
+            | Operation::ModuleCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. } => {
@@ -57,6 +58,7 @@ fn expression(
     enum Task {
         Value(ValueId),
         Binary(BinaryOp),
+        Invoke,
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
@@ -65,6 +67,16 @@ fn expression(
                 Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
                 Operation::Integer { value, .. } => {
                     (Opcode::Ipush1, vec![Operand::Bits(*value as u64)])
+                }
+                Operation::ModuleCall { module, member, .. } => {
+                    tasks.push(Task::Invoke);
+                    (
+                        Opcode::Getmv,
+                        vec![
+                            Operand::Symbol(format!("__ciq_module_{module}")),
+                            Operand::Symbol(format!("__ciq_member_{member}")),
+                        ],
+                    )
                 }
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
@@ -77,6 +89,7 @@ fn expression(
                 }
                 _ => unreachable!("statement is not a value definition"),
             },
+            Task::Invoke => (Opcode::Invokemz, vec![]),
             Task::Binary(kind) => (
                 match kind {
                     BinaryOp::Add => Opcode::Addv,

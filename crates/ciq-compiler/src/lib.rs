@@ -1,6 +1,8 @@
 //! Restricted Monkey C frontend. See docs/specs/compiler-subset.md.
 
 pub mod backend;
+mod bindings;
+pub use bindings::symbol_bindings;
 mod ir_text;
 mod parser;
 pub use ir_text::parse_ir;
@@ -69,6 +71,11 @@ pub enum Operation {
         kind: BinaryOp,
         left: ValueId,
         right: ValueId,
+    },
+    ModuleCall {
+        result: ValueId,
+        module: String,
+        member: String,
     },
     LocalInitialize {
         local: LocalId,
@@ -160,6 +167,22 @@ impl Function {
                     right,
                     ..
                 } => (Some(result), vec![left, right]),
+                Operation::ModuleCall {
+                    result,
+                    ref module,
+                    ref member,
+                } => {
+                    let valid = |name: &str| {
+                        name.bytes()
+                            .next()
+                            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+                            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                    };
+                    if !valid(module) || !valid(member) {
+                        return Err(fail("invalid module or member name"));
+                    }
+                    (Some(result), vec![])
+                }
                 Operation::LocalInitialize { local, value } => {
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
@@ -207,12 +230,57 @@ impl Function {
                 message: "IR requires a final return".into(),
             });
         }
-        for (value, index) in definitions {
-            if uses.get(&value) != Some(&1) {
+        for (value, index) in &definitions {
+            if uses.get(value) != Some(&1) {
                 return Err(IrError {
-                    operation: Some(index),
+                    operation: Some(*index),
                     message: "supported expression IR requires exactly one use per defined value"
                         .into(),
+                });
+            }
+        }
+        if operations
+            .iter()
+            .any(|located| matches!(located.operation, Operation::ModuleCall { .. }))
+        {
+            // Calls make operation order observable. Until a general scheduler
+            // exists, accept only the expression order the backend can preserve.
+            enum Task {
+                Value(ValueId),
+                Emit(usize),
+            }
+            let mut schedule = Vec::new();
+            for (index, located) in operations.iter().enumerate() {
+                let root = match located.operation {
+                    Operation::LocalInitialize { value, .. } | Operation::Return { value } => value,
+                    _ => continue,
+                };
+                let mut tasks = vec![Task::Value(root)];
+                while let Some(task) = tasks.pop() {
+                    match task {
+                        Task::Emit(at) => schedule.push(at),
+                        Task::Value(value) => {
+                            let at = definitions[&value];
+                            tasks.push(Task::Emit(at));
+                            if let Operation::Binary { left, right, .. } = operations[at].operation
+                            {
+                                tasks.extend([Task::Value(right), Task::Value(left)]);
+                            }
+                        }
+                    }
+                }
+                schedule.push(index);
+            }
+            if let Some((expected, actual)) = schedule
+                .iter()
+                .enumerate()
+                .find(|(expected, actual)| *expected != **actual)
+            {
+                return Err(IrError {
+                    operation: Some(*actual),
+                    message: format!(
+                        "functions with calls require expression evaluation order in IR (expected operation {expected})"
+                    ),
                 });
             }
         }
@@ -249,6 +317,11 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::ModuleCall {
+                    result,
+                    ref module,
+                    ref member,
+                } => format!(".call %{} {module} {member}", result.0),
                 Operation::LocalInitialize { local, value } => {
                     format!(".local ${} %{}", local.0, value.0)
                 }
@@ -290,6 +363,20 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
                     )
                 })?,
             },
+            parser::ExpressionKind::ModuleCall { module, member } => {
+                if locals.contains_key(&module) {
+                    return Err(Diagnostic::at(
+                        source,
+                        expression.span.start,
+                        "calls on local receivers are unsupported",
+                    ));
+                }
+                Operation::ModuleCall {
+                    result: ValueId(operations.len() as u32),
+                    module,
+                    member,
+                }
+            }
             parser::ExpressionKind::Binary { kind, left, right } => {
                 let left = emit(source, *left, locals, operations)?;
                 let right = emit(source, *right, locals, operations)?;

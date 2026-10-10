@@ -28,3 +28,11 @@ cargo run -p ciq-compiler -- examples/compiler-probe/locals.mc scratch/compiler-
 ```
 
 The backend allocates two local slots and emits `argcincsp`, `lputv`, and `lgetv`. [Local-variable evidence](../../docs/investigations/compiler-locals.md) covers SDK comparisons, simulator execution, and IR text. Reassignment is not supported yet.
+
+[calls.mc](calls.mc) calls externally supplied `Numbers.left()` and `Numbers.right()`, returning `49` with the helper definitions in [the call experiment](../../docs/investigations/compiler-calls.md). It emits symbolic assembly:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/calls.mc scratch/compiler-example/calls.mcasm
+```
+
+Raw CODE additionally needs `--symbols <symbol-source.mcasm>` from that scaffold. The frontend does not generate the module or its method metadata yet.
