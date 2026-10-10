@@ -55,6 +55,23 @@ must not become an assumed address-field width. The
 demonstrates this distinction: the same `news 0x01000000` encoding runs after
 raising only the simulated watch-app memory allowance.
 
+Do not introduce per-device address regions without evidence that devices use
+different VM address formats. First investigate a shared region model. The
+external research's high-nibble description suggests DATA addresses in
+`0x00000000..0x0fffffff` and CODE addresses in `0x10000000..0x1fffffff`;
+the successful `0x01000000` string fits that hypothesis. This is a provisional
+interpretation, not a verified 28-bit offset specification. Retain full u32
+address representations and distinguish region selectors from offsets. Verify
+selector handling and additional offset bits before defining authoring bounds;
+unknown addresses must remain preservable numerically.
+
+Device profiles should initially supply capacity and capability constraints,
+rather than redefining section regions. Add VM format variants only when
+observations establish them. After resolving the shared DATA address rule,
+replace the current 24-bit checks consistently across string parsing, DATA
+layout, and CODE binding. Keep CODE/method-address changes dependent on their
+own evidence.
+
 Layout uses section-relative offsets, rather than placing objects at physical
 watch RAM addresses. Two devices with compatible formats and identical selected
 inputs may use the same section layout; a smaller budget can cause validation
