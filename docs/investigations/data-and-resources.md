@@ -40,6 +40,12 @@ method addresses, not behavior at offsets beyond `0x00ffffff`. The current
 limit is a conservative implementation profile; larger offsets and the exact
 selector/offset boundary remain unverified.
 
+A subsequent [boundary experiment](string-address-boundary.md) on the same date
+loaded a DATA string at `0x01000000` in the simulator with an increased memory
+allowance. This disproves the universal 24-bit offset ceiling; the full
+selector/offset rule remains unresolved. Current authoring restrictions must
+not be presented as established VM limits.
+
 **Experimentally observed:** a sequential walk of Minimal Console DATA finds 128
 c2 class/module records and 52 string records. Hello World finds 129 c2 records
 and 53 strings. No c1 or JSON records occur. Class records are retained as

@@ -18,10 +18,13 @@ A symbol ID is a different kind of reference. Other address prefixes remain
 numeric and uninterpreted.
 
 The 24-bit offset restriction is an implementation policy adopted from external
-research's prefixed-address patterns, not an experimentally established VM
-capacity limit. That source also describes a high-nibble selector, so the exact
-selector/offset boundary remains unresolved. See
-[the provenance and uncertainty](../investigations/data-and-resources.md).
+research's prefixed-address patterns. It is now known to exclude a working VM
+address: [a simulator experiment](../investigations/string-address-boundary.md)
+loaded a literal at DATA+`0x01000000` after increasing the simulated app memory
+allowance. The authoring profile has not yet been expanded. The exact upper
+limit and selector/offset boundary remain unresolved; do not treat 16 MiB as a
+VM capacity specification. See also
+[the original provenance](../investigations/data-and-resources.md).
 
 Minimal Console's literal record is at DATA+`0x3279`:
 

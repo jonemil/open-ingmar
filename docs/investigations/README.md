@@ -127,4 +127,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   explicit DATA placement/binding, print result discard, and native/IR/assembly
   parity with simulator-confirmed output and return value `43`.
 
+- [DATA string address boundary](string-address-boundary.md): controlled tests
+  and a raised simulator memory allowance demonstrate `news 0x01000000` loading
+  a real literal beyond the assumed 24-bit offset ceiling.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

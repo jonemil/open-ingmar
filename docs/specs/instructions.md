@@ -286,10 +286,12 @@ offset. hello() uses news 0x00003279. At data-section offset 0x3279 the bytes 01
 Observed encoding: `18 00 00 32 79` at CODE+`0x000038` in **minimal-console**,
 /hello.
 
-**Limits:** The specimen has a zero address prefix and a data-relative offset.
-[String records and pinned assembly](data-strings.md) are now supported. General
-address-space rules, runtime allocation versus interning, and other string
-representations remain unresolved.
+**Limits:** Initial specimens have a zero address prefix and a DATA-relative
+offset. A [larger-offset simulator test][ref-larger-string-offset]
+also loads a literal at DATA+`0x01000000` with a raised app memory allowance.
+[String records and pinned assembly](data-strings.md) currently impose a narrower
+authoring profile. General address-space rules, runtime allocation versus
+interning, and other string representations remain unresolved.
 
 ## spush
 
@@ -573,3 +575,5 @@ two-parameter callee uses `argcincsp 0x03 0x01`, parameters in slots 1/2, and
 its local in slot 3. Runtime `48`/`-40` and ordered helper logs support this
 context/count mapping for these bodies; general receiver/frame representation
 and maximum-count runtime behavior remain unverified.
+
+[ref-larger-string-offset]: ../investigations/string-address-boundary.md

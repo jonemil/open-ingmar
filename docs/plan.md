@@ -29,11 +29,16 @@ describe planned behavior and investigations record the supporting evidence.
 
 ## Next work
 
-1. Investigate branch/exception metadata before conditions or general
+1. Revisit the DATA string authoring profile: the
+   [boundary experiment](investigations/string-address-boundary.md) demonstrates
+   a working `0x01000000` literal offset in the simulator with raised memory.
+   Expand parsing/layout/binding together without assuming an unverified upper
+   limit. This does not establish larger CODE/method offsets.
+2. Investigate branch/exception metadata before conditions or general
    relocation. Keep placement constraints and preserve unknown metadata.
-2. Build complete applications once required DATA/resource/module structures are
+3. Build complete applications once required DATA/resource/module structures are
    understood. Add cross-function binding and arity/type checks.
-3. Implement [Jungle-driven project builds](design/project-builds.md), including
+4. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
 
 Broader package variants, a separate linker, LLVM, and a full VM are deferred.
