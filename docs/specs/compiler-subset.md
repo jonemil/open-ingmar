@@ -9,7 +9,9 @@ Initial restricted frontend, 2026-10-10. Design:
 [parameters/arguments](../investigations/compiler-arguments.md), and
 [strings/printing](../investigations/compiler-strings.md).
 
-Input is exactly one top-level function:
+The default mode accepts exactly one top-level function.
+[Compilation-unit mode](compiler-unit.md) adds global/module declarations and
+cross-function validation across files. The per-function grammar is:
 
 ```text
 function = "function" identifier "(" parameter-list? ")" block
@@ -30,7 +32,7 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
-letters/digits/underscore. `function`, `return`, `var`, `if`, `else`, `true`,
+letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`, `true`,
 `while`, `break`, `continue`, and `false` are reserved. Boolean literals are not
 supported yet.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.

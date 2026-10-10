@@ -20,6 +20,11 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
 /// blocks lower to labels and symbolic branches, with an empty evaluation stack
 /// on each edge; local slots are allocated across the whole function.
 pub fn lower(function: &Function) -> Program {
+    lower_named(function, function.name())
+}
+
+/// Lower a function using a unit-unique entry label and internal alias prefix.
+pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     let mut definitions = BTreeMap::new();
     let mut strings = BTreeMap::new();
     let mut literals = Vec::new();
@@ -27,7 +32,7 @@ pub fn lower(function: &Function) -> Program {
     for located in function.operations() {
         if let Operation::String { value, .. } = &located.operation {
             if !strings.contains_key(value) {
-                let alias = format!("__ciq_string_{}_{}", function.name(), strings.len());
+                let alias = format!("__ciq_string_{}_{}", label, strings.len());
                 strings.insert(value.clone(), alias.clone());
                 literals.push(Item::String(ciq_prg::data::StringDeclaration {
                     alias,
@@ -56,7 +61,7 @@ pub fn lower(function: &Function) -> Program {
         }
     }
     let mut items = literals;
-    items.push(Item::Label(function.name().into()));
+    items.push(Item::Label(label.into()));
     items.push(if slots.is_empty() {
         instruction(
             Opcode::Argc,
@@ -74,21 +79,13 @@ pub fn lower(function: &Function) -> Program {
     for located in function.operations() {
         let (value, opcode, operands) = match located.operation {
             Operation::Block { block } => {
-                items.push(Item::Label(format!(
-                    "__ciq_block_{}_{}",
-                    function.name(),
-                    block.0
-                )));
+                items.push(Item::Label(format!("__ciq_block_{}_{}", label, block.0)));
                 continue;
             }
             Operation::Jump { target } => {
                 items.push(instruction(
                     Opcode::Goto,
-                    vec![Operand::Code(format!(
-                        "__ciq_block_{}_{}",
-                        function.name(),
-                        target.0
-                    ))],
+                    vec![Operand::Code(format!("__ciq_block_{}_{}", label, target.0))],
                 ));
                 continue;
             }
@@ -102,16 +99,14 @@ pub fn lower(function: &Function) -> Program {
                     Opcode::Bf,
                     vec![Operand::Code(format!(
                         "__ciq_block_{}_{}",
-                        function.name(),
-                        on_false.0
+                        label, on_false.0
                     ))],
                 ));
                 items.push(instruction(
                     Opcode::Goto,
                     vec![Operand::Code(format!(
                         "__ciq_block_{}_{}",
-                        function.name(),
-                        on_true.0
+                        label, on_true.0
                     ))],
                 ));
                 continue;

@@ -26,8 +26,7 @@ Pure-only expression definitions may be scheduled by dependencies. Functions
 containing calls, prints, or assignments must have IR operation order matching
 left-to-right
 expression evaluation and statement order. Validation rejects schedules the
-current backend cannot preserve. Shared-value graphs, object calls, and cyclic
-control flow require further scheduling/validation work.
+current backend cannot preserve. Shared-value graphs and object calls require further scheduling/validation work.
 
 The IR is immutable after validation. Source parsing, typed construction, and
 [IR text](../specs/compiler-ir-text.md) use the same validator, so no producer
@@ -101,8 +100,8 @@ or a general stack-merge policy before they are needed.
 The frontend emits structured `if/else` and `while` statements into the same
 graph. Falling-through arms jump to a join declared after both arms. Arms
 ending in `return`, `break`, or `continue` have no join edge. An omitted `else`
-supplies an empty false arm. Nested arms preserve declaration order. Omit joins when both
-arms terminate and reject unreachable following statements. All fallthrough
+supplies an empty false arm. Nested arms preserve declaration order. Omit joins
+when both arms terminate and reject unreachable following statements. All fallthrough
 paths must return an integer.
 
 Name resolution gives each arm an inherited environment and discards its local
@@ -217,6 +216,28 @@ Local evidence:
 [ref-llvm-ir]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/IR/CMakeLists.txt
 [ref-llvm-mc]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/CMakeLists.txt
 [ref-cargo-target-names]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html
+
+## Compilation units
+
+`CompilationUnit` owns declarations with separate global/module ownership and
+immutable `Function` bodies. It collects all signatures before checking qualified
+calls, allowing forward and recursive references across files. Existing function
+validation supplies the current integer argument/result contract; unit validation
+adds identity and exact arity checks. Single-function compilation still permits
+external callees for bounded scaffold experiments.
+
+Lowering combines all bodies into one assembly model with length-prefixed,
+owner-qualified labels. Internal block/string aliases use the same identity,
+preventing collisions between similarly named members. Metadata generation must
+consume those labels and module/member identities together. No linker, separate
+IR crate, or new call opcode is needed for this step.
+
+Unit IR wraps unchanged function IR documents with ownership records. Source,
+typed construction, and text resumption share checks and produce equivalent
+assembly/CODE with the same bindings. Strings remain deduplicated per function;
+module DATA records and symbol allocation remain future metadata work. See
+[the unit profile](../specs/compiler-unit.md) and
+[simulator evidence](../investigations/compiler-unit.md).
 
 ## Literal content and placement
 

@@ -3,6 +3,8 @@
 //! [`compile`] parses Monkey C source and [`parse_ir`] parses saved IR text.
 //! Both produce a validated [`Function`], which [`backend::lower`] converts
 //! into typed VM assembly. Typed IR construction uses the same validation.
+//! [`compile_sources`] collects global/module functions into a [`CompilationUnit`]
+//! and checks qualified calls across files. [`parse_unit_ir`] resumes unit text.
 
 pub mod backend;
 mod bindings;
@@ -11,7 +13,12 @@ pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod parser;
 mod source_ir;
+mod unit;
 pub use ir_text::parse_ir;
+pub use unit::{
+    CompilationUnit, FunctionDeclaration, SourceDiagnostic, UnitError, compile_sources,
+    parse_unit_ir,
+};
 
 use std::fmt;
 

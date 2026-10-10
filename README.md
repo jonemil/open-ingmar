@@ -169,6 +169,12 @@ iterations with displays `47` and `59`.
 loop targets and displays `52`/`48`. General string/object operations and
 complete-project compilation remain future work.
 
+[Multiple-function units](examples/compiler-unit/README.md) now collect global
+and module declarations across files and check qualified calls.
+[Simulator evidence](docs/investigations/compiler-unit.md) confirms generated
+caller/callee/helper bodies with results `48` and `-40`; application metadata
+still comes from the SDK reference.
+
 Build and validate the workspace:
 
 ```sh

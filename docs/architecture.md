@@ -108,9 +108,11 @@ Generated functions currently use existing application DATA/module metadata.
 Symbol binding consumes an explicit symbol source; it does not create method
 records. Literal requirements are unplaced in CODE; explicit DATA sources supply
 their offsets without resolving method aliases until reconstruction.
-Cross-function arity/type checking and complete metadata generation remain
-future work. Signing, packaging, and project configuration do not belong in the
-frontend.
+Compilation units collect global/module functions across files, check qualified
+callee identities and integer argument counts/types, and lower their bodies into
+one CODE layout. Complete metadata generation remains future work. See
+[unit rules](specs/compiler-unit.md). Signing, packaging, and project
+configuration do not belong in the frontend.
 
 ### Agreed layer names and future extraction
 

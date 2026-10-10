@@ -163,4 +163,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   optional false arms, mixed terminators, native/text parity, and simulator
   execution of nested targets and zero iterations.
 
+- [Compiler compilation units](compiler-unit.md): cross-file declarations,
+  qualified-call validation, distinct body labels, unit IR parity, and runtime
+  execution of generated caller/callee/helper bodies.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

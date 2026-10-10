@@ -10,11 +10,19 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut from = "source".to_string();
     let mut emit = "assembly".to_string();
     let mut paths = Vec::new();
+    let mut unit = false;
     let mut symbols_path = None;
     let mut data_path = None;
     let mut args = env::args_os().skip(1);
     let mut options = std::collections::BTreeSet::new();
     while let Some(arg) = args.next() {
+        if arg == "--unit" {
+            if unit {
+                return Err("duplicate --unit option".into());
+            }
+            unit = true;
+            continue;
+        }
         if arg == "--from" || arg == "--emit" || arg == "--symbols" || arg == "--data" {
             if !options.insert(arg.clone()) {
                 return Err("duplicate pipeline option".into());
@@ -42,8 +50,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             paths.push(arg);
         }
     }
-    if paths.len() != 2 {
-        return Err("Usage: ciq-compiler [--from source|ir|assembly] [--emit ir|assembly|code] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> <new-output>".into());
+    if paths.len() < 2 || (paths.len() != 2 && (!unit || from != "source")) {
+        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
         || !matches!(emit.as_str(), "ir" | "assembly" | "code")
@@ -56,23 +64,54 @@ fn run() -> Result<(), Box<dyn Error>> {
     if (symbols_path.is_some() || data_path.is_some()) && emit != "code" {
         return Err("--symbols and --data are supported only with --emit code".into());
     }
-    let source = fs::read_to_string(&paths[0])?;
-    let function = match from.as_str() {
-        "source" => Some(ciq_compiler::compile(&source)),
-        "ir" => Some(ciq_compiler::parse_ir(&source)),
-        _ => None,
-    }
-    .transpose()
-    .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?;
-    let bytes = if emit == "ir" {
-        function.as_ref().unwrap().to_ir_text().into_bytes()
-    } else {
-        let assembly = if let Some(function) = function {
-            function.lower()
+    let output_path = paths.pop().unwrap();
+    let sources = paths
+        .iter()
+        .map(fs::read_to_string)
+        .collect::<Result<Vec<_>, _>>()?;
+    let source = &sources[0];
+    let (ir, assembly) = if unit && from != "assembly" {
+        let model = if from == "source" {
+            let inputs = sources.iter().map(String::as_str).collect::<Vec<_>>();
+            ciq_compiler::compile_sources(&inputs).map_err(|error| {
+                format!(
+                    "{}:{}",
+                    paths[error.source].to_string_lossy(),
+                    error.diagnostic
+                )
+            })?
         } else {
-            ciq_assembly::Program::parse(&source)
-                .map_err(|error| format!("{}: {error}", paths[0].to_string_lossy()))?
+            ciq_compiler::parse_unit_ir(source)
+                .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?
         };
+        (
+            (emit == "ir").then(|| model.to_ir_text()),
+            (emit != "ir").then(|| model.lower()),
+        )
+    } else if from != "assembly" {
+        let function = if from == "source" {
+            ciq_compiler::compile(source)
+        } else {
+            ciq_compiler::parse_ir(source)
+        }
+        .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?;
+        (
+            (emit == "ir").then(|| function.to_ir_text()),
+            (emit != "ir").then(|| function.lower()),
+        )
+    } else {
+        (
+            None,
+            Some(
+                ciq_assembly::Program::parse(source)
+                    .map_err(|error| format!("{}: {error}", paths[0].to_string_lossy()))?,
+            ),
+        )
+    };
+    let bytes = if emit == "ir" {
+        ir.unwrap().into_bytes()
+    } else {
+        let assembly = assembly.unwrap();
         if emit == "assembly" {
             assembly.to_text().into_bytes()
         } else {
@@ -98,7 +137,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&paths[1])?;
+        .open(output_path)?;
     output.write_all(&bytes)?;
     Ok(())
 }

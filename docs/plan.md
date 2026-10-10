@@ -33,15 +33,20 @@ describe planned behavior and investigations record the supporting evidence.
   `while` loops with mutable locals and nested branches are [verified][loops],
   including zero and multiple iterations. Innermost `break`/`continue` and
   optional `else` are [also verified](investigations/compiler-loop-control.md).
-- The latest implementation checkpoint passes 189 Rust tests, Clippy, and
+- Compilation units collect global/module functions across files, resolve forward
+  calls, and check integer argument counts/types. Native/unit-IR/assembly CODE
+  agrees; [the simulator](investigations/compiler-unit.md) verifies all four
+  generated bodies and reversed arguments. Application metadata remains external.
+- The latest implementation checkpoint passes 196 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
 1. Build a minimal complete application with independently generated CODE,
    DATA/classes/modules, symbols, resources, and required container metadata.
-   Start with multiple functions, cross-function binding, and arity/type checks,
-   then add the required lifecycle and API behavior. Verify a signed PRG in the
+   Multiple-function collection and qualified-call checks are implemented. Next
+   establish the minimal lifecycle, receiver, and API requirements from SDK
+   specimens, then generate their method/module structures and container fields. Verify a signed PRG in the
    simulator without transplanting its generated functions into SDK scaffolding.
    Use SDK specimens to investigate missing structures and record evidence.
 2. Implement [Jungle-driven project builds](design/project-builds.md), including

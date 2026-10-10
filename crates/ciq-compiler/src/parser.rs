@@ -226,6 +226,7 @@ impl<'a> Parser<'a> {
                 if !matches!(
                     name,
                     "function"
+                        | "module"
                         | "return"
                         | "var"
                         | "if"
@@ -314,6 +315,7 @@ impl<'a> Parser<'a> {
                 if !matches!(
                     name,
                     "function"
+                        | "module"
                         | "return"
                         | "var"
                         | "if"
@@ -560,44 +562,99 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         lookahead: None,
         expressions: 0,
     };
-    parser.expect(Kind::Word("function"), "'function'")?;
-    let name = parser.identifier()?;
-    let Kind::Word(identifier) = name.kind else {
-        unreachable!()
+    let function = parser.function()?;
+    parser.expect(Kind::End, "end of input (only one function is supported)")?;
+    Ok(function)
+}
+
+impl Parser<'_> {
+    fn function(&mut self) -> Result<ParsedFunction, Diagnostic> {
+        self.expressions = 0;
+        self.expect(Kind::Word("function"), "'function'")?;
+        let name = self.identifier()?;
+        let Kind::Word(identifier) = name.kind else {
+            unreachable!()
+        };
+        self.expect(Kind::Punctuation('('), "'('")?;
+        let mut parameters = Vec::new();
+        if self.peek()? != Kind::Punctuation(')') {
+            loop {
+                let parameter = self.identifier()?;
+                let Kind::Word(name) = parameter.kind else {
+                    unreachable!()
+                };
+                if parameters.len() >= crate::MAX_PARAMETERS {
+                    return Err(
+                        self.error(parameter.span.start, "function exceeds 254-parameter limit")
+                    );
+                }
+                if parameters.iter().any(|p| p == name) {
+                    return Err(self.error(
+                        parameter.span.start,
+                        format!("duplicate parameter {name:?}"),
+                    ));
+                }
+                parameters.push(name.to_owned());
+                if self.peek()? != Kind::Punctuation(',') {
+                    break;
+                }
+                self.token()?;
+            }
+        }
+        self.expect(Kind::Punctuation(')'), "')'")?;
+        let (statements, body_span) = self.block(0)?;
+        Ok(ParsedFunction {
+            name: identifier.to_owned(),
+            parameters,
+            statements,
+            body_span,
+        })
+    }
+}
+
+/// Parse global functions and flat module declarations in source order.
+/// Function bodies retain their existing syntax and per-function limits.
+pub(crate) fn declarations(
+    source: &str,
+) -> Result<Vec<(Option<String>, ParsedFunction)>, Diagnostic> {
+    let mut parser = Parser {
+        source,
+        offset: 0,
+        lookahead: None,
+        expressions: 0,
     };
-    parser.expect(Kind::Punctuation('('), "'('")?;
-    let mut parameters = Vec::new();
-    if parser.peek()? != Kind::Punctuation(')') {
-        loop {
-            let parameter = parser.identifier()?;
-            let Kind::Word(name) = parameter.kind else {
+    let mut declarations = Vec::new();
+    while parser.peek()? != Kind::End {
+        if parser.peek()? == Kind::Word("module") {
+            parser.token()?;
+            let token = parser.identifier()?;
+            let Kind::Word(module) = token.kind else {
                 unreachable!()
             };
-            if parameters.len() >= crate::MAX_PARAMETERS {
-                return Err(
-                    parser.error(parameter.span.start, "function exceeds 254-parameter limit")
-                );
+            if module == "System" {
+                return Err(parser.error(token.span.start, "System is reserved for SDK intrinsics"));
             }
-            if parameters.iter().any(|p| p == name) {
-                return Err(parser.error(
-                    parameter.span.start,
-                    format!("duplicate parameter {name:?}"),
-                ));
-            }
-            parameters.push(name.to_owned());
-            if parser.peek()? != Kind::Punctuation(',') {
-                break;
+            parser.expect(Kind::Punctuation('{'), "'{'")?;
+            let start = declarations.len();
+            while parser.peek()? != Kind::Punctuation('}') {
+                declarations.push((Some(module.into()), parser.function()?));
+                if declarations.len() > crate::unit::MAX_FUNCTIONS {
+                    return Err(parser.error(
+                        token.span.start,
+                        "compilation unit exceeds 256-function limit",
+                    ));
+                }
             }
             parser.token()?;
+            if declarations.len() == start {
+                return Err(parser.error(token.span.start, "empty modules are unsupported"));
+            }
+        } else {
+            declarations.push((None, parser.function()?));
+        }
+        if declarations.len() > crate::unit::MAX_FUNCTIONS {
+            return Err(parser.error(parser.offset, "compilation unit exceeds 256-function limit"));
         }
     }
-    parser.expect(Kind::Punctuation(')'), "')'")?;
-    let (statements, body_span) = parser.block(0)?;
-    parser.expect(Kind::End, "end of input (only one function is supported)")?;
-    Ok(ParsedFunction {
-        name: identifier.to_owned(),
-        parameters,
-        statements,
-        body_span,
-    })
+    Ok(declarations)
 }
