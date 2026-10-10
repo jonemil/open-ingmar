@@ -30,3 +30,5 @@
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; the larger appended function is also confirmed; structured DEBUG/line metadata is implemented and the bounded in-place shrink experiment has confirmed simulator execution, as described in [the plan](../plan.md).
 
 - [Multi-file source, barrels, and IQ packages](multi-file-and-barrels.md): three new examples, source/archive comparison, exact PRG reconstruction, assembly-edited cross-file calls, and four successful simulator checks through container-broker.
+
+- [Barrel/IQ format and packaging research](package-formats.md): independent ZIP repacking accepted by the SDK, resource placement, 7z coder/header inspection, verified exact-byte manifest signing, and the proposed `ciq-package` stages.
