@@ -39,7 +39,8 @@ in-memory composition and editable stage resumption.
    arguments, strings/locals, and `System.println` statements.
    [The plan](../plan.md) links their runtime evidence.
 2. Conditions/branches and exceptions after their assembler fixups and
-   stack/frame requirements are understood.
+   stack/frame requirements are understood. Follow the
+   [control-flow assembly plan](control-flow.md) first.
 3. Independent application DATA/classes/symbols/resources and other required
    metadata, then [Jungle-driven project builds](project-builds.md).
 

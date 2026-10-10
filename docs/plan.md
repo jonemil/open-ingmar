@@ -29,13 +29,17 @@ describe planned behavior and investigations record the supporting evidence.
 
 ## Next work
 
-1. Revisit the DATA string authoring profile: the
-   [boundary experiment](investigations/string-address-boundary.md) demonstrates
-   a working `0x01000000` literal offset in the simulator with raised memory.
-   Expand parsing/layout/binding together without assuming an unverified upper
-   limit. This does not establish larger CODE/method offsets.
-2. Investigate branch/exception metadata before conditions or general
-   relocation. Keep placement constraints and preserve unknown metadata.
+1. Implement [branch-label fixups](design/control-flow.md), then lossless
+   exception-table assembly/disassembly, before frontend conditions or general
+   relocation. The [control-flow investigation](investigations/control-flow.md)
+   verifies opposite conditional branches, a changed loop target, and a moved
+   exception-bearing function. Keep unknown metadata and placement constraints.
+2. Revisit DATA string authoring after establishing shared address-region rules.
+   The [boundary experiment](investigations/string-address-boundary.md) proves
+   a working `0x01000000` literal offset with raised simulator memory; the upper
+   limit remains unverified. Expand parsing/layout/binding together without
+   extrapolating to CODE/method offsets. Device budgets remain a separate
+   [build-layer concern](design/project-builds.md#target-constraints-and-section-layout).
 3. Build complete applications once required DATA/resource/module structures are
    understood. Add cross-function binding and arity/type checks.
 4. Implement [Jungle-driven project builds](design/project-builds.md), including

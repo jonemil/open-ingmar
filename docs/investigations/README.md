@@ -131,4 +131,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   and a raised simulator memory allowance demonstrate `news 0x01000000` loading
   a real literal beyond the assumed 24-bit offset ceiling.
 
+- [Branches and exceptions](control-flow.md): signed relative branch operands,
+  nonempty exception tables, and simulator-confirmed branch inversion, loop
+  redirection, and a moved exception-bearing function.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

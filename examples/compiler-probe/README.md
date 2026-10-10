@@ -83,7 +83,14 @@ Raw CODE uses both `--symbols` and `--data` from an explicit scaffold.
 shows literal allocation, native/text parity, signing, and simulator output.
 String concatenation/returns/parameters remain unsupported.
 
+[control-flow.mc](control-flow.mc) is an SDK research input for conditional
+returns, a backward loop, and an explicit caught exception. Our compiler does
+not accept it yet. The [control-flow investigation][control-flow] explains
+scaffold integration and simulator-verified binary edits; it informs the next
+assembler milestone.
+
 [ref-complete-stop-resume-commands]: ../../docs/specs/compiler-ir-text.md#command-line-stages
 
 [ref-the-arithmetic-experiment]: ../../docs/investigations/compiler-arithmetic.md
 [ref-the-parameter-argument-experiment]: ../../docs/investigations/compiler-arguments.md
+[control-flow]: ../../docs/investigations/control-flow.md
