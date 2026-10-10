@@ -42,8 +42,8 @@ cargo run -p ciq-compiler -- examples/compiler-probe/locals.mc scratch/compiler-
 
 The backend allocates two local slots and emits `argcincsp`, `lputv`, and
 `lgetv`. [Local-variable evidence](../../docs/investigations/compiler-locals.md)
-covers SDK comparisons, simulator execution, and IR text. Reassignment is not
-supported yet.
+covers SDK comparisons, simulator execution, and IR text. Local reassignment
+is supported with the fixed-type rules below.
 
 [calls.mc](calls.mc) calls externally supplied `Numbers.left()` and
 `Numbers.right()`, returning `49` with the helper definitions in
@@ -117,6 +117,21 @@ cargo run -p ciq-compiler -- examples/compiler-probe/nested-conditions.mc scratc
 
 [The nested-condition experiment][nested] verifies both nested outcomes and
 continuing arms, with displays `53` and `46`. Braces and `else` remain required;
-reassignment and loops are still unsupported.
+loops are still unsupported.
 
 [nested]: ../../docs/investigations/compiler-nested-conditions.md
+
+[assignments.mc](assignments.mc) updates a common integer and string local in
+both condition arms, prints their selected values, then increments the integer.
+Both locals reuse their original frame slots; type changes are rejected.
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/assignments.mc scratch/compiler-example/assignments.mcasm
+```
+
+Raw CODE needs explicit symbol and DATA bindings for the generated literals.
+[The assignment experiment][assignments] records native/text parity, integration,
+and simulator returns `44`/`48` with display `54`. Parameters remain read-only;
+compound assignment and loops are unsupported.
+
+[assignments]: ../../docs/investigations/compiler-assignments.md

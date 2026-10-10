@@ -21,7 +21,8 @@ ciq-ir 1
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
 Header version must be `1` or `2`. Version 1 describes a single-block body;
-version 2 adds the control-flow directives below. Exactly one `.function <identifier>
+version 2 adds control flow and local assignment below. Exactly one
+`.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. The supported
 semantic body is ordered local initializations, print statements, and expression
@@ -56,7 +57,7 @@ validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
-preserving value IDs. It emits version 2 when blocks or comparisons are present,
+preserving value IDs. It emits version 2 for blocks, comparisons, or assignments,
 otherwise version 1, even if the input header was version 2. `parse_ir`
 reconstructs them. `backend::lower()` (also
 exposed through `Function::lower()`) creates the shared assembly `Program`
@@ -95,8 +96,8 @@ slot. The backend assigns local slots after parameters in initialization order
 and executes every initializer before proceeding. Repeated reads may refer to
 one local, while each resulting value still has one use. Pure-only functions use
 dependency traversal while locals retain their initialized value.
-Call-containing functions add the ordering restriction below; reassignment still
-requires a revised policy.
+Functions with calls, prints, or assignments add the ordering restriction below.
+Version 2 provides explicit assignment without repeating initialization.
 
 ```text
 ciq-ir 1
@@ -122,10 +123,11 @@ has the same meaning as for other operations. The module's expected stored
 symbol name is `globals/<module>` and the member's is `<member>`; this is not
 numeric symbol allocation or method metadata generation.
 
-Calls are effectful. If a function contains any `.call` or `.println`, all its
+Calls, prints, and writes are effectful. If a function contains any `.call`,
+`.println`, or `.assign`, all its
 operations must match the backend's left-to-right expression traversal and
-ordered initialization/print/return sinks. The shared validator rejects
-incompatible schedules, including moving a call across an initialization or
+ordered initialization/assignment/print/branch/return sinks. The shared validator
+rejects incompatible schedules, including moving a call across an initialization or
 reversing call operands. Pure-only functions retain the earlier definition-order
 flexibility. This conservative policy keeps runtime/IR operation order
 consistent until a general scheduler is implemented.
@@ -241,8 +243,8 @@ consumes an integer or string without defining a result. Both accept optional
 spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
-local initialization/reads; arithmetic, parameters, user-call arguments/results,
-and returns remain integer-only. All existing use/dependency/order rules apply.
+local initialization/assignment/reads; arithmetic, parameters, user-call
+arguments/results, and returns remain integer-only. All existing use/dependency/order rules apply.
 
 ```text
 ciq-ir 1
@@ -319,8 +321,8 @@ Expression definitions still precede their uses, are globally unique, and have
 exactly one use, now restricted to their defining block. Locals can cross edges,
 but a read requires its unique initializer to execute on every incoming path;
 at a join the available set is the intersection of predecessor sets. A local
-initialized in only one arm cannot be read in a sibling or join. No reassignment
-or cross-block expression/phi values are supported. Local slots are allocated
+initialized in only one arm cannot be read or assigned in a sibling or join.
+Cross-block expression/phi values remain unsupported. Local slots are allocated
 across the entire function, including mutually exclusive paths.
 
 The 1024-operation limit includes block markers and terminators. Effectful
@@ -332,3 +334,46 @@ checks. Source conditions use these same forward joins with `.jump` for
 continuing arms, including nested statements and early returns. Source local
 names/scopes are resolved before serialization; the IR only retains globally
 unique local identities. See [the source subset](compiler-subset.md).
+
+## Version 2 local assignment
+
+`.assign $<local-id> %<value-id> [span=<start>:<end>]` consumes an earlier value
+and replaces an initialized local. It is accepted only with `ciq-ir 2`; no
+explicit blocks are required for a straight-line assignment body.
+
+```text
+ciq-ir 2
+.function probe
+.integer %0 40
+.local $0 %0
+.read %1 $0
+.integer %2 2
+.add %3 %1 %2
+.assign $0 %3
+.read %4 $0
+.return %4
+.end
+```
+
+The target must be initialized on every incoming path. `.assign` does not
+introduce an identity, count as another local, or establish initialization.
+Repeated `.local` declarations for one ID remain invalid. Local IDs retain their
+initializer's integer/string type; assignments must match it. Boolean values,
+undefined values/locals, wrong-path targets, shared values, and cross-block RHS
+values are rejected. The RHS contributes one use; assignment defines no result.
+Each write counts toward the 1024-operation limit and reuses the existing slot.
+
+If a function contains any assignment, its entire operation sequence must match
+left-to-right expression evaluation and ordered statement sinks, as for calls
+and prints. A read defined before a write and used after it is rejected, since
+dependency lowering would move the read past the write. Store a snapshot in a
+separate initialized local before the write when that behavior is needed. This
+rule applies to native typed construction and text resumption equally. Existing
+assignment-free pure functions retain their earlier scheduling flexibility.
+
+The canonical printer emits version 2 for assignments even without blocks.
+Version-1 syntax remains unchanged. [The source subset][assignment-source]
+specifies name resolution and supported statement forms; source names/scopes
+are not part of this IR.
+
+[assignment-source]: compiler-subset.md#local-reassignment

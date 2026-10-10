@@ -132,6 +132,12 @@ pub enum Operation {
         local: LocalId,
         value: ValueId,
     },
+    /// Replace an initialized local's value without changing its integer/string
+    /// type or allocating a new local. The right-hand value is consumed first.
+    LocalAssign {
+        local: LocalId,
+        value: ValueId,
+    },
     LocalRead {
         result: ValueId,
         local: LocalId,
@@ -164,7 +170,8 @@ impl std::error::Error for IrError {}
 /// Expression values have one use within their defining block and refer only to
 /// earlier definitions. Explicit blocks have forward edges and terminate with a
 /// return, branch, or jump; an unmarked body is one implicit block. Local reads
-/// require initialization on every incoming path. Calls and prints require
+/// and assignments require initialization on every incoming path. Assignments
+/// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
 /// Locals and prints accept integers or strings. Arithmetic, parameters, calls,
@@ -199,7 +206,7 @@ impl Function {
     /// Construct and validate a function with positional parameters.
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
-    /// Rejects invalid names, spans, value/local dependencies, call ordering,
+    /// Rejects invalid names, spans, value/local dependencies, effect ordering,
     /// incompatible value types, malformed blocks, backward edges, cross-block
     /// expression uses, and unsupported operation or parameter/local counts.
     /// External callee arity and types are not checked here.
@@ -379,6 +386,22 @@ impl Function {
                     }
                     (None, vec![value])
                 }
+                Operation::LocalAssign { local, value } => {
+                    if !available_locals.contains(&local) {
+                        return Err(fail(
+                            "assignment requires an initialized local on every incoming path",
+                        ));
+                    }
+                    if boolean_values.contains(&value) {
+                        return Err(fail("Boolean locals are not yet supported"));
+                    }
+                    if string_locals.contains(&local) != string_values.contains(&value) {
+                        return Err(fail(
+                            "assignment must preserve the local's integer/string type",
+                        ));
+                    }
+                    (None, vec![value])
+                }
                 Operation::LocalRead { result, local } => {
                     if !available_locals.contains(&local) {
                         return Err(fail(
@@ -445,11 +468,13 @@ impl Function {
         if operations.iter().any(|located| {
             matches!(
                 located.operation,
-                Operation::ModuleCall { .. } | Operation::Println { .. }
+                Operation::ModuleCall { .. }
+                    | Operation::Println { .. }
+                    | Operation::LocalAssign { .. }
             )
         }) {
-            // Calls make operation order observable. Until a general scheduler
-            // exists, accept only the expression order the backend can preserve.
+            // Calls, prints, and writes make operation order observable. A read
+            // defined before a write must not be emitted after that write.
             enum Task {
                 Value(ValueId),
                 Emit(usize),
@@ -458,6 +483,7 @@ impl Function {
             for (index, located) in operations.iter().enumerate() {
                 let root = match located.operation {
                     Operation::LocalInitialize { value, .. }
+                    | Operation::LocalAssign { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value } => value,
                     Operation::Branch { condition, .. } => condition,
@@ -497,7 +523,7 @@ impl Function {
                 return Err(IrError {
                     operation: Some(*actual),
                     message: format!(
-                        "functions with calls require expression evaluation order in IR (expected operation {expected})"
+                        "functions with calls, prints, or assignments require expression evaluation order in IR (expected operation {expected})"
                     ),
                 });
             }
@@ -527,7 +553,7 @@ impl Function {
     /// Serialize this function as provisional `ciq-ir` text.
     ///
     /// Retains semantic IDs, operation order, and optional source spans. The
-    /// output uses version 2 for blocks or comparisons, otherwise version 1.
+    /// output uses version 2 for blocks, comparisons, or assignments, otherwise 1.
     /// It can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
@@ -538,7 +564,7 @@ impl Function {
         let version = if self.operations.iter().any(|o| {
             matches!(
                 o.operation,
-                Operation::Block { .. } | Operation::Compare { .. }
+                Operation::Block { .. } | Operation::Compare { .. } | Operation::LocalAssign { .. }
             )
         }) {
             2
@@ -608,6 +634,9 @@ impl Function {
                 Operation::LocalInitialize { local, value } => {
                     format!(".local ${} %{}", local.0, value.0)
                 }
+                Operation::LocalAssign { local, value } => {
+                    format!(".assign ${} %{}", local.0, value.0)
+                }
                 Operation::LocalRead { result, local } => {
                     format!(".read %{} ${}", result.0, local.0)
                 }
@@ -627,9 +656,10 @@ impl Function {
 ///
 /// Resolves parameters and scoped locals, lowers nested conditions to forward
 /// blocks, and retains source spans. Requires an integer return on every path;
-/// unreachable statements and local/parameter shadowing are rejected. Unsupported
-/// syntax, unresolved names, and invalid IR produce source diagnostics rather
-/// than partial output. VM instruction selection and symbol binding occur later.
+/// unreachable statements and local/parameter shadowing are rejected. Assignments
+/// require a visible initialized local and preserve its integer/string type.
+/// Unsupported syntax, unresolved names, and invalid IR produce source
+/// diagnostics rather than partial output. VM instruction selection and symbol binding occur later.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     source_ir::build(source, parser::parse(source)?)
 }

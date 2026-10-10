@@ -29,17 +29,18 @@ describe planned behavior and investigations record the supporting evidence.
   positional arguments, string literals/locals, `System.println` statements,
   and nested `if/else` statements using `==` or `>` are simulator-verified.
   Conditions support scoped arm locals, early returns, and forward joins.
-- The latest implementation checkpoint passes 175 Rust tests, Clippy, and
+  Fixed-type integer/string reassignment is [also simulator-verified][assignments].
+- The latest implementation checkpoint passes 180 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Design local reassignment and its type/initialization rules before adding
-   bounded `while` loops. Nested condition statements, early returns, scoped
-   locals, and forward joins are [simulator-verified][nested]. Keep expression
-   values block-local and preserve empty evaluation stacks on edges. Backward
-   edges need revised reachability/definite-initialization checks; exception
-   source lowering still needs stack/frame research.
+1. Add a bounded `while` subset using initialized, fixed-type mutable locals.
+   Backward edges need revised reachability and definite-initialization checks;
+   preserve block-local expression values, evaluation order, and empty stacks
+   on edges. Test zero/multiple iterations, nested branches, and early returns
+   before simulator integration. Exception source lowering still needs
+   stack/frame research.
 2. Revisit DATA string authoring after establishing shared address-region rules.
    The [boundary experiment](investigations/string-address-boundary.md) proves
    a working `0x01000000` literal offset with raised simulator memory; the upper
@@ -92,3 +93,5 @@ builds, and simulator sessions. The build helpers default to ignored
 reproducible inputs/outputs, not checked-in evidence requirements.
 
 [nested]: investigations/compiler-nested-conditions.md
+
+[assignments]: investigations/compiler-assignments.md

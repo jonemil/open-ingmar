@@ -151,4 +151,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   arm locals, early returns, selected print order, native/text parity, and
   simulator execution of nested outcomes and continuing joins.
 
+- [Compiler local reassignment](compiler-assignments.md): fixed integer/string
+  types, reused slots, read/write schedule validation, native/text parity, and
+  simulator-confirmed branch values and later increment.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

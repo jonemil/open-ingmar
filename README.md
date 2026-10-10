@@ -158,7 +158,10 @@ IR blocks, native/text parity, and simulator displays `55` and `53`.
 [Nested conditions](examples/compiler-probe/nested-conditions.mc) also support
 arm-local declarations, prints, early returns, and continued execution through
 joins. See [scope rules and simulator evidence][nested-conditions].
-Reassignment, general string/object operations, and complete-project compilation
+[Local reassignment](examples/compiler-probe/assignments.mc) preserves each
+local's integer/string type and reuses its slot. [Simulator evidence][assignments]
+confirms branch writes and a later increment, displaying `54`.
+Loops, general string/object operations, and complete-project compilation
 remain future work.
 
 Build and validate the workspace:
@@ -232,3 +235,5 @@ do not remove files already tracked by Git.
 [ref-multi-file-and-barrel-examples]: docs/investigations/multi-file-and-barrels.md
 
 [nested-conditions]: docs/investigations/compiler-nested-conditions.md
+
+[assignments]: docs/investigations/compiler-assignments.md

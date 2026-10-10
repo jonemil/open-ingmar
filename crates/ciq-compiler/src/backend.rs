@@ -10,10 +10,12 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
 
 /// Lower a validated IR function into a typed VM assembly program.
 ///
-/// Selects instructions and assigns parameter/local frame slots. Initializers
+/// Selects instructions and assigns parameter/local frame slots. Assignments
+/// evaluate their right-hand expression before replacing the existing slot.
+/// Initializers
 /// execute in order; expression operands and call arguments evaluate left to
 /// right. Relies on [`Function`] validation to exclude shared expression values
-/// and incompatible call schedules. Module/member aliases and literal DATA
+/// and incompatible effect schedules. Module/member aliases and literal DATA
 /// placements remain unresolved. Print calls discard their result. Explicit
 /// blocks lower to labels and symbolic branches, with an empty evaluation stack
 /// on each edge; local slots are allocated across the whole function.
@@ -114,7 +116,8 @@ pub fn lower(function: &Function) -> Program {
                 ));
                 continue;
             }
-            Operation::LocalInitialize { local, value } => {
+            Operation::LocalInitialize { local, value }
+            | Operation::LocalAssign { local, value } => {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
             Operation::Return { value } => (value, Opcode::Return, vec![]),

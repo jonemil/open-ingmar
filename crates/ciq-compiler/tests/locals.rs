@@ -121,7 +121,6 @@ fn invalid_local_source_is_rejected_with_locations() {
         "var return = 41; return 41;",
         "var var = 41; return 41;",
         "var x = 1, y = 2; return x;",
-        "var x = 1; x = 2; return x;",
         "var x = 1; return y;",
         "return 1; var x = 2;",
         "{ var x = 1; } return 1;",

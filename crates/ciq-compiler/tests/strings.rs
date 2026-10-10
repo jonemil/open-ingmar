@@ -170,3 +170,52 @@ fn utf8_literal_size_and_string_escape_limits_are_checked() {
     // IR uses assembly escapes, independently of the source escape subset.
     assert!(parse_ir("ciq-ir 1\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());
 }
+
+#[test]
+fn assigned_strings_preserve_types_bindings_slots_and_pipeline_parity() {
+    let function = compile(include_str!(
+        "../../../examples/compiler-probe/assignments.mc"
+    ))
+    .unwrap();
+    let program = function.lower();
+    let data =
+        Source::parse(".string initial \"start\"\n.string zero \"zero\"\n.string one \"one\"")
+            .unwrap();
+    let strings = string_bindings(&program, &data).unwrap();
+    let symbols = symbol_bindings(&program, &symbols()).unwrap();
+    let bytes = program.encode_with_references(&symbols, &strings).unwrap();
+    assert_eq!(
+        bytes,
+        parse_ir(&function.to_ir_text())
+            .unwrap()
+            .lower()
+            .encode_with_references(&symbols, &strings)
+            .unwrap()
+    );
+    assert_eq!(
+        bytes,
+        Program::parse(&program.to_text())
+            .unwrap()
+            .encode_with_references(&symbols, &strings)
+            .unwrap()
+    );
+    let instructions = decode(&bytes).unwrap();
+    assert_eq!(instructions[0].instruction.operands(), &[2, 2]);
+    let stores: Vec<_> = instructions
+        .iter()
+        .filter(|i| i.instruction.opcode() == Opcode::Lputv)
+        .map(|i| i.instruction.operands()[0])
+        .collect();
+    assert_eq!(stores, [2, 3, 2, 3, 2, 3, 2]);
+    let offsets: Vec<_> = instructions
+        .iter()
+        .filter(|i| i.instruction.opcode() == Opcode::News)
+        .map(|i| {
+            i.instruction
+                .operands()
+                .iter()
+                .fold(0u32, |v, b| (v << 8) | *b as u32)
+        })
+        .collect();
+    assert_eq!(offsets, [0, 9, 17]);
+}

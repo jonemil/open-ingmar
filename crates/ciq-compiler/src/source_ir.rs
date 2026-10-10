@@ -187,6 +187,23 @@ impl Builder<'_> {
                     let value = self.value(argument, locals)?;
                     self.push(Operation::Println { value }, Some(span));
                 }
+                parser::Statement::Assign { name, value, .. } => {
+                    let local = locals.get(&name).copied().ok_or_else(|| {
+                        Diagnostic::at(
+                            self.source,
+                            span.start,
+                            if self.parameters.contains_key(&name) {
+                                "parameter assignment is not supported".into()
+                            } else {
+                                format!(
+                                    "assignment requires an in-scope initialized local {name:?}"
+                                )
+                            },
+                        )
+                    })?;
+                    let value = self.value(value, locals)?;
+                    self.push(Operation::LocalAssign { local, value }, Some(span));
+                }
                 parser::Statement::Return { value, .. } => {
                     let value = self.value(value, locals)?;
                     self.push(Operation::Return { value }, Some(span));

@@ -100,10 +100,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".jump") if version_two => (12, 2),
             Some(".equal") if version_two => (13, 4),
             Some(".greater") if version_two => (14, 4),
+            Some(".assign") if version_two => (15, 3),
             _ => {
                 return Err(fail(
                     *at,
-                    "unknown IR directive (blocks, comparisons, branches, and jumps require ciq-ir 2)",
+                    "unknown IR directive (blocks, comparisons, branches, jumps, and assignments require ciq-ir 2)",
                 ));
             }
         };
@@ -163,7 +164,12 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 10 {
+        let operation = if kind == 15 {
+            Operation::LocalAssign {
+                local: parse_local(&fields[1])?,
+                value: parse_value(&fields[2])?,
+            }
+        } else if kind == 10 {
             Operation::Block {
                 block: parse_block(&fields[1])?,
             }

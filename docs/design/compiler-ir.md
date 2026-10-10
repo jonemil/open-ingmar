@@ -9,7 +9,7 @@ compatibility or a commitment to LLVM/SSA infrastructure.
 
 A function has a name, parameter count, and ordered operations. Operations
 represent integer/string constants, addition/subtraction, positional parameter
-reads, local initialization/reads, user-module calls, print statements,
+reads, local initialization/assignment/reads, user-module calls, print statements,
 integer returns, comparisons, and explicit block/branch/jump operations. Source
 spans are optional diagnostic provenance.
 
@@ -23,10 +23,11 @@ reads require initialization on every incoming path. Repeated source reads
 create fresh values from stored locals rather than recomputing initializers.
 
 Pure-only expression definitions may be scheduled by dependencies. Functions
-containing calls or prints must have IR operation order matching left-to-right
+containing calls, prints, or assignments must have IR operation order matching
+left-to-right
 expression evaluation and statement order. Validation rejects schedules the
-current backend cannot preserve. Shared-value graphs, reassignment, object
-calls, and cyclic control flow require further scheduling/validation work.
+current backend cannot preserve. Shared-value graphs, object calls, and cyclic
+control flow require further scheduling/validation work.
 
 The IR is immutable after validation. Source parsing, typed construction, and
 [IR text](../specs/compiler-ir-text.md) use the same validator, so no producer
@@ -90,7 +91,8 @@ Expression values cannot cross block boundaries. Each block emits complete
 expression trees into statement/terminator sinks, leaving an empty evaluation
 stack on every edge. Stored locals may cross edges: validation intersects
 initialized-local sets from all predecessors at a join. Local identities remain
-unique, with no reassignment; frame slots are allocated across the whole
+unique; assignments reuse initialized locals without changing their type. Frame
+slots are allocated across the whole
 function, including mutually exclusive paths. This avoids introducing phi values
 or a general stack-merge policy before they are needed.
 
@@ -107,12 +109,40 @@ rejected. The source builder is separate from parsing and VM lowering. Names
 and source scopes are resolved there; IR text and assembly retain identities
 rather than source environments.
 
-This supports nested statements and early returns without mutable locals or
-value joins. [The nested-condition experiment][nested] verifies selected prints
-and continuing paths in the simulator. Define reassignment and type rules before
-adding backward edges or loops.
+This supports nested statements and early returns without expression value
+joins. [The nested-condition experiment][nested] verifies selected prints
+and continuing paths in the simulator. Backward edges and loops still need
+revised graph and initialization validation.
 [Condition experiments](../investigations/compiler-conditions.md) verify both
 comparison outcomes in the official simulator and native/text CODE parity.
+
+## Mutable locals
+
+`LocalInitialize` declares a unique stored local and fixes its integer/string
+type. `LocalAssign` consumes a new value and replaces that local's content,
+without declaring another identity or allocating another frame slot. Its target
+must already be initialized on every incoming path, and its value must retain
+the initializer's type. Assignment cannot make a partly initialized local valid
+at a join. Boolean locals and parameter writes remain unsupported.
+
+A fresh local read observes the most recent write on the path being executed.
+Common locals can therefore carry selected branch results to a join without
+phi values or stack merging. RHS evaluation completes before `lputv` replaces
+the existing slot, supporting `n = n + 1`. Source scopes still determine which
+local names are visible; assigning an enclosing local uses its inherited ID.
+
+Writes make read timing observable even when a function contains no calls.
+Assignment-containing IR must match statement/left-to-right evaluation order,
+just like calls and prints. This rejects a read defined before a write but used
+afterward: dependency lowering would otherwise execute it after the write and
+silently change its meaning. Pure functions without calls, prints, or writes
+retain their definition-order flexibility. A future scheduler could preserve
+snapshots with temporaries, but that complexity is unnecessary for this subset.
+
+The [assignment experiment][assignments] verifies integer and string writes in
+both arms, later reads/increments, and native/text CODE parity. These are fixed
+type rules for our supported subset, not a claim that Monkey C locals generally
+have fixed types.
 
 ## Rationale and evidence
 
@@ -170,3 +200,5 @@ not inferred. [The experiment](../investigations/compiler-strings.md) documents
 this boundary and generated UTF-8 output in the simulator.
 
 [nested]: ../investigations/compiler-nested-conditions.md
+
+[assignments]: ../investigations/compiler-assignments.md

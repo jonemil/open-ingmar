@@ -17,6 +17,7 @@ block = "{" statement* "}"
 parameter-list = identifier ("," identifier)*
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
+          | identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | "return" expression ";"
           | "if" "(" expression ")" block "else" block
@@ -79,8 +80,8 @@ source. CODE output is a raw payload, not a PRG. See
 
 The source subset supports binary `+` and `-` with equal precedence and left
 associativity, and parentheses for grouping. Literals remain decimal `0..=127`;
-subtraction results may be negative. Unary signs, other operators, reassignment,
-object calls, and other statement forms remain unsupported. Parse nesting is
+subtraction results may be negative. Unary signs, other operators, object calls,
+and other statement forms remain unsupported. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
 
@@ -103,12 +104,12 @@ share the existing stage boundaries.
 `var <identifier> = <expression>;` initializes an integer or string local.
 Expressions may read it repeatedly after initialization. Duplicate declarations
 in one scope, shadowing an enclosing local or parameter, self/forward/unknown
-reads, uninitialized declarations, and reassignment are rejected. An arm's
+reads and uninitialized declarations are rejected. An arm's
 locals are visible within that arm and nested arms, but not in a sibling or
 after the condition. Disjoint arms may reuse a name; each declaration receives
 a distinct semantic local and VM slot. A later outer declaration may also reuse
 a name that has gone out of scope. Standalone braced blocks are unsupported.
-This restricted subset does not imply Monkey C `var` is immutable generally.
+Reassignment follows the fixed-type rules below.
 
 IR distinguishes semantic `LocalId` from `ValueId` and physical VM slots.
 `LocalInitialize` consumes an expression value and declares a unique local;
@@ -258,7 +259,8 @@ Continuing arms jump to a shared block after both arms. Returning arms do not
 contribute an edge to that join; when both arms return, no join is generated.
 Only enclosing locals are visible after the condition. Even if both arms
 declare the same name, those distinct declarations do not define a result at
-the join. No phi values, reassignment, or shared stack values are introduced.
+the join. Enclosing locals can carry results using assignment; no phi values or
+shared stack values are introduced.
 
 The semantic 1024-operation limit includes generated block markers and
 terminators. The 255 parameter/local slots count all declarations across the
@@ -269,6 +271,33 @@ before the branch. This uses existing version-2 IR without new directives.
 
 See [nested-conditions.mc](../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator evidence][nested]. Full language scoping,
-mutable locals, optional `else`, loops, and standalone blocks remain future work.
+optional `else`, loops, and standalone blocks remain future work.
 
 [nested]: ../investigations/compiler-nested-conditions.md
+
+## Local reassignment
+
+`<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
+The target must be a bare identifier. Parameters, fields, unknown/forward names,
+and arm locals used outside their scope are rejected. Assignment is a statement,
+not an expression; compound assignment and increment/decrement are unsupported.
+
+The initializer fixes the local's integer or string type. Each assignment must
+preserve it; Boolean assignments and changing between integer/string are
+rejected. RHS evaluation finishes before the write, so `n = n + 1` reads the old
+value. Later reads observe the new content on that path. Assigning an enclosing
+local inside an arm is allowed; assignment does not create a declaration.
+
+A write consumes one semantic value and defines no result. It reuses the local's
+existing slot and does not contribute to the 255-local count. The operation
+count still includes each write and its RHS definitions. Both arms may update a
+common local, or one arm may leave it unchanged; it remains available at the
+join because its initializer executes before the condition.
+
+Source, typed IR, and text IR share type, availability, and effect-order checks.
+Assignment-containing IR uses the conservative schedule specified in
+[IR text](compiler-ir-text.md#version-2-local-assignment). See
+[assignments.mc](../../examples/compiler-probe/assignments.mc) and
+[integer/string simulator evidence][assignments]. Loops remain unsupported.
+
+[assignments]: ../investigations/compiler-assignments.md

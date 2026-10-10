@@ -41,10 +41,11 @@ in-memory composition and editable stage resumption.
 2. Terminal conditional returns with `==`/`>` and forward-only semantic blocks
    are [implemented and simulator-verified](../investigations/compiler-conditions.md).
    Nested statements, scoped arm locals, early returns, and continuing joins are
-   [also verified](../investigations/compiler-nested-conditions.md). Define
-   reassignment before adding loops. Branch-label and exception assembly
-   are implemented; exception source compilation still needs stack/frame
-   research. See the [control-flow design](control-flow.md).
+   [also verified](../investigations/compiler-nested-conditions.md). Local
+   reassignment is [also verified](../investigations/compiler-assignments.md);
+   loops need revised graph and initialization checks. Branch-label and
+   exception assembly are implemented; exception source compilation still needs
+   stack/frame research. See the [control-flow design](control-flow.md).
 3. Independent application DATA/classes/symbols/resources and other required
    metadata, then [Jungle-driven project builds](project-builds.md).
 

@@ -13,6 +13,11 @@ pub(crate) enum Statement {
         argument: Expression,
         span: Span,
     },
+    Assign {
+        name: String,
+        value: Expression,
+        span: Span,
+    },
     Return {
         value: Expression,
         span: Span,
@@ -29,7 +34,10 @@ impl Statement {
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
-            Self::Println { span, .. } | Self::Return { span, .. } | Self::If { span, .. } => *span,
+            Self::Println { span, .. }
+            | Self::Assign { span, .. }
+            | Self::Return { span, .. }
+            | Self::If { span, .. } => *span,
         }
     }
 }
@@ -365,7 +373,7 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
         while self.peek()? != Kind::Punctuation('}') {
             let start = self.lookahead.as_ref().unwrap().span.start;
-            // A print's parsed call node already counts its statement sink.
+            // A print's call node or assignment target already counts its sink.
             if matches!(self.peek()?, Kind::Word("var" | "return" | "if")) {
                 self.expressions += 1;
             }
@@ -421,23 +429,45 @@ impl<'a> Parser<'a> {
                 Kind::End => return Err(self.error(start, "expected '}' before end of input")),
                 _ => {
                     let expression = self.expression(0)?;
-                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                    let ExpressionKind::ModuleCall {
-                        module,
-                        member,
-                        mut arguments,
-                    } = expression.kind
-                    else {
-                        return Err(
-                            self.error(start, "only System.println is supported as a statement")
-                        );
-                    };
-                    if module != "System" || member != "println" || arguments.len() != 1 {
-                        return Err(self.error(start, "expected System.println with one argument"));
-                    }
-                    Statement::Println {
-                        argument: arguments.remove(0),
-                        span: Span { start, end },
+                    if self.peek()? == Kind::Punctuation('=') {
+                        let ExpressionKind::Local(name) = expression.kind else {
+                            return Err(
+                                self.error(start, "assignment target must be a local identifier")
+                            );
+                        };
+                        if self.source[expression.span.start..expression.span.end] != name {
+                            return Err(self.error(
+                                start,
+                                "assignment target must be a bare local identifier",
+                            ));
+                        }
+                        self.token()?;
+                        let value = self.expression(0)?;
+                        let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                        Statement::Assign {
+                            name,
+                            value,
+                            span: Span { start, end },
+                        }
+                    } else {
+                        let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
+                        let ExpressionKind::ModuleCall {
+                            module,
+                            member,
+                            mut arguments,
+                        } = expression.kind
+                        else {
+                            return Err(self.error(start, "only assignment and System.println are supported as expression statements"));
+                        };
+                        if module != "System" || member != "println" || arguments.len() != 1 {
+                            return Err(
+                                self.error(start, "expected System.println with one argument")
+                            );
+                        }
+                        Statement::Println {
+                            argument: arguments.remove(0),
+                            span: Span { start, end },
+                        }
                     }
                 }
             };

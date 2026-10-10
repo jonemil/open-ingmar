@@ -341,3 +341,146 @@ fn condition_nesting_and_global_frame_operation_limits_are_bounded() {
             .contains("operation limit")
     );
 }
+
+#[test]
+fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
+    for (source, outcomes) in [
+        (
+            "function f(x) { var n = 40; var old = n; n = n + 1; n = n + 2; return n + old; }",
+            [83, 83],
+        ),
+        (
+            "function f(x) { var n = 40; if (x == 0) { n = n + 3; } else { n = n + 7; } n = n + 1; return n; }",
+            [44, 48],
+        ),
+        (
+            "function f(x) { var n = 40; if (x == 0) { n = 41; } else {} return n; }",
+            [41, 40],
+        ),
+        (
+            "function f(x) { var n = 40; if (x == 0) { n = 41; if (n > 40) { n = n + 2; } else {} } else { return n; } return n; }",
+            [43, 40],
+        ),
+    ] {
+        let f = compile(source).unwrap();
+        for (argument, expected) in outcomes.into_iter().enumerate() {
+            assert_eq!(execute(&f, argument as i32), expected);
+        }
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(
+            f.lower().encode().unwrap(),
+            ciq_assembly::Program::parse(&f.assembly())
+                .unwrap()
+                .encode()
+                .unwrap()
+        );
+        let prologue = &decode(&f.lower().encode().unwrap()).unwrap()[0].instruction;
+        assert_eq!(
+            prologue.operands()[1],
+            if source.contains("var old") { 2 } else { 1 }
+        );
+    }
+    let source = "function f() { var n = 1; n = n + 2; return n; }";
+    let f = compile(source).unwrap();
+    let assigned = f
+        .operations()
+        .iter()
+        .find(|o| matches!(o.operation, ciq_compiler::Operation::LocalAssign { .. }))
+        .unwrap();
+    let span = assigned.span.unwrap();
+    assert_eq!(&source[span.start..span.end], "n = n + 2;");
+    assert!(f.to_ir_text().starts_with("ciq-ir 2"));
+}
+
+#[test]
+fn source_assignments_reject_type_changes_parameters_and_escaping_names() {
+    for source in [
+        "function f(x) { x = 1; return x; }",
+        "function f() { n = 1; var n = 2; return n; }",
+        "function f(x) { if (x == 0) { var n = 1; } else { n = 2; } return 1; }",
+        "function f(x) { if (x == 0) { var n = 1; } else {} n = 2; return 1; }",
+        "function f() { var n = 1; n = \"string\"; return n; }",
+        "function f() { var n = \"string\"; n = 1; return 1; }",
+        "function f(x) { var n = 1; n = x > 0; return n; }",
+        "function f() { var n = 1; return n = 2; }",
+        "function f() { var n = 1; (n) = 2; return n; }",
+        "function f() { var n = 1; n + 1 = 2; return n; }",
+        "function f() { var n = 1; n += 1; return n; }",
+        "function f() { var n = 1; n++; return n; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let source = "function f() { var n = 1;\n n = \"string\"; return n; }";
+    let error = compile(source).unwrap_err();
+    assert_eq!((error.line, error.column), (2, 2));
+    assert!(error.message.contains("preserve"));
+}
+
+#[test]
+fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedules() {
+    let stale = "ciq-ir 2\n.function f\n.integer %0 1\n.local $0 %0\n.read %1 $0\n.integer %2 2\n.assign $0 %2\n.return %1\n.end";
+    assert!(
+        parse_ir(stale)
+            .unwrap_err()
+            .message
+            .contains("evaluation order")
+    );
+    // The same stale read must also be rejected through direct typed construction.
+    let ordered = stale
+        .replace(".read %1 $0\n", "")
+        .replace(".return %1", ".read %1 $0\n.return %1");
+    let f = parse_ir(&ordered).unwrap();
+    assert_eq!(execute(&f, 0), 2);
+    let mut operations = f.operations().to_vec();
+    let read = operations.remove(4);
+    operations.insert(2, read);
+    assert!(
+        Function::new("f".into(), operations)
+            .unwrap_err()
+            .message
+            .contains("evaluation order")
+    );
+    for body in [
+        ".integer %0 1\n.assign $0 %0\n.integer %1 2\n.return %1",
+        ".integer %0 1\n.local $0 %0\n.string %1 \"str\"\n.assign $0 %1\n.integer %2 2\n.return %2",
+        ".string %0 \"str\"\n.local $0 %0\n.integer %1 1\n.assign $0 %1\n.return %1",
+    ] {
+        assert!(parse_ir(&format!("ciq-ir 2\n.function f\n{body}\n.end")).is_err());
+    }
+    let partial = cfg(
+        ".block ^1\n.integer %3 1\n.local $0 %3\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.integer %4 2\n.assign $0 %4\n.integer %5 3\n.return %5",
+    );
+    assert!(
+        parse_ir(&partial)
+            .unwrap_err()
+            .message
+            .contains("incoming path")
+    );
+    assert!(parse_ir(&ordered.replacen("ciq-ir 2", "ciq-ir 1", 1)).is_err());
+    // Aliases need not be small slot indexes; assignment reuses the initializer slot.
+    let f = parse_ir(&ordered.replace("$0", "$4294967295")).unwrap();
+    assert_eq!(execute(&f, 0), 2);
+}
+
+#[test]
+fn assignment_effect_order_and_operation_limits_include_each_write() {
+    let f = compile("function f() { var n = Numbers.first(); n = Numbers.second(n); System.println(n); return n; }").unwrap();
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let assembly = f.assembly();
+    assert!(
+        assembly.find("__ciq_member_first").unwrap()
+            < assembly.find("__ciq_member_second").unwrap()
+    );
+    let body = "n = 1;".repeat(510);
+    let f = compile(&format!("function f() {{ var n = 1; {body}return n; }}")).unwrap();
+    assert_eq!(f.operations().len(), 1024);
+    assert_eq!(execute(&f, 0), 1);
+    assert!(
+        compile(&format!(
+            "function f() {{ var n = 1; {body}n = 1; return n; }}"
+        ))
+        .unwrap_err()
+        .message
+        .contains("operation limit")
+    );
+}
