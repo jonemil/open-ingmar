@@ -8,9 +8,9 @@ compatibility or a commitment to LLVM/SSA infrastructure.
 ## Representation and invariants
 
 A function has a name, parameter count, and ordered operations. Operations
-represent integer constants, addition/subtraction, positional parameter reads,
-local initialization/reads, user-module calls, and a final return. Source spans
-are optional diagnostic provenance.
+represent integer/string constants, addition/subtraction, positional parameter
+reads, local initialization/reads, user-module calls, print statements, and a
+final integer return. Source spans are optional diagnostic provenance.
 
 Value IDs name semantic results. Local IDs name stored semantic locals. Neither
 chooses a VM slot, symbol ID, or CODE/DATA offset. Parameter indexes name
@@ -22,10 +22,10 @@ initialized local. Repeated source reads create fresh values from stored locals
 rather than recomputing initializers.
 
 Pure-only expression definitions may be scheduled by dependencies. Functions
-containing calls must have IR operation order matching left-to-right expression
-evaluation and initialization order. Validation rejects schedules the current
-backend cannot preserve. Shared-value graphs, reassignment, object calls, and
-control flow require further scheduling/validation work.
+containing calls or prints must have IR operation order matching left-to-right
+expression evaluation and statement order. Validation rejects schedules the
+current backend cannot preserve. Shared-value graphs, reassignment, object
+calls, and control flow require further scheduling/validation work.
 
 The IR is immutable after validation. Source parsing, typed construction, and
 [IR text](../specs/compiler-ir-text.md) use the same validator, so no producer
@@ -108,3 +108,22 @@ Local evidence:
 [ref-llvm-ir]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/IR/CMakeLists.txt
 [ref-llvm-mc]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/CMakeLists.txt
 [ref-cargo-target-names]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html
+
+## Literal content and placement
+
+Semantic string values retain UTF-8 content rather than DATA addresses. Local
+reads retain their initializer's integer/string type. The current validator
+restricts arithmetic, parameters, user-call arguments/results, and returns to
+integers; print statements accept either type and define no result.
+
+Lowering deduplicates content within a function and emits unplaced assembly
+string declarations plus symbolic `news` operands. An explicit DATA source
+supplies placement at encoding, keeping semantic IR independent of application
+layout. DATA layout can be validated before its method references are resolved;
+PRG reconstruction completes those bindings. This supports both native and saved
+textual stages without allocating application metadata in the frontend.
+
+`System.println` is an explicit intrinsic. Its dedicated SDK alias and discarded
+VM result follow observed SDK output; arbitrary SDK names and return types are
+not inferred. [The experiment](../investigations/compiler-strings.md) documents
+this boundary and generated UTF-8 output in the simulator.

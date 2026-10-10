@@ -102,9 +102,18 @@ material, retain their selected raw/structured sources.
 referenced by code. The template workflow consumes those declarations and
 applies same-length string edits to the template's DATA records.
 `ciq_asm::assemble` only returns code bytes; use `assemble_template` or project
-assembly to materialize DATA. Inline code declarations require `at`;
-unconstrained layout belongs in a standalone DATA source. Resizing or
-overlapping template string edits is rejected.
+assembly to materialize DATA. Template string edits still require `at`; resizing
+or overlapping edits are rejected. Shared CODE assembly also accepts unplaced
+`.string` declarations as content requirements. They need external DATA offsets
+when referenced and do not allocate records. A standalone DATA source remains
+responsible for unconstrained layout.
+
+The compiler's `--data` binding checks each unplaced requirement against exactly
+one DATA record with matching content. Pinned requirements must also match their
+offset. Layout-only DATA parsing retains unresolved class/method aliases so
+strings can be bound before CODE is encoded; final PRG reconstruction must
+resolve those fields. See [compiler pipeline](compiler-ir-text.md) and
+[runtime evidence](../investigations/compiler-strings.md).
 
 ## Commands
 

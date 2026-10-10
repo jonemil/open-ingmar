@@ -36,12 +36,11 @@ in-memory composition and editable stage resumption.
 
 1. Completed: constant returns, integer addition/subtraction/grouping,
    initialized locals, user-module calls, integer parameters, and positional
-   arguments. [The plan](../plan.md) links their runtime evidence.
-2. Next: strings and member calls such as `System.println`, with controlled
-   specimens before implementation.
-3. Conditions/branches and exceptions after their assembler fixups and
+   arguments, strings/locals, and `System.println` statements.
+   [The plan](../plan.md) links their runtime evidence.
+2. Conditions/branches and exceptions after their assembler fixups and
    stack/frame requirements are understood.
-4. Independent application DATA/classes/symbols/resources and other required
+3. Independent application DATA/classes/symbols/resources and other required
    metadata, then [Jungle-driven project builds](project-builds.md).
 
 Define source grammar and calling conventions before adding syntax. Preserve

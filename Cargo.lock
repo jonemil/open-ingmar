@@ -70,6 +70,7 @@ dependencies = [
  "ciq-asm",
  "ciq-assembly",
  "ciq-mc",
+ "ciq-prg",
 ]
 
 [[package]]

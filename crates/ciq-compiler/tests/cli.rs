@@ -287,3 +287,93 @@ fn cli_resumes_parameters_and_argument_lists() {
     assert!(fs::read_to_string(ir).unwrap().contains("parameters=2"));
     fs::remove_dir_all(dir).unwrap();
 }
+#[test]
+fn cli_binds_strings_across_saved_stages() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-strings-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let ir = dir.join("probe.ciqir");
+    let asm = dir.join("probe.mcasm");
+    let symbols = dir.join("symbols.mcasm");
+    let data = dir.join("data.mcasm");
+    fs::write(
+        &source,
+        "function probe() { System.println(\"hello #\"); return 42; }",
+    )
+    .unwrap();
+    fs::write(
+        &symbols,
+        ".symbol system \"Toybox_System\" id=0x00800005\n.symbol print \"println\" id=0x00800067\n",
+    )
+    .unwrap();
+    fs::write(
+        &data,
+        ".bytes at=0x00000000 aabb\n.string actual \"hello #\"\n",
+    )
+    .unwrap();
+    for (from, emit, input, output) in [
+        ("source", "ir", &source, &ir),
+        ("ir", "assembly", &ir, &asm),
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", emit])
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    let mut results = Vec::new();
+    for (from, input) in [("source", &source), ("ir", &ir), ("assembly", &asm)] {
+        let output = dir.join(format!("{from}.bin"));
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", "code", "--symbols"])
+            .arg(&symbols)
+            .arg("--data")
+            .arg(&data)
+            .arg(input)
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        results.push(fs::read(output).unwrap());
+    }
+    assert_eq!(results[0], results[1]);
+    assert_eq!(results[0], results[2]);
+    let invalid = dir.join("invalid.bin");
+    for options in [
+        vec!["--emit", "code", "--symbols"],
+        vec!["--emit", "assembly", "--symbols"],
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(options)
+            .arg(&symbols)
+            .arg(&source)
+            .arg(&invalid)
+            .output()
+            .unwrap();
+        assert!(!run.status.success());
+        assert!(!invalid.exists());
+    }
+    fs::write(&data, ".string other \"missing\"").unwrap();
+    let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+        .args(["--emit", "code", "--symbols"])
+        .arg(&symbols)
+        .arg("--data")
+        .arg(&data)
+        .arg(&source)
+        .arg(&invalid)
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    assert!(!invalid.exists());
+    fs::remove_dir_all(dir).unwrap();
+}

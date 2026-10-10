@@ -28,7 +28,7 @@ fn edited_ir_uses_explicit_value_ids_and_optional_source_metadata() {
     assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
     let error = parse_ir(&text.replace(".return %17", ".return %18")).unwrap_err();
     assert_eq!(error.line, 4);
-    assert!(error.message.contains("defined integer"));
+    assert!(error.message.contains("defined value"));
 }
 
 #[test]

@@ -3,9 +3,14 @@ use crate::{Diagnostic, Span};
 pub(crate) struct ParsedFunction {
     pub name: String,
     pub parameters: Vec<String>,
-    pub locals: Vec<LocalDeclaration>,
+    pub statements: Vec<Statement>,
     pub expression: Expression,
     pub return_span: Span,
+}
+
+pub(crate) enum Statement {
+    Local(LocalDeclaration),
+    Println { argument: Expression, span: Span },
 }
 
 pub(crate) struct LocalDeclaration {
@@ -20,6 +25,7 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     Integer(i32),
+    String(String),
     Local(String),
     ModuleCall {
         module: String,
@@ -37,6 +43,7 @@ pub(crate) enum ExpressionKind {
 enum Kind<'a> {
     Word(&'a str),
     Integer(&'a str),
+    String(&'a str),
     Punctuation(char),
     End,
 }
@@ -89,6 +96,35 @@ impl<'a> Parser<'a> {
                     .count();
                 self.offset += length;
                 Kind::Word(&rest[..length])
+            }
+            Some('"') => {
+                self.offset += 1;
+                loop {
+                    let c = self.source[self.offset..]
+                        .chars()
+                        .next()
+                        .ok_or_else(|| self.error(start, "unterminated string literal"))?;
+                    self.offset += c.len_utf8();
+                    if c == '"' {
+                        break;
+                    }
+                    if c == '\n' || c == '\r' {
+                        return Err(
+                            self.error(start, "string literals cannot contain raw newlines")
+                        );
+                    }
+                    if c == '\\' {
+                        let escaped = self.source[self.offset..]
+                            .chars()
+                            .next()
+                            .ok_or_else(|| self.error(start, "unfinished string escape"))?;
+                        if !matches!(escaped, 'n' | 'r' | 't' | '"' | '\\') {
+                            return Err(self.error(self.offset, "unsupported source string escape"));
+                        }
+                        self.offset += escaped.len_utf8();
+                    }
+                }
+                Kind::String(&self.source[start..self.offset])
             }
             Some(c) if c.is_ascii_digit() => {
                 let length = rest.bytes().take_while(u8::is_ascii_digit).count();
@@ -165,6 +201,11 @@ impl<'a> Parser<'a> {
     fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
+            Kind::String(literal) => {
+                let fields = ciq_prg::symbols::source::tokens(literal)
+                    .map_err(|error| self.error(token.span.start, error.to_string()))?;
+                self.node(ExpressionKind::String(fields[0][1..].into()), token.span)
+            }
             Kind::Integer(digits) => {
                 let value = digits
                     .parse::<i32>()
@@ -296,7 +337,29 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::Punctuation(')'), "')'")?;
     parser.expect(Kind::Punctuation('{'), "'{'")?;
     let mut locals = Vec::new();
-    while parser.peek()? == Kind::Word("var") {
+    let mut statements = Vec::new();
+    while parser.peek()? != Kind::Word("return") {
+        if parser.peek()? != Kind::Word("var") {
+            let expression = parser.expression(0)?;
+            let end = parser.expect(Kind::Punctuation(';'), "';'")?.span.end;
+            let start = expression.span.start;
+            let ExpressionKind::ModuleCall {
+                module,
+                member,
+                mut arguments,
+            } = expression.kind
+            else {
+                return Err(parser.error(start, "only System.println is supported as a statement"));
+            };
+            if module != "System" || member != "println" || arguments.len() != 1 {
+                return Err(parser.error(start, "expected System.println with one argument"));
+            }
+            statements.push(Statement::Println {
+                argument: arguments.remove(0),
+                span: Span { start, end },
+            });
+            continue;
+        }
         let start = parser.token()?.span.start;
         if locals.len() >= crate::MAX_LOCALS {
             return Err(parser.error(start, "function exceeds 255-local limit"));
@@ -311,10 +374,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         if parameters.len() + locals.len() >= crate::MAX_LOCALS {
             return Err(parser.error(start, "parameters plus locals exceed 255-slot limit"));
         }
-        if locals
-            .iter()
-            .any(|local: &LocalDeclaration| local.name == name)
-        {
+        if locals.iter().any(|local: &String| local == name) {
             return Err(parser.error(start, format!("duplicate local declaration {name:?}")));
         }
         parser.expect(
@@ -328,11 +388,12 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         if parser.expressions >= crate::MAX_OPERATIONS {
             return Err(parser.error(start, "function exceeds 1024-operation limit"));
         }
-        locals.push(LocalDeclaration {
+        locals.push(name.to_owned());
+        statements.push(Statement::Local(LocalDeclaration {
             name: name.into(),
             initializer,
             span: Span { start, end },
-        });
+        }));
     }
     let returned = parser.expect(Kind::Word("return"), "'return'")?;
     let expression = parser.expression(0)?;
@@ -345,7 +406,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     Ok(ParsedFunction {
         name: identifier.to_owned(),
         parameters,
-        locals,
+        statements,
         expression,
         return_span: Span {
             start: returned.span.start,

@@ -112,8 +112,8 @@ cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcas
 ```
 
 The [compiler pipeline](docs/specs/compiler-ir-text.md) can also emit IR
-(`--emit ir`), resume it (`--from ir`), or encode raw CODE directly
-(`--emit code`). Both the native path and saved `.mcasm` use the
+(`--emit ir`), resume it (`--from ir`), or encode raw CODE directly (`--emit
+code`). Both the native path and saved `.mcasm` use the
 [shared assembly model](docs/design/assembly-model.md).
 
 The output is a function, requiring explicit application scaffold integration.
@@ -137,8 +137,13 @@ parameters and positional arguments are also implemented:
 [parameters.mc](examples/compiler-probe/parameters.mc) produce
 simulator-confirmed `48` together. See
 [argument/frame evidence](docs/investigations/compiler-arguments.md).
-Reassignment, string/member calls, and complete-project compilation remain
-future work.
+String literals, string-valued locals, and `System.println` statements are now
+supported too: [strings.mc](examples/compiler-probe/strings.mc) prints generated
+UTF-8 strings and `42`, then returns simulator-confirmed `43`. CODE emission
+uses `--data` for explicit DATA bindings alongside `--symbols`; see
+[string/print evidence](docs/investigations/compiler-strings.md).
+Reassignment, general string/object operations, and complete-project compilation
+remain future work.
 
 Build and validate the workspace:
 
@@ -190,10 +195,10 @@ Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`,
 
 Downloaded reference projects belong in the Git-ignored `references/` directory.
 Developer keys belong in Git-ignored `keys/`; build scripts default to
-`keys/developer_key.der`.
-Local SDK artifacts and temporary experiments belong in the Git-ignored
-`scratch/` directory. Documentation should retain enough information to
-reproduce experiments without relying on these directories being present.
+`keys/developer_key.der`. Local SDK artifacts and temporary experiments belong
+in the Git-ignored `scratch/` directory. Documentation should retain enough
+information to reproduce experiments without relying on these directories being
+present.
 
 Version control includes our source, scripts, tests, documentation, container
 recipe, and independently created example resources. SDK distributions,
@@ -201,9 +206,9 @@ downloaded catalogues, device packages, reference checkouts, signing keys,
 credentials, caches, and generated binaries or captures remain local. Keep new
 downloads and experiment output in `scratch/` or `references/`; `.gitignore`
 also covers root download archives, `tmp/`, example build directories, and
-common signing-key and Connect IQ binary extensions. Review
-`git status --short --untracked-files=all` and `git diff --cached` before
-committing. Ignore rules do not remove files already tracked by Git.
+common signing-key and Connect IQ binary extensions. Review `git status --short
+--untracked-files=all` and `git diff --cached` before committing. Ignore rules
+do not remove files already tracked by Git.
 
 [ref-complete-same-size-function-replacement]: docs/investigations/function-replacement.md
 [ref-larger-appended-function]: docs/investigations/code-labels-and-relocation.md

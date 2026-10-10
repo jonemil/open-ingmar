@@ -7,8 +7,8 @@ existing ordinary CODE assembly grammar/model, not full section-project assembly
 or signing.
 
 `Program` is an ordered sequence of immutable items: labels, instructions,
-inline symbol declarations, and pinned inline string declarations. An
-instruction has an `Opcode` and typed operand fields: `Bits(u64)`,
+inline symbol declarations, and inline string declarations with optional
+placement. An instruction has an `Opcode` and typed operand fields: `Bits(u64)`,
 `Symbol(alias)`, or `String(alias)`. Semantic value IDs from compiler IR are
 absent here. Symbol/string references remain symbolic until encoding receives
 declarations or external bindings. Branch operands/fixups are not added by this
@@ -16,10 +16,10 @@ change.
 
 Both `Program::new(items)` and `Program::parse(text)` apply the same structural
 validation: identifier syntax, operand count/width, allowed reference kinds,
-pinned inline string placement, duplicate labels, and the 24-bit CODE layout
-limit. A parsed model retains assembly line numbers for errors; constructed
-items use line zero. Source-line provenance is not part of semantic item
-equality.
+optional 24-bit string placement, duplicate string aliases/labels, and the
+24-bit CODE layout limit. A parsed model retains assembly line numbers for
+errors; constructed items use line zero. Source-line provenance is not part of
+semantic item equality.
 
 `Program::to_text()` prints canonical existing `.mcasm` syntax; comments,
 optional commas, and whitespace are not preserved. Instruction/label/declaration
@@ -40,3 +40,12 @@ same encoder as direct model construction. `ciq-asm` still owns PRG
 reconstruction, template edits, signing commands, and filesystem output policy.
 The compiler depends on the shared model without acquiring signing/archive
 dependencies.
+
+Unplaced string declarations describe literal requirements. CODE encoding uses
+external string offsets for their operands; it does not allocate DATA or verify
+that an arbitrary external map contains the declared content. The compiler's
+explicit DATA binder checks content and layout before supplying the map. Pinned
+declarations retain their existing direct encoding/template behavior.
+Section-project CODE still contains references only, with declarations in the
+authoritative DATA source. See [string assembly](../specs/data-strings.md) and
+[compiler evidence](../investigations/compiler-strings.md).

@@ -11,14 +11,19 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut emit = "assembly".to_string();
     let mut paths = Vec::new();
     let mut symbols_path = None;
+    let mut data_path = None;
     let mut args = env::args_os().skip(1);
     let mut options = std::collections::BTreeSet::new();
     while let Some(arg) = args.next() {
-        if arg == "--from" || arg == "--emit" || arg == "--symbols" {
+        if arg == "--from" || arg == "--emit" || arg == "--symbols" || arg == "--data" {
             if !options.insert(arg.clone()) {
                 return Err("duplicate pipeline option".into());
             }
             let value = args.next().ok_or("pipeline option requires a value")?;
+            if arg == "--data" {
+                data_path = Some(value);
+                continue;
+            }
             if arg == "--symbols" {
                 symbols_path = Some(value);
                 continue;
@@ -38,7 +43,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     if paths.len() != 2 {
-        return Err("Usage: ciq-compiler [--from source|ir|assembly] [--emit ir|assembly|code] [--symbols symbol-source.mcasm] <input> <new-output>".into());
+        return Err("Usage: ciq-compiler [--from source|ir|assembly] [--emit ir|assembly|code] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
         || !matches!(emit.as_str(), "ir" | "assembly" | "code")
@@ -48,8 +53,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     if from == "assembly" && emit == "ir" {
         return Err("assembly cannot be raised to semantic IR".into());
     }
-    if symbols_path.is_some() && emit != "code" {
-        return Err("--symbols is supported only with --emit code".into());
+    if (symbols_path.is_some() || data_path.is_some()) && emit != "code" {
+        return Err("--symbols and --data are supported only with --emit code".into());
     }
     let source = fs::read_to_string(&paths[0])?;
     let function = match from.as_str() {
@@ -71,16 +76,23 @@ fn run() -> Result<(), Box<dyn Error>> {
         if emit == "assembly" {
             assembly.to_text().into_bytes()
         } else {
-            if let Some(path) = symbols_path {
+            let symbols = if let Some(path) = symbols_path {
                 let symbol_source = fs::read_to_string(&path)?;
                 let symbols = ciq_assembly::Program::parse(&symbol_source)
                     .map_err(|error| format!("{}: {error}", path.to_string_lossy()))?;
-                let bindings = ciq_compiler::symbol_bindings(&assembly, &symbols)
-                    .map_err(|error| format!("{}: {error}", path.to_string_lossy()))?;
-                assembly.encode_with_references(&bindings, &Default::default())?
+                ciq_compiler::symbol_bindings(&assembly, &symbols)?
             } else {
-                assembly.encode()?
-            }
+                Default::default()
+            };
+            let strings = if let Some(path) = data_path {
+                let data_source = fs::read_to_string(&path)?;
+                let data = ciq_prg::data::Source::parse_layout(&data_source)
+                    .map_err(|error| format!("{}: {error}", path.to_string_lossy()))?;
+                ciq_compiler::string_bindings(&assembly, &data)?
+            } else {
+                Default::default()
+            };
+            assembly.encode_with_references(&symbols, &strings)?
         }
     };
     let mut output = OpenOptions::new()

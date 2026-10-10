@@ -8,15 +8,37 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     let mut rows = Vec::new();
     let mut offset = 0;
     for line in source.split_inclusive('\n') {
-        let content = line.split('#').next().unwrap();
-        let fields: Vec<_> = content.split_whitespace().collect();
+        let mut quoted = false;
+        let mut escaped = false;
+        for (column, c) in line.char_indices() {
+            if escaped {
+                escaped = false;
+            } else if quoted && c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                quoted = !quoted;
+            } else if !quoted && c == '#' {
+                break;
+            } else if !quoted && c == ',' {
+                return Err(Diagnostic::at(
+                    source,
+                    offset + column,
+                    "IR fields require whitespace separators",
+                ));
+            }
+        }
+        let fields = ciq_prg::symbols::source::tokens(line)
+            .map_err(|error| Diagnostic::at(source, offset, error.to_string()))?;
         if !fields.is_empty() {
             rows.push((offset, fields));
         }
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
-    if rows.first().map(|(_, fields)| fields.as_slice()) != Some(&["ciq-ir", "1"][..]) {
+    if !rows
+        .first()
+        .is_some_and(|(_, fields)| fields == &["ciq-ir", "1"])
+    {
         return Err(fail(
             rows.first().map_or(0, |row| row.0),
             "expected 'ciq-ir 1'",
@@ -50,7 +72,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             ended = true;
             break;
         }
-        let (kind, width) = match fields.first().copied() {
+        let (kind, width) = match fields.first().map(String::as_str) {
             Some(".integer") => (0, 3),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
@@ -67,10 +89,12 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                     ),
             ),
             Some(".parameter") => (7, 3),
+            Some(".string") => (8, 3),
+            Some(".println") => (9, 2),
             _ => {
                 return Err(fail(
                     *at,
-                    "expected .integer, .add, .subtract, .local, .read, .call, .parameter, .return, or .end",
+                    "expected .integer, .add, .subtract, .local, .read, .call, .parameter, .string, .println, .return, or .end",
                 ));
             }
         };
@@ -119,62 +143,74 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 0 {
-            let digits = fields[2];
+        let operation = if kind == 8 {
+            let value = fields[2]
+                .strip_prefix('"')
+                .ok_or_else(|| fail(*at, "string values require quotes"))?;
+            Operation::String {
+                result: parse_value(&fields[1])?,
+                value: value.into(),
+            }
+        } else if kind == 9 {
+            Operation::Println {
+                value: parse_value(&fields[1])?,
+            }
+        } else if kind == 0 {
+            let digits = &fields[2];
             if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
                 return Err(fail(*at, "integer must be nonnegative decimal"));
             }
             Operation::Integer {
-                result: parse_value(fields[1])?,
+                result: parse_value(&fields[1])?,
                 value: digits
                     .parse()
                     .map_err(|_| fail(*at, "integer exceeds i32"))?,
             }
         } else if kind == 1 {
             Operation::Return {
-                value: parse_value(fields[1])?,
+                value: parse_value(&fields[1])?,
             }
         } else if kind == 4 {
             Operation::LocalInitialize {
-                local: parse_local(fields[1])?,
-                value: parse_value(fields[2])?,
+                local: parse_local(&fields[1])?,
+                value: parse_value(&fields[2])?,
             }
         } else if kind == 5 {
             Operation::LocalRead {
-                result: parse_value(fields[1])?,
-                local: parse_local(fields[2])?,
+                result: parse_value(&fields[1])?,
+                local: parse_local(&fields[2])?,
             }
         } else if kind == 6 {
             Operation::ModuleCall {
-                result: parse_value(fields[1])?,
-                module: fields[2].into(),
-                member: fields[3].into(),
+                result: parse_value(&fields[1])?,
+                module: fields[2].clone(),
+                member: fields[3].clone(),
                 arguments: fields[4..width]
                     .iter()
                     .map(|field| parse_value(field))
                     .collect::<Result<_, _>>()?,
             }
         } else if kind == 7 {
-            let digits = fields[2];
+            let digits = &fields[2];
             if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
                 return Err(fail(*at, "parameter index must be decimal usize"));
             }
             Operation::ParameterRead {
-                result: parse_value(fields[1])?,
+                result: parse_value(&fields[1])?,
                 index: digits
                     .parse()
                     .map_err(|_| fail(*at, "parameter index exceeds usize"))?,
             }
         } else {
             Operation::Binary {
-                result: parse_value(fields[1])?,
+                result: parse_value(&fields[1])?,
                 kind: if kind == 2 {
                     BinaryOp::Add
                 } else {
                     BinaryOp::Subtract
                 },
-                left: parse_value(fields[2])?,
-                right: parse_value(fields[3])?,
+                left: parse_value(&fields[2])?,
+                right: parse_value(&fields[3])?,
             }
         };
         operations.push(LocatedOperation { operation, span });

@@ -7,8 +7,9 @@ not a stable interchange contract. Evidence:
 [pipeline experiment](../investigations/compiler-pipeline.md),
 [arithmetic extension](../investigations/compiler-arithmetic.md),
 [local declarations](../investigations/compiler-locals.md),
-[module calls](../investigations/compiler-calls.md), and
-[parameters/arguments](../investigations/compiler-arguments.md).
+[module calls](../investigations/compiler-calls.md),
+[parameters/arguments](../investigations/compiler-arguments.md), and
+[strings/printing](../investigations/compiler-strings.md).
 
 ```text
 ciq-ir 1
@@ -19,17 +20,17 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be exactly `1`. Exactly one
-`.function <identifier> [parameters=<count>]` and trailing `.end` are required;
-input after `.end` is rejected. Identifiers use the assembly label identifier
-rules. The supported semantic body is ordered local initializations and integer
-expression trees (which may include module calls) ending with a final
-`.return <value-id>`. Definitions are `.integer <result-id> <value>`,
-`.add <result-id> <left-id> <right-id>`, and
-`.subtract <result-id> <left-id> <right-id>`. Value IDs are `%` plus decimal
-`u32`; any such ID is supported, not just `%0`. Integer values are nonnegative
-decimal `0..=127`, matching the backend's currently verified literal encoding
-subset; computed results are not restricted to that range.
+Header version must be exactly `1`. Exactly one `.function <identifier>
+[parameters=<count>]` and trailing `.end` are required; input after `.end` is
+rejected. Identifiers use the assembly label identifier rules. The supported
+semantic body is ordered local initializations, print statements, and expression
+trees (which may include module calls) ending with a final integer `.return
+<value-id>`. Definitions are `.integer <result-id> <value>`, `.add <result-id>
+<left-id> <right-id>`, and `.subtract <result-id> <left-id> <right-id>`. Value
+IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
+values are nonnegative decimal `0..=127`, matching the backend's currently
+verified literal encoding subset; computed results are not restricted to that
+range.
 
 Each operation optionally has `span=<start>:<end>` with decimal `usize` byte
 offsets and `start <= end`. These offsets refer to the original source, not
@@ -118,13 +119,13 @@ has the same meaning as for other operations. The module's expected stored
 symbol name is `globals/<module>` and the member's is `<member>`; this is not
 numeric symbol allocation or method metadata generation.
 
-Calls are effectful. If a function contains any `.call`, all its operations must
-match the backend's left-to-right expression traversal and ordered
-initialization/return sinks. The shared validator rejects incompatible
-schedules, including moving a call across an initialization or reversing call
-operands. Pure-only functions retain the earlier definition-order flexibility.
-This conservative policy keeps runtime/IR operation order consistent until a
-general scheduler is implemented.
+Calls are effectful. If a function contains any `.call` or `.println`, all its
+operations must match the backend's left-to-right expression traversal and
+ordered initialization/print/return sinks. The shared validator rejects
+incompatible schedules, including moving a call across an initialization or
+reversing call operands. Pure-only functions retain the earlier definition-order
+flexibility. This conservative policy keeps runtime/IR operation order
+consistent until a general scheduler is implemented.
 
 ```text
 ciq-ir 1
@@ -149,14 +150,13 @@ implemented.
 ## Parameter metadata and reads
 
 The optional `parameters=<nonnegative-decimal-count>` field on `.function`
-defaults to zero, with a maximum of 254.
-`Function::with_parameters(name, count, operations)` uses the shared validator;
-`Function::new` retains zero-parameter behavior.
-`.parameter %<result-id> <zero-based-index>` defines a fresh integer value from
-a signature position. Index must be below the parameter count; repeated reads
-and unused declared parameters are allowed. Source parameter names are resolved
-by the frontend, not stored in IR. Position is independent of value/local IDs
-and VM slots.
+defaults to zero, with a maximum of 254. `Function::with_parameters(name, count,
+operations)` uses the shared validator; `Function::new` retains zero-parameter
+behavior. `.parameter %<result-id> <zero-based-index>` defines a fresh integer
+value from a signature position. Index must be below the parameter count;
+repeated reads and unused declared parameters are allowed. Source parameter
+names are resolved by the frontend, not stored in IR. Position is independent of
+value/local IDs and VM slots.
 
 Call argument IDs refer to earlier value definitions and count as uses; their
 order is significant. The call-containing evaluation-order validator includes
@@ -203,16 +203,15 @@ existing files are never overwritten.
 
 `--emit code` emits an ordinary CODE payload, **not a complete PRG or
 executable**. PRG metadata/resources and signing still use the explicitly
-documented scaffold workflow. For CODE emission,
-`--symbols <symbol-source.mcasm>` supplies a metadata-only `.symbol` file,
-including an exported PRG symbol section. Its declared aliases resolve ordinary
-assembly references. Compiler aliases `__ciq_module_<name>` /
-`__ciq_member_<name>` resolve by unique stored names `globals/<name>` /
-`<name>`, independently of the file's aliases. Missing/ambiguous names,
-duplicate aliases/IDs, conflicting generated bindings, and non-symbol items are
-errors before output creation. `--symbols` with IR/assembly emission is
-rejected; those stages remain symbolic. No DATA/SYMBOLS section is written by
-raw CODE encoding.
+documented scaffold workflow. For CODE emission, `--symbols
+<symbol-source.mcasm>` supplies a metadata-only `.symbol` file, including an
+exported PRG symbol section. Its declared aliases resolve ordinary assembly
+references. Compiler aliases `__ciq_module_<name>` / `__ciq_member_<name>`
+resolve by unique stored names `globals/<name>` / `<name>`, independently of the
+file's aliases. Missing/ambiguous names, duplicate aliases/IDs, conflicting
+generated bindings, and non-symbol items are errors before output creation.
+`--symbols` with IR/assembly emission is rejected; those stages remain symbolic.
+No DATA/SYMBOLS section is written by raw CODE encoding.
 
 ```sh
 cargo run -p ciq-compiler -- --emit code --symbols scratch/call-project/010-symbols-5717b015.mcasm examples/compiler-probe/calls.mc scratch/calls.bin
@@ -220,5 +219,58 @@ cargo run -p ciq-compiler -- --emit code --symbols scratch/call-project/010-symb
 
 `symbol_bindings(&assembly, &symbols)` exposes the same resolution to library
 consumers. `Program::encode_with_references` consumes the resulting map; callers
-may also supply explicit maps. External string bindings remain library-only.
-Self-contained assembly declarations continue to work without `--symbols`.
+may also supply explicit maps. `--data <data-source.mcasm>` supplies DATA string
+bindings for CODE emission only. `Source::parse_layout` validates placement
+while retaining unresolved class symbol/method fields; final PRG assembly must
+resolve those fields. `string_bindings(&assembly, &data)` binds each unplaced
+literal declaration by unique content, independently of the DATA alias.
+Missing/ambiguous content or a conflicting alias is an error. Pinned
+declarations must match both content and offset; ordinary undeclared `&alias`
+operands use DATA aliases directly. Neither option writes or allocates DATA.
+Both options are rejected for IR/assembly emission. Pinned self-contained
+assembly still encodes without `--data`; symbolic stages can be generated
+without either option.
+
+## String values and print statements
+
+`.string %<result-id> "value"` defines a string value; `.println %<value-id>`
+consumes an integer or string without defining a result. Both accept optional
+spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
+[assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
+The semantic string limit is 65535 UTF-8 bytes. String types propagate through
+local initialization/reads; arithmetic, parameters, user-call arguments/results,
+and returns remain integer-only. All existing use/dependency/order rules apply.
+
+```text
+ciq-ir 1
+.function probe
+.string %0 "Hello # from Rust"
+.println %0
+.integer %2 43
+.return %2
+.end
+```
+
+The IR string directive names a semantic value. Lowered assembly `.string`
+directives name DATA requirements, deduplicated by content within the function:
+
+```text
+.string __ciq_string_probe_0 "Hello # from Rust"
+probe:
+argc 0x01
+getmv @__ciq_sdk_System @__ciq_member_println
+frpush
+news &__ciq_string_probe_0
+invokem 0x02
+popv
+ipush1 0x2b
+return
+```
+
+For complete section-project assembly, put literal declarations in the
+**authoritative DATA source**, removing them from CODE. Existing DATA records
+can be reused by changing CODE aliases explicitly; otherwise append unplaced
+strings to DATA and update the manifest length. CODE and IR/text paths consume
+the same DATA bindings. See
+[reproduction](../investigations/compiler-strings.md) for source → IR → assembly
+→ signed PRG and native CODE parity.

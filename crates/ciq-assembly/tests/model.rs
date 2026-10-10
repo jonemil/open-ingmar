@@ -49,3 +49,33 @@ fn memory_construction_uses_the_same_operand_and_layout_validation() {
             .unwrap()
     );
 }
+#[test]
+fn unplaced_literals_require_external_data_bindings() {
+    let program =
+        ciq_assembly::Program::parse(".string greeting \"hello\"\nnews &greeting\nreturn").unwrap();
+    assert!(program.encode().is_err());
+    let invalid = std::collections::BTreeMap::from([("greeting".into(), 0x1000000)]);
+    assert!(
+        program
+            .encode_with_references(&Default::default(), &invalid)
+            .is_err()
+    );
+    let bindings = std::collections::BTreeMap::from([("greeting".into(), 0x123)]);
+    let bytes = program
+        .encode_with_references(&Default::default(), &bindings)
+        .unwrap();
+    assert_eq!(
+        ciq_mc::decode(&bytes).unwrap()[0].instruction.operands(),
+        &[0, 0, 1, 0x23]
+    );
+    assert!(
+        ciq_assembly::Program::parse(".string greeting \"hello\"\n.string greeting \"again\"")
+            .is_err()
+    );
+    assert_eq!(
+        program.to_text(),
+        ciq_assembly::Program::parse(&program.to_text())
+            .unwrap()
+            .to_text()
+    );
+}

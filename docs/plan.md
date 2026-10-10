@@ -21,21 +21,19 @@ describe planned behavior and investigations record the supporting evidence.
 - Own-key PRG signing/verification and supported barrel/IQ reading, packing,
   verification, and IQ creation are implemented.
 - Source → IR → assembly → CODE works in memory and through saved text. Integer
-  arithmetic, initialized locals, user-module calls, integer parameters, and
-  positional arguments are simulator-verified.
-- The latest implementation checkpoint passes 148 Rust tests, Clippy, and
+  arithmetic, initialized locals, user-module calls, integer parameters,
+  positional arguments, string literals/locals, and `System.println` statements
+  are simulator-verified.
+- The latest implementation checkpoint passes 155 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Investigate strings and `System.println` with controlled SDK specimens.
-   Extend source parsing, semantic validation, IR text, VM lowering, and
-   native/text parity together. Validate generated behavior in the simulator.
-2. Investigate branch/exception metadata before conditions or general
+1. Investigate branch/exception metadata before conditions or general
    relocation. Keep placement constraints and preserve unknown metadata.
-3. Build complete applications once required DATA/resource/module structures are
+2. Build complete applications once required DATA/resource/module structures are
    understood. Add cross-function binding and arity/type checks.
-4. Implement [Jungle-driven project builds](design/project-builds.md), including
+3. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
 
 Broader package variants, a separate linker, LLVM, and a full VM are deferred.
@@ -69,8 +67,9 @@ belong in [investigations](investigations/README.md). Key checkpoints:
   [native/text pipeline](investigations/compiler-pipeline.md),
   [arithmetic](investigations/compiler-arithmetic.md),
   [locals](investigations/compiler-locals.md),
-  [module calls](investigations/compiler-calls.md), and
-  [parameters/arguments](investigations/compiler-arguments.md).
+  [module calls](investigations/compiler-calls.md),
+  [parameters/arguments](investigations/compiler-arguments.md), and
+  [strings/printing](investigations/compiler-strings.md).
 
 Use [SDK support scripts](../scripts/README.md) for device downloads, reference
 builds, and simulator sessions. The build helpers default to ignored

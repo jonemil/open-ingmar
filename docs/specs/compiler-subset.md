@@ -5,18 +5,22 @@ Initial restricted frontend, 2026-10-10. Design:
 [constant returns](../investigations/first-compiler.md),
 [arithmetic](../investigations/compiler-arithmetic.md),
 [locals](../investigations/compiler-locals.md),
-[module calls](../investigations/compiler-calls.md), and
-[parameters/arguments](../investigations/compiler-arguments.md).
+[module calls](../investigations/compiler-calls.md),
+[parameters/arguments](../investigations/compiler-arguments.md), and
+[strings/printing](../investigations/compiler-strings.md).
 
 Input is exactly one top-level function:
 
 ```text
-function <identifier>(<parameter-list>?) { <local-declaration>* return <expression>; }
-parameter-list = <identifier> ("," <identifier>)*
+function = "function" identifier "(" parameter-list? ")"
+           "{" statement* "return" expression ";" "}"
+parameter-list = identifier ("," identifier)*
 argument-list = expression ("," expression)*
-local-declaration = "var" <identifier> "=" <expression> ";"
+statement = "var" identifier "=" expression ";"
+          | "System" "." "println" "(" expression ")" ";"
 expression = primary (("+" | "-") primary)*
-primary = <decimal-integer> | <parameter-or-local-identifier> | <module> "." <member> "(" argument-list? ")" | "(" expression ")"
+primary = decimal-integer | string-literal | parameter-or-local-identifier
+        | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
@@ -24,7 +28,7 @@ letters/digits/underscore. `function`, `return`, and `var` are reserved.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
 The accepted literal domain is `0..=127`; computed results may be negative or
 exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
-types, modules/classes, other statements/additional functions, and other
+types, modules/classes, unsupported statements/additional functions, and other
 operators are rejected. This is a frontend limit, not a Monkey C language or VM
 integer limit. The domain deliberately avoids unresolved high-bit one-byte
 immediate behavior.
@@ -36,16 +40,16 @@ covers parameters and earlier initialized function locals. There is no general
 type inference, global/member resolver, whole-program analysis, or optimizer
 yet.
 
-The IR contains integer constants, binary add/subtract definitions, parameter
-reads, local initialization/read and module-call operations, and a final return
-using a value ID, with optional source spans. Source compilation supplies them;
-IR text may omit them. Without locals, lowering emits a label from the function
-name, `argc <parameter-count + 1>`, `ipushz` for zero or `ipush1` for a positive
-supported literal, left/right operands followed by `addv` or `subv` for binary
-definitions, then `return`. The frame count follows the observed hidden context
-slot; omitting SDK global-resolution instructions is limited to this
-context-independent body. It does not establish the frame layout or valid setup
-for arbitrary functions.
+The IR contains integer/string constants, binary add/subtract definitions,
+parameter reads, local initialization/read, module calls, print statements, and
+a final integer return using a value ID, with optional source spans. Source
+compilation supplies them; IR text may omit them. Without locals, lowering emits
+a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
+or `ipush1` for a positive supported literal, left/right operands followed by
+`addv` or `subv` for binary definitions, then `return`. The frame count follows
+the observed hidden context slot; omitting SDK global-resolution instructions is
+limited to this context-independent body. It does not establish the frame layout
+or valid setup for arbitrary functions.
 
 ```sh
 cargo run -p ciq-compiler -- examples/compiler-probe/probe.mc scratch/probe.mcasm
@@ -61,9 +65,9 @@ constructed operations, `parse_ir` resumes [IR text](compiler-ir-text.md), and
 assembler/signing commands consume the output after explicitly integrating it
 into an application section project.
 
-The compiler CLI now supports `--from source|ir|assembly` and
-`--emit ir|assembly|code`. The default two-path invocation still emits assembly
-from source. CODE output is a raw payload, not a PRG. See
+The compiler CLI now supports `--from source|ir|assembly` and `--emit
+ir|assembly|code`. The default two-path invocation still emits assembly from
+source. CODE output is a raw payload, not a PRG. See
 [pipeline commands and limits](compiler-ir-text.md#command-line-stages).
 
 ## Arithmetic and lowering contract
@@ -103,13 +107,13 @@ IR distinguishes semantic `LocalId` from `ValueId` and physical VM slots.
 expression value still has exactly one use; repeated source reads create
 separate read definitions. Initializations execute in source/IR order, including
 unused locals. The backend assigns local slots after parameters in
-initialization order, preserving slot 0, uses
-`argcincsp <parameter-count + 1> <local-count>`, and emits `lputv`/`lgetv`.
-Without locals it uses `argc <parameter-count + 1>`. Parameters plus locals are
-limited to 255 and functions to 1024 total operations. [Controlled SDK output
-and simulator results][ref-controlled-sdk-output-and-simulator-resu] confirm
-two/three-local bodies; the 255-local limit is checked structurally in tests,
-not established as a device runtime limit.
+initialization order, preserving slot 0, uses `argcincsp <parameter-count + 1>
+<local-count>`, and emits `lputv`/`lgetv`. Without locals it uses `argc
+<parameter-count + 1>`. Parameters plus locals are limited to 255 and functions
+to 1024 total operations. [Controlled SDK output and simulator
+results][ref-controlled-sdk-output-and-simulator-resu] confirm two/three-local
+bodies; the 255-local limit is checked structurally in tests, not established as
+a device runtime limit.
 
 Provisional version-1 text gains `.local $<decimal-u32-id> %<value-id>` and
 `.read %<result-id> $<local-id>`, each with the existing optional span. Semantic
@@ -121,31 +125,32 @@ The supported call form is `<module>.<member>(<arguments>?)` in integer
 expressions/initializers. The module is a top-level user module provided by the
 surrounding PRG scaffold, and the member is an existing integer-return function
 with matching positional arity. Global unqualified calls, local/object
-receivers, nested modules, void/string calls, and standalone call statements
-remain unsupported. Module/member names stay symbolic until encoding; neither
-IDs nor DATA method records are generated here.
+receivers, nested modules, and void/string user-module calls remain unsupported.
+The separate `System.println` statement is described below. Module/member names
+stay symbolic until encoding; neither IDs nor DATA method records are generated
+here.
 
 IR contains `ModuleCall { result, module, member, arguments }` and provisional
 `.call %<result> <module> <member> [%<argument> ...]` text. Calls may have
 effects. For any function containing a call, IR operations must appear in the
-backend's left-to-right expression evaluation order, with initialization
-statements in order. Reject incompatible schedules rather than silently
+backend's left-to-right expression evaluation order, with initialization and
+print statements in order. Reject incompatible schedules rather than silently
 reordering effects; pure-only IR keeps its existing ordering flexibility. This
 conservative restriction can change when a more general scheduling policy is
 implemented.
 
-Backend lowering selects
-`getmv @__ciq_module_<module> @__ciq_member_<member>; invokemz`, for zero
-arguments. Nonempty calls additionally use `frpush`, argument expressions in
-order, and `invokem <argument-count + 1>`. Module bindings must identify
-`globals/<module>`; the short `<module>` symbol is a distinct field identity.
-The compiler CLI supports `--symbols <symbol-source.mcasm>` for CODE emission:
-resolve generated aliases by unique stored names in the provided `.symbol`
-declarations, reject absent/ambiguous targets, and preserve ordinary aliases for
-assembly inputs. Library consumers can supply bindings through the assembly
-encoder. [Runtime evidence](../investigations/compiler-calls.md) confirms return
-values and observable call order; the helper functions and their DATA
-module/method records are still supplied by the SDK scaffold.
+Backend lowering selects `getmv @__ciq_module_<module> @__ciq_member_<member>;
+invokemz`, for zero arguments. Nonempty calls additionally use `frpush`,
+argument expressions in order, and `invokem <argument-count + 1>`. Module
+bindings must identify `globals/<module>`; the short `<module>` symbol is a
+distinct field identity. The compiler CLI supports `--symbols
+<symbol-source.mcasm>` for CODE emission: resolve generated aliases by unique
+stored names in the provided `.symbol` declarations, reject absent/ambiguous
+targets, and preserve ordinary aliases for assembly inputs. Library consumers
+can supply bindings through the assembly encoder. [Runtime
+evidence](../investigations/compiler-calls.md) confirms return values and
+observable call order; the helper functions and their DATA module/method records
+are still supplied by the SDK scaffold.
 
 ## Parameters and positional arguments
 
@@ -165,14 +170,47 @@ evaluation-order validation.
 
 Backend prologue counts parameters plus one context slot; parameter index 0
 loads slot 1, and local slots start after all parameters. Nonempty calls select
-the callable, emit `frpush`, evaluate arguments left to right, then
-`invokem <argument-count + 1>`. Empty calls keep `invokemz`. Function/call
-parameter counts are limited to 254 and parameters plus locals to 255, so
-existing u8 fields/slot indexes fit. The 1024-operation and 64-level expression
-nesting limits remain. These encoding limits do not claim runtime validation at
-maximum counts.
+the callable, emit `frpush`, evaluate arguments left to right, then `invokem
+<argument-count + 1>`. Empty calls keep `invokemz`. Function/call parameter
+counts are limited to 254 and parameters plus locals to 255, so existing u8
+fields/slot indexes fit. The 1024-operation and 64-level expression nesting
+limits remain. These encoding limits do not claim runtime validation at maximum
+counts.
 [SDK and runtime evidence](../investigations/compiler-arguments.md) verifies two
 parameters, a following local, nested calls, and generated caller/callee
 execution with observable argument order.
 
 [ref-controlled-sdk-output-and-simulator-resu]: ../investigations/compiler-locals.md
+
+## Strings and printing
+
+Double-quoted literals accept UTF-8 characters and source escapes `\n`, `\r`,
+`\t`, `\"`, and `\\`. Raw newlines, unfinished/unknown escapes, and values
+longer than 65535 UTF-8 bytes are rejected. Empty strings are allowed. Source
+Unicode escape syntax is not supported; IR/assembly use their own documented
+escape syntax.
+
+String literals and string-valued local reads can initialize locals or supply
+`System.println(expression);`. Print statements may occur between local
+initializations and accept one integer or string value. Parameters, arithmetic,
+user-module arguments/results, and the final return remain integer-only. The
+shared validator propagates string types through locals and rejects incompatible
+uses. Concatenation, string returns/parameters, arbitrary SDK calls, and using
+`System.println` as an expression remain unsupported. A local/parameter named
+`System` cannot be used as the print receiver. The function's scaffold must
+provide the SDK module; import/Jungle resolution is not implemented.
+
+`String { result, value }` defines a semantic string; `Println { value }` is an
+effectful sink without a result. Printing participates in the same conservative
+IR scheduling check as user calls. Lowering uses `news` for literals and `getmv;
+frpush; <argument>; invokem 2; popv` for printing. The dedicated
+`__ciq_sdk_System` alias binds only to `Toybox_System`; the member alias binds
+to `println`. This does not establish a general SDK naming convention.
+
+Lowering deduplicates literal content within each function, naming declarations
+`__ciq_string_<function>_<first-occurrence-index>`. These CODE declarations omit
+`at`; they describe required content without assigning DATA placement. Raw CODE
+needs `--data <data-source.mcasm>` in addition to `--symbols`. Matching and
+integration are described in [IR pipeline commands](compiler-ir-text.md) and
+[the runtime experiment](../investigations/compiler-strings.md). Application
+DATA allocation and method metadata remain explicit scaffold work.

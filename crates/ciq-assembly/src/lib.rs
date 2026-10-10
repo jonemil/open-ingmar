@@ -147,6 +147,7 @@ impl Program {
         Ok(program)
     }
     fn validate(&self) -> Result<(), Error> {
+        let mut string_aliases = std::collections::BTreeSet::new();
         for (index, item) in self.items.iter().enumerate() {
             let fail = |message| self.error(index, message);
             match item {
@@ -159,17 +160,19 @@ impl Program {
                     }
                 }
                 Item::String(declaration) => {
+                    if !string_aliases.insert(&declaration.alias) {
+                        return Err(fail("duplicate string alias"));
+                    }
                     if !valid_alias(&declaration.alias)
                         || declaration.value.len() > u16::MAX as usize
                     {
                         return Err(fail("invalid string declaration"));
                     }
                     match declaration.at {
+                        None => (),
                         Some(at) if at < 0x1000000 => (),
                         _ => {
-                            return Err(fail(
-                                "inline code strings require a 24-bit at=0x... placement",
-                            ));
+                            return Err(fail("inline code string placement exceeds 24 bits"));
                         }
                     }
                 }
@@ -276,6 +279,8 @@ impl Program {
     /// The maps bind symbol aliases to IDs and string aliases to DATA offsets.
     /// Missing or duplicate aliases and values exceeding operand widths are
     /// errors. Output contains instructions only, not symbol or string records.
+    /// Unplaced literal declarations require an external binding when referenced;
+    /// their content must be materialized separately in DATA by the caller.
     pub fn encode_with_references(
         &self,
         external: &BTreeMap<String, u32>,
@@ -286,8 +291,14 @@ impl Program {
         for (index, item) in self.items.iter().enumerate() {
             match item {
                 Item::Symbol(d) => declarations.declarations.push(d.clone()),
-                Item::String(d) if strings.insert(d.alias.clone(), d.at.unwrap()).is_some() => {
-                    return Err(self.error(index, format!("duplicate string alias {}", d.alias)));
+                Item::String(d) => {
+                    if let Some(at) = d.at {
+                        if strings.insert(d.alias.clone(), at).is_some() {
+                            return Err(
+                                self.error(index, format!("duplicate string alias {}", d.alias))
+                            );
+                        }
+                    }
                 }
                 _ => (),
             }
@@ -316,9 +327,17 @@ impl Program {
                     Operand::Symbol(alias) => *bindings.get(alias).ok_or_else(|| {
                         self.error(index, format!("undefined symbol alias {alias}"))
                     })? as u64,
-                    Operand::String(alias) => *strings.get(alias).ok_or_else(|| {
-                        self.error(index, format!("undefined string alias {alias}"))
-                    })? as u64,
+                    Operand::String(alias) => {
+                        let at = *strings.get(alias).ok_or_else(|| {
+                            self.error(index, format!("undefined string alias {alias}"))
+                        })?;
+                        if at >= 0x1000000 {
+                            return Err(
+                                self.error(index, "resolved string placement exceeds 24 bits")
+                            );
+                        }
+                        at as u64
+                    }
                 };
                 if value >= (1u64 << (width * 8)) {
                     return Err(self.error(index, "resolved operand exceeds field width"));

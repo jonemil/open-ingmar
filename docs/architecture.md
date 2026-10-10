@@ -27,7 +27,8 @@ crates are currently unpublished.
   packing, and IQ creation. Depends on `ciq-prg`, `ciq-sign`, `zip`,
   `sevenz-rust2`, and `quick-xml`; archive/XML dependencies stay here.
 - **`ciq-compiler`**: restricted source parsing, semantic IR validation/text
-  I/O, and VM lowering. Depends on `ciq-mc` and `ciq-assembly`.
+  I/O, VM lowering, and explicit symbol/literal binding. Depends on `ciq-mc`,
+  `ciq-assembly`, and `ciq-prg` for DATA sources.
 
 See [the documentation guide](README.md) for the distinction between design,
 format specifications, evidence records, and Rust API documentation.
@@ -88,18 +89,21 @@ path does not print and reparse intermediate files. Both paths share validation
 and encoding and must remain equivalent as representations evolve.
 
 `ciq-compiler` owns semantic values and locals, positional parameters, ordered
-calls, and source diagnostics. `backend::lower()` selects VM instructions and
-assigns frame/local slots; `Function::lower()` delegates to it. Assembly
-receives already-selected instructions and handles layout/binding/encoding
-through `ciq-mc`. See [compiler design](design/compiler-ir.md),
+calls/prints, integer/string validation, and source diagnostics.
+`backend::lower()` selects VM instructions and assigns frame/local slots;
+`Function::lower()` delegates to it. Assembly receives already-selected
+instructions and handles layout/binding/encoding through `ciq-mc`. See [compiler
+design](design/compiler-ir.md),
 [the source subset](specs/compiler-subset.md), and
 [the IR format](specs/compiler-ir-text.md).
 
 Generated functions currently use existing application DATA/module metadata.
 Symbol binding consumes an explicit symbol source; it does not create method
-records. Cross-function arity/type checking and complete metadata generation
-remain future work. Signing, packaging, and project configuration do not belong
-in the frontend.
+records. Literal requirements are unplaced in CODE; explicit DATA sources supply
+their offsets without resolving method aliases until reconstruction.
+Cross-function arity/type checking and complete metadata generation remain
+future work. Signing, packaging, and project configuration do not belong in the
+frontend.
 
 ### Agreed layer names and future extraction
 

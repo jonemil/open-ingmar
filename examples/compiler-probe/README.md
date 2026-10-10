@@ -71,6 +71,18 @@ integrates both generated bodies into the supplied module metadata, returning
 `48`. Calls still require explicit symbol bindings and a matching scaffold
 signature.
 
+[strings.mc](strings.mc) prints generated UTF-8 strings and `40 + 2`, then
+returns `43`. Lowering emits named literal requirements with no DATA placement:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/strings.mc scratch/compiler-example/strings.mcasm
+```
+
+Raw CODE uses both `--symbols` and `--data` from an explicit scaffold.
+[The string/print experiment](../../docs/investigations/compiler-strings.md)
+shows literal allocation, native/text parity, signing, and simulator output.
+String concatenation/returns/parameters remain unsupported.
+
 [ref-complete-stop-resume-commands]: ../../docs/specs/compiler-ir-text.md#command-line-stages
 
 [ref-the-arithmetic-experiment]: ../../docs/investigations/compiler-arithmetic.md

@@ -6,7 +6,7 @@
 
 pub mod backend;
 mod bindings;
-pub use bindings::symbol_bindings;
+pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod parser;
 pub use ir_text::parse_ir;
@@ -71,6 +71,13 @@ pub enum Operation {
         result: ValueId,
         value: i32,
     },
+    String {
+        result: ValueId,
+        value: String,
+    },
+    Println {
+        value: ValueId,
+    },
     Binary {
         result: ValueId,
         kind: BinaryOp,
@@ -124,6 +131,9 @@ impl std::error::Error for IrError {}
 /// Locals must be initialized before reads. Functions containing calls require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
+/// String types propagate through local reads; arithmetic, user-call arguments,
+/// parameters, and the return value remain integer-only. Print statements accept
+/// either integer or string values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
@@ -155,8 +165,8 @@ impl Function {
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
     /// Rejects invalid names, spans, value/local dependencies, call ordering,
-    /// and unsupported operation or parameter/local counts. External callee
-    /// arity and types are not checked here.
+    /// incompatible value types, and unsupported operation or parameter/local
+    /// counts. External callee arity and types are not checked here.
     pub fn with_parameters(
         name: String,
         parameter_count: usize,
@@ -188,6 +198,8 @@ impl Function {
         let mut definitions = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
+        let mut string_values = std::collections::BTreeSet::new();
+        let mut string_locals = std::collections::BTreeSet::new();
         for (index, located) in operations.iter().enumerate() {
             let fail = |message: &str| IrError {
                 operation: Some(index),
@@ -203,12 +215,25 @@ impl Function {
                     }
                     (Some(result), vec![])
                 }
+                Operation::String { result, ref value } => {
+                    if value.len() > u16::MAX as usize {
+                        return Err(fail("string UTF-8 byte length exceeds u16"));
+                    }
+                    string_values.insert(result);
+                    (Some(result), vec![])
+                }
+                Operation::Println { value } => (None, vec![value]),
                 Operation::Binary {
                     result,
                     left,
                     right,
                     ..
-                } => (Some(result), vec![left, right]),
+                } => {
+                    if string_values.contains(&left) || string_values.contains(&right) {
+                        return Err(fail("arithmetic requires integer values"));
+                    }
+                    (Some(result), vec![left, right])
+                }
                 Operation::ParameterRead { result, index } => {
                     if index >= parameter_count {
                         return Err(fail("parameter index is outside the function signature"));
@@ -230,12 +255,25 @@ impl Function {
                     if !valid(module) || !valid(member) {
                         return Err(fail("invalid module or member name"));
                     }
+                    if module == "System" {
+                        return Err(fail(
+                            "System calls are supported only as println statements",
+                        ));
+                    }
+                    if arguments.iter().any(|value| string_values.contains(value)) {
+                        return Err(fail(
+                            "user-module calls currently require integer arguments",
+                        ));
+                    }
                     if arguments.len() > MAX_PARAMETERS {
                         return Err(fail("call exceeds 254-argument limit"));
                     }
                     (Some(result), arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
+                    if string_values.contains(&value) {
+                        string_locals.insert(local);
+                    }
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
                     }
@@ -253,9 +291,15 @@ impl Function {
                             "local read must refer to an earlier initialized local",
                         ));
                     }
+                    if string_locals.contains(&local) {
+                        string_values.insert(result);
+                    }
                     (Some(result), vec![])
                 }
                 Operation::Return { value } => {
+                    if string_values.contains(&value) {
+                        return Err(fail("return requires an integer value"));
+                    }
                     if index + 1 != operations.len() {
                         return Err(fail("return must be the final operation"));
                     }
@@ -264,9 +308,7 @@ impl Function {
             };
             for operand in operands {
                 if !definitions.contains_key(&operand) {
-                    return Err(fail(
-                        "operand must refer to an earlier defined integer value",
-                    ));
+                    return Err(fail("operand must refer to an earlier defined value"));
                 }
                 *uses.entry(operand).or_insert(0usize) += 1;
             }
@@ -294,10 +336,12 @@ impl Function {
                 });
             }
         }
-        if operations
-            .iter()
-            .any(|located| matches!(located.operation, Operation::ModuleCall { .. }))
-        {
+        if operations.iter().any(|located| {
+            matches!(
+                located.operation,
+                Operation::ModuleCall { .. } | Operation::Println { .. }
+            )
+        }) {
             // Calls make operation order observable. Until a general scheduler
             // exists, accept only the expression order the backend can preserve.
             enum Task {
@@ -307,7 +351,9 @@ impl Function {
             let mut schedule = Vec::new();
             for (index, located) in operations.iter().enumerate() {
                 let root = match located.operation {
-                    Operation::LocalInitialize { value, .. } | Operation::Return { value } => value,
+                    Operation::LocalInitialize { value, .. }
+                    | Operation::Return { value }
+                    | Operation::Println { value } => value,
                     _ => continue,
                 };
                 let mut tasks = vec![Task::Value(root)];
@@ -354,8 +400,9 @@ impl Function {
     /// Lower this IR function into a typed VM assembly program.
     ///
     /// [`backend::lower`] selects instructions and assigns frame slots. Module
-    /// and member aliases remain unresolved for later binding. Output contains
-    /// a function body, not a complete PRG.
+    /// and member aliases remain unresolved for later binding. Deduplicated
+    /// literal declarations carry content without DATA placement; bind them with
+    /// [`string_bindings`] before encoding CODE. Output is not a complete PRG.
     pub fn lower(&self) -> ciq_assembly::Program {
         backend::lower(self)
     }
@@ -379,6 +426,10 @@ impl Function {
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
+                Operation::String { result, ref value } => {
+                    format!(".string %{} {value:?}", result.0)
+                }
+                Operation::Println { value } => format!(".println %{}", value.0),
                 Operation::Binary {
                     result,
                     kind,
@@ -442,6 +493,10 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         operations: &mut Vec<LocatedOperation>,
     ) -> Result<ValueId, Diagnostic> {
         let operation = match expression.kind {
+            parser::ExpressionKind::String(value) => Operation::String {
+                result: ValueId(operations.len() as u32),
+                value,
+            },
             parser::ExpressionKind::Integer(value) => Operation::Integer {
                 result: ValueId(operations.len() as u32),
                 value,
@@ -516,20 +571,38 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         .collect();
     let mut operations = Vec::new();
     let mut locals = std::collections::BTreeMap::new();
-    for declaration in ast.locals {
-        let value = emit(
-            source,
-            declaration.initializer,
-            &locals,
-            &parameters,
-            &mut operations,
-        )?;
-        let local = LocalId(locals.len() as u32);
-        operations.push(LocatedOperation {
-            operation: Operation::LocalInitialize { local, value },
-            span: Some(declaration.span),
-        });
-        locals.insert(declaration.name, local);
+    for statement in ast.statements {
+        match statement {
+            parser::Statement::Local(declaration) => {
+                let value = emit(
+                    source,
+                    declaration.initializer,
+                    &locals,
+                    &parameters,
+                    &mut operations,
+                )?;
+                let local = LocalId(locals.len() as u32);
+                operations.push(LocatedOperation {
+                    operation: Operation::LocalInitialize { local, value },
+                    span: Some(declaration.span),
+                });
+                locals.insert(declaration.name, local);
+            }
+            parser::Statement::Println { argument, span } => {
+                if locals.contains_key("System") || parameters.contains_key("System") {
+                    return Err(Diagnostic::at(
+                        source,
+                        span.start,
+                        "System receiver is shadowed",
+                    ));
+                }
+                let value = emit(source, argument, &locals, &parameters, &mut operations)?;
+                operations.push(LocatedOperation {
+                    operation: Operation::Println { value },
+                    span: Some(span),
+                });
+            }
+        }
     }
     let value = emit(
         source,
@@ -542,6 +615,12 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         operation: Operation::Return { value },
         span: Some(ast.return_span),
     });
-    Function::with_parameters(ast.name, parameter_count, operations)
-        .map_err(|error| Diagnostic::at(source, 0, error.message))
+    let spans: Vec<_> = operations.iter().map(|op| op.span).collect();
+    Function::with_parameters(ast.name, parameter_count, operations).map_err(|error| {
+        let offset = error
+            .operation
+            .and_then(|index| spans.get(index).copied().flatten())
+            .map_or(0, |span: Span| span.start);
+        Diagnostic::at(source, offset, error.message)
+    })
 }

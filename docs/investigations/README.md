@@ -123,4 +123,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   context/slot observations, nested argument order, generated caller/callee
   execution, and simulator-confirmed `48`/`-40`.
 
+- [Compiler strings and printing](compiler-strings.md): UTF-8 literal records,
+  explicit DATA placement/binding, print result discard, and native/IR/assembly
+  parity with simulator-confirmed output and return value `43`.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

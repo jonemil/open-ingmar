@@ -136,6 +136,17 @@ impl Source {
         symbols: &Bindings,
         code: &Bindings,
     ) -> Result<Self, Error> {
+        let source = Self::parse_layout(text)?;
+        source.encode_with_references(symbols, code)?;
+        Ok(source)
+    }
+
+    /// Parse DATA assembly and validate layout, retaining unresolved field aliases.
+    ///
+    /// Produces a source whose string offsets can be bound before CODE encoding.
+    /// Does not validate referenced symbols or methods; final encoding must
+    /// resolve them through [`Self::encode_with_references`].
+    pub fn parse_layout(text: &str) -> Result<Self, Error> {
         let mut source = Self::default();
         let mut class: Option<classes::source::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
@@ -192,7 +203,7 @@ impl Source {
         if class.is_some() {
             return Err(Error("unterminated .class declaration".into()));
         }
-        source.encode_with_references(symbols, code)?;
+        source.layout()?;
         Ok(source)
     }
 
@@ -401,6 +412,14 @@ impl Source {
         Ok((payload, strings))
     }
 
+    /// Resolve DATA string aliases to offsets after validating fragment layout.
+    ///
+    /// Checks placement, lengths, and duplicate aliases without resolving class
+    /// fields. Use this before CODE encoding when DATA methods refer back to CODE.
+    pub fn string_bindings(&self) -> Result<BTreeMap<String, u32>, Error> {
+        self.layout().map(|(strings, _)| strings)
+    }
+
     fn layout(&self) -> Result<(Bindings, Bindings), Error> {
         let mut offset = 0usize;
         let mut strings = BTreeMap::new();
@@ -470,6 +489,30 @@ impl Source {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn string_layout_can_precede_method_binding_but_encoding_cannot() {
+        let text = ".class owner version=0x02 extends=none statics=none parent=none module=none app_flags=0x0000\n.field symbol=@method bits=0x10 type=0x06 value=code:probe\n.endclass\n.string greeting \"hello\"\n";
+        assert!(Source::parse(text).is_err());
+        let source = Source::parse_layout(text).unwrap();
+        assert_eq!(source.string_bindings().unwrap()["greeting"], 18);
+        assert!(source.encode().is_err());
+        let (payload, strings) = source
+            .encode_with_references(
+                &Bindings::from([("method".into(), 0x42)]),
+                &Bindings::from([("probe".into(), 0x123)]),
+            )
+            .unwrap();
+        assert_eq!(strings["greeting"], 18);
+        assert_eq!(string_at(&payload, 18).unwrap().0, "hello");
+        assert!(
+            Source::parse_layout(&text.replace(
+                ".string greeting",
+                ".bytes at=0x00000000 ff\n.string greeting"
+            ))
+            .is_err()
+        );
+    }
 
     #[test]
     fn authored_strings_allocate_by_order_and_utf8_byte_length() {
