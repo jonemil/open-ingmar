@@ -32,3 +32,24 @@ The useful design analogy here is semantic IR → VM instruction/reference model
 ## Pipeline checkpoint
 
 The user requested proving native composition and text resumption before extending the language. Both routes now work for the constant-return subset, including edited IR and simulator execution. Source compilation, IR text parsing, and explicit IR construction use the same semantic validator; assembly text and native assembly construction use the same structural checks and encoder. See [the checkpoint](../investigations/compiler-pipeline.md). Future operation changes must update validation, native lowering, IR parsing/printing, and equivalence tests together. This requirement keeps the boundaries connected without freezing the operation set or serialization syntax.
+
+## Layer responsibilities and naming
+
+Discussion settled on keeping `ciq-assembly` for the shared assembly representation/infrastructure and `ciq-asm` / `ciq-dis` as the paired assembly/disassembly tools. Earlier rename suggestions are not the plan. Each shared library owns a coherent representation and its rules, rather than miscellaneous shared utilities. Cargo package and executable names can differ, but no name changes are needed ([Cargo target reference](https://doc.rust-lang.org/cargo/reference/cargo-targets.html)).
+
+| Layer | Responsibility | Current location | Possible future boundary |
+|---|---|---|---|
+| Frontend | Source syntax, source-language checks, semantic IR construction | `ciq-compiler` source parser and `compile` | Frontend in `ciq-compiler` |
+| Semantic IR | Values/operations, validation, IR text parsing/printing | `ciq-compiler` types, `Function::new`, `parse_ir`, `to_ir_text` | Shared `ciq-ir` library |
+| Codegen / VM backend | Instruction selection, evaluation-stack/local/frame choices, later calls/control-flow lowering | `ciq-compiler::Function::lower()` | Backend module, possibly a `ciq-codegen` library |
+| Assembly infrastructure | Selected VM instructions, labels, symbolic operands, `.mcasm` parsing/printing, layout/reference resolution and CODE encoding | `ciq-assembly` | Keep this responsibility/name |
+| Instruction encoding | Opcode definitions, concrete operand bytes, instruction encoding/decoding | `ciq-mc` | Keep this responsibility/name |
+| PRG tools | Complete project reconstruction or disassembly/export | `ciq-asm` / `ciq-dis` | Keep the paired names |
+
+Codegen functionality already exists; a separate codegen crate does not. The IR library is a likely useful future extraction, not an implemented crate or a commitment to freeze the present operation set. If extracted, `ciq-ir` should own semantic types, validation, and text I/O and have no dependency on VM lowering or assembly. The frontend produces that representation; codegen consumes it and produces the assembly model. A compiler driver can orchestrate both. In particular, the existing VM-specific `Function::lower()` must stay with the backend rather than move into `ciq-ir` with the types.
+
+As arithmetic/locals/calls grow, isolate VM lowering from semantic definitions, initially through a backend module if sufficient. Extract libraries when independent consumers or dependency boundaries warrant it; do not create packages only to match diagram boxes. No dedicated IR CLI is required: existing compiler commands can expose IR reading/writing/validation, and package names need not equal executable names.
+
+Native model composition and textual stop/resume remain required capabilities. Keep shared validation and equivalence tests as representations change; the exact IR schema, serialization, APIs, backend algorithms, and future crate splits remain amendable. Assembly is a lower-level representation in the broad IR sense, but documentation should call it the assembly model to distinguish it from semantic compiler IR.
+
+Naming comparisons consulted on 2026-10-10: LLVM separates [IR/Core](https://github.com/llvm/llvm-project/blob/main/llvm/lib/IR/CMakeLists.txt), [MC](https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/CMakeLists.txt), and [code-generation layers](https://llvm.org/docs/CodeGenerator.html), while [llvm-mc](https://llvm.org/docs/CommandGuide/llvm-mc.html) names a command using the MC infrastructure. GCC's internal representation names include [GIMPLE](https://gcc.gnu.org/onlinedocs/gccint/GIMPLE.html) and [RTL](https://gcc.gnu.org/onlinedocs/gccint/RTL.html); the GNU assembler command is [as](https://sourceware.org/binutils/docs/as/) in Binutils. These are examples of separating internal component names from user-facing tools, not a required crate naming scheme.
