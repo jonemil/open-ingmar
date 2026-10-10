@@ -12,23 +12,8 @@ pub fn pack_barrel(
     output: impl AsRef<Path>,
     limits: Limits,
 ) -> Result<()> {
-    let source = source.as_ref();
+    let (source, members) = source_tree(source.as_ref(), output.as_ref(), limits)?;
     let output = output.as_ref();
-    if !fs::symlink_metadata(source)?.file_type().is_dir() {
-        return Err(Error::new("barrel source must be an ordinary directory"));
-    }
-    let source = fs::canonicalize(source)?;
-    let parent = output
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    if fs::canonicalize(parent)?.starts_with(&source) {
-        return Err(Error::new("output must be outside the source tree"));
-    }
-    let mut members = Vec::new();
-    inventory(&source, "", &mut members, limits)?;
-    paths::validate(&members, limits)?;
-    members.sort_by(|a, b| a.name.cmp(&b.name));
     let outer = read_manifest(&source, &members, "manifest.xml", limits)?;
     let inner = read_manifest(&source, &members, "content/manifest.xml", limits)?;
     if outer != inner {
@@ -86,11 +71,15 @@ pub fn pack_barrel(
     let mut package = Package::read(data.as_slice(), limits)?;
     package
         .visit_members(|member, input| crate::copy_exact(input, &mut io::sink(), member.size))?;
+    publish(output, &data)
+}
+
+fn publish(output: &Path, data: &[u8]) -> Result<()> {
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(output)?;
-    if let Err(error) = file.write_all(&data).and_then(|()| file.flush()) {
+    if let Err(error) = file.write_all(data).and_then(|()| file.flush()) {
         drop(file);
         let _ = fs::remove_file(output);
         return Err(error.into());
@@ -178,4 +167,104 @@ impl Seek for Bounded {
         }
         Ok(new)
     }
+}
+
+fn source_tree(
+    source: &Path,
+    output: &Path,
+    limits: Limits,
+) -> Result<(std::path::PathBuf, Vec<Member>)> {
+    if !fs::symlink_metadata(source)?.file_type().is_dir() {
+        return Err(Error::new("package source must be an ordinary directory"));
+    }
+    let source = fs::canonicalize(source)?;
+    let parent = output
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    if fs::canonicalize(parent)?.starts_with(&source) {
+        return Err(Error::new("output must be outside the source tree"));
+    }
+    let mut members = Vec::new();
+    inventory(&source, "", &mut members, limits)?;
+    paths::validate(&members, limits)?;
+    members.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok((source, members))
+}
+
+/// Rebuild a modern developer IQ tree without modifying or regenerating signatures.
+/// Verification must pass before a new output file is published.
+pub fn repack_iq(source: impl AsRef<Path>, output: impl AsRef<Path>, limits: Limits) -> Result<()> {
+    let (source, members) = source_tree(source.as_ref(), output.as_ref(), limits)?;
+    let manifest = read_manifest(&source, &members, "manifest.xml", limits)?;
+    if crate::manifest::parse(&manifest)?.kind != Some(Kind::Iq) {
+        return Err(Error::new("repacking requires an IQ application manifest"));
+    }
+    let content_options = sevenz_rust2::encoder_options::EncoderOptions::Lzma2(
+        sevenz_rust2::encoder_options::Lzma2Options::from_level(6),
+    );
+    let header_options = sevenz_rust2::encoder_options::EncoderOptions::Lzma(
+        sevenz_rust2::encoder_options::LzmaOptions::default(),
+    );
+    if u64::from(
+        content_options
+            .get_lzma_dict_size()
+            .max(header_options.get_lzma_dict_size()),
+    ) > limits.dictionary_bytes
+    {
+        return Err(Error::new("IQ writer dictionary exceeds limit"));
+    }
+    let buffer = Bounded {
+        inner: Cursor::new(Vec::new()),
+        limit: limits.archive_bytes,
+    };
+    let mut writer = sevenz_rust2::ArchiveWriter::new(buffer).map_err(backend_error)?;
+    writer.set_content_methods(vec![
+        sevenz_rust2::EncoderConfiguration::new(sevenz_rust2::EncoderMethod::LZMA2)
+            .with_options(content_options),
+    ]);
+    writer.set_encrypt_header(false);
+    // One independent LZMA2 stream per ordinary file, with the pinned default options.
+    for member in &members {
+        if member.directory
+            && members
+                .iter()
+                .any(|other| other.name != member.name && other.name.starts_with(&member.name))
+        {
+            continue;
+        }
+        let entry = sevenz_rust2::ArchiveEntry {
+            name: member.name.trim_end_matches('/').to_owned(),
+            is_directory: member.directory,
+            ..Default::default()
+        };
+        if member.directory {
+            return Err(Error::new(
+                "empty directories are unsupported by the pinned IQ writer",
+            ));
+        } else {
+            let path = source.join(&member.name);
+            if !fs::symlink_metadata(&path)?.file_type().is_file() {
+                return Err(Error::new("source changed while packing"));
+            }
+            let written = writer
+                .push_archive_entry(
+                    entry,
+                    Some(fs::File::open(path)?.take(member.size.saturating_add(1))),
+                )
+                .map_err(backend_error)?;
+            if written.size != member.size {
+                return Err(Error::new("source size changed while packing"));
+            }
+        }
+    }
+    let data = writer.finish()?.inner.into_inner();
+    let mut package = Package::read(data.as_slice(), limits)?;
+    let report = package.verify(None);
+    if !report.verified() {
+        return Err(Error::new(format!(
+            "IQ repacking requires valid modern developer signatures: {report:?}"
+        )));
+    }
+    publish(output.as_ref(), &data)
 }

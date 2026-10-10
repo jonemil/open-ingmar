@@ -1,6 +1,6 @@
 # Connect IQ distribution package: observed 7z and signing profile
 
-Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); modern developer [verification](package-verification.md) implemented; writing remains planned. Evidence: [independent archive/signature investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`. This profile covers our own dual-hash developer-signed export. Store delivery, legacy variants, and general device catalogues are not specified here.
+Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); modern developer [verification](package-verification.md) implemented; [unchanged repacking](iq-repacking.md) is implemented; own-key writing remains planned. Evidence: [independent archive/signature investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`. This profile covers our own dual-hash developer-signed export. Store delivery, legacy variants, and general device catalogues are not specified here.
 
 ## Archive
 

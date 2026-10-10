@@ -75,6 +75,7 @@ dependencies = [
  "ciq-prg",
  "ciq-sign",
  "crc32fast",
+ "lzma-rust2",
  "quick-xml",
  "rand_core",
  "rsa",

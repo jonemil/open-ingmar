@@ -22,8 +22,12 @@ impl<'a> Header<'a> {
         Ok(self.take(1)?[0])
     }
     fn expect(&mut self, n: u8) -> Result<()> {
-        if self.byte()? != n {
-            return Err(Error::new("unsupported 7z header structure"));
+        let actual = self.byte()?;
+        if actual != n {
+            return Err(Error::new(format!(
+                "unsupported 7z header structure at {}: expected {n:#x}, got {actual:#x}",
+                self.at - 1
+            )));
         }
         Ok(())
     }
@@ -378,4 +382,129 @@ pub(crate) fn seven_z(data: &[u8], limits: Limits) -> Result<()> {
     }
     h.expect(0)?;
     h.done()
+}
+
+/// Decode the deliberately narrow single-LZMA encoded-header profile before the
+/// backend sees counts or names. Reframe internally with an ordinary raw header.
+pub(crate) fn normalize_seven_z(data: &mut Vec<u8>, limits: Limits) -> Result<()> {
+    use std::io::Read;
+    let start = data
+        .get(..32)
+        .ok_or_else(|| Error::new("truncated 7z header"))?;
+    let word = |b: &[u8]| u32::from_le_bytes(b.try_into().unwrap());
+    if crc32fast::hash(&start[12..32]) != word(&start[8..12]) {
+        return Err(Error::new("7z start-header CRC mismatch"));
+    }
+    let at = u64::from_le_bytes(start[12..20].try_into().unwrap())
+        .checked_add(32)
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or_else(|| Error::new("7z offset overflow"))?;
+    let size = u64::from_le_bytes(start[20..28].try_into().unwrap());
+    if size > limits.header_bytes as u64 {
+        return Err(Error::new("7z header exceeds limit"));
+    }
+    let end = at
+        .checked_add(size as usize)
+        .ok_or_else(|| Error::new("7z header overflow"))?;
+    let raw = data
+        .get(at..end)
+        .ok_or_else(|| Error::new("truncated 7z next header"))?;
+    if crc32fast::hash(raw) != word(&start[28..32]) {
+        return Err(Error::new("7z next-header CRC mismatch"));
+    }
+    if raw.first() != Some(&23) {
+        return Ok(());
+    }
+    let header_limits = Limits {
+        entries: 1,
+        total_bytes: limits.header_bytes as u64,
+        ..limits
+    };
+    let mut check = Header { data: raw, at: 1 };
+    if streams(&mut check, header_limits, at)? != 1 {
+        return Err(Error::new("unsupported encoded-header streams"));
+    }
+    check.done()?;
+    let mut h = Header { data: raw, at: 1 };
+    h.expect(6)?;
+    let position = h
+        .number()?
+        .checked_add(32)
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or_else(|| Error::new("encoded-header offset overflow"))?;
+    h.expect(1)?;
+    h.expect(9)?;
+    let packed_size = h.number()?;
+    let packed_end = usize::try_from(packed_size)
+        .ok()
+        .and_then(|n| position.checked_add(n))
+        .ok_or_else(|| Error::new("encoded-header size overflow"))?;
+    let packed = data
+        .get(position..packed_end)
+        .ok_or_else(|| Error::new("truncated encoded header"))?;
+    if h.data.get(h.at) == Some(&10) {
+        h.byte()?;
+        h.expect(1)?;
+        if word(h.take(4)?) != crc32fast::hash(packed) {
+            return Err(Error::new("encoded-header packed CRC mismatch"));
+        }
+    }
+    h.expect(0)?;
+    h.expect(7)?;
+    h.expect(11)?;
+    h.expect(1)?;
+    h.expect(0)?;
+    h.expect(1)?;
+    h.expect(0x23)?;
+    if h.take(3)? != [3, 1, 1] {
+        return Err(Error::new("only single-LZMA encoded headers are supported"));
+    }
+    h.expect(5)?;
+    let props = h.take(5)?;
+    dictionary(&[3, 1, 1], props, limits)?;
+    h.expect(12)?;
+    let decoded_size = h.number()?;
+    if decoded_size > limits.header_bytes as u64 {
+        return Err(Error::new("decoded 7z header exceeds limit"));
+    }
+    let mut decoded_crc = None;
+    if h.data.get(h.at) == Some(&10) {
+        h.byte()?;
+        h.expect(1)?;
+        decoded_crc = Some(word(h.take(4)?));
+    }
+    h.expect(0)?;
+    if h.data.get(h.at) == Some(&8) {
+        h.byte()?;
+        if decoded_crc.is_none() {
+            h.expect(10)?;
+            h.expect(1)?;
+            decoded_crc = Some(word(h.take(4)?));
+        }
+        h.expect(0)?;
+    }
+    h.expect(0)?;
+    h.done()?;
+    let decoded_crc =
+        decoded_crc.ok_or_else(|| Error::new("encoded header requires decoded CRC"))?;
+    let dict = word(&props[1..]);
+    let mut decoder =
+        lzma_rust2::LzmaReader::new_with_props(packed, decoded_size, props[0], dict, None)?;
+    let mut decoded = Vec::new();
+    (&mut decoder)
+        .take(decoded_size.saturating_add(1))
+        .read_to_end(&mut decoded)?;
+    if decoded.len() as u64 != decoded_size || crc32fast::hash(&decoded) != decoded_crc {
+        return Err(Error::new("decoded 7z header size or CRC mismatch"));
+    }
+    if decoded.first() != Some(&1) {
+        return Err(Error::new("nested encoded headers are unsupported"));
+    }
+    data.truncate(at);
+    data.extend_from_slice(&decoded);
+    data[20..28].copy_from_slice(&decoded_size.to_le_bytes());
+    data[28..32].copy_from_slice(&decoded_crc.to_le_bytes());
+    let crc = crc32fast::hash(&data[12..32]);
+    data[8..12].copy_from_slice(&crc.to_le_bytes());
+    Ok(())
 }

@@ -9,13 +9,14 @@ publish.workspace = true
 ciq-prg.workspace = true
 ciq-sign.workspace = true
 zip = { version = "=6.0.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-sevenz-rust2 = { version = "=0.20.2", default-features = false }
+sevenz-rust2 = { version = "=0.20.2", default-features = false, features = ["compress"] }
+lzma-rust2 = { version = "=0.16.5", default-features = false, features = ["std"] }
+crc32fast = "=1.5.2"
 quick-xml = { version = "=0.41.0", default-features = false }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-crc32fast = "1.5.0"
 rsa = { version = "0.9.10", default-features = false, features = ["std"] }
 rand_core = { version = "0.6.4", features = ["getrandom"] }

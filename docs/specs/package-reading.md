@@ -15,7 +15,7 @@ cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacke
 
 `unpack` creates a **new** destination; an existing directory, file, or symlink is refused. The destination's parent must already exist. It writes the archive's actual tree, preserving every ordinary member's bytes, including unknown files, XML whitespace, signatures, resources, and external debug metadata. It creates directories and empty files, but does not restore archive timestamps, ownership, executable bits, or other permissions. Inspection reports go to stdout, not into the extracted package.
 
-Both commands print `Signatures were not verified.` The separate [verify command](package-verification.md) now checks the modern developer IQ profile and its PRGs. Packing, package re-signing, and automatic disassembly are later stages. Pass an extracted PRG to the existing tools explicitly:
+Both commands print `Signatures were not verified.` The separate [verify command](package-verification.md) now checks the modern developer IQ profile and its PRGs. Canonical barrel packing and [unchanged IQ repacking](iq-repacking.md) are implemented; package re-signing and automatic disassembly remain later stages. Pass an extracted PRG to the existing tools explicitly:
 
 ```sh
 cargo run -p ciq-dis -- all scratch/unpacked-application/006-B4257-00/barrel-app.prg scratch/unpacked-prg-project
@@ -54,7 +54,7 @@ Own header preflight validates counts, sizes, coder properties, and stream/file 
 
 Supported ZIP: ordinary single-disk classic ZIP, UTF-8 names, Store and Deflate, including the SDK's data descriptors. ZIP64, split archives, non-UTF-8 legacy names, encryption, special entries, and other methods are rejected. The central directory must end immediately before the end-directory record, allowing its ordinary archive comment.
 
-Supported 7z: an unencoded next header, internal file metadata, and one simple Copy, LZMA, or LZMA2 coder per block, with optional substream descriptions. Simple solid streams are exercised with independently authored Copy fixtures; the real SDK specimen uses independent LZMA2 blocks. Mixed per-block CRC availability with an explicit substream CRC table is rejected. Encoded/compressed headers, external metadata, coder chains/graphs, encryption, anti-items, and unknown file properties are rejected until bounded support is implemented. Optional known timestamp/attribute fields are parsed by the backend; extra ordinary package files remain supported.
+Supported 7z: an unencoded next header or the bounded single-LZMA encoded-header profile described in [IQ repacking](iq-repacking.md), internal file metadata, and one simple Copy, LZMA, or LZMA2 coder per block, with optional substream descriptions. Simple solid streams are exercised with independently authored Copy fixtures; the real SDK specimen uses independent LZMA2 blocks. Mixed per-block CRC availability with an explicit substream CRC table is rejected. Other encoded-header profiles, external metadata, coder chains/graphs, encryption, anti-items, and unknown file properties are rejected until bounded support is implemented. Optional known timestamp/attribute fields are parsed by the backend; extra ordinary package files remain supported.
 
 These restrictions are implementation limits, not claims that other Garmin packages cannot use those features.
 

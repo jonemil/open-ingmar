@@ -292,7 +292,7 @@ fn links_special_entries_encryption_and_codecs_are_rejected() {
     let central = codec.windows(4).position(|b| b == b"PK\x01\x02").unwrap();
     codec[central + 10..central + 12].copy_from_slice(&99u16.to_le_bytes());
     assert!(open(codec).is_err());
-    assert_rejected(envelope(&[], &[23]), "encoded");
+    assert_rejected(envelope(&[], &[23]), "truncated");
     let mut header = vec![
         1, 4, 6, 0, 1, 9, 0, 0, 7, 11, 1, 0, 1, 1, 0x21, 12, 0, 0, 0, 5, 0, 0, 0,
     ];
@@ -547,6 +547,106 @@ mod verification {
     use rand_core::OsRng;
     use rsa::{RsaPrivateKey, pkcs8::EncodePrivateKey};
     use std::sync::OnceLock;
+
+    fn iq_tree(temp: &Temp, fixture: &Fixture) -> PathBuf {
+        let root = temp.0.join("source");
+        fs::create_dir(&root).unwrap();
+        for (name, bytes) in &fixture.entries {
+            let path = root.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+        root
+    }
+    #[test]
+    fn iq_repack_preserves_members_signatures_and_is_deterministic() {
+        let fixture = Fixture::new();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        fs::create_dir(root.join("empty-directory")).unwrap();
+        assert!(
+            ciq_package::repack_iq(&root, temp.output(), Limits::default())
+                .unwrap_err()
+                .to_string()
+                .contains("empty directories")
+        );
+        assert!(!temp.output().exists());
+        fs::remove_dir(root.join("empty-directory")).unwrap();
+        fs::write(root.join("empty.bin"), []).unwrap();
+        ciq_package::repack_iq(&root, temp.output(), Limits::default()).unwrap();
+        let second = temp.0.join("second.iq");
+        let result = Command::new(env!("CARGO_BIN_EXE_ciq-package"))
+            .arg("repack-iq")
+            .arg(&root)
+            .arg(&second)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(fs::read(temp.output()).unwrap(), fs::read(second).unwrap());
+        let mut package = Package::open(temp.output(), Limits::default()).unwrap();
+        assert!(package.verify(Some(&keys()[0].public_key())).verified());
+        let extracted = temp.0.join("extracted");
+        package.unpack(&extracted).unwrap();
+        for (name, bytes) in &fixture.entries {
+            assert_eq!(&fs::read(extracted.join(name)).unwrap(), bytes);
+        }
+        assert_eq!(fs::read(extracted.join("empty.bin")).unwrap(), []);
+    }
+    #[test]
+    fn iq_repack_rejects_stale_or_invalid_signatures_without_output() {
+        let fixture = Fixture::new();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        for name in ["manifest.xml", "a/app.prg", "manifest.sig2", "dev_key.pub"] {
+            let path = root.join(name);
+            let original = fs::read(&path).unwrap();
+            let mut changed = original.clone();
+            if name == "manifest.xml" {
+                changed.push(b'\n');
+            } else {
+                let last = changed.len() - 1;
+                changed[last] ^= 1;
+            }
+            fs::write(&path, changed).unwrap();
+            assert!(
+                ciq_package::repack_iq(&root, temp.output(), Limits::default()).is_err(),
+                "{name}"
+            );
+            assert!(!temp.output().exists());
+            fs::write(path, original).unwrap();
+        }
+    }
+    #[test]
+    fn iq_repack_refuses_existing_outputs_and_obeys_limits() {
+        let fixture = Fixture::new();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        for limits in [
+            Limits {
+                archive_bytes: 64,
+                ..Limits::default()
+            },
+            Limits {
+                entries: 2,
+                ..Limits::default()
+            },
+            Limits {
+                header_bytes: 1,
+                ..Limits::default()
+            },
+        ] {
+            assert!(ciq_package::repack_iq(&root, temp.output(), limits).is_err());
+            assert!(!temp.output().exists());
+        }
+        fs::write(temp.output(), b"preserve").unwrap();
+        assert!(ciq_package::repack_iq(&root, temp.output(), Limits::default()).is_err());
+        assert_eq!(fs::read(temp.output()).unwrap(), b"preserve");
+        assert!(ciq_package::repack_iq(&root, root.join("inside.iq"), Limits::default()).is_err());
+    }
     fn keys() -> &'static [DeveloperKey; 2] {
         static KEYS: OnceLock<[DeveloperKey; 2]> = OnceLock::new();
         KEYS.get_or_init(|| {
@@ -982,4 +1082,51 @@ fn packing_rejects_symlinks_and_case_collisions() {
     fs::write(source.join("UNKNOWN.bin"), b"collision").unwrap();
     assert!(ciq_package::pack_barrel(&source, temp.output(), Limits::default()).is_err());
     assert!(!temp.output().exists());
+}
+
+#[test]
+fn encoded_lzma_headers_are_checked_before_backend_allocation() {
+    let mut writer = sevenz_rust2::ArchiveWriter::new(Cursor::new(Vec::new())).unwrap();
+    writer.set_encrypt_header(false);
+    for (name, bytes) in iq_entries() {
+        writer
+            .push_archive_entry(
+                sevenz_rust2::ArchiveEntry {
+                    name: name.into(),
+                    ..Default::default()
+                },
+                Some(bytes),
+            )
+            .unwrap();
+    }
+    let data = writer.finish().unwrap().into_inner();
+    let at = 32 + u64::from_le_bytes(data[12..20].try_into().unwrap()) as usize;
+    assert_eq!(data[at], 23);
+    assert!(open(data.clone()).is_ok());
+    let encoded_size = u64::from_le_bytes(data[20..28].try_into().unwrap()) as usize;
+    assert!(
+        Package::read(
+            data.as_slice(),
+            Limits {
+                header_bytes: encoded_size,
+                ..Limits::default()
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        Package::read(
+            data.as_slice(),
+            Limits {
+                dictionary_bytes: 4096,
+                ..Limits::default()
+            }
+        )
+        .is_err()
+    );
+    let mut corrupt = data.clone();
+    corrupt[at - 1] ^= 1;
+    assert!(open(corrupt).is_err());
+    // Valid outer CRCs do not permit an arbitrary encoded-header graph.
+    assert!(open(envelope(&data[32..at], &[23, 6, 0, 2])).is_err());
 }

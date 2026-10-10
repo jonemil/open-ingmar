@@ -1,8 +1,8 @@
 //! Package reading, verification and barrel packing; see docs/specs/package-reading.md
-//! and docs/specs/barrel-packing.md.
+//! and docs/specs/barrel-packing.md / docs/specs/iq-repacking.md.
 mod manifest;
 mod pack;
-pub use pack::pack_barrel;
+pub use pack::{pack_barrel, repack_iq};
 mod paths;
 mod preflight;
 mod verify;
@@ -150,6 +150,7 @@ impl Package {
             }
             (Backend::Zip(Box::new(archive)), Kind::Barrel, members)
         } else if data.starts_with(b"7z\xbc\xaf\x27\x1c") {
+            preflight::normalize_seven_z(&mut data, limits)?;
             preflight::seven_z(&data, limits)?;
             let mut archive = sevenz_rust2::ArchiveReader::new(
                 Cursor::new(data),

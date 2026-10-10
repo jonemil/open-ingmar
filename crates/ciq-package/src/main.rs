@@ -6,17 +6,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         || (args[0] != "list"
             && args[0] != "unpack"
             && args[0] != "verify"
-            && args[0] != "pack-barrel")
+            && args[0] != "pack-barrel"
+            && args[0] != "repack-iq")
         || (args[0] == "list" && args.len() != 2)
-        || ((args[0] == "unpack" || args[0] == "pack-barrel") && args.len() != 3)
+        || ((args[0] == "unpack" || args[0] == "pack-barrel" || args[0] == "repack-iq")
+            && args.len() != 3)
         || (args[0] == "verify"
             && !(args.len() == 2 || (args.len() == 4 && args[2] == "--expected-key")))
     {
-        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>] | pack-barrel <directory> <new.barrel>".into());
+        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>] | pack-barrel <directory> <new.barrel> | repack-iq <directory> <new.iq>".into());
     }
     if args[0] == "pack-barrel" {
         ciq_package::pack_barrel(&args[1], &args[2], Limits::default())?;
         println!("Packed barrel to {}", PathBuf::from(&args[2]).display());
+        return Ok(());
+    }
+    if args[0] == "repack-iq" {
+        ciq_package::repack_iq(&args[1], &args[2], Limits::default())?;
+        println!(
+            "Repacked IQ to {}; modern developer signatures verified, signed member bytes retained.",
+            PathBuf::from(&args[2]).display()
+        );
         return Ok(());
     }
     let mut package = Package::open(PathBuf::from(&args[1]), Limits::default())?;
