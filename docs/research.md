@@ -4,6 +4,9 @@
 
 Distinguish these categories explicitly:
 
+- **Officially documented:** stated in Garmin's documentation, with a URL,
+  review date, and applicable API/SDK version when available; not necessarily
+  reproduced with our current SDK or target.
 - **Source-derived:** observed in a named external implementation at a pinned
   revision; not yet confirmed against Garmin output.
 - **Experimentally observed:** reproduced with a recorded artifact, toolchain,

@@ -204,6 +204,7 @@ commands, evidence, and limits.
 - [Plan and current status](docs/plan.md)
 - [Architecture](docs/architecture.md)
 - [Research and documentation conventions](docs/research.md)
+- [Official Garmin reference reading map](docs/investigations/official-garmin-documentation.md)
 - [Developer signing](docs/specs/developer-signatures.md)
 - [Instruction reference](docs/specs/instructions.md)
 - [Symbol assembly and named operands](docs/specs/symbol-assembly.md)

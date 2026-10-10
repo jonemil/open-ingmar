@@ -1,5 +1,7 @@
 # Investigation index
 
+- [Official Garmin documentation](official-garmin-documentation.md): reading
+  map and documented language, lifecycle, and Jungle rules for future work.
 - [Local SDK inventory](sdk-inventory.md): SDK 9.2.0 files, launcher interface,
   and initial execution-environment limitations.
 - [Hello World reference build](hello-world-build.md): successful SDK 9.2.0

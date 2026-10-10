@@ -93,6 +93,12 @@ compatibility checks remain to be specified from evidence.
 
 ## Investigation and implementation sequence
 
+The [official documentation review][official-docs] records configuration
+evaluation, path bases, precedence, and direct barrel-project dependencies.
+Use those documented rules to choose SDK experiments before defining our subset.
+
+[official-docs]: ../investigations/official-garmin-documentation.md
+
 1. Before implementation, document a supported Jungle grammar and resolution
    rules using bundled Garmin documentation and controlled SDK experiments.
    Investigate variables/substitution, path bases, lists and multiple Jungle

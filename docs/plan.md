@@ -9,6 +9,12 @@ The current reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
 [Architecture](architecture.md) defines implementation boundaries; design pages
 describe planned behavior and investigations record the supporting evidence.
 
+Use the [official documentation reading map][official-docs] when extending
+language, lifecycle, or project configuration support. Its documented contracts
+guide SDK experiments; they do not replace binary-format evidence.
+
+[official-docs]: investigations/official-garmin-documentation.md
+
 ## Current capabilities
 
 - Eight workspace crates implement PRG handling, instructions, assembly,
@@ -62,6 +68,9 @@ describe planned behavior and investigations record the supporting evidence.
    null/object/array operations required for View creation. Keep complete-PRG
    native/text parity and simulator checks. Broader application profiles and
    resource assets remain open.
+   The official subpage review also records inherited callback signatures and
+   container source forms. Validate the documented method-argument limit before
+   broadening calls; investigate extended code separately when needed.
 2. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
 3. Revisit DATA string authoring and shared address-region rules as complete
