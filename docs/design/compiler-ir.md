@@ -79,8 +79,9 @@ diagnose VM-level issues throughout that evolution.
 
 An unmarked function remains one implicit block. An explicit function begins
 with a block marker; the first declared block is entry. Every block terminates
-with an integer return, Boolean branch, or jump. Targets must name later blocks
-and every block must be reachable. No implicit fallthrough or loops are accepted.
+with an integer return, Boolean branch, or jump. Targets may name earlier or
+later blocks; every block must be reachable from entry. No implicit fallthrough
+is accepted.
 
 Integer equality and greater-than produce transient Boolean values, consumed
 only by branches. These are semantic operations; the backend selects `eq`/`gt`
@@ -90,17 +91,18 @@ assembly layer. No fallthrough optimization is implemented.
 Expression values cannot cross block boundaries. Each block emits complete
 expression trees into statement/terminator sinks, leaving an empty evaluation
 stack on every edge. Stored locals may cross edges: validation intersects
-initialized-local sets from all predecessors at a join. Local identities remain
+initialized-local sets from all predecessors at a join, including loop edges.
+Local identities remain
 unique; assignments reuse initialized locals without changing their type. Frame
 slots are allocated across the whole
 function, including mutually exclusive paths. This avoids introducing phi values
 or a general stack-merge policy before they are needed.
 
-The frontend emits structured `if/else` statements into the same forward-only
+The frontend emits structured `if/else` and `while` statements into the same
 graph. Continuing arms jump to a join declared after both arms; returning arms
 have no join edge. Nested arms preserve this declaration order. Omit joins when
-both arms return and reject unreachable following statements. All paths must
-return an integer.
+both arms return and reject unreachable following statements. All fallthrough
+paths must return an integer.
 
 Name resolution gives each arm an inherited environment and discards its local
 declarations on exit. Sibling declarations may reuse names but receive distinct
@@ -111,8 +113,8 @@ rather than source environments.
 
 This supports nested statements and early returns without expression value
 joins. [The nested-condition experiment][nested] verifies selected prints
-and continuing paths in the simulator. Backward edges and loops still need
-revised graph and initialization validation.
+and continuing paths in the simulator. Loop construction and initialization
+checks extend this representation as described below.
 [Condition experiments](../investigations/compiler-conditions.md) verify both
 comparison outcomes in the official simulator and native/text CODE parity.
 
@@ -143,6 +145,37 @@ The [assignment experiment][assignments] verifies integer and string writes in
 both arms, later reads/increments, and native/text CODE parity. These are fixed
 type rules for our supported subset, not a claim that Monkey C locals generally
 have fixed types.
+
+## Loops and initialization analysis
+
+A `while` statement jumps to a test block, evaluates its comparison on each
+visit, branches to the body or exit, and sends continuing body paths back to
+the test. A returning body path has no backedge. Body declarations have a nested
+source scope and fixed slots; their initializers execute on every iteration.
+The exit remains reachable in the source analysis even when the body returns,
+since the condition may initially be false. No iteration cap or termination
+proof is generated.
+
+Reachability now walks edges from entry, rather than checking whether each
+block has a predecessor. This rejects disconnected cycles. Block IDs and textual
+order do not determine execution order. The final declared block still returns;
+expression definitions and local declarations must precede their textual uses.
+Expression values remain block-local, so no stack values cross loop edges.
+
+Definite initialization uses a greatest fixed point over the reachable graph.
+For each block, its incoming set is the intersection of predecessor outgoing
+sets; its outgoing set adds its local initializers. Start sets at the universe
+of declared locals and repeatedly intersect until unchanged. Entry has an empty
+external predecessor, preventing a backedge from establishing first-entry
+initialization. Within a block, scan operations in order, adding each initializer
+before checking subsequent reads/writes. Assignments never establish a local.
+This accounts for zero iterations without rejecting common locals that remain
+initialized through cycles.
+
+Types remain fixed by unique initializers, and source construction satisfies
+the textual declaration-before-use rule. A general type inference or SSA
+framework is unnecessary here. [Loop evidence][loops] covers zero/multiple
+iterations, reused body slots, nested conditions, and native/text parity.
 
 ## Rationale and evidence
 
@@ -202,3 +235,5 @@ this boundary and generated UTF-8 output in the simulator.
 [nested]: ../investigations/compiler-nested-conditions.md
 
 [assignments]: ../investigations/compiler-assignments.md
+
+[loops]: ../investigations/compiler-loops.md

@@ -484,3 +484,159 @@ fn assignment_effect_order_and_operation_limits_include_each_write() {
         .contains("operation limit")
     );
 }
+
+#[test]
+fn while_tests_each_iteration_and_preserves_body_local_initialization() {
+    let f = compile("function f(x) { var n = x; var total = 0; while (n > 0) { var current = n; if (current == 2) { total = total + 5; } else { total = total + current; } n = n - 1; } return total; }").unwrap();
+    for (argument, expected) in [(0, 0), (1, 1), (2, 6), (3, 9), (4, 13), (9, 48)] {
+        assert_eq!(execute(&f, argument), expected);
+    }
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(
+        f.lower().encode().unwrap(),
+        ciq_assembly::Program::parse(&f.assembly())
+            .unwrap()
+            .encode()
+            .unwrap()
+    );
+    assert_eq!(
+        Function::with_parameters(
+            f.name().into(),
+            f.parameter_count(),
+            f.operations().to_vec()
+        )
+        .unwrap(),
+        f
+    );
+    let code = decode(&f.lower().encode().unwrap()).unwrap();
+    assert!(code.iter().any(|i| {
+        i.relative_target()
+            .is_some_and(|target| target < i.offset as i64)
+    }));
+    assert_eq!(code[0].instruction.operands(), &[2, 3]);
+    let nested = compile("function f(x) { var n = x; var total = 0; while (n > 0) { var inner = n; while (inner > 0) { total = total + 1; inner = inner - 1; } n = n - 1; } return total; }").unwrap();
+    for (argument, expected) in [(0, 0), (1, 1), (3, 6)] {
+        assert_eq!(execute(&nested, argument), expected);
+    }
+}
+
+#[test]
+fn while_early_returns_leave_the_zero_iteration_exit_available() {
+    let f = compile("function f(x) { var n = x; while (n > 0) { if (n == 2) { return 42; } else { n = n - 1; } } return 7; }").unwrap();
+    for (argument, expected) in [(0, 7), (1, 7), (2, 42), (3, 42)] {
+        assert_eq!(execute(&f, argument), expected);
+    }
+    let f = compile("function f(x) { while (x > 0) { return 41; } return 43; }").unwrap();
+    assert_eq!(execute(&f, 0), 43);
+    assert_eq!(execute(&f, 1), 41);
+    let f = compile("function f(x) { var n = x; if (n > 0) { while (n > 0) { n = n - 1; } } else { n = 3; } return n; }").unwrap();
+    assert_eq!(execute(&f, 0), 3);
+    assert_eq!(execute(&f, 4), 0);
+    assert!(
+        compile("function f(x) { while (x > 0) { return 41; } }")
+            .unwrap_err()
+            .message
+            .contains("every path")
+    );
+}
+
+#[test]
+fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_values() {
+    // Numeric IDs and declaration order intentionally differ from execution order.
+    let text = "ciq-ir 2\n.function f parameters=1\n.block ^100\n.jump ^5\n.block ^1\n.integer %0 7\n.local $0 %0\n.jump ^5\n.block ^5\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^50\n.block ^50\n.read %4 $0\n.return %4\n.end";
+    // Changing the first edge to the body makes its initializer definite at exit.
+    let mandatory_body = text.replacen(".jump ^5", ".jump ^1", 1);
+    assert_eq!(execute(&parse_ir(&mandatory_body).unwrap(), 0), 7);
+
+    assert!(
+        parse_ir(text)
+            .unwrap_err()
+            .message
+            .contains("initialized local")
+    );
+    let assign = text.replace(
+        ".read %4 $0\n.return %4",
+        ".integer %4 2\n.assign $0 %4\n.integer %5 3\n.return %5",
+    );
+    assert!(
+        parse_ir(&assign)
+            .unwrap_err()
+            .message
+            .contains("incoming path")
+    );
+    // A loop header cannot read a body-only initializer, even on the backedge.
+    let header = text
+        .replace(".parameter %1 0", ".read %1 $0")
+        .replace(".read %4 $0", ".integer %4 1");
+    assert!(parse_ir(&header).is_err());
+    let disconnected = "ciq-ir 2\n.function f\n.block ^0\n.jump ^3\n.block ^1\n.jump ^2\n.block ^2\n.jump ^1\n.block ^3\n.integer %0 1\n.return %0\n.end";
+    assert!(
+        parse_ir(disconnected)
+            .unwrap_err()
+            .message
+            .contains("unreachable")
+    );
+    // An initializer inside a cyclic block must still precede its first local read.
+    let bad = "ciq-ir 2\n.function f parameters=1\n.block ^0\n.jump ^1\n.block ^1\n.read %0 $0\n.local $0 %0\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^2\n.integer %4 1\n.return %4\n.end";
+    assert!(parse_ir(bad).is_err());
+}
+
+#[test]
+fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
+    for source in [
+        "function f(x) { while (x) {} return 1; }",
+        "function f(x) { while (x > 0) x = 1; return 1; }",
+        "function f(x) { while (x > 0) { var n = 1; } return n; }",
+        "function f(x) { while (x > 0) { var n = 1; } n = 2; return 1; }",
+        "function f(x) { var n = 1; while (x > 0) { var n = 2; } return n; }",
+        "function f(x) { while (x > 0) { break; } return 1; }",
+        "function f(x) { while (x > 0) { continue; } return 1; }",
+        "function f() { var while = 1; return while; }",
+        "function while() { return 1; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let nest = |n| {
+        format!(
+            "function f(x) {{ {} {} return 1; }}",
+            "while (x > 0) {".repeat(n),
+            "}".repeat(n)
+        )
+    };
+    assert!(compile(&nest(64)).is_ok());
+    assert!(compile(&nest(65)).unwrap_err().message.contains("nesting"));
+    let mixed = format!(
+        "function f(x) {{ {}{}return 1; {}{}return 2; }}",
+        "if (x == 0) {".repeat(32),
+        "while (x > 0) {".repeat(33),
+        "}".repeat(33),
+        "} else { return 1; }".repeat(32)
+    );
+    assert!(compile(&mixed).unwrap_err().message.contains("nesting"));
+}
+
+#[test]
+fn loop_effects_and_text_pipeline_remain_inside_test_body_and_exit_blocks() {
+    let f = compile(include_str!("../../../examples/compiler-probe/loops.mc")).unwrap();
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(
+        f.lower(),
+        ciq_assembly::Program::parse(&f.assembly()).unwrap()
+    );
+    let f = compile("function f() { var n = 3; while (Numbers.condition(n) > 0) { n = Numbers.next(n); System.println(n); } return Numbers.after(n); }").unwrap();
+    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let assembly = f.assembly();
+    assert!(
+        assembly.find("__ciq_member_condition").unwrap()
+            > assembly.find("__ciq_block_f_1:").unwrap()
+    );
+    assert!(
+        assembly.find("__ciq_member_next").unwrap() > assembly.find("__ciq_block_f_2:").unwrap()
+    );
+    assert!(
+        assembly.find("__ciq_member_after").unwrap() > assembly.find("__ciq_block_f_3:").unwrap()
+    );
+    let strings = compile("function f(x) { var text = \"first\"; var n = x; while (n > 0) { System.println(text); text = \"next\"; n = n - 1; } System.println(text); return 1; }").unwrap();
+    assert_eq!(strings, parse_ir(&strings.to_ir_text()).unwrap());
+    assert!(compile("function f() { while (0 == 0) {} return 1; }").is_ok());
+}

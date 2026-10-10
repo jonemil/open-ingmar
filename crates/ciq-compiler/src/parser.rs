@@ -22,6 +22,11 @@ pub(crate) enum Statement {
         value: Expression,
         span: Span,
     },
+    While {
+        condition: Expression,
+        body: Vec<Statement>,
+        span: Span,
+    },
     If {
         condition: Expression,
         on_true: Vec<Statement>,
@@ -37,7 +42,8 @@ impl Statement {
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
-            | Self::If { span, .. } => *span,
+            | Self::If { span, .. }
+            | Self::While { span, .. } => *span,
         }
     }
 }
@@ -211,7 +217,7 @@ impl<'a> Parser<'a> {
             Kind::Word(name)
                 if !matches!(
                     name,
-                    "function" | "return" | "var" | "if" | "else" | "true" | "false"
+                    "function" | "return" | "var" | "if" | "else" | "while" | "true" | "false"
                 ) =>
             {
                 Ok(token)
@@ -290,7 +296,7 @@ impl<'a> Parser<'a> {
             Kind::Word(name)
                 if !matches!(
                     name,
-                    "function" | "return" | "var" | "if" | "else" | "true" | "false"
+                    "function" | "return" | "var" | "if" | "else" | "while" | "true" | "false"
                 ) =>
             {
                 if self.peek()? == Kind::Punctuation('.') {
@@ -360,7 +366,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a braced statement sequence, bounding conditional nesting and total
+    /// Parse a braced statement sequence, bounding control-flow nesting and total
     /// source operations before semantic construction.
     fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), Diagnostic> {
         let start = self
@@ -368,13 +374,13 @@ impl<'a> Parser<'a> {
             .span
             .start;
         if depth > 64 {
-            return Err(self.error(start, "conditional nesting exceeds 64 levels"));
+            return Err(self.error(start, "control-flow nesting exceeds 64 levels"));
         }
         let mut statements = Vec::new();
         while self.peek()? != Kind::Punctuation('}') {
             let start = self.lookahead.as_ref().unwrap().span.start;
             // A print's call node or assignment target already counts its sink.
-            if matches!(self.peek()?, Kind::Word("var" | "return" | "if")) {
+            if matches!(self.peek()?, Kind::Word("var" | "return" | "if" | "while")) {
                 self.expressions += 1;
             }
             if self.expressions > crate::MAX_OPERATIONS {
@@ -406,6 +412,21 @@ impl<'a> Parser<'a> {
                     Statement::Return {
                         value,
                         span: Span { start, end },
+                    }
+                }
+                Kind::Word("while") => {
+                    self.token()?;
+                    self.expect(Kind::Punctuation('('), "'('")?;
+                    let condition = self.expression(0)?;
+                    self.expect(Kind::Punctuation(')'), "')'")?;
+                    let (body, body_span) = self.block(depth + 1)?;
+                    Statement::While {
+                        condition,
+                        body,
+                        span: Span {
+                            start,
+                            end: body_span.end,
+                        },
                     }
                 }
                 Kind::Word("if") => {

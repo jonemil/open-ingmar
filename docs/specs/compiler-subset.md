@@ -21,6 +21,7 @@ statement = "var" identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | "return" expression ";"
           | "if" "(" expression ")" block "else" block
+          | "while" "(" expression ")" block
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = decimal-integer | string-literal | parameter-or-local-identifier
@@ -29,7 +30,7 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `return`, `var`, `if`, `else`, `true`,
-and `false` are reserved. Boolean literals are not supported yet.
+`while`, and `false` are reserved. Boolean literals are not supported yet.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
 The accepted literal domain is `0..=127`; computed results may be negative or
 exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
@@ -230,7 +231,7 @@ DATA allocation and method metadata remain explicit scaffold work.
 A function may end with `if (<condition>) { return <integer-expression>; } else
 { return <integer-expression>; }`. Both braces and `else` are required. Arms may
 also contain local declarations, print statements, and nested conditions, as
-described below. Loops remain unsupported.
+described below. Loop syntax is specified separately below.
 
 `==` and `>` compare integer expressions and produce Booleans. Arithmetic has
 higher precedence, so `value + 1 > 2` compares the sum. At most one comparison
@@ -249,9 +250,11 @@ block-local values and initialization on every path. See
 
 ## Statement arms and joins
 
-Conditions may appear between statements and nest to 64 levels. Empty arms are
+Conditions may appear between statements; combined `if`/`while` nesting is
+limited to 64 levels. Empty arms are
 allowed; `else if` without braces is not accepted. Each arm has its own local
-scope. The function must return an integer on every path. Statements after a
+scope. The function must return an integer on every fallthrough path. Statements
+after a
 return, or after a conditional whose arms both return, are rejected as
 unreachable. A path with no return is rejected at the function's closing brace.
 
@@ -271,7 +274,7 @@ before the branch. This uses existing version-2 IR without new directives.
 
 See [nested-conditions.mc](../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator evidence][nested]. Full language scoping,
-optional `else`, loops, and standalone blocks remain future work.
+optional `else`, other loop forms, and standalone blocks remain future work.
 
 [nested]: ../investigations/compiler-nested-conditions.md
 
@@ -298,6 +301,36 @@ Source, typed IR, and text IR share type, availability, and effect-order checks.
 Assignment-containing IR uses the conservative schedule specified in
 [IR text](compiler-ir-text.md#version-2-local-assignment). See
 [assignments.mc](../../examples/compiler-probe/assignments.mc) and
-[integer/string simulator evidence][assignments]. Loops remain unsupported.
+[integer/string simulator evidence][assignments].
 
 [assignments]: ../investigations/compiler-assignments.md
+
+## While loops
+
+`while (<condition>) { <statements> }` evaluates its condition before each
+iteration. The condition must be an integer `==` or `>` comparison, with the
+same Boolean/type rules as `if`. Braces are required; the body may be empty or
+contain locals, assignments, prints, nested conditions/loops, and early returns.
+`break`, `continue`, `for`, and `do/while` are unsupported.
+
+Body locals are visible within that body and nested scopes, but not after the
+loop or in its condition. Their existing slots are initialized anew on each
+iteration; new slots are not allocated per iteration. Enclosing local writes
+persist into later tests and after exit. Fixed integer/string types still apply.
+
+The body may execute zero times. Its declarations cannot establish a local
+needed at the test or exit. A function ending with a loop still needs a return
+for its false-condition path, even if its body always returns. The compiler does
+not prove termination or condition outcomes and does not insert an iteration
+limit. "Bounded subset" refers to supported syntax and compilation limits.
+
+Lowering uses explicit test/body/exit blocks and a symbolic backward jump from
+continuing body paths. Conditions are evaluated in the test block each visit;
+body effects stay in the body. Every edge has an empty evaluation stack. These
+use the existing version-2 branch/jump directives; cyclic initialization checks
+are specified in [IR text](compiler-ir-text.md#cyclic-control-flow).
+
+See [loops.mc](../../examples/compiler-probe/loops.mc) and
+[zero/multiple-iteration simulator evidence][loops].
+
+[loops]: ../investigations/compiler-loops.md

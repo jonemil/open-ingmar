@@ -161,7 +161,10 @@ joins. See [scope rules and simulator evidence][nested-conditions].
 [Local reassignment](examples/compiler-probe/assignments.mc) preserves each
 local's integer/string type and reuses its slot. [Simulator evidence][assignments]
 confirms branch writes and a later increment, displaying `54`.
-Loops, general string/object operations, and complete-project compilation
+[`while` loops](examples/compiler-probe/loops.mc) support mutable locals, nested
+conditions, and early returns. [Loop evidence][loops] verifies zero and multiple
+iterations with displays `47` and `59`.
+Loop control, general string/object operations, and complete-project compilation
 remain future work.
 
 Build and validate the workspace:
@@ -237,3 +240,5 @@ do not remove files already tracked by Git.
 [nested-conditions]: docs/investigations/compiler-nested-conditions.md
 
 [assignments]: docs/investigations/compiler-assignments.md
+
+[loops]: docs/investigations/compiler-loops.md

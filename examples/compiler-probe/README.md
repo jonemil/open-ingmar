@@ -86,8 +86,8 @@ String concatenation/returns/parameters remain unsupported.
 [control-flow.mc](control-flow.mc) is an SDK research input for conditional
 returns, a backward loop, and an explicit caught exception. Our compiler does
 not accept it yet. The [control-flow investigation][control-flow] explains
-scaffold integration and simulator-verified binary edits; it informs the next
-compiler extensions; loops and exceptions remain unsupported by our frontend.
+scaffold integration and simulator-verified binary edits. Explicit exceptions
+remain unsupported by our frontend.
 
 [ref-complete-stop-resume-commands]: ../../docs/specs/compiler-ir-text.md#command-line-stages
 
@@ -117,7 +117,7 @@ cargo run -p ciq-compiler -- examples/compiler-probe/nested-conditions.mc scratc
 
 [The nested-condition experiment][nested] verifies both nested outcomes and
 continuing arms, with displays `53` and `46`. Braces and `else` remain required;
-loops are still unsupported.
+loop control statements remain unsupported.
 
 [nested]: ../../docs/investigations/compiler-nested-conditions.md
 
@@ -132,6 +132,20 @@ cargo run -p ciq-compiler -- examples/compiler-probe/assignments.mc scratch/comp
 Raw CODE needs explicit symbol and DATA bindings for the generated literals.
 [The assignment experiment][assignments] records native/text parity, integration,
 and simulator returns `44`/`48` with display `54`. Parameters remain read-only;
-compound assignment and loops are unsupported.
+compound assignment and loop control statements are unsupported.
 
 [assignments]: ../../docs/investigations/compiler-assignments.md
+
+[loops.mc](loops.mc) decrements a stored counter in `while`, reinitializes a
+body-local value each iteration, and accumulates a total through nested branches.
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/loops.mc scratch/compiler-example/loops.mcasm
+```
+
+Its [runtime experiment][loops] verifies three/four iterations returning `49`/`53`
+and a zero/one-iteration variant returning `40`/`41`. Shared scaffold displays
+are `59` and `47`. Conditions are reevaluated each visit; there is no generated
+iteration cap. Body locals do not escape, and `break`/`continue` remain unsupported.
+
+[loops]: ../../docs/investigations/compiler-loops.md

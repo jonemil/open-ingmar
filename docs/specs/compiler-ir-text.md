@@ -244,7 +244,8 @@ spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
 local initialization/assignment/reads; arithmetic, parameters, user-call
-arguments/results, and returns remain integer-only. All existing use/dependency/order rules apply.
+arguments/results, and returns remain integer-only. All existing use/dependency/
+order rules apply.
 
 ```text
 ciq-ir 1
@@ -312,16 +313,18 @@ ciq-ir 2
 All new directives accept the existing optional source span. A body containing
 block/branch/jump operations must begin with `.block`. Every block must end in
 `.return`, `.branch`, or `.jump`, with no operations after its terminator until
-the next block. All targets must be declared later in operation order. Every
-block must be reachable from entry; backward edges, missing targets, duplicate
-blocks, and implicit fallthrough are rejected. The final block returns.
+the next block. Targets may name earlier or later blocks. Every block must be
+reachable from entry; missing targets, duplicate blocks, disconnected cycles,
+and implicit
+fallthrough are rejected. The final block returns.
 A version-2 body without these operations retains the implicit single block.
 
 Expression definitions still precede their uses, are globally unique, and have
 exactly one use, now restricted to their defining block. Locals can cross edges,
-but a read requires its unique initializer to execute on every incoming path;
-at a join the available set is the intersection of predecessor sets. A local
-initialized in only one arm cannot be read or assigned in a sibling or join.
+but reads and assignments require the unique initializer to execute on every
+incoming path. Its declaration must also precede the textual use. Availability
+is the fixed-point intersection described below. A local initialized in only
+one arm cannot be read or assigned in a sibling or join.
 Cross-block expression/phi values remain unsupported. Local slots are allocated
 across the entire function, including mutually exclusive paths.
 
@@ -377,3 +380,34 @@ specifies name resolution and supported statement forms; source names/scopes
 are not part of this IR.
 
 [assignment-source]: compiler-subset.md#local-reassignment
+
+## Cyclic control flow
+
+Version 2 also accepts backward branch/jump targets. The graph is checked for
+reachability by walking from the first block, including cycles. Having a
+predecessor alone does not make a block reachable. The final declared block must
+still end in `.return`; this does not prove every runtime path terminates.
+Neither a new directive nor a new header version is needed for loops.
+
+Definite-local sets are computed to a greatest fixed point. Start incoming and
+outgoing sets at the universe of declared local IDs. For every block, intersect
+its predecessor outgoing sets to obtain its incoming set; its outgoing set adds
+all its `.local` initializers. Entry additionally has an empty external
+predecessor, so its incoming set is always empty. Repeat until sets stop changing.
+Scan each block's operations from its final incoming set, adding initializers
+only when encountered. Reads/assignments require membership at their position
+and an earlier textual declaration; assignments do not add initialization.
+
+This accepts common initialized locals carried around a loop and rejects values
+initialized only on its backedge. Local initializer IDs remain globally unique;
+one declaration may execute repeatedly, resetting its existing slot each visit.
+Types retain their initializer's integer/string classification. Expression
+values still refer to earlier definitions in the same block and have one static
+use; runtime execution may visit that definition/use repeatedly. No expression
+values or evaluation-stack state cross an edge.
+
+Source loops lower to these existing graph operations. Test comparisons/calls
+execute again on every visit; body statements retain evaluation order. Native
+construction, text resumption, and source compilation use the same validator.
+See [loop source rules](compiler-subset.md#while-loops) and
+[the runtime experiment](../investigations/compiler-loops.md).

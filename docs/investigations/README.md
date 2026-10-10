@@ -155,4 +155,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   types, reused slots, read/write schedule validation, native/text parity, and
   simulator-confirmed branch values and later increment.
 
+- [Compiler while loops](compiler-loops.md): graph reachability, fixed-point
+  initialization, repeated body-local initialization, native/text parity, and
+  simulator-confirmed zero/multiple iterations with nested branches.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

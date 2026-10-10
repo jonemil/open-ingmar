@@ -209,6 +209,31 @@ impl Builder<'_> {
                     self.push(Operation::Return { value }, Some(span));
                     returned = true;
                 }
+                parser::Statement::While {
+                    condition, body, ..
+                } => {
+                    let test = self.block_id();
+                    let body_block = self.block_id();
+                    let exit = self.block_id();
+                    self.push(Operation::Jump { target: test }, Some(span));
+                    self.push(Operation::Block { block: test }, None);
+                    let condition = self.value(condition, locals)?;
+                    self.push(
+                        Operation::Branch {
+                            condition,
+                            on_true: body_block,
+                            on_false: exit,
+                        },
+                        Some(span),
+                    );
+                    self.push(Operation::Block { block: body_block }, None);
+                    let body_returns = self.sequence(body, &mut locals.clone())?;
+                    if !body_returns {
+                        self.push(Operation::Jump { target: test }, Some(span));
+                    }
+                    self.push(Operation::Block { block: exit }, None);
+                    // The condition may initially be false, even when the body returns.
+                }
                 parser::Statement::If {
                     condition,
                     on_true,
@@ -270,12 +295,13 @@ pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Functio
         next_local: 0,
         next_block: 1,
     };
-    // Nested conditions necessarily occur beneath a top-level conditional.
-    if ast
-        .statements
-        .iter()
-        .any(|s| matches!(s, parser::Statement::If { .. }))
-    {
+    // Nested control flow necessarily occurs beneath a top-level if or while.
+    if ast.statements.iter().any(|s| {
+        matches!(
+            s,
+            parser::Statement::If { .. } | parser::Statement::While { .. }
+        )
+    }) {
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
     if !builder.sequence(ast.statements, &mut BTreeMap::new())? {

@@ -1,6 +1,6 @@
-//! Structural validation for forward-only semantic control flow.
-use crate::{BlockId, IrError, LocatedOperation, Operation};
-use std::collections::BTreeMap;
+//! Block structure, reachability, and definite local initialization for semantic IR.
+use crate::{BlockId, IrError, LocalId, LocatedOperation, Operation};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) struct Structure {
     pub explicit: bool,
@@ -8,7 +8,7 @@ pub(crate) struct Structure {
     pub predecessors: BTreeMap<BlockId, Vec<BlockId>>,
 }
 
-/// Validate block boundaries and forward edges, returning block membership
+/// Validate terminated blocks and reachable targets, returning block membership
 /// and predecessor lists for value and definite-initialization checks.
 pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrError> {
     let explicit = operations.iter().any(|o| {
@@ -75,17 +75,29 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
     let mut predecessors: BTreeMap<_, Vec<_>> =
         positions.keys().map(|b| (*b, Vec::new())).collect();
     for (index, from, to) in edges {
-        let target = positions
-            .get(&to)
-            .ok_or_else(|| fail(index, "undefined block target"))?;
-        if *target <= index {
-            return Err(fail(index, "only forward control-flow edges are supported"));
+        if !positions.contains_key(&to) {
+            return Err(fail(index, "undefined block target"));
         }
         predecessors.get_mut(&to).unwrap().push(from);
     }
     let entry = blocks[0];
+    let mut reachable = BTreeSet::from([entry]);
+    let mut pending = vec![entry];
+    let mut successors: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
+    for (to, froms) in &predecessors {
+        for from in froms {
+            successors.entry(*from).or_default().push(*to);
+        }
+    }
+    while let Some(block) = pending.pop() {
+        for target in successors.get(&block).into_iter().flatten() {
+            if reachable.insert(*target) {
+                pending.push(*target);
+            }
+        }
+    }
     for (block, at) in positions {
-        if block != entry && predecessors[&block].is_empty() {
+        if !reachable.contains(&block) {
             return Err(fail(at, "unreachable block"));
         }
     }
@@ -94,4 +106,55 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
         blocks,
         predecessors,
     })
+}
+
+/// Compute the locals definitely initialized at each block entry. The greatest
+/// fixed point intersects predecessor outputs; entry also has an empty external
+/// predecessor, so a backedge cannot establish first-entry initialization.
+pub(crate) fn local_inputs(
+    structure: &Structure,
+    operations: &[LocatedOperation],
+) -> BTreeMap<BlockId, BTreeSet<LocalId>> {
+    if !structure.explicit {
+        return BTreeMap::new();
+    }
+    let mut generated: BTreeMap<_, BTreeSet<_>> = structure
+        .predecessors
+        .keys()
+        .map(|b| (*b, BTreeSet::new()))
+        .collect();
+    let mut universe = BTreeSet::new();
+    for (index, located) in operations.iter().enumerate() {
+        if let Operation::LocalInitialize { local, .. } = located.operation {
+            universe.insert(local);
+            generated
+                .get_mut(&structure.blocks[index])
+                .unwrap()
+                .insert(local);
+        }
+    }
+    let entry = structure.blocks[0];
+    let mut inputs: BTreeMap<_, _> = generated.keys().map(|b| (*b, universe.clone())).collect();
+    let mut outputs = inputs.clone();
+    loop {
+        let mut changed = false;
+        for (block, predecessors) in &structure.predecessors {
+            let mut available = if *block == entry {
+                BTreeSet::new()
+            } else {
+                outputs[&predecessors[0]].clone()
+            };
+            for predecessor in predecessors.iter().skip(1) {
+                available.retain(|local| outputs[predecessor].contains(local));
+            }
+            let mut outgoing = available.clone();
+            outgoing.extend(&generated[block]);
+            changed |= inputs[block] != available || outputs[block] != outgoing;
+            inputs.insert(*block, available);
+            outputs.insert(*block, outgoing);
+        }
+        if !changed {
+            return inputs;
+        }
+    }
 }

@@ -91,8 +91,8 @@ path does not print and reparse intermediate files. Both paths share validation
 and encoding and must remain equivalent as representations evolve.
 
 `ciq-compiler` owns semantic values and locals, positional parameters, ordered
-calls/prints/writes, forward-only blocks and terminators, integer/string/Boolean
-validation, fixed-type local reassignment, definite initialization, and source
+calls/prints/writes, blocks and cyclic edges, integer/string/Boolean
+validation, fixed-type local reassignment, fixed-point initialization, and source
 diagnostics. Its internal
 source builder resolves arm scopes and emits structured statements into IR;
 parsing and VM instruction selection remain separate.

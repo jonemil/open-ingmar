@@ -91,13 +91,13 @@ pub enum Operation {
         left: ValueId,
         right: ValueId,
     },
-    /// Consume a Boolean and terminate the block with two forward targets.
+    /// Consume a Boolean and terminate the block with two block targets.
     Branch {
         condition: ValueId,
         on_true: BlockId,
         on_false: BlockId,
     },
-    /// Terminate the block with an unconditional forward edge.
+    /// Terminate the block with an unconditional edge.
     Jump {
         target: BlockId,
     },
@@ -168,7 +168,7 @@ impl std::error::Error for IrError {}
 /// A validated semantic IR function with a name, parameters, and operations.
 ///
 /// Expression values have one use within their defining block and refer only to
-/// earlier definitions. Explicit blocks have forward edges and terminate with a
+/// earlier definitions. Explicit blocks may have cyclic edges and terminate with a
 /// return, branch, or jump; an unmarked body is one implicit block. Local reads
 /// and assignments require initialization on every incoming path. Assignments
 /// retain each local's initializer type. Calls, prints, and assignments require
@@ -207,7 +207,7 @@ impl Function {
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
     /// Rejects invalid names, spans, value/local dependencies, effect ordering,
-    /// incompatible value types, malformed blocks, backward edges, cross-block
+    /// incompatible value types, malformed/unreachable blocks, cross-block
     /// expression uses, and unsupported operation or parameter/local counts.
     /// External callee arity and types are not checked here.
     pub fn with_parameters(
@@ -242,10 +242,7 @@ impl Function {
         let structure = control_flow::validate(&operations)?;
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
-        let mut outgoing_locals: std::collections::BTreeMap<
-            BlockId,
-            std::collections::BTreeSet<LocalId>,
-        > = std::collections::BTreeMap::new();
+        let local_inputs = control_flow::local_inputs(&structure, &operations);
         let mut boolean_values = std::collections::BTreeSet::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
@@ -261,17 +258,7 @@ impl Function {
             }
             let (result, operands) = match located.operation {
                 Operation::Block { block } => {
-                    available_locals = match structure.predecessors[&block].first() {
-                        Some(first) => {
-                            let mut available: std::collections::BTreeSet<LocalId> =
-                                outgoing_locals[first].clone();
-                            for pred in &structure.predecessors[&block][1..] {
-                                available.retain(|local| outgoing_locals[pred].contains(local));
-                            }
-                            available
-                        }
-                        None => Default::default(),
-                    };
+                    available_locals = local_inputs[&block].clone();
                     (None, vec![])
                 }
                 Operation::Compare {
@@ -387,7 +374,7 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::LocalAssign { local, value } => {
-                    if !available_locals.contains(&local) {
+                    if !locals.contains(&local) || !available_locals.contains(&local) {
                         return Err(fail(
                             "assignment requires an initialized local on every incoming path",
                         ));
@@ -403,7 +390,7 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } => {
-                    if !available_locals.contains(&local) {
+                    if !locals.contains(&local) || !available_locals.contains(&local) {
                         return Err(fail(
                             "local read must refer to an earlier initialized local",
                         ));
@@ -439,12 +426,6 @@ impl Function {
                 if definitions.insert(result, index).is_some() {
                     return Err(fail("duplicate value definition"));
                 }
-            }
-            if matches!(
-                located.operation,
-                Operation::Branch { .. } | Operation::Jump { .. } | Operation::Return { .. }
-            ) {
-                outgoing_locals.insert(structure.blocks[index], available_locals.clone());
             }
         }
         if !matches!(
@@ -654,9 +635,10 @@ impl Function {
 
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
-/// Resolves parameters and scoped locals, lowers nested conditions to forward
-/// blocks, and retains source spans. Requires an integer return on every path;
-/// unreachable statements and local/parameter shadowing are rejected. Assignments
+/// Resolves parameters and scoped locals, lowers conditions/while loops to
+/// blocks, and retains source spans. Requires an integer return on every
+/// fallthrough path and rejects unreachable statements or local/parameter
+/// shadowing. Assignments
 /// require a visible initialized local and preserve its integer/string type.
 /// Unsupported syntax, unresolved names, and invalid IR produce source
 /// diagnostics rather than partial output. VM instruction selection and symbol binding occur later.

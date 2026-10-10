@@ -1,0 +1,133 @@
+# Compiler while loops
+
+2026-10-10. Question: can cyclic semantic blocks preserve definite-local and
+stack/effect invariants while compiling zero/multiple loop iterations?
+SDK 9.2.0, Java 17, `fr265`, original memory allowance, our developer key. This
+uses our [branch encoding](branch-labels.md), [assignment rules][assignments],
+and unchanged [control-flow scaffold][scaffold]. No new external research was
+consulted or copied.
+
+## Implementation and scope
+
+The source builder lowers `while` to existing version-2 test/body/exit blocks.
+It reevaluates the comparison on each visit and emits a symbolic backedge from
+continuing body paths. Returning paths omit the backedge. Body-local declarations
+retain their fixed slots but initialize on every iteration. There is no generated
+iteration cap; the syntax/compilation limits define the bounded subset.
+
+Graph validation now walks reachability from entry, rejecting disconnected
+cycles. Definite initialization intersects predecessor sets to a greatest fixed
+point, with an empty external predecessor for entry. This prevents body-only
+initializers from becoming available on a zero-iteration exit or first header
+visit. Local declarations still precede textual uses; values remain block-local
+and all edges carry empty evaluation stacks. [Design][design],
+[source syntax][source],
+and [cyclic IR rules][ir] document the contract.
+
+## Simulator observations
+
+The [checked-in example](../../examples/compiler-probe/loops.mc) sets
+`remaining = value + 3` and `total = 0`. Each iteration initializes
+`current = remaining`, adds `5` when it equals `2` or adds `current` otherwise,
+prints it, and decrements `remaining`. On exit it prints the total and returns
+`40 + total`. A second input initializes `remaining = value` instead.
+
+**Experimentally observed:**
+
+| Initial counter | Argument | Iteration prints | Total | Return | Display |
+|---|---|---|---|---|---|
+| `value + 3` | 0 | 3, 2, 1 | 9 | 49 | |
+| `value + 3` | 1 | 4, 3, 2, 1 | 13 | 53 | 59 |
+| `value` | 0 | none | 0 | 40 | |
+| `value` | 1 | 1 | 1 | 41 | 47 |
+
+Scaffold `probe()` adds `choose(1)` to `countdown(3) = 6`, explaining the displays.
+The other results remain `caught(false) = 41` and `caught(true) = 43`. Redraws
+repeat the selected loop and its prints. Both console and captured displays were
+inspected; captures/logs are under ignored
+`scratch/compiler-loops/simulator-multiple/` and `simulator-zero/`.
+
+The generated prologue is `argcincsp 2 3`: slots 2/3 store `remaining`/`total`,
+and slot 4 stores the repeatedly initialized `current`. CODE is 107 bytes for
+the main source and 104 for the zero-iteration variant. Both use backward `goto`
+operands targeting the test label. Native, saved-IR, and saved-assembly CODE are
+byte-identical for each input.
+
+**Verified preservation:** append CODE at `0x3fd`, keeping the original 1021-byte
+prefix intact. The suffix exactly matches the separately encoded generated
+body. DATA only changes the method word at `0x4a8..0x4ac`, from `0x100000a7` to
+`0x100003fd`. RESOURCES only adds 21 or 24 zero bytes respectively, retaining
+32-byte signature alignment with total growth 128. All remaining section
+payloads, including EXCEPTIONS, DEBUG, LINE_NUMBERS, and SYMBOLS, are unchanged
+except regenerated developer signatures, which verify with our key.
+
+Signed output SHA-256:
+
+```text
+multiple 0af12d107d4114df33f4940f65fda96887bda6f3f1a3a606fb755350ad1c7029
+zero     9f16114108596b7fd210da138648a1b4e68800a0f3f1327d94975115c51b45a1
+```
+
+## Reproduction
+
+Build the original SDK PRG using [its instructions][scaffold]. Use fresh outputs
+for repeats. Generate all stages with existing symbols:
+
+```sh
+cargo build --workspace
+mkdir -p scratch/compiler-loops
+target/debug/ciq-dis all scratch/control-flow/sdk-probe/build/fr265/sdk-probe.prg scratch/compiler-loops/project
+target/debug/ciq-compiler examples/compiler-probe/loops.mc scratch/compiler-loops/choose.mcasm
+target/debug/ciq-compiler --emit ir examples/compiler-probe/loops.mc scratch/compiler-loops/choose.ciqir
+target/debug/ciq-compiler --emit code --symbols scratch/compiler-loops/project/010-symbols-5717b015.mcasm examples/compiler-probe/loops.mc scratch/compiler-loops/native.bin
+target/debug/ciq-compiler --from ir --emit code --symbols scratch/compiler-loops/project/010-symbols-5717b015.mcasm scratch/compiler-loops/choose.ciqir scratch/compiler-loops/ir.bin
+target/debug/ciq-compiler --from assembly --emit code --symbols scratch/compiler-loops/project/010-symbols-5717b015.mcasm scratch/compiler-loops/choose.mcasm scratch/compiler-loops/assembly.bin
+cmp scratch/compiler-loops/native.bin scratch/compiler-loops/ir.bin
+cmp scratch/compiler-loops/native.bin scratch/compiler-loops/assembly.bin
+```
+
+Apply the same bounded append integration used by
+[the nested-condition experiment][integration], substituting root
+`scratch/compiler-loops`, the `choose.mcasm`/`native.bin` paths above, and the
+new output names below. Its script derives CODE growth and resource padding from
+the generated bytes; DATA retains the existing `code:choose` method binding.
+Preserve the original label and its line references as `sdk_choose`, and bind
+`__ciq_sdk_System`/`__ciq_member_println` to the existing print symbols.
+
+```sh
+target/debug/ciq-asm project scratch/compiler-loops/project scratch/compiler-loops/generated.prg -y keys/developer_key.der
+target/debug/ciq-asm verify scratch/compiler-loops/generated.prg -y keys/developer_key.der
+xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg scratch/compiler-loops/generated.prg --device fr265 --observe-seconds 10
+```
+
+For the second input, copy the source under `scratch/` and change only
+`var remaining = value + 3;` to `var remaining = value;`. Repeat stages and append
+integration against a fresh export of the original PRG; save each simulator
+capture before the next session overwrites `scratch/simulator/`.
+
+## Validation and limits
+
+Rust tests independently execute bounded integer/Boolean instruction sequences
+for zero/multiple iterations, nested loops/branches, and early returns. They
+check body-local slot reuse, backward targets, empty edge stacks, typed/native/
+text parity, repeated condition placement, and effectful calls remaining within
+test/body/exit blocks. String types through loops are tested structurally, not by
+this simulator specimen.
+
+Initialization tests include shuffled numeric block IDs, zero-iteration exits,
+backedge-only values, a mandatory first-body initializer, and reads before an
+initializer in a cyclic block. Reachability tests reject disconnected cycles
+whose members nevertheless have predecessors. Combined `if`/`while` nesting is
+limited to 64, and source body scopes/shadowing/return requirements are checked.
+
+This establishes the tested profile on one target. Termination and condition
+outcomes are not proven; even an always-returning body needs a source return for
+the zero-iteration exit. `break`, `continue`, optional `else`, other loop forms,
+and exception source compilation remain unsupported.
+
+[assignments]: compiler-assignments.md
+[scaffold]: control-flow.md#reproduction
+[design]: ../design/compiler-ir.md#loops-and-initialization-analysis
+[source]: ../specs/compiler-subset.md#while-loops
+[ir]: ../specs/compiler-ir-text.md#cyclic-control-flow
+[integration]: compiler-nested-conditions.md#reproduction
