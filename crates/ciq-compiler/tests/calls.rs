@@ -162,7 +162,6 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
         "return Numbers.return();",
         "return Numbers.left()();",
         "var Numbers = 1; return Numbers.left();",
-        "Numbers.left(); return 1;",
     ] {
         assert!(
             compile(&format!("function probe() {{ {body} }}")).is_err(),

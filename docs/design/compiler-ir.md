@@ -10,7 +10,7 @@ compatibility or a commitment to LLVM/SSA infrastructure.
 A function has a name, parameter count, and ordered operations. Operations
 represent integer/string constants, addition/subtraction, positional parameter
 reads, local initialization/assignment/reads, user-module calls, print statements,
-integer returns, comparisons, and explicit block/branch/jump operations. Source
+integer/void returns, comparisons, and explicit block/branch/jump operations. Source
 spans are optional diagnostic provenance.
 
 Value IDs name semantic results. Local IDs name stored semantic locals. Neither
@@ -79,7 +79,7 @@ diagnose VM-level issues throughout that evolution.
 
 An unmarked function remains one implicit block. An explicit function begins
 with a block marker; the first declared block is entry. Every block terminates
-with an integer return, Boolean branch, or jump. Targets may name earlier or
+with an integer or void return, Boolean branch, or jump. Targets may name earlier or
 later blocks; every block must be reachable from entry. No implicit fallthrough
 is accepted.
 
@@ -103,7 +103,8 @@ graph. Falling-through arms jump to a join declared after both arms. Arms
 ending in `return`, `break`, or `continue` have no join edge. An omitted `else`
 supplies an empty false arm. Nested arms preserve declaration order. Omit joins
 when both arms terminate and reject unreachable following statements. All fallthrough
-paths must return an integer.
+paths must return an integer when any return has a value; void functions
+receive a final return on fallthrough. Mixed returns are rejected.
 
 Name resolution gives each arm an inherited environment and discards its local
 declarations on exit. Sibling declarations may reuse names but receive distinct
@@ -224,7 +225,7 @@ Local evidence:
 immutable `Function` bodies. It collects all signatures before checking qualified
 calls, allowing forward and recursive references across files. Existing function
 validation supplies the current integer argument/result contract; unit validation
-adds identity and exact arity checks. Single-function compilation still permits
+adds identity, exact arity, and integer/void result checks. Single-function compilation still permits
 external callees for bounded scaffold experiments.
 
 Lowering combines all bodies into one assembly model with length-prefixed,
@@ -245,8 +246,8 @@ allocation for its supported profile. See
 
 Semantic string values retain UTF-8 content rather than DATA addresses. Local
 reads retain their initializer's integer/string type. The current validator
-restricts arithmetic, parameters, user-call arguments/results, and returns to
-integers; print statements accept either type and define no result.
+restricts arithmetic, parameters, and user-call arguments to integers;
+expression calls and valued returns yield integers; print statements accept either type and define no result.
 
 Lowering deduplicates content within a function and emits unplaced assembly
 string declarations plus symbolic `news` operands. An explicit DATA source
@@ -265,3 +266,22 @@ this boundary and generated UTF-8 output in the simulator.
 [assignments]: ../investigations/compiler-assignments.md
 
 [loops]: ../investigations/compiler-loops.md
+
+## Void results and effect-only calls
+
+Functions infer one common integer or void result contract from validated
+return terminators. A void return has no value dependency. Statement calls
+consume ordered integer arguments and define no value, whether the callee
+returns an integer or void. Unit checking rejects void callees in expressions;
+standalone expression calls retain an external integer-result obligation.
+This keeps effect-only calls out of the expression graph and preserves the
+existing one-use, block-local value model.
+
+The backend emits a bare VM return and discards each statement call's runtime
+result. The application layer selects its startup wrapper from the entry
+contract and avoids printing void results. [Source and IR rules][void-source]
+and [simulator evidence][void-evidence] establish this increment before source
+class ownership, receiver types, null/object/array values, or native SDK calls.
+
+[void-source]: ../specs/compiler-subset.md#void-functions-and-statement-calls
+[void-evidence]: ../investigations/compiler-void.md

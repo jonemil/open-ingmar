@@ -116,6 +116,39 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
             Operation::Return { value } => (value, Opcode::Return, vec![]),
+            Operation::ReturnVoid => {
+                items.push(instruction(Opcode::Return, vec![]));
+                continue;
+            }
+            Operation::ModuleCallStatement {
+                ref module,
+                ref member,
+                ref arguments,
+            } => {
+                items.push(instruction(
+                    Opcode::Getmv,
+                    vec![
+                        Operand::Symbol(format!("__ciq_module_{module}")),
+                        Operand::Symbol(format!("__ciq_member_{member}")),
+                    ],
+                ));
+                if !arguments.is_empty() {
+                    items.push(instruction(Opcode::Frpush, vec![]));
+                    for value in arguments {
+                        expression(*value, &definitions, &slots, &strings, &mut items);
+                    }
+                }
+                items.push(if arguments.is_empty() {
+                    instruction(Opcode::Invokemz, vec![])
+                } else {
+                    instruction(
+                        Opcode::Invokem,
+                        vec![Operand::Bits(arguments.len() as u64 + 1)],
+                    )
+                });
+                items.push(instruction(Opcode::Popv, vec![]));
+                continue;
+            }
             Operation::Println { value } => {
                 items.push(instruction(
                     Opcode::Getmv,

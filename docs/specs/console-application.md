@@ -9,8 +9,8 @@ See [runtime evidence][evidence] and [application design][design].
 ## Input and lifecycle
 
 The caller supplies sixteen application-ID bytes and a global entry function
-name. The entry must have zero parameters and return an integer under the
-existing function rules. CLI default: `main`. The ID identifies the application;
+name. The entry must have zero parameters and an integer or void result under
+the existing function rules. CLI default: `main`. The ID identifies the application;
 it is independent of the signing key.
 
 Generated lifecycle behavior:
@@ -19,6 +19,7 @@ Generated lifecycle behavior:
   `initialize` invoke the corresponding native base methods.
 - `onStart(state)` ignores state, calls the global entry once, prints its integer
   result using `System.println`, discards the print result, and returns void.
+  A void entry is invoked without that print; its VM result is discarded.
 - `getInitialView()` returns a one-element array containing an initialized native
   `WatchUi.View`. This is a blank view; greeting/result output is in the console.
 - Globals and user modules have empty initializer methods. A leading empty
@@ -26,8 +27,9 @@ Generated lifecycle behavior:
 
 User functions may print strings/integers, call declared module members, and use
 existing locals/control flow. This does not add source class, receiver, array,
-object, null, or void syntax. Generated lifecycle assembly supplies those fixed
-operations separately from semantic function IR.
+object, or null syntax. Void functions and qualified statement calls follow
+[the source rules][void-source]. Generated lifecycle assembly supplies those
+fixed operations separately from semantic function IR.
 
 Modules named `globals`, `statics`, or `Toybox`, and global functions named
 `Toybox`, collide with bootstrap fields and are rejected. The unit's existing
@@ -139,3 +141,5 @@ exported and reconstructed through the existing section-project tools.
 [classes]: data-classes.md
 [design]: ../design/console-application.md
 [evidence]: ../investigations/application-bootstrap.md
+
+[void-source]: compiler-subset.md#void-functions-and-statement-calls

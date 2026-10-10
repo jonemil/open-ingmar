@@ -1,5 +1,5 @@
 //! Minimal console application metadata and lifecycle generation.
-use crate::CompilationUnit;
+use crate::{CompilationUnit, ReturnType};
 use ciq_assembly::{Item, Operand, Program};
 use ciq_mc::Opcode;
 use ciq_prg::{
@@ -28,12 +28,13 @@ const ON_START: u32 = 0x0080029f;
 const GET_INITIAL_VIEW: u32 = 0x008002a0;
 const GLOBALS: u32 = 0x008002e6;
 
-/// Application identity and the global zero-parameter integer entry function.
+/// Application identity and the global zero-parameter startup entry function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsoleApplication {
     /// Sixteen manifest application-ID bytes, independent of signing identity.
     pub id: [u8; 16],
-    /// Global function invoked once by onStart; its integer result is printed.
+    /// Global function invoked once by onStart; integer results are printed and
+    /// void results are discarded without an automatic print.
     pub entry: String,
 }
 
@@ -94,9 +95,9 @@ fn class(
     }
 }
 
-fn lifecycle(entry: &str) -> Vec<Item> {
+fn lifecycle(entry: &str, result: ReturnType) -> Vec<Item> {
     use Opcode::*;
-    vec![
+    let mut items = vec![
         Item::Label("__ciq_bootstrap".into()),
         instruction(Argc, vec![bits(1)]),
         instruction(Return, vec![]),
@@ -109,22 +110,28 @@ fn lifecycle(entry: &str) -> Vec<Item> {
         instruction(Return, vec![]),
         Item::Label("__ciq_on_start".into()),
         instruction(Argc, vec![bits(2)]),
-        instruction(
+    ];
+    if result == ReturnType::Integer {
+        items.push(instruction(
             Getmv,
             vec![sym("__ciq_sdk_System"), sym("__ciq_member_println")],
-        ),
-        instruction(Frpush, vec![]),
-        instruction(
-            Getmv,
-            vec![
-                sym("__ciq_app_globals"),
-                sym(&format!("__ciq_member_{entry}")),
-            ],
-        ),
-        instruction(Invokemz, vec![]),
-        instruction(Invokem, vec![bits(2)]),
-        instruction(Popv, vec![]),
-        instruction(Return, vec![]),
+        ));
+        items.push(instruction(Frpush, vec![]));
+    }
+    items.push(instruction(
+        Getmv,
+        vec![
+            sym("__ciq_app_globals"),
+            sym(&format!("__ciq_member_{entry}")),
+        ],
+    ));
+    items.push(instruction(Invokemz, vec![]));
+    if result == ReturnType::Integer {
+        items.push(instruction(Invokem, vec![bits(2)]));
+    }
+    items.push(instruction(Popv, vec![]));
+    items.push(instruction(Return, vec![]));
+    items.extend([
         Item::Label("__ciq_initial_view".into()),
         instruction(Argc, vec![bits(1)]),
         instruction(Ipush1, vec![bits(1)]),
@@ -150,7 +157,8 @@ fn lifecycle(entry: &str) -> Vec<Item> {
         instruction(Invokemz, vec![]),
         instruction(Popv, vec![]),
         instruction(Return, vec![]),
-    ]
+    ]);
+    items
 }
 
 /// Generate an unsigned, template-free console watch application from unit IR.
@@ -158,8 +166,9 @@ fn lifecycle(entry: &str) -> Vec<Item> {
 /// Uses the bootstrap profile tested with SDK 9.2.0 and Forerunner 265: version-2
 /// DATA records, fixed native symbol IDs, two native-class imports, generated
 /// lifecycle methods, and empty resources/permissions/exceptions. The entry must
-/// be a global zero-parameter integer-return function. onStart invokes it once
-/// and prints its result; getInitialView returns a blank native View.
+/// be a global zero-parameter integer-return or void function. onStart invokes
+/// it once and prints only integer results; getInitialView returns a blank
+/// native View.
 ///
 /// Allocates user symbols and all CODE/DATA positions deterministically. Global
 /// and module methods bind to unit CODE labels; literals use shared DATA layout.
@@ -244,7 +253,7 @@ pub fn build_console_application(
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
     }
-    let mut items = lifecycle(&app.entry);
+    let mut items = lifecycle(&app.entry, entry.function.return_type());
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;

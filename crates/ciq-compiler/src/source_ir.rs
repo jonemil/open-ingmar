@@ -206,9 +206,41 @@ impl Builder<'_> {
                     let value = self.value(value, locals)?;
                     self.push(Operation::LocalAssign { local, value }, Some(span));
                 }
+                parser::Statement::Call {
+                    module,
+                    member,
+                    arguments,
+                    ..
+                } => {
+                    if locals.contains_key(&module) || self.parameters.contains_key(&module) {
+                        return Err(Diagnostic::at(
+                            self.source,
+                            span.start,
+                            "calls on local receivers are unsupported",
+                        ));
+                    }
+                    let arguments = arguments
+                        .into_iter()
+                        .map(|arg| self.value(arg, locals))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.push(
+                        Operation::ModuleCallStatement {
+                            module,
+                            member,
+                            arguments,
+                        },
+                        Some(span),
+                    );
+                }
                 parser::Statement::Return { value, .. } => {
-                    let value = self.value(value, locals)?;
-                    self.push(Operation::Return { value }, Some(span));
+                    let operation = if let Some(value) = value {
+                        Operation::Return {
+                            value: self.value(value, locals)?,
+                        }
+                    } else {
+                        Operation::ReturnVoid
+                    };
+                    self.push(operation, Some(span));
                     terminated = true;
                 }
                 parser::Statement::Break { .. } | parser::Statement::Continue { .. } => {
@@ -300,9 +332,21 @@ impl Builder<'_> {
     }
 }
 
-/// Resolve source names and emit validated semantic IR, requiring an integer
-/// return on every fallthrough path and rejecting unreachable statements.
+/// Resolve source names and emit validated integer-return or void function IR.
+/// Integer functions require a value on every path. Void fallthrough gains a
+/// return terminator; mixed returns and unreachable statements are rejected.
 pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Function, Diagnostic> {
+    fn has_value_return(statements: &[parser::Statement]) -> bool {
+        statements.iter().any(|s| match s {
+            parser::Statement::Return { value: Some(_), .. } => true,
+            parser::Statement::If {
+                on_true, on_false, ..
+            } => has_value_return(on_true) || has_value_return(on_false),
+            parser::Statement::While { body, .. } => has_value_return(body),
+            _ => false,
+        })
+    }
+    let integer_result = has_value_return(&ast.statements);
     let mut builder = Builder {
         source,
         parameters: ast
@@ -326,11 +370,20 @@ pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Functio
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
     if !builder.sequence(ast.statements, &mut BTreeMap::new())? {
-        return Err(Diagnostic::at(
-            source,
-            ast.body_span.end - 1,
-            "function requires an integer return on every path",
-        ));
+        if integer_result {
+            return Err(Diagnostic::at(
+                source,
+                ast.body_span.end - 1,
+                "function requires an integer return on every path",
+            ));
+        }
+        builder.push(
+            Operation::ReturnVoid,
+            Some(Span {
+                start: ast.body_span.end - 1,
+                end: ast.body_span.end,
+            }),
+        );
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
     Function::with_parameters(ast.name, builder.parameters.len(), builder.operations).map_err(

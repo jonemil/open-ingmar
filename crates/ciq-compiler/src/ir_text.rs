@@ -3,7 +3,7 @@ use crate::{
     Span, ValueId,
 };
 
-/// Parse `ciq-ir` version 1 or 2 text into a validated semantic function.
+/// Parse `ciq-ir` version 1, 2, or 3 text into a validated semantic function.
 ///
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
@@ -38,13 +38,12 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
-    if !rows
-        .first()
-        .is_some_and(|(_, fields)| fields == &["ciq-ir", "1"] || fields == &["ciq-ir", "2"])
-    {
+    if !rows.first().is_some_and(|(_, fields)| {
+        fields == &["ciq-ir", "1"] || fields == &["ciq-ir", "2"] || fields == &["ciq-ir", "3"]
+    }) {
         return Err(fail(
             rows.first().map_or(0, |row| row.0),
-            "expected 'ciq-ir 1' or 'ciq-ir 2'",
+            "expected 'ciq-ir 1', 'ciq-ir 2', or 'ciq-ir 3'",
         ));
     }
     let Some((name_at, declaration)) = rows.get(1) else {
@@ -65,7 +64,8 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         0
     };
     let mut operations = Vec::new();
-    let version_two = rows[0].1[1] == "2";
+    let version_three = rows[0].1[1] == "3";
+    let version_two = rows[0].1[1] == "2" || version_three;
     let mut operation_offsets = Vec::new();
     let mut ended = false;
     for (index, (at, fields)) in rows.iter().enumerate().skip(2) {
@@ -77,6 +77,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             break;
         }
         let (kind, width) = match fields.first().map(String::as_str) {
+            Some(".return-void") if version_three => (16, 1),
+            Some(".call-discard") if version_three => (
+                17,
+                fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span="))),
+            ),
             Some(".integer") => (0, 3),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
@@ -104,11 +109,14 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             _ => {
                 return Err(fail(
                     *at,
-                    "unknown IR directive (blocks, comparisons, branches, jumps, and assignments require ciq-ir 2)",
+                    "unknown IR directive (control flow and assignments require ciq-ir 2; void returns and statement calls require ciq-ir 3)",
                 ));
             }
         };
-        if (kind == 6 && width < 4) || fields.len() < width || fields.len() > width + 1 {
+        if ((kind == 6 && width < 4) || (kind == 17 && width < 3))
+            || fields.len() < width
+            || fields.len() > width + 1
+        {
             return Err(fail(*at, "incorrect IR operation field count"));
         }
         let parse_value = |text: &str| -> Result<ValueId, Diagnostic> {
@@ -164,7 +172,18 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 15 {
+        let operation = if kind == 16 {
+            Operation::ReturnVoid
+        } else if kind == 17 {
+            Operation::ModuleCallStatement {
+                module: fields[1].clone(),
+                member: fields[2].clone(),
+                arguments: fields[3..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 15 {
             Operation::LocalAssign {
                 local: parse_local(&fields[1])?,
                 value: parse_value(&fields[2])?,

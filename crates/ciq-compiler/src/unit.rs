@@ -1,5 +1,5 @@
 //! Declaration collection, cross-function checks, and unit text serialization.
-use crate::{Diagnostic, Function, Operation, backend, parser, source_ir};
+use crate::{Diagnostic, Function, Operation, ReturnType, backend, parser, source_ir};
 use ciq_assembly::Program;
 use std::{collections::BTreeMap, fmt};
 
@@ -10,7 +10,7 @@ pub(crate) const MAX_FUNCTIONS: usize = 256;
 pub struct FunctionDeclaration {
     /// None for a global function, otherwise its unqualified module name.
     pub module: Option<String>,
-    /// Validated function body and integer positional signature.
+    /// Validated function body with integer parameters and integer/void result.
     pub function: Function,
 }
 
@@ -54,8 +54,9 @@ impl std::error::Error for UnitError {}
 
 /// Validated global and module functions in deterministic input order.
 ///
-/// All qualified user calls resolve inside the unit. Parameters, arguments,
-/// and results remain integers; System.println is the separate intrinsic.
+/// All qualified user calls resolve inside the unit. Parameters and arguments
+/// remain integers; results may be integers or void. Void calls are permitted
+/// only as statements. System.println is the separate intrinsic.
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
@@ -67,7 +68,8 @@ impl CompilationUnit {
     ///
     /// Accepts forward and recursive calls. Rejects duplicate identities,
     /// invalid/reserved module names, global/module name collisions, unresolved
-    /// callees, wrong argument counts, and units outside 1..=256 functions.
+    /// callees, wrong argument counts, void calls used as values, and units outside
+    /// 1..=256 functions.
     /// Each immutable Function has already checked argument/result types and
     /// local control-flow invariants. This does not prove recursive termination.
     pub fn new(declarations: Vec<FunctionDeclaration>) -> Result<Self, UnitError> {
@@ -127,7 +129,13 @@ impl CompilationUnit {
                 declaration.function.name().to_owned(),
             );
             if signatures
-                .insert(key, declaration.function.parameter_count())
+                .insert(
+                    key,
+                    (
+                        declaration.function.parameter_count(),
+                        declaration.function.return_type(),
+                    ),
+                )
                 .is_some()
             {
                 return Err(fail(
@@ -155,16 +163,30 @@ impl CompilationUnit {
                     member,
                     arguments,
                     ..
+                }
+                | Operation::ModuleCallStatement {
+                    module,
+                    member,
+                    arguments,
                 } = &located.operation
                 {
                     let key = (Some(module.clone()), member.clone());
-                    let Some(count) = signatures.get(&key) else {
+                    let Some((count, result)) = signatures.get(&key) else {
                         return Err(fail(
                             Some(index),
                             Some(operation),
                             format!("unresolved function {module}.{member}"),
                         ));
                     };
+                    if *result == ReturnType::Void
+                        && matches!(located.operation, Operation::ModuleCall { .. })
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!("void function {module}.{member} cannot be used as a value"),
+                        ));
+                    }
                     if *count != arguments.len() {
                         return Err(fail(
                             Some(index),
@@ -206,7 +228,7 @@ impl CompilationUnit {
 
     /// Serialize ownership and validated function IR as version-1 unit text.
     ///
-    /// Inner functions retain the existing version-1/version-2 IR format and
+    /// Inner functions use the supported version-1/version-2/version-3 IR format and
     /// optional spans. Source filenames are not serialized in this profile.
     pub fn to_ir_text(&self) -> String {
         let mut text = String::from("ciq-unit 1\n");

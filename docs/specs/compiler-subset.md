@@ -21,7 +21,8 @@ argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
-          | "return" expression ";"
+          | module "." member "(" argument-list? ")" ";"
+          | "return" expression? ";"
           | "if" "(" expression ")" block ("else" block)?
           | "while" "(" expression ")" block
           | "break" ";" | "continue" ";"
@@ -140,7 +141,8 @@ The supported call form is `<module>.<member>(<arguments>?)` in integer
 expressions/initializers. The module is a top-level user module provided by the
 surrounding PRG scaffold, and the member is an existing integer-return function
 with matching positional arity. Global unqualified calls, local/object
-receivers, nested modules, and void/string user-module calls remain unsupported.
+receivers, nested modules, and string-return user-module calls remain unsupported.
+Void module calls are supported as statements, as described below.
 The separate `System.println` statement is described below. Module/member names
 stay symbolic until encoding; neither IDs nor DATA method records are generated
 here.
@@ -360,3 +362,48 @@ version-2 `.jump` operations; no new IR directives or VM opcodes are needed.
 
 See [loop-control.mc](../../examples/compiler-probe/loop-control.mc) and
 [simulator evidence](../investigations/compiler-loop-control.md).
+
+## Void functions and statement calls
+
+A function with any valued return must return an integer on every path. If it
+has no valued return, it is void: `return;` terminates immediately, and reaching
+the final closing brace inserts a void return. Integer and void return forms
+cannot be mixed, including across branches. Returning strings or Booleans stays
+unsupported. Unreachable statements after bare returns are rejected, as after
+integer returns. Loops and scoped locals retain their existing rules.
+
+```monkeyc
+function main() {
+    Startup.greet(41);
+}
+module Startup {
+    function greet(number) {
+        System.println(number);
+        return;
+    }
+}
+```
+
+Qualified user calls may be expression statements. They take integer arguments
+and discard the result of either an integer-return or void function. Void calls
+cannot initialize locals, provide arguments, or appear in any other expression.
+Unit mode checks the callee's result type and arity after collecting all
+signatures. Single-function mode still leaves external callee contracts to the
+caller; expression calls there assume integers. No void expression value is
+created. Statement calls preserve argument evaluation and statement order.
+
+Typed IR adds `ReturnVoid` and `ModuleCallStatement`; `Function::return_type()`
+reports the validated integer/void contract. Saved text uses
+[IR version 3](compiler-ir-text.md#version-3-void-returns-and-statement-calls).
+Both forms share type, control-flow, use, and effect-schedule validation.
+A void function may contain only its return, so the operation bound is now
+1..=1024. The backend emits bare `return`; statement calls use the existing call
+sequence and discard the VM result with `popv`.
+
+The [console application profile](console-application.md) accepts either entry
+result type and prints only integer results. The [example][void-example] and
+[simulator evidence][void-evidence] verify both void return forms and caller
+continuation after discarded calls. Source class/receiver syntax remains open.
+
+[void-example]: ../../examples/compiler-void/README.md
+[void-evidence]: ../investigations/compiler-void.md

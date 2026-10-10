@@ -41,15 +41,20 @@ describe planned behavior and investigations record the supporting evidence.
   lifecycle CODE, DATA/modules, native imports, and all unsigned container fields
   without SDK payloads. Own-key signed greeting `41`/`42` and two-file `48` runs
   are verified; the View is blank and output is in the console.
-- The latest implementation checkpoint passes 202 Rust tests, Clippy, and
+- Void functions and qualified statement calls are
+  [simulator-verified](investigations/compiler-void.md), including early loop
+  returns, argument order, discarded integer results, and void startup. Saved
+  unit IR produces identical complete unsigned PRGs.
+- The latest implementation checkpoint passes 208 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
 1. Extend the [console application bootstrap](design/console-application.md) to
    source-authored lifecycle methods. Establish a minimal AppBase/View class
-   subset, receiver/context rules, and required void/null/object/array and SDK
-   call types. Generate methods/imports from those identities and preserve
+   subset, receiver/context rules, and required null/object/array and SDK
+   call types. Void returns and statement calls are implemented; class ownership
+   and native-call typing are the next semantic boundaries. Generate methods/imports from those identities and preserve
    complete-application native/text and simulator checks. The fixed bootstrap is
    implemented; broader application profiles and resource assets remain open.
 2. Implement [Jungle-driven project builds](design/project-builds.md), including

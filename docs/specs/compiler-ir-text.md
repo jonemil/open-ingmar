@@ -1,4 +1,4 @@
-# Provisional compiler IR text, versions 1 and 2
+# Provisional compiler IR text, versions 1, 2, and 3
 
 Implemented 2026-10-10 to exercise the compiler stage boundaries while the
 language subset is small. This is our semantic IR format, separate from Garmin
@@ -20,13 +20,15 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be `1` or `2`. Version 1 describes a single-block body;
-version 2 adds control flow and local assignment below. Exactly one
+Header version must be `1`, `2`, or `3`. Version 1 describes a single-block
+integer-return body; version 2 adds control flow and local assignment. Version 3
+adds void returns and statement calls below. Exactly one
 `.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. The supported
-semantic body is ordered local initializations, print statements, and expression
-trees (which may include module calls) ending with a final integer `.return
+version-1/version-2 body is ordered local initializations, print statements,
+and expression trees (which may include module calls), ending with integer
+`.return
 <value-id>`. Definitions are `.integer <result-id> <value>`, `.add <result-id>
 <left-id> <right-id>`, and `.subtract <result-id> <left-id> <right-id>`. Value
 IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
@@ -57,8 +59,9 @@ validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
-preserving value IDs. It emits version 2 for blocks, comparisons, or assignments,
-otherwise version 1, even if the input header was version 2. `parse_ir`
+preserving value IDs. It emits version 3 for void returns or statement calls,
+version 2 for blocks/comparisons/assignments, otherwise version 1, independently
+of the input header. `parse_ir`
 reconstructs them. `backend::lower()` (also
 exposed through `Function::lower()`) creates the shared assembly `Program`
 directly; it does not print/reparse text. `Function::assembly()` is convenience
@@ -147,10 +150,9 @@ ciq-ir 1
 ```
 
 Names and result expectations are not checked against a whole-program type
-environment yet: the scaffold must supply integer-return callees. Object
-calls and global unqualified calls remain unsupported. Argument counts must
-match the supplied callee signature; whole-program arity checking is not
-implemented.
+environment in standalone mode: the scaffold must supply integer-return
+callees. Unit mode checks names, arity, and integer/void result contracts.
+Object calls and global unqualified calls remain unsupported.
 
 ## Parameter metadata and reads
 
@@ -244,7 +246,8 @@ spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
 local initialization/assignment/reads; arithmetic, parameters, user-call
-arguments/results, and returns remain integer-only. All existing use/dependency/
+arguments and expression-call results remain integer-only; valued returns
+require integers. Void returns have no value. All existing use/dependency/
 order rules apply.
 
 ```text
@@ -341,7 +344,7 @@ unique local identities. See [the source subset](compiler-subset.md).
 ## Version 2 local assignment
 
 `.assign $<local-id> %<value-id> [span=<start>:<end>]` consumes an earlier value
-and replaces an initialized local. It is accepted only with `ciq-ir 2`; no
+and replaces an initialized local. It is accepted with `ciq-ir 2` or `3`; no
 explicit blocks are required for a straight-line assignment body.
 
 ```text
@@ -411,3 +414,45 @@ execute again on every visit; body statements retain evaluation order. Native
 construction, text resumption, and source compilation use the same validator.
 See [loop source rules](compiler-subset.md#while-loops) and
 [the runtime experiment](../investigations/compiler-loops.md).
+
+## Version 3 void returns and statement calls
+
+`ciq-ir 3` accepts all version-1/version-2 directives and adds:
+
+- `.return-void [span=<start>:<end>]`: terminate without a semantic result.
+- `.call-discard <module> <member> [%<argument> ...] [span=<start>:<end>]`:
+  invoke a qualified user function for effects without defining a value.
+
+`.call-discard` may target an integer-return or void function; the caller
+discards its result. Argument IDs name earlier integer
+values in the same block and each counts as a use. Calls use identifier rules,
+argument limits, and left-to-right effect scheduling already required by
+`.call`. Names, arity, and callee result contracts are checked in unit mode;
+standalone functions retain their external-callee obligations.
+
+```text
+ciq-ir 3
+.function startup
+.integer %0 41
+.call-discard Startup greet %0
+.return-void
+.end
+```
+
+Every return in a function must agree: `.return` yields an integer,
+`.return-void` yields void. The shared validator infers and exposes that result
+contract; no separate result annotation is stored. A block may terminate with
+either form. The final declared block still returns, and the existing
+reachability, definite-local, and empty-edge-stack rules apply. A single
+`.return-void` is a valid function body. Implicit text fallthrough is rejected;
+only source compilation inserts a final void return.
+
+Versions 1 and 2 reject these two new directives. Canonical printing emits
+version 3 when either operation is present, version 2 for existing control flow
+or assignment, otherwise version 1. Old function/unit documents remain valid;
+the `ciq-unit 1` envelope needs no change. Void values, class ownership,
+receiver/object/null/array operations, and arbitrary SDK calls are not introduced.
+See [source rules][void-source] and [runtime evidence][void-evidence].
+
+[void-source]: compiler-subset.md#void-functions-and-statement-calls
+[void-evidence]: ../investigations/compiler-void.md

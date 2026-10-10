@@ -177,7 +177,9 @@ still comes from the SDK reference in that earlier experiment. The new
 [console application generator](examples/compiler-application/README.md) supplies
 all lifecycle CODE, DATA, imports, and unsigned sections independently. It runs
 the greeting with `41`/`42` and the same two-file unit with `48`; signing remains
-a separate step. Source-authored lifecycle classes and project builds are next.
+a separate step. [Void startup and module calls](examples/compiler-void/README.md)
+also run with inferred void returns and discarded call results. Source-authored
+lifecycle classes and project builds are next.
 
 Build and validate the workspace:
 

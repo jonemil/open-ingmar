@@ -60,7 +60,7 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
                     edges.push((index, block, target));
                     terminated = true;
                 }
-                Operation::Return { .. } => terminated = true,
+                Operation::Return { .. } | Operation::ReturnVoid => terminated = true,
                 _ => (),
             }
         }

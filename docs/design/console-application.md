@@ -41,7 +41,9 @@ same builder. A linker or new crate is unnecessary for the current profile.
 
 Debug tables, launcher assets, named views, and resource-language tables are
 omitted in this console profile. The generated native View stays blank; entry
-prints and its integer result provide the runtime observation.
+prints and, for integer entries, its result provide the runtime observation.
+Void entries run once with their result discarded and no wrapper print;
+[the void-call experiment](../investigations/compiler-void.md) verifies this path.
 
 ## Next extension
 

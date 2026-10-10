@@ -18,8 +18,14 @@ pub(crate) enum Statement {
         value: Expression,
         span: Span,
     },
+    Call {
+        module: String,
+        member: String,
+        arguments: Vec<Expression>,
+        span: Span,
+    },
     Return {
-        value: Expression,
+        value: Option<Expression>,
         span: Span,
     },
     Break {
@@ -48,6 +54,7 @@ impl Statement {
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
+            | Self::Call { span, .. }
             | Self::If { span, .. }
             | Self::Break { span }
             | Self::Continue { span }
@@ -438,7 +445,11 @@ impl<'a> Parser<'a> {
                 }
                 Kind::Word("return") => {
                     self.token()?;
-                    let value = self.expression(0)?;
+                    let value = if self.peek()? == Kind::Punctuation(';') {
+                        None
+                    } else {
+                        Some(self.expression(0)?)
+                    };
                     let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
                     Statement::Return {
                         value,
@@ -526,16 +537,25 @@ impl<'a> Parser<'a> {
                             mut arguments,
                         } = expression.kind
                         else {
-                            return Err(self.error(start, "only assignment and System.println are supported as expression statements"));
+                            return Err(self.error(start, "only assignment and qualified calls are supported as expression statements"));
                         };
-                        if module != "System" || member != "println" || arguments.len() != 1 {
-                            return Err(
-                                self.error(start, "expected System.println with one argument")
-                            );
-                        }
-                        Statement::Println {
-                            argument: arguments.remove(0),
-                            span: Span { start, end },
+                        if module == "System" {
+                            if member != "println" || arguments.len() != 1 {
+                                return Err(
+                                    self.error(start, "expected System.println with one argument")
+                                );
+                            }
+                            Statement::Println {
+                                argument: arguments.remove(0),
+                                span: Span { start, end },
+                            }
+                        } else {
+                            Statement::Call {
+                                module,
+                                member,
+                                arguments,
+                                span: Span { start, end },
+                            }
                         }
                     }
                 }

@@ -30,3 +30,6 @@ device-data, and key setup. Output names follow the example directory name.
 
 Keep generated artifacts in each project's ignored `build/` directory. Signing
 keys and SDK installations stay outside the examples.
+
+- [Void startup and module calls](compiler-void/README.md): complete generated
+  application with effect-only calls, bare returns, and void fallthrough.

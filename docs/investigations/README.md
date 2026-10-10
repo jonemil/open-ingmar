@@ -172,3 +172,6 @@ in-place shrink experiment has confirmed simulator execution, as described in
   generation, complete native/IR parity, and simulator-confirmed 41/42/48.
 
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md
+
+- [Void functions and statement calls](compiler-void.md): complete void startup,
+  early returns, argument order, and integer-result discard in the simulator.

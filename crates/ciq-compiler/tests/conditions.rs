@@ -242,10 +242,8 @@ fn source_arm_scopes_missing_returns_and_unreachable_statements_are_rejected() {
         "function f(x) { if (x == 0) { var x = 1; return x; } else { return 2; } }",
         "function f(x) { if (x == 0) { var n = 1; var n = 2; return n; } else { return 2; } }",
         "function f(x) { if (x == 0) { return 1; } else {} }",
-        "function f(x) { if (x == 0) {} else {} }",
         "function f(x) { if (x == 0) { return 1; var n = 2; } else { return 3; } }",
         "function f(x) { if (x == 0) { return 1; } else { return 2; } return 3; }",
-        "function f(x) { if (x == 0) {} else { if (x > 1) {} else {} } }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -707,8 +705,6 @@ fn optional_else_preserves_false_path_scope_and_return_requirements() {
         "function f(x) { if (x == 0) { return 1; } }",
         "function f(x) { if (x == 0) { var n = 1; } return n; }",
         "function f(x) { if (x == 0) { return 1; } else if (x > 0) { return 2; } return 3; }",
-        "function f(x) { while (x > 0) { break; } }",
-        "function f(x) { while (x > 0) { continue; } }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

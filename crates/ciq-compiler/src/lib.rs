@@ -88,6 +88,14 @@ pub enum BinaryOp {
     Subtract,
 }
 
+/// The supported function result contract, inferred from validated returns.
+/// Void functions produce no semantic value; parameters remain integers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnType {
+    Integer,
+    Void,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     /// Start a uniquely named block; the first declared block is entry.
@@ -138,6 +146,13 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Invoke a qualified user method for effects, discarding any VM result.
+    /// Unit validation permits an integer or void callee and checks its arity.
+    ModuleCallStatement {
+        module: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     LocalInitialize {
         local: LocalId,
         value: ValueId,
@@ -155,6 +170,8 @@ pub enum Operation {
     Return {
         value: ValueId,
     },
+    /// Terminate the block without producing a semantic result.
+    ReturnVoid,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,12 +201,15 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals and prints accept integers or strings. Arithmetic, parameters, calls,
-/// and returns require integers; comparisons produce Booleans used by branches.
+/// Locals and prints accept integers or strings. Arithmetic, parameters, and
+/// call arguments require integers. Returns consistently produce integers or
+/// no value; comparisons produce Booleans used by branches. Statement calls
+/// discard results; unit validation rejects using a void callee as a value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
     parameter_count: usize,
+    return_type: ReturnType,
     operations: Vec<LocatedOperation>,
 }
 
@@ -200,6 +220,11 @@ impl Function {
 
     pub fn parameter_count(&self) -> usize {
         self.parameter_count
+    }
+
+    /// Return the common result type established by every return terminator.
+    pub fn return_type(&self) -> ReturnType {
+        self.return_type
     }
 
     pub fn operations(&self) -> &[LocatedOperation] {
@@ -217,8 +242,9 @@ impl Function {
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
     /// Rejects invalid names, spans, value/local dependencies, effect ordering,
-    /// incompatible value types, malformed/unreachable blocks, cross-block
-    /// expression uses, and unsupported operation or parameter/local counts.
+    /// incompatible value types or mixed integer/void returns, malformed or
+    /// unreachable blocks, cross-block expression uses, and unsupported
+    /// operation or parameter/local counts.
     /// External callee arity and types are not checked here.
     pub fn with_parameters(
         name: String,
@@ -242,12 +268,13 @@ impl Function {
                 message: "invalid function name".into(),
             });
         }
-        if operations.len() < 2 || operations.len() > MAX_OPERATIONS {
+        if operations.is_empty() || operations.len() > MAX_OPERATIONS {
             return Err(IrError {
                 operation: None,
-                message: "IR requires 2..=1024 operations with a final return".into(),
+                message: "IR requires 1..=1024 operations with a final return".into(),
             });
         }
+        let mut return_type = None;
         let mut definitions = std::collections::BTreeMap::new();
         let structure = control_flow::validate(&operations)?;
         let mut value_blocks = std::collections::BTreeMap::new();
@@ -333,7 +360,12 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ModuleCall {
-                    result,
+                    ref module,
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::ModuleCallStatement {
                     ref module,
                     ref member,
                     ref arguments,
@@ -362,7 +394,12 @@ impl Function {
                     if arguments.len() > MAX_PARAMETERS {
                         return Err(fail("call exceeds 254-argument limit"));
                     }
-                    (Some(result), arguments.clone())
+                    let result = if let Operation::ModuleCall { result, .. } = located.operation {
+                        Some(result)
+                    } else {
+                        None
+                    };
+                    (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
                     if boolean_values.contains(&value) {
@@ -410,7 +447,19 @@ impl Function {
                     }
                     (Some(result), vec![])
                 }
+                Operation::ReturnVoid => {
+                    if return_type.replace(ReturnType::Void) == Some(ReturnType::Integer) {
+                        return Err(fail("function cannot mix integer and void returns"));
+                    }
+                    if !structure.explicit && index + 1 != operations.len() {
+                        return Err(fail("return must be the final operation"));
+                    }
+                    (None, vec![])
+                }
                 Operation::Return { value } => {
+                    if return_type.replace(ReturnType::Integer) == Some(ReturnType::Void) {
+                        return Err(fail("function cannot mix integer and void returns"));
+                    }
                     if string_values.contains(&value) || boolean_values.contains(&value) {
                         return Err(fail("return requires an integer value"));
                     }
@@ -440,7 +489,7 @@ impl Function {
         }
         if !matches!(
             operations.last().unwrap().operation,
-            Operation::Return { .. }
+            Operation::Return { .. } | Operation::ReturnVoid
         ) {
             return Err(IrError {
                 operation: None,
@@ -460,6 +509,7 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::ModuleCall { .. }
+                    | Operation::ModuleCallStatement { .. }
                     | Operation::Println { .. }
                     | Operation::LocalAssign { .. }
             )
@@ -472,19 +522,20 @@ impl Function {
             }
             let mut schedule = Vec::new();
             for (index, located) in operations.iter().enumerate() {
-                let root = match located.operation {
+                let roots = match &located.operation {
                     Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
                     | Operation::Return { value }
-                    | Operation::Println { value } => value,
-                    Operation::Branch { condition, .. } => condition,
-                    Operation::Block { .. } | Operation::Jump { .. } => {
+                    | Operation::Println { value } => vec![*value],
+                    Operation::Branch { condition, .. } => vec![*condition],
+                    Operation::ModuleCallStatement { arguments, .. } => arguments.clone(),
+                    Operation::Block { .. } | Operation::Jump { .. } | Operation::ReturnVoid => {
                         schedule.push(index);
                         continue;
                     }
                     _ => continue,
                 };
-                let mut tasks = vec![Task::Value(root)];
+                let mut tasks: Vec<_> = roots.into_iter().rev().map(Task::Value).collect();
                 while let Some(task) = tasks.pop() {
                     match task {
                         Task::Emit(at) => schedule.push(at),
@@ -522,6 +573,7 @@ impl Function {
         Ok(Self {
             name,
             parameter_count,
+            return_type: return_type.expect("final return establishes result type"),
             operations,
         })
     }
@@ -544,7 +596,8 @@ impl Function {
     /// Serialize this function as provisional `ciq-ir` text.
     ///
     /// Retains semantic IDs, operation order, and optional source spans. The
-    /// output uses version 2 for blocks, comparisons, or assignments, otherwise 1.
+    /// output uses version 3 for void returns or statement calls, version 2 for
+    /// blocks/comparisons/assignments, otherwise version 1.
     /// It can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
@@ -553,6 +606,13 @@ impl Function {
             format!(" parameters={}", self.parameter_count)
         };
         let version = if self.operations.iter().any(|o| {
+            matches!(
+                o.operation,
+                Operation::ReturnVoid | Operation::ModuleCallStatement { .. }
+            )
+        }) {
+            3
+        } else if self.operations.iter().any(|o| {
             matches!(
                 o.operation,
                 Operation::Block { .. } | Operation::Compare { .. } | Operation::LocalAssign { .. }
@@ -619,6 +679,18 @@ impl Function {
                         .collect::<String>();
                     format!(".call %{} {module} {member}{arguments}", result.0)
                 }
+                Operation::ModuleCallStatement {
+                    ref module,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|value| format!(" %{}", value.0))
+                        .collect::<String>();
+                    format!(".call-discard {module} {member}{arguments}")
+                }
+                Operation::ReturnVoid => ".return-void".into(),
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)
                 }
@@ -646,12 +718,14 @@ impl Function {
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
 /// Resolves parameters and scoped locals, lowers conditions and while loops
-/// (including innermost break/continue) to blocks, and retains source spans. Requires an integer return on every
-/// fallthrough path and rejects unreachable statements or local/parameter
-/// shadowing. Assignments
-/// require a visible initialized local and preserve its integer/string type.
+/// (including innermost break/continue) to blocks, and retains source spans.
+/// Functions with value returns require an integer return on every path;
+/// otherwise bare returns and fallthrough produce void returns. Mixed return
+/// types, unreachable statements, and local/parameter shadowing are rejected.
+/// Assignments require a visible initialized local and preserve its integer/string type.
 /// Unsupported syntax, unresolved names, and invalid IR produce source
-/// diagnostics rather than partial output. VM instruction selection and symbol binding occur later.
+/// diagnostics rather than partial output. VM instruction selection and symbol
+/// binding occur later.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     source_ir::build(source, parser::parse(source)?)
 }

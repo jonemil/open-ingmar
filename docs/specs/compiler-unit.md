@@ -3,8 +3,9 @@
 This profile collects multiple restricted functions before lowering CODE. It is
 independent of application profiles; the
 [console application builder](console-application.md) supplies a complete PRG
-from this unit, while Jungle resolution remains future work. The [function subset](compiler-subset.md)
-and [function IR](compiler-ir-text.md) remain the per-function contracts.
+from this unit, while Jungle resolution remains future work. The
+[function subset](compiler-subset.md) and [function IR](compiler-ir-text.md)
+remain the per-function contracts.
 
 ## Source declarations
 
@@ -23,7 +24,8 @@ as an intrinsic receiver and cannot be declared as a module.
 All function bodies use the existing grammar and limits. Qualified user calls
 must resolve to a module member in this unit, regardless of declaration order.
 Call argument counts must exactly match the callee's parameter count. All
-parameters, user-call arguments/results, and returns are integers; string and
+parameters and user-call arguments are integers; functions return integers or
+void. Expression calls require integer results; string and
 Boolean arguments are rejected. These are the current subset's fixed type
 rules, not general Monkey C type inference.
 
@@ -83,7 +85,7 @@ ciq-ir 1
 
 The first line is the unit header. Each `.owner global` or
 `.owner module <identifier>` applies to exactly one following function document,
-including its own `ciq-ir 1` or `ciq-ir 2` header and `.end`. There is no unit end
+including its own `ciq-ir 1`, `ciq-ir 2`, or `ciq-ir 3` header and `.end`. There is no unit end
 directive. Blank lines and `#` comments between records are accepted, as are
 LF/CRLF line endings; function text retains its existing quoting/comment rules.
 Each inner function is validated before checking ownership and calls together.
@@ -118,3 +120,12 @@ See [the example](../../examples/compiler-unit/README.md) and
 For complete unsigned application output, use `--emit prg --app-id <id>`
 with source or saved unit IR. The [console application profile](console-application.md)
 specifies the generated lifecycle, metadata, entry selection, and restrictions.
+
+Unit signatures include each function's validated integer/void result contract.
+Expression `.call` requires an integer callee; statement `.call-discard` permits
+either result and discards it. Both check integer arguments and exact arity.
+Inner functions may use [IR version 3][void-ir] without changing the unit
+envelope. See [void source rules][void-source].
+
+[void-ir]: compiler-ir-text.md#version-3-void-returns-and-statement-calls
+[void-source]: compiler-subset.md#void-functions-and-statement-calls
