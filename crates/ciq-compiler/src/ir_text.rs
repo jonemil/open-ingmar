@@ -1,6 +1,9 @@
-use crate::{BinaryOp, Diagnostic, Function, LocalId, LocatedOperation, Operation, Span, ValueId};
+use crate::{
+    BinaryOp, BlockId, ComparisonOp, Diagnostic, Function, LocalId, LocatedOperation, Operation,
+    Span, ValueId,
+};
 
-/// Parse `ciq-ir 1` text into a validated semantic function.
+/// Parse `ciq-ir` version 1 or 2 text into a validated semantic function.
 ///
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
@@ -37,11 +40,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
     if !rows
         .first()
-        .is_some_and(|(_, fields)| fields == &["ciq-ir", "1"])
+        .is_some_and(|(_, fields)| fields == &["ciq-ir", "1"] || fields == &["ciq-ir", "2"])
     {
         return Err(fail(
             rows.first().map_or(0, |row| row.0),
-            "expected 'ciq-ir 1'",
+            "expected 'ciq-ir 1' or 'ciq-ir 2'",
         ));
     }
     let Some((name_at, declaration)) = rows.get(1) else {
@@ -62,6 +65,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         0
     };
     let mut operations = Vec::new();
+    let version_two = rows[0].1[1] == "2";
     let mut operation_offsets = Vec::new();
     let mut ended = false;
     for (index, (at, fields)) in rows.iter().enumerate().skip(2) {
@@ -91,10 +95,15 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".parameter") => (7, 3),
             Some(".string") => (8, 3),
             Some(".println") => (9, 2),
+            Some(".block") if version_two => (10, 2),
+            Some(".branch") if version_two => (11, 4),
+            Some(".jump") if version_two => (12, 2),
+            Some(".equal") if version_two => (13, 4),
+            Some(".greater") if version_two => (14, 4),
             _ => {
                 return Err(fail(
                     *at,
-                    "expected .integer, .add, .subtract, .local, .read, .call, .parameter, .string, .println, .return, or .end",
+                    "unknown IR directive (blocks, comparisons, branches, and jumps require ciq-ir 2)",
                 ));
             }
         };
@@ -123,6 +132,17 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                     .map_err(|_| fail(*at, "local ID exceeds u32"))?,
             ))
         };
+        let parse_block = |text: &str| -> Result<BlockId, Diagnostic> {
+            let digits = text
+                .strip_prefix('^')
+                .filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+                .ok_or_else(|| fail(*at, "block IDs use ^ followed by decimal u32"))?;
+            Ok(BlockId(
+                digits
+                    .parse()
+                    .map_err(|_| fail(*at, "block ID exceeds u32"))?,
+            ))
+        };
         let span = if let Some(field) = fields.get(width) {
             let (start, end) = field
                 .strip_prefix("span=")
@@ -143,7 +163,32 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 8 {
+        let operation = if kind == 10 {
+            Operation::Block {
+                block: parse_block(&fields[1])?,
+            }
+        } else if kind == 11 {
+            Operation::Branch {
+                condition: parse_value(&fields[1])?,
+                on_true: parse_block(&fields[2])?,
+                on_false: parse_block(&fields[3])?,
+            }
+        } else if kind == 12 {
+            Operation::Jump {
+                target: parse_block(&fields[1])?,
+            }
+        } else if kind == 13 || kind == 14 {
+            Operation::Compare {
+                result: parse_value(&fields[1])?,
+                kind: if kind == 13 {
+                    ComparisonOp::Equal
+                } else {
+                    ComparisonOp::Greater
+                },
+                left: parse_value(&fields[2])?,
+                right: parse_value(&fields[3])?,
+            }
+        } else if kind == 8 {
             let value = fields[2]
                 .strip_prefix('"')
                 .ok_or_else(|| fail(*at, "string values require quotes"))?;

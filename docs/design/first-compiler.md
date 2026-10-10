@@ -38,9 +38,11 @@ in-memory composition and editable stage resumption.
    initialized locals, user-module calls, integer parameters, and positional
    arguments, strings/locals, and `System.println` statements.
    [The plan](../plan.md) links their runtime evidence.
-2. Conditions/branches and exceptions after their assembler fixups and
-   stack/frame requirements are understood. Follow the
-   [control-flow assembly plan](control-flow.md) first.
+2. Terminal conditional returns with `==`/`>` and forward-only semantic blocks
+   are [implemented and simulator-verified](../investigations/compiler-conditions.md).
+   Extend branch statements/nesting next. Branch-label and exception assembly
+   are implemented; exception source compilation still needs stack/frame
+   research. See the [control-flow design](control-flow.md).
 3. Independent application DATA/classes/symbols/resources and other required
    metadata, then [Jungle-driven project builds](project-builds.md).
 

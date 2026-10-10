@@ -143,4 +143,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   version 5 projects, shared CODE boundaries, and an assembled moved handler
   returning the edited `47` in the simulator.
 
+- [Compiler terminal conditions](compiler-conditions.md): explicit semantic
+  blocks and definite-local joins, version-2 IR/native parity, and both outcomes
+  of generated equality/greater-than functions in the simulator.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

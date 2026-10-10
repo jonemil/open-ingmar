@@ -1,4 +1,4 @@
-# Provisional compiler IR text, version 1
+# Provisional compiler IR text, versions 1 and 2
 
 Implemented 2026-10-10 to exercise the compiler stage boundaries while the
 language subset is small. This is our semantic IR format, separate from Garmin
@@ -20,7 +20,8 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be exactly `1`. Exactly one `.function <identifier>
+Header version must be `1` or `2`. Version 1 describes a single-block body;
+version 2 adds the control-flow directives below. Exactly one `.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. The supported
 semantic body is ordered local initializations, print statements, and expression
@@ -47,15 +48,17 @@ Local initialization consumes an expression value; each local read defines a
 fresh expression value. The function is limited to 1024 operations including
 return; parameter metadata is not an operation. Invalid names/spans,
 out-of-range literals, shared values, dead definitions, forward/undefined uses,
-multiple returns, and blocks are rejected. For pure-only functions, definition
-order need not match VM stack order: the backend walks dependencies for each
-initialization/return in statement order and emits each binary left operand
+multiple returns, and blocks are rejected in version 1. For pure-only functions,
+definition order need not match VM stack order: the backend walks dependencies
+for each initialization/return in statement order and emits each binary left operand
 before its right operand. `parse_ir` reports positions in the IR input; typed
 validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
-preserving value IDs. `parse_ir` reconstructs them. `backend::lower()` (also
+preserving value IDs. It emits version 2 when blocks or comparisons are present,
+otherwise version 1, even if the input header was version 2. `parse_ir`
+reconstructs them. `backend::lower()` (also
 exposed through `Function::lower()`) creates the shared assembly `Program`
 directly; it does not print/reparse text. `Function::assembly()` is convenience
 lowering plus assembly printing. This gives a native source → IR → assembly
@@ -142,8 +145,8 @@ ciq-ir 1
 ```
 
 Names and result expectations are not checked against a whole-program type
-environment yet: the scaffold must supply integer-return callees. Blocks, object
-calls, and global unqualified calls remain unsupported. Argument counts must
+environment yet: the scaffold must supply integer-return callees. Object
+calls and global unqualified calls remain unsupported. Argument counts must
 match the supplied callee signature; whole-program arity checking is not
 implemented.
 
@@ -274,3 +277,56 @@ strings to DATA and update the manifest length. CODE and IR/text paths consume
 the same DATA bindings. See
 [reproduction](../investigations/compiler-strings.md) for source → IR → assembly
 → signed PRG and native CODE parity.
+
+## Version 2 control flow
+
+Version 2 accepts all version-1 directives and additionally:
+
+```text
+ciq-ir 2
+.function choose parameters=1
+.block ^0
+.parameter %0 0
+.integer %1 0
+.equal %2 %0 %1
+.branch %2 ^1 ^2
+.block ^1
+.integer %3 47
+.return %3
+.block ^2
+.integer %4 49
+.return %4
+.end
+```
+
+- `.block ^<id>` starts a block; IDs are decimal `u32`, distinct from `%` values
+  and `$` locals. Block IDs must be unique; the first block is entry.
+- `.equal %<result> %<left> %<right>` and `.greater` compare integers and define
+  a Boolean result. Only `.branch` may consume it.
+- `.branch %<condition> ^<true-target> ^<false-target>` consumes a Boolean and
+  terminates the block. The two targets may be the same block.
+- `.jump ^<target>` terminates the block unconditionally.
+
+All new directives accept the existing optional source span. A body containing
+block/branch/jump operations must begin with `.block`. Every block must end in
+`.return`, `.branch`, or `.jump`, with no operations after its terminator until
+the next block. All targets must be declared later in operation order. Every
+block must be reachable from entry; backward edges, missing targets, duplicate
+blocks, and implicit fallthrough are rejected. The final block returns.
+A version-2 body without these operations retains the implicit single block.
+
+Expression definitions still precede their uses, are globally unique, and have
+exactly one use, now restricted to their defining block. Locals can cross edges,
+but a read requires its unique initializer to execute on every incoming path;
+at a join the available set is the intersection of predecessor sets. A local
+initialized in only one arm cannot be read in a sibling or join. No reassignment
+or cross-block expression/phi values are supported. Local slots are allocated
+across the entire function, including mutually exclusive paths.
+
+The 1024-operation limit includes block markers and terminators. Effectful
+functions retain left-to-right expression and statement order within each
+block; block markers and jumps participate in schedule validation. Branches
+consume their comparisons, and no evaluation-stack values are carried over an
+edge. Source parsing, typed construction, and text resumption use these same
+checks. Typed/text IR supports forward joins with `.jump`; the source subset
+currently only generates a terminal conditional with one return per arm.

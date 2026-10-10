@@ -13,18 +13,23 @@ Input is exactly one top-level function:
 
 ```text
 function = "function" identifier "(" parameter-list? ")"
-           "{" statement* "return" expression ";" "}"
+           "{" statement* terminal "}"
+terminal = "return" expression ";"
+         | "if" "(" expression ")" "{" "return" expression ";" "}"
+           "else" "{" "return" expression ";" "}"
 parameter-list = identifier ("," identifier)*
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
-expression = primary (("+" | "-") primary)*
+expression = arithmetic (("==" | ">") arithmetic)?
+arithmetic = primary (("+" | "-") primary)*
 primary = decimal-integer | string-literal | parameter-or-local-identifier
         | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
-letters/digits/underscore. `function`, `return`, and `var` are reserved.
+letters/digits/underscore. `function`, `return`, `var`, `if`, `else`, `true`,
+and `false` are reserved. Boolean literals are not supported yet.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
 The accepted literal domain is `0..=127`; computed results may be negative or
 exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
@@ -42,7 +47,8 @@ yet.
 
 The IR contains integer/string constants, binary add/subtract definitions,
 parameter reads, local initialization/read, module calls, print statements, and
-a final integer return using a value ID, with optional source spans. Source
+integer comparisons, branches, and integer returns using value IDs, with
+optional source spans. Source
 compilation supplies them; IR text may omit them. Without locals, lowering emits
 a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
 or `ipush1` for a positive supported literal, left/right operands followed by
@@ -82,8 +88,8 @@ return. These are implementation limits.
 Semantic IR contains pure integer add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
 definitions are unique, operands refer to earlier definitions, every defined
-value has exactly one use, and initialization statements or the final return
-consume expression results. General shared-value graphs and unused definitions
+value has exactly one use, and initialization statements, branches, prints, or
+returns consume expression results within the same block. General shared-value graphs and unused definitions
 remain rejected until their scheduling policy is implemented. For pure-only
 functions, definition order need not be VM stack order: the backend traverses
 each initializer/return expression and emits left operand, right operand, then
@@ -214,3 +220,26 @@ needs `--data <data-source.mcasm>` in addition to `--symbols`. Matching and
 integration are described in [IR pipeline commands](compiler-ir-text.md) and
 [the runtime experiment](../investigations/compiler-strings.md). Application
 DATA allocation and method metadata remain explicit scaffold work.
+
+## Terminal conditions
+
+A function may end with `if (<condition>) { return <integer-expression>; } else
+{ return <integer-expression>; }` after its common prefix of local declarations
+and prints. Both braces and `else` are required. Each arm contains exactly one
+return; branch-local statements, nested conditions, loops, and statements after
+the conditional are rejected.
+
+`==` and `>` compare integer expressions and produce Booleans. Arithmetic has
+higher precedence, so `value + 1 > 2` compares the sum. At most one comparison
+is accepted per expression level; parentheses retain their existing grouping
+behavior. The condition must produce a Boolean comparison result. Boolean
+locals, parameters, literals, print arguments, call arguments, arithmetic, and
+returns are rejected. Integer truthiness, other comparison operators, and
+short-circuit operators are not supported.
+
+Lowering emits an entry block, the common statements, comparison, and branch,
+then separate integer-return blocks. Both arms may read parameters and common
+locals. The [version-2 IR rules](compiler-ir-text.md#version-2-control-flow)
+validate block-local values and initialization on every path. See
+[conditions.mc](../../examples/compiler-probe/conditions.mc) and
+[simulator evidence](../investigations/compiler-conditions.md).

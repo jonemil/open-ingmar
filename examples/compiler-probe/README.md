@@ -87,10 +87,23 @@ String concatenation/returns/parameters remain unsupported.
 returns, a backward loop, and an explicit caught exception. Our compiler does
 not accept it yet. The [control-flow investigation][control-flow] explains
 scaffold integration and simulator-verified binary edits; it informs the next
-assembler milestone.
+compiler extensions; loops and exceptions remain unsupported by our frontend.
 
 [ref-complete-stop-resume-commands]: ../../docs/specs/compiler-ir-text.md#command-line-stages
 
 [ref-the-arithmetic-experiment]: ../../docs/investigations/compiler-arithmetic.md
 [ref-the-parameter-argument-experiment]: ../../docs/investigations/compiler-arguments.md
 [control-flow]: ../../docs/investigations/control-flow.md
+
+[conditions.mc](conditions.mc) initializes a common local and returns `47` or
+`49` from a terminal `if/else`. Compile it with:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/conditions.mc scratch/compiler-example/conditions.mcasm
+```
+
+`--emit ir` produces version-2 text with explicit blocks and a Boolean branch.
+Both `==` and `>` have [simulator evidence][conditions]; branch-local statements
+and nested conditions are not supported yet.
+
+[conditions]: ../../docs/investigations/compiler-conditions.md

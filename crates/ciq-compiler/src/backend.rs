@@ -1,5 +1,5 @@
-//! VM instruction selection for validated expressions, locals, and print statements.
-use crate::{BinaryOp, Function, LocalId, Operation, ValueId};
+//! VM instruction selection for validated expressions, locals, and control flow.
+use crate::{BinaryOp, ComparisonOp, Function, LocalId, Operation, ValueId};
 use ciq_assembly::{Item, Operand, Program};
 use ciq_mc::Opcode;
 use std::collections::BTreeMap;
@@ -14,7 +14,9 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
 /// execute in order; expression operands and call arguments evaluate left to
 /// right. Relies on [`Function`] validation to exclude shared expression values
 /// and incompatible call schedules. Module/member aliases and literal DATA
-/// placements remain unresolved. Print calls discard their result.
+/// placements remain unresolved. Print calls discard their result. Explicit
+/// blocks lower to labels and symbolic branches, with an empty evaluation stack
+/// on each edge; local slots are allocated across the whole function.
 pub fn lower(function: &Function) -> Program {
     let mut definitions = BTreeMap::new();
     let mut strings = BTreeMap::new();
@@ -36,6 +38,7 @@ pub fn lower(function: &Function) -> Program {
             Operation::String { result, .. }
             | Operation::Integer { result, .. }
             | Operation::Binary { result, .. }
+            | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
             | Operation::ModuleCall { result, .. } => {
@@ -47,7 +50,7 @@ pub fn lower(function: &Function) -> Program {
                     (function.parameter_count() + slots.len() + 1) as u64,
                 );
             }
-            Operation::Return { .. } | Operation::Println { .. } => {}
+            _ => {}
         }
     }
     let mut items = literals;
@@ -68,6 +71,49 @@ pub fn lower(function: &Function) -> Program {
     });
     for located in function.operations() {
         let (value, opcode, operands) = match located.operation {
+            Operation::Block { block } => {
+                items.push(Item::Label(format!(
+                    "__ciq_block_{}_{}",
+                    function.name(),
+                    block.0
+                )));
+                continue;
+            }
+            Operation::Jump { target } => {
+                items.push(instruction(
+                    Opcode::Goto,
+                    vec![Operand::Code(format!(
+                        "__ciq_block_{}_{}",
+                        function.name(),
+                        target.0
+                    ))],
+                ));
+                continue;
+            }
+            Operation::Branch {
+                condition,
+                on_true,
+                on_false,
+            } => {
+                expression(condition, &definitions, &slots, &strings, &mut items);
+                items.push(instruction(
+                    Opcode::Bf,
+                    vec![Operand::Code(format!(
+                        "__ciq_block_{}_{}",
+                        function.name(),
+                        on_false.0
+                    ))],
+                ));
+                items.push(instruction(
+                    Opcode::Goto,
+                    vec![Operand::Code(format!(
+                        "__ciq_block_{}_{}",
+                        function.name(),
+                        on_true.0
+                    ))],
+                ));
+                continue;
+            }
             Operation::LocalInitialize { local, value } => {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
@@ -104,6 +150,7 @@ fn expression(
     enum Task {
         Value(ValueId),
         Binary(BinaryOp),
+        Compare(ComparisonOp),
         Invoke(usize),
         Context,
     }
@@ -149,11 +196,28 @@ fn expression(
                     tasks.extend([Task::Binary(*kind), Task::Value(*right), Task::Value(*left)]);
                     continue;
                 }
+                Operation::Compare {
+                    kind, left, right, ..
+                } => {
+                    tasks.extend([
+                        Task::Compare(*kind),
+                        Task::Value(*right),
+                        Task::Value(*left),
+                    ]);
+                    continue;
+                }
                 _ => unreachable!("statement is not a value definition"),
             },
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),
+            Task::Compare(kind) => (
+                match kind {
+                    ComparisonOp::Equal => Opcode::Eq,
+                    ComparisonOp::Greater => Opcode::Gt,
+                },
+                vec![],
+            ),
             Task::Binary(kind) => (
                 match kind {
                     BinaryOp::Add => Opcode::Addv,

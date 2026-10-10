@@ -6,6 +6,14 @@ pub(crate) struct ParsedFunction {
     pub statements: Vec<Statement>,
     pub expression: Expression,
     pub return_span: Span,
+    pub conditional: Option<Conditional>,
+}
+
+pub(crate) struct Conditional {
+    pub condition: Expression,
+    pub returned: Expression,
+    pub return_span: Span,
+    pub span: Span,
 }
 
 pub(crate) enum Statement {
@@ -37,6 +45,11 @@ pub(crate) enum ExpressionKind {
         left: Box<Expression>,
         right: Box<Expression>,
     },
+    Compare {
+        kind: crate::ComparisonOp,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +58,7 @@ enum Kind<'a> {
     Integer(&'a str),
     String(&'a str),
     Punctuation(char),
+    EqualEqual,
     End,
 }
 
@@ -131,7 +145,11 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',')) => {
+            Some('=') if rest.starts_with("==") => {
+                self.offset += 2;
+                Kind::EqualEqual
+            }
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -169,11 +187,40 @@ impl<'a> Parser<'a> {
     fn identifier(&mut self) -> Result<Token<'a>, Diagnostic> {
         let token = self.token()?;
         match token.kind {
-            Kind::Word(name) if !matches!(name, "function" | "return" | "var") => Ok(token),
+            Kind::Word(name)
+                if !matches!(
+                    name,
+                    "function" | "return" | "var" | "if" | "else" | "true" | "false"
+                ) =>
+            {
+                Ok(token)
+            }
             _ => Err(self.error(token.span.start, "expected a non-reserved identifier")),
         }
     }
     fn expression(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let left = self.arithmetic(depth)?;
+        let kind = match self.peek()? {
+            Kind::EqualEqual => crate::ComparisonOp::Equal,
+            Kind::Punctuation('>') => crate::ComparisonOp::Greater,
+            _ => return Ok(left),
+        };
+        self.token()?;
+        let right = self.arithmetic(depth)?;
+        let span = Span {
+            start: left.span.start,
+            end: right.span.end,
+        };
+        self.node(
+            ExpressionKind::Compare {
+                kind,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            span,
+        )
+    }
+    fn arithmetic(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let mut left = self.primary(depth)?;
         loop {
             let kind = match self.peek()? {
@@ -219,7 +266,12 @@ impl<'a> Parser<'a> {
                     })?;
                 self.node(ExpressionKind::Integer(value), token.span)
             }
-            Kind::Word(name) if !matches!(name, "function" | "return" | "var") => {
+            Kind::Word(name)
+                if !matches!(
+                    name,
+                    "function" | "return" | "var" | "if" | "else" | "true" | "false"
+                ) =>
+            {
                 if self.peek()? == Kind::Punctuation('.') {
                     self.token()?;
                     let member = self.identifier()?;
@@ -338,7 +390,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::Punctuation('{'), "'{'")?;
     let mut locals = Vec::new();
     let mut statements = Vec::new();
-    while parser.peek()? != Kind::Word("return") {
+    while !matches!(parser.peek()?, Kind::Word("return" | "if")) {
         if parser.peek()? != Kind::Word("var") {
             let expression = parser.expression(0)?;
             let end = parser.expect(Kind::Punctuation(';'), "';'")?.span.end;
@@ -395,6 +447,36 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
             span: Span { start, end },
         }));
     }
+    let conditional = if parser.peek()? == Kind::Word("if") {
+        let start = parser.token()?.span.start;
+        parser.expect(Kind::Punctuation('('), "'('")?;
+        let condition = parser.expression(0)?;
+        let condition_end = parser.expect(Kind::Punctuation(')'), "')'")?.span.end;
+        parser.expect(
+            Kind::Punctuation('{'),
+            "'{' (return-only arms require braces)",
+        )?;
+        let returned = parser.expect(Kind::Word("return"), "'return' (return-only arm)")?;
+        let expression = parser.expression(0)?;
+        let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
+        parser.expect(Kind::Punctuation('}'), "'}' (return-only arm)")?;
+        parser.expect(Kind::Word("else"), "'else' (both arms must return)")?;
+        parser.expect(Kind::Punctuation('{'), "'{'")?;
+        Some(Conditional {
+            condition,
+            returned: expression,
+            return_span: Span {
+                start: returned.span.start,
+                end: semi.span.end,
+            },
+            span: Span {
+                start,
+                end: condition_end,
+            },
+        })
+    } else {
+        None
+    };
     let returned = parser.expect(Kind::Word("return"), "'return'")?;
     let expression = parser.expression(0)?;
     let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
@@ -402,6 +484,12 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         Kind::Punctuation('}'),
         "'}' (additional statements are unsupported)",
     )?;
+    if conditional.is_some() {
+        parser.expect(
+            Kind::Punctuation('}'),
+            "'}' (conditional must be the final statement)",
+        )?;
+    }
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(ParsedFunction {
         name: identifier.to_owned(),
@@ -412,5 +500,6 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
             start: returned.span.start,
             end: semi.span.end,
         },
+        conditional,
     })
 }

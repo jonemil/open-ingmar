@@ -26,16 +26,19 @@ describe planned behavior and investigations record the supporting evidence.
   verification, and IQ creation are implemented.
 - Source → IR → assembly → CODE works in memory and through saved text. Integer
   arithmetic, initialized locals, user-module calls, integer parameters,
-  positional arguments, string literals/locals, and `System.println` statements
-  are simulator-verified.
-- The latest implementation checkpoint passes 166 Rust tests, Clippy, and
+  positional arguments, string literals/locals, `System.println` statements,
+  and terminal integer `if/else` returns using `==` or `>` are simulator-verified.
+- The latest implementation checkpoint passes 171 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Design semantic control-flow IR and a bounded frontend condition subset.
-   Define comparisons, block terminators, join validation, and text/native parity
-   before adding source syntax. [Branch-label fixups](investigations/branch-labels.md)
+1. Extend the bounded condition frontend with branch statements and nesting.
+   Forward-only semantic blocks, comparisons, terminators, definite-local joins,
+   and native/text parity are implemented; terminal `if/else` returns are
+   [simulator-verified](investigations/compiler-conditions.md). Preserve empty
+   evaluation stacks on edges before considering loops or value joins.
+   [Branch-label fixups](investigations/branch-labels.md)
    and [exception sources](investigations/exception-assembly.md) are implemented
    and simulator-verified; preserve unknown metadata and placement constraints.
 2. Revisit DATA string authoring after establishing shared address-region rules.

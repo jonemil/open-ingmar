@@ -151,6 +151,10 @@ supported too: [strings.mc](examples/compiler-probe/strings.mc) prints generated
 UTF-8 strings and `42`, then returns simulator-confirmed `43`. CODE emission
 uses `--data` for explicit DATA bindings alongside `--symbols`; see
 [string/print evidence](docs/investigations/compiler-strings.md).
+Terminal `if/else` returns with integer `==`/`>` comparisons are supported:
+[conditions.mc](examples/compiler-probe/conditions.mc) exercises both arms.
+[Condition evidence](docs/investigations/compiler-conditions.md) records explicit
+IR blocks, native/text parity, and simulator displays `55` and `53`.
 Reassignment, general string/object operations, and complete-project compilation
 remain future work.
 

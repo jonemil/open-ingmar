@@ -6,6 +6,7 @@
 
 pub mod backend;
 mod bindings;
+mod control_flow;
 pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod parser;
@@ -55,6 +56,17 @@ pub struct ValueId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalId(pub u32);
 
+/// A semantic block identity, independent of assembly labels and CODE offsets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BlockId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Integer comparisons whose Boolean results are consumed by branches.
+pub enum ComparisonOp {
+    Equal,
+    Greater,
+}
+
 pub(crate) const MAX_PARAMETERS: usize = 254;
 pub(crate) const MAX_LOCALS: usize = 255;
 pub(crate) const MAX_OPERATIONS: usize = 1024;
@@ -67,6 +79,27 @@ pub enum BinaryOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Start a uniquely named block; the first declared block is entry.
+    Block {
+        block: BlockId,
+    },
+    /// Compare two integers, defining a Boolean for a branch in this block.
+    Compare {
+        result: ValueId,
+        kind: ComparisonOp,
+        left: ValueId,
+        right: ValueId,
+    },
+    /// Consume a Boolean and terminate the block with two forward targets.
+    Branch {
+        condition: ValueId,
+        on_true: BlockId,
+        on_false: BlockId,
+    },
+    /// Terminate the block with an unconditional forward edge.
+    Jump {
+        target: BlockId,
+    },
     Integer {
         result: ValueId,
         value: i32,
@@ -127,13 +160,14 @@ impl std::error::Error for IrError {}
 
 /// A validated semantic IR function with a name, parameters, and operations.
 ///
-/// Every expression value has one use and refers only to earlier definitions.
-/// Locals must be initialized before reads. Functions containing calls require
+/// Expression values have one use within their defining block and refer only to
+/// earlier definitions. Explicit blocks have forward edges and terminate with a
+/// return, branch, or jump; an unmarked body is one implicit block. Local reads
+/// require initialization on every incoming path. Calls and prints require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// String types propagate through local reads; arithmetic, user-call arguments,
-/// parameters, and the return value remain integer-only. Print statements accept
-/// either integer or string values.
+/// Locals and prints accept integers or strings. Arithmetic, parameters, calls,
+/// and returns require integers; comparisons produce Booleans used by branches.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
@@ -165,8 +199,9 @@ impl Function {
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
     /// Rejects invalid names, spans, value/local dependencies, call ordering,
-    /// incompatible value types, and unsupported operation or parameter/local
-    /// counts. External callee arity and types are not checked here.
+    /// incompatible value types, malformed blocks, backward edges, cross-block
+    /// expression uses, and unsupported operation or parameter/local counts.
+    /// External callee arity and types are not checked here.
     pub fn with_parameters(
         name: String,
         parameter_count: usize,
@@ -196,6 +231,14 @@ impl Function {
             });
         }
         let mut definitions = std::collections::BTreeMap::new();
+        let structure = control_flow::validate(&operations)?;
+        let mut value_blocks = std::collections::BTreeMap::new();
+        let mut available_locals = std::collections::BTreeSet::new();
+        let mut outgoing_locals: std::collections::BTreeMap<
+            BlockId,
+            std::collections::BTreeSet<LocalId>,
+        > = std::collections::BTreeMap::new();
+        let mut boolean_values = std::collections::BTreeSet::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
         let mut string_values = std::collections::BTreeSet::new();
@@ -209,6 +252,42 @@ impl Function {
                 return Err(fail("source span ends before it starts"));
             }
             let (result, operands) = match located.operation {
+                Operation::Block { block } => {
+                    available_locals = match structure.predecessors[&block].first() {
+                        Some(first) => {
+                            let mut available: std::collections::BTreeSet<LocalId> =
+                                outgoing_locals[first].clone();
+                            for pred in &structure.predecessors[&block][1..] {
+                                available.retain(|local| outgoing_locals[pred].contains(local));
+                            }
+                            available
+                        }
+                        None => Default::default(),
+                    };
+                    (None, vec![])
+                }
+                Operation::Compare {
+                    result,
+                    left,
+                    right,
+                    ..
+                } => {
+                    if [left, right]
+                        .iter()
+                        .any(|v| string_values.contains(v) || boolean_values.contains(v))
+                    {
+                        return Err(fail("comparison requires integer values"));
+                    }
+                    boolean_values.insert(result);
+                    (Some(result), vec![left, right])
+                }
+                Operation::Branch { condition, .. } => {
+                    if !boolean_values.contains(&condition) {
+                        return Err(fail("branch requires a Boolean comparison result"));
+                    }
+                    (None, vec![condition])
+                }
+                Operation::Jump { .. } => (None, vec![]),
                 Operation::Integer { result, value } => {
                     if !(0..=127).contains(&value) {
                         return Err(fail("supported integer literal range is 0..=127"));
@@ -222,14 +301,22 @@ impl Function {
                     string_values.insert(result);
                     (Some(result), vec![])
                 }
-                Operation::Println { value } => (None, vec![value]),
+                Operation::Println { value } => {
+                    if boolean_values.contains(&value) {
+                        return Err(fail("println currently accepts only integers or strings"));
+                    }
+                    (None, vec![value])
+                }
                 Operation::Binary {
                     result,
                     left,
                     right,
                     ..
                 } => {
-                    if string_values.contains(&left) || string_values.contains(&right) {
+                    if [left, right]
+                        .iter()
+                        .any(|v| string_values.contains(v) || boolean_values.contains(v))
+                    {
                         return Err(fail("arithmetic requires integer values"));
                     }
                     (Some(result), vec![left, right])
@@ -260,7 +347,9 @@ impl Function {
                             "System calls are supported only as println statements",
                         ));
                     }
-                    if arguments.iter().any(|value| string_values.contains(value)) {
+                    if arguments.iter().any(|value| {
+                        string_values.contains(value) || boolean_values.contains(value)
+                    }) {
                         return Err(fail(
                             "user-module calls currently require integer arguments",
                         ));
@@ -271,12 +360,16 @@ impl Function {
                     (Some(result), arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
+                    if boolean_values.contains(&value) {
+                        return Err(fail("Boolean locals are not yet supported"));
+                    }
                     if string_values.contains(&value) {
                         string_locals.insert(local);
                     }
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
                     }
+                    available_locals.insert(local);
                     if locals.len() > MAX_LOCALS {
                         return Err(fail("function exceeds 255-local limit"));
                     }
@@ -286,7 +379,7 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } => {
-                    if !locals.contains(&local) {
+                    if !available_locals.contains(&local) {
                         return Err(fail(
                             "local read must refer to an earlier initialized local",
                         ));
@@ -297,10 +390,10 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::Return { value } => {
-                    if string_values.contains(&value) {
+                    if string_values.contains(&value) || boolean_values.contains(&value) {
                         return Err(fail("return requires an integer value"));
                     }
-                    if index + 1 != operations.len() {
+                    if !structure.explicit && index + 1 != operations.len() {
                         return Err(fail("return must be the final operation"));
                     }
                     (None, vec![value])
@@ -310,12 +403,24 @@ impl Function {
                 if !definitions.contains_key(&operand) {
                     return Err(fail("operand must refer to an earlier defined value"));
                 }
+                if value_blocks[&operand] != structure.blocks[index] {
+                    return Err(fail(
+                        "expression values cannot cross block boundaries; use local reads",
+                    ));
+                }
                 *uses.entry(operand).or_insert(0usize) += 1;
             }
             if let Some(result) = result {
+                value_blocks.insert(result, structure.blocks[index]);
                 if definitions.insert(result, index).is_some() {
                     return Err(fail("duplicate value definition"));
                 }
+            }
+            if matches!(
+                located.operation,
+                Operation::Branch { .. } | Operation::Jump { .. } | Operation::Return { .. }
+            ) {
+                outgoing_locals.insert(structure.blocks[index], available_locals.clone());
             }
         }
         if !matches!(
@@ -354,6 +459,11 @@ impl Function {
                     Operation::LocalInitialize { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value } => value,
+                    Operation::Branch { condition, .. } => condition,
+                    Operation::Block { .. } | Operation::Jump { .. } => {
+                        schedule.push(index);
+                        continue;
+                    }
                     _ => continue,
                 };
                 let mut tasks = vec![Task::Value(root)];
@@ -364,7 +474,8 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::Binary { left, right, .. } => {
+                                Operation::Binary { left, right, .. }
+                                | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
                                 Operation::ModuleCall { arguments, .. } => tasks.extend(
@@ -412,19 +523,52 @@ impl Function {
         self.lower().to_text()
     }
 
-    /// Serialize this function as provisional `ciq-ir 1` text.
+    /// Serialize this function as provisional `ciq-ir` text.
     ///
     /// Retains semantic IDs, operation order, and optional source spans. The
-    /// output can be read by [`parse_ir`]; it is not Garmin MIR.
+    /// output uses version 2 for blocks or comparisons, otherwise version 1.
+    /// It can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
             String::new()
         } else {
             format!(" parameters={}", self.parameter_count)
         };
-        let mut text = format!("ciq-ir 1\n.function {}{parameters}\n", self.name);
+        let version = if self.operations.iter().any(|o| {
+            matches!(
+                o.operation,
+                Operation::Block { .. } | Operation::Compare { .. }
+            )
+        }) {
+            2
+        } else {
+            1
+        };
+        let mut text = format!("ciq-ir {version}\n.function {}{parameters}\n", self.name);
         for operation in &self.operations {
             text.push_str(&match operation.operation {
+                Operation::Block { block } => format!(".block ^{}", block.0),
+                Operation::Branch {
+                    condition,
+                    on_true,
+                    on_false,
+                } => format!(".branch %{} ^{} ^{}", condition.0, on_true.0, on_false.0),
+                Operation::Jump { target } => format!(".jump ^{}", target.0),
+                Operation::Compare {
+                    result,
+                    kind,
+                    left,
+                    right,
+                } => format!(
+                    ".{} %{} %{} %{}",
+                    match kind {
+                        ComparisonOp::Equal => "equal",
+                        ComparisonOp::Greater => "greater",
+                    },
+                    result.0,
+                    left.0,
+                    right.0
+                ),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)
@@ -554,6 +698,16 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
                     right,
                 }
             }
+            parser::ExpressionKind::Compare { kind, left, right } => {
+                let left = emit(source, *left, locals, parameters, operations)?;
+                let right = emit(source, *right, locals, parameters, operations)?;
+                Operation::Compare {
+                    result: ValueId(operations.len() as u32),
+                    kind,
+                    left,
+                    right,
+                }
+            }
         };
         let result = ValueId(operations.len() as u32);
         operations.push(LocatedOperation {
@@ -570,6 +724,12 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         .map(|(index, name)| (name, index))
         .collect();
     let mut operations = Vec::new();
+    if ast.conditional.is_some() {
+        operations.push(LocatedOperation {
+            operation: Operation::Block { block: BlockId(0) },
+            span: None,
+        });
+    }
     let mut locals = std::collections::BTreeMap::new();
     for statement in ast.statements {
         match statement {
@@ -603,6 +763,42 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
                 });
             }
         }
+    }
+    if let Some(conditional) = ast.conditional {
+        let condition = emit(
+            source,
+            conditional.condition,
+            &locals,
+            &parameters,
+            &mut operations,
+        )?;
+        operations.push(LocatedOperation {
+            operation: Operation::Branch {
+                condition,
+                on_true: BlockId(1),
+                on_false: BlockId(2),
+            },
+            span: Some(conditional.span),
+        });
+        operations.push(LocatedOperation {
+            operation: Operation::Block { block: BlockId(1) },
+            span: None,
+        });
+        let value = emit(
+            source,
+            conditional.returned,
+            &locals,
+            &parameters,
+            &mut operations,
+        )?;
+        operations.push(LocatedOperation {
+            operation: Operation::Return { value },
+            span: Some(conditional.return_span),
+        });
+        operations.push(LocatedOperation {
+            operation: Operation::Block { block: BlockId(2) },
+            span: None,
+        });
     }
     let value = emit(
         source,

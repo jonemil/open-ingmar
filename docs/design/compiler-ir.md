@@ -9,23 +9,24 @@ compatibility or a commitment to LLVM/SSA infrastructure.
 
 A function has a name, parameter count, and ordered operations. Operations
 represent integer/string constants, addition/subtraction, positional parameter
-reads, local initialization/reads, user-module calls, print statements, and a
-final integer return. Source spans are optional diagnostic provenance.
+reads, local initialization/reads, user-module calls, print statements,
+integer returns, comparisons, and explicit block/branch/jump operations. Source
+spans are optional diagnostic provenance.
 
 Value IDs name semantic results. Local IDs name stored semantic locals. Neither
 chooses a VM slot, symbol ID, or CODE/DATA offset. Parameter indexes name
 positions; the backend accounts for the VM context separately.
 
-Each expression value has one use and references earlier definitions. Local
-initializations execute in order, including unused locals; reads require an
-initialized local. Repeated source reads create fresh values from stored locals
-rather than recomputing initializers.
+Each expression value has one use in its defining block and references earlier
+definitions. Local initializations execute in order, including unused locals;
+reads require initialization on every incoming path. Repeated source reads
+create fresh values from stored locals rather than recomputing initializers.
 
 Pure-only expression definitions may be scheduled by dependencies. Functions
 containing calls or prints must have IR operation order matching left-to-right
 expression evaluation and statement order. Validation rejects schedules the
 current backend cannot preserve. Shared-value graphs, reassignment, object
-calls, and control flow require further scheduling/validation work.
+calls, and cyclic control flow require further scheduling/validation work.
 
 The IR is immutable after validation. Source parsing, typed construction, and
 [IR text](../specs/compiler-ir-text.md) use the same validator, so no producer
@@ -68,10 +69,36 @@ lowering/encoder. Every operation extension updates validation, native lowering,
 IR parsing/printing, and parity tests together. Preserve this contract without
 freezing the schema or backend algorithm.
 
-The current tree-based backend needs no optimizer or general control-flow
-framework. Add blocks, terminators, result joins, and stack validation when
-conditions require them. Keep readable assembly available to diagnose VM-level
-issues throughout that evolution.
+The backend traverses expression trees within each block. Blocks and terminators
+are explicit operations in the existing ordered representation; they do not
+require a new crate or optimizer framework. Keep readable assembly available to
+diagnose VM-level issues throughout that evolution.
+
+## Control flow and joins
+
+An unmarked function remains one implicit block. An explicit function begins
+with a block marker; the first declared block is entry. Every block terminates
+with an integer return, Boolean branch, or jump. Targets must name later blocks
+and every block must be reachable. No implicit fallthrough or loops are accepted.
+
+Integer equality and greater-than produce transient Boolean values, consumed
+only by branches. These are semantic operations; the backend selects `eq`/`gt`
+and `bf` followed by `goto`. Block labels and branch displacements belong to the
+assembly layer. No fallthrough optimization is implemented.
+
+Expression values cannot cross block boundaries. Each block emits complete
+expression trees into statement/terminator sinks, leaving an empty evaluation
+stack on every edge. Stored locals may cross edges: validation intersects
+initialized-local sets from all predecessors at a join. Local identities remain
+unique, with no reassignment; frame slots are allocated across the whole
+function, including mutually exclusive paths. This avoids introducing phi values
+or a general stack-merge policy before they are needed.
+
+The typed/text IR supports forward joins, while the first source subset only
+emits a terminal `if/else` with one integer return per arm. Extend source arms
+and nesting before considering backward edges, mutable locals, or value joins.
+[Condition experiments](../investigations/compiler-conditions.md) verify both
+comparison outcomes in the official simulator and native/text CODE parity.
 
 ## Rationale and evidence
 
