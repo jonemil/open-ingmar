@@ -1,6 +1,6 @@
 # ciq-package design
 
-Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stages 1–2 are implemented:** library plus `list`/`unpack` and modern developer IQ `verify`. Stages 3–5 remain planned. See [verification behavior](../specs/package-verification.md). See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
+Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stages 1–3 are implemented:** library plus `list`/`unpack`, modern developer IQ `verify`, and deterministic `pack-barrel`. Stages 4–5 remain planned. See [packing behavior](../specs/barrel-packing.md) and [SDK validation](../investigations/barrel-packing.md). See [verification behavior](../specs/package-verification.md). See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
 
 ## Boundary and model
 
@@ -38,13 +38,13 @@ Deterministic writers use a specified stable member order, stable timestamps/att
 
 1. **Read/list/unpack both formats — implemented for the initial profile.** Create the crate and CLI, detect container by magic, inspect package type from the manifest, expose member inventory and product attributes, and perform bounded safe extraction. Validate our ZIP barrel and 7z IQ members byte for byte against independently obtained payloads. Synthetic cases cover traversal, links, duplicates, CRC/truncation failures, unsupported codecs/encryption, size limits, and an IQ with multiple product descriptors. Do not depend on SDK binaries in unit tests.
 2. **Package verification — implemented for the modern developer profile.** Extend `ciq-sign` with public-SPKI import/export and narrowly scoped detached SHA-1/SHA-256 signing/verification APIs, keeping the private key opaque. Independently verify the real SDK modern IQ profile, product signature attribute equality, PRG key consistency, exact-byte manifest signing, and optional expected key. Test tampered manifest, PRG, signature attributes, public key, and missing members; use generated ephemeral keys, never the user's private key.
-3. **Barrel packer.** Start from a canonical unpacked package layout; retain manifest/Jungle/source/resource bytes and emit deterministic ZIP/Deflate. Repack our code-only and resource specimens. Acceptance is successful SDK consumption and identical resulting CODE/DATA, already demonstrated experimentally for two independently created ZIP variants. Add a project-to-content mapper later, with explicit source/resource inputs; avoid an incomplete implicit Jungle interpreter.
+3. **Barrel packer — implemented for the canonical extracted tree.** Retain identical manifest copies plus Jungle/source/resource bytes and emit bounded deterministic ZIP/Deflate. Both code-only and resource specimens preserve every ordinary member byte, repack deterministically, and are consumed by the SDK with identical resulting CODE/DATA. See [writer policy](../specs/barrel-packing.md) and [acceptance evidence](../investigations/barrel-packing.md).
 4. **Unchanged IQ repacking.** Rebuild a package with all signed bytes unchanged, preserving signing identity without a key. Verify before/after and compare every member. Exercise the chosen 7z writer and deterministic output. Keep this distinct from editing/resigning and do not claim store acceptance from simulator checks.
 5. **Own-key IQ creation/editing.** Implement the signing sequence in the IQ spec: sign PRGs, update product attributes and public key, serialize/sign the final manifest, then archive and verify. Begin with a supplied SDK manifest/product metadata rather than generating device/version metadata from guesses. Capture multi-device and legacy/store variants before claiming general compatibility. Reassembled extracted PRGs must still run in the official simulator; validate a rebuilt distribution package with the applicable SDK/install/upload workflow when available and authorized.
 
 ## Proposed commands
 
-`list`, `unpack`, and `verify` exist. The other spellings below remain planned; they are not CLI options yet:
+`list`, `unpack`, `verify`, and `pack-barrel` exist. The other spellings below remain planned; they are not CLI options yet:
 
 ```sh
 ciq-package list library.barrel

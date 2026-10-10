@@ -47,11 +47,12 @@ List or unpack source barrels and IQ distribution packages (destinations must be
 ```sh
 cargo run -p ciq-package -- list examples/number-barrel/build/number-barrel.barrel
 cargo run -p ciq-package -- unpack examples/number-barrel/build/number-barrel.barrel scratch/unpacked-library
+cargo run -p ciq-package -- pack-barrel scratch/unpacked-library scratch/library-repacked.barrel
 cargo run -p ciq-package -- list scratch/barrels/barrel-app.iq
 cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacked-application
 ```
 
-The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Writers follow later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
+The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Deterministic `pack-barrel` now repacks a canonical extracted tree; both code and resource barrels are SDK-validated. See [packing behavior](docs/specs/barrel-packing.md). IQ writers follow later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
 
 Build and validate the workspace:
 

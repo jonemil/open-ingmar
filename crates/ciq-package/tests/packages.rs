@@ -836,3 +836,150 @@ mod verification {
         assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 2);
     }
 }
+
+fn packing_tree(temp: &Temp, reverse: bool) -> PathBuf {
+    let root = temp.0.join("source");
+    fs::create_dir(&root).unwrap();
+    let mut entries = barrel_entries();
+    if reverse {
+        entries.reverse();
+    }
+    for (name, bytes) in entries {
+        let path = root.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+    fs::create_dir(root.join("empty")).unwrap();
+    fs::write(root.join("zero.bin"), []).unwrap();
+    root
+}
+#[test]
+fn packed_barrel_is_deterministic_and_preserves_payloads() {
+    let a = Temp::new();
+    let b = Temp::new();
+    let source_a = packing_tree(&a, false);
+    let source_b = packing_tree(&b, true);
+    let file = fs::File::open(source_b.join("unknown.bin")).unwrap();
+    file.set_times(fs::FileTimes::new().set_modified(std::time::UNIX_EPOCH))
+        .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            source_b.join("unknown.bin"),
+            fs::Permissions::from_mode(0o600),
+        )
+        .unwrap();
+    }
+    ciq_package::pack_barrel(&source_a, a.output(), Limits::default()).unwrap();
+    ciq_package::pack_barrel(&source_b, b.output(), Limits::default()).unwrap();
+    assert_eq!(fs::read(a.output()).unwrap(), fs::read(b.output()).unwrap());
+    let cli_output = a.0.join("cli.barrel");
+    let result = Command::new(env!("CARGO_BIN_EXE_ciq-package"))
+        .arg("pack-barrel")
+        .arg(&source_a)
+        .arg(&cli_output)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(fs::read(a.output()).unwrap(), fs::read(cli_output).unwrap());
+    let mut package = Package::open(a.output(), Limits::default()).unwrap();
+    let extracted = a.0.join("extracted");
+    package.unpack(&extracted).unwrap();
+    for (name, bytes) in barrel_entries() {
+        assert_eq!(fs::read(extracted.join(name)).unwrap(), bytes);
+    }
+    assert!(extracted.join("empty").is_dir());
+    assert_eq!(fs::read(extracted.join("zero.bin")).unwrap(), []);
+    let names: Vec<_> = package.members().iter().map(|m| m.name.as_str()).collect();
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted);
+}
+#[test]
+fn packing_rejects_mismatched_or_invalid_manifests_before_output() {
+    let temp = Temp::new();
+    let source = packing_tree(&temp, false);
+    fs::write(
+        source.join("content/manifest.xml"),
+        [BARREL, b"\n"].concat(),
+    )
+    .unwrap();
+    assert!(
+        ciq_package::pack_barrel(&source, temp.output(), Limits::default())
+            .unwrap_err()
+            .to_string()
+            .contains("identical")
+    );
+    assert!(!temp.output().exists());
+    for name in ["manifest.xml", "content/manifest.xml"] {
+        fs::write(source.join(name), IQ).unwrap();
+    }
+    assert!(ciq_package::pack_barrel(&source, temp.output(), Limits::default()).is_err());
+    assert!(!temp.output().exists());
+}
+#[test]
+fn packing_refuses_existing_output_and_output_inside_source() {
+    let temp = Temp::new();
+    let source = packing_tree(&temp, false);
+    fs::write(temp.output(), b"keep me").unwrap();
+    assert!(ciq_package::pack_barrel(&source, temp.output(), Limits::default()).is_err());
+    assert_eq!(fs::read(temp.output()).unwrap(), b"keep me");
+    assert!(
+        ciq_package::pack_barrel(&source, source.join("new.barrel"), Limits::default()).is_err()
+    );
+    assert!(!source.join("new.barrel").exists());
+}
+#[test]
+fn packing_enforces_input_and_output_limits() {
+    let temp = Temp::new();
+    let source = packing_tree(&temp, false);
+    for limits in [
+        Limits {
+            entries: 2,
+            ..Limits::default()
+        },
+        Limits {
+            member_bytes: 10,
+            ..Limits::default()
+        },
+        Limits {
+            total_bytes: 10,
+            ..Limits::default()
+        },
+        Limits {
+            manifest_bytes: 10,
+            ..Limits::default()
+        },
+        Limits {
+            archive_bytes: 64,
+            ..Limits::default()
+        },
+        Limits {
+            header_bytes: 1,
+            ..Limits::default()
+        },
+    ] {
+        assert!(ciq_package::pack_barrel(&source, temp.output(), limits).is_err());
+        assert!(!temp.output().exists());
+    }
+}
+#[cfg(unix)]
+#[test]
+fn packing_rejects_symlinks_and_case_collisions() {
+    let temp = Temp::new();
+    let source = packing_tree(&temp, false);
+    let link = temp.0.join("link");
+    std::os::unix::fs::symlink(&source, &link).unwrap();
+    assert!(ciq_package::pack_barrel(link, temp.output(), Limits::default()).is_err());
+    std::os::unix::fs::symlink(source.join("unknown.bin"), source.join("alias")).unwrap();
+    assert!(ciq_package::pack_barrel(&source, temp.output(), Limits::default()).is_err());
+    fs::remove_file(source.join("alias")).unwrap();
+    fs::write(source.join("UNKNOWN.bin"), b"collision").unwrap();
+    assert!(ciq_package::pack_barrel(&source, temp.output(), Limits::default()).is_err());
+    assert!(!temp.output().exists());
+}

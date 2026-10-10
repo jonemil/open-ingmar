@@ -1,6 +1,6 @@
 # Monkey Barrel package: observed ZIP profile
 
-Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); writing remains planned. Evidence: [package investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`, and the earlier [library experiment](../investigations/multi-file-and-barrels.md). This is the verified profile of our specimens, not a claim about every historical SDK.
+Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); deterministic [canonical-tree packing](barrel-packing.md) is implemented and SDK-validated. Evidence: [package investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`, and the earlier [library experiment](../investigations/multi-file-and-barrels.md). This is the verified profile of our specimens, not a claim about every historical SDK.
 
 ## Archive and members
 
@@ -16,7 +16,7 @@ content/source/Numbers.mc
 content/resources/strings.xml   # present in the resource variant
 ```
 
-`manifest.xml` is the outer library declaration. `content/manifest.xml` is the build manifest selected by the generated Jungle. Both are byte identical in our specimens; whether differing declarations are legal is unverified. For our first writer, require coherent library identity and emit identical manifest copies.
+`manifest.xml` is the outer library declaration. `content/manifest.xml` is the build manifest selected by the generated Jungle. Both are byte identical in our specimens; whether differing declarations are legal is unverified. Our first writer requires coherent library identity and byte-identical copies, preserving both rather than rewriting them.
 
 The namespaced root is `iq:manifest` (`http://www.garmin.com/xml/connectiq`), version `3`, containing `iq:barrel` with `id`, `module`, `version`, and `minApiLevel`, plus products, permissions, languages, dependencies (`iq:barrels`), and annotations. The observed module/version are `Numbers` / `1.0.0`. Manifest parsing must preserve unknown attributes/elements and raw XML for unchanged repacking; a source-format extension is not implied by this layout.
 
@@ -36,7 +36,7 @@ Monkey C source and resource members are packaged unchanged. An independently au
 
 Implemented reader: recognize ZIP framing, inventory members, parse library identity and the canonical `content/manifest.xml`, and extract source/resources as opaque member bytes. Arbitrary Jungle-selected manifest paths are deferred. Unknown ordinary members remain available for preservation. Validate CRCs and reject duplicate or conflicting paths, unsupported compression/encryption, links, and out-of-root paths rather than overwriting another entry.
 
-Planned first writer: repack an already canonical extracted package tree, validating the required manifests and `barrel.jungle`, then emit deterministic ZIP/Deflate with stable order/timestamps. Its success criterion is equal member bytes and SDK consumption, not identical compressed archive bytes. A later project-to-barrel builder can construct the `content/` mapping explicitly; arbitrary Jungle interpretation, source syntax checking, and compilation are separate work.
+Implemented first writer: repack an already canonical extracted package tree, validating the required manifests and `barrel.jungle`, then emit deterministic ZIP/Deflate with stable order/timestamps. Its success criterion is equal member bytes and SDK consumption, not identical compressed archive bytes. A later project-to-barrel builder can construct the `content/` mapping explicitly; arbitrary Jungle interpretation, source syntax checking, and compilation are separate work.
 
 Two entries with the same filename are not two declarations to merge. Namespace resolution and generated module bytecode remain the compiler's responsibility. Adding/removing library sources is not a PRG relocation operation.
 

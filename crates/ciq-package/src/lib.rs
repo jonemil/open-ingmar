@@ -1,5 +1,8 @@
-//! Package inventory and extraction; see docs/specs/package-reading.md.
+//! Package reading, verification and barrel packing; see docs/specs/package-reading.md
+//! and docs/specs/barrel-packing.md.
 mod manifest;
+mod pack;
+pub use pack::pack_barrel;
 mod paths;
 mod preflight;
 mod verify;

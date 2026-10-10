@@ -3,13 +3,21 @@ use std::{env, path::PathBuf};
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args_os().skip(1).collect();
     if args.len() < 2
-        || (args[0] != "list" && args[0] != "unpack" && args[0] != "verify")
+        || (args[0] != "list"
+            && args[0] != "unpack"
+            && args[0] != "verify"
+            && args[0] != "pack-barrel")
         || (args[0] == "list" && args.len() != 2)
-        || (args[0] == "unpack" && args.len() != 3)
+        || ((args[0] == "unpack" || args[0] == "pack-barrel") && args.len() != 3)
         || (args[0] == "verify"
             && !(args.len() == 2 || (args.len() == 4 && args[2] == "--expected-key")))
     {
-        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>]".into());
+        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>] | pack-barrel <directory> <new.barrel>".into());
+    }
+    if args[0] == "pack-barrel" {
+        ciq_package::pack_barrel(&args[1], &args[2], Limits::default())?;
+        println!("Packed barrel to {}", PathBuf::from(&args[2]).display());
+        return Ok(());
     }
     let mut package = Package::open(PathBuf::from(&args[1]), Limits::default())?;
     if args[0] == "verify" {
