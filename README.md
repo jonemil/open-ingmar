@@ -69,6 +69,8 @@ Rust 1.85 or newer is required by the manifest (tested here with 1.99). Containe
 - [SDK support scripts](scripts/README.md)
 - [Original session handoff](connect-iq-rust-toolchain-codex-handoff.md)
 
+[Multi-file and barrel examples](docs/investigations/multi-file-and-barrels.md) now round-trip and run: the multi-file assembly edit shows `47`, and reconstructed barrel/package programs show `46`. Barrel source/archive consumption produces identical CODE and DATA; the SDK creates distribution packages separately.
+
 Workspace members under `crates/` are `ciq-prg`, `ciq-mc`, `ciq-sign`, `ciq-dis`, and `ciq-asm`. Keep `Cargo.lock` in version control for the command-line tools.
 
 Downloaded reference projects belong in the Git-ignored `references/` directory. Local SDK artifacts and temporary experiments belong in the Git-ignored `scratch/` directory. Documentation should retain enough information to reproduce experiments without relying on these directories being present.

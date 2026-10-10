@@ -28,3 +28,5 @@
 - [Structured DEBUG and line metadata](line-metadata.md): version 4 projects, exact real-example round trips, 67 passing tests, and signed in-place grow/shrink variants and confirmed shrunk-function execution returning `45`.
 
 Follow [the research conventions](../research.md) when recording findings. Runtime acceptance of the same-size Hello World edit is confirmed; the arithmetic function replacement is also confirmed; the larger appended function is also confirmed; structured DEBUG/line metadata is implemented and the bounded in-place shrink experiment has confirmed simulator execution, as described in [the plan](../plan.md).
+
+- [Multi-file source, barrels, and IQ packages](multi-file-and-barrels.md): three new examples, source/archive comparison, exact PRG reconstruction, assembly-edited cross-file calls, and four successful simulator checks through container-broker.

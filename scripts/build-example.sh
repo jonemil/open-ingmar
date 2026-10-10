@@ -12,6 +12,7 @@ sdk_dir=${CIQ_SDK_HOME:-"$repo_dir/connectiq"}
 key_path=${CIQ_DEVELOPER_KEY:-"$repo_dir/developer_key.der"}
 data_dir=${CIQ_DATA_HOME:-"$repo_dir/scratch/garmin-data"}
 device=${2:-fr265}
+jungle_files=${CIQ_JUNGLE_FILES:-"$example_dir/monkey.jungle"}
 
 # Prefer the user's runtime; the local research runtime is a fallback.
 if ! command -v java >/dev/null 2>&1; then
@@ -65,7 +66,7 @@ exec java -Xms1g -Dfile.encoding=UTF-8 -Dapple.awt.UIElement=true \
     "-Duser.home=$sdk_user_dir" \
     -classpath "$sdk_dir/bin/monkeybrains.jar" \
     com.garmin.monkeybrains.Monkeybrains \
-    -f "$example_dir/monkey.jungle" \
+    -f "$jungle_files" \
     -d "$device" \
     -o "$example_dir/build/$device/$example_name.prg" \
     -y "$key_path" \

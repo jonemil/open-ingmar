@@ -26,6 +26,7 @@
 *.prg.debug.xml
 *.iq
 *.bar
+*.barrel
 *.bar.debug.xml
 
 # Rust build output, including future workspace members.

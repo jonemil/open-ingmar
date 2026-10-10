@@ -1,0 +1,15 @@
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application id="7846a90322e44bdcaf0d7503ed2be603"
+                    type="watch-app"
+                    name="@Strings.AppName"
+                    entry="MultiFileApp"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    minApiLevel="3.0.0">
+        <iq:products>
+            <iq:product id="fr265" />
+        </iq:products>
+        <iq:permissions />
+        <iq:languages />
+        <iq:barrels />
+    </iq:application>
+</iq:manifest>

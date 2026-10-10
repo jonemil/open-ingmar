@@ -88,3 +88,11 @@ examples/hello-world/build.sh
 ```
 
 The script has offline verification using synthetic packages and mocked network responses. A real account login, Garmin's current browser redirect behavior, and authenticated downloads remain unverified. HTTP 401/403 or a login timeout will be reported without printing token responses. Protocol details are in [the local specification](../docs/specs/device-download.md).
+
+## Barrel builds and alternate Jungles
+
+`sh scripts/build-barrel.sh examples/number-barrel` packages the independently authored library to its ignored `build/number-barrel.barrel`. It discovers Java and project-local device data like the app helper, requires no signing key, and refuses an existing archive to avoid accepting stale output after an SDK failure. Move a prior output aside to rebuild it.
+
+Both build helpers accept `CIQ_JUNGLE_FILES`. Relative paths resolve from the example directory; use absolute paths for inputs elsewhere. For example, `CIQ_JUNGLE_FILES=monkey-source.jungle sh scripts/build-example.sh examples/barrel-app` uses the source-barrel configuration instead of its default archive configuration. All app builds still use the external developer key and `-O 0`.
+
+[The multi-file/barrel investigation](../docs/investigations/multi-file-and-barrels.md) records successful SDK builds, Rust reconstruction, and simulator runs through the container-broker plugin. Its approved Garmin setup mounts this workspace and supports repeated command execution; the simulator session can run under `xvfb-run` inside that container without nesting Podman.

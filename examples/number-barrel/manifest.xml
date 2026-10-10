@@ -1,0 +1,9 @@
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:barrel id="d90856e2f4264105bbbd7b84eef55aeb" module="Numbers" version="1.0.0" minApiLevel="3.0.0">
+        <iq:products><iq:product id="fr265" /></iq:products>
+        <iq:permissions />
+        <iq:languages />
+        <iq:barrels />
+        <iq:annotations />
+    </iq:barrel>
+</iq:manifest>

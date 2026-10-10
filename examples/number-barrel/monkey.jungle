@@ -1,0 +1,4 @@
+project.manifest = manifest.xml
+base.sourcePath = source
+# This code-only barrel needs no device personality resources.
+fr265.personality = resources
