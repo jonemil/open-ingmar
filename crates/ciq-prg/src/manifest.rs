@@ -1,6 +1,6 @@
 //! Section project manifest.
 
-use crate::{CODE, DATA, SYMBOLS};
+use crate::{CODE, DATA, EXCEPTIONS, SYMBOLS};
 const DEBUG: u32 = 0xd0000d1e;
 const LINES: u32 = 0xc0de7ab1;
 use std::{fmt, fmt::Write};
@@ -15,6 +15,7 @@ pub enum Encoding {
     Data,
     Debug,
     Lines,
+    Exceptions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,8 +73,9 @@ impl Manifest {
                     && fields != ["ciq-project", "2"]
                     && fields != ["ciq-project", "3"]
                     && fields != ["ciq-project", "4"]
+                    && fields != ["ciq-project", "5"]
                 {
-                    return Err(fail("expected ciq-project 1, 2, 3, or 4 header"));
+                    return Err(fail("expected ciq-project 1, 2, 3, 4, or 5 header"));
                 }
                 version = fields[1];
                 version_seen = true;
@@ -81,7 +83,7 @@ impl Manifest {
             }
             if fields.len() != 5 || fields[0] != "section" {
                 return Err(fail(
-                    "expected section <hex-id> <length> <raw|assembly|symbols|data|debug|lines> <file>",
+                    "expected section <hex-id> <length> <raw|assembly|symbols|data|debug|lines|exceptions> <file>",
                 ));
             }
             let hex = fields[1]
@@ -106,12 +108,13 @@ impl Manifest {
             let encoding = match fields[3] {
                 "raw" => Encoding::Raw,
                 "assembly" if kind == CODE => Encoding::Assembly,
-                "symbols" if kind == SYMBOLS && matches!(version, "2" | "3" | "4") => {
+                "symbols" if kind == SYMBOLS && matches!(version, "2" | "3" | "4" | "5") => {
                     Encoding::Symbols
                 }
-                "data" if kind == DATA && matches!(version, "3" | "4") => Encoding::Data,
-                "debug" if kind == DEBUG && version == "4" => Encoding::Debug,
-                "lines" if kind == LINES && version == "4" => Encoding::Lines,
+                "data" if kind == DATA && matches!(version, "3" | "4" | "5") => Encoding::Data,
+                "debug" if kind == DEBUG && matches!(version, "4" | "5") => Encoding::Debug,
+                "lines" if kind == LINES && matches!(version, "4" | "5") => Encoding::Lines,
+                "exceptions" if kind == EXCEPTIONS && version == "5" => Encoding::Exceptions,
                 _ => {
                     return Err(fail(
                         "unsupported encoding for this version or section kind",
@@ -131,7 +134,7 @@ impl Manifest {
         if !version_seen {
             return Err(Error {
                 line: 1,
-                message: "missing ciq-project 1, 2, 3, or 4 header",
+                message: "missing ciq-project 1, 2, 3, 4, or 5 header",
             });
         }
         Ok(Self { entries })
@@ -139,6 +142,12 @@ impl Manifest {
 
     pub fn to_text(&self) -> String {
         let version = if self
+            .entries
+            .iter()
+            .any(|e| e.encoding == Encoding::Exceptions)
+        {
+            5
+        } else if self
             .entries
             .iter()
             .any(|e| matches!(e.encoding, Encoding::Debug | Encoding::Lines))
@@ -162,6 +171,7 @@ impl Manifest {
                 Encoding::Data => "data",
                 Encoding::Debug => "debug",
                 Encoding::Lines => "lines",
+                Encoding::Exceptions => "exceptions",
             };
             writeln!(
                 text,
@@ -177,6 +187,30 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exception_encoding_requires_version_five_and_the_ordinary_section_kind() {
+        let source = "ciq-project 5\nsection 0x0ece7105 2 exceptions e.mcasm\n";
+        let manifest = Manifest::parse(source).unwrap();
+        assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
+        assert!(Manifest::parse(&source.replace("project 5", "project 4")).is_err());
+        assert!(Manifest::parse(&source.replace("0x0ece7105", "0xeece7105")).is_err());
+        for encoding in ["assembly", "symbols", "data", "debug", "lines"] {
+            let (kind, length) = match encoding {
+                "assembly" => (CODE, 1),
+                "symbols" => (SYMBOLS, 2),
+                "data" => (DATA, 0),
+                "debug" => (DEBUG, 0),
+                _ => (LINES, 2),
+            };
+            assert!(
+                Manifest::parse(&format!(
+                    "ciq-project 5\nsection 0x{kind:08x} {length} {encoding} a.mcasm\n"
+                ))
+                .is_ok()
+            );
+        }
+    }
 
     #[test]
     fn comments_blank_lines_and_duplicate_identifiers_are_preserved_in_order() {
@@ -217,7 +251,7 @@ mod tests {
         for text in [
             "",
             "# comment",
-            "ciq-project 5",
+            "ciq-project 6",
             "section 0x12345678 0 raw empty.bin",
         ] {
             assert!(Manifest::parse(text).is_err());

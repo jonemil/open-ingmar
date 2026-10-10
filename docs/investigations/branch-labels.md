@@ -16,8 +16,9 @@ defines these rules.
 Project export reuses method/line labels and adds labels for verified branch or
 subroutine targets. `code-symbolic` also emits local branch labels; numeric
 `code` listings retain bit patterns. Invalid or unrepresentable targets remain
-numeric. EXCEPTIONS remains raw; length-changing edits still require accounting
-for its offsets and other opaque references.
+numeric. EXCEPTIONS remained raw at this checkpoint;
+[structured exception assembly](exception-assembly.md) subsequently adds named
+metadata. Length-changing edits still require accounting for opaque references.
 
 ## Reconstruction and runtime evidence
 

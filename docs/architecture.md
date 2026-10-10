@@ -49,8 +49,9 @@ allocation must be deterministic.
 
 CODE labels resolve supported DATA method targets and line PCs. DEBUG aliases
 resolve line filename/function offsets. Named relative branches also resolve
-after CODE layout. General relocation, exception fixups, extended CODE,
-resource assembly, and automatic symbol ID allocation
+after CODE layout, as do named exception starts, ends, and handlers. General
+relocation, opaque metadata fixups, extended CODE, resource assembly, and
+automatic symbol ID allocation
 remain incomplete. Every length-changing edit must account for affected
 references and integrity fields. Equal length alone does not prove validity.
 

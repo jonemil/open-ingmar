@@ -19,7 +19,8 @@ All simulator runs use the original device profile and memory allowance.
 External sources inform encoding interpretations; no implementation code was
 copied. At this research checkpoint the new instructions required raw CODE
 export. [Subsequent branch-label support](branch-labels.md) adds those encodings
-and structured CODE; EXCEPTIONS remains raw.
+and structured CODE; [exception assembly](exception-assembly.md) subsequently
+adds structured EXCEPTIONS.
 
 ## SDK observations
 

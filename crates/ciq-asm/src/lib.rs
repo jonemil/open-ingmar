@@ -19,6 +19,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     for (encoding, kind, role) in [
         (Encoding::Debug, 0xd0000d1e, "DEBUG"),
         (Encoding::Lines, 0xc0de7ab1, "LINE_NUMBERS"),
+        (Encoding::Exceptions, ciq_prg::EXCEPTIONS, "EXCEPTIONS"),
     ] {
         if manifest.entries.iter().any(|e| e.encoding == encoding)
             && manifest.entries.iter().filter(|e| e.kind == kind).count() != 1
@@ -102,6 +103,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
     let (data_payload, strings) = data_source.encode_with_references(&bindings, &labels)?;
     let (debug_payload, debug_strings) = debug_source.encode()?;
     let mut line_targets = Vec::new();
+    let mut exception_targets = Vec::new();
     let mut sections = Vec::new();
     for (entry, bytes) in manifest.entries.iter().zip(inputs) {
         let payload = match entry.encoding {
@@ -130,6 +132,21 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
                 }
                 source.encode(&labels, &debug_strings)?
             }
+            Encoding::Exceptions => {
+                let source = ciq_prg::exceptions::Source::parse(std::str::from_utf8(&bytes)?)?;
+                for record in &source.entries {
+                    for (offset, allow_end) in [
+                        (&record.begin, false),
+                        (&record.end, true),
+                        (&record.handler, false),
+                    ] {
+                        if let ciq_prg::exceptions::Offset::Code(alias) = offset {
+                            exception_targets.push((alias.clone(), allow_end));
+                        }
+                    }
+                }
+                source.encode(&labels)?
+            }
         };
         if payload.len() != entry.length as usize {
             return Err(format!(
@@ -143,6 +160,19 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         sections.push(Section::new(entry.kind, payload)?);
     }
     let prg = Prg::from_sections(sections);
+    if !exception_targets.is_empty() {
+        let code = prg.unique_section(ciq_prg::CODE)?.payload();
+        for (alias, allow_end) in exception_targets {
+            let target = labels[&alias] as usize;
+            // Assembly labels already denote instruction boundaries or end-of-CODE.
+            if target > code.len() || !allow_end && target == code.len() {
+                return Err(format!(
+                    "exception CODE label {alias} is not a valid boundary for its role"
+                )
+                .into());
+            }
+        }
+    }
     if !labels.is_empty() {
         let length = prg.unique_section(ciq_prg::CODE)?.payload().len();
         for alias in line_targets {

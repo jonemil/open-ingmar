@@ -11,6 +11,87 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn exception_labels_include_code_end_and_resolve_independently_of_section_order() {
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("exceptions");
+    let payload = ciq_prg::exceptions::Source::parse(".exception begin=0x00 end=0x02 handler=0x01\n.exception begin=0xffffff end=0x00 handler=0x02").unwrap().encode(&Default::default()).unwrap();
+    let original = Prg::from_sections(vec![
+        Section::new(ciq_prg::EXCEPTIONS, payload).unwrap(),
+        Section::new(CODE, vec![0x16, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Exceptions);
+    assert!(manifest.to_text().starts_with("ciq-project 5"));
+    let path = directory.join(&manifest.entries[0].file);
+    let source = fs::read_to_string(&path).unwrap();
+    assert!(
+        source
+            .contains("begin=code:code_00000000 end=code:code_00000002 handler=code:code_00000001")
+    );
+    assert!(source.contains("begin=0xffffff end=code:code_00000000 handler=0x000002"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let code_path = directory.join(&manifest.entries[1].file);
+    let code = fs::read_to_string(&code_path).unwrap();
+    fs::write(
+        &code_path,
+        code.replace("code_00000001:", "popv\ncode_00000001:"),
+    )
+    .unwrap();
+    let mut larger = manifest.clone();
+    larger.entries[1].length = 3;
+    fs::write(directory.join(FILE_NAME), larger.to_text()).unwrap();
+    let moved = ciq_asm::assemble_project(&directory).unwrap();
+    let ex = ciq_prg::exceptions::Source::from_payload(
+        moved.unique_section(ciq_prg::EXCEPTIONS).unwrap().payload(),
+    )
+    .unwrap();
+    assert_eq!(ex.entries[0].handler, ciq_prg::exceptions::Offset::Raw(2));
+    assert_eq!(ex.entries[0].end, ciq_prg::exceptions::Offset::Raw(3));
+    for (old, new) in [
+        ("begin=code:code_00000000", "begin=code:code_00000002"),
+        ("handler=code:code_00000001", "handler=code:code_00000002"),
+        ("handler=code:code_00000001", "handler=code:missing"),
+    ] {
+        fs::write(&path, source.replace(old, new)).unwrap();
+        assert!(ciq_asm::assemble_project(&directory).is_err());
+    }
+    let mut duplicate = larger;
+    duplicate.entries.push(duplicate.entries[0].clone());
+    fs::write(directory.join(FILE_NAME), duplicate.to_text()).unwrap();
+    assert!(
+        ciq_asm::assemble_project(&directory)
+            .unwrap_err()
+            .to_string()
+            .contains("structured EXCEPTIONS requires a unique section")
+    );
+}
+
+#[test]
+fn malformed_duplicate_and_unsupported_code_exceptions_preserve_raw_inputs() {
+    for payloads in [vec![vec![0, 0, 1]], vec![vec![0, 0], vec![0, 0]]] {
+        let temporary = TemporaryDirectory::new();
+        let directory = temporary.0.join("raw");
+        let original = Prg::from_sections(
+            payloads
+                .into_iter()
+                .map(|p| Section::new(ciq_prg::EXCEPTIONS, p).unwrap())
+                .collect(),
+        );
+        let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+        assert!(manifest.entries.iter().all(|e| e.encoding == Encoding::Raw));
+        assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    }
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("unsupported-code");
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, vec![0xff]).unwrap(),
+        Section::new(ciq_prg::EXCEPTIONS, vec![0, 0]).unwrap(),
+    ]);
+    ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+}
+
+#[test]
 fn branch_targets_export_as_labels_and_invalid_targets_retain_numeric_bits() {
     // Forward to return, backward to start, inside an operand, negative, and beyond CODE.
     let code = vec![

@@ -43,6 +43,10 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
         .ok()
         .and_then(|s| ciq_prg::debug::LineSource::from_payload(s.payload()).ok());
     let mut code_labels = project_code_labels(prg, data.as_ref());
+    let mut exception_source = prg
+        .unique_section(ciq_prg::EXCEPTIONS)
+        .ok()
+        .and_then(|s| ciq_prg::exceptions::Source::from_payload(s.payload()).ok());
     if let (Some(lines), Some(code)) = (
         &line_source,
         prg.unique_section(CODE)
@@ -64,11 +68,39 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     }
     if let Ok(section) = prg.unique_section(CODE) {
         name_branch_targets(section.payload(), &mut code_labels);
+        if let (Some(source), Ok(instructions)) = (&mut exception_source, decode(section.payload()))
+        {
+            let boundaries: std::collections::BTreeSet<_> =
+                instructions.iter().map(|i| i.offset).collect();
+            let length = section.payload().len();
+            for entry in &source.entries {
+                for (offset, allow_end) in [
+                    (&entry.begin, false),
+                    (&entry.end, true),
+                    (&entry.handler, false),
+                ] {
+                    if let ciq_prg::exceptions::Offset::Raw(n) = offset {
+                        if boundaries.contains(&(*n as usize)) || allow_end && *n as usize == length
+                        {
+                            code_labels
+                                .entry(*n)
+                                .or_insert_with(|| format!("code_{n:08x}"));
+                        }
+                    }
+                }
+            }
+            source.name_references(&code_labels, length as u32);
+        }
     }
     let label_bindings = code_labels
         .iter()
         .map(|(offset, alias)| (alias.clone(), *offset))
         .collect();
+    if let Some(source) = &exception_source {
+        if source.encode(&label_bindings)? != prg.unique_section(ciq_prg::EXCEPTIONS)?.payload() {
+            return Err("structured exception export changed bytes".into());
+        }
+    }
     let debug_bindings = debug_source
         .as_ref()
         .map(|s| s.encode().map(|(_, bindings)| bindings))
@@ -141,15 +173,19 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 structured.as_ref(),
                 debug_source.as_ref(),
                 line_source.as_ref(),
+                exception_source.as_ref(),
             ) {
-                (0xd0000d1e, _, _, Some(source), _) => {
+                (ciq_prg::EXCEPTIONS, _, _, _, _, Some(source)) => {
+                    (Encoding::Exceptions, source.to_text().into_bytes())
+                }
+                (0xd0000d1e, _, _, Some(source), _, _) => {
                     (Encoding::Debug, source.to_text().into_bytes())
                 }
-                (0xc0de7ab1, _, _, _, Some(source)) => {
+                (0xc0de7ab1, _, _, _, Some(source), _) => {
                     (Encoding::Lines, source.to_text().into_bytes())
                 }
-                (DATA, Some(source), _, _, _) => (Encoding::Data, source.to_text().into_bytes()),
-                (SYMBOLS, _, Some(source), _, _) => {
+                (DATA, Some(source), _, _, _, _) => (Encoding::Data, source.to_text().into_bytes()),
+                (SYMBOLS, _, Some(source), _, _, _) => {
                     (Encoding::Symbols, source.to_text().into_bytes())
                 }
                 _ => (Encoding::Raw, section.payload().to_vec()),
@@ -161,7 +197,8 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
             | Encoding::Symbols
             | Encoding::Data
             | Encoding::Debug
-            | Encoding::Lines => "mcasm",
+            | Encoding::Lines
+            | Encoding::Exceptions => "mcasm",
         };
         let file = format!(
             "{index:03}-{}-{:08x}.{extension}",
@@ -726,6 +763,9 @@ fn disassemble_named(
             }
         }
         text.push('\n');
+    }
+    if let Some(alias) = u32::try_from(code.len()).ok().and_then(|n| labels.get(&n)) {
+        writeln!(text, "{alias}:").unwrap();
     }
     Ok(text)
 }

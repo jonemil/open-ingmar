@@ -62,8 +62,9 @@ identities, not new VM symbols or evidence of a complete function signature.
 [Structured line mappings](line-numbers-and-debug.md) now share these labels in
 version 4 projects. Export adds labels for verified line-PC instruction
 boundaries; named PCs move when those labels move. Named branch operands also
-follow layout as described below. Exception intervals, header offsets, numeric
-operands, and opaque metadata are not automatically relocated.
+follow layout as described below. Named
+[exception references](exceptions.md) also follow these labels. Header offsets,
+numeric operands, and opaque metadata are not automatically relocated.
 Project import still checks manifest lengths. Explicitly changing those lengths
 does not validate other affected references. The append-only experiment in the
 investigation tests a larger body without shifting existing instructions; it
@@ -91,5 +92,5 @@ input without silently rewriting it.
 Project export and `code-symbolic` name branch targets only when they denote
 verified instruction boundaries. Project export reuses method/line labels,
 adding `code_<offset>` names for remaining targets. Numeric `code` listings
-retain original operand bits. EXCEPTIONS remains raw at this milestone. See
+retain original operand bits. Structured EXCEPTIONS now shares labels too. See
 [the implementation experiment](../investigations/branch-labels.md).

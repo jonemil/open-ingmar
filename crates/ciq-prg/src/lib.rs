@@ -1,6 +1,7 @@
 //! Ordered, opaque PRG sections.
 
 pub mod debug;
+pub mod exceptions;
 use std::fmt;
 
 pub mod data;
@@ -11,6 +12,7 @@ pub mod symbols;
 pub const DATA: u32 = 0xda7a_babe;
 pub const RESOURCES: u32 = 0xf00d_600d;
 pub const CODE: u32 = 0xc0de_babe;
+pub const EXCEPTIONS: u32 = 0x0ece_7105;
 pub const SYMBOLS: u32 = 0x5717_b015;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

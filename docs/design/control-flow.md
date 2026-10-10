@@ -13,8 +13,8 @@ names there. Start with observed `goto`, `bt`, `bf`, and `jsr` encodings;
 comparisons, Boolean pushes, `throw`, and `ret` need their own documented
 encodings. A local subroutine return is distinct from a function return.
 
-In `ciq-assembly`, introduce a typed CODE-label operand. Proposed text syntax
-uses the existing `code:` namespace:
+`ciq-assembly` now uses a typed CODE-label operand with the existing `code:`
+namespace:
 
 ```text
 loop_test:
@@ -52,7 +52,8 @@ and optional CODE-label references for range starts, ends, and handlers.
 Boundary labels may denote the end of CODE for a range endpoint, but handlers
 must denote instructions. Confirm endpoint semantics before specifying strict
 interval validation. Keep record order and preserve original bytes on unchanged
-export/import. The text syntax is not yet defined.
+export/import. The [exception specification](../specs/exceptions.md) defines the implemented
+text syntax.
 
 Resolve this metadata after CODE layout, alongside method and line bindings.
 Length-changing edits still require accounting for header offsets and other
@@ -63,8 +64,8 @@ relocation safety.
 
 1. Completed: observed instruction encodings and branch-label binding/export,
    with an [assembler-produced simulator edit](../investigations/branch-labels.md).
-2. Add lossless exception parsing, writing, and project source. Reproduce the
-   moved-function experiment through our assembler with named references.
+2. Completed: lossless exception parsing, writing, and project source, with
+   [named moved-function reproduction](../investigations/exception-assembly.md).
 3. Extend semantic IR and frontend conditions after documenting control-flow
    joins, value types, and stack requirements. Exception source syntax can remain
    deferred while exception-bearing scaffolds are preserved correctly.

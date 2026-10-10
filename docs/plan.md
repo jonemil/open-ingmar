@@ -20,26 +20,24 @@ describe planned behavior and investigations record the supporting evidence.
   line mappings support the documented constrained assembly profiles.
 - Named branch/subroutine operands resolve signed relative displacements;
   symbolic CODE export shares method/line/branch labels. An assembler-produced
-  loop edit is simulator-verified; exception sections remain raw.
+  loop edit is simulator-verified. Ordered exception records and named offsets
+  round-trip losslessly; a moved handler is simulator-verified.
 - Own-key PRG signing/verification and supported barrel/IQ reading, packing,
   verification, and IQ creation are implemented.
 - Source → IR → assembly → CODE works in memory and through saved text. Integer
   arithmetic, initialized locals, user-module calls, integer parameters,
   positional arguments, string literals/locals, and `System.println` statements
   are simulator-verified.
-- The latest implementation checkpoint passes 160 Rust tests, Clippy, and
+- The latest implementation checkpoint passes 166 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Implement lossless exception-table assembly/disassembly following the
-   [control-flow design](design/control-flow.md), before frontend conditions or
-   general relocation. The
-   [control-flow investigation](investigations/control-flow.md)
-   verifies opposite conditional branches, a changed loop target, and a moved
-   exception-bearing function. Keep unknown metadata and placement constraints.
-   [Branch-label fixups](investigations/branch-labels.md) are implemented and
-   simulator-verified.
+1. Design semantic control-flow IR and a bounded frontend condition subset.
+   Define comparisons, block terminators, join validation, and text/native parity
+   before adding source syntax. [Branch-label fixups](investigations/branch-labels.md)
+   and [exception sources](investigations/exception-assembly.md) are implemented
+   and simulator-verified; preserve unknown metadata and placement constraints.
 2. Revisit DATA string authoring after establishing shared address-region rules.
    The [boundary experiment](investigations/string-address-boundary.md) proves
    a working `0x01000000` literal offset with raised simulator memory; the upper

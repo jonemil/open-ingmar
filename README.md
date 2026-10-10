@@ -38,8 +38,10 @@ Relative branches and local subroutine calls now accept `code:label`, with
 signed 16-bit displacement checks. Project export shares these targets with
 method and line labels. The control-flow specimen reconstructs byte for byte;
 an assembled loop-target edit displays simulator-confirmed `45`. See
-[branch-label evidence](docs/investigations/branch-labels.md). Exception sections
-remain raw until the next milestone.
+[branch-label evidence](docs/investigations/branch-labels.md). Supported exception
+sections now export ordered records with shared CODE
+labels; the moved-function experiment verifies named handler relocation. See
+[exception assembly](docs/investigations/exception-assembly.md).
 
 Reassemble with your developer key, or sign an existing PRG separately (outputs
 must be new files):

@@ -139,4 +139,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   symbolic target export, byte-identical control-flow reconstruction, and an
   assembler-produced loop edit displaying `45` in the simulator.
 
+- [Exception assembly](exception-assembly.md): ordered structured records,
+  version 5 projects, shared CODE boundaries, and an assembled moved handler
+  returning the edited `47` in the simulator.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md
