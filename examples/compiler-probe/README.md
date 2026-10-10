@@ -20,3 +20,11 @@ cargo run -p ciq-compiler -- examples/compiler-probe/arithmetic.mc scratch/compi
 ```
 
 The eleven-byte body executes `subv` then `addv`, without constant folding. [The arithmetic experiment](../../docs/investigations/compiler-arithmetic.md) records simulator results `43` and `-3`, integration commands, and pipeline equivalence.
+
+[locals.mc](locals.mc) initializes two locals and reads the first repeatedly, returning `37`:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/locals.mc scratch/compiler-example/locals.mcasm
+```
+
+The backend allocates two local slots and emits `argcincsp`, `lputv`, and `lgetv`. [Local-variable evidence](../../docs/investigations/compiler-locals.md) covers SDK comparisons, simulator execution, and IR text. Reassignment is not supported yet.

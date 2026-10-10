@@ -98,3 +98,50 @@ fn cli_resumes_saved_arithmetic_ir_and_assembly() {
     assert_eq!(fs::read(direct).unwrap(), fs::read(text).unwrap());
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn cli_resumes_local_declarations_and_reports_unknown_reads() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-locals-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let ir = dir.join("probe.ciqir");
+    let asm = dir.join("probe.mcasm");
+    let direct = dir.join("native.bin");
+    let text = dir.join("text.bin");
+    fs::write(
+        &source,
+        "function probe() { var x = 40 + 2; var y = x - 5; return x + y - x; }",
+    )
+    .unwrap();
+    for (options, input, output) in [
+        (vec!["--emit", "ir"], &source, &ir),
+        (vec!["--from", "ir"], &ir, &asm),
+        (vec!["--emit", "code"], &source, &direct),
+        (vec!["--from", "assembly", "--emit", "code"], &asm, &text),
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(options)
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(&direct).unwrap(), fs::read(text).unwrap());
+    let invalid = dir.join("invalid.bin");
+    fs::write(&source, "function probe() { return missing; }").unwrap();
+    let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+        .args(["--emit", "code"])
+        .arg(source)
+        .arg(&invalid)
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    assert!(!invalid.exists());
+    assert!(String::from_utf8_lossy(&run.stderr).contains("not yet initialized"));
+    fs::remove_dir_all(dir).unwrap();
+}

@@ -1,4 +1,4 @@
-use crate::{BinaryOp, Diagnostic, Function, LocatedOperation, Operation, Span, ValueId};
+use crate::{BinaryOp, Diagnostic, Function, LocalId, LocatedOperation, Operation, Span, ValueId};
 
 /// Parse the provisional IR format and apply the shared semantic validator.
 pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
@@ -41,10 +41,12 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
             Some(".subtract") => (3, 4),
+            Some(".local") => (4, 3),
+            Some(".read") => (5, 3),
             _ => {
                 return Err(fail(
                     *at,
-                    "expected .integer, .add, .subtract, .return, or .end",
+                    "expected .integer, .add, .subtract, .local, .read, .return, or .end",
                 ));
             }
         };
@@ -62,7 +64,17 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                     .map_err(|_| fail(*at, "value ID exceeds u32"))?,
             ))
         };
-        let value_id = parse_value(fields[1])?;
+        let parse_local = |text: &str| -> Result<LocalId, Diagnostic> {
+            let digits = text
+                .strip_prefix('$')
+                .filter(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+                .ok_or_else(|| fail(*at, "local IDs use $ followed by decimal u32"))?;
+            Ok(LocalId(
+                digits
+                    .parse()
+                    .map_err(|_| fail(*at, "local ID exceeds u32"))?,
+            ))
+        };
         let span = if let Some(field) = fields.get(width) {
             let (start, end) = field
                 .strip_prefix("span=")
@@ -89,16 +101,28 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                 return Err(fail(*at, "integer must be nonnegative decimal"));
             }
             Operation::Integer {
-                result: value_id,
+                result: parse_value(fields[1])?,
                 value: digits
                     .parse()
                     .map_err(|_| fail(*at, "integer exceeds i32"))?,
             }
         } else if kind == 1 {
-            Operation::Return { value: value_id }
+            Operation::Return {
+                value: parse_value(fields[1])?,
+            }
+        } else if kind == 4 {
+            Operation::LocalInitialize {
+                local: parse_local(fields[1])?,
+                value: parse_value(fields[2])?,
+            }
+        } else if kind == 5 {
+            Operation::LocalRead {
+                result: parse_value(fields[1])?,
+                local: parse_local(fields[2])?,
+            }
         } else {
             Operation::Binary {
-                result: value_id,
+                result: parse_value(fields[1])?,
                 kind: if kind == 2 {
                     BinaryOp::Add
                 } else {

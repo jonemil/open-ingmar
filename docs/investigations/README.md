@@ -50,3 +50,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Native/text compiler pipeline](compiler-pipeline.md): provisional IR parser/printer, shared CODE model, native/text byte equivalence, and simulator-confirmed edited IR returning `43`.
 
 - [Compiler integer arithmetic](compiler-arithmetic.md): grouped add/subtract, dependency-based VM lowering, native/text equivalence, and simulator-confirmed `43` and `-3`.
+
+- [Compiler initialized locals](compiler-locals.md): semantic local identities, ordered initialization, repeated reads, controlled SDK slot comparison, and simulator-confirmed `37` and `-6`.

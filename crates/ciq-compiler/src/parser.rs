@@ -2,8 +2,15 @@ use crate::{Diagnostic, Span};
 
 pub(crate) struct ParsedFunction {
     pub name: String,
+    pub locals: Vec<LocalDeclaration>,
     pub expression: Expression,
     pub return_span: Span,
+}
+
+pub(crate) struct LocalDeclaration {
+    pub name: String,
+    pub initializer: Expression,
+    pub span: Span,
 }
 
 pub(crate) struct Expression {
@@ -12,6 +19,7 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     Integer(i32),
+    Local(String),
     Binary {
         kind: crate::BinaryOp,
         left: Box<Expression>,
@@ -81,7 +89,7 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-')) => {
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -115,6 +123,13 @@ impl<'a> Parser<'a> {
             return Err(self.error(span.start, "expression exceeds 1024-operation limit"));
         }
         Ok(Expression { kind, span })
+    }
+    fn identifier(&mut self) -> Result<Token<'a>, Diagnostic> {
+        let token = self.token()?;
+        match token.kind {
+            Kind::Word(name) if !matches!(name, "function" | "return" | "var") => Ok(token),
+            _ => Err(self.error(token.span.start, "expected a non-reserved identifier")),
+        }
     }
     fn expression(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let mut left = self.primary(depth)?;
@@ -157,6 +172,9 @@ impl<'a> Parser<'a> {
                     })?;
                 self.node(ExpressionKind::Integer(value), token.span)
             }
+            Kind::Word(name) if !matches!(name, "function" | "return" | "var") => {
+                self.node(ExpressionKind::Local(name.into()), token.span)
+            }
             Kind::Punctuation('(') => {
                 if depth >= 64 {
                     return Err(
@@ -173,7 +191,7 @@ impl<'a> Parser<'a> {
             }
             _ => Err(self.error(
                 token.span.start,
-                "expected a decimal integer or parenthesized expression",
+                "expected an integer, local identifier, or parenthesized expression",
             )),
         }
     }
@@ -195,16 +213,46 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         expressions: 0,
     };
     parser.expect(Kind::Word("function"), "'function'")?;
-    let name = parser.token()?;
+    let name = parser.identifier()?;
     let Kind::Word(identifier) = name.kind else {
-        return Err(parser.error(name.span.start, "expected a function identifier"));
+        unreachable!()
     };
-    if matches!(identifier, "function" | "return") {
-        return Err(parser.error(name.span.start, "reserved word cannot name a function"));
-    }
     parser.expect(Kind::Punctuation('('), "'('")?;
     parser.expect(Kind::Punctuation(')'), "')' (parameters are unsupported)")?;
     parser.expect(Kind::Punctuation('{'), "'{'")?;
+    let mut locals = Vec::new();
+    while parser.peek()? == Kind::Word("var") {
+        let start = parser.token()?.span.start;
+        if locals.len() >= crate::MAX_LOCALS {
+            return Err(parser.error(start, "function exceeds 255-local limit"));
+        }
+        let name = parser.identifier()?;
+        let Kind::Word(name) = name.kind else {
+            unreachable!()
+        };
+        if locals
+            .iter()
+            .any(|local: &LocalDeclaration| local.name == name)
+        {
+            return Err(parser.error(start, format!("duplicate local declaration {name:?}")));
+        }
+        parser.expect(
+            Kind::Punctuation('='),
+            "'=' (locals require an initializer)",
+        )?;
+        let initializer = parser.expression(0)?;
+        let end = parser.expect(Kind::Punctuation(';'), "';'")?.span.end;
+        // A local initialization consumes one additional semantic operation.
+        parser.expressions += 1;
+        if parser.expressions >= crate::MAX_OPERATIONS {
+            return Err(parser.error(start, "function exceeds 1024-operation limit"));
+        }
+        locals.push(LocalDeclaration {
+            name: name.into(),
+            initializer,
+            span: Span { start, end },
+        });
+    }
     let returned = parser.expect(Kind::Word("return"), "'return'")?;
     let expression = parser.expression(0)?;
     let semi = parser.expect(Kind::Punctuation(';'), "';'")?;
@@ -215,6 +263,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(ParsedFunction {
         name: identifier.to_owned(),
+        locals,
         expression,
         return_span: Span {
             start: returned.span.start,
