@@ -2,6 +2,39 @@ use ciq_package::{Limits, Package};
 use std::{env, path::PathBuf};
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args_os().skip(1).collect();
+    if args.first().is_some_and(|a| a == "pack-iq") {
+        if !(args.len() == 5 || args.len() == 7)
+            || args[3] != "-y"
+            || (args.len() == 7 && args[5] != "--debug")
+        {
+            return Err("usage: ciq-package pack-iq <directory> <new.iq> -y <developer.der> [--debug omit|preserve]".into());
+        }
+        let debug = if args.len() == 5 || args[6] == "omit" {
+            ciq_package::DebugPolicy::Omit
+        } else if args[6] == "preserve" {
+            ciq_package::DebugPolicy::Preserve
+        } else {
+            return Err("--debug must be omit or preserve".into());
+        };
+        if std::fs::canonicalize(&args[4])?.starts_with(std::fs::canonicalize(&args[1])?) {
+            return Err("developer key must be outside the package source tree".into());
+        }
+        use std::io::Read;
+        let mut der = Vec::new();
+        std::fs::File::open(&args[4])?
+            .take(65537)
+            .read_to_end(&mut der)?;
+        if der.len() > 65536 {
+            return Err("developer key exceeds size limit".into());
+        }
+        let key = ciq_sign::DeveloperKey::from_pkcs8_der(&der)?;
+        ciq_package::pack_iq(&args[1], &args[2], &key, debug, Limits::default())?;
+        println!(
+            "Created IQ at {}; own-key signatures verified; external debug policy: {debug:?}.",
+            PathBuf::from(&args[2]).display()
+        );
+        return Ok(());
+    }
     if args.len() < 2
         || (args[0] != "list"
             && args[0] != "unpack"
@@ -14,7 +47,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         || (args[0] == "verify"
             && !(args.len() == 2 || (args.len() == 4 && args[2] == "--expected-key")))
     {
-        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>] | pack-barrel <directory> <new.barrel> | repack-iq <directory> <new.iq>".into());
+        return Err("usage: ciq-package list <archive> | unpack <archive> <new-directory> | verify <archive> [--expected-key <public.der>] | pack-barrel <directory> <new.barrel> | repack-iq <directory> <new.iq> | pack-iq <directory> <new.iq> -y <developer.der> [--debug omit|preserve]".into());
     }
     if args[0] == "pack-barrel" {
         ciq_package::pack_barrel(&args[1], &args[2], Limits::default())?;

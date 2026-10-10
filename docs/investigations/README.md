@@ -40,3 +40,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Deterministic Rust barrel packing](barrel-packing.md): canonical extracted-tree writer, payload preservation, repeated ZIP byte equality, and SDK CODE/DATA equivalence for code and resource barrels.
 
 - [Unchanged IQ repacking](iq-repacking.md): deterministic 7z output, exact SDK member/signature preservation, independent libarchive decoding, and bounded single-LZMA encoded headers.
+
+- [Own-key IQ creation](iq-creation.md): controlled XML signing-attribute edits, alternate-key tests, debug policy, independently decoded output, and simulator-confirmed assembly edit returning `47`.

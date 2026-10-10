@@ -4,6 +4,9 @@
 # Local SDK artifacts, PRG specimens, and experiment output.
 /scratch/
 /tmp/
+# Private package staging directories left after an interrupted operation.
+.ciq-package-*/
+.ciq-iq-*/
 /connectiq/
 /connectiq-sdk-*
 /sdks.json

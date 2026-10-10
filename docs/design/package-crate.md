@@ -1,6 +1,6 @@
 # ciq-package design
 
-Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stages 1–4 are implemented:** library plus `list`/`unpack`, modern developer IQ `verify`, deterministic `pack-barrel`, and verified unchanged `repack-iq`. Stage 5 remains planned. See [IQ repacking](../specs/iq-repacking.md). See [packing behavior](../specs/barrel-packing.md) and [SDK validation](../investigations/barrel-packing.md). See [verification behavior](../specs/package-verification.md). See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
+Decision, 2026-10-10: add archive/package support as a sixth workspace crate, `ciq-package`, with a library and a same-named CLI. **Stages 1–5 are implemented:** library plus `list`/`unpack`, modern developer IQ `verify`, deterministic `pack-barrel`, verified unchanged `repack-iq`, and own-key `pack-iq`. See [IQ creation](../specs/iq-creation.md). See [IQ repacking](../specs/iq-repacking.md). See [packing behavior](../specs/barrel-packing.md) and [SDK validation](../investigations/barrel-packing.md). See [verification behavior](../specs/package-verification.md). See [the reading specification](../specs/package-reading.md) and [validation](../investigations/package-reading.md). Local references: [barrel profile](../specs/barrel-package.md), [IQ profile](../specs/iq-package.md), and [experiments](../investigations/package-formats.md).
 
 ## Boundary and model
 
@@ -40,11 +40,11 @@ Deterministic writers use a specified stable member order, stable timestamps/att
 2. **Package verification — implemented for the modern developer profile.** Extend `ciq-sign` with public-SPKI import/export and narrowly scoped detached SHA-1/SHA-256 signing/verification APIs, keeping the private key opaque. Independently verify the real SDK modern IQ profile, product signature attribute equality, PRG key consistency, exact-byte manifest signing, and optional expected key. Test tampered manifest, PRG, signature attributes, public key, and missing members; use generated ephemeral keys, never the user's private key.
 3. **Barrel packer — implemented for the canonical extracted tree.** Retain identical manifest copies plus Jungle/source/resource bytes and emit bounded deterministic ZIP/Deflate. Both code-only and resource specimens preserve every ordinary member byte, repack deterministically, and are consumed by the SDK with identical resulting CODE/DATA. See [writer policy](../specs/barrel-packing.md) and [acceptance evidence](../investigations/barrel-packing.md).
 4. **Unchanged IQ repacking — implemented for modern developer packages.** Rebuild a package with all signed bytes unchanged, preserving signing identity without a key. Verify before/after and compare every member. Exercise the chosen 7z writer and deterministic output. Keep this distinct from editing/resigning and do not claim store acceptance from simulator checks.
-5. **Own-key IQ creation/editing.** Implement the signing sequence in the IQ spec: sign PRGs, update product attributes and public key, serialize/sign the final manifest, then archive and verify. Begin with a supplied SDK manifest/product metadata rather than generating device/version metadata from guesses. Capture multi-device and legacy/store variants before claiming general compatibility. Reassembled extracted PRGs must still run in the official simulator; validate a rebuilt distribution package with the applicable SDK/install/upload workflow when available and authorized.
+5. **Own-key IQ creation/editing — implemented for supplied modern metadata.** Implement the signing sequence in the IQ spec: sign PRGs, update product attributes and public key, serialize/sign the final manifest, then archive and verify. Begin with a supplied SDK manifest/product metadata rather than generating device/version metadata from guesses. Capture multi-device and legacy/store variants before claiming general compatibility. Reassembled extracted PRGs must still run in the official simulator; validate a rebuilt distribution package with the applicable SDK/install/upload workflow when available and authorized.
 
 ## Proposed commands
 
-`list`, `unpack`, `verify`, `pack-barrel`, and `repack-iq` exist. The other spellings below remain planned; they are not CLI options yet:
+`list`, `unpack`, `verify`, `pack-barrel`, `repack-iq`, and `pack-iq` exist.
 
 ```sh
 ciq-package list library.barrel
@@ -54,7 +54,7 @@ ciq-package list application.iq
 ciq-package unpack application.iq scratch/application
 ciq-package verify application.iq [--expected-key publisher-public.der]
 ciq-package repack-iq scratch/application scratch/unchanged.iq
-ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
+ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der [--debug omit|preserve]
 ```
 
 `unpack` writes the archive's real tree, preserving its `manifest.xml`, `barrel.jungle`, and product-relative filenames. Inspection reports stay outside that tree or on stdout; they are not silently included as new package members. `pack-barrel` and `repack-iq` initially consume canonical extracted layouts. `pack-iq -y` takes edited PRGs and the supplied manifest as inputs, with explicit policy for stale external debug XML. A new-file output rule matches the existing assembler/disassembler tools. No automatic PRG disassembly is needed to unpack a package; the user can pass an extracted PRG to `ciq-dis all` separately.
@@ -70,4 +70,4 @@ Project-to-package export and future compiler integration are tracked in [the pr
 - Whether SDK/install tooling accepts independently produced 7z packages with different archive settings; exact member/signature verification alone does not answer this.
 - External `debug.xml` updates after assembly edits. Preserve/omit with explicit supported policy; do not publish stale mappings as newly correct.
 
-Stages 1–4 are complete for their documented supported profiles; [verification evidence](../investigations/package-verification.md) and [barrel packing evidence](../investigations/barrel-packing.md) record acceptance checks. Next implement stage 5, own-key IQ creation. Own-key IQ creation and project-to-package export remain planned.
+Stages 1–5 are complete for their documented supported profiles; [verification evidence](../investigations/package-verification.md) and [barrel packing evidence](../investigations/barrel-packing.md) record acceptance checks. The [creation experiment](../investigations/iq-creation.md) validates an edited program extracted from our IQ in the simulator. Return to assembler naming/control-flow work and [the first compiler milestone](first-compiler.md); broad package variants and project-to-package export remain follow-up work.

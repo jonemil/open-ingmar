@@ -51,9 +51,10 @@ cargo run -p ciq-package -- pack-barrel scratch/unpacked-library scratch/library
 cargo run -p ciq-package -- list scratch/barrels/barrel-app.iq
 cargo run -p ciq-package -- unpack scratch/barrels/barrel-app.iq scratch/unpacked-application
 cargo run -p ciq-package -- repack-iq scratch/unpacked-application scratch/application-repacked.iq
+cargo run -p ciq-package -- pack-iq scratch/unpacked-application scratch/application-resigned.iq -y developer_key.der
 ```
 
-The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Deterministic `pack-barrel` now repacks a canonical extracted tree; both code and resource barrels are SDK-validated. See [packing behavior](docs/specs/barrel-packing.md). Verified [unchanged IQ repacking](docs/specs/iq-repacking.md) is also implemented; own-key IQ creation follows later. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
+The reader preserves every ordinary member byte, including raw manifests and unknown files, and checks paths and resource limits before extraction. Both barrel specimens and all IQ members match independent extraction byte for byte. `ciq-package verify <archive> [--expected-key <public.der>]` now verifies the documented modern developer IQ profile. Deterministic `pack-barrel` now repacks a canonical extracted tree; both code and resource barrels are SDK-validated. See [packing behavior](docs/specs/barrel-packing.md). Verified [unchanged IQ repacking](docs/specs/iq-repacking.md) is also implemented; [own-key IQ creation](docs/specs/iq-creation.md) is also implemented, with external debug XML omitted by default. See [the supported reading profile](docs/specs/package-reading.md) and [verification evidence](docs/investigations/package-reading.md).
 
 Build and validate the workspace:
 
@@ -81,6 +82,7 @@ Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). C
 - [IQ package/signing profile](docs/specs/iq-package.md)
 - [IQ verification commands and reports](docs/specs/package-verification.md)
 - [Package crate design and remaining stages](docs/design/package-crate.md)
+- [First Monkey C compiler milestone](docs/design/first-compiler.md)
 - [Future project builds and Jungle support](docs/design/project-builds.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)

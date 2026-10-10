@@ -647,6 +647,156 @@ mod verification {
         assert_eq!(fs::read(temp.output()).unwrap(), b"preserve");
         assert!(ciq_package::repack_iq(&root, root.join("inside.iq"), Limits::default()).is_err());
     }
+
+    fn creation_fixture() -> Fixture {
+        let mut fixture = Fixture::new();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone())
+            .unwrap()
+            .replace("application id=", "application apiVersion='6.0.2' id=")
+            .replace(
+                "partNumber=",
+                "connectIqVersion='5.2.0' minFirmwareVersion='2502' partNumber=",
+            );
+        *fixture.member("manifest.xml") = xml.into_bytes();
+        fixture.resign_manifest();
+        fixture
+    }
+    #[test]
+    fn own_key_iq_replaces_identity_preserves_metadata_and_controls_debug() {
+        let fixture = creation_fixture();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        let before: Vec<_> = fixture
+            .entries
+            .iter()
+            .map(|(n, b)| (n.clone(), b.clone()))
+            .collect();
+        for (name, debug) in [
+            ("omit.iq", ciq_package::DebugPolicy::Omit),
+            ("preserve.iq", ciq_package::DebugPolicy::Preserve),
+        ] {
+            let output = temp.0.join(name);
+            ciq_package::pack_iq(&root, &output, &keys()[1], debug, Limits::default()).unwrap();
+            let mut package = Package::open(output, Limits::default()).unwrap();
+            assert!(package.verify(Some(&keys()[1].public_key())).verified());
+            assert!(!package.verify(Some(&keys()[0].public_key())).verified());
+            assert_eq!(
+                package.members().iter().any(|m| m.name == "a/debug.xml"),
+                debug == ciq_package::DebugPolicy::Preserve
+            );
+            let manifest = package.manifest();
+            assert_eq!(manifest.identity["apiVersion"], "6.0.2");
+            assert!(
+                manifest
+                    .products
+                    .iter()
+                    .all(|p| p.attributes["connectIqVersion"] == "5.2.0"
+                        && p.attributes["minFirmwareVersion"] == "2502")
+            );
+            let extracted = temp.0.join(format!("{name}-tree"));
+            package.unpack(&extracted).unwrap();
+            let new_prg = Prg::parse(&fs::read(extracted.join("a/app.prg")).unwrap()).unwrap();
+            let old_prg = Prg::parse(&fs::read(root.join("a/app.prg")).unwrap()).unwrap();
+            assert_eq!(
+                ciq_sign::signed_bytes(&new_prg),
+                ciq_sign::signed_bytes(&old_prg)
+            );
+            assert_eq!(
+                fs::read(extracted.join("a/app.prg")).unwrap(),
+                fs::read(extracted.join("b/app.prg")).unwrap()
+            );
+            assert!(
+                package
+                    .manifest_xml()
+                    .windows(b"<unknown retained='yes'/>".len())
+                    .any(|w| w == b"<unknown retained='yes'/>")
+            );
+        }
+        for (name, bytes) in before {
+            assert_eq!(fs::read(root.join(name)).unwrap(), bytes);
+        }
+        assert!(!fs::read_dir(&temp.0).unwrap().any(|e| {
+            e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".ciq-iq-")
+        }));
+    }
+    #[test]
+    fn own_key_iq_accepts_unsigned_edited_prgs_and_shared_product_paths() {
+        let mut fixture = creation_fixture();
+        let xml = String::from_utf8(fixture.member("manifest.xml").clone())
+            .unwrap()
+            .replace("filename='b/app.prg'", "filename='a/app.prg'");
+        *fixture.member("manifest.xml") = xml.into_bytes();
+        fixture.entries.retain(|(n, _)| n != "b/app.prg");
+        *fixture.member("a/app.prg") =
+            Prg::from_sections(vec![Section::new(CODE, vec![0x38, 42, 0x16]).unwrap()]).to_bytes();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        ciq_package::pack_iq(
+            &root,
+            temp.output(),
+            &keys()[1],
+            ciq_package::DebugPolicy::Omit,
+            Limits::default(),
+        )
+        .unwrap();
+        let mut package = Package::open(temp.output(), Limits::default()).unwrap();
+        assert!(package.verify(Some(&keys()[1].public_key())).verified());
+        assert_eq!(package.manifest().products.len(), 2);
+        let extracted = temp.0.join("extracted");
+        package.unpack(&extracted).unwrap();
+        let prg = Prg::parse(&fs::read(extracted.join("a/app.prg")).unwrap()).unwrap();
+        assert_eq!(
+            prg.sections()
+                .iter()
+                .find(|s| s.kind() == CODE)
+                .unwrap()
+                .payload(),
+            [0x38, 42, 0x16]
+        );
+    }
+    #[test]
+    fn own_key_iq_rejects_missing_metadata_invalid_products_and_cleans_stage() {
+        let fixture = creation_fixture();
+        let temp = Temp::new();
+        let root = iq_tree(&temp, &fixture);
+        let original = fs::read(root.join("manifest.xml")).unwrap();
+        let xml = String::from_utf8(original.clone())
+            .unwrap()
+            .replace("connectIqVersion='5.2.0'", "");
+        fs::write(root.join("manifest.xml"), xml).unwrap();
+        assert!(
+            ciq_package::pack_iq(
+                &root,
+                temp.output(),
+                &keys()[0],
+                ciq_package::DebugPolicy::Omit,
+                Limits::default()
+            )
+            .is_err()
+        );
+        fs::write(root.join("manifest.xml"), original).unwrap();
+        fs::write(root.join("b/app.prg"), b"malformed").unwrap();
+        assert!(
+            ciq_package::pack_iq(
+                &root,
+                temp.output(),
+                &keys()[0],
+                ciq_package::DebugPolicy::Omit,
+                Limits::default()
+            )
+            .is_err()
+        );
+        assert!(!temp.output().exists());
+        assert!(!fs::read_dir(&temp.0).unwrap().any(|e| {
+            e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".ciq-iq-")
+        }));
+    }
     fn keys() -> &'static [DeveloperKey; 2] {
         static KEYS: OnceLock<[DeveloperKey; 2]> = OnceLock::new();
         KEYS.get_or_init(|| {

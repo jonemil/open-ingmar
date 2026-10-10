@@ -1,6 +1,6 @@
 # Connect IQ distribution package: observed 7z and signing profile
 
-Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); modern developer [verification](package-verification.md) implemented; [unchanged repacking](iq-repacking.md) is implemented; own-key writing remains planned. Evidence: [independent archive/signature investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`. This profile covers our own dual-hash developer-signed export. Store delivery, legacy variants, and general device catalogues are not specified here.
+Status: documented 2026-10-10; Rust reading/extraction implemented for [the supported profile](package-reading.md); modern developer [verification](package-verification.md) implemented; [unchanged repacking](iq-repacking.md) is implemented; [own-key creation](iq-creation.md) is implemented for supplied modern metadata. Evidence: [independent archive/signature investigation](../investigations/package-formats.md), SDK 9.2.0 / `fr265`. This profile covers our own dual-hash developer-signed export. Store delivery, legacy variants, and general device catalogues are not specified here.
 
 ## Archive
 
@@ -51,7 +51,7 @@ There is no archive-byte signature in this specimen. Recompression/timestamps al
 
 ## Own-key writing sequence
 
-Planned modern developer-package writer:
+Implemented modern developer-package writer (see [exact input restrictions and debug policy](iq-creation.md)):
 
 1. Validate all selected PRGs, required product metadata, safe filenames, and supported signature variants.
 2. Re-sign every product with the supplied external developer key and verify each PRG. Remove stale signing material using the existing PRG signing policy.

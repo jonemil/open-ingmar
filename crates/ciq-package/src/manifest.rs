@@ -176,3 +176,203 @@ pub(crate) fn parse(xml: &[u8]) -> Result<Manifest> {
     }
     Ok(manifest)
 }
+
+/// Patch only the signing attributes of direct Garmin product elements. All
+/// other lexical XML bytes, including unknown elements and comments, survive.
+pub(crate) fn update_signatures(
+    xml: &[u8],
+    signatures: &BTreeMap<String, (String, String)>,
+    limit: u64,
+) -> Result<Vec<u8>> {
+    let original = parse(xml)?;
+    let mut reader = NsReader::from_reader(xml);
+    reader.resolver_mut().set_max_declarations_per_element(128);
+    let mut stack: Vec<String> = Vec::new();
+    let mut edits = Vec::new();
+    let mut count = 0;
+    loop {
+        let (resolved, event) = reader
+            .read_resolved_event()
+            .map_err(|e| Error::new(e.to_string()))?;
+        match event {
+            Event::Start(ref element) | Event::Empty(ref element) => {
+                let local = element.local_name();
+                let garmin =
+                    matches!(resolved, ResolveResult::Bound(ns) if ns.as_ref() == NAMESPACE);
+                if garmin
+                    && local.as_ref() == b"product"
+                    && stack.as_slice() == ["manifest", "application", "products"]
+                {
+                    let product = original
+                        .products
+                        .get(count)
+                        .ok_or_else(|| Error::new("product rewrite count mismatch"))?;
+                    let (sha1, sha256) = signatures
+                        .get(&product.filename)
+                        .ok_or_else(|| Error::new("missing generated product signatures"))?;
+                    let body = element.as_ref();
+                    let end = usize::try_from(reader.buffer_position())
+                        .map_err(|_| Error::new("XML offset overflow"))?;
+                    let suffix = if matches!(event, Event::Empty(_)) {
+                        3
+                    } else {
+                        2
+                    };
+                    let start = end
+                        .checked_sub(body.len() + suffix)
+                        .ok_or_else(|| Error::new("unsupported product XML layout"))?;
+                    if xml.get(start) != Some(&b'<')
+                        || xml.get(start + 1..start + 1 + body.len()) != Some(body)
+                    {
+                        return Err(Error::new("unsupported product XML layout"));
+                    }
+                    let rewritten = signing_tag(body, sha1, sha256)?;
+                    edits.push((start + 1, start + 1 + body.len(), rewritten));
+                    count += 1;
+                }
+                if matches!(event, Event::Start(_)) {
+                    stack.push(if garmin {
+                        std::str::from_utf8(local.as_ref())
+                            .map_err(|e| Error::new(e.to_string()))?
+                            .to_owned()
+                    } else {
+                        "<foreign>".into()
+                    });
+                }
+            }
+            Event::End(_) => {
+                stack.pop();
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    if count != original.products.len() {
+        return Err(Error::new("product rewrite count mismatch"));
+    }
+    let mut result = Vec::new();
+    let mut previous = 0;
+    for (start, end, body) in edits {
+        let growth = (start - previous)
+            .checked_add(body.len())
+            .ok_or_else(|| Error::new("manifest size overflow"))?;
+        if (result.len() as u64).saturating_add(growth as u64) > limit {
+            return Err(Error::new("generated manifest exceeds limit"));
+        }
+        result.extend_from_slice(&xml[previous..start]);
+        result.extend_from_slice(&body);
+        previous = end;
+    }
+    if (result.len() as u64).saturating_add((xml.len() - previous) as u64) > limit {
+        return Err(Error::new("generated manifest exceeds limit"));
+    }
+    result.extend_from_slice(&xml[previous..]);
+    let updated = parse(&result)?;
+    if updated.identity != original.identity || updated.products.len() != original.products.len() {
+        return Err(Error::new("product rewrite changed identity"));
+    }
+    Ok(result)
+}
+fn signing_tag(body: &[u8], sha1: &str, sha256: &str) -> Result<Vec<u8>> {
+    let replacements = [
+        (b"sig".as_slice(), sha1),
+        (b"sig2".as_slice(), sha256),
+        (b"sigFormat".as_slice(), "rsa-4096"),
+    ];
+    let mut found = [false; 3];
+    let mut at = 0;
+    while at < body.len() && !body[at].is_ascii_whitespace() {
+        at += 1;
+    }
+    let mut result = Vec::new();
+    let mut previous = 0;
+    while at < body.len() {
+        while at < body.len() && body[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if at == body.len() {
+            break;
+        }
+        let name_start = at;
+        while at < body.len() && !body[at].is_ascii_whitespace() && body[at] != b'=' {
+            at += 1;
+        }
+        let name = &body[name_start..at];
+        while at < body.len() && body[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if body.get(at) != Some(&b'=') {
+            return Err(Error::new("unsupported product attribute layout"));
+        }
+        at += 1;
+        while at < body.len() && body[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let quote = *body
+            .get(at)
+            .ok_or_else(|| Error::new("missing attribute quote"))?;
+        if quote != b'\'' && quote != b'"' {
+            return Err(Error::new("unsupported product attribute quote"));
+        }
+        at += 1;
+        let value_start = at;
+        while at < body.len() && body[at] != quote {
+            at += 1;
+        }
+        if at == body.len() {
+            return Err(Error::new("unterminated product attribute"));
+        }
+        if let Some((index, (_, replacement))) = replacements
+            .iter()
+            .enumerate()
+            .find(|(_, (key, _))| *key == name)
+        {
+            result.extend_from_slice(&body[previous..value_start]);
+            result.extend_from_slice(replacement.as_bytes());
+            previous = at;
+            found[index] = true;
+        }
+        at += 1;
+    }
+    result.extend_from_slice(&body[previous..]);
+    for (index, (name, value)) in replacements.iter().enumerate() {
+        if !found[index] {
+            result.push(b' ');
+            result.extend_from_slice(name);
+            result.extend_from_slice(b"=\"");
+            result.extend_from_slice(value.as_bytes());
+            result.push(b'"');
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod signing_tests {
+    use super::*;
+    #[test]
+    fn signature_patches_preserve_unknown_xml_quotes_and_nonproduct_elements() {
+        let xml = br#"<?xml version='1.0'?><!-- sig='leave' --><m:manifest xmlns:m='http://www.garmin.com/xml/connectiq' xmlns:f='urn:foreign' version='3'><m:application id='x'><m:products><m:product filename='a&amp;b.prg' partNumber='a' sig = 'old&#65;' sig2="old2" sigFormat='rsa-4096' unknown='keep &amp; exact'><m:extra/></m:product><m:product filename="a&amp;b.prg" partNumber='b' /><f:product sig='untouched'/></m:products></m:application></m:manifest>"#;
+        let signatures = BTreeMap::from([("a&b.prg".into(), ("AA".into(), "BB".into()))]);
+        let result = update_signatures(xml, &signatures, 4096).unwrap();
+        let expected = std::str::from_utf8(xml)
+            .unwrap()
+            .replace("sig = 'old&#65;'", "sig = 'AA'")
+            .replace("sig2=\"old2\"", "sig2=\"BB\"")
+            .replace(
+                "partNumber='b' /",
+                "partNumber='b'  sig=\"AA\" sig2=\"BB\" sigFormat=\"rsa-4096\"/",
+            );
+        assert_eq!(result, expected.as_bytes());
+        let parsed = parse(&result).unwrap();
+        assert_eq!(parsed.products.len(), 2);
+        assert!(
+            parsed
+                .products
+                .iter()
+                .all(|p| p.attributes["sig"] == "AA" && p.attributes["sig2"] == "BB")
+        );
+        assert!(update_signatures(xml, &signatures, 16).is_err());
+        assert!(update_signatures(xml, &BTreeMap::new(), 4096).is_err());
+    }
+}

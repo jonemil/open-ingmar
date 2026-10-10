@@ -86,7 +86,12 @@ fn publish(output: &Path, data: &[u8]) -> Result<()> {
     }
     Ok(())
 }
-fn read_manifest(root: &Path, members: &[Member], name: &str, limits: Limits) -> Result<Vec<u8>> {
+pub(crate) fn read_manifest(
+    root: &Path,
+    members: &[Member],
+    name: &str,
+    limits: Limits,
+) -> Result<Vec<u8>> {
     let member = members
         .iter()
         .find(|m| m.name == name && !m.directory)
@@ -169,7 +174,7 @@ impl Seek for Bounded {
     }
 }
 
-fn source_tree(
+pub(crate) fn source_tree(
     source: &Path,
     output: &Path,
     limits: Limits,
