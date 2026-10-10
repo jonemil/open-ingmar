@@ -38,6 +38,42 @@ current `pack-barrel` only consumes an already exported canonical tree and
 preserves its Jungle bytes. It does not perform this project-to-package
 transformation.
 
+## Target constraints and section layout
+
+Proposed boundary: resolve a device and app type for a complete application
+build, and supply their constraints to target-dependent selection, resource
+generation, and final layout/validation. Shared source, semantic IR, and generic
+instruction encoding need not acquire device-specific offsets or require a
+device profile for every operation. API validation or conditional input
+selection may still need the target before layout.
+
+Keep VM format rules separate from device capacity. Operand widths, address
+selectors, and record framing describe encoding; app memory allowances describe
+whether a particular target can execute the result. A small memory allowance
+must not become an assumed address-field width. The
+[string-boundary experiment](../investigations/string-address-boundary.md)
+demonstrates this distinction: the same `news 0x01000000` encoding runs after
+raising only the simulated watch-app memory allowance.
+
+Layout uses section-relative offsets, rather than placing objects at physical
+watch RAM addresses. Two devices with compatible formats and identical selected
+inputs may use the same section layout; a smaller budget can cause validation
+to reject it instead of requiring different offsets. Target-dependent inputs or
+resource encodings can change the layout itself.
+
+Memory accounting needs its own investigation before enforcing precise build
+limits. PRG file size is not established as peak runtime memory: loaded DATA,
+resources, frame/stack storage, and dynamic objects may have different costs.
+Report known static costs and distinguish them from unbounded or estimated
+runtime allocation; do not promise that passing a static check guarantees all
+execution fits.
+
+Keep low-level assembly/container tools usable without a device profile for
+inspection, lossless reconstruction, and format experiments. A complete target
+build should validate against its resolved profile and record explicit
+experimental capacity overrides. Exact profile fields, accounting rules, and
+compatibility checks remain to be specified from evidence.
+
 ## Investigation and implementation sequence
 
 1. Before implementation, document a supported Jungle grammar and resolution
