@@ -5,7 +5,10 @@
 //! into typed VM assembly. Typed IR construction uses the same validation.
 //! [`compile_sources`] collects global/module functions into a [`CompilationUnit`]
 //! and checks qualified calls across files. [`parse_unit_ir`] resumes unit text.
+//! [`application::build_console_application`] adds generated lifecycle/metadata
+//! and returns an unsigned PRG for the supported console bootstrap profile.
 
+pub mod application;
 pub mod backend;
 mod bindings;
 mod control_flow;

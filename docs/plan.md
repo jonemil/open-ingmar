@@ -36,19 +36,22 @@ describe planned behavior and investigations record the supporting evidence.
 - Compilation units collect global/module functions across files, resolve forward
   calls, and check integer argument counts/types. Native/unit-IR/assembly CODE
   agrees; [the simulator](investigations/compiler-unit.md) verifies all four
-  generated bodies and reversed arguments. Application metadata remains external.
-- The latest implementation checkpoint passes 196 Rust tests, Clippy, and
+  generated bodies and reversed arguments.
+- A [complete console app](investigations/application-bootstrap.md) now generates
+  lifecycle CODE, DATA/modules, native imports, and all unsigned container fields
+  without SDK payloads. Own-key signed greeting `41`/`42` and two-file `48` runs
+  are verified; the View is blank and output is in the console.
+- The latest implementation checkpoint passes 202 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
-1. Build a minimal complete application with independently generated CODE,
-   DATA/classes/modules, symbols, resources, and required container metadata.
-   Multiple-function collection and qualified-call checks are implemented. Next
-   establish the minimal lifecycle, receiver, and API requirements from SDK
-   specimens, then generate their method/module structures and container fields. Verify a signed PRG in the
-   simulator without transplanting its generated functions into SDK scaffolding.
-   Use SDK specimens to investigate missing structures and record evidence.
+1. Extend the [console application bootstrap](design/console-application.md) to
+   source-authored lifecycle methods. Establish a minimal AppBase/View class
+   subset, receiver/context rules, and required void/null/object/array and SDK
+   call types. Generate methods/imports from those identities and preserve
+   complete-application native/text and simulator checks. The fixed bootstrap is
+   implemented; broader application profiles and resource assets remain open.
 2. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
 3. Revisit DATA string authoring and shared address-region rules as complete

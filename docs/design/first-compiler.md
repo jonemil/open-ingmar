@@ -20,8 +20,9 @@ assembler reconstructed and signed the PRG with our key. The simulator verified
 `41` and a source edit to `42`. See
 [evidence](../investigations/first-compiler.md).
 
-The compiler emits a function, not a complete application. Source diagnostics
-reject unsupported input. Independent Rust parsing and semantic IR construction
+The default compiler mode emits a function. The later
+[console application profile](console-application.md) generates a complete PRG
+from a compilation unit. Source diagnostics reject unsupported input. Independent Rust parsing and semantic IR construction
 have no optimizer/Ghidra implementation dependency. VM lowering produces the
 same assembly model used by handwritten code and disassembly; encoding, layout,
 and signing remain separate.
@@ -49,9 +50,11 @@ in-memory composition and editable stage resumption.
    exception assembly are implemented; exception source compilation still needs
    stack/frame research. See the [control-flow design](control-flow.md).
 3. Multiple-function units with qualified-call binding and integer arity/type
-   checks are [verified](../investigations/compiler-unit.md). Next generate
-   independent application DATA/classes/symbols/resources and required metadata. Verify a minimal signed application without SDK-provided
-   scaffolding, then add [Jungle-driven project builds](project-builds.md).
+   checks are [verified](../investigations/compiler-unit.md). Independent
+   console application metadata is
+   [implemented and verified](../investigations/application-bootstrap.md) without
+   SDK-provided scaffolding. Next add source-authored lifecycle classes and
+   [Jungle-driven project builds](project-builds.md).
 
 Complete applications take priority over broader section-size/address research.
 Use their placement needs and larger generated programs to expose concrete

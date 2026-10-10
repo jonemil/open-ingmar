@@ -1,8 +1,9 @@
 # Compilation units
 
 This profile collects multiple restricted functions before lowering CODE. It is
-an intermediate step toward complete applications; it does not generate PRG
-metadata or resolve Jungle projects. The [function subset](compiler-subset.md)
+independent of application profiles; the
+[console application builder](console-application.md) supplies a complete PRG
+from this unit, while Jungle resolution remains future work. The [function subset](compiler-subset.md)
 and [function IR](compiler-ir-text.md) remain the per-function contracts.
 
 ## Source declarations
@@ -113,3 +114,7 @@ CLI behavior is unchanged.
 
 See [the example](../../examples/compiler-unit/README.md) and
 [simulator evidence](../investigations/compiler-unit.md).
+
+For complete unsigned application output, use `--emit prg --app-id <id>`
+with source or saved unit IR. The [console application profile](console-application.md)
+specifies the generated lifecycle, metadata, entry selection, and restrictions.

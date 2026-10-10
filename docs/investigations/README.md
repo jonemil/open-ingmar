@@ -167,4 +167,8 @@ in-place shrink experiment has confirmed simulator execution, as described in
   qualified-call validation, distinct body labels, unit IR parity, and runtime
   execution of generated caller/callee/helper bodies.
 
+- [Independent console application bootstrap](application-bootstrap.md): reduced
+  lifecycle/import requirements, sorted field lookup, template-free PRG
+  generation, complete native/IR parity, and simulator-confirmed 41/42/48.
+
 [ref-shared-code-labels-and-controlled-size-c]: code-labels-and-relocation.md

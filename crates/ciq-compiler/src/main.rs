@@ -13,6 +13,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut unit = false;
     let mut symbols_path = None;
     let mut data_path = None;
+    let mut app_id = None;
+    let mut app_entry = None;
     let mut args = env::args_os().skip(1);
     let mut options = std::collections::BTreeSet::new();
     while let Some(arg) = args.next() {
@@ -23,7 +25,13 @@ fn run() -> Result<(), Box<dyn Error>> {
             unit = true;
             continue;
         }
-        if arg == "--from" || arg == "--emit" || arg == "--symbols" || arg == "--data" {
+        if arg == "--from"
+            || arg == "--emit"
+            || arg == "--symbols"
+            || arg == "--data"
+            || arg == "--app-id"
+            || arg == "--entry"
+        {
             if !options.insert(arg.clone()) {
                 return Err("duplicate pipeline option".into());
             }
@@ -39,7 +47,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             let value = value
                 .into_string()
                 .map_err(|_| "option value must be UTF-8")?;
-            if arg == "--from" {
+            if arg == "--app-id" {
+                app_id = Some(value);
+            } else if arg == "--entry" {
+                app_entry = Some(value);
+            } else if arg == "--from" {
                 from = value;
             } else {
                 emit = value;
@@ -51,10 +63,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     if paths.len() < 2 || (paths.len() != 2 && (!unit || from != "source")) {
-        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
+        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--app-id <32-hex-digits>] [--entry <global-function>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
-        || !matches!(emit.as_str(), "ir" | "assembly" | "code")
+        || !matches!(emit.as_str(), "ir" | "assembly" | "code" | "prg")
     {
         return Err("unsupported pipeline stage".into());
     }
@@ -64,6 +76,29 @@ fn run() -> Result<(), Box<dyn Error>> {
     if (symbols_path.is_some() || data_path.is_some()) && emit != "code" {
         return Err("--symbols and --data are supported only with --emit code".into());
     }
+    if emit == "prg" && (!unit || from == "assembly") {
+        return Err("--emit prg requires --unit with source or unit IR input".into());
+    }
+    if emit != "prg" && (app_id.is_some() || app_entry.is_some()) {
+        return Err("--app-id and --entry are supported only with --emit prg".into());
+    }
+    let application = if emit == "prg" {
+        let text = app_id.ok_or("--emit prg requires --app-id <32-hex-digits>")?;
+        if text.len() != 32 || !text.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("application ID requires exactly 32 hexadecimal digits".into());
+        }
+        let mut id = [0; 16];
+        for (index, byte) in id.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)?;
+        }
+        Some(ciq_compiler::application::ConsoleApplication {
+            id,
+            entry: app_entry.unwrap_or_else(|| "main".into()),
+        })
+    } else {
+        None
+    };
+    let mut prg = None;
     let output_path = paths.pop().unwrap();
     let sources = paths
         .iter()
@@ -84,10 +119,18 @@ fn run() -> Result<(), Box<dyn Error>> {
             ciq_compiler::parse_unit_ir(source)
                 .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?
         };
-        (
-            (emit == "ir").then(|| model.to_ir_text()),
-            (emit != "ir").then(|| model.lower()),
-        )
+        if let Some(application) = &application {
+            prg = Some(
+                ciq_compiler::application::build_console_application(&model, application)?
+                    .to_bytes(),
+            );
+            (None, None)
+        } else {
+            (
+                (emit == "ir").then(|| model.to_ir_text()),
+                (emit != "ir").then(|| model.lower()),
+            )
+        }
     } else if from != "assembly" {
         let function = if from == "source" {
             ciq_compiler::compile(source)
@@ -108,7 +151,9 @@ fn run() -> Result<(), Box<dyn Error>> {
             ),
         )
     };
-    let bytes = if emit == "ir" {
+    let bytes = if emit == "prg" {
+        prg.unwrap()
+    } else if emit == "ir" {
         ir.unwrap().into_bytes()
     } else {
         let assembly = assembly.unwrap();

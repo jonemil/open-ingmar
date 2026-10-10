@@ -54,8 +54,9 @@ justify it. If IR is extracted, move VM-specific methods out of its types; the
 backend consumes IR and produces assembly, never the reverse dependency.
 
 Source project configuration, DATA/resource/module generation, signing, and
-packaging remain separate concerns. Current function integration uses existing
-application metadata. Symbol binding resolves module/member names against an
+packaging remain separate concerns. Raw function integration may use existing
+application metadata; the [console application builder](console-application.md)
+generates a constrained independent profile from unit IR. Symbol binding resolves module/member names against an
 explicit symbol source without generating method records.
 
 ## Native and textual pipelines
@@ -235,7 +236,8 @@ IR crate, or new call opcode is needed for this step.
 Unit IR wraps unchanged function IR documents with ownership records. Source,
 typed construction, and text resumption share checks and produce equivalent
 assembly/CODE with the same bindings. Strings remain deduplicated per function;
-module DATA records and symbol allocation remain future metadata work. See
+the separate console application builder supplies module DATA and symbol
+allocation for its supported profile. See
 [the unit profile](../specs/compiler-unit.md) and
 [simulator evidence](../investigations/compiler-unit.md).
 

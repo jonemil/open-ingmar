@@ -38,8 +38,8 @@ format specifications, evidence records, and Rust API documentation.
 Container handling preserves section order, duplicate/unknown identifiers, and
 opaque payloads. Supported code and metadata have structured views; unsupported
 content remains raw. Exported section projects can reconstruct a complete PRG
-without an original template. A single compiled function cannot yet produce a
-complete application.
+without an original template. The compiler can now generate a complete console application from a function
+unit using a constrained, simulator-tested bootstrap profile.
 
 The [assembly language](design/assembly-source.md) serves handwritten code,
 compiler output, and disassembly. Its [shared model](design/assembly-model.md)
@@ -104,15 +104,18 @@ design](design/compiler-ir.md),
 [the source subset](specs/compiler-subset.md), and
 [the IR format](specs/compiler-ir-text.md).
 
-Generated functions currently use existing application DATA/module metadata.
+Raw function CODE can still use existing application DATA/module metadata.
 Symbol binding consumes an explicit symbol source; it does not create method
 records. Literal requirements are unplaced in CODE; explicit DATA sources supply
 their offsets without resolving method aliases until reconstruction.
 Compilation units collect global/module functions across files, check qualified
 callee identities and integer argument counts/types, and lower their bodies into
-one CODE layout. Complete metadata generation remains future work. See
-[unit rules](specs/compiler-unit.md). Signing, packaging, and project
-configuration do not belong in the frontend.
+one CODE layout. A separate application builder generates lifecycle assembly,
+DATA/modules, imports, and unsigned sections for the
+[console bootstrap profile](specs/console-application.md), using no SDK payloads.
+Source-authored classes/lifecycle and general resources remain future work. See
+[unit rules](specs/compiler-unit.md) and [application design](design/console-application.md).
+Signing, packaging, and project configuration do not belong in the frontend.
 
 ### Agreed layer names and future extraction
 

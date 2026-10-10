@@ -1,0 +1,386 @@
+//! Minimal console application metadata and lifecycle generation.
+use crate::CompilationUnit;
+use ciq_assembly::{Item, Operand, Program};
+use ciq_mc::Opcode;
+use ciq_prg::{
+    Prg, Section,
+    data::{
+        self, Fragment,
+        classes::source::{Declaration, FieldDeclaration, Key, Reference},
+    },
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
+
+const STATICS: u32 = 0x00800002;
+const TOYBOX: u32 = 0x00800003;
+const SYSTEM: u32 = 0x00800005;
+const WATCH_UI: u32 = 0x00800011;
+const APPLICATION: u32 = 0x00800015;
+const INIT: u32 = 0x00800018;
+const INITIALIZE: u32 = 0x0080005e;
+const PRINTLN: u32 = 0x00800067;
+const VIEW: u32 = 0x0080019f;
+const APP_BASE: u32 = 0x0080029c;
+const ON_START: u32 = 0x0080029f;
+const GET_INITIAL_VIEW: u32 = 0x008002a0;
+const GLOBALS: u32 = 0x008002e6;
+
+/// Application identity and the global zero-parameter integer entry function.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsoleApplication {
+    /// Sixteen manifest application-ID bytes, independent of signing identity.
+    pub id: [u8; 16],
+    /// Global function invoked once by onStart; its integer result is printed.
+    pub entry: String,
+}
+
+/// An unsupported application configuration or metadata/encoding failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationError {
+    /// Failed bootstrap-profile or encoding requirement.
+    pub message: String,
+}
+impl fmt::Display for ApplicationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+impl std::error::Error for ApplicationError {}
+fn error(e: impl fmt::Display) -> ApplicationError {
+    ApplicationError {
+        message: e.to_string(),
+    }
+}
+
+fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
+    Item::Instruction { opcode, operands }
+}
+fn sym(name: &str) -> Operand {
+    Operand::Symbol(name.into())
+}
+fn bits(value: u64) -> Operand {
+    Operand::Bits(value)
+}
+fn field(id: u32, flags: u8, kind: u8, value: Reference) -> FieldDeclaration {
+    FieldDeclaration {
+        key: Key::Raw((id << 8) | u32::from(flags)),
+        kind,
+        value,
+    }
+}
+fn method(id: u32, flags: u8, label: &str) -> FieldDeclaration {
+    field(id, flags, 6, Reference::Code(label.into()))
+}
+fn class(
+    alias: &str,
+    references: [Option<Reference>; 4],
+    mut fields: Vec<FieldDeclaration>,
+) -> Declaration {
+    // Runtime lookup failed for an out-of-order global method in the probe.
+    fields.sort_by_key(|f| match f.key {
+        Key::Raw(key) => key,
+        _ => unreachable!(),
+    });
+    Declaration {
+        alias: Some(alias.into()),
+        at: None,
+        version: 2,
+        references,
+        app_flags: 0x7f,
+        fields,
+    }
+}
+
+fn lifecycle(entry: &str) -> Vec<Item> {
+    use Opcode::*;
+    vec![
+        Item::Label("__ciq_bootstrap".into()),
+        instruction(Argc, vec![bits(1)]),
+        instruction(Return, vec![]),
+        Item::Label("__ciq_noop".into()),
+        instruction(Return, vec![]),
+        Item::Label("__ciq_constructor".into()),
+        instruction(Getselfv, vec![sym("__ciq_app_base")]),
+        instruction(Getsv, vec![sym("__ciq_app_init")]),
+        instruction(Invokemz, vec![]),
+        instruction(Return, vec![]),
+        Item::Label("__ciq_on_start".into()),
+        instruction(Argc, vec![bits(2)]),
+        instruction(
+            Getmv,
+            vec![sym("__ciq_sdk_System"), sym("__ciq_member_println")],
+        ),
+        instruction(Frpush, vec![]),
+        instruction(
+            Getmv,
+            vec![
+                sym("__ciq_app_globals"),
+                sym(&format!("__ciq_member_{entry}")),
+            ],
+        ),
+        instruction(Invokemz, vec![]),
+        instruction(Invokem, vec![bits(2)]),
+        instruction(Popv, vec![]),
+        instruction(Return, vec![]),
+        Item::Label("__ciq_initial_view".into()),
+        instruction(Argc, vec![bits(1)]),
+        instruction(Ipush1, vec![bits(1)]),
+        instruction(Newa, vec![]),
+        instruction(Dup, vec![bits(0)]),
+        instruction(Ipushz, vec![]),
+        instruction(
+            Getmv,
+            vec![sym("__ciq_app_watch_ui"), sym("__ciq_app_view")],
+        ),
+        instruction(Newc, vec![]),
+        instruction(Dup, vec![bits(0)]),
+        instruction(Getsv, vec![sym("__ciq_app_initialize")]),
+        instruction(Dup, vec![bits(1)]),
+        instruction(Invokem, vec![bits(1)]),
+        instruction(Popv, vec![]),
+        instruction(Aputv, vec![]),
+        instruction(Return, vec![]),
+        Item::Label("__ciq_initialize".into()),
+        instruction(Argc, vec![bits(1)]),
+        instruction(Getselfv, vec![sym("__ciq_app_base")]),
+        instruction(Getsv, vec![sym("__ciq_app_initialize")]),
+        instruction(Invokemz, vec![]),
+        instruction(Popv, vec![]),
+        instruction(Return, vec![]),
+    ]
+}
+
+/// Generate an unsigned, template-free console watch application from unit IR.
+///
+/// Uses the bootstrap profile tested with SDK 9.2.0 and Forerunner 265: version-2
+/// DATA records, fixed native symbol IDs, two native-class imports, generated
+/// lifecycle methods, and empty resources/permissions/exceptions. The entry must
+/// be a global zero-parameter integer-return function. onStart invokes it once
+/// and prints its result; getInitialView returns a blank native View.
+///
+/// Allocates user symbols and all CODE/DATA positions deterministically. Global
+/// and module methods bind to unit CODE labels; literals use shared DATA layout.
+/// Rejects unsupported entry signatures, reserved namespace collisions, and
+/// encoding/layout limits. Device budgets and other API/device profiles are not
+/// inferred. No SDK files, original PRG, debug tables, or signing key are read.
+/// Signing remains a separate operation on the returned complete PRG.
+pub fn build_console_application(
+    unit: &CompilationUnit,
+    app: &ConsoleApplication,
+) -> Result<Prg, ApplicationError> {
+    let Some(entry) = unit
+        .declarations()
+        .iter()
+        .find(|d| d.module.is_none() && d.function.name() == app.entry)
+    else {
+        return Err(error("application entry must name a global function"));
+    };
+    if entry.function.parameter_count() != 0 {
+        return Err(error("application entry must have zero parameters"));
+    }
+    let modules: BTreeSet<_> = unit
+        .declarations()
+        .iter()
+        .filter_map(|d| d.module.clone())
+        .collect();
+    if modules
+        .iter()
+        .any(|m| matches!(m.as_str(), "globals" | "statics" | "Toybox"))
+        || unit
+            .declarations()
+            .iter()
+            .any(|d| d.module.is_none() && d.function.name() == "Toybox")
+    {
+        return Err(error(
+            "application declarations collide with a reserved bootstrap namespace",
+        ));
+    }
+    let mut ids = BTreeMap::from([
+        ("initialize".to_owned(), INITIALIZE),
+        ("println".into(), PRINTLN),
+        ("View".into(), VIEW),
+        ("AppBase".into(), APP_BASE),
+        ("onStart".into(), ON_START),
+        ("getInitialView".into(), GET_INITIAL_VIEW),
+    ]);
+    let names: BTreeSet<_> = unit
+        .declarations()
+        .iter()
+        .map(|d| d.function.name().to_owned())
+        .chain(modules.iter().cloned())
+        .collect();
+    let mut next = 2; // Symbol 1 is the synthesized application class.
+    for name in names {
+        ids.entry(name).or_insert_with(|| {
+            let id = next;
+            next += 1;
+            id
+        });
+    }
+    let mut module_ids = BTreeMap::new();
+    for module in &modules {
+        module_ids.insert(module.clone(), next);
+        next += 1;
+    }
+    let mut bindings = BTreeMap::from([
+        ("__ciq_sdk_System".into(), SYSTEM),
+        ("__ciq_member_println".into(), PRINTLN),
+        ("__ciq_app_globals".into(), GLOBALS),
+        ("__ciq_app_base".into(), APP_BASE),
+        ("__ciq_app_init".into(), INIT),
+        ("__ciq_app_initialize".into(), INITIALIZE),
+        ("__ciq_app_watch_ui".into(), WATCH_UI),
+        ("__ciq_app_view".into(), VIEW),
+    ]);
+    for d in unit.declarations() {
+        bindings.insert(
+            format!("__ciq_member_{}", d.function.name()),
+            ids[d.function.name()],
+        );
+    }
+    for (module, id) in &module_ids {
+        bindings.insert(format!("__ciq_module_{module}"), *id);
+    }
+    let mut items = lifecycle(&app.entry);
+    items.extend(unit.lower().items().iter().cloned());
+    let assembly = Program::new(items).map_err(error)?;
+    let labels = assembly.labels().map_err(error)?;
+    let module_alias = |name: &str| format!("__ciq_data_module_{}_{}", name.len(), name);
+    let mut statics_fields = vec![field(GLOBALS, 0, 10, Reference::Raw(0))];
+    for id in module_ids.values() {
+        statics_fields.push(field(*id, 0, 10, Reference::Raw(0)));
+    }
+    let statics = class(
+        "__ciq_data_statics",
+        [None, None, None, Some(Reference::Raw(STATICS))],
+        statics_fields,
+    );
+    let mut global_fields = vec![
+        field(1, 0x50, 7, Reference::Class("__ciq_data_app".into())),
+        field(TOYBOX, 0, 0, Reference::Raw(0)),
+        method(INIT, 0x30, "__ciq_noop"),
+    ];
+    for d in unit.declarations().iter().filter(|d| d.module.is_none()) {
+        global_fields.push(method(ids[d.function.name()], 0x10, &d.code_label()));
+    }
+    for module in &modules {
+        global_fields.push(field(
+            ids[module],
+            0x50,
+            10,
+            Reference::Raw(module_ids[module]),
+        ));
+    }
+    let globals = class(
+        "__ciq_data_globals",
+        [None, None, None, Some(Reference::Raw(GLOBALS))],
+        global_fields,
+    );
+    let application = class(
+        "__ciq_data_app",
+        [
+            Some(Reference::Raw(0x40000000)),
+            None,
+            Some(Reference::Raw(GLOBALS)),
+            None,
+        ],
+        vec![
+            method(INIT, 0x30, "__ciq_constructor"),
+            method(INITIALIZE, 0x10, "__ciq_initialize"),
+            field(APP_BASE, 0x70, 7, Reference::Raw(0x40000000)),
+            method(ON_START, 0x10, "__ciq_on_start"),
+            method(GET_INITIAL_VIEW, 0x10, "__ciq_initial_view"),
+        ],
+    );
+    let mut classes = vec![statics, globals, application];
+    for module in &modules {
+        let mut fields = vec![method(INIT, 0x30, "__ciq_noop")];
+        for d in unit
+            .declarations()
+            .iter()
+            .filter(|d| d.module.as_ref() == Some(module))
+        {
+            fields.push(method(ids[d.function.name()], 0x10, &d.code_label()));
+        }
+        classes.push(class(
+            &module_alias(module),
+            [
+                None,
+                None,
+                Some(Reference::Raw(GLOBALS)),
+                Some(Reference::Raw(module_ids[module])),
+            ],
+            fields,
+        ));
+    }
+    // Type-0a module fields require numeric DATA offsets in the shared model.
+    let mut positions = BTreeMap::new();
+    let mut offset = 0u32;
+    for c in &mut classes {
+        c.at = Some(offset);
+        positions.insert(c.alias.clone().unwrap(), offset);
+        offset = offset
+            .checked_add(u32::try_from(c.encoded_length().map_err(error)?).map_err(error)?)
+            .ok_or_else(|| error("DATA layout exceeds u32"))?;
+    }
+    for f in &mut classes[0].fields {
+        let Key::Raw(key) = f.key else { unreachable!() };
+        let id = key >> 8;
+        let alias = if id == GLOBALS {
+            "__ciq_data_globals".to_owned()
+        } else {
+            module_alias(module_ids.iter().find(|(_, v)| **v == id).unwrap().0)
+        };
+        f.value = Reference::Raw(positions[&alias]);
+    }
+    let mut fragments = classes.into_iter().map(Fragment::Class).collect::<Vec<_>>();
+    fragments.extend(assembly.items().iter().filter_map(|i| {
+        if let Item::String(s) = i {
+            Some(Fragment::String(s.clone()))
+        } else {
+            None
+        }
+    }));
+    let data = data::Source { fragments };
+    let strings = data.string_bindings().map_err(error)?;
+    let code = assembly
+        .encode_with_references(&bindings, &strings)
+        .map_err(error)?;
+    let data = data
+        .encode_with_references(&BTreeMap::new(), &labels)
+        .map_err(error)?
+        .0;
+    let mut header = 0x00060002u32.to_be_bytes().to_vec();
+    header.resize(33, 0);
+    let mut entry_points = 1u16.to_be_bytes().to_vec();
+    entry_points.extend(app.id);
+    for word in [GLOBALS, 1, 0x82, 0x26, 1] {
+        entry_points.extend(word.to_be_bytes());
+    }
+    let mut imports = 2u16.to_be_bytes().to_vec();
+    for word in [APPLICATION, APP_BASE, WATCH_UI, VIEW] {
+        imports.extend(word.to_be_bytes());
+    }
+    let mut sections = vec![
+        (0xd000d00d, header),
+        (0x6060c0de, entry_points),
+        (ciq_prg::DATA, data),
+        (ciq_prg::CODE, code),
+        (0xc1a557b1, imports),
+        (ciq_prg::RESOURCES, vec![0, 0]),
+        (0x6000db01, vec![0, 0]),
+        (ciq_prg::EXCEPTIONS, vec![0, 0]),
+    ];
+    // Deterministic trailing resource padding keeps the unsigned stream aligned.
+    let length = sections.iter().map(|(_, b)| 8 + b.len()).sum::<usize>();
+    sections[5].1.resize(2 + ((32 - length % 32) % 32), 0);
+    Ok(Prg::from_sections(
+        sections
+            .into_iter()
+            .map(|(kind, payload)| Section::new(kind, payload).map_err(error))
+            .collect::<Result<_, _>>()?,
+    ))
+}
