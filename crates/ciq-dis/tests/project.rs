@@ -536,3 +536,30 @@ fn malformed_debug_and_line_sections_fall_back_to_raw() {
     assert_eq!(manifest.entries[1].encoding, Encoding::Raw);
     assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
 }
+
+#[test]
+fn owner_qualified_labels_roundtrip_a_shared_member_symbol() {
+    let symbols = ciq_prg::symbols::source::Source::parse(
+        ".symbol Left \"Left\" id=0x01\n.symbol Right \"Right\" id=0x02\n.symbol answer \"answer\" id=0x03\n",
+    ).unwrap();
+    let symbol_payload = symbols.encode().unwrap();
+    let bindings = symbols.bindings().unwrap();
+    let data = ciq_prg::data::Source::parse_with_symbols(
+        ".class Left version=0x02 extends=none statics=none parent=none module=@Left app_flags=0x0\n.field symbol=@answer bits=0x10 type=0x06 value=0x10000000\n.endclass\n.class Right version=0x02 extends=none statics=none parent=none module=@Right app_flags=0x0\n.field symbol=@answer bits=0x10 type=0x06 value=0x10000003\n.endclass\n", &bindings,
+    ).unwrap().encode_with_symbols(&bindings).unwrap().0;
+    let original = Prg::from_sections(vec![
+        Section::new(SYMBOLS, symbol_payload).unwrap(),
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x38, 21, 0x16, 0x38, 22, 0x16]).unwrap(),
+    ]);
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("owners");
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    let data = fs::read_to_string(directory.join(&manifest.entries[1].file)).unwrap();
+    let code = fs::read_to_string(directory.join(&manifest.entries[2].file)).unwrap();
+    for label in ["method_Left__answer", "method_Right__answer"] {
+        assert!(data.contains(&format!("value=code:{label}")));
+        assert!(code.contains(&format!("{label}:")));
+    }
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+}

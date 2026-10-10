@@ -5,6 +5,7 @@ Each directory is a standalone Connect IQ project containing its own manifest, J
 - [hello-world](hello-world/README.md): minimal watch application showing a greeting and a numeric probe.
 - [minimal-console](minimal-console/README.md): one target function calling `println("Hello!")`, with basic watch-app lifecycle scaffolding and no custom rendering.
 - [multi-file](multi-file/README.md): three source files sharing a module function, with console/display `46`.
+- [module-names](module-names/README.md): two modules with the same `answer()` spelling, returning `21` and `22`.
 - [number-barrel](number-barrel/README.md): the numeric module packaged as a source library.
 - [barrel-app](barrel-app/README.md): the library consumed through an archive or source-project Jungle.
 

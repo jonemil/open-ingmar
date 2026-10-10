@@ -77,7 +77,7 @@ Checked-in code should stand on its own and reference local specifications when 
 
 [Experiments on 2026-10-10](investigations/multi-file-and-barrels.md) compile three Monkey C source files into one CODE/DATA layout. Consuming a barrel archive or its source project produces identical executable code and data. The observed barrel archive contains source and build metadata; it is not a VM object file. A separately exported IQ archive holds a device PRG plus external metadata/signatures. Its extracted PRG remains the unit our assembler reconstructs. Do not equate an IQ archive with a linkable object or assume PRG re-signing updates package-level signatures.
 
-These observations support collecting source declarations before complete-program layout. They do not require a separate linker or an option to ignore placement constraints. Multiple-module name collisions, branch/exception fixups, resource libraries, annotations, and multi-device distribution remain bounded follow-up investigations.
+These observations support collecting source declarations before complete-program layout. They do not require a separate linker or an option to ignore placement constraints. [Repeated module names](investigations/module-method-names.md) now have owner-qualified exported labels with conservative fallback for shared targets. This preserves the flat assembly namespace. Branch/exception fixups, resource libraries, annotations, and multi-device distribution remain bounded follow-up investigations.
 
 ## Package crate
 

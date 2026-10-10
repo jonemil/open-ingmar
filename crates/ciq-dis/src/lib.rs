@@ -237,7 +237,9 @@ fn project_code_labels(
         return BTreeMap::new();
     };
     let starts: BTreeSet<_> = boundaries.iter().map(|i| i.offset as u32).collect();
-    let mut candidates: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    // Retain every binding: shared targets must not inherit the first field's name.
+    type MethodBinding = (Option<String>, Option<String>); // DATA owner, member symbol alias
+    let mut candidates: BTreeMap<u32, BTreeSet<MethodBinding>> = BTreeMap::new();
     for fragment in &data.fragments {
         let Fragment::Class(c) = fragment else {
             continue;
@@ -251,21 +253,54 @@ fn project_code_labels(
                     Key::Symbol { alias, .. } => Some(alias.clone()),
                     _ => None,
                 };
-                candidates.entry(value & 0xffffff).or_insert(alias);
+                candidates
+                    .entry(value & 0xffffff)
+                    .or_default()
+                    .insert((c.alias.clone(), alias));
             }
         }
     }
+    let mut targets: BTreeMap<String, BTreeSet<u32>> = BTreeMap::new();
+    for (offset, bindings) in &candidates {
+        for (_, name) in bindings {
+            if let Some(name) = name {
+                targets.entry(name.clone()).or_default().insert(*offset);
+            }
+        }
+    }
+    let proposed: BTreeMap<_, _> = candidates
+        .into_iter()
+        .map(|(offset, bindings)| {
+            let name = if bindings.len() == 1 {
+                let (owner, member) = bindings.into_iter().next().unwrap();
+                member.and_then(|member| {
+                    if ["code_", "sym_", "method_"]
+                        .iter()
+                        .any(|prefix| member.starts_with(prefix))
+                    {
+                        None
+                    } else if targets[&member].len() == 1 {
+                        Some(member)
+                    } else {
+                        owner.map(|owner| format!("method_{owner}__{member}"))
+                    }
+                })
+            } else {
+                None
+            };
+            (offset, name)
+        })
+        .collect();
+    // Concatenated owner/member spellings can collide; neither target wins.
     let mut counts = BTreeMap::new();
-    for name in candidates.values().flatten() {
+    for name in proposed.values().flatten() {
         *counts.entry(name.clone()).or_insert(0usize) += 1;
     }
-    candidates
+    proposed
         .into_iter()
         .map(|(offset, name)| {
             let alias = name
-                .filter(|name| {
-                    counts[name] == 1 && !name.starts_with("code_") && !name.starts_with("sym_")
-                })
+                .filter(|name| counts[name] == 1)
                 .unwrap_or_else(|| format!("code_{offset:08x}"));
             (offset, alias)
         })
@@ -650,6 +685,70 @@ fn disassemble_named(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn method_labels(bindings: &[(&str, &str, u32)]) -> std::collections::BTreeMap<u32, String> {
+        let mut symbols = std::collections::BTreeMap::new();
+        let mut owners: std::collections::BTreeMap<&str, String> =
+            std::collections::BTreeMap::new();
+        for (owner, member, offset) in bindings {
+            let next = symbols.len() as u32 + 1;
+            symbols.entry(member.to_string()).or_insert(next);
+            owners.entry(owner).or_default().push_str(&format!(
+                ".field symbol=@{member} bits=0x10 type=0x06 value=0x{:08x}\n",
+                0x10000000 | offset
+            ));
+        }
+        let text: String = owners.into_iter().map(|(owner, fields)| format!(
+            ".class {owner} version=0x02 extends=none statics=none parent=none module=none app_flags=0x0\n{fields}.endclass\n"
+        )).collect();
+        let data = DataSource::parse_with_symbols(&text, &symbols).unwrap();
+        let prg = Prg::from_sections(vec![ciq_prg::Section::new(CODE, vec![0x16; 8]).unwrap()]);
+        project_code_labels(&prg, Some(&data))
+    }
+
+    #[test]
+    fn duplicate_members_use_owner_labels_and_unique_members_stay_short() {
+        let labels = method_labels(&[
+            ("Left", "answer", 0),
+            ("Right", "answer", 1),
+            ("App", "probe", 2),
+        ]);
+        assert_eq!(labels[&0], "method_Left__answer");
+        assert_eq!(labels[&1], "method_Right__answer");
+        assert_eq!(labels[&2], "probe");
+    }
+
+    #[test]
+    fn shared_targets_are_numeric_independent_of_binding_order() {
+        let bindings = [
+            ("Left", "answer", 0),
+            ("Right", "probe", 0),
+            ("Other", "answer", 1),
+        ];
+        let labels = method_labels(&bindings);
+        assert_eq!(labels[&0], "code_00000000");
+        assert_eq!(labels[&1], "method_Other__answer");
+        let reversed: Vec<_> = bindings.into_iter().rev().collect();
+        assert_eq!(labels, method_labels(&reversed));
+    }
+
+    #[test]
+    fn concatenation_collisions_and_reserved_names_fall_back() {
+        let labels = method_labels(&[
+            ("a__b", "c", 0),
+            ("a", "b__c", 1),
+            ("other", "c", 2),
+            ("other", "b__c", 3),
+            ("App", "method_other__c", 4),
+            ("App", "code_00000002", 5),
+        ]);
+        assert_eq!(labels[&0], "code_00000000");
+        assert_eq!(labels[&1], "code_00000001");
+        assert_eq!(labels[&2], "method_other__c");
+        assert_eq!(labels[&3], "method_other__b__c");
+        assert_eq!(labels[&4], "code_00000004");
+        assert_eq!(labels[&5], "code_00000005");
+    }
 
     #[test]
     fn offsets_follow_variable_width_instructions() {

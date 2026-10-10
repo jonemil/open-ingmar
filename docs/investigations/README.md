@@ -42,3 +42,5 @@ Follow [the research conventions](../research.md) when recording findings. Runti
 - [Unchanged IQ repacking](iq-repacking.md): deterministic 7z output, exact SDK member/signature preservation, independent libarchive decoding, and bounded single-LZMA encoded headers.
 
 - [Own-key IQ creation](iq-creation.md): controlled XML signing-attribute edits, alternate-key tests, debug policy, independently decoded output, and simulator-confirmed assembly edit returning `47`.
+
+- [Repeated module method names](module-method-names.md): shared member IDs, owner-qualified assembly labels, byte-identical reconstruction, and a simulator-verified edit affecting only Left.
