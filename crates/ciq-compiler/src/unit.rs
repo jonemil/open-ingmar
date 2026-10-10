@@ -5,6 +5,21 @@ use std::{collections::BTreeMap, fmt};
 
 pub(crate) const MAX_FUNCTIONS: usize = 256;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Owner<'a> {
+    Global,
+    Module(&'a str),
+    Class(&'a str),
+}
+impl<'a> Owner<'a> {
+    fn name(self) -> &'a str {
+        match self {
+            Self::Global => "",
+            Self::Module(name) | Self::Class(name) => name,
+        }
+    }
+}
+
 /// A global function or a member of a flat source module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDeclaration {
@@ -35,10 +50,41 @@ impl FunctionDeclaration {
     }
 }
 
+/// Supported native superclass identity, independent of an import-table index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassBase {
+    ApplicationAppBase,
+}
+
+/// A named instance class and its declared method bodies in source order.
+/// Fields, source inheritance, and native method bodies are not supported yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassDeclaration {
+    /// Unqualified class identity, distinct from module/global names.
+    pub name: String,
+    /// Native superclass identity resolved by application generation.
+    pub base: ClassBase,
+    /// Instance-method IR bodies, checked together during unit construction.
+    pub methods: Vec<Function>,
+}
+impl ClassDeclaration {
+    /// Return an owner-qualified CODE label for a method in this class.
+    pub fn code_label(&self, method: &str) -> String {
+        format!(
+            "__ciq_fn_c_{}_{}_{}_{}",
+            self.name.len(),
+            self.name,
+            method.len(),
+            method
+        )
+    }
+}
+
 /// A declaration or cross-function validation failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnitError {
-    /// Zero-based declaration index, absent for a unit-wide failure.
+    /// Zero-based body index: global/module functions first, then class methods.
+    /// Absent for a unit-wide failure. Class errors use the first method index.
     pub declaration: Option<usize>,
     /// Zero-based operation index within that declaration, when applicable.
     pub operation: Option<usize>,
@@ -52,15 +98,17 @@ impl fmt::Display for UnitError {
 }
 impl std::error::Error for UnitError {}
 
-/// Validated global and module functions in deterministic input order.
+/// Validated global/module functions and instance classes with checked calls.
 ///
 /// All qualified user calls resolve inside the unit. Parameters and arguments
 /// remain integers; results may be integers or void. Void calls are permitted
-/// only as statements. System.println is the separate intrinsic.
+/// only as statements. Self calls require a declared method in the enclosing
+/// class. System.println is the separate intrinsic.
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
     declarations: Vec<FunctionDeclaration>,
+    classes: Vec<ClassDeclaration>,
 }
 
 impl CompilationUnit {
@@ -73,17 +121,128 @@ impl CompilationUnit {
     /// Each immutable Function has already checked argument/result types and
     /// local control-flow invariants. This does not prove recursive termination.
     pub fn new(declarations: Vec<FunctionDeclaration>) -> Result<Self, UnitError> {
-        Self::validate(&declarations)?;
-        Ok(Self { declarations })
+        Self::with_classes(declarations, Vec::new())
     }
 
-    fn validate(declarations: &[FunctionDeclaration]) -> Result<(), UnitError> {
+    /// Validate global/module functions and instance classes together.
+    ///
+    /// Resolves self calls only against the enclosing class, and module calls
+    /// only against module functions. Checks owner/name uniqueness, exact arity,
+    /// receiver contracts, and integer/void results. Requires 1..=256 bodies.
+    /// Class errors use flattened body indexes after all global/module functions.
+    pub fn with_classes(
+        declarations: Vec<FunctionDeclaration>,
+        classes: Vec<ClassDeclaration>,
+    ) -> Result<Self, UnitError> {
+        let unit = Self {
+            declarations,
+            classes,
+        };
+        unit.validate()?;
+        Ok(unit)
+    }
+
+    fn validate(&self) -> Result<(), UnitError> {
         let fail = |declaration, operation, message| UnitError {
             declaration,
             operation,
             message,
         };
-        if declarations.is_empty() || declarations.len() > MAX_FUNCTIONS {
+        let valid = |name: &str| {
+            name.bytes()
+                .next()
+                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+                && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        };
+        let reserved = |name: &str| {
+            matches!(
+                name,
+                "System"
+                    | "self"
+                    | "function"
+                    | "module"
+                    | "class"
+                    | "extends"
+                    | "var"
+                    | "return"
+                    | "if"
+                    | "else"
+                    | "while"
+                    | "break"
+                    | "continue"
+                    | "true"
+                    | "false"
+            )
+        };
+        let mut bodies = self
+            .declarations
+            .iter()
+            .map(|d| {
+                (
+                    d.module.as_deref().map_or(Owner::Global, Owner::Module),
+                    &d.function,
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut names = std::collections::BTreeSet::new();
+        for (index, d) in self.declarations.iter().enumerate() {
+            if let Some(module) = &d.module {
+                if !valid(module) || reserved(module) {
+                    return Err(fail(
+                        Some(index),
+                        None,
+                        "invalid or reserved module name".into(),
+                    ));
+                }
+                names.insert(module.as_str());
+            }
+        }
+        for class in &self.classes {
+            let at = bodies.len();
+            if !valid(&class.name)
+                || reserved(&class.name)
+                || matches!(
+                    class.name.as_str(),
+                    "Application"
+                        | "AppBase"
+                        | "globals"
+                        | "statics"
+                        | "Toybox"
+                        | "initialize"
+                        | "println"
+                        | "View"
+                        | "onStart"
+                        | "getInitialView"
+                )
+            {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "invalid or reserved class name".into(),
+                ));
+            }
+            if !names.insert(&class.name) {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "duplicate class or class/module name collision".into(),
+                ));
+            }
+            if class.methods.is_empty() {
+                return Err(fail(
+                    None,
+                    None,
+                    "class requires at least one method".into(),
+                ));
+            }
+            bodies.extend(
+                class
+                    .methods
+                    .iter()
+                    .map(|f| (Owner::Class(class.name.as_str()), f)),
+            );
+        }
+        if bodies.is_empty() || bodies.len() > MAX_FUNCTIONS {
             return Err(fail(
                 None,
                 None,
@@ -91,50 +250,25 @@ impl CompilationUnit {
             ));
         }
         let mut signatures = BTreeMap::new();
-        for (index, declaration) in declarations.iter().enumerate() {
-            if let Some(module) = &declaration.module {
-                let valid = module
-                    .bytes()
-                    .next()
-                    .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-                    && module
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b == b'_');
-                if !valid
-                    || matches!(
-                        module.as_str(),
-                        "System"
-                            | "function"
-                            | "module"
-                            | "var"
-                            | "return"
-                            | "if"
-                            | "else"
-                            | "while"
-                            | "break"
-                            | "continue"
-                            | "true"
-                            | "false"
-                    )
-                {
-                    return Err(fail(
-                        Some(index),
-                        None,
-                        "invalid or reserved module name".into(),
-                    ));
-                }
+        for (index, &(owner, function)) in bodies.iter().enumerate() {
+            if function.is_instance_method() != matches!(owner, Owner::Class(_)) {
+                return Err(fail(
+                    Some(index),
+                    None,
+                    "function receiver contract does not match declaration owner".into(),
+                ));
             }
-            let key = (
-                declaration.module.clone(),
-                declaration.function.name().to_owned(),
-            );
+            if owner == Owner::Global && names.contains(function.name()) {
+                return Err(fail(
+                    Some(index),
+                    None,
+                    "global function collides with a module or class name".into(),
+                ));
+            }
             if signatures
                 .insert(
-                    key,
-                    (
-                        declaration.function.parameter_count(),
-                        declaration.function.return_type(),
-                    ),
+                    (owner, function.name()),
+                    (function.parameter_count(), function.return_type()),
                 )
                 .is_some()
             {
@@ -145,62 +279,85 @@ impl CompilationUnit {
                 ));
             }
         }
-        for (index, declaration) in declarations.iter().enumerate() {
-            if declaration.module.is_none()
-                && declarations
-                    .iter()
-                    .any(|d| d.module.as_deref() == Some(declaration.function.name()))
-            {
-                return Err(fail(
-                    Some(index),
-                    None,
-                    "global function collides with a module name".into(),
-                ));
-            }
-            for (operation, located) in declaration.function.operations().iter().enumerate() {
-                if let Operation::ModuleCall {
-                    module,
-                    member,
-                    arguments,
-                    ..
-                }
-                | Operation::ModuleCallStatement {
-                    module,
-                    member,
-                    arguments,
-                } = &located.operation
+        for (index, &(owner, function)) in bodies.iter().enumerate() {
+            for (operation, located) in function.operations().iter().enumerate() {
+                let (key, arguments, value_call) = match &located.operation {
+                    Operation::ModuleCall {
+                        module,
+                        member,
+                        arguments,
+                        ..
+                    } => (
+                        (Owner::Module(module.as_str()), member.as_str()),
+                        arguments,
+                        true,
+                    ),
+                    Operation::ModuleCallStatement {
+                        module,
+                        member,
+                        arguments,
+                    } => (
+                        (Owner::Module(module.as_str()), member.as_str()),
+                        arguments,
+                        false,
+                    ),
+                    Operation::SelfCall {
+                        member, arguments, ..
+                    } => ((owner, member.as_str()), arguments, true),
+                    Operation::SelfCallStatement { member, arguments } => {
+                        ((owner, member.as_str()), arguments, false)
+                    }
+                    _ => continue,
+                };
+                if matches!(
+                    located.operation,
+                    Operation::SelfCall { .. } | Operation::SelfCallStatement { .. }
+                ) && !matches!(owner, Owner::Class(_))
                 {
-                    let key = (Some(module.clone()), member.clone());
-                    let Some((count, result)) = signatures.get(&key) else {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            format!("unresolved function {module}.{member}"),
-                        ));
-                    };
-                    if *result == ReturnType::Void
-                        && matches!(located.operation, Operation::ModuleCall { .. })
-                    {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            format!("void function {module}.{member} cannot be used as a value"),
-                        ));
-                    }
-                    if *count != arguments.len() {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            format!(
-                                "{module}.{member} expects {count} arguments, got {}",
-                                arguments.len()
-                            ),
-                        ));
-                    }
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        "self calls require a class method".into(),
+                    ));
+                }
+                let Some((count, result)) = signatures.get(&key) else {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        format!("unresolved function {}.{}", key.0.name(), key.1),
+                    ));
+                };
+                if value_call && *result == ReturnType::Void {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        format!(
+                            "void function {}.{} cannot be used as a value",
+                            key.0.name(),
+                            key.1
+                        ),
+                    ));
+                }
+                if *count != arguments.len() {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        format!(
+                            "{}.{} expects {count} arguments, got {}",
+                            key.0.name(),
+                            key.1,
+                            arguments.len()
+                        ),
+                    ));
                 }
             }
         }
         Ok(())
+    }
+
+    /// Return classes in input-file and class declaration order.
+    pub fn classes(&self) -> &[ClassDeclaration] {
+        &self.classes
     }
 
     /// Return declarations in source-file and declaration order.
@@ -208,10 +365,11 @@ impl CompilationUnit {
         &self.declarations
     }
 
-    /// Lower all functions to one assembly model in declaration order.
+    /// Lower global/module functions, then class methods, into one assembly model.
     ///
     /// Uses unit-unique CODE/internal/string labels. Calls retain symbolic
-    /// module/member references; layout is shared across all generated bodies.
+    /// module/member or current-receiver references. Ordering within each group
+    /// follows input files and declarations; layout is shared across all bodies.
     /// Encoding still requires explicit symbol and literal placements.
     pub fn lower(&self) -> Program {
         let items = self
@@ -222,22 +380,37 @@ impl CompilationUnit {
                     .items()
                     .to_vec()
             })
+            .chain(self.classes.iter().flat_map(|c| {
+                c.methods.iter().flat_map(|f| {
+                    backend::lower_named(f, &c.code_label(f.name()))
+                        .items()
+                        .to_vec()
+                })
+            }))
             .collect();
         Program::new(items).expect("unit identities lower to disjoint assembly labels")
     }
 
-    /// Serialize ownership and validated function IR as version-1 unit text.
+    /// Serialize validated function/class ownership and bodies as unit IR text.
     ///
-    /// Inner functions use the supported version-1/version-2/version-3 IR format and
-    /// optional spans. Source filenames are not serialized in this profile.
+    /// Uses unit version 2 when classes are present, otherwise version 1. Inner
+    /// functions use versions 1..=4 and optional spans. Classes retain native
+    /// base identity without a VM import index. Source filenames are not stored.
     pub fn to_ir_text(&self) -> String {
-        let mut text = String::from("ciq-unit 1\n");
+        let mut text = format!("ciq-unit {}\n", if self.classes.is_empty() { 1 } else { 2 });
         for d in &self.declarations {
             match &d.module {
                 None => text.push_str(".owner global\n"),
                 Some(module) => text.push_str(&format!(".owner module {module}\n")),
             }
             text.push_str(&d.function.to_ir_text());
+        }
+        for class in &self.classes {
+            text.push_str(&format!(".class {} Application.AppBase\n", class.name));
+            for method in &class.methods {
+                text.push_str(&method.to_ir_text());
+            }
+            text.push_str(".end-class\n");
         }
         text
     }
@@ -260,9 +433,10 @@ impl std::error::Error for SourceDiagnostic {}
 
 /// Compile one or more source files into a validated declaration unit.
 ///
-/// Collects global functions and flat module members in file/declaration order
+/// Collects global/module functions and AppBase-derived class methods
 /// before resolving qualified calls, so declarations may follow their callers.
-/// Modules may be reopened across files; member identities must remain unique.
+/// Modules may be reopened across files; class names and member identities
+/// must remain unique. Calls on self resolve within their own class.
 /// All user callees must be present. Rejects empty units and more than 256
 /// functions; existing syntax/type/control-flow bounds apply per function.
 /// Diagnostics identify the source index and byte/line/column within that file.
@@ -270,37 +444,71 @@ impl std::error::Error for SourceDiagnostic {}
 /// generated here.
 pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagnostic> {
     let mut declarations = Vec::new();
+    let mut classes = Vec::new();
     let mut origins = Vec::new();
+    let mut class_origins = Vec::new();
     for (source_index, source) in sources.iter().enumerate() {
         let diagnostic = |diagnostic| SourceDiagnostic {
             source: source_index,
             diagnostic,
         };
-        for (module, ast) in parser::declarations(source).map_err(diagnostic)? {
-            let start = ast.body_span.start;
-            if declarations.len() >= MAX_FUNCTIONS {
+        let parsed = parser::declarations(source).map_err(diagnostic)?;
+        for (module, ast) in parsed.functions {
+            if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
                 return Err(diagnostic(Diagnostic::at(
                     source,
-                    start,
+                    ast.body_span.start,
                     "compilation unit exceeds 256-function limit",
                 )));
             }
-            origins.push((source_index, start));
+            origins.push((source_index, ast.body_span.start));
             declarations.push(FunctionDeclaration {
                 module,
                 function: source_ir::build(source, ast).map_err(diagnostic)?,
             });
         }
+        for class in parsed.classes {
+            let mut methods = Vec::new();
+            for ast in class.methods {
+                if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
+                    return Err(diagnostic(Diagnostic::at(
+                        source,
+                        ast.body_span.start,
+                        "compilation unit exceeds 256-function limit",
+                    )));
+                }
+                class_origins.push((source_index, ast.body_span.start));
+                methods.push(source_ir::build_method(source, ast).map_err(diagnostic)?);
+            }
+            classes.push(ClassDeclaration {
+                name: class.name,
+                base: ClassBase::ApplicationAppBase,
+                methods,
+            });
+        }
     }
-    CompilationUnit::validate(&declarations).map_err(|error| {
-        let (source_index, start) = error.declaration.map_or((0, 0), |i| {
-            let (source, start) = origins[i];
-            let start = error
-                .operation
-                .and_then(|op| declarations[i].function.operations()[op].span)
-                .map_or(start, |span| span.start);
-            (source, start)
-        });
+    origins.extend(class_origins);
+    let unit = CompilationUnit {
+        declarations,
+        classes,
+    };
+    unit.validate().map_err(|error| {
+        let bodies = unit
+            .declarations
+            .iter()
+            .map(|d| &d.function)
+            .chain(unit.classes.iter().flat_map(|c| &c.methods))
+            .collect::<Vec<_>>();
+        let (source_index, start) = error
+            .declaration
+            .and_then(|i| origins.get(i).copied())
+            .unwrap_or((0, 0));
+        let start = error
+            .declaration
+            .and_then(|i| bodies.get(i))
+            .and_then(|f| error.operation.and_then(|op| f.operations().get(op)))
+            .and_then(|op| op.span)
+            .map_or(start, |span| span.start);
         SourceDiagnostic {
             source: source_index,
             diagnostic: Diagnostic::at(
@@ -310,83 +518,131 @@ pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagno
             ),
         }
     })?;
-    Ok(CompilationUnit { declarations })
+    Ok(unit)
 }
 
-/// Parse unit IR text and revalidate ownership and every qualified call.
-///
-/// Requires a `ciq-unit 1` header followed by owner records and complete
-/// function IR documents. Reports text locations for malformed inner functions
-/// and cross-function errors; source spans are retained as provenance only.
+/// Parse version-1/version-2 unit text and validate owners and call signatures.
+/// Version 2 adds AppBase classes with instance-method function IR. Diagnostics
+/// use text positions; serialized source spans are provenance only.
 pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
-    let mut lines = text.split_inclusive('\n');
-    let header = lines.next().unwrap_or("");
-    if header
-        .split('#')
-        .next()
-        .unwrap()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        != ["ciq-unit", "1"]
-    {
-        return Err(Diagnostic::at(text, 0, "expected ciq-unit 1 header"));
+    let rows = text
+        .split_inclusive('\n')
+        .scan(0, |offset, line| {
+            let at = *offset;
+            *offset += line.len();
+            Some((at, line))
+        })
+        .collect::<Vec<_>>();
+    let fields = |line: &str| {
+        line.split('#')
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let header = rows.first().map(|(_, l)| fields(l)).unwrap_or_default();
+    if header != ["ciq-unit", "1"] && header != ["ciq-unit", "2"] {
+        return Err(Diagnostic::at(text, 0, "expected ciq-unit 1 or 2 header"));
     }
-    let mut offset = header.len();
+    let version_two = header[1] == "2";
+    let mut i = 1;
     let mut declarations = Vec::new();
+    let mut classes = Vec::new();
     let mut locations = Vec::new();
-    while let Some(line) = lines.next() {
-        let owner_start = offset;
-        offset += line.len();
-        let parts: Vec<_> = line.split('#').next().unwrap().split_whitespace().collect();
+    let mut class_locations = Vec::new();
+    fn function(text: &str, rows: &[(usize, &str)], i: &mut usize) -> Result<Function, Diagnostic> {
+        let start = rows.get(*i).map_or(text.len(), |r| r.0);
+        while let Some((_, line)) = rows.get(*i) {
+            *i += 1;
+            if line.split('#').next().unwrap().trim() == ".end" {
+                let end = rows.get(*i).map_or(text.len(), |r| r.0);
+                return crate::parse_ir(&text[start..end])
+                    .map_err(|e| Diagnostic::at(text, start + e.offset, e.message));
+            }
+        }
+        Err(Diagnostic::at(text, start, "expected function .end"))
+    }
+    while let Some(&(at, line)) = rows.get(i) {
+        i += 1;
+        let parts = fields(line);
         if parts.is_empty() {
             continue;
         }
-        let module = match parts.as_slice() {
-            [".owner", "global"] => None,
-            [".owner", "module", name] => Some((*name).to_owned()),
+        match parts
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .as_slice()
+        {
+            [".owner", "global"] | [".owner", "module", _] => {
+                let module = (parts.len() == 3).then(|| parts[2].clone());
+                locations.push(at);
+                declarations.push(FunctionDeclaration {
+                    module,
+                    function: function(text, &rows, &mut i)?,
+                });
+            }
+            [".class", name, "Application.AppBase"] if version_two => {
+                let name = (*name).to_owned();
+                let mut methods = Vec::new();
+                let mut ended = false;
+                while let Some(&(method_at, line)) = rows.get(i) {
+                    let parts = fields(line);
+                    if parts.is_empty() {
+                        i += 1;
+                        continue;
+                    }
+                    if parts == [".end-class"] {
+                        i += 1;
+                        ended = true;
+                        break;
+                    }
+                    if locations.len() + class_locations.len() >= MAX_FUNCTIONS {
+                        return Err(Diagnostic::at(
+                            text,
+                            method_at,
+                            "compilation unit exceeds 256-function limit",
+                        ));
+                    }
+                    class_locations.push(method_at);
+                    methods.push(function(text, &rows, &mut i)?);
+                }
+                if !ended {
+                    return Err(Diagnostic::at(text, at, "expected .end-class"));
+                }
+                classes.push(ClassDeclaration {
+                    name,
+                    base: ClassBase::ApplicationAppBase,
+                    methods,
+                });
+            }
             _ => {
                 return Err(Diagnostic::at(
                     text,
-                    owner_start,
-                    "expected .owner global or .owner module <name>",
+                    at,
+                    "expected owner record or version-2 AppBase class",
                 ));
             }
-        };
-        let function_start = offset;
-        let mut function_text = String::new();
-        let mut ended = false;
-        for line in lines.by_ref() {
-            function_text.push_str(line);
-            offset += line.len();
-            if line.split('#').next().unwrap().trim() == ".end" {
-                ended = true;
-                break;
-            }
         }
-        if !ended {
+        if declarations.len() + classes.iter().map(|c| c.methods.len()).sum::<usize>()
+            > MAX_FUNCTIONS
+        {
             return Err(Diagnostic::at(
                 text,
-                function_start,
-                "expected function .end",
-            ));
-        }
-        let function = crate::parse_ir(&function_text)
-            .map_err(|error| Diagnostic::at(text, function_start + error.offset, error.message))?;
-        locations.push(owner_start);
-        declarations.push(FunctionDeclaration { module, function });
-        if declarations.len() > MAX_FUNCTIONS {
-            return Err(Diagnostic::at(
-                text,
-                owner_start,
+                at,
                 "compilation unit exceeds 256-function limit",
             ));
         }
     }
-    CompilationUnit::new(declarations).map_err(|error| {
+    locations.extend(class_locations);
+    CompilationUnit::with_classes(declarations, classes).map_err(|e| {
         Diagnostic::at(
             text,
-            error.declaration.map_or(0, |i| locations[i]),
-            error.message,
+            e.declaration
+                .and_then(|i| locations.get(i).copied())
+                .unwrap_or(0),
+            e.message,
         )
     })
 }

@@ -285,3 +285,28 @@ class ownership, receiver types, null/object/array values, or native SDK calls.
 
 [void-source]: ../specs/compiler-subset.md#void-functions-and-statement-calls
 [void-evidence]: ../investigations/compiler-void.md
+
+## Class ownership and instance receivers
+
+Class declarations own named instance-method bodies and a native base identity.
+The unit keeps them separate from its existing global/module declaration list,
+so callers cannot mistake class members for static module functions. Collection
+and layout group ordinary functions before class methods, retaining order within
+each group. Owner-qualified labels keep same-name bodies distinct.
+
+Function IR independently records whether it requires an instance receiver.
+Ordinary constructors reject self calls; method construction enables them.
+Unit validation pairs this receiver contract with class ownership and resolves
+self callees only within that class. It checks integer arguments and integer/void
+results before lowering. The receiver remains the hidden context rather than a
+first-class value, sufficient for explicit self calls without object operations.
+
+The backend selects getselfv and the existing counted-call convention.
+Application generation binds the source methods into the selected AppBase DATA
+record and invokes the chosen startup on that instance. Native base identity is
+resolved there; semantic IR never stores import indexes. Generated callbacks and
+View/base setup remain a separate layer until their native-call and value types
+are supported. See [the class profile][classes] and [runtime evidence][class-run].
+
+[classes]: ../specs/compiler-classes.md
+[class-run]: ../investigations/compiler-class.md

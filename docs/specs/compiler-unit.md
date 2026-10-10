@@ -11,7 +11,7 @@ remain the per-function contracts.
 
 ```text
 unit = declaration+
-declaration = function | "module" identifier "{" function+ "}"
+declaration = function | "module" identifier "{" function+ "}" | class
 ```
 
 Inputs are one or more source files in caller-supplied order. Global functions
@@ -32,7 +32,7 @@ rules, not general Monkey C type inference.
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the
 separate intrinsic. Global functions can serve as entry methods but cannot yet
-be called by bare source names. Imports, classes, nested/empty modules, typed
+be called by bare source names. Imports, nested/empty modules, typed
 signatures, optional/default parameters, overloading, and arbitrary SDK calls
 remain unsupported.
 
@@ -85,7 +85,7 @@ ciq-ir 1
 
 The first line is the unit header. Each `.owner global` or
 `.owner module <identifier>` applies to exactly one following function document,
-including its own `ciq-ir 1`, `ciq-ir 2`, or `ciq-ir 3` header and `.end`. There is no unit end
+including its own supported function IR header and `.end`. There is no unit end
 directive. Blank lines and `#` comments between records are accepted, as are
 LF/CRLF line endings; function text retains its existing quoting/comment rules.
 Each inner function is validated before checking ownership and calls together.
@@ -129,3 +129,18 @@ envelope. See [void source rules][void-source].
 
 [void-ir]: compiler-ir-text.md#version-3-void-returns-and-statement-calls
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
+
+## Class extension
+
+[Source class rules](compiler-classes.md) add AppBase-derived classes, explicit
+instance receiver contracts, and self-call validation. `classes()` exposes
+ordered class declarations; `with_classes` validates them alongside ordinary
+functions. Existing `new` and `declarations()` retain their global/module roles.
+
+Unit version 2 adds `.class <name> Application.AppBase` containers ending at
+`.end-class`. Class bodies use receiver-bearing function IR version 4. Canonical
+text places global/module records before class containers, preserving order
+within each group. Lowering follows that same grouped order, with distinct class
+CODE label prefixes. Error body indexes follow globals/modules, then methods.
+The 256-body total includes both groups. Multiple classes may pass unit/IR
+validation; the complete console PRG profile currently permits exactly one.

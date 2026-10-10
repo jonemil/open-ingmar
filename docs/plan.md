@@ -45,18 +45,23 @@ describe planned behavior and investigations record the supporting evidence.
   [simulator-verified](investigations/compiler-void.md), including early loop
   returns, argument order, discarded integer results, and void startup. Saved
   unit IR produces identical complete unsigned PRGs.
-- The latest implementation checkpoint passes 208 Rust tests, Clippy, and
+- AppBase-derived source classes and explicit `self` calls are
+  [simulator-verified](investigations/compiler-class.md). Unit ownership and
+  instance contracts resolve same-name methods separately from globals/modules;
+  saved class IR regenerates the same complete PRG. Lifecycle/View/base setup
+  remains generated.
+- The latest implementation checkpoint passes 216 Rust tests, Clippy, and
   formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
 
 ## Next work
 
 1. Extend the [console application bootstrap](design/console-application.md) to
-   source-authored lifecycle methods. Establish a minimal AppBase/View class
-   subset, receiver/context rules, and required null/object/array and SDK
-   call types. Void returns and statement calls are implemented; class ownership
-   and native-call typing are the next semantic boundaries. Generate methods/imports from those identities and preserve
-   complete-application native/text and simulator checks. The fixed bootstrap is
-   implemented; broader application profiles and resource assets remain open.
+   source-authored lifecycle methods. Class ownership, current-receiver calls,
+   void returns, and statement calls are implemented. Next add typed native-base
+   calls and source initialization, then callback parameter types and the
+   null/object/array operations required for View creation. Keep complete-PRG
+   native/text parity and simulator checks. Broader application profiles and
+   resource assets remain open.
 2. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
 3. Revisit DATA string authoring and shared address-region rules as complete

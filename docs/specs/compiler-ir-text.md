@@ -1,4 +1,4 @@
-# Provisional compiler IR text, versions 1, 2, and 3
+# Provisional compiler IR text, versions 1 through 4
 
 Implemented 2026-10-10 to exercise the compiler stage boundaries while the
 language subset is small. This is our semantic IR format, separate from Garmin
@@ -20,9 +20,9 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be `1`, `2`, or `3`. Version 1 describes a single-block
+Header version must be `1`, `2`, `3`, or `4`. Version 1 describes a single-block
 integer-return body; version 2 adds control flow and local assignment. Version 3
-adds void returns and statement calls below. Exactly one
+adds void returns and statement calls; version 4 adds instance receivers. Exactly one
 `.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. The supported
@@ -59,7 +59,8 @@ validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
-preserving value IDs. It emits version 3 for void returns or statement calls,
+preserving value IDs. It emits version 4 for instance methods, version 3 for
+void returns or statement calls,
 version 2 for blocks/comparisons/assignments, otherwise version 1, independently
 of the input header. `parse_ir`
 reconstructs them. `backend::lower()` (also
@@ -456,3 +457,43 @@ See [source rules][void-source] and [runtime evidence][void-evidence].
 
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
 [void-evidence]: ../investigations/compiler-void.md
+
+## Version 4 instance receivers
+
+`ciq-ir 4` accepts all earlier directives. The optional declaration field
+`receiver=instance` marks an instance method; ordinary bodies omit it. It may
+appear before or after `parameters=<count>`; duplicate or unknown fields are
+rejected. Receiver metadata requires version 4, even for a method without self
+calls. The receiver is the hidden context, not an explicit parameter/value ID.
+
+Two additional directives require an instance method:
+
+- `.call-self %<result> <member> [%<argument> ...] [span=<start>:<end>]`:
+  define an integer result from a current-receiver member call.
+- `.call-self-discard <member> [%<argument> ...] [span=<start>:<end>]`:
+  invoke a current-receiver member for effects and discard its result.
+
+Arguments remain integer, ordered, earlier-defined values in the same block.
+The existing use/effect/control-flow checks apply. Unit validation binds calls
+only to declared methods in the enclosing class, checks arity/result contracts,
+and rejects instance bodies in global/module owners. Standalone method IR
+retains its required receiver and unbound class/callee obligations.
+
+```text
+ciq-ir 4
+.function start receiver=instance
+.integer %0 50
+.integer %1 3
+.call-self %2 answer %0 %1
+.println %2
+.return-void
+.end
+```
+
+Canonical method output always uses version 4 and keeps `receiver=instance`.
+Ordinary functions keep their earlier canonical versions. Native base-class
+identity and enclosing class name belong to [unit class containers][class-ir],
+not function IR; neither carries a VM import index. No general receiver values,
+object construction, fields, native self calls, or source inheritance are added.
+
+[class-ir]: compiler-classes.md#native-and-textual-ir

@@ -33,3 +33,6 @@ keys and SDK installations stay outside the examples.
 
 - [Void startup and module calls](compiler-void/README.md): complete generated
   application with effect-only calls, bare returns, and void fallthrough.
+
+- [Source class and receiver calls](compiler-class/README.md): AppBase ownership
+  and nested instance-method calls in a complete generated application.

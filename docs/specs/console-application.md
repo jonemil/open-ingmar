@@ -26,8 +26,8 @@ Generated lifecycle behavior:
   bootstrap body occupies CODE offset zero before lifecycle and user code.
 
 User functions may print strings/integers, call declared module members, and use
-existing locals/control flow. This does not add source class, receiver, array,
-object, or null syntax. Void functions and qualified statement calls follow
+existing locals/control flow. The [class extension](compiler-classes.md) adds source ownership and self calls;
+array, object, and null values remain unsupported. Void functions and qualified statement calls follow
 [the source rules][void-source]. Generated lifecycle assembly supplies those
 fixed operations separately from semantic function IR.
 
@@ -127,7 +127,8 @@ cargo run -p ciq-asm -- sign scratch/hello-unsigned.prg scratch/hello.prg -y \
 ```
 
 `--emit prg` requires `--unit` and source or unit-IR input. `--app-id` requires
-exactly 32 hexadecimal digits. `--entry <global-function>` overrides `main`.
+exactly 32 hexadecimal digits. `--entry <global-function>` overrides `main`; class units require
+`--entry Class.method` under the profile below.
 Application options are rejected for other outputs; external `--symbols`/`--data`
 inputs are rejected for PRG output because the generator owns their layout.
 Outputs must be new files.
@@ -143,3 +144,24 @@ exported and reconstructed through the existing section-project tools.
 [evidence]: ../investigations/application-bootstrap.md
 
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
+
+## Source class startup
+
+A unit containing [source classes](compiler-classes.md) must contain exactly one
+AppBase class and select a zero-parameter startup method with `Class.method`.
+The global application field and ENTRY_POINTS class identity remain symbol `1`,
+now representing the named source class. Plain member names equal to the class
+reuse `1`; other user/native names retain the allocation rules above.
+
+Generated onStart selects the startup using `getselfv`, then the existing call
+and integer/void result policy. Source class methods extend the application DATA
+record with sorted fields bound to their owner-qualified CODE labels. Existing
+global/module methods stay in their own DATA owners. Class names, native base
+identity, and method ownership survive saved unit IR.
+
+Source methods named `initialize`, `onStart`, `getInitialView`, or `AppBase` are
+rejected because those fields remain generated. Native base initialization,
+constructor, imports, and blank View generation are unchanged. This does not yet
+compile source lifecycle callbacks, fields, arbitrary object receivers, or View
+construction. [Runtime evidence](../investigations/compiler-class.md) verifies
+void/integer startup, nested self calls, and the source edit.

@@ -48,7 +48,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
-            | Operation::ModuleCall { result, .. } => {
+            | Operation::ModuleCall { result, .. }
+            | Operation::SelfCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. } => {
@@ -125,28 +126,30 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ref member,
                 ref arguments,
             } => {
-                items.push(instruction(
-                    Opcode::Getmv,
-                    vec![
-                        Operand::Symbol(format!("__ciq_module_{module}")),
-                        Operand::Symbol(format!("__ciq_member_{member}")),
-                    ],
-                ));
-                if !arguments.is_empty() {
-                    items.push(instruction(Opcode::Frpush, vec![]));
-                    for value in arguments {
-                        expression(*value, &definitions, &slots, &strings, &mut items);
-                    }
-                }
-                items.push(if arguments.is_empty() {
-                    instruction(Opcode::Invokemz, vec![])
-                } else {
-                    instruction(
-                        Opcode::Invokem,
-                        vec![Operand::Bits(arguments.len() as u64 + 1)],
-                    )
-                });
-                items.push(instruction(Opcode::Popv, vec![]));
+                statement_call(
+                    Some(module),
+                    member,
+                    arguments,
+                    &definitions,
+                    &slots,
+                    &strings,
+                    &mut items,
+                );
+                continue;
+            }
+            Operation::SelfCallStatement {
+                ref member,
+                ref arguments,
+            } => {
+                statement_call(
+                    None,
+                    member,
+                    arguments,
+                    &definitions,
+                    &slots,
+                    &strings,
+                    &mut items,
+                );
                 continue;
             }
             Operation::Println { value } => {
@@ -197,23 +200,25 @@ fn expression(
                     (Opcode::Ipush1, vec![Operand::Bits(*value as u64)])
                 }
                 Operation::ModuleCall {
-                    module,
-                    member,
-                    arguments,
-                    ..
+                    member, arguments, ..
+                }
+                | Operation::SelfCall {
+                    member, arguments, ..
                 } => {
                     tasks.push(Task::Invoke(arguments.len()));
                     if !arguments.is_empty() {
                         tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
                         tasks.push(Task::Context);
                     }
-                    (
-                        Opcode::Getmv,
-                        vec![
-                            Operand::Symbol(format!("__ciq_module_{module}")),
-                            Operand::Symbol(format!("__ciq_member_{member}")),
-                        ],
-                    )
+                    let module = if let Operation::ModuleCall { module, .. } = definitions[&value] {
+                        Some(module.as_str())
+                    } else {
+                        None
+                    };
+                    let Item::Instruction { opcode, operands } = call_target(module, member) else {
+                        unreachable!()
+                    };
+                    (opcode, operands)
                 }
                 Operation::ParameterRead { index, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(*index as u64 + 1)])
@@ -259,4 +264,42 @@ fn expression(
         };
         items.push(instruction(opcode, operands));
     }
+}
+
+fn call_target(module: Option<&str>, member: &str) -> Item {
+    let member = Operand::Symbol(format!("__ciq_member_{member}"));
+    if let Some(module) = module {
+        instruction(
+            Opcode::Getmv,
+            vec![Operand::Symbol(format!("__ciq_module_{module}")), member],
+        )
+    } else {
+        instruction(Opcode::Getselfv, vec![member])
+    }
+}
+fn statement_call(
+    module: Option<&str>,
+    member: &str,
+    arguments: &[ValueId],
+    definitions: &BTreeMap<ValueId, &Operation>,
+    slots: &BTreeMap<LocalId, u64>,
+    strings: &BTreeMap<String, String>,
+    items: &mut Vec<Item>,
+) {
+    items.push(call_target(module, member));
+    if !arguments.is_empty() {
+        items.push(instruction(Opcode::Frpush, vec![]));
+        for value in arguments {
+            expression(*value, definitions, slots, strings, items);
+        }
+    }
+    items.push(if arguments.is_empty() {
+        instruction(Opcode::Invokemz, vec![])
+    } else {
+        instruction(
+            Opcode::Invokem,
+            vec![Operand::Bits(arguments.len() as u64 + 1)],
+        )
+    });
+    items.push(instruction(Opcode::Popv, vec![]));
 }

@@ -63,7 +63,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     }
     if paths.len() < 2 || (paths.len() != 2 && (!unit || from != "source")) {
-        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--app-id <32-hex-digits>] [--entry <global-function>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
+        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--app-id <32-hex-digits>] [--entry <global-function|Class.method>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
         || !matches!(emit.as_str(), "ir" | "assembly" | "code" | "prg")

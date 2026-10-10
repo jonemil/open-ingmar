@@ -3,7 +3,7 @@ use crate::{
     Span, ValueId,
 };
 
-/// Parse `ciq-ir` version 1, 2, or 3 text into a validated semantic function.
+/// Parse `ciq-ir` versions 1 through 4 text into a validated semantic function.
 ///
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
@@ -39,32 +39,46 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
     if !rows.first().is_some_and(|(_, fields)| {
-        fields == &["ciq-ir", "1"] || fields == &["ciq-ir", "2"] || fields == &["ciq-ir", "3"]
+        fields == &["ciq-ir", "1"]
+            || fields == &["ciq-ir", "2"]
+            || fields == &["ciq-ir", "3"]
+            || fields == &["ciq-ir", "4"]
     }) {
         return Err(fail(
             rows.first().map_or(0, |row| row.0),
-            "expected 'ciq-ir 1', 'ciq-ir 2', or 'ciq-ir 3'",
+            "expected 'ciq-ir 1', 'ciq-ir 2', 'ciq-ir 3', or 'ciq-ir 4'",
         ));
     }
     let Some((name_at, declaration)) = rows.get(1) else {
         return Err(fail(source.len(), "expected .function <name>"));
     };
-    if !(2..=3).contains(&declaration.len()) || declaration[0] != ".function" {
+    let version_four = rows[0].1[1] == "4";
+    if !(2..=4).contains(&declaration.len()) || declaration[0] != ".function" {
         return Err(fail(*name_at, "expected .function <name>"));
     }
-    let parameter_count = if let Some(field) = declaration.get(2) {
-        let digits = field
+    let mut parameter_count = 0;
+    let mut parameters = false;
+    let mut instance_method = false;
+    for field in declaration.iter().skip(2) {
+        if field == "receiver=instance" && version_four && !instance_method {
+            instance_method = true;
+        } else if let Some(digits) = field
             .strip_prefix("parameters=")
-            .filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
-            .ok_or_else(|| fail(*name_at, "expected parameters=<decimal-count>"))?;
-        digits
-            .parse()
-            .map_err(|_| fail(*name_at, "parameter count exceeds usize"))?
-    } else {
-        0
-    };
+            .filter(|s| !parameters && !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+        {
+            parameter_count = digits
+                .parse()
+                .map_err(|_| fail(*name_at, "parameter count exceeds usize"))?;
+            parameters = true;
+        } else {
+            return Err(fail(
+                *name_at,
+                "invalid or duplicate function metadata (receiver requires ciq-ir 4)",
+            ));
+        }
+    }
     let mut operations = Vec::new();
-    let version_three = rows[0].1[1] == "3";
+    let version_three = rows[0].1[1] == "3" || version_four;
     let version_two = rows[0].1[1] == "2" || version_three;
     let mut operation_offsets = Vec::new();
     let mut ended = false;
@@ -76,7 +90,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             ended = true;
             break;
         }
+        let call_width =
+            || fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span=")));
         let (kind, width) = match fields.first().map(String::as_str) {
+            Some(".call-self") if version_four => (18, call_width()),
+            Some(".call-self-discard") if version_four => (19, call_width()),
             Some(".return-void") if version_three => (16, 1),
             Some(".call-discard") if version_three => (
                 17,
@@ -109,11 +127,14 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             _ => {
                 return Err(fail(
                     *at,
-                    "unknown IR directive (control flow and assignments require ciq-ir 2; void returns and statement calls require ciq-ir 3)",
+                    "unknown IR directive (control flow and assignments require ciq-ir 2; void returns and statement calls require ciq-ir 3; receivers require ciq-ir 4)",
                 ));
             }
         };
-        if ((kind == 6 && width < 4) || (kind == 17 && width < 3))
+        if ((kind == 6 && width < 4)
+            || (kind == 17 && width < 3)
+            || (kind == 18 && width < 3)
+            || (kind == 19 && width < 2))
             || fields.len() < width
             || fields.len() > width + 1
         {
@@ -172,7 +193,24 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 16 {
+        let operation = if kind == 18 {
+            Operation::SelfCall {
+                result: parse_value(&fields[1])?,
+                member: fields[2].clone(),
+                arguments: fields[3..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 19 {
+            Operation::SelfCallStatement {
+                member: fields[1].clone(),
+                arguments: fields[2..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 16 {
             Operation::ReturnVoid
         } else if kind == 17 {
             Operation::ModuleCallStatement {
@@ -289,15 +327,18 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     if !ended {
         return Err(fail(source.len(), "expected .end"));
     }
-    Function::with_parameters(declaration[1].to_string(), parameter_count, operations).map_err(
-        |error| {
-            Diagnostic::at(
-                source,
-                error
-                    .operation
-                    .map_or(*name_at, |index| operation_offsets[index]),
-                error.message,
-            )
-        },
-    )
+    let construct = if instance_method {
+        Function::method
+    } else {
+        Function::with_parameters
+    };
+    construct(declaration[1].to_string(), parameter_count, operations).map_err(|error| {
+        Diagnostic::at(
+            source,
+            error
+                .operation
+                .map_or(*name_at, |index| operation_offsets[index]),
+            error.message,
+        )
+    })
 }

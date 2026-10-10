@@ -3,8 +3,9 @@
 //! [`compile`] parses Monkey C source and [`parse_ir`] parses saved IR text.
 //! Both produce a validated [`Function`], which [`backend::lower`] converts
 //! into typed VM assembly. Typed IR construction uses the same validation.
-//! [`compile_sources`] collects global/module functions into a [`CompilationUnit`]
-//! and checks qualified calls across files. [`parse_unit_ir`] resumes unit text.
+//! [`compile_sources`] collects global/module functions and instance classes
+//! into a [`CompilationUnit`] and checks module/current-receiver calls.
+//! [`parse_unit_ir`] resumes the same validated unit from saved text.
 //! [`application::build_console_application`] adds generated lifecycle/metadata
 //! and returns an unsigned PRG for the supported console bootstrap profile.
 
@@ -19,8 +20,8 @@ mod source_ir;
 mod unit;
 pub use ir_text::parse_ir;
 pub use unit::{
-    CompilationUnit, FunctionDeclaration, SourceDiagnostic, UnitError, compile_sources,
-    parse_unit_ir,
+    ClassBase, ClassDeclaration, CompilationUnit, FunctionDeclaration, SourceDiagnostic, UnitError,
+    compile_sources, parse_unit_ir,
 };
 
 use std::fmt;
@@ -153,6 +154,17 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Invoke an integer-return member on this method's instance receiver.
+    SelfCall {
+        result: ValueId,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
+    /// Invoke a member on this method's receiver and discard its result.
+    SelfCallStatement {
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     LocalInitialize {
         local: LocalId,
         value: ValueId,
@@ -205,11 +217,14 @@ impl std::error::Error for IrError {}
 /// call arguments require integers. Returns consistently produce integers or
 /// no value; comparisons produce Booleans used by branches. Statement calls
 /// discard results; unit validation rejects using a void callee as a value.
+/// Instance methods permit self calls and require class ownership at unit
+/// validation. Other functions cannot assume an instance receiver.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
     parameter_count: usize,
     return_type: ReturnType,
+    instance_method: bool,
     operations: Vec<LocatedOperation>,
 }
 
@@ -225,6 +240,11 @@ impl Function {
     /// Return the common result type established by every return terminator.
     pub fn return_type(&self) -> ReturnType {
         self.return_type
+    }
+
+    /// Whether this body requires an instance receiver in its hidden context slot.
+    pub fn is_instance_method(&self) -> bool {
+        self.instance_method
     }
 
     pub fn operations(&self) -> &[LocatedOperation] {
@@ -250,6 +270,28 @@ impl Function {
         name: String,
         parameter_count: usize,
         operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct(name, parameter_count, operations, false)
+    }
+
+    /// Construct and validate an instance method with integer positional parameters.
+    ///
+    /// Enables current-receiver calls. The receiver occupies the hidden VM context
+    /// slot, not an explicit parameter. Class ownership and callee signatures are
+    /// checked by compilation-unit validation; other Function invariants apply.
+    pub fn method(
+        name: String,
+        parameter_count: usize,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct(name, parameter_count, operations, true)
+    }
+
+    fn construct(
+        name: String,
+        parameter_count: usize,
+        operations: Vec<LocatedOperation>,
+        instance_method: bool,
     ) -> Result<Self, IrError> {
         if parameter_count > MAX_PARAMETERS {
             return Err(IrError {
@@ -370,31 +412,32 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
-                    let valid = |name: &str| {
-                        name.bytes()
-                            .next()
-                            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-                            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-                    };
-                    if !valid(module) || !valid(member) {
-                        return Err(fail("invalid module or member name"));
-                    }
-                    if module == "System" {
-                        return Err(fail(
-                            "System calls are supported only as println statements",
-                        ));
-                    }
-                    if arguments.iter().any(|value| {
-                        string_values.contains(value) || boolean_values.contains(value)
-                    }) {
-                        return Err(fail(
-                            "user-module calls currently require integer arguments",
-                        ));
-                    }
-                    if arguments.len() > MAX_PARAMETERS {
-                        return Err(fail("call exceeds 254-argument limit"));
-                    }
+                    validate_call_names(Some(module), member).map_err(fail)?;
+                    validate_call_arguments(arguments, &string_values, &boolean_values)
+                        .map_err(fail)?;
                     let result = if let Operation::ModuleCall { result, .. } = located.operation {
+                        Some(result)
+                    } else {
+                        None
+                    };
+                    (result, arguments.clone())
+                }
+                Operation::SelfCall {
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::SelfCallStatement {
+                    ref member,
+                    ref arguments,
+                } => {
+                    if !instance_method {
+                        return Err(fail("self calls require an instance method"));
+                    }
+                    validate_call_names(None, member).map_err(fail)?;
+                    validate_call_arguments(arguments, &string_values, &boolean_values)
+                        .map_err(fail)?;
+                    let result = if let Operation::SelfCall { result, .. } = located.operation {
                         Some(result)
                     } else {
                         None
@@ -510,6 +553,8 @@ impl Function {
                 located.operation,
                 Operation::ModuleCall { .. }
                     | Operation::ModuleCallStatement { .. }
+                    | Operation::SelfCall { .. }
+                    | Operation::SelfCallStatement { .. }
                     | Operation::Println { .. }
                     | Operation::LocalAssign { .. }
             )
@@ -528,7 +573,8 @@ impl Function {
                     | Operation::Return { value }
                     | Operation::Println { value } => vec![*value],
                     Operation::Branch { condition, .. } => vec![*condition],
-                    Operation::ModuleCallStatement { arguments, .. } => arguments.clone(),
+                    Operation::ModuleCallStatement { arguments, .. }
+                    | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
                     Operation::Block { .. } | Operation::Jump { .. } | Operation::ReturnVoid => {
                         schedule.push(index);
                         continue;
@@ -547,7 +593,8 @@ impl Function {
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
-                                Operation::ModuleCall { arguments, .. } => tasks.extend(
+                                Operation::ModuleCall { arguments, .. }
+                                | Operation::SelfCall { arguments, .. } => tasks.extend(
                                     arguments.iter().rev().map(|value| Task::Value(*value)),
                                 ),
                                 _ => {}
@@ -573,6 +620,7 @@ impl Function {
         Ok(Self {
             name,
             parameter_count,
+            instance_method,
             return_type: return_type.expect("final return establishes result type"),
             operations,
         })
@@ -596,8 +644,8 @@ impl Function {
     /// Serialize this function as provisional `ciq-ir` text.
     ///
     /// Retains semantic IDs, operation order, and optional source spans. The
-    /// output uses version 3 for void returns or statement calls, version 2 for
-    /// blocks/comparisons/assignments, otherwise version 1.
+    /// output uses version 4 for instance methods, version 3 for void returns or
+    /// statement calls, version 2 for blocks/assignments, otherwise version 1.
     /// It can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
@@ -605,7 +653,14 @@ impl Function {
         } else {
             format!(" parameters={}", self.parameter_count)
         };
-        let version = if self.operations.iter().any(|o| {
+        let receiver = if self.instance_method {
+            " receiver=instance"
+        } else {
+            ""
+        };
+        let version = if self.instance_method {
+            4
+        } else if self.operations.iter().any(|o| {
             matches!(
                 o.operation,
                 Operation::ReturnVoid | Operation::ModuleCallStatement { .. }
@@ -622,7 +677,10 @@ impl Function {
         } else {
             1
         };
-        let mut text = format!("ciq-ir {version}\n.function {}{parameters}\n", self.name);
+        let mut text = format!(
+            "ciq-ir {version}\n.function {}{parameters}{receiver}\n",
+            self.name
+        );
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Block { block } => format!(".block ^{}", block.0),
@@ -690,6 +748,27 @@ impl Function {
                         .collect::<String>();
                     format!(".call-discard {module} {member}{arguments}")
                 }
+                Operation::SelfCall {
+                    result,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(".call-self %{} {member}{arguments}", result.0)
+                }
+                Operation::SelfCallStatement {
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(".call-self-discard {member}{arguments}")
+                }
                 Operation::ReturnVoid => ".return-void".into(),
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)
@@ -728,4 +807,39 @@ impl Function {
 /// binding occur later.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     source_ir::build(source, parser::parse(source)?)
+}
+
+fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'static str> {
+    let valid = |name: &str| {
+        name.bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    };
+    if !valid(member) || module.is_some_and(|m| !valid(m)) {
+        return Err("invalid module or member name");
+    }
+    if module == Some("System") {
+        return Err("System calls are supported only as println statements");
+    }
+    if module == Some("self") {
+        return Err("self calls require explicit receiver IR operations");
+    }
+    Ok(())
+}
+fn validate_call_arguments(
+    arguments: &[ValueId],
+    strings: &std::collections::BTreeSet<ValueId>,
+    booleans: &std::collections::BTreeSet<ValueId>,
+) -> Result<(), &'static str> {
+    if arguments
+        .iter()
+        .any(|v| strings.contains(v) || booleans.contains(v))
+    {
+        return Err("user calls currently require integer arguments");
+    }
+    if arguments.len() > MAX_PARAMETERS {
+        return Err("call exceeds 254-argument limit");
+    }
+    Ok(())
 }

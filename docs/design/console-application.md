@@ -8,8 +8,8 @@ lifecycle generation before general class/project compilation. The first
 
 ## Boundaries
 
-The frontend still resolves restricted global/module functions into semantic
-IR. Unit validation handles declaration identities and integer call signatures.
+The frontend resolves restricted global/module functions and source AppBase
+class methods into semantic IR. Unit validation handles declaration identities and integer call signatures.
 The VM backend selects user-function instructions. Application generation then
 combines those bodies with typed lifecycle assembly and constructs DATA and
 container sections; signing and package/project configuration remain separate.
@@ -17,8 +17,9 @@ container sections; signing and package/project configuration remain separate.
 This avoids embedding application metadata or native import indexes in semantic
 function IR. The lifecycle generator uses fixed receiver/object/array/void
 operations with recorded evidence, rather than pretending the frontend already
-accepts those source constructs. General source classes and typed SDK calls will
-need their own semantic operations and validation before replacing the wrapper.
+accepts those source constructs. Source classes now supply method ownership and self calls; typed SDK calls
+and object/null/array operations still need validation before replacing the
+remaining wrapper.
 
 No SDK files, compiled PRG template, copied DATA prefix, or signing key are read
 by the generator. Native identities and opaque header/entry profile values are
@@ -47,9 +48,10 @@ Void entries run once with their result discarded and no wrapper print;
 
 ## Next extension
 
-Make lifecycle behavior source-authored: define a minimal AppBase/View class
-subset, receiver/context rules, and the required void/null/object/array and SDK
-call types. Generate corresponding method records and imports from those
+Source class ownership, instance receiver calls, and integer/void startup are
+[implemented](../investigations/compiler-class.md). Next add typed native-base
+calls and source initialization, then the null/object/array and SDK-call types
+needed for source lifecycle callbacks and View creation. Generate corresponding method records and imports from those
 identities instead of fixed wrapper choices. Preserve native/text equivalence
 and complete-application simulator tests as each construct is added.
 

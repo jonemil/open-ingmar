@@ -232,8 +232,11 @@ impl<'a> Parser<'a> {
             Kind::Word(name)
                 if !matches!(
                     name,
-                    "function"
+                    "self"
+                        | "function"
                         | "module"
+                        | "class"
+                        | "extends"
                         | "return"
                         | "var"
                         | "if"
@@ -323,6 +326,8 @@ impl<'a> Parser<'a> {
                     name,
                     "function"
                         | "module"
+                        | "class"
+                        | "extends"
                         | "return"
                         | "var"
                         | "if"
@@ -376,6 +381,8 @@ impl<'a> Parser<'a> {
                             end,
                         },
                     )
+                } else if name == "self" {
+                    Err(self.error(token.span.start, "self is supported only in receiver calls"))
                 } else {
                     self.node(ExpressionKind::Local(name.into()), token.span)
                 }
@@ -632,33 +639,50 @@ impl Parser<'_> {
     }
 }
 
-/// Parse global functions and flat module declarations in source order.
-/// Function bodies retain their existing syntax and per-function limits.
-pub(crate) fn declarations(
-    source: &str,
-) -> Result<Vec<(Option<String>, ParsedFunction)>, Diagnostic> {
+pub(crate) struct ParsedUnit {
+    pub functions: Vec<(Option<String>, ParsedFunction)>,
+    pub classes: Vec<ParsedClass>,
+}
+pub(crate) struct ParsedClass {
+    pub name: String,
+    pub methods: Vec<ParsedFunction>,
+}
+
+/// Parse global/module functions and AppBase-derived class declarations.
+/// Collects source ownership without binding calls or selecting VM instructions.
+pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
     let mut parser = Parser {
         source,
         offset: 0,
         lookahead: None,
         expressions: 0,
     };
-    let mut declarations = Vec::new();
+    let mut unit = ParsedUnit {
+        functions: Vec::new(),
+        classes: Vec::new(),
+    };
+    let mut count = 0;
     while parser.peek()? != Kind::End {
-        if parser.peek()? == Kind::Word("module") {
-            parser.token()?;
+        if matches!(parser.peek()?, Kind::Word("module" | "class")) {
+            let is_class = parser.token()?.kind == Kind::Word("class");
             let token = parser.identifier()?;
-            let Kind::Word(module) = token.kind else {
+            let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
-            if module == "System" {
+            if is_class {
+                parser.expect(Kind::Word("extends"), "'extends Application.AppBase'")?;
+                parser.expect(Kind::Word("Application"), "'Application.AppBase'")?;
+                parser.expect(Kind::Punctuation('.'), "'.'")?;
+                parser.expect(Kind::Word("AppBase"), "'AppBase'")?;
+            } else if name == "System" {
                 return Err(parser.error(token.span.start, "System is reserved for SDK intrinsics"));
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
-            let start = declarations.len();
+            let mut methods = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
-                declarations.push((Some(module.into()), parser.function()?));
-                if declarations.len() > crate::unit::MAX_FUNCTIONS {
+                methods.push(parser.function()?);
+                count += 1;
+                if count > crate::unit::MAX_FUNCTIONS {
                     return Err(parser.error(
                         token.span.start,
                         "compilation unit exceeds 256-function limit",
@@ -666,15 +690,25 @@ pub(crate) fn declarations(
                 }
             }
             parser.token()?;
-            if declarations.len() == start {
-                return Err(parser.error(token.span.start, "empty modules are unsupported"));
+            if methods.is_empty() {
+                return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
+            }
+            if is_class {
+                unit.classes.push(ParsedClass {
+                    name: name.into(),
+                    methods,
+                });
+            } else {
+                unit.functions
+                    .extend(methods.into_iter().map(|f| (Some(name.into()), f)));
             }
         } else {
-            declarations.push((None, parser.function()?));
+            unit.functions.push((None, parser.function()?));
+            count += 1;
         }
-        if declarations.len() > crate::unit::MAX_FUNCTIONS {
+        if count > crate::unit::MAX_FUNCTIONS {
             return Err(parser.error(parser.offset, "compilation unit exceeds 256-function limit"));
         }
     }
-    Ok(declarations)
+    Ok(unit)
 }

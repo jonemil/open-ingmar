@@ -64,7 +64,7 @@ fn text_and_constructed_ir_share_semantic_validation() {
         assert!(Function::new("probe".into(), operations).is_err());
     }
     for text in [
-        "ciq-ir 4\n.function probe\n.integer %0 41\n.return %0\n.end",
+        "ciq-ir 5\n.function probe\n.integer %0 41\n.return %0\n.end",
         "ciq-ir 1\n.function probe\n.integer %0 128\n.return %0\n.end",
         "ciq-ir 1\n.function probe\n.integer %0 41\n.integer %0 42\n.return %0\n.end",
         "ciq-ir 1\n.function probe\n.integer %0 41 span=7:3\n.return %0\n.end",

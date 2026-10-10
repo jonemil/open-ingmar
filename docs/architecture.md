@@ -113,7 +113,9 @@ callee identities and integer argument counts/types, and lower their bodies into
 one CODE layout. A separate application builder generates lifecycle assembly,
 DATA/modules, imports, and unsigned sections for the
 [console bootstrap profile](specs/console-application.md), using no SDK payloads.
-Source-authored classes/lifecycle and general resources remain future work. See
+Source AppBase classes now supply instance methods and self calls, with
+explicit ownership/receiver contracts. Lifecycle callbacks, object values, and
+general resources remain future work. See
 [unit rules](specs/compiler-unit.md) and [application design](design/console-application.md).
 Signing, packaging, and project configuration do not belong in the frontend.
 

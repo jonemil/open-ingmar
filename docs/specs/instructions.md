@@ -437,9 +437,13 @@ selects hello with getselfv 0x00000080 before invokemz.
 Observed encoding: `43 00 80 02 9c` at CODE+`0x000004` in **minimal-console**,
 MinimalConsoleApp/<init>.
 
+Current-instance method selection is also
+[SDK-observed and simulator-verified](../investigations/compiler-class.md),
+including nested positional calls.
+
 **Limits:** Global-function resolution through the current context is observed
-in compiled code. Receiver representation, inherited lookup, and missing-member
-behavior remain unverified.
+in compiled code. Receiver representation, general inherited lookup, and
+missing-member behavior remain unverified.
 
 ## getself
 

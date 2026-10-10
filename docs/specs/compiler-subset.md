@@ -34,12 +34,12 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`, `true`,
-`while`, `break`, `continue`, and `false` are reserved. Boolean literals are not
+`while`, `break`, `continue`, `class`, `extends`, `self`, and `false` are reserved. Boolean literals are not
 supported yet.
 Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
 The accepted literal domain is `0..=127`; computed results may be negative or
 exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
-types, modules/classes, unsupported statements/additional functions, and other
+types, unsupported statements/additional functions in default mode, and other
 operators are rejected. This is a frontend limit, not a Monkey C language or VM
 integer limit. The domain deliberately avoids unresolved high-bit one-byte
 immediate behavior.
@@ -407,3 +407,12 @@ continuation after discarded calls. Source class/receiver syntax remains open.
 
 [void-example]: ../../examples/compiler-void/README.md
 [void-evidence]: ../investigations/compiler-void.md
+
+## Instance class extension
+
+Unit mode also accepts [AppBase-derived class declarations](compiler-classes.md).
+Their methods may call `self.<member>(...)` as integer expressions or statements;
+class ownership and receiver contracts remain explicit in typed/saved IR.
+Default single-function source mode does not accept self calls. Class callbacks,
+object values/fields, source inheritance, and general native calls remain open.
+See [runtime evidence](../investigations/compiler-class.md).

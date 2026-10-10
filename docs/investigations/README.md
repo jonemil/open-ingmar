@@ -175,3 +175,6 @@ in-place shrink experiment has confirmed simulator execution, as described in
 
 - [Void functions and statement calls](compiler-void.md): complete void startup,
   early returns, argument order, and integer-result discard in the simulator.
+
+- [Source class and receiver calls](compiler-class.md): class ownership, nested
+  self calls, and complete application startup on the generated instance.

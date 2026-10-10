@@ -56,11 +56,19 @@ fn emit(
                 .into_iter()
                 .map(|argument| emit(source, argument, locals, parameters, operations))
                 .collect::<Result<Vec<_>, _>>()?;
-            Operation::ModuleCall {
-                result: ValueId(operations.len() as u32),
-                module,
-                member,
-                arguments,
+            if module == "self" {
+                Operation::SelfCall {
+                    result: ValueId(operations.len() as u32),
+                    member,
+                    arguments,
+                }
+            } else {
+                Operation::ModuleCall {
+                    result: ValueId(operations.len() as u32),
+                    module,
+                    member,
+                    arguments,
+                }
             }
         }
         parser::ExpressionKind::Binary { kind, left, right } => {
@@ -223,14 +231,16 @@ impl Builder<'_> {
                         .into_iter()
                         .map(|arg| self.value(arg, locals))
                         .collect::<Result<Vec<_>, _>>()?;
-                    self.push(
+                    let operation = if module == "self" {
+                        Operation::SelfCallStatement { member, arguments }
+                    } else {
                         Operation::ModuleCallStatement {
                             module,
                             member,
                             arguments,
-                        },
-                        Some(span),
-                    );
+                        }
+                    };
+                    self.push(operation, Some(span));
                 }
                 parser::Statement::Return { value, .. } => {
                     let operation = if let Some(value) = value {
@@ -336,6 +346,21 @@ impl Builder<'_> {
 /// Integer functions require a value on every path. Void fallthrough gains a
 /// return terminator; mixed returns and unreachable statements are rejected.
 pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Function, Diagnostic> {
+    build_body(source, ast, false)
+}
+
+pub(crate) fn build_method(
+    source: &str,
+    ast: parser::ParsedFunction,
+) -> Result<Function, Diagnostic> {
+    build_body(source, ast, true)
+}
+
+fn build_body(
+    source: &str,
+    ast: parser::ParsedFunction,
+    method: bool,
+) -> Result<Function, Diagnostic> {
     fn has_value_return(statements: &[parser::Statement]) -> bool {
         statements.iter().any(|s| match s {
             parser::Statement::Return { value: Some(_), .. } => true,
@@ -386,13 +411,16 @@ pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Functio
         );
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
-    Function::with_parameters(ast.name, builder.parameters.len(), builder.operations).map_err(
-        |error| {
-            let offset = error
-                .operation
-                .and_then(|index| spans.get(index).copied().flatten())
-                .map_or(0, |span| span.start);
-            Diagnostic::at(source, offset, error.message)
-        },
-    )
+    let construct = if method {
+        Function::method
+    } else {
+        Function::with_parameters
+    };
+    construct(ast.name, builder.parameters.len(), builder.operations).map_err(|error| {
+        let offset = error
+            .operation
+            .and_then(|index| spans.get(index).copied().flatten())
+            .map_or(0, |span| span.start);
+        Diagnostic::at(source, offset, error.message)
+    })
 }

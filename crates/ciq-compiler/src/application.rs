@@ -28,13 +28,13 @@ const ON_START: u32 = 0x0080029f;
 const GET_INITIAL_VIEW: u32 = 0x008002a0;
 const GLOBALS: u32 = 0x008002e6;
 
-/// Application identity and the global zero-parameter startup entry function.
+/// Application identity and a zero-parameter global or class startup entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsoleApplication {
     /// Sixteen manifest application-ID bytes, independent of signing identity.
     pub id: [u8; 16],
-    /// Global function invoked once by onStart; integer results are printed and
-    /// void results are discarded without an automatic print.
+    /// Global function name, or Class.method for a declared AppBase class.
+    /// Invoked once by onStart; integer results are printed, void discarded.
     pub entry: String,
 }
 
@@ -95,7 +95,7 @@ fn class(
     }
 }
 
-fn lifecycle(entry: &str, result: ReturnType) -> Vec<Item> {
+fn lifecycle(entry: &str, result: ReturnType, instance: bool) -> Vec<Item> {
     use Opcode::*;
     let mut items = vec![
         Item::Label("__ciq_bootstrap".into()),
@@ -118,13 +118,12 @@ fn lifecycle(entry: &str, result: ReturnType) -> Vec<Item> {
         ));
         items.push(instruction(Frpush, vec![]));
     }
-    items.push(instruction(
-        Getmv,
-        vec![
-            sym("__ciq_app_globals"),
-            sym(&format!("__ciq_member_{entry}")),
-        ],
-    ));
+    let member = sym(&format!("__ciq_member_{entry}"));
+    items.push(if instance {
+        instruction(Getselfv, vec![member])
+    } else {
+        instruction(Getmv, vec![sym("__ciq_app_globals"), member])
+    });
     items.push(instruction(Invokemz, vec![]));
     if result == ReturnType::Integer {
         items.push(instruction(Invokem, vec![bits(2)]));
@@ -166,12 +165,14 @@ fn lifecycle(entry: &str, result: ReturnType) -> Vec<Item> {
 /// Uses the bootstrap profile tested with SDK 9.2.0 and Forerunner 265: version-2
 /// DATA records, fixed native symbol IDs, two native-class imports, generated
 /// lifecycle methods, and empty resources/permissions/exceptions. The entry must
-/// be a global zero-parameter integer-return or void function. onStart invokes
-/// it once and prints only integer results; getInitialView returns a blank
-/// native View.
+/// be a zero-parameter integer-return or void global function, or a method in
+/// the sole declared AppBase class. Class entries use Class.method names and
+/// current-receiver lookup. onStart invokes it once and prints only integer
+/// results; getInitialView returns a blank native View. Source callbacks that
+/// collide with generated lifecycle/base fields are rejected.
 ///
-/// Allocates user symbols and all CODE/DATA positions deterministically. Global
-/// and module methods bind to unit CODE labels; literals use shared DATA layout.
+/// Allocates user symbols and all CODE/DATA positions deterministically. Global,
+/// module, and class methods bind to unit CODE labels; literals use shared DATA layout.
 /// Rejects unsupported entry signatures, reserved namespace collisions, and
 /// encoding/layout limits. Device budgets and other API/device profiles are not
 /// inferred. No SDK files, original PRG, debug tables, or signing key are read.
@@ -180,14 +181,46 @@ pub fn build_console_application(
     unit: &CompilationUnit,
     app: &ConsoleApplication,
 ) -> Result<Prg, ApplicationError> {
-    let Some(entry) = unit
-        .declarations()
-        .iter()
-        .find(|d| d.module.is_none() && d.function.name() == app.entry)
-    else {
-        return Err(error("application entry must name a global function"));
+    let (entry, instance) = if unit.classes().is_empty() {
+        let Some(entry) = unit
+            .declarations()
+            .iter()
+            .find(|d| d.module.is_none() && d.function.name() == app.entry)
+        else {
+            return Err(error("application entry must name a global function"));
+        };
+        (&entry.function, false)
+    } else {
+        if unit.classes().len() != 1 {
+            return Err(error(
+                "console class profile requires exactly one AppBase class",
+            ));
+        }
+        let class = &unit.classes()[0];
+        let Some((owner, member)) = app.entry.split_once('.') else {
+            return Err(error("class application entry must use Class.method"));
+        };
+        if owner != class.name {
+            return Err(error(
+                "application entry must select the declared AppBase class",
+            ));
+        }
+        let Some(entry) = class.methods.iter().find(|f| f.name() == member) else {
+            return Err(error("application entry method is not declared"));
+        };
+        if class.methods.iter().any(|f| {
+            matches!(
+                f.name(),
+                "initialize" | "onStart" | "getInitialView" | "AppBase"
+            )
+        }) {
+            return Err(error(
+                "source methods collide with generated lifecycle or base fields",
+            ));
+        }
+        (entry, true)
     };
-    if entry.function.parameter_count() != 0 {
+    if entry.parameter_count() != 0 {
         return Err(error("application entry must have zero parameters"));
     }
     let modules: BTreeSet<_> = unit
@@ -215,10 +248,18 @@ pub fn build_console_application(
         ("onStart".into(), ON_START),
         ("getInitialView".into(), GET_INITIAL_VIEW),
     ]);
+    for class in unit.classes() {
+        ids.insert(class.name.clone(), 1);
+    }
     let names: BTreeSet<_> = unit
         .declarations()
         .iter()
         .map(|d| d.function.name().to_owned())
+        .chain(
+            unit.classes()
+                .iter()
+                .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
+        )
         .chain(modules.iter().cloned())
         .collect();
     let mut next = 2; // Symbol 1 is the synthesized application class.
@@ -244,16 +285,21 @@ pub fn build_console_application(
         ("__ciq_app_watch_ui".into(), WATCH_UI),
         ("__ciq_app_view".into(), VIEW),
     ]);
-    for d in unit.declarations() {
+    for function in unit
+        .declarations()
+        .iter()
+        .map(|d| &d.function)
+        .chain(unit.classes().iter().flat_map(|c| &c.methods))
+    {
         bindings.insert(
-            format!("__ciq_member_{}", d.function.name()),
-            ids[d.function.name()],
+            format!("__ciq_member_{}", function.name()),
+            ids[function.name()],
         );
     }
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
     }
-    let mut items = lifecycle(&app.entry, entry.function.return_type());
+    let mut items = lifecycle(entry.name(), entry.return_type(), instance);
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
@@ -288,7 +334,7 @@ pub fn build_console_application(
         [None, None, None, Some(Reference::Raw(GLOBALS))],
         global_fields,
     );
-    let application = class(
+    let mut application = class(
         "__ciq_data_app",
         [
             Some(Reference::Raw(0x40000000)),
@@ -304,6 +350,18 @@ pub fn build_console_application(
             method(GET_INITIAL_VIEW, 0x10, "__ciq_initial_view"),
         ],
     );
+    for source_class in unit.classes() {
+        application.fields.extend(
+            source_class
+                .methods
+                .iter()
+                .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
+        );
+        application.fields.sort_by_key(|f| match f.key {
+            Key::Raw(key) => key,
+            _ => unreachable!(),
+        });
+    }
     let mut classes = vec![statics, globals, application];
     for module in &modules {
         let mut fields = vec![method(INIT, 0x30, "__ciq_noop")];

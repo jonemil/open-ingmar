@@ -215,7 +215,7 @@ fn unit_text_framing_and_combined_function_bounds_are_checked() {
     let function = "ciq-ir 1\n.function f\n.integer %0 1\n.return %0\n.end\n";
     for text in [
         "".to_owned(),
-        "ciq-unit 2\n".to_owned(),
+        "ciq-unit 3\n".to_owned(),
         "ciq-unit 1\n".to_owned(),
         format!("ciq-unit 1\n{function}"),
         format!("ciq-unit 1\n.owner global extra\n{function}"),

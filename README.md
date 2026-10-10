@@ -179,7 +179,9 @@ all lifecycle CODE, DATA, imports, and unsigned sections independently. It runs
 the greeting with `41`/`42` and the same two-file unit with `48`; signing remains
 a separate step. [Void startup and module calls](examples/compiler-void/README.md)
 also run with inferred void returns and discarded call results. Source-authored
-lifecycle classes and project builds are next.
+lifecycle callbacks and project builds are next. The
+[source class example](examples/compiler-class/README.md) already runs methods
+on the generated AppBase instance using explicit `self` calls.
 
 Build and validate the workspace:
 
