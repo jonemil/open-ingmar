@@ -29,6 +29,17 @@ bytes per field. Its v2 overview says N×5 while its detailed key/type/value
 fields imply nine. Our actual v2 specimens traverse exactly to EOF with
 nine-byte fields; overview sizes are not adopted.
 
+Address-profile clarification, 2026-10-10: the same pinned plugin's
+`doc/prg.md`, section 1.3, lists prefixed addresses such as `0x00xxxxxx` for
+DATA and `0x10xxxxxx` for CODE. Our zero-prefix, 24-bit DATA offset policy was
+adopted from these patterns. However, the text describes the selector as the
+"high nibble," leaving the remaining nibble's role unclear. The patterns do
+not by themselves establish an eight-bit selector or a 16 MiB DATA maximum.
+Our specimens confirm small zero-prefix string addresses and `0x10`-prefixed
+method addresses, not behavior at offsets beyond `0x00ffffff`. The current
+limit is a conservative implementation profile; larger offsets and the exact
+selector/offset boundary remain unverified.
+
 **Experimentally observed:** a sequential walk of Minimal Console DATA finds 128
 c2 class/module records and 52 string records. Hello World finds 129 c2 records
 and 53 strings. No c1 or JSON records occur. Class records are retained as

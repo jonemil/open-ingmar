@@ -17,6 +17,12 @@ only addresses `0x00xxxxxx`, interpreted as offsets to record tags within DATA.
 A symbol ID is a different kind of reference. Other address prefixes remain
 numeric and uninterpreted.
 
+The 24-bit offset restriction is an implementation policy adopted from external
+research's prefixed-address patterns, not an experimentally established VM
+capacity limit. That source also describes a high-nibble selector, so the exact
+selector/offset boundary remains unresolved. See
+[the provenance and uncertainty](../investigations/data-and-resources.md).
+
 Minimal Console's literal record is at DATA+`0x3279`:
 
 ```text
