@@ -80,6 +80,7 @@ Rust 1.85 or newer is required (workspace tests also pass with actual 1.85.0). C
 - [IQ package/signing profile](docs/specs/iq-package.md)
 - [IQ verification commands and reports](docs/specs/package-verification.md)
 - [Package crate design and remaining stages](docs/design/package-crate.md)
+- [Future project builds and Jungle support](docs/design/project-builds.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)
 - [SDK support scripts](scripts/README.md)

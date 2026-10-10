@@ -61,6 +61,8 @@ ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
 
 ## Outstanding research
 
+Project-to-package export and future compiler integration are tracked in [the project-build and Jungle plan](project-builds.md). Canonical-tree packing does not resolve a project's Jungle configuration or generate the exported Jungle.
+
 - Extend bounded backend support beyond classic ZIP and unencoded single-coder 7z headers; add real solid/LZMA specimens and controlled member-output sinks. Dependency/MSRV checks are recorded for the initial implementation.
 - Additional real SDK products, multi-device exports, older SHA-1 manifest signing, store-specific metadata, and optional signatures/public-key formats.
 - Barrel annotations, dependent barrels, localization/device resources, optional metadata, multiple Jungles, and project-to-package path rewriting.
@@ -68,4 +70,4 @@ ciq-package pack-iq scratch/application scratch/resigned.iq -y developer_key.der
 - Whether SDK/install tooling accepts independently produced 7z packages with different archive settings; exact member/signature verification alone does not answer this.
 - External `debug.xml` updates after assembly edits. Preserve/omit with explicit supported policy; do not publish stale mappings as newly correct.
 
-Stages 1–2 are complete for their documented supported profiles; [verification evidence](../investigations/package-verification.md) records acceptance checks. Next implement stage 3, deterministic canonical-layout barrel packing. IQ writers remain planned.
+Stages 1–3 are complete for their documented supported profiles; [verification evidence](../investigations/package-verification.md) and [barrel packing evidence](../investigations/barrel-packing.md) record acceptance checks. Next implement stage 4, unchanged IQ repacking. Own-key IQ creation and project-to-package export remain planned.

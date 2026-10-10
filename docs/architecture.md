@@ -46,6 +46,8 @@ Byte-identical disassembly/reassembly is a useful preservation test and has alre
 
 The future compiler can perform whole-program analysis over applicable Monkey C source files. Do not require topological source ordering or introduce a separate object format without evidence that it is needed.
 
+For complete projects, a future build layer will resolve existing Jungle files and manifests into compiler inputs and export settings. It will also map a barrel project's selected files into the archive layout and generate its packaged Jungle configuration. Keep configuration resolution separate from language compilation, archive encoding, and signing; crate/API choices remain deferred. See [the project-build plan](design/project-builds.md) for scope, research, and acceptance examples.
+
 ## Complete section export and signing boundary
 
 Implemented on 2026-10-08: export undecoded sections as raw binary, with a manifest retaining identifiers and order. Ordinary code is represented as assembly when supported, otherwise raw binary. Import reconstructs the complete container from these files without requiring the original PRG as a template. See [the project format](specs/section-project.md) and [verification record](investigations/section-project.md).
