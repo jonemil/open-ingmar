@@ -1,4 +1,4 @@
-//! Section project manifest, documented in docs/specs/section-project.md.
+//! Section project manifest.
 
 use crate::{CODE, DATA, SYMBOLS};
 const DEBUG: u32 = 0xd0000d1e;

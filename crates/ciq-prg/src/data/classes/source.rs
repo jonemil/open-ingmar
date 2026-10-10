@@ -1,4 +1,5 @@
-//! Named, lossless class declarations; see docs/specs/data-classes.md.
+//! Named, lossless class declarations.
+//!
 use super::Class;
 use crate::{
     data::address,

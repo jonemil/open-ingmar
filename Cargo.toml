@@ -17,6 +17,9 @@ ciq-sign = { path = "crates/ciq-sign" }
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
 # RSA fixture generation is prohibitively slow with unoptimized big-integer arithmetic.
 [profile.test.package.num-bigint-dig]
 opt-level = 3

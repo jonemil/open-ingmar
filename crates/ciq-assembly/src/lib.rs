@@ -1,4 +1,9 @@
-//! Shared ordinary CODE assembly model. See docs/specs/assembly-model.md.
+//! Shared ordinary CODE assembly model.
+//!
+//! Parses, prints, and encodes ordinary CODE assembly through [`Program`].
+//! Text parsing and typed construction use the same validation. Encoding
+//! resolves symbol/string aliases and produces raw instruction bytes; PRG
+//! reconstruction and signing belong to the assembler tool.
 use ciq_mc::{Instruction, Opcode};
 use ciq_prg::{
     data::StringDeclaration,
@@ -36,7 +41,10 @@ pub enum Item {
     String(StringDeclaration),
 }
 
-/// Validated symbolic CODE source; bindings and encoding are later steps.
+/// A validated CODE assembly program containing instructions and declarations.
+///
+/// Symbol and string aliases are resolved during encoding. Equality compares
+/// program content and ignores source line numbers.
 #[derive(Debug, Clone)]
 pub struct Program {
     items: Vec<Item>,
@@ -50,6 +58,11 @@ impl PartialEq for Program {
 impl Eq for Program {}
 
 impl Program {
+    /// Construct and validate a CODE assembly program from typed items.
+    ///
+    /// Applies the same operand and layout checks as [`Self::parse`]. Symbol
+    /// and string aliases may remain unresolved until encoding. Errors use line
+    /// zero because the items have no source line numbers.
     pub fn new(items: Vec<Item>) -> Result<Self, Error> {
         let program = Self {
             lines: vec![0; items.len()],
@@ -58,6 +71,7 @@ impl Program {
         program.validate()?;
         Ok(program)
     }
+    /// Return instructions and declarations in source order.
     pub fn items(&self) -> &[Item] {
         &self.items
     }
@@ -67,6 +81,11 @@ impl Program {
             message: message.into(),
         }
     }
+    /// Parse CODE `.mcasm` text into a validated assembly program.
+    ///
+    /// Rejects unsupported syntax and invalid operands or layout. Symbol and
+    /// string aliases are retained for later binding. Errors identify the input
+    /// line; comments and whitespace are not retained in the program.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut program = Self {
             items: Vec::new(),
@@ -186,6 +205,9 @@ impl Program {
         self.labels()?;
         Ok(())
     }
+    /// Calculate each label's byte offset in the encoded CODE payload.
+    ///
+    /// Rejects duplicate labels and layouts exceeding the 24-bit address space.
     pub fn labels(&self) -> Result<BTreeMap<String, u32>, Error> {
         let mut labels = BTreeMap::new();
         let mut offset = 0u32;
@@ -207,6 +229,10 @@ impl Program {
         }
         Ok(labels)
     }
+    /// Serialize the program as canonical CODE `.mcasm` text.
+    ///
+    /// Retains instructions, declarations, aliases, and placement constraints.
+    /// Original comments and whitespace are not reproduced.
     pub fn to_text(&self) -> String {
         let mut text = String::new();
         for item in &self.items {
@@ -237,9 +263,19 @@ impl Program {
         }
         text
     }
+    /// Encode the program into raw CODE bytes using its inline declarations.
+    ///
+    /// Unresolved aliases are errors. Use [`Self::encode_with_references`] to
+    /// supply external bindings. Output contains no SYMBOLS/DATA sections or
+    /// container signatures.
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         self.encode_with_references(&BTreeMap::new(), &BTreeMap::new())
     }
+    /// Encode raw CODE bytes using inline declarations and external alias maps.
+    ///
+    /// The maps bind symbol aliases to IDs and string aliases to DATA offsets.
+    /// Missing or duplicate aliases and values exceeding operand widths are
+    /// errors. Output contains instructions only, not symbol or string records.
     pub fn encode_with_references(
         &self,
         external: &BTreeMap<String, u32>,

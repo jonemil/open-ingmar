@@ -1,5 +1,5 @@
-//! Package reading, verification and barrel packing; see docs/specs/package-reading.md
-//! and docs/specs/barrel-packing.md / docs/specs/iq-repacking.md.
+//! Package reading, verification and barrel packing.
+//!
 mod create;
 pub use create::{DebugPolicy, pack_iq};
 mod manifest;

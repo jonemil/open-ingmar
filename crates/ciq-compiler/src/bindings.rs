@@ -2,8 +2,12 @@
 use ciq_assembly::{Error, Item, Operand, Program};
 use std::collections::BTreeMap;
 
-/// Resolve CODE references without generating or changing a PRG symbol table.
-/// Compiler module aliases denote `globals/<name>`, not the short field name.
+/// Build a symbol alias-to-ID map for encoding the supplied assembly program.
+///
+/// `symbols` must contain only valid `.symbol` declarations. Compiler-generated
+/// aliases must match exactly one stored name: modules use `globals/<name>`,
+/// while members use their short names. Missing, ambiguous, or conflicting
+/// bindings are errors. No PRG symbol records are generated or modified.
 pub fn symbol_bindings(
     program: &Program,
     symbols: &Program,

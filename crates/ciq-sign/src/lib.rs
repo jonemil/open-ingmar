@@ -1,4 +1,5 @@
-//! PRG developer signing and verification. See docs/specs/developer-signatures.md.
+//! PRG developer signing and verification.
+//!
 use ciq_prg::{Prg, Section};
 use rand_core::OsRng;
 use rsa::{

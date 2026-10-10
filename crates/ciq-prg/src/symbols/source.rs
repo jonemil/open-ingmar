@@ -1,4 +1,4 @@
-//! Shared symbol declarations and layout; see docs/specs/symbol-assembly.md.
+//! Shared symbol declarations and layout.
 
 use super::Symbols;
 use std::collections::{BTreeMap, BTreeSet};

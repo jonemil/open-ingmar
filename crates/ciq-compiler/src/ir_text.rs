@@ -1,6 +1,9 @@
 use crate::{BinaryOp, Diagnostic, Function, LocalId, LocatedOperation, Operation, Span, ValueId};
 
-/// Parse the provisional IR format and apply the shared semantic validator.
+/// Parse `ciq-ir 1` text into a validated semantic function.
+///
+/// Applies the same validation as typed [`Function`] construction. Invalid
+/// syntax or semantic operations produce diagnostics at input byte offsets.
 pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     let mut rows = Vec::new();
     let mut offset = 0;

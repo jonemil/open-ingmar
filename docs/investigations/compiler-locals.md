@@ -1,10 +1,18 @@
 # Compiler initialized local variables
 
-2026-10-10. Question: can the independent frontend preserve initialized locals through repeated reads, while keeping semantic local identities separate from VM slots? Result: SDK slot comparison, native/text pipeline equivalence, own-key signed PRG integration, and official simulator execution are verified.
+2026-10-10. Question: can the independent frontend preserve initialized locals
+through repeated reads, while keeping semantic local identities separate from VM
+slots? Result: SDK slot comparison, native/text pipeline equivalence, own-key
+signed PRG integration, and official simulator execution are verified.
 
 ## Scope and evidence
 
-Implementation is independent Rust in `ciq-compiler`, against [our instruction reference](../specs/instructions.md), [the earlier local-slot experiment](function-replacement.md), and [compiler arithmetic](compiler-arithmetic.md). No reference-project implementation was incorporated. SDK/compiler/simulator: 9.2.0; target `fr265`; compiler optimization `-O 0`.
+Implementation is independent Rust in `ciq-compiler`, against
+[our instruction reference](../specs/instructions.md),
+[the earlier local-slot experiment](function-replacement.md), and
+[compiler arithmetic](compiler-arithmetic.md). No reference-project
+implementation was incorporated. SDK/compiler/simulator: 9.2.0; target `fr265`;
+compiler optimization `-O 0`.
 
 Tracked source [locals.mc](../../examples/compiler-probe/locals.mc):
 
@@ -16,7 +24,13 @@ function probe() {
 }
 ```
 
-**Experimentally observed:** a copy of SDK Hello World with this function compiles to CODE `[0x30, 0x52)`. It starts with `argcincsp 0x01 0x02`, resolves globals into slot 0, initializes `first` with `lputv 0x01`, initializes `second` with `lputv 0x02`, and returns through repeated loads. The arithmetic/store/read sequence matches our generated function after the SDK globals-resolution sequence. This extends prior one-local evidence to two locals. Source name locations are not assumed to be VM symbol IDs.
+**Experimentally observed:** a copy of SDK Hello World with this function
+compiles to CODE `[0x30, 0x52)`. It starts with `argcincsp 0x01 0x02`, resolves
+globals into slot 0, initializes `first` with `lputv 0x01`, initializes `second`
+with `lputv 0x02`, and returns through repeated loads. The arithmetic/store/read
+sequence matches our generated function after the SDK globals-resolution
+sequence. This extends prior one-local evidence to two locals. Source name
+locations are not assumed to be VM symbol IDs.
 
 Our generated function is 26 bytes:
 
@@ -39,23 +53,53 @@ subv
 return
 ```
 
-Exact bytes: `4a 01 02 38 28 38 02 03 13 01 12 01 38 05 04 13 02 12 01 12 02 03 12 01 04 16`.
+Exact bytes:
+`4a 01 02 38 28 38 02 03 13 01 12 01 38 05 04 13 02 12 01 12 02 03 12 01 04 16`.
 
-**Experimentally observed:** console prints greeting plus `37`; inspected screen displays `Hello world!` and `37`. A separate source with `var unused = 1; var first = 2 - 5; var second = first + first; return second;` emits a 24-byte function with `argcincsp 0x01 0x03`, stores slots 1/2/3, and reads the negative slot twice. Console and inspected screen show `-6`. Both functions are reached through the original application lifecycle/view call sites. These results distinguish execution from the preserved SDK original returning `41`.
+**Experimentally observed:** console prints greeting plus `37`; inspected screen
+displays `Hello world!` and `37`. A separate source with
+`var unused = 1; var first = 2 - 5; var second = first + first; return second;`
+emits a 24-byte function with `argcincsp 0x01 0x03`, stores slots 1/2/3, and
+reads the negative slot twice. Console and inspected screen show `-6`. Both
+functions are reached through the original application lifecycle/view call
+sites. These results distinguish execution from the preserved SDK original
+returning `41`.
 
-**Interpretation:** allocating extra local slots after the one context slot supports these context-independent parameterless bodies. Locals retain initializer values across repeated reads. This does not establish general frame ownership, parameters, nested scopes, closures, overflow, or device runtime acceptance of all 255 structurally encodable locals.
+**Interpretation:** allocating extra local slots after the one context slot
+supports these context-independent parameterless bodies. Locals retain
+initializer values across repeated reads. This does not establish general frame
+ownership, parameters, nested scopes, closures, overflow, or device runtime
+acceptance of all 255 structurally encodable locals.
 
 ## Representation and limits
 
-The [frontend specification](../specs/compiler-subset.md) permits initialized `var` declarations before a final return, with earlier-local reads in arithmetic expressions. Names are resolved in declaration order. Self/forward/unknown reads and duplicate declarations produce source diagnostics. Reassignment, uninitialized declarations, comma declarations, nested scopes, calls, and other statements remain rejected.
+The [frontend specification](../specs/compiler-subset.md) permits initialized
+`var` declarations before a final return, with earlier-local reads in arithmetic
+expressions. Names are resolved in declaration order. Self/forward/unknown reads
+and duplicate declarations produce source diagnostics. Reassignment,
+uninitialized declarations, comma declarations, nested scopes, calls, and other
+statements remain rejected.
 
-Semantic `LocalId` is independent of `ValueId` and physical slots. `LocalInitialize` consumes an expression value; `LocalRead` defines a fresh value. Repeated reads share a local identity, not an expression definition. Each expression value still has one use. Initializations are statement sinks, executed in order, including unused locals. Backend slot allocation follows initialization order, regardless of numeric semantic IDs. With no locals, previous arithmetic/literal output is unchanged. The current scheduling policy relies on pure expressions and absence of reassignment; effectful operations require explicit ordering before extension.
+Semantic `LocalId` is independent of `ValueId` and physical slots.
+`LocalInitialize` consumes an expression value; `LocalRead` defines a fresh
+value. Repeated reads share a local identity, not an expression definition. Each
+expression value still has one use. Initializations are statement sinks,
+executed in order, including unused locals. Backend slot allocation follows
+initialization order, regardless of numeric semantic IDs. With no locals,
+previous arithmetic/literal output is unchanged. The current scheduling policy
+relies on pure expressions and absence of reassignment; effectful operations
+require explicit ordering before extension.
 
-[Provisional version-1 IR text](../specs/compiler-ir-text.md) adds `.local $<local-id> %<value-id>` and `.read %<result-id> $<local-id>`. Both use shared validation and optional source spans. No new crate, signing dependency, or application metadata generation is introduced. Limits: 255 locals, 1024 total operations including initialization/read/return, and 64 parenthesis levels.
+[Provisional version-1 IR text](../specs/compiler-ir-text.md) adds
+`.local $<local-id> %<value-id>` and `.read %<result-id> $<local-id>`. Both use
+shared validation and optional source spans. No new crate, signing dependency,
+or application metadata generation is introduced. Limits: 255 locals, 1024 total
+operations including initialization/read/return, and 64 parenthesis levels.
 
 ## Reproduction
 
-Run from the repository root with new output paths. SDK/device data and the external developer key are needed for SDK/signing/runtime stages.
+Run from the repository root with new output paths. SDK/device data and the
+external developer key are needed for SDK/signing/runtime stages.
 
 ```sh
 mkdir -p scratch/compiler-locals
@@ -89,7 +133,8 @@ sh scripts/build-example.sh examples/hello-world fr265
 target/debug/ciq-dis all examples/hello-world/build/fr265/hello-world.prg scratch/compiler-locals/base-project
 ```
 
-Specific integration for the measured 744-byte CODE/7777-byte RESOURCES scaffold (assertions deliberately reject other builds):
+Specific integration for the measured 744-byte CODE/7777-byte RESOURCES scaffold
+(assertions deliberately reject other builds):
 
 ```sh
 python3 - <<'PY'
@@ -116,21 +161,36 @@ for name in ['probe', 'negative']:
     manifest.write_text(text.replace('0xc0debabe 744 assembly', f'0xc0debabe {744 + size} assembly')
                            .replace('0xf00d600d 7777 raw', f'0xf00d600d {7777 + padding} raw'))
 PY
-target/debug/ciq-asm project scratch/compiler-locals/probe-project scratch/compiler-locals/probe-37.prg -y developer_key.der
-target/debug/ciq-asm project scratch/compiler-locals/negative-project scratch/compiler-locals/negative-6.prg -y developer_key.der
-target/debug/ciq-asm verify scratch/compiler-locals/probe-37.prg -y developer_key.der
-target/debug/ciq-asm verify scratch/compiler-locals/negative-6.prg -y developer_key.der
+target/debug/ciq-asm project scratch/compiler-locals/probe-project scratch/compiler-locals/probe-37.prg -y keys/developer_key.der
+target/debug/ciq-asm project scratch/compiler-locals/negative-project scratch/compiler-locals/negative-6.prg -y keys/developer_key.der
+target/debug/ciq-asm verify scratch/compiler-locals/probe-37.prg -y keys/developer_key.der
+target/debug/ciq-asm verify scratch/compiler-locals/negative-6.prg -y keys/developer_key.der
 sh scripts/run-simulator-container.sh --prg scratch/compiler-locals/probe-37.prg
 sh scripts/run-simulator-container.sh --prg scratch/compiler-locals/negative-6.prg
 ```
 
-Actual integration reused `scratch/arithmetic/base-project`, the identical baseline export. Runtime reused the existing Garmin container through container-broker with `xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg <path> --device fr265 --observe-seconds 8`. Capture/logs from `scratch/simulator/` were copied after each run to `scratch/compiler-locals/simulator-37/` and `simulator-negative-6/`; both screen images were inspected.
+Actual integration reused `scratch/arithmetic/base-project`, the identical
+baseline export. Runtime reused the existing Garmin container through
+container-broker with
+`xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg <path> --device fr265 --observe-seconds 8`.
+Capture/logs from `scratch/simulator/` were copied after each run to
+`scratch/compiler-locals/simulator-37/` and `simulator-negative-6/`; both screen
+images were inspected.
 
 ## Preservation and validation
 
-Independent section-wrapper parsing confirms only DATA, CODE, RESOURCES, and DEVELOPER_SIGNATURE change. Original CODE is an exact 744-byte prefix, followed by generated bytes at `0x2e8`. DATA's method value at `0x49f` becomes `0x100002e8`; other DATA bytes are unchanged. CODE grows to 770/768 bytes and raw RESOURCES gains 6/8 trailing zeros, preserving combined growth of 32 and signature-payload alignment modulo 32. This remains a bounded scaffold experiment, not a general relocation feature.
+Independent section-wrapper parsing confirms only DATA, CODE, RESOURCES, and
+DEVELOPER_SIGNATURE change. Original CODE is an exact 744-byte prefix, followed
+by generated bytes at `0x2e8`. DATA's method value at `0x49f` becomes
+`0x100002e8`; other DATA bytes are unchanged. CODE grows to 770/768 bytes and
+raw RESOURCES gains 6/8 trailing zeros, preserving combined growth of 32 and
+signature-payload alignment modulo 32. This remains a bounded scaffold
+experiment, not a general relocation feature.
 
-Existing debug/line mappings continue to name the original body. The generated body has no new debug mapping. Empty EXCEPTIONS and zero header CODE offsets remain unchanged. Both PRGs verify SHA-1/SHA-256 developer signatures against the supplied key. The positive output round-trips byte identically:
+Existing debug/line mappings continue to name the original body. The generated
+body has no new debug mapping. Empty EXCEPTIONS and zero header CODE offsets
+remain unchanged. Both PRGs verify SHA-1/SHA-256 developer signatures against
+the supplied key. The positive output round-trips byte identically:
 
 ```sh
 target/debug/ciq-dis all scratch/compiler-locals/probe-37.prg scratch/compiler-locals/roundtrip-project
@@ -147,4 +207,12 @@ cmp scratch/compiler-locals/probe-37.prg scratch/compiler-locals/roundtrip.prg
 | Signed `37` PRG | `94b39bf332b56568031c87413ee8ef06a17871a1d9c408d0726f2e1d3692e3ea` |
 | Signed `-6` PRG | `e74030888db75bf74bf97502bc0c83222caa990327404cac199180daeed521be` |
 
-Seven new tests cover initialization/read semantics and all pipeline paths, source spans, invalid names/reads/declarations, shared text/typed validation, noncontiguous semantic IDs versus slots, source/IR local and total-operation limits, and CLI output/diagnostics. The restricted instruction evaluator checks stack balance and store-before-read within this subset, not physical frames. All 136 workspace tests pass on Rust 1.99; formatting and workspace/all-target Clippy with warnings denied pass. Next: controlled call/frame specimens and a first supported function-call form. Reassignment needs its own semantic ordering extension.
+Seven new tests cover initialization/read semantics and all pipeline paths,
+source spans, invalid names/reads/declarations, shared text/typed validation,
+noncontiguous semantic IDs versus slots, source/IR local and total-operation
+limits, and CLI output/diagnostics. The restricted instruction evaluator checks
+stack balance and store-before-read within this subset, not physical frames. All
+136 workspace tests pass on Rust 1.99; formatting and workspace/all-target
+Clippy with warnings denied pass. Next: controlled call/frame specimens and a
+first supported function-call form. Reassignment needs its own semantic ordering
+extension.

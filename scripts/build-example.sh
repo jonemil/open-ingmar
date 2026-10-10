@@ -9,7 +9,7 @@ example_dir=$(CDPATH= cd -- "$1" && pwd)
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 example_name=$(basename -- "$example_dir")
 sdk_dir=${CIQ_SDK_HOME:-"$repo_dir/connectiq"}
-key_path=${CIQ_DEVELOPER_KEY:-"$repo_dir/developer_key.der"}
+key_path=${CIQ_DEVELOPER_KEY:-"$repo_dir/keys/developer_key.der"}
 data_dir=${CIQ_DATA_HOME:-"$repo_dir/scratch/garmin-data"}
 device=${2:-fr265}
 jungle_files=${CIQ_JUNGLE_FILES:-"$example_dir/monkey.jungle"}

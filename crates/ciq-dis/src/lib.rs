@@ -1,4 +1,7 @@
 //! Text output for the supported ordinary bytecode subset.
+//!
+//! Exports supported code and metadata as assembly and declarations. Unknown
+//! payloads remain raw bytes so exported projects can preserve them.
 
 use ciq_mc::{Error, decode};
 use ciq_prg::{

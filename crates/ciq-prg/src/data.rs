@@ -1,4 +1,4 @@
-//! Referenced DATA strings and opaque spans; see docs/specs/data-strings.md.
+//! Referenced DATA strings and opaque spans.
 
 use crate::symbols::source::{Error, tokens, valid_alias};
 use std::collections::{BTreeMap, BTreeSet};

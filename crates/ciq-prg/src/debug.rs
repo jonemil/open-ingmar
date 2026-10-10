@@ -1,4 +1,5 @@
-//! DEBUG strings and LINE_NUMBERS; see docs/specs/line-numbers-and-debug.md.
+//! DEBUG strings and LINE_NUMBERS.
+//!
 use crate::{
     data::{Fragment, Source as DataSource, StringDeclaration},
     symbols::source::{Error, tokens, valid_alias},

@@ -1,4 +1,4 @@
-//! Ordered, opaque PRG sections. See docs/specs/prg-container.md.
+//! Ordered, opaque PRG sections.
 
 pub mod debug;
 use std::fmt;
@@ -49,7 +49,6 @@ impl Section {
     }
 
     /// Research-derived names; recognizing a name does not decode its payload.
-    /// See the section catalogue in docs/investigations/rust-bootstrap.md.
     pub fn name(&self) -> Option<&'static str> {
         match self.kind {
             0xd000_d00d => Some("HEADER_VERSIONED"),

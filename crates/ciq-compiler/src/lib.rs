@@ -1,4 +1,8 @@
-//! Restricted Monkey C frontend. See docs/specs/compiler-subset.md.
+//! Restricted Monkey C frontend.
+//!
+//! [`compile`] parses Monkey C source and [`parse_ir`] parses saved IR text.
+//! Both produce a validated [`Function`], which [`backend::lower`] converts
+//! into typed VM assembly. Typed IR construction uses the same validation.
 
 pub mod backend;
 mod bindings;
@@ -114,7 +118,12 @@ impl fmt::Display for IrError {
 }
 impl std::error::Error for IrError {}
 
-/// Validated subset IR, constructible from source, text, or typed operations.
+/// A validated semantic IR function with a name, parameters, and operations.
+///
+/// Every expression value has one use and refers only to earlier definitions.
+/// Locals must be initialized before reads. Functions containing calls require
+/// operations in expression evaluation order. Operations cannot be mutated
+/// after validation; VM frame slots are assigned during lowering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
@@ -135,12 +144,19 @@ impl Function {
         &self.operations
     }
 
-    /// Construct IR through the same validation used by its text reader.
+    /// Construct and validate a zero-parameter function from IR operations.
+    ///
+    /// Uses [`Self::with_parameters`] with a parameter count of zero.
     pub fn new(name: String, operations: Vec<LocatedOperation>) -> Result<Self, IrError> {
         Self::with_parameters(name, 0, operations)
     }
 
-    /// Validate positional parameters independently of their source names.
+    /// Construct and validate a function with positional parameters.
+    ///
+    /// Parameter count includes unused parameters and excludes the VM context.
+    /// Rejects invalid names, spans, value/local dependencies, call ordering,
+    /// and unsupported operation or parameter/local counts. External callee
+    /// arity and types are not checked here.
     pub fn with_parameters(
         name: String,
         parameter_count: usize,
@@ -335,16 +351,24 @@ impl Function {
         })
     }
 
-    /// Lower directly to the shared typed assembly model, without printing/parsing.
+    /// Lower this IR function into a typed VM assembly program.
+    ///
+    /// [`backend::lower`] selects instructions and assigns frame slots. Module
+    /// and member aliases remain unresolved for later binding. Output contains
+    /// a function body, not a complete PRG.
     pub fn lower(&self) -> ciq_assembly::Program {
         backend::lower(self)
     }
 
+    /// Lower this function and serialize its VM assembly as `.mcasm` text.
     pub fn assembly(&self) -> String {
         self.lower().to_text()
     }
 
-    /// Provisional, versioned text representation of the semantic IR.
+    /// Serialize this function as provisional `ciq-ir 1` text.
+    ///
+    /// Retains semantic IDs, operation order, and optional source spans. The
+    /// output can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
             String::new()
@@ -403,6 +427,11 @@ impl Function {
     }
 }
 
+/// Parse one supported Monkey C function into validated semantic IR.
+///
+/// Resolves parameter and local names and retains source spans. Unsupported
+/// syntax, unresolved names, and invalid IR produce source diagnostics rather
+/// than partial output. VM instruction selection and symbol binding occur later.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
     let ast = parser::parse(source)?;
     fn emit(

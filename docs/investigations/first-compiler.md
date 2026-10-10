@@ -1,14 +1,36 @@
 # First Rust Monkey C compiler experiment
 
-2026-10-10. Question: can a restricted independent frontend generate a complete constant-return function and run it inside the known-good application? Result: source → small semantic IR → readable assembly → assembled/signed PRG → simulator is verified for `41` and `42`.
+2026-10-10. Question: can a restricted independent frontend generate a complete
+constant-return function and run it inside the known-good application? Result:
+source → small semantic IR → readable assembly → assembled/signed PRG →
+simulator is verified for `41` and `42`.
 
 ## Design and evidence
 
-The [representation decision](../design/compiler-ir.md) compares direct lowering with a small value-based IR. Chosen initial IR: an integer definition with a value ID, then a return of that value, both with source spans. It is an internal Rust representation, not Garmin MIR. The frontend and backend are independently written in `ciq-compiler`; no external implementation was incorporated. Opcode/frame assumptions come from [our instruction specifications](../specs/instructions.md) and [the prior arithmetic replacement](function-replacement.md). The latter supports context-independent arithmetic without the original globals-resolution sequence, but does not prove the complete calling convention.
+The [representation decision](../design/compiler-ir.md) compares direct lowering
+with a small value-based IR. Chosen initial IR: an integer definition with a
+value ID, then a return of that value, both with source spans. It is an internal
+Rust representation, not Garmin MIR. The frontend and backend are independently
+written in `ciq-compiler`; no external implementation was incorporated.
+Opcode/frame assumptions come from
+[our instruction specifications](../specs/instructions.md) and
+[the prior arithmetic replacement](function-replacement.md). The latter supports
+context-independent arithmetic without the original globals-resolution sequence,
+but does not prove the complete calling convention.
 
-Before implementation, [the restricted grammar and lowering contract](../specs/compiler-subset.md) were documented. Only a parameterless top-level function returning a decimal integer in `0..=127` is accepted. Unsupported syntax is rejected with locations. This range avoids unresolved high-bit immediate semantics; it is not the VM's integer range. Compiler tests use independently authored inputs and require no Garmin SDK.
+Before implementation,
+[the restricted grammar and lowering contract](../specs/compiler-subset.md) were
+documented. Only a parameterless top-level function returning a decimal integer
+in `0..=127` is accepted. Unsupported syntax is rejected with locations. This
+range avoids unresolved high-bit immediate semantics; it is not the VM's integer
+range. Compiler tests use independently authored inputs and require no Garmin
+SDK.
 
-SDK/simulator 9.2.0, `fr265`, scaffold compiled with `-O 0`. Input: tracked [probe.mc](../../examples/compiler-probe/probe.mc), returning `41`. A local second source replaces that literal with `42`. The original application provides lifecycle, resources, class/method metadata, symbol IDs, and container headers; this experiment does not compile those from scratch.
+SDK/simulator 9.2.0, `fr265`, scaffold compiled with `-O 0`. Input: tracked
+[probe.mc](../../examples/compiler-probe/probe.mc), returning `41`. A local
+second source replaces that literal with `42`. The original application provides
+lifecycle, resources, class/method metadata, symbol IDs, and container headers;
+this experiment does not compile those from scratch.
 
 ## Reproduction
 
@@ -32,7 +54,10 @@ ipush1 0x29
 return
 ```
 
-Its body is five bytes: `35 01 38 29 16`. The initial IR is conceptually `v0 = Integer(41); Return(v0)`; these semantic values are independent of physical VM slots. The backend emits the prologue and selects integer-push instructions.
+Its body is five bytes: `35 01 38 29 16`. The initial IR is conceptually
+`v0 = Integer(41); Return(v0)`; these semantic values are independent of
+physical VM slots. The backend emits the prologue and selects integer-push
+instructions.
 
 Prepare the changed-source comparison and compile it:
 
@@ -45,7 +70,9 @@ PY
 target/debug/ciq-compiler scratch/compiler/probe-42.mc scratch/compiler/probe-42.mcasm
 ```
 
-Explicit scaffold integration (specific to the measured 744-byte CODE and 7777-byte RESOURCES specimen; these assertions deliberately fail for a different build):
+Explicit scaffold integration (specific to the measured 744-byte CODE and
+7777-byte RESOURCES specimen; these assertions deliberately fail for a different
+build):
 
 ```sh
 python3 - <<'PY'
@@ -71,26 +98,47 @@ for value in [41, 42]:
     manifest.write_text(text.replace('0xc0debabe 744 assembly', '0xc0debabe 749 assembly')
                            .replace('0xf00d600d 7777 raw', '0xf00d600d 7804 raw'))
 PY
-target/debug/ciq-asm project scratch/compiler/hello-41-project scratch/compiler/hello-41.prg -y developer_key.der
-target/debug/ciq-asm project scratch/compiler/hello-42-project scratch/compiler/hello-42.prg -y developer_key.der
-target/debug/ciq-asm verify scratch/compiler/hello-41.prg -y developer_key.der
-target/debug/ciq-asm verify scratch/compiler/hello-42.prg -y developer_key.der
+target/debug/ciq-asm project scratch/compiler/hello-41-project scratch/compiler/hello-41.prg -y keys/developer_key.der
+target/debug/ciq-asm project scratch/compiler/hello-42-project scratch/compiler/hello-42.prg -y keys/developer_key.der
+target/debug/ciq-asm verify scratch/compiler/hello-41.prg -y keys/developer_key.der
+target/debug/ciq-asm verify scratch/compiler/hello-42.prg -y keys/developer_key.der
 sh scripts/run-simulator-container.sh --prg scratch/compiler/hello-41.prg
 sh scripts/run-simulator-container.sh --prg scratch/compiler/hello-42.prg
 ```
 
-Actual simulator execution used the existing Garmin container through container-broker with `xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg <path> --device fr265 --observe-seconds 8`. Logs/screens were saved under ignored `scratch/compiler/simulator-41/` and `simulator-42/`. Both captured watch screens were inspected.
+Actual simulator execution used the existing Garmin container through
+container-broker with
+`xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg <path> --device fr265 --observe-seconds 8`.
+Logs/screens were saved under ignored `scratch/compiler/simulator-41/` and
+`simulator-42/`. Both captured watch screens were inspected.
 
 ## Experimentally observed results
 
-- Both compiled bodies execute through the application's lifecycle and view call sites: greeting plus `41`/`42` in the console, and `Hello world!` plus `41`/`42` on screen. The changed value distinguishes execution of the generated target from the retained SDK original returning `41`.
-- Original CODE is an exact 744-byte prefix of both outputs. Generated CODE starts at `0x2e8` and grows CODE to 749 bytes. The new `42` suffix is `35 01 38 2a 16`.
-- DATA's `probe` method value at `0x49f` changes from `0x10000030` to `0x100002e8`; every other DATA byte is preserved.
-- Existing DEBUG/line metadata remains byte identical because the original probe line PC still names `probe_original`. No source map is generated for the appended function yet. This keeps the old debug mapping with the old body rather than claiming it describes the new one.
-- Raw RESOURCES gains 27 trailing zero bytes, giving combined CODE/resource growth of 32 bytes and preserving the original signature-payload alignment modulo 32. This follows the [previous append experiment](code-labels-and-relocation.md), not a universal format rule or automatic resource relocation feature.
-- All other non-signature sections are byte identical. Both outputs verify SHA-1/SHA-256 developer signatures against the supplied external key.
-- Empty EXCEPTIONS (`00 00`) and the existing zero header CODE offsets remain unchanged. This experiment does not validate branches, exception ranges, or nonzero header relocation.
-- Exporting/reassembling `hello-42.prg` without signing reproduces it byte for byte:
+- Both compiled bodies execute through the application's lifecycle and view call
+  sites: greeting plus `41`/`42` in the console, and `Hello world!` plus
+  `41`/`42` on screen. The changed value distinguishes execution of the
+  generated target from the retained SDK original returning `41`.
+- Original CODE is an exact 744-byte prefix of both outputs. Generated CODE
+  starts at `0x2e8` and grows CODE to 749 bytes. The new `42` suffix is
+  `35 01 38 2a 16`.
+- DATA's `probe` method value at `0x49f` changes from `0x10000030` to
+  `0x100002e8`; every other DATA byte is preserved.
+- Existing DEBUG/line metadata remains byte identical because the original probe
+  line PC still names `probe_original`. No source map is generated for the
+  appended function yet. This keeps the old debug mapping with the old body
+  rather than claiming it describes the new one.
+- Raw RESOURCES gains 27 trailing zero bytes, giving combined CODE/resource
+  growth of 32 bytes and preserving the original signature-payload alignment
+  modulo 32. This follows the
+  [previous append experiment](code-labels-and-relocation.md), not a universal
+  format rule or automatic resource relocation feature.
+- All other non-signature sections are byte identical. Both outputs verify
+  SHA-1/SHA-256 developer signatures against the supplied external key.
+- Empty EXCEPTIONS (`00 00`) and the existing zero header CODE offsets remain
+  unchanged. This experiment does not validate branches, exception ranges, or
+  nonzero header relocation.
+- Exporting/reassembling `hello-42.prg` without signing reproduces it byte for
+  byte:
 
 ```sh
 target/debug/ciq-dis all scratch/compiler/hello-42.prg scratch/compiler/hello-42-roundtrip-project
@@ -107,6 +155,16 @@ cmp scratch/compiler/hello-42.prg scratch/compiler/hello-42-roundtrip.prg
 
 ## Implementation validation and next step
 
-Five new tests cover IR value identity/source spans, every accepted literal assembled and evaluated by a restricted encoding test, unsupported-input rejection, Unicode/comment locations, and CLI overwrite/invalid-input behavior. The encoding test is not a full VM or a substitute for the simulator evidence. All 116 workspace tests pass with Rust 1.99; formatting and Clippy with warnings denied pass.
+Five new tests cover IR value identity/source spans, every accepted literal
+assembled and evaluated by a restricted encoding test, unsupported-input
+rejection, Unicode/comment locations, and CLI overwrite/invalid-input behavior.
+The encoding test is not a full VM or a substitute for the simulator evidence.
+All 116 workspace tests pass with Rust 1.99; formatting and Clippy with warnings
+denied pass.
 
-The result supports `argc 0x01` followed by a context-independent integer return for this global function and its existing call sites. It does not establish frame setup for arbitrary methods, closures, parameters, or locals. Next extend the IR/parser/backend to a small arithmetic expression, then locals and calls using controlled specimens; continue branch/exception investigation before supporting conditions and changing code layout generally.
+The result supports `argc 0x01` followed by a context-independent integer return
+for this global function and its existing call sites. It does not establish
+frame setup for arbitrary methods, closures, parameters, or locals. Next extend
+the IR/parser/backend to a small arithmetic expression, then locals and calls
+using controlled specimens; continue branch/exception investigation before
+supporting conditions and changing code layout generally.

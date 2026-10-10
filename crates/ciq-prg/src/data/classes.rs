@@ -1,4 +1,5 @@
-//! Read-only DATA class/module framing. See docs/specs/data-classes.md.
+//! Read-only DATA class/module framing.
+//!
 use crate::symbols::source::Error;
 pub mod source;
 

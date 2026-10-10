@@ -1,4 +1,4 @@
-//! Instruction encodings observed in our specimens; see docs/specs/bytecode-subset.md.
+//! Instruction encodings observed in our specimens.
 
 use std::fmt;
 

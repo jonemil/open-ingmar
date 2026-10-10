@@ -1,4 +1,4 @@
-//! Initial assembly grammar; see docs/specs/bytecode-subset.md.
+//! Initial assembly grammar.
 
 use ciq_prg::{
     Prg, Section,

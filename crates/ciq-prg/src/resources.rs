@@ -1,4 +1,4 @@
-//! Read-only resource string indexes; see docs/specs/resources.md.
+//! Read-only resource string indexes.
 
 use crate::symbols::source::Error;
 use std::collections::BTreeSet;

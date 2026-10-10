@@ -19,6 +19,7 @@
 /*.tar.xz
 
 # Local signing keys and generated example artifacts.
+/keys/
 *.der
 *.pem
 *.key

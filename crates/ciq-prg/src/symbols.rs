@@ -1,4 +1,4 @@
-//! Observed symbol-table payload format. See docs/specs/symbols.md.
+//! Observed symbol-table payload format.
 
 pub mod source;
 

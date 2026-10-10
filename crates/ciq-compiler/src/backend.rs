@@ -8,7 +8,12 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
     Item::Instruction { opcode, operands }
 }
 
-/// Schedule each initialization/return in order, following its value dependencies.
+/// Lower a validated IR function into a typed VM assembly program.
+///
+/// Selects instructions and assigns parameter/local frame slots. Initializers
+/// execute in order; expression operands and call arguments evaluate left to
+/// right. Relies on [`Function`] validation to exclude shared expression values
+/// and incompatible call schedules. Module/member aliases remain unresolved.
 pub fn lower(function: &Function) -> Program {
     let mut definitions = BTreeMap::new();
     let mut slots = BTreeMap::new();

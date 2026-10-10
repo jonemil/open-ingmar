@@ -1,17 +1,37 @@
 # Structured line metadata and in-place function sizes
 
-Date: 2026-10-09. SDK 9.2.0 / `fr265`, unoptimized debug Hello World and Minimal Console. Follow-up to [shared CODE labels and controlled SDK comparisons](code-labels-and-relocation.md). The user reported success after the grow/shrink instructions. Fresh host console and screen captures confirm the **shrunk variant returning 45**; no separate capture of the grown variant returning 44 is retained.
+Date: 2026-10-09. SDK 9.2.0 / `fr265`, unoptimized debug Hello World and Minimal
+Console. Follow-up to [shared CODE labels and controlled SDK
+comparisons][ref-shared-code-labels-and-controlled-sdk-co]. The user reported
+success after the grow/shrink instructions. Fresh host console and screen
+captures confirm the **shrunk variant returning 45**; no separate capture of the
+grown variant returning 44 is retained.
 
 ## Evidence and implementation
 
-The earlier controlled Garmin compiler runs established the local LINE_NUMBERS entry framing and DEBUG string offsets, and showed which method/line PCs move when `probe()` grows. Their source attribution and pinned external references remain in that investigation and [the bootstrap](rust-bootstrap.md). This implementation is independently written Rust using [our metadata specification](../specs/line-numbers-and-debug.md), without external repository dependencies.
+The earlier controlled Garmin compiler runs established the local LINE_NUMBERS
+entry framing and DEBUG string offsets, and showed which method/line PCs move
+when `probe()` grows. Their source attribution and pinned external references
+remain in that investigation and [the bootstrap](rust-bootstrap.md). This
+implementation is independently written Rust using
+[our metadata specification](../specs/line-numbers-and-debug.md), without
+external repository dependencies.
 
 Experimentally observed here:
 
-- Both original examples export as version 4 projects with DEBUG strings and line entries as authoritative assembly. Complete reassembly preserves every byte, including signatures.
-- Hello World has eight DEBUG strings, 45 line entries, and a 744-byte ordinary CODE payload. Every line PC resolves to a decoded instruction boundary. Every filename/function word resolves to a DEBUG string boundary.
-- The exporter shares method labels with DATA and introduces labels for additional line PCs. The importer loads all bindings before assembly, regardless of manifest order.
-- Synthetic tests cover label movement, DEBUG string movement, preserved entry order/duplicate PCs, foreign PCs, raw fallback, malformed lengths, undefined references, placement conflicts, and end-of-CODE rejection. All 67 workspace tests pass; Clippy with warnings denied passes.
+- Both original examples export as version 4 projects with DEBUG strings and
+  line entries as authoritative assembly. Complete reassembly preserves every
+  byte, including signatures.
+- Hello World has eight DEBUG strings, 45 line entries, and a 744-byte ordinary
+  CODE payload. Every line PC resolves to a decoded instruction boundary. Every
+  filename/function word resolves to a DEBUG string boundary.
+- The exporter shares method labels with DATA and introduces labels for
+  additional line PCs. The importer loads all bindings before assembly,
+  regardless of manifest order.
+- Synthetic tests cover label movement, DEBUG string movement, preserved entry
+  order/duplicate PCs, foreign PCs, raw fallback, malformed lengths, undefined
+  references, placement conflicts, and end-of-CODE rejection. All 67 workspace
+  tests pass; Clippy with warnings denied passes.
 
 Original preservation checks:
 
@@ -22,11 +42,19 @@ Original preservation checks:
 
 ## Scope of the in-place experiment
 
-The original Hello World `probe()` occupies CODE `[0x30, 0x3d)`, 13 bytes. Both variants replace that interval, retaining the `probe` entry label at `0x30` and physically moving the later instructions. This extends the previous append-only experiment, which left existing instructions in place.
+The original Hello World `probe()` occupies CODE `[0x30, 0x3d)`, 13 bytes. Both
+variants replace that interval, retaining the `probe` entry label at `0x30` and
+physically moving the later instructions. This extends the previous append-only
+experiment, which left existing instructions in place.
 
-The specimen has fully decoded branch-free ordinary CODE, an empty EXCEPTIONS count (`0000`), and a 33-byte HEADER_VERSIONED containing `00060002` followed by 29 zero bytes. Its background/glance offsets are zero. This bounds the experiment; no generic relocation operation or handling of nonempty exceptions, nonzero header offsets, extended code, or bundles is implemented.
+The specimen has fully decoded branch-free ordinary CODE, an empty EXCEPTIONS
+count (`0000`), and a 33-byte HEADER_VERSIONED containing `00060002` followed by
+29 zero bytes. Its background/glance offsets are zero. This bounds the
+experiment; no generic relocation operation or handling of nonempty exceptions,
+nonzero header offsets, extended code, or bundles is implemented.
 
-Grow to 24 bytes, computing `40 + 4` through local slot 1; expected result **44**:
+Grow to 24 bytes, computing `40 + 4` through local slot 1; expected result
+**44**:
 
 ```text
 probe:
@@ -55,13 +83,28 @@ ipush1 0x2d
 return
 ```
 
-The original source-line entry for the return expression points to `code_0000003a`. Retain that alias deliberately at new CODE `0x3f` for the grown computation and `0x32` for the shrunk literal. Its spelling is a source identity, not a placement constraint. The entry label stays fixed. Existing later labels move by +11 or -8. Source line numbers and file/function identities stay unchanged; this policy maps the edited expression to the original source line and does not claim the original Monkey C text describes the new instructions.
+The original source-line entry for the return expression points to
+`code_0000003a`. Retain that alias deliberately at new CODE `0x3f` for the grown
+computation and `0x32` for the shrunk literal. Its spelling is a source
+identity, not a placement constraint. The entry label stays fixed. Existing
+later labels move by +11 or -8. Source line numbers and file/function identities
+stay unchanged; this policy maps the edited expression to the original source
+line and does not claim the original Monkey C text describes the new
+instructions.
 
-Keep every DATA/DEBUG `at=` constraint. No ignore-placement option is introduced. Explicitly update the manifest CODE length to 755 or 736. As a local experiment precaution, append 21 or 8 zero bytes to RESOURCES so the developer signature payload retains the SDK's observed 32-byte file alignment. Its role is still an interpretation of the compiler-output pattern, **not an established general PRG validity requirement**. Do not normalize arbitrary opaque resource tails or infer general padding rules from this specimen.
+Keep every DATA/DEBUG `at=` constraint. No ignore-placement option is
+introduced. Explicitly update the manifest CODE length to 755 or 736. As a local
+experiment precaution, append 21 or 8 zero bytes to RESOURCES so the developer
+signature payload retains the SDK's observed 32-byte file alignment. Its role is
+still an interpretation of the compiler-output pattern, **not an established
+general PRG validity requirement**. Do not normalize arbitrary opaque resource
+tails or infer general padding rules from this specimen.
 
 ## Reproduction
 
-Build the original if necessary with `sh scripts/build-example.sh examples/hello-world`. Use fresh output paths: the tools refuse existing export directories and PRGs.
+Build the original if necessary with
+`sh scripts/build-example.sh examples/hello-world`. Use fresh output paths: the
+tools refuse existing export directories and PRGs.
 
 ```sh
 mkdir -p scratch/line-metadata
@@ -71,7 +114,13 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/line-metadata/minimal-project scratch/line-metadata/minimal-roundtrip.prg
 ```
 
-Copy `hello-project` to `hello-inplace-grown` and `hello-inplace-shrunk` under the same scratch directory. In `003-code-c0debabe.mcasm`, replace everything from `probe:` through the instruction immediately before `code_0000003d:` with the corresponding body above. Retain `code_0000003d:` and all following instructions and labels. In `sections.ciq`, change only the CODE payload length (744 → 755/736) and RESOURCES length (7777 → 7798/7785). Append the corresponding zeros to the resource payload, for example:
+Copy `hello-project` to `hello-inplace-grown` and `hello-inplace-shrunk` under
+the same scratch directory. In `003-code-c0debabe.mcasm`, replace everything
+from `probe:` through the instruction immediately before `code_0000003d:` with
+the corresponding body above. Retain `code_0000003d:` and all following
+instructions and labels. In `sections.ciq`, change only the CODE payload length
+(744 → 755/736) and RESOURCES length (7777 → 7798/7785). Append the
+corresponding zeros to the resource payload, for example:
 
 ```sh
 python3 - <<'PY'
@@ -82,36 +131,55 @@ for name, count in [('grown', 21), ('shrunk', 8)]:
     assert len(original) == 7777  # refuse to pad twice
     path.write_bytes(original + bytes(count))
 PY
-cargo run -p ciq-asm -- project scratch/line-metadata/hello-inplace-grown scratch/line-metadata/hello-inplace-grown.prg -y developer_key.der
-cargo run -p ciq-asm -- project scratch/line-metadata/hello-inplace-shrunk scratch/line-metadata/hello-inplace-shrunk.prg -y developer_key.der
-cargo run -p ciq-asm -- verify scratch/line-metadata/hello-inplace-grown.prg -y developer_key.der
-cargo run -p ciq-asm -- verify scratch/line-metadata/hello-inplace-shrunk.prg -y developer_key.der
+cargo run -p ciq-asm -- project scratch/line-metadata/hello-inplace-grown scratch/line-metadata/hello-inplace-grown.prg -y keys/developer_key.der
+cargo run -p ciq-asm -- project scratch/line-metadata/hello-inplace-shrunk scratch/line-metadata/hello-inplace-shrunk.prg -y keys/developer_key.der
+cargo run -p ciq-asm -- verify scratch/line-metadata/hello-inplace-grown.prg -y keys/developer_key.der
+cargo run -p ciq-asm -- verify scratch/line-metadata/hello-inplace-shrunk.prg -y keys/developer_key.der
 ```
 
-Method and line targets follow CODE labels automatically; no manual address-word editing is needed. The original signature file remains preservation input; `-y` replaces it after reconstruction. The private key remains outside the export and Git.
+Method and line targets follow CODE labels automatically; no manual address-word
+editing is needed. The original signature file remains preservation input; `-y`
+replaces it after reconstruction. The private key remains outside the export and
+Git.
 
 ## Checks and prepared artifacts
 
 Independent payload comparisons against the original assert:
 
-- Same section identities and order; every section outside CODE, DATA, LINE_NUMBERS, RESOURCES, and DEVELOPER_SIGNATURE is byte identical.
-- CODE prefix before `0x30` is unchanged. Original suffix starting at `0x3d` is byte identical at new `0x48` (grown) or `0x35` (shrunk).
-- DATA changes are exactly 25 ordinary method address words originally at/after `0x3d`, each by +11 or -8. `probe` stays at `0x30`; all other DATA bytes, including class layout and strings, are unchanged.
-- All 45 line entries retain order, file/function offsets, and source line numbers. Exactly 41 PCs change: the expression mapping described above plus 40 entries after the old function. Earlier PCs are unchanged.
-- RESOURCES is the complete original payload followed by the chosen zeros. Both signature payload offsets remain divisible by 32 (121152 grown, 121120 shrunk).
-- SHA-1 and SHA-256 RSA signatures verify against the supplied developer key. An independent Python public-RSA calculation also validates both digest signatures; the embedded public key matches the original local-key build.
+- Same section identities and order; every section outside CODE, DATA,
+  LINE_NUMBERS, RESOURCES, and DEVELOPER_SIGNATURE is byte identical.
+- CODE prefix before `0x30` is unchanged. Original suffix starting at `0x3d` is
+  byte identical at new `0x48` (grown) or `0x35` (shrunk).
+- DATA changes are exactly 25 ordinary method address words originally at/after
+  `0x3d`, each by +11 or -8. `probe` stays at `0x30`; all other DATA bytes,
+  including class layout and strings, are unchanged.
+- All 45 line entries retain order, file/function offsets, and source line
+  numbers. Exactly 41 PCs change: the expression mapping described above plus 40
+  entries after the old function. Earlier PCs are unchanged.
+- RESOURCES is the complete original payload followed by the chosen zeros. Both
+  signature payload offsets remain divisible by 32 (121152 grown, 121120
+  shrunk).
+- SHA-1 and SHA-256 RSA signatures verify against the supplied developer key. An
+  independent Python public-RSA calculation also validates both digest
+  signatures; the embedded public key matches the original local-key build.
 - Each signed variant completes another byte-identical full export/import.
 
-| Variant | PRG bytes | CODE bytes | SHA-256 |
-|---|---:|---:|---|
-| `scratch/line-metadata/hello-inplace-grown.prg` | 122700 | 755 | `7588f12c1e54ff964144c85b8bb18c78dc84cd003aeec1e93786ce737ffb32b9` |
-| `scratch/line-metadata/hello-inplace-shrunk.prg` | 122668 | 736 | `afd1ef9716082fc664680b4bdff572219420c434f01895a3dac815d78e5ec657` |
+- **Variant:** `scratch/line-metadata/hello-inplace-grown.prg`. **PRG bytes:**
+  122700. **CODE bytes:** 755. **SHA-256:**
+          `7588f12c1e54ff964144c85b8bb18c78dc84cd003aeec1e93786ce737ffb32b9`.
 
-These hashes depend on the original build and local key; a different key legitimately changes signing material. Generated exports, comparison JSON, and PRGs remain ignored under `scratch/line-metadata/`.
+- **Variant:** `scratch/line-metadata/hello-inplace-shrunk.prg`. **PRG bytes:**
+  122668. **CODE bytes:** 736. **SHA-256:**
+          `afd1ef9716082fc664680b4bdff572219420c434f01895a3dac815d78e5ec657`.
+
+These hashes depend on the original build and local key; a different key
+legitimately changes signing material. Generated exports, comparison JSON, and
+PRGs remain ignored under `scratch/line-metadata/`.
 
 ## Host runtime result and follow-up
 
-Podman is unavailable in the agent container. Run on the host, checking each capture before the next run overwrites it:
+Podman is unavailable in the agent container. Run on the host, checking each
+capture before the next run overwrites it:
 
 ```sh
 sh scripts/run-simulator-container.sh --prg scratch/line-metadata/hello-inplace-grown.prg
@@ -120,6 +188,21 @@ sh scripts/run-simulator-container.sh --prg scratch/line-metadata/hello-inplace-
 # Expected: greeting and 45 in both console and watch screen.
 ```
 
-Host result, 2026-10-09: the user reported that it worked. The latest console capture (20:53:04 UTC) contains `Hello from Monkey C!` and `45`; the screen capture (20:53:14 UTC) visually shows `Hello world!` and `45`. The agent inspected both, and the shrunk PRG hash still matches the prepared artifact above. Console SHA-256: `d96580222908c949508f13924ca5a15c5c1a6192cc8fed2d9a8e495c1102d0b0`; screen SHA-256: `5ba67e62fcb3d9d960a7493a7b553b128e1a40e25542dd6d7c76e71210a4eeb0`. Captures remain ignored under `scratch/simulator/`.
+Host result, 2026-10-09: the user reported that it worked. The latest console
+capture (20:53:04 UTC) contains `Hello from Monkey C!` and `45`; the screen
+capture (20:53:14 UTC) visually shows `Hello world!` and `45`. The agent
+inspected both, and the shrunk PRG hash still matches the prepared artifact
+above. Console SHA-256:
+`d96580222908c949508f13924ca5a15c5c1a6192cc8fed2d9a8e495c1102d0b0`; screen
+SHA-256: `5ba67e62fcb3d9d960a7493a7b553b128e1a40e25542dd6d7c76e71210a4eeb0`.
+Captures remain ignored under `scratch/simulator/`.
 
-This confirms runtime acceptance of the in-place 13 → 5 byte replacement, including execution through later moved methods. It does not independently validate debugger breakpoint behavior or every line mapping. The latest captures cover the shrunk variant; no separate grown-variant capture is retained, so agent-observed `44` execution remains unverified. Next investigate more complex multi-file source and barrel/bundle specimens before choosing placement relaxation, automatic layout, or a separate linker design.
+This confirms runtime acceptance of the in-place 13 → 5 byte replacement,
+including execution through later moved methods. It does not independently
+validate debugger breakpoint behavior or every line mapping. The latest captures
+cover the shrunk variant; no separate grown-variant capture is retained, so
+agent-observed `44` execution remains unverified. Next investigate more complex
+multi-file source and barrel/bundle specimens before choosing placement
+relaxation, automatic layout, or a separate linker design.
+
+[ref-shared-code-labels-and-controlled-sdk-co]: code-labels-and-relocation.md
