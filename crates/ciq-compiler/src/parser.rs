@@ -2,6 +2,7 @@ use crate::{Diagnostic, Span};
 
 pub(crate) struct ParsedFunction {
     pub name: String,
+    pub parameters: Vec<String>,
     pub locals: Vec<LocalDeclaration>,
     pub expression: Expression,
     pub return_span: Span,
@@ -23,6 +24,7 @@ pub(crate) enum ExpressionKind {
     ModuleCall {
         module: String,
         member: String,
+        arguments: Vec<Expression>,
     },
     Binary {
         kind: crate::BinaryOp,
@@ -93,7 +95,7 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.')) => {
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -187,17 +189,32 @@ impl<'a> Parser<'a> {
                         Kind::Punctuation('('),
                         "'(' (only module calls are supported)",
                     )?;
-                    let end = self
-                        .expect(
-                            Kind::Punctuation(')'),
-                            "')' (call arguments are unsupported)",
-                        )?
-                        .span
-                        .end;
+                    if depth >= 64 {
+                        return Err(
+                            self.error(token.span.start, "expression nesting exceeds 64 levels")
+                        );
+                    }
+                    let mut arguments = Vec::new();
+                    if self.peek()? != Kind::Punctuation(')') {
+                        loop {
+                            if arguments.len() >= crate::MAX_PARAMETERS {
+                                return Err(
+                                    self.error(token.span.start, "call exceeds 254-argument limit")
+                                );
+                            }
+                            arguments.push(self.expression(depth + 1)?);
+                            if self.peek()? != Kind::Punctuation(',') {
+                                break;
+                            }
+                            self.token()?;
+                        }
+                    }
+                    let end = self.expect(Kind::Punctuation(')'), "')'")?.span.end;
                     self.node(
                         ExpressionKind::ModuleCall {
                             module: name.into(),
                             member: member.into(),
+                            arguments,
                         },
                         Span {
                             start: token.span.start,
@@ -251,7 +268,32 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         unreachable!()
     };
     parser.expect(Kind::Punctuation('('), "'('")?;
-    parser.expect(Kind::Punctuation(')'), "')' (parameters are unsupported)")?;
+    let mut parameters = Vec::new();
+    if parser.peek()? != Kind::Punctuation(')') {
+        loop {
+            let parameter = parser.identifier()?;
+            let Kind::Word(name) = parameter.kind else {
+                unreachable!()
+            };
+            if parameters.len() >= crate::MAX_PARAMETERS {
+                return Err(
+                    parser.error(parameter.span.start, "function exceeds 254-parameter limit")
+                );
+            }
+            if parameters.iter().any(|p| p == name) {
+                return Err(parser.error(
+                    parameter.span.start,
+                    format!("duplicate parameter {name:?}"),
+                ));
+            }
+            parameters.push(name.to_owned());
+            if parser.peek()? != Kind::Punctuation(',') {
+                break;
+            }
+            parser.token()?;
+        }
+    }
+    parser.expect(Kind::Punctuation(')'), "')'")?;
     parser.expect(Kind::Punctuation('{'), "'{'")?;
     let mut locals = Vec::new();
     while parser.peek()? == Kind::Word("var") {
@@ -263,6 +305,12 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         let Kind::Word(name) = name.kind else {
             unreachable!()
         };
+        if parameters.iter().any(|parameter| parameter == name) {
+            return Err(parser.error(start, "local declaration shadows a parameter"));
+        }
+        if parameters.len() + locals.len() >= crate::MAX_LOCALS {
+            return Err(parser.error(start, "parameters plus locals exceed 255-slot limit"));
+        }
         if locals
             .iter()
             .any(|local: &LocalDeclaration| local.name == name)
@@ -296,6 +344,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(ParsedFunction {
         name: identifier.to_owned(),
+        parameters,
         locals,
         expression,
         return_span: Span {

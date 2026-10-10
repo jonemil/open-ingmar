@@ -51,6 +51,7 @@ pub struct ValueId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalId(pub u32);
 
+pub(crate) const MAX_PARAMETERS: usize = 254;
 pub(crate) const MAX_LOCALS: usize = 255;
 pub(crate) const MAX_OPERATIONS: usize = 1024;
 
@@ -72,10 +73,15 @@ pub enum Operation {
         left: ValueId,
         right: ValueId,
     },
+    ParameterRead {
+        result: ValueId,
+        index: usize,
+    },
     ModuleCall {
         result: ValueId,
         module: String,
         member: String,
+        arguments: Vec<ValueId>,
     },
     LocalInitialize {
         local: LocalId,
@@ -112,6 +118,7 @@ impl std::error::Error for IrError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     name: String,
+    parameter_count: usize,
     operations: Vec<LocatedOperation>,
 }
 
@@ -120,12 +127,31 @@ impl Function {
         &self.name
     }
 
+    pub fn parameter_count(&self) -> usize {
+        self.parameter_count
+    }
+
     pub fn operations(&self) -> &[LocatedOperation] {
         &self.operations
     }
 
     /// Construct IR through the same validation used by its text reader.
     pub fn new(name: String, operations: Vec<LocatedOperation>) -> Result<Self, IrError> {
+        Self::with_parameters(name, 0, operations)
+    }
+
+    /// Validate positional parameters independently of their source names.
+    pub fn with_parameters(
+        name: String,
+        parameter_count: usize,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        if parameter_count > MAX_PARAMETERS {
+            return Err(IrError {
+                operation: None,
+                message: "function exceeds 254-parameter limit".into(),
+            });
+        }
         let valid_name = name
             .bytes()
             .next()
@@ -167,10 +193,17 @@ impl Function {
                     right,
                     ..
                 } => (Some(result), vec![left, right]),
+                Operation::ParameterRead { result, index } => {
+                    if index >= parameter_count {
+                        return Err(fail("parameter index is outside the function signature"));
+                    }
+                    (Some(result), vec![])
+                }
                 Operation::ModuleCall {
                     result,
                     ref module,
                     ref member,
+                    ref arguments,
                 } => {
                     let valid = |name: &str| {
                         name.bytes()
@@ -181,7 +214,10 @@ impl Function {
                     if !valid(module) || !valid(member) {
                         return Err(fail("invalid module or member name"));
                     }
-                    (Some(result), vec![])
+                    if arguments.len() > MAX_PARAMETERS {
+                        return Err(fail("call exceeds 254-argument limit"));
+                    }
+                    (Some(result), arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
                     if !locals.insert(local) {
@@ -189,6 +225,9 @@ impl Function {
                     }
                     if locals.len() > MAX_LOCALS {
                         return Err(fail("function exceeds 255-local limit"));
+                    }
+                    if parameter_count + locals.len() > MAX_LOCALS {
+                        return Err(fail("parameters plus locals exceed 255-slot limit"));
                     }
                     (None, vec![value])
                 }
@@ -262,9 +301,14 @@ impl Function {
                         Task::Value(value) => {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
-                            if let Operation::Binary { left, right, .. } = operations[at].operation
-                            {
-                                tasks.extend([Task::Value(right), Task::Value(left)]);
+                            match &operations[at].operation {
+                                Operation::Binary { left, right, .. } => {
+                                    tasks.extend([Task::Value(*right), Task::Value(*left)])
+                                }
+                                Operation::ModuleCall { arguments, .. } => tasks.extend(
+                                    arguments.iter().rev().map(|value| Task::Value(*value)),
+                                ),
+                                _ => {}
                             }
                         }
                     }
@@ -284,7 +328,11 @@ impl Function {
                 });
             }
         }
-        Ok(Self { name, operations })
+        Ok(Self {
+            name,
+            parameter_count,
+            operations,
+        })
     }
 
     /// Lower directly to the shared typed assembly model, without printing/parsing.
@@ -298,7 +346,12 @@ impl Function {
 
     /// Provisional, versioned text representation of the semantic IR.
     pub fn to_ir_text(&self) -> String {
-        let mut text = format!("ciq-ir 1\n.function {}\n", self.name);
+        let parameters = if self.parameter_count == 0 {
+            String::new()
+        } else {
+            format!(" parameters={}", self.parameter_count)
+        };
+        let mut text = format!("ciq-ir 1\n.function {}{parameters}\n", self.name);
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
@@ -321,7 +374,17 @@ impl Function {
                     result,
                     ref module,
                     ref member,
-                } => format!(".call %{} {module} {member}", result.0),
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|value| format!(" %{}", value.0))
+                        .collect::<String>();
+                    format!(".call %{} {module} {member}{arguments}", result.0)
+                }
+                Operation::ParameterRead { result, index } => {
+                    format!(".parameter %{} {index}", result.0)
+                }
                 Operation::LocalInitialize { local, value } => {
                     format!(".local ${} %{}", local.0, value.0)
                 }
@@ -346,6 +409,7 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         source: &str,
         expression: parser::Expression,
         locals: &std::collections::BTreeMap<String, LocalId>,
+        parameters: &std::collections::BTreeMap<String, usize>,
         operations: &mut Vec<LocatedOperation>,
     ) -> Result<ValueId, Diagnostic> {
         let operation = match expression.kind {
@@ -353,33 +417,52 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
                 result: ValueId(operations.len() as u32),
                 value,
             },
-            parser::ExpressionKind::Local(name) => Operation::LocalRead {
-                result: ValueId(operations.len() as u32),
-                local: *locals.get(&name).ok_or_else(|| {
-                    Diagnostic::at(
+            parser::ExpressionKind::Local(name) => {
+                let result = ValueId(operations.len() as u32);
+                if let Some(local) = locals.get(&name) {
+                    Operation::LocalRead {
+                        result,
+                        local: *local,
+                    }
+                } else if let Some(index) = parameters.get(&name) {
+                    Operation::ParameterRead {
+                        result,
+                        index: *index,
+                    }
+                } else {
+                    return Err(Diagnostic::at(
                         source,
                         expression.span.start,
                         format!("unknown or not yet initialized local {name:?}"),
-                    )
-                })?,
-            },
-            parser::ExpressionKind::ModuleCall { module, member } => {
-                if locals.contains_key(&module) {
+                    ));
+                }
+            }
+            parser::ExpressionKind::ModuleCall {
+                module,
+                member,
+                arguments,
+            } => {
+                if locals.contains_key(&module) || parameters.contains_key(&module) {
                     return Err(Diagnostic::at(
                         source,
                         expression.span.start,
                         "calls on local receivers are unsupported",
                     ));
                 }
+                let arguments = arguments
+                    .into_iter()
+                    .map(|argument| emit(source, argument, locals, parameters, operations))
+                    .collect::<Result<Vec<_>, _>>()?;
                 Operation::ModuleCall {
                     result: ValueId(operations.len() as u32),
                     module,
                     member,
+                    arguments,
                 }
             }
             parser::ExpressionKind::Binary { kind, left, right } => {
-                let left = emit(source, *left, locals, operations)?;
-                let right = emit(source, *right, locals, operations)?;
+                let left = emit(source, *left, locals, parameters, operations)?;
+                let right = emit(source, *right, locals, parameters, operations)?;
                 Operation::Binary {
                     result: ValueId(operations.len() as u32),
                     kind,
@@ -395,10 +478,23 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         });
         Ok(result)
     }
+    let parameter_count = ast.parameters.len();
+    let parameters = ast
+        .parameters
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| (name, index))
+        .collect();
     let mut operations = Vec::new();
     let mut locals = std::collections::BTreeMap::new();
     for declaration in ast.locals {
-        let value = emit(source, declaration.initializer, &locals, &mut operations)?;
+        let value = emit(
+            source,
+            declaration.initializer,
+            &locals,
+            &parameters,
+            &mut operations,
+        )?;
         let local = LocalId(locals.len() as u32);
         operations.push(LocatedOperation {
             operation: Operation::LocalInitialize { local, value },
@@ -406,10 +502,17 @@ pub fn compile(source: &str) -> Result<Function, Diagnostic> {
         });
         locals.insert(declaration.name, local);
     }
-    let value = emit(source, ast.expression, &locals, &mut operations)?;
+    let value = emit(
+        source,
+        ast.expression,
+        &locals,
+        &parameters,
+        &mut operations,
+    )?;
     operations.push(LocatedOperation {
         operation: Operation::Return { value },
         span: Some(ast.return_span),
     });
-    Function::new(ast.name, operations).map_err(|error| Diagnostic::at(source, 0, error.message))
+    Function::with_parameters(ast.name, parameter_count, operations)
+        .map_err(|error| Diagnostic::at(source, 0, error.message))
 }

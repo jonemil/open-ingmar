@@ -156,7 +156,7 @@ fn incompatible_effectful_ir_orders_are_rejected_but_pure_orders_still_work() {
 fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
     for body in [
         "return left();",
-        "return Numbers.left(1);",
+        "return Numbers.left(1,);",
         "return Numbers.Inner.left();",
         "return Numbers.left;",
         "return Numbers.return();",
@@ -169,9 +169,9 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
             "{body}"
         );
     }
-    let error = compile("function probe() {\n  return Numbers.left(1);\n}").unwrap_err();
-    assert_eq!((error.line, error.column), (2, 23));
-    assert!(error.message.contains("arguments"));
+    let error = compile("function probe() {\n  return Numbers.left(1,);\n}").unwrap_err();
+    assert_eq!((error.line, error.column), (2, 25));
+    assert!(error.message.contains("expected"));
     for call in [
         ".call %0 Numbers.left",
         ".call %0 bad.module left",

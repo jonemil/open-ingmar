@@ -19,12 +19,12 @@ fn cli_refuses_overwrite_and_creates_no_output_for_invalid_input() {
     assert!(!run().status.success());
     assert_eq!(fs::read(&output).unwrap(), saved);
     fs::remove_file(&output).unwrap();
-    fs::write(&source, "function probe(x) { return 41; }").unwrap();
+    fs::write(&source, "function probe(x as Number) { return 41; }").unwrap();
     let failed = run();
     assert!(!failed.status.success());
     assert!(!output.exists());
     let diagnostic = String::from_utf8(failed.stderr).unwrap();
-    assert!(diagnostic.contains("probe.mc:1:16:"));
+    assert!(diagnostic.contains("probe.mc:1:18:"));
     fs::remove_dir_all(dir).unwrap();
 }
 
@@ -229,5 +229,61 @@ fn cli_binds_module_calls_in_native_ir_and_assembly_paths() {
         .unwrap();
     assert!(!run.status.success());
     assert!(!invalid.exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn cli_resumes_parameters_and_argument_lists() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-arguments-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let symbols = dir.join("symbols.mcasm");
+    let ir = dir.join("probe.ciqir");
+    let asm = dir.join("probe.mcasm");
+    let direct = dir.join("direct.bin");
+    let text = dir.join("text.bin");
+    fs::write(
+        &source,
+        "function probe(first,second) { var x = Numbers.subtract(first,second); return x; }",
+    )
+    .unwrap();
+    fs::write(
+        &symbols,
+        ".symbol m \"globals/Numbers\" id=0x02\n.symbol f \"subtract\" id=0x84\n",
+    )
+    .unwrap();
+    for (options, input, output) in [
+        (vec!["--emit", "ir"], &source, &ir),
+        (vec!["--from", "ir"], &ir, &asm),
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(options)
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    for (from, input, output) in [("source", &source, &direct), ("assembly", &asm, &text)] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", "code", "--symbols"])
+            .arg(&symbols)
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(&direct).unwrap(), fs::read(text).unwrap());
+    assert_eq!(&fs::read(&direct).unwrap()[..3], &[0x4a, 3, 1]);
+    assert!(fs::read_to_string(ir).unwrap().contains("parameters=2"));
     fs::remove_dir_all(dir).unwrap();
 }

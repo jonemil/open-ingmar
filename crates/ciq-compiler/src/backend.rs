@@ -16,23 +16,33 @@ pub fn lower(function: &Function) -> Program {
         match &located.operation {
             Operation::Integer { result, .. }
             | Operation::Binary { result, .. }
+            | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
             | Operation::ModuleCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. } => {
-                slots.insert(*local, slots.len() as u64 + 1);
+                slots.insert(
+                    *local,
+                    (function.parameter_count() + slots.len() + 1) as u64,
+                );
             }
             Operation::Return { .. } => {}
         }
     }
     let mut items = vec![Item::Label(function.name().into())];
     items.push(if slots.is_empty() {
-        instruction(Opcode::Argc, vec![Operand::Bits(1)])
+        instruction(
+            Opcode::Argc,
+            vec![Operand::Bits(function.parameter_count() as u64 + 1)],
+        )
     } else {
         instruction(
             Opcode::Argcincsp,
-            vec![Operand::Bits(1), Operand::Bits(slots.len() as u64)],
+            vec![
+                Operand::Bits(function.parameter_count() as u64 + 1),
+                Operand::Bits(slots.len() as u64),
+            ],
         )
     });
     for located in function.operations() {
@@ -58,7 +68,8 @@ fn expression(
     enum Task {
         Value(ValueId),
         Binary(BinaryOp),
-        Invoke,
+        Invoke(usize),
+        Context,
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
@@ -68,8 +79,17 @@ fn expression(
                 Operation::Integer { value, .. } => {
                     (Opcode::Ipush1, vec![Operand::Bits(*value as u64)])
                 }
-                Operation::ModuleCall { module, member, .. } => {
-                    tasks.push(Task::Invoke);
+                Operation::ModuleCall {
+                    module,
+                    member,
+                    arguments,
+                    ..
+                } => {
+                    tasks.push(Task::Invoke(arguments.len()));
+                    if !arguments.is_empty() {
+                        tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
+                        tasks.push(Task::Context);
+                    }
                     (
                         Opcode::Getmv,
                         vec![
@@ -77,6 +97,9 @@ fn expression(
                             Operand::Symbol(format!("__ciq_member_{member}")),
                         ],
                     )
+                }
+                Operation::ParameterRead { index, .. } => {
+                    (Opcode::Lgetv, vec![Operand::Bits(*index as u64 + 1)])
                 }
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
@@ -89,7 +112,9 @@ fn expression(
                 }
                 _ => unreachable!("statement is not a value definition"),
             },
-            Task::Invoke => (Opcode::Invokemz, vec![]),
+            Task::Invoke(0) => (Opcode::Invokemz, vec![]),
+            Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
+            Task::Context => (Opcode::Frpush, vec![]),
             Task::Binary(kind) => (
                 match kind {
                     BinaryOp::Add => Opcode::Addv,

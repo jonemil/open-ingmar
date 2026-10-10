@@ -63,7 +63,7 @@ fn every_supported_literal_assembles_and_returns_its_value() {
 fn unsupported_programs_are_rejected_completely() {
     for source in [
         "",
-        "function probe(x) { return 41; }",
+        "function probe(x as Number) { return 41; }",
         "function probe() { return 128; }",
         "function probe() { return 999999999999999999999999; }",
         "function probe() { return -1; }",

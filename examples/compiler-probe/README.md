@@ -36,3 +36,12 @@ cargo run -p ciq-compiler -- examples/compiler-probe/calls.mc scratch/compiler-e
 ```
 
 Raw CODE additionally needs `--symbols <symbol-source.mcasm>` from that scaffold. The frontend does not generate the module or its method metadata yet.
+
+[parameters.mc](parameters.mc) defines a two-parameter `difference` function with a local after its parameters. [arguments.mc](arguments.mc) calls it with nested argument expressions. Compile each independently:
+
+```sh
+cargo run -p ciq-compiler -- examples/compiler-probe/parameters.mc scratch/compiler-example/parameters.mcasm
+cargo run -p ciq-compiler -- examples/compiler-probe/arguments.mc scratch/compiler-example/arguments.mcasm
+```
+
+[The parameter/argument experiment](../../docs/investigations/compiler-arguments.md) integrates both generated bodies into the supplied module metadata, returning `48`. Calls still require explicit symbol bindings and a matching scaffold signature.
