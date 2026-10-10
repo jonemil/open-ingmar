@@ -48,8 +48,14 @@ in-memory composition and editable stage resumption.
    `else` are [verified](../investigations/compiler-loop-control.md). Branch-label and
    exception assembly are implemented; exception source compilation still needs
    stack/frame research. See the [control-flow design](control-flow.md).
-3. Independent application DATA/classes/symbols/resources and other required
-   metadata, then [Jungle-driven project builds](project-builds.md).
+3. Next: multiple functions with cross-function binding and arity/type checks,
+   followed by independent application DATA/classes/symbols/resources and other
+   required metadata. Verify a minimal signed application without SDK-provided
+   scaffolding, then add [Jungle-driven project builds](project-builds.md).
+
+Complete applications take priority over broader section-size/address research.
+Use their placement needs and larger generated programs to expose concrete
+limits; investigate necessary blockers without assuming universal region bounds.
 
 Define source grammar and calling conventions before adding syntax. Preserve
 source spans for diagnostics. Assess evaluation/effect order, temporary/local

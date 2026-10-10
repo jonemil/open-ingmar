@@ -38,16 +38,26 @@ describe planned behavior and investigations record the supporting evidence.
 
 ## Next work
 
-1. Revisit DATA string authoring after establishing shared address-region rules.
-   The [boundary experiment](investigations/string-address-boundary.md) proves
-   a working `0x01000000` literal offset with raised simulator memory; the upper
-   limit remains unverified. Expand parsing/layout/binding together without
-   extrapolating to CODE/method offsets. Device budgets remain a separate
-   [build-layer concern](design/project-builds.md#target-constraints-and-section-layout).
-2. Build complete applications once required DATA/resource/module structures are
-   understood. Add cross-function binding and arity/type checks.
-3. Implement [Jungle-driven project builds](design/project-builds.md), including
+1. Build a minimal complete application with independently generated CODE,
+   DATA/classes/modules, symbols, resources, and required container metadata.
+   Start with multiple functions, cross-function binding, and arity/type checks,
+   then add the required lifecycle and API behavior. Verify a signed PRG in the
+   simulator without transplanting its generated functions into SDK scaffolding.
+   Use SDK specimens to investigate missing structures and record evidence.
+2. Implement [Jungle-driven project builds](design/project-builds.md), including
    application/barrel inputs and generated export configuration.
+3. Revisit DATA string authoring and shared address-region rules as complete
+   applications expose actual placement needs. Section/offset research is not a
+   prerequisite for the minimal application; address concrete blockers when
+   encountered. The [boundary experiment](investigations/string-address-boundary.md)
+   proves a working `0x01000000` literal offset with raised simulator memory;
+   the upper limit remains unverified. Expand parsing/layout/binding together
+   without extrapolating to CODE/method offsets. Device budgets remain a separate
+   [build-layer concern](design/project-builds.md#target-constraints-and-section-layout).
+
+Prioritize complete applications before broader section-size experiments.
+Larger generated programs should help identify which format and device limits
+need investigation; their observed limits must not become universal assumptions.
 
 Exception source lowering still needs stack/frame research.
 
