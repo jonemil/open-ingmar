@@ -12,6 +12,8 @@ The caller supplies sixteen application-ID bytes and a global entry function
 name. The entry must have zero parameters and a Number, String, Boolean, or
 Void result under the existing function rules. CLI default: `main`. The ID identifies the
 application; it is independent of the signing key.
+Nullable entries are rejected because the generated wrapper prints valued
+results without a source-authored null guard.
 
 Generated lifecycle behavior:
 

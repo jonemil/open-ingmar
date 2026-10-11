@@ -447,7 +447,10 @@ impl CompilationUnit {
                     ));
                 }
                 for (argument, parameter) in arguments.iter().zip(*parameters) {
-                    if function.value_types[argument].api_type() != parameter.api_type() {
+                    if !crate::native::accepts(
+                        &parameter.api_type(),
+                        &function.value_types[argument].api_type(),
+                    ) {
                         return Err(fail(
                             Some(index),
                             Some(operation),

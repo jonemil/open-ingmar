@@ -66,15 +66,25 @@ pub(crate) fn parse_ir_context(
     let Some((name_at, declaration)) = rows.get(1) else {
         return Err(fail(source.len(), "expected .function <name>"));
     };
-    if !(2..=5).contains(&declaration.len()) || declaration[0] != ".function" {
+    if !(2..=6).contains(&declaration.len()) || declaration[0] != ".function" {
         return Err(fail(*name_at, "expected .function <name>"));
     }
     let mut parameter_count = 0;
     let mut parameters = false;
     let mut parameter_types = None;
     let mut instance_method = false;
+    let mut result_type = None;
     for field in declaration.iter().skip(2) {
-        if field == "receiver=instance" && !instance_method {
+        if let Some(result) = field.strip_prefix("result=") {
+            if result_type.is_some() {
+                return Err(fail(*name_at, "duplicate result contract"));
+            }
+            result_type = Some(match result {
+                "nullable-integer" => crate::ReturnType::NullableInteger,
+                "nullable-string" => crate::ReturnType::NullableString,
+                _ => return Err(fail(*name_at, "unsupported function result contract")),
+            });
+        } else if field == "receiver=instance" && !instance_method {
             instance_method = true;
         } else if let Some(types) = field.strip_prefix("parameter-types=") {
             if parameter_types.is_some() {
@@ -84,6 +94,8 @@ pub(crate) fn parse_ir_context(
                 types
                     .split(':')
                     .map(|t| match t {
+                        "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
+                        "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "integer" => Ok(crate::ParameterType::Integer),
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
@@ -416,6 +428,7 @@ pub(crate) fn parse_ir_context(
         operations,
         instance_method,
         context,
+        result_type,
     );
     result.map_err(|error| {
         Diagnostic::at(
@@ -438,6 +451,8 @@ fn call_contract(
 ) -> Result<(crate::ReturnType, usize), Diagnostic> {
     if let Some(field) = fields.get(at).and_then(|s| s.strip_prefix("result=")) {
         let result = match field {
+            "nullable-integer" => crate::ReturnType::NullableInteger,
+            "nullable-string" => crate::ReturnType::NullableString,
             "integer" => crate::ReturnType::Integer,
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,

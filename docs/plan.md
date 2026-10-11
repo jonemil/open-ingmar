@@ -7,11 +7,10 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Extend nullable
-   parameter/result annotations and user-call contracts when a runnable example
-   needs to pass nullable values between functions. Retain
-   branch-proof validation through saved IR, joins, loops, and writes; extend
-   supported guard forms without trusting frontend-only assumptions.
+1. **Extend core Lang contracts and value types.** Retain branch-proof validation
+   through saved IR, joins, loops, and writes. Extend guard forms to nullable
+   parameters and additional comparisons without trusting frontend-only
+   assumptions; support nullable Boolean when a runnable case requires it.
    Grow Object equality and other core methods through documented assignability
    rules rather than weakening argument validation to accept any value.
 

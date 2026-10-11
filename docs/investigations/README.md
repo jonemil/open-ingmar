@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Nullable user contracts](compiler-nullable-contracts.md): union signatures,
+  call validation, and matching SDK/generated application output.
 - [Substring results](compiler-substring.md): nullable String validation and
   observed range normalization on fr265.
 - [Nullable Number results](compiler-nullable-numbers.md): native search and

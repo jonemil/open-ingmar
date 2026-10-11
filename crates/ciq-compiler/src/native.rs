@@ -94,7 +94,7 @@ pub(crate) fn value_call(
 
 /// Check exact types or union membership, without implicit conversions or
 /// inheritance widening. Every alternative of an actual union must be accepted.
-fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
+pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual {
         return true;
     }

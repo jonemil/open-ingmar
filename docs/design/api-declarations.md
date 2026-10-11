@@ -30,8 +30,9 @@ category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User functions accept Number, String, and Boolean parameters
-and results; API declarations alone do not enable other types. String `find`
+supported calls. User functions accept Number, String, Boolean, and nullable
+Number/String parameters and results; API declarations alone do not enable
+other types. String `find`
 and `toNumber` retain Number-or-Null result contracts; `substring` retains
 String-or-Null. Flow validation permits non-null consumers only for local reads
 proved non-null by a direct branch.

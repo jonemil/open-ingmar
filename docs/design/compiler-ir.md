@@ -25,10 +25,17 @@ expression order. Pure expressions may be scheduled by dependencies.
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
 
+Explicit nullable user signatures preserve the declared union, even for bodies
+that return only scalars or Null. Constructors, source, and text validate each
+return against that contract. Unit validation checks argument assignability and
+requires call result metadata to equal the callee's result; callers cannot hide
+a nullable result behind scalar metadata. Inferred scalar/Void contracts remain
+available for functions without an explicit result declaration.
+
 ## Null-check facts
 
-Nullable native Number/String results preserve their union until control flow proves a
-local non-null. `null_flow` computes facts shared by typed construction and text
+Nullable Number/String values preserve their union until control flow proves
+a local non-null. `null_flow` computes facts shared by typed construction and text
 resumption; fresh local reads use those facts, while the storage contract remains
 nullable. Facts survive only when every incoming path provides them, and writes
 invalidate them. No runtime conversion or assertion is emitted for narrowing.

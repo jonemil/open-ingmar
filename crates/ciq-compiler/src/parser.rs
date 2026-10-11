@@ -794,11 +794,22 @@ impl Parser<'_> {
                 parameter_types.push(if self.peek()? == Kind::Word("as") {
                     self.token()?;
                     let at = self.offset;
-                    Some(match self.path()?.as_str() {
+                    let ty = match self.path()?.as_str() {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
+                    };
+                    Some(if self.peek()? == Kind::Word("or") {
+                        self.token()?;
+                        self.expect(Kind::Word("Null"), "'Null'")?;
+                        match ty {
+                            crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
+                            crate::ParameterType::String => crate::ParameterType::NullableString,
+                            _ => return Err(self.error(at, "unsupported nullable parameter type")),
+                        }
+                    } else {
+                        ty
                     })
                 } else {
                     None
@@ -813,12 +824,23 @@ impl Parser<'_> {
         let result_type = if self.peek()? == Kind::Word("as") {
             self.token()?;
             let at = self.offset;
-            Some(match self.path()?.as_str() {
+            let ty = match self.path()?.as_str() {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Void" => crate::ReturnType::Void,
                 _ => return Err(self.error(at, "unsupported result type annotation")),
+            };
+            Some(if self.peek()? == Kind::Word("or") {
+                self.token()?;
+                self.expect(Kind::Word("Null"), "'Null'")?;
+                match ty {
+                    crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
+                    crate::ReturnType::String => crate::ReturnType::NullableString,
+                    _ => return Err(self.error(at, "unsupported nullable result type")),
+                }
+            } else {
+                ty
             })
         } else {
             None

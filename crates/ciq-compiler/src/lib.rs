@@ -94,12 +94,15 @@ pub enum BinaryOp {
     Subtract,
 }
 
-/// The supported function result contract, inferred from validated returns.
+/// The supported function result contract, declared explicitly or inferred
+/// from uniform scalar/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnType {
     Integer,
+    NullableInteger,
     String,
+    NullableString,
     Boolean,
     Void,
 }
@@ -108,7 +111,9 @@ pub enum ReturnType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParameterType {
     Integer,
+    NullableInteger,
     String,
+    NullableString,
     Boolean,
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
@@ -118,6 +123,8 @@ impl ParameterType {
     /// Return the API type represented by this supported parameter contract.
     pub fn api_type(self) -> api::Type {
         match self {
+            Self::NullableInteger => ValueType::NullableInteger.api_type(),
+            Self::NullableString => ValueType::NullableString.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
@@ -130,6 +137,8 @@ impl ReturnType {
     /// Return the API type represented by this supported result contract.
     pub fn api_type(self) -> api::Type {
         match self {
+            Self::NullableInteger => ValueType::NullableInteger.api_type(),
+            Self::NullableString => ValueType::NullableString.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
@@ -365,7 +374,7 @@ impl Function {
         self.parameter_count
     }
 
-    /// Return the common result type established by every return terminator.
+    /// Return the validated result contract shared by all return terminators.
     pub fn return_type(&self) -> ReturnType {
         self.return_type
     }
@@ -389,6 +398,7 @@ impl Function {
             self.operations.clone(),
             self.instance_method,
             Some(context),
+            Some(self.return_type),
         )
         .map(|_| ())
     }
@@ -449,6 +459,29 @@ impl Function {
         Self::construct(name, parameter_types, operations, false)
     }
 
+    /// Construct function IR with explicit parameter and result contracts.
+    /// Every return must be assignable to the result; nullable contracts accept
+    /// Null, their scalar type, or the same union. Other validation is unchanged.
+    pub fn with_signature(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        result: ReturnType,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct_for_api(name, parameter_types, operations, false, None, Some(result))
+    }
+
+    /// Construct instance-method IR with explicit parameter and result contracts.
+    /// Unit validation checks ownership, callees, and native callback contracts.
+    pub fn method_with_signature(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        result: ReturnType,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct_for_api(name, parameter_types, operations, true, None, Some(result))
+    }
+
     /// Return explicit parameter types in source order, excluding the receiver.
     pub fn parameter_types(&self) -> &[ParameterType] {
         &self.parameter_types
@@ -480,7 +513,14 @@ impl Function {
         operations: Vec<LocatedOperation>,
         instance_method: bool,
     ) -> Result<Self, IrError> {
-        Self::construct_for_api(name, parameter_types, operations, instance_method, None)
+        Self::construct_for_api(
+            name,
+            parameter_types,
+            operations,
+            instance_method,
+            None,
+            None,
+        )
     }
 
     fn construct_for_api(
@@ -489,6 +529,7 @@ impl Function {
         operations: Vec<LocatedOperation>,
         instance_method: bool,
         context: Option<api::ApiContext>,
+        declared_result: Option<ReturnType>,
     ) -> Result<Self, IrError> {
         if instance_method && native::callback(ClassBase::ApplicationAppBase, &name).is_some() {
             if let Some(context) = context {
@@ -680,6 +721,8 @@ impl Function {
                     types.insert(
                         result,
                         match parameter_types[index] {
+                            ParameterType::NullableInteger => ValueType::NullableInteger,
+                            ParameterType::NullableString => ValueType::NullableString,
                             ParameterType::Integer => ValueType::Integer,
                             ParameterType::String => ValueType::String,
                             ParameterType::Boolean => ValueType::Boolean,
@@ -822,6 +865,9 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {
+                    if declared_result.is_some_and(|ty| ty != ReturnType::Void) {
+                        return Err(fail("void return does not match function result contract"));
+                    }
                     if return_type
                         .replace(ReturnType::Void)
                         .is_some_and(|previous| previous != ReturnType::Void)
@@ -834,12 +880,21 @@ impl Function {
                     (None, vec![])
                 }
                 Operation::Return { value } => {
-                    let result = match type_of(value) {
-                        ValueType::Integer => ReturnType::Integer,
-                        ValueType::String => ReturnType::String,
-                        ValueType::Boolean => ReturnType::Boolean,
-                        _ => {
-                            return Err(fail("return requires a Number, String, or Boolean value"));
+                    let result = if let Some(contract) = declared_result {
+                        if !native::accepts(&contract.api_type(), &type_of(value).api_type()) {
+                            return Err(fail("return type does not match function contract"));
+                        }
+                        contract
+                    } else {
+                        match type_of(value) {
+                            ValueType::Integer => ReturnType::Integer,
+                            ValueType::String => ReturnType::String,
+                            ValueType::Boolean => ReturnType::Boolean,
+                            _ => {
+                                return Err(fail(
+                                    "nullable returns require an explicit result contract",
+                                ));
+                            }
                         }
                     };
                     if return_type
@@ -1031,6 +1086,8 @@ impl Function {
                 self.parameter_types
                     .iter()
                     .map(|t| match t {
+                        ParameterType::NullableInteger => "nullable-integer",
+                        ParameterType::NullableString => "nullable-string",
                         ParameterType::Integer => "integer",
                         ParameterType::String => "string",
                         ParameterType::Boolean => "boolean",
@@ -1040,8 +1097,14 @@ impl Function {
                     .join(":")
             )
         };
+        let result = match self.return_type {
+            ReturnType::NullableInteger | ReturnType::NullableString => {
+                call_type_text(self.return_type)
+            }
+            _ => "",
+        };
         let mut text = format!(
-            "ciq-ir\n.function {}{parameters}{receiver}{parameter_types}\n",
+            "ciq-ir\n.function {}{parameters}{receiver}{parameter_types}{result}\n",
             self.name
         );
         for operation in &self.operations {
@@ -1247,11 +1310,16 @@ fn validate_call_arguments(
         types.get(v).is_some_and(|t| {
             !matches!(
                 t,
-                ValueType::Integer | ValueType::String | ValueType::Boolean
+                ValueType::Integer
+                    | ValueType::String
+                    | ValueType::Boolean
+                    | ValueType::Null
+                    | ValueType::NullableInteger
+                    | ValueType::NullableString
             )
         })
     }) {
-        return Err("user calls require Number, String, or Boolean arguments");
+        return Err("user calls require supported scalar or nullable arguments");
     }
     if arguments.len() > MAX_PARAMETERS {
         return Err("call exceeds 254-argument limit");
@@ -1261,6 +1329,8 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::NullableInteger => Ok(ValueType::NullableInteger),
+        ReturnType::NullableString => Ok(ValueType::NullableString),
         ReturnType::Integer => Ok(ValueType::Integer),
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
@@ -1270,6 +1340,8 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
 
 fn call_type_text(result: ReturnType) -> &'static str {
     match result {
+        ReturnType::NullableInteger => " result=nullable-integer",
+        ReturnType::NullableString => " result=nullable-string",
         ReturnType::Integer => "",
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",

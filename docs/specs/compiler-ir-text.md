@@ -151,7 +151,8 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `string`, or `boolean`; omission means integer.
+The result type is `integer`, `string`, `boolean`, `nullable-integer`, or
+`nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
 Void is invalid in a value call. Names use ASCII identifier rules and remain
 symbolic. The optional span
@@ -281,7 +282,8 @@ optional spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
 locals, function parameters, user calls, and returns. Arithmetic requires
 integers. A function's value returns must all have the same supported type;
-Number, String, and Boolean results are inferred from validated return values.
+Number, String, and Boolean results are inferred from uniform return values,
+unless a nullable result is declared as specified below.
 Void returns have no value. All existing use/dependency/
 order rules apply.
 
@@ -460,7 +462,7 @@ Void returns and effect-only calls use:
   invoke a qualified user function for effects without defining a value.
 
 `.call-discard` may target any supported user result, including Void; the caller
-discards it. Argument IDs name earlier Number, String, or Boolean values in the
+discards it. Argument IDs name earlier supported scalar, nullable, or Null values in the
 same block and each counts as a use. Calls use identifier rules,
 argument limits, and left-to-right effect scheduling already required by
 `.call`. Names, arity, and callee result contracts are checked in unit mode;
@@ -478,7 +480,8 @@ ciq-ir
 Every return in a function must agree: `.return` yields its value's supported
 type,
 `.return-void` yields void. The shared validator infers and exposes that result
-contract; no separate result annotation is stored. A block may terminate with
+contract. Nullable result declarations instead require assignability to that
+union on every return. A block may terminate with
 either form. The final declared block still returns, and the existing
 reachability, definite-local, and empty-edge-stack rules apply. A single
 `.return-void` is a valid function body. Implicit text fallthrough is rejected;
@@ -505,7 +508,8 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:...`. Separate entries with colons;
+`parameter-types=integer:string:boolean:...`. Ordinary signatures also accept
+`nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
 also accepted; unit validation restricts it to native AppBase.onStart/onStop
@@ -520,8 +524,8 @@ errors. For example:
 pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
 `.greater` remains integer-only. Callback-state reads/locals preserve their
 opaque nullable type.
-Printing, arithmetic, integer returns, and user-call arguments reject null and
-Dictionary values. A nullable Dictionary local may be assigned null; other
+Printing and arithmetic reject Null and Dictionary values. Null may be used
+in nullable Number/String user contracts; Dictionary remains callback-only. A nullable Dictionary local may be assigned null; other
 assignments preserve the initializer type. Lowering uses `npush` for null and
 the existing local-slot and equality instructions.
 
@@ -540,8 +544,8 @@ Two additional directives require an instance method:
 - `.call-self-discard <member> [%<argument> ...] [span=<start>:<end>]`:
   invoke a current-receiver member for effects and discard its result.
 
-Arguments are ordered, earlier-defined Number/String/Boolean values in the same
-block.
+Arguments are ordered, earlier-defined supported scalar, nullable, or Null
+values in the same block.
 The existing use/effect/control-flow checks apply. Unit validation binds calls
 only to declared methods in the enclosing class, checks arity/result contracts,
 and rejects instance bodies in global/module owners. Standalone method IR
@@ -647,9 +651,40 @@ Assignment can supply Null, the non-null type, or the same union, but always
 requires another proof before non-null use. Existing effect-order, one-use,
 and block-local value rules apply.
 Stored Boolean guards and comparisons against null-valued locals are not proof
-forms. Nullable results cannot use ordinary user parameter/result contracts
-or non-null consumers. Nullable Numbers may be passed as substring indices,
+forms. Nullable values may use matching user parameter/result contracts,
+but cannot use non-null consumers without proof. Nullable Numbers may be passed as substring indices,
 which explicitly accept that union. Readers and typed constructors recompute
 all facts; IR text carries no trusted narrowing metadata. See [source examples][nullable-source].
 
 [nullable-source]: compiler-subset.md#nullable-results
+
+## Nullable user signatures
+
+A function declaration may carry `result=nullable-integer` or
+`result=nullable-string`. Every value return must be Null, the corresponding
+scalar type, or the same union. A void return is invalid. The declared union is
+preserved even when all returns are scalar or all are Null; canonical text
+always writes it. Omitted result metadata infers a uniform scalar/Void contract
+and rejects nullable/Null returns. Other function result fields are unsupported.
+Parameter lists independently accept the same nullable type names.
+
+```text
+ciq-ir
+.function identity parameters=1 parameter-types=nullable-string result=nullable-string
+.parameter %0 0
+.return %0
+.end
+```
+
+`Function::with_signature` and `method_with_signature` supply explicit result
+contracts to the shared validator. Parameter-only constructors infer scalar/Void
+results. Unit validation accepts Null, the corresponding scalar, or the same
+union for nullable arguments; scalar arguments still require exact types.
+Call result contracts must equal the callee's declared result, even when its
+body always returns a scalar. This prevents edited call metadata from hiding
+nullable results. Standalone IR has no callee signature environment.
+
+Parameter reads preserve their declared union. Copy a nullable parameter into
+a local to use the existing branch proofs; direct parameter-read guards do not
+narrow later reads. No casts or new VM instructions are introduced. See the
+[complete example](../../examples/compiler-nullable-contracts/README.md).

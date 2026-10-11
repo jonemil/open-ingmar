@@ -239,6 +239,14 @@ pub fn build_console_application(
         }
         (entry, true)
     };
+    if matches!(
+        entry.return_type(),
+        ReturnType::NullableInteger | ReturnType::NullableString
+    ) {
+        return Err(error(
+            "console entry requires a non-null scalar or Void result",
+        ));
+    }
     let source_start = instance
         && unit.classes()[0]
             .methods

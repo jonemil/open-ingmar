@@ -32,7 +32,8 @@ from methods retain their existing rules.
 
 A self expression call requires a declared value-returning method in the same
 class. A self statement call discards any supported result, including Void.
-Number/String/Boolean arguments and result contracts must match the callee;
+Arguments follow scalar/nullable assignability and result contracts must equal
+the callee's contract;
 counts must match exactly. Forward and recursive
 references are checked after collecting signatures. Self lookup never falls
 back to a global/module member or an inherited native method. Recursion is

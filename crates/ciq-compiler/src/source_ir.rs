@@ -557,6 +557,7 @@ fn build_body(
         builder.operations,
         method,
         context,
+        result_type,
     );
     let function = result.map_err(|error| {
         let offset = error

@@ -161,22 +161,29 @@ IDs need not be contiguous; their numeric values never select physical slots.
 Ordinary source parameters default to Number. `as` annotations accept the fully
 qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`, and
 `Toybox.Lang.Boolean`; result annotations also accept `Void`. Short names,
-module aliases in annotations, unions, nullable types, and other type syntax
-are outside this subset. These declarations require no `using` statement.
+module aliases in annotations, and general unions are outside this subset.
+Number and String annotations additionally accept the exact suffix `or Null`
+for both parameters and results. Nullable Boolean, reversed alternatives,
+parenthesized unions, and other type syntax remain unsupported. These
+declarations require no `using` statement.
 
 Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. String and Boolean source results require
-explicit annotations. Every value-returning path must return the same declared
-type; mixed types, value/void mixtures, and missing returns are errors. Typed IR
-construction infers the uniform result from its returns. Native callbacks retain
+value returns have a Void contract. String, Boolean, and nullable source results
+require explicit annotations. Each return must be assignable to its contract:
+a nullable result accepts its scalar type, Null, or the same union. Unrelated
+types, value/void mixtures, and missing returns are errors. Typed IR constructors
+infer uniform scalar/Void returns unless an explicit signature is supplied.
+Native callbacks retain
 their independently resolved signatures; annotations cannot override them.
 
 ## User module calls
 
 The supported call form is `<module>.<member>(<arguments>?)` in expressions
 and initializers. The module is a top-level user module provided by the
-surrounding PRG scaffold. Value calls return Number, String, or Boolean;
-arguments must match the declared types and positional arity. Global unqualified
+surrounding PRG scaffold. Value calls return supported scalar or nullable types.
+Arguments must satisfy the declared types and positional arity: a nullable
+parameter accepts Null, its scalar type, or the same union; scalar parameters
+require exact types. Global unqualified
 calls, arbitrary local/object receivers, and nested modules remain unsupported.
 Void module calls are supported as statements, as described below.
 The separate `System.println` statement is described below. Module/member names
@@ -470,7 +477,7 @@ caller; expression calls there assume integers. No void expression value is
 created. Statement calls preserve argument evaluation and statement order.
 
 Typed IR adds `ReturnVoid` and `ModuleCallStatement`; `Function::return_type()`
-reports the validated Number/String/Boolean/Void contract. Saved text uses
+reports the validated scalar, nullable, or Void contract. Saved text uses
 [IR](compiler-ir-text.md#void-returns-and-statement-calls).
 Both forms share type, control-flow, use, and effect-schedule validation.
 A void function may contain only its return, so the operation bound is now
@@ -563,7 +570,8 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 ## Nullable results
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
-Number or Null. String `substring` returns String or Null. Store nullable
+Number or Null. String `substring` and user calls may also return nullable
+values. Store nullable
 results in locals and compare them with null.
 A direct `if (value == null)` or `if (null == value)` proves that local non-null
 on the false path. Fresh reads there have the non-null Number or String type
@@ -587,8 +595,11 @@ Only direct local-read/literal-null comparisons used by the branch establish
 facts. A stored Boolean condition, a null-valued local used as the comparison
 operand, or a check of a different local does not narrow the target. Checking
 one local does not narrow aliases or later native-call results. Unchecked nullable
-values cannot be printed, used as non-null operands/receivers, passed as ordinary
-user arguments, or returned. Nullable user signatures remain unsupported.
+values cannot be printed or used as non-null operands/receivers. They may be
+passed to matching nullable parameters and returned under matching nullable
+result contracts. Scalar parameters/results still require a non-null value.
+Nullable parameters can be copied to locals for narrowing; a direct comparison
+of a parameter read does not establish a local proof.
 Other unions remain outside this profile. Conversion, search, and slicing
 behavior is supplied by the runtime, not folded by the compiler. See
 [Number evidence](../investigations/compiler-nullable-numbers.md) and

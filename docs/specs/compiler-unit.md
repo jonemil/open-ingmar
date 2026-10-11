@@ -26,9 +26,10 @@ as an intrinsic receiver and cannot be declared as a module.
 All function bodies use the existing grammar and limits. Qualified user calls
 must resolve to a module member in this unit, regardless of declaration order.
 Call argument counts must exactly match the callee's parameter count. All
-ordinary parameters accept Number, String, or Boolean contracts; functions
-return one of those types or Void. Expression calls require a value result.
-Arguments must exactly match the corresponding parameter type. Source contract
+ordinary parameters accept Number, String, Boolean, or nullable Number/String
+contracts; functions return one of these or Void. Expression calls require a
+value result. Nullable arguments accept Null, the corresponding scalar, or the
+same union; scalar arguments require exact types. Source contract
 annotations and defaults follow the [function rules][function-types]; these are
 subset rules, not general Monkey C type inference.
 
@@ -139,7 +140,7 @@ profile](console-application.md)
 specifies the generated lifecycle, metadata, entry selection, and restrictions.
 
 Unit signatures include explicit parameter types and the validated result
-contract. Expression `.call` carries the expected Number/String/Boolean result;
+contract. Expression `.call` carries the expected scalar or nullable result;
 unit validation requires it to match the callee. Statement `.call-discard`
 permits any supported result, including Void, and discards it. Both check
 argument types and exact arity.
