@@ -7,23 +7,22 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Connect core types and API declarations.** Extend the bounded catalogue
-   in `ciq-compiler` where current language behavior requires it. Connect internal
-   value types and operator validation to its Lang identities, then use inherited
-   member lookup in source resolution. Keep native lowering support explicit:
-   known declarations alone do not make calls compilable. Migrate remaining
-   Application/System special cases before expanding native support.
+1. **Resolve core member calls through API declarations.** Use the bounded
+   catalogue's inherited lookup in source resolution. Start with a Number value
+   calling inherited `toString()` and printing its result in a complete app.
+   Establish its receiver/invocation form with a focused SDK specimen before
+   lowering; known declarations alone do not make calls compilable. Extend
+   value-producing native call IR and its text form together. Migrate remaining
+   Application/System special cases as they acquire supported call forms.
    See [API declaration design][api-design].
 
-   Connect current integer/string/null behavior to those identities. Read the
-   language reference alongside `Lang` contracts to define operator operand and
-   result rules separately from method signatures and VM lowering. Grow numeric
-   conversions, mixed arithmetic, string addition, and equality through focused
-   specimens; do not attempt all core types/operators in one increment.
-   Acceptance: existing examples retain their behavior through native and text
-   paths; inherited lookup and class/member availability have focused checks.
-   Diagnose missing catalogue knowledge separately from known unavailable APIs
-   and declarations whose lowering is unsupported.
+   Read the language reference alongside `Lang` contracts when extending
+   operator rules. Grow numeric conversions, mixed arithmetic, string addition,
+   and equality through focused specimens; do not attempt all core operators in
+   one increment. Acceptance: inherited member calls produce the expected output
+   in the simulator and retain native/text pipeline equivalence. Diagnose missing
+   catalogue knowledge separately from known unavailable APIs and declarations
+   whose lowering is unsupported.
 
    Define explicit target context alongside availability: selected device/API,
    app type, permissions, and execution scope. Keep the app's minimum API and VM

@@ -44,10 +44,11 @@ VM backend. Keep `ciq-asm` and `ciq-dis` as the paired tools.
 The [API declaration model](api-declarations.md) supplies a bounded catalogue of
 class/member contracts and introduction levels independently of executable
 bindings. Startup callback validation reads that model. Supported parameter and
-result contracts expose core `Lang` identities; internal value types and operator
-rules still use the restricted profile. Extend that connection separately from
-API method lookup and VM instruction selection. Object semantics do not require
-every IR value to denote a heap allocation.
+result contracts and internal value categories map to core `Lang` identities.
+A separate operator-rule layer checks API operand types and supplies result
+types before VM instruction selection. It retains the restricted executable
+profile; general API member lookup remains separate work. Object semantics do
+not require every IR value to denote a heap allocation.
 
 ## Native and textual pipelines
 

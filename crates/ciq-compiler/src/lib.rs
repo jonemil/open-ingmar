@@ -18,6 +18,7 @@ pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod names;
 mod native;
+mod operators;
 mod parser;
 mod source_ir;
 mod unit;
@@ -112,11 +113,8 @@ impl ParameterType {
     /// Return the API type represented by this supported parameter contract.
     pub fn api_type(self) -> api::Type {
         match self {
-            Self::Integer => api::Type::named("Toybox.Lang.Number"),
-            Self::NullableDictionary => api::Type::Union(vec![
-                api::Type::named("Toybox.Lang.Dictionary"),
-                api::Type::Null,
-            ]),
+            Self::Integer => ValueType::Integer.api_type(),
+            Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
 }
@@ -125,7 +123,7 @@ impl ReturnType {
     /// Return the API type represented by this supported result contract.
     pub fn api_type(self) -> api::Type {
         match self {
-            Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::Integer => ValueType::Integer.api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -138,6 +136,38 @@ enum ValueType {
     Boolean,
     Null,
     NullableDictionary,
+}
+
+impl ValueType {
+    /// Map a supported value category to its core API type without changing storage.
+    fn api_type(self) -> api::Type {
+        match self {
+            Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::String => api::Type::named("Toybox.Lang.String"),
+            Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
+            Self::Null => api::Type::Null,
+            Self::NullableDictionary => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Dictionary"),
+                api::Type::Null,
+            ]),
+        }
+    }
+
+    /// Adapt an API type to the fixed executable value subset; other types
+    /// remain unsupported even if the catalogue contains their declarations.
+    fn from_api_type(ty: &api::Type) -> Option<Self> {
+        match ty {
+            api::Type::Named(name) => match name.as_str() {
+                "Toybox.Lang.Number" => Some(Self::Integer),
+                "Toybox.Lang.String" => Some(Self::String),
+                "Toybox.Lang.Boolean" => Some(Self::Boolean),
+                _ => None,
+            },
+            api::Type::Null => Some(Self::Null),
+            _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -435,21 +465,13 @@ impl Function {
                     right,
                     kind,
                 } => {
-                    let pair = (type_of(left), type_of(right));
-                    let null_check = kind == ComparisonOp::Equal
-                        && matches!(
-                            pair,
-                            (
-                                ValueType::NullableDictionary | ValueType::Null,
-                                ValueType::Null
-                            ) | (ValueType::Null, ValueType::NullableDictionary)
-                        );
-                    if pair != (ValueType::Integer, ValueType::Integer) && !null_check {
-                        return Err(fail(
+                    let result_type = operators::comparison_result(
+                        kind, &type_of(left).api_type(), &type_of(right).api_type(),
+                    ).and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail(
                             "comparison requires integer values or a dictionary/null equality check",
-                        ));
-                    }
-                    types.insert(result, ValueType::Boolean);
+                        ))?;
+                    types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }
                 Operation::Branch { condition, .. } => {
@@ -494,14 +516,16 @@ impl Function {
                     result,
                     left,
                     right,
-                    ..
+                    kind,
                 } => {
-                    if [left, right]
-                        .iter()
-                        .any(|v| type_of(*v) != ValueType::Integer)
-                    {
-                        return Err(fail("arithmetic requires integer values"));
-                    }
+                    let result_type = operators::binary_result(
+                        kind,
+                        &type_of(left).api_type(),
+                        &type_of(right).api_type(),
+                    )
+                    .and_then(|ty| ValueType::from_api_type(&ty))
+                    .ok_or_else(|| fail("arithmetic requires integer values"))?;
+                    types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }
                 Operation::ParameterRead { result, index } => {

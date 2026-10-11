@@ -11,9 +11,9 @@ Restricted frontend. Design:
 
 Integer/string/null restrictions below describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
-The planned [core type/API model](../design/api-declarations.md) connects values
-to `Lang` declarations; general member lookup and API availability checking are
-not yet supported. No API declaration-file syntax is specified here.
+The [core type/API model](../design/api-declarations.md) connects values to
+`Lang` identities for operator validation; general member lookup and target API
+availability checking are not yet supported. No API declaration-file syntax is specified here.
 
 The default mode accepts exactly one top-level function.
 [Compilation-unit mode](compiler-unit.md) adds global/module declarations and
@@ -96,6 +96,12 @@ subtraction results may be negative. Unary signs, other operators, object calls,
 and other statement forms remain unsupported. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
+
+Arithmetic validation uses the semantic API type `Toybox.Lang.Number` for both
+operands and the result. Comparisons produce `Toybox.Lang.Boolean`; supported
+null checks are specified below. These contracts are independent of method
+lookup and VM instruction selection. API declarations do not broaden accepted
+operator combinations or cause heap allocations to be emitted.
 
 Semantic IR contains pure integer add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:

@@ -16,8 +16,10 @@ Current entries cover Lang's Object, Number, String, Boolean, Char, and
 Dictionary, plus Application.AppBase and the Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related methods, AppBase initialization/startup, and System
-printing. Parameter/result subset types expose `api_type()` mappings. This does
-not yet replace the internal value-type model or enable numeric member calls.
+printing. Parameter/result subset types expose `api_type()` mappings. Internal
+value categories map to Number, String, Boolean, Null, and nullable Dictionary;
+operator validation uses those semantic types. Numeric member calls remain
+unsupported.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types
@@ -69,11 +71,22 @@ their `Lang` identities. Begin with types needed by existing examples, then grow
 coverage through runnable applications. Modules remain namespaces with their
 own rules; they do not inherit `Lang.Object`.
 
-Keep operator rules separate from method declarations. Rules determine accepted
-operand types, conversions, result types, and language-visible errors. Semantic
-IR preserves operations such as addition; the backend selects VM instructions
-or other supported implementations. A numeric class identity does not imply
-that addition becomes a method call.
+Operator rules live separately from method declarations in
+`ciq-compiler::operators`. IR validation maps operand categories to API types,
+checks the supported operator contract, and maps its result back to an executable
+value category. Parameter/result mappings share that bridge. The internal enum
+remains a bounded profile, not a replacement for arbitrary API type expressions.
+
+Current rules accept Number/Number addition, subtraction, equality, and greater
+comparison; equality also accepts Null/Null and nullable Dictionary/Null in
+either order. Arithmetic produces Number and comparisons produce Boolean.
+These are our supported rules, not a complete Monkey C operator specification.
+String addition, mixed numeric conversions, and general equality need evidence
+and lowering support before being added.
+
+Semantic IR preserves operations such as addition; the backend selects VM
+instructions. Rules contain no opcodes, storage slots, or method bindings. A
+numeric class identity does not imply that addition becomes a method call.
 
 Object semantics and runtime storage are separate. The language's heap markers
 describe allocation costs, not an established tagged-value layout or a compiler
