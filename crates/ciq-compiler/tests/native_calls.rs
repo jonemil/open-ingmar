@@ -286,7 +286,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
         valid.replace("toString", "toChar"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
-        valid.replace(".parameter %0 0", ".boolean %0 true"),
+        valid.replace(".parameter %0 0", ".null %0"),
     ] {
         assert!(parse_ir(&bad).is_err(), "{bad}");
     }

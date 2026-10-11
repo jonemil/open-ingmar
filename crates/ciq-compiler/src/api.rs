@@ -325,6 +325,12 @@ fn build_core() -> Catalogue {
             ApiLevel(5, 0, 0),
         ),
     ];
+    classes.get_mut("Toybox.Lang.Boolean").unwrap().methods = vec![method(
+        "compareTo",
+        vec![Type::named(object)],
+        Type::named(number),
+        ApiLevel(5, 0, 0),
+    )];
     classes.get_mut(string).unwrap().methods = vec![
         method(
             "compareTo",

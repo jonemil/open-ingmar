@@ -1,0 +1,73 @@
+# Boolean method surface and grouped validation
+
+Reviewed 2026-10-11 against Garmin's [Boolean][boolean] and [Object][object]
+API pages. Runtime experiment: SDK/compiler/simulator 9.2.0, fr265,
+optimization disabled. Scope: contracts and dispatch, not runtime bodies.
+
+## Method inventory
+
+Boolean declares one method and inherits five from Object. Introductions and
+signatures below are public contracts; executable prerequisites describe our
+bounded compiler profile.
+
+| Method | Result | Since | Executable scope or prerequisite |
+|---|---|---|---|
+| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean arguments |
+| inherited `toString()` | String | 1.0.0 | Supported |
+| inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
+| inherited `hashCode()` | Number | 1.0.0 | Supported |
+| inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbol and callable Method values |
+| inherited `weak()` | WeakReference | 1.2.0 | Needs receiver-dependent result contracts |
+
+**Documented:** comparison treats false as zero and true as one, and admits
+Numeric, Boolean, or Char arguments. Other numeric types and Char require
+executable value support. Results promise a sign, not an exact magnitude.
+Object's `weak()` note says immutable values, including Boolean, return their
+values despite its WeakReference result declaration. Do not apply that declared
+result unchanged; specialization and a probe are required. Neither deferred
+member was tested here. Nullable Boolean remains outside the source/IR profile.
+
+## Experiment
+
+Inputs: the [complete Boolean example][example] plus an ignored AppBase wrapper
+whose initializer calls the base initializer, whose `onStart(state)` calls
+`start()`, and whose `getInitialView()` returns `[new Toybox.WatchUi.View()]`.
+Create `scratch/compiler-boolean-methods/monkey.jungle` selecting the example
+sources, wrapper, and local fr265 manifest/resources, then:
+
+```sh
+sh scripts/build-example.sh scratch/compiler-boolean-methods
+cargo run -p ciq-dis -- all \
+  scratch/compiler-boolean-methods/build/fr265/compiler-boolean-methods.prg \
+  scratch/compiler-boolean-methods/sdk-export
+sh scripts/run-simulator-container.sh \
+  --prg scratch/compiler-boolean-methods/build/fr265/compiler-boolean-methods.prg
+```
+
+Build/sign/run our output using the example README. Save each console log before
+another run overwrites it and compare actual lines with the expected output.
+Both applications produced the same 27 lines.
+
+**Observed:** SYMBOLS binds `toString` to `0x008000af`, `hashCode` to
+`0x008000ad`, `equals` to `0x008000b3`, and `compareTo` to `0x00800e50`.
+These reuse the existing native profile. SDK-generated CODE uses ordinary
+Boolean pushes and member dispatch; our generic backend requires no Boolean
+boxing or new call operation for this specimen.
+
+Boolean/Number comparison signs matched, including zero/one equivalence and
+negative Number arguments. Equality distinguished Boolean from Number and
+String, accepted nullable arguments, and returned false for Null. Equal Boolean
+hashes matched; particular hash values are not asserted. String conversion
+produced `true`/`false`. Receiver and argument calls printed in that order before
+the comparison result. These observations do not establish behavior for other
+numeric types, firmware, or devices.
+
+Shared tests cover source/resumed-IR PRG equality, assembly round trips, explicit
+bindings, argument/result validation, edited IR and null guards, and source/IR
+diagnostics around the API 5.0.0 threshold. Boolean comparison returns Number;
+it cannot directly feed a branch. Native comparison's mixed arguments do not
+expand operator equality, ordering, or arithmetic.
+
+[boolean]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Boolean.html
+[object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+[example]: ../../examples/compiler-boolean-methods/README.md

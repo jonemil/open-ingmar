@@ -15,24 +15,25 @@ model. No declaration-file syntax or new crate is required initially.
 Current entries cover Lang's Object, Number, String, Boolean, Char, and
 Dictionary, plus Application.AppBase and the Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
-Number arithmetic-related methods, String length/case/string methods, AppBase
-initialization/startup/shutdown, and System printing/exit. Parameter/result
-subset types expose `api_type()` mappings.
+Number arithmetic-related and comparison methods, Boolean comparison, String
+length/case/string methods, AppBase initialization/startup/shutdown, and System
+printing/exit. Parameter/result subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Null, nullable Number,
 nullable String, and nullable Dictionary; operator validation uses those
 semantic types. The
 bounded native call profile resolves Number's inherited `toString`, `equals`,
 and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
 and String's length, case, string, search, slicing, numeric conversion, equality,
-hash, and comparison contracts.
+hash, and comparison contracts. Boolean uses direct comparison and inherited
+Object string conversion, equality, and hash contracts.
 Argument types must satisfy their signatures or a declared union; every
 alternative of an actual union must be accepted. This does not
 permit implicit conversions or unknown classes. Named arguments may widen
 through catalogue-declared superclass paths. Executable method profiles can
-restrict a broad declaration further: Number comparison admits Number/Boolean,
-String comparison admits String, and both equality profiles admit supported
-scalars and nullable scalars. Executable
-support remains a separate check. Number results use the existing integer
+restrict a broad declaration further: Number/Boolean comparison admits
+Number/Boolean, String comparison admits String, and all three equality
+profiles admit supported scalars and nullable scalars. Executable support remains
+a separate check. Number results use the existing integer
 value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
@@ -99,14 +100,15 @@ entry points omit API-level checks and retain their bounded lowering checks.
 Saved IR builds must resupply the context. It neither changes serialized IR
 nor configures PRG deployment metadata.
 
-Current checks cover supported Number/String value calls, System printing/exit,
-AppBase bases, initialization, and known callbacks. Method introductions in the
-executable profile are API 1.0.0 except Number/String.compareTo at 5.0.0 and
-String.toNumberWithBase at 1.4.1; substring's nullable index form additionally
-requires 3.3.2. Catalogue knowledge does not
-enable methods whose executable types or profiles are unsupported. Context
-levels are caller assertions: no device database, permission, app-type, execution-scope, or VM-capability validation is
-implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.
+Current checks cover supported Number/String/Boolean value calls, System
+printing/exit, AppBase bases, initialization, and known callbacks. Method
+introductions in the executable profile are API 1.0.0 except
+Number/String/Boolean.compareTo at 5.0.0 and String.toNumberWithBase at 1.4.1;
+substring's nullable index form additionally requires 3.3.2. Catalogue knowledge
+does not enable methods whose executable types or profiles are unsupported.
+Context levels are caller assertions: no device database, permission, app-type,
+execution-scope, or VM-capability validation is implied. The console PRG generator
+remains the SDK 9.2.0 / fr265-tested profile.
 
 Native module statements have canonical module/member identities and no result
 value. Catalogue lookup validates their contract and optional API context before

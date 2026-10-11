@@ -7,12 +7,14 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Review Boolean next using the
-   [class-focused strategy](#native-lang-strategy), including inherited methods.
-   Implement the group that fits supported value types and dispatch. Revisit
-   deferred [Number][number-methods] and [String][string-methods] methods as
-   their prerequisites become available. Investigate receiver-dependent `weak()`
-   contracts before claiming support for immutable-value behavior.
+1. **Extend core Lang contracts and value types.** Investigate immutable-value
+   `weak()` next across Number, String, and Boolean. Probe runtime results and
+   choose receiver-dependent contracts before implementing this exception to
+   Object's declared WeakReference result. Keep ordinary object weak references
+   separate. Follow the [class-focused strategy](#native-lang-strategy) for
+   subsequent groups; revisit deferred [Number][number-methods],
+   [String][string-methods], and [Boolean][boolean-methods] methods as their
+   prerequisites become available.
    Retain branch-proof validation through saved IR, joins, loops, and writes.
    Extend supported comparisons without trusting frontend-only assumptions;
    support nullable Boolean when a runnable case requires it.
@@ -226,3 +228,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [number-methods]: investigations/compiler-number-methods.md#method-inventory
 
 [string-methods]: investigations/compiler-string-methods.md#method-inventory
+
+[boolean-methods]: investigations/compiler-boolean-methods.md#method-inventory

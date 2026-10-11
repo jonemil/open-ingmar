@@ -561,6 +561,14 @@ an explicit radix. Numeric ranges and conversion content are passed to the
 runtime without compiler validation. See the
 [String group evidence][string-group].
 
+Boolean receivers support `toString()` returning String, `hashCode()` returning
+Number, and `equals` returning Boolean with the same scalar/nullable argument
+profile as Number/String equality. These inherited methods date from API 1.0.0.
+Boolean `compareTo` returns Number and accepts Number/Boolean arguments, since
+API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
+does not enable Boolean arithmetic or ordering operators. See the
+[Boolean group evidence](../investigations/compiler-boolean-methods.md).
+
 String results may initialize/replace a String local or be printed. Number
 results support integer locals, arithmetic, comparisons, user-call
 arguments, integer returns, and further Number calls. For example,
@@ -569,12 +577,12 @@ Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, Number/String parameter, and supported call-result receivers are
+local, Number/String/Boolean parameter, and supported call-result receivers are
 accepted. Evaluate the receiver first, then arguments left to right, then invoke
 the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.
-Only these value-producing native calls are supported. Null/Dictionary/Boolean
+Only these value-producing native calls are supported. Null/Dictionary
 receivers and discarded method statements remain unsupported. Chained calls
 must resolve each member against the preceding result's type, for example
 `41.toString().toUpper().length().format("%03d")`. String and Boolean user

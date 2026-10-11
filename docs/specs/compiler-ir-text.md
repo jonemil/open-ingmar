@@ -601,6 +601,13 @@ Validation accepts a Number receiver with `toString`, `abs`, `toNumber`, or
 nullable scalar, or Null. Number comparison requires API 5.0.0 when a context
 is supplied. Its broad Object declaration does not enable other argument
 profiles. Equality returns Boolean; hash and conversion return Number.
+Boolean receivers accept zero-argument `toString` and `hashCode`, `compareTo`
+with one Number/Boolean argument, and `equals` with a supported scalar,
+nullable scalar, or Null. Their results are String, Number, Number, and Boolean
+respectively. Boolean comparison requires API 5.0.0 with explicit context;
+the other three methods date from 1.0.0. The same shared argument/result
+validation applies; native comparison does not enable Boolean ordering
+operators or arithmetic.
 String receivers accept zero-argument `length`, `hashCode`, `toLower`,
 `toUpper`, `toString`, and `toNumber`, plus `find` with one String argument,
 `toNumberWithBase` with one Number argument,

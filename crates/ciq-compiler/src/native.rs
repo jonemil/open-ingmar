@@ -1,4 +1,4 @@
-//! Adapt catalogue callbacks to the supported executable parameter profile.
+//! Resolve catalogue contracts into supported callback and native-call profiles.
 use crate::{ClassBase, ParameterType, ReturnType, api};
 
 pub(crate) struct CallbackSignature {
@@ -79,37 +79,41 @@ pub(crate) fn value_call(
             member
         ),
         (
-            "Toybox.Lang.Number",
+            "Toybox.Lang.Number" | "Toybox.Lang.Boolean",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
-        ) | (
-            "Toybox.Lang.Number",
-            "Toybox.Lang.Number",
-            "format" | "abs" | "toNumber" | "compareTo"
-        ) | (
-            "Toybox.Lang.String",
-            "Toybox.Lang.String",
-            "length"
-                | "toLower"
-                | "toUpper"
-                | "toString"
-                | "find"
-                | "toNumber"
-                | "substring"
-                | "compareTo"
-                | "equals"
-                | "hashCode"
-                | "toNumberWithBase"
-        )
+        ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
+            | (
+                "Toybox.Lang.Number",
+                "Toybox.Lang.Number",
+                "format" | "abs" | "toNumber" | "compareTo"
+            )
+            | (
+                "Toybox.Lang.String",
+                "Toybox.Lang.String",
+                "length"
+                    | "toLower"
+                    | "toUpper"
+                    | "toString"
+                    | "find"
+                    | "toNumber"
+                    | "substring"
+                    | "compareTo"
+                    | "equals"
+                    | "hashCode"
+                    | "toNumberWithBase"
+            )
     );
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
-    if class == "Toybox.Lang.Number"
+    if matches!(class.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean")
         && member == "compareTo"
         && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean"))
     {
-        return Err("Number.compareTo lowering currently requires Number or Boolean".into());
+        return Err(format!(
+            "{class}.compareTo lowering currently requires Number or Boolean"
+        ));
     }
     if class == "Toybox.Lang.String"
         && member == "compareTo"

@@ -82,6 +82,9 @@ conversion, comparison, equality, and hashing checks.
 The [String method example](examples/compiler-string-methods/README.md) groups
 text operations, base conversion, comparison, equality, and hashing.
 
+The [Boolean method example](examples/compiler-boolean-methods/README.md) groups
+comparison, equality, hashing, and string conversion.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

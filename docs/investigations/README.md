@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Boolean methods](compiler-boolean-methods.md): inherited contracts, mixed
+  comparison arguments, and grouped simulator validation.
 - [String methods](compiler-string-methods.md): method inventory, grouped
   simulator validation, base conversion, and UTF-8 index observations.
 - [Number methods](compiler-number-methods.md): full method inventory, deferred

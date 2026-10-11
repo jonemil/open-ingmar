@@ -75,7 +75,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f(x as Toybox.Lang.Number or Null) { return 7.compareTo(x); }",
         "function f(x as Toybox.Lang.Number or Null) { return x.hashCode(); }",
         "function f() { return 7.equals(7) + 1; }",
-        "function f() { return true.hashCode(); }",
+        "function f() { return true.abs(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
