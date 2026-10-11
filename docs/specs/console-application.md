@@ -66,6 +66,7 @@ Fixed native symbol IDs in this profile:
 | toString | `0x008000af` |
 | length | `0x008000bb` |
 | find | `0x008000bc` |
+| substring | `0x008000bd` |
 | toLower | `0x008000be` |
 | toUpper | `0x008000bf` |
 | View | `0x0080019f` |

@@ -71,7 +71,7 @@ impl ApiContext {
         self.minimum
     }
 
-    fn require(self, name: &str, since: ApiLevel) -> Result<(), String> {
+    pub(crate) fn require(self, name: &str, since: ApiLevel) -> Result<(), String> {
         if since > self.target {
             return Err(format!(
                 "{name} requires API {since}; unavailable on target API {}",
@@ -325,6 +325,12 @@ fn build_core() -> Catalogue {
         ),
     ];
     classes.get_mut(string).unwrap().methods = vec![
+        method(
+            "substring",
+            vec![Type::Union(vec![Type::named(number), Type::Null]); 2],
+            Type::Union(vec![Type::named(string), Type::Null]),
+            initial,
+        ),
         method(
             "find",
             vec![Type::named(string)],

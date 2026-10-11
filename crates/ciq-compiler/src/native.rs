@@ -53,8 +53,24 @@ pub(crate) fn value_call(
     if resolved.method.parameters.len() != arguments.len() {
         return Err("native call argument count does not match its API contract".into());
     }
-    if resolved.method.parameters != arguments {
+    if !resolved
+        .method
+        .parameters
+        .iter()
+        .zip(arguments)
+        .all(|(expected, actual)| accepts(expected, actual))
+    {
         return Err("native call argument types do not match its API contract".into());
+    }
+    if class == "Toybox.Lang.String"
+        && member == "substring"
+        && arguments
+            .iter()
+            .any(|ty| matches!(ty, api::Type::Null | api::Type::Union(_)))
+    {
+        if let Some(context) = context {
+            context.require("String.substring nullable indices", api::ApiLevel(3, 3, 2))?;
+        }
     }
     let supported = matches!(
         (
@@ -67,13 +83,28 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.String",
                 "Toybox.Lang.String",
-                "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber"
+                "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber" | "substring"
             )
     );
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
     Ok(resolved.method.result.clone())
+}
+
+/// Check exact types or union membership, without implicit conversions or
+/// inheritance widening. Every alternative of an actual union must be accepted.
+fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
+    if expected == actual {
+        return true;
+    }
+    if let api::Type::Union(types) = actual {
+        return types.iter().all(|ty| accepts(expected, ty));
+    }
+    if let api::Type::Union(types) = expected {
+        return types.iter().any(|ty| ty == actual);
+    }
+    false
 }
 
 /// Resolve a module statement contract, then require supported Void lowering.

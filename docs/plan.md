@@ -7,10 +7,9 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Add nullable String results
-   for `substring`, accounting for its index contracts and API-specific behavior.
-   Extend nullable parameter/result annotations and user-call contracts when a
-   runnable example needs to pass nullable values between functions. Retain
+1. **Extend core Lang contracts and value types.** Extend nullable
+   parameter/result annotations and user-call contracts when a runnable example
+   needs to pass nullable values between functions. Retain
    branch-proof validation through saved IR, joins, loops, and writes; extend
    supported guard forms without trusting frontend-only assumptions.
    Grow Object equality and other core methods through documented assignability

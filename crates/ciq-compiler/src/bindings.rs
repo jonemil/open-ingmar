@@ -63,6 +63,8 @@ pub fn symbol_bindings(
                 "abs".to_string()
             } else if alias == "__ciq_native_length" {
                 "length".to_string()
+            } else if alias == "__ciq_native_substring" {
+                "substring".to_string()
             } else if alias == "__ciq_native_find" {
                 "find".to_string()
             } else if alias == "__ciq_native_toNumber" {

@@ -143,6 +143,7 @@ enum ValueType {
     Integer,
     NullableInteger,
     String,
+    NullableString,
     Boolean,
     Null,
     NullableDictionary,
@@ -158,6 +159,10 @@ impl ValueType {
                 api::Type::Null,
             ]),
             Self::String => api::Type::named("Toybox.Lang.String"),
+            Self::NullableString => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.String"),
+                api::Type::Null,
+            ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
@@ -180,6 +185,7 @@ impl ValueType {
             api::Type::Null => Some(Self::Null),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
             _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
+            _ if *ty == Self::NullableString.api_type() => Some(Self::NullableString),
             _ => None,
         }
     }
@@ -559,9 +565,13 @@ impl Function {
                             if let Some(&at) = definitions.get(&value) {
                                 if let Operation::LocalRead { local, .. } = operations[at].operation
                                 {
-                                    if local_types.get(&local) == Some(&ValueType::NullableInteger)
-                                    {
-                                        return ValueType::NullableInteger;
+                                    if let Some(&ty) = local_types.get(&local) {
+                                        if matches!(
+                                            ty,
+                                            ValueType::NullableInteger | ValueType::NullableString
+                                        ) {
+                                            return ty;
+                                        }
                                     }
                                 }
                             }
@@ -782,6 +792,8 @@ impl Function {
                             && incoming == ValueType::Null)
                         && !(local_types[&local] == ValueType::NullableInteger
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableString
+                            && matches!(incoming, ValueType::String | ValueType::Null))
                     {
                         return Err(fail("assignment must preserve the local's value type"));
                     }
@@ -797,8 +809,12 @@ impl Function {
                     let ty = local_types[&local];
                     types.insert(
                         result,
-                        if ty == ValueType::NullableInteger && non_null.contains(&local) {
-                            ValueType::Integer
+                        if non_null.contains(&local) {
+                            match ty {
+                                ValueType::NullableInteger => ValueType::Integer,
+                                ValueType::NullableString => ValueType::String,
+                                _ => ty,
+                            }
                         } else {
                             ty
                         },

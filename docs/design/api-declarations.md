@@ -19,10 +19,12 @@ Number arithmetic-related methods, String length/case/string methods, AppBase
 initialization/startup/shutdown, and System printing/exit. Parameter/result
 subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Null, nullable Number,
-and nullable Dictionary; operator validation uses those semantic types. The
+nullable String, and nullable Dictionary; operator validation uses those semantic types. The
 bounded native call profile resolves Number's inherited `toString` and direct `format`/`abs`,
-and String's direct length, case, string, find, and Number-conversion contracts.
-Argument types must match their signatures; executable support remains a
+and String's length, case, string, find, substring, and Number-conversion contracts.
+Argument types must match their signatures or be alternatives of a declared
+union; every alternative of an actual union must be accepted. This does not
+imply inheritance widening or conversions. Executable support remains a
 separate check. Number results use the existing integer value
 category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
@@ -30,8 +32,9 @@ need no new IR operation or type.
 String results use the existing String category and can receive further
 supported calls. User functions accept Number, String, and Boolean parameters
 and results; API declarations alone do not enable other types. String `find`
-and `toNumber` retain Number-or-Null result contracts. Flow validation permits
-Number consumers only for local reads proved non-null by a direct branch.
+and `toNumber` retain Number-or-Null result contracts; `substring` retains
+String-or-Null. Flow validation permits non-null consumers only for local reads
+proved non-null by a direct branch.
 Other result unions need corresponding validation before executable support.
 
 Classes hold instance methods; modules hold module functions. Methods carry
@@ -102,6 +105,11 @@ checking executable support. The current profile admits only zero-argument
 effectful statement, separate from an IR return or branch. This establishes a
 module-call path without adding runtime bodies to declarations.
 
+Substring's nullable index form is checked separately at API 3.3.2, while the
+method itself dates from 1.0.0. Numeric range-dependent behavior is not inferred
+from types; callers must provide a compatible minimum for negative indices.
+See the [source contract](../specs/compiler-subset.md#nullable-results).
+
 ## Core language relationship
 
 Model `Lang.Object` as the class-hierarchy root and connect built-in values to
@@ -116,7 +124,8 @@ value category. Parameter/result mappings share that bridge. The internal enum
 remains a bounded profile, not a replacement for arbitrary API type expressions.
 
 Current rules accept Number/Number addition, subtraction, equality, and greater
-comparison; equality also accepts Null/Null and nullable Number/Dictionary with
+comparison; equality also accepts Null/Null and nullable
+Number/String/Dictionary with
 Null in either order; Boolean pairs support equality. Arithmetic produces Number and
 comparisons produce Boolean. Boolean literals and locals share that semantic
 identity and use ordinary conditions, assignments, and printing.

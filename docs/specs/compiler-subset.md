@@ -547,8 +547,9 @@ receivers and discarded method statements remain unsupported. Chained calls
 must resolve each member against the preceding result's type, for example
 `41.toString().toUpper().length().format("%03d")`. String and Boolean user
 parameters/results require the function annotations defined above.
-String `find(String)` and `toNumber()` return Number or Null and follow the
-[null-check rules](#nullable-number-results). Unknown catalogue
+String `find(String)` and `toNumber()` return Number or Null;
+`substring(Number or Null, Number or Null)` returns String or Null. These follow the
+[null-check rules](#nullable-results). Unknown catalogue
 members, wrong arity/types, and known members lacking lowering are distinct
 errors. Explicit [API context inputs][api-context] check introduction levels;
 general native dispatch remains unsupported.
@@ -559,13 +560,14 @@ a String contains a valid format pattern.
 identity separately from executable IDs. Runtime evidence and reproduction are
 in the [native call experiment](../investigations/compiler-native-calls.md).
 
-## Nullable Number results
+## Nullable results
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
-Number or Null. Store their results in locals and compare them with null.
+Number or Null. String `substring` returns String or Null. Store nullable
+results in locals and compare them with null.
 A direct `if (value == null)` or `if (null == value)` proves that local non-null
-on the false path. Fresh reads there have Number type and support arithmetic,
-Number methods, printing, and ordinary user arguments/returns. For example:
+on the false path. Fresh reads there have the non-null Number or String type
+and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc
 function parse(text as Toybox.Lang.String) as Toybox.Lang.Number {
@@ -578,15 +580,25 @@ function parse(text as Toybox.Lang.String) as Toybox.Lang.Number {
 A join retains a proof only if all incoming paths provide it. The false exit of
 `while (value == null)` also provides a proof, unless another exit such as
 `break` lacks it. Assignments to that local invalidate the proof, including
-assignments of Number values. Nullable Number locals accept Number, Null, or
-Number-or-Null replacements; their declared storage type stays nullable.
+assignments of non-null values. Nullable locals accept Null, their non-null
+type, or the same union; their declared storage type stays nullable.
 
 Only direct local-read/literal-null comparisons used by the branch establish
 facts. A stored Boolean condition, a null-valued local used as the comparison
 operand, or a check of a different local does not narrow the target. Checking
 one local does not narrow aliases or later native-call results. Unchecked nullable
-values cannot be printed, used as Number operands/receivers, passed as ordinary
+values cannot be printed, used as non-null operands/receivers, passed as ordinary
 user arguments, or returned. Nullable user signatures remain unsupported.
-Other unions and String-result methods such as `substring` remain outside this
-profile. Conversion and search behavior is supplied by the runtime, not folded
-by the compiler; see [evidence](../investigations/compiler-nullable-numbers.md).
+Other unions remain outside this profile. Conversion, search, and slicing
+behavior is supplied by the runtime, not folded by the compiler. See
+[Number evidence](../investigations/compiler-nullable-numbers.md) and
+[substring evidence](../investigations/compiler-substring.md).
+
+`substring` takes zero-based start and exclusive end indices. Number indices
+are accepted from API 1.0.0. Null or Number-or-Null indices require target and
+minimum API at least 3.3.2 when an API context is supplied: Null selects the
+respective beginning/end boundary. Negative indices are relative to the end
+from API 3.3.2. Numeric ranges are not analyzed, so callers using negative
+values must select a compatible minimum themselves. No API context means these
+compatibility checks are omitted. Index normalization/error behavior remains
+a runtime obligation; the declared result remains nullable.

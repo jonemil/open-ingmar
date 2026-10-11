@@ -73,6 +73,9 @@ and Boolean values through module and instance methods.
 The [nullable Number example](examples/compiler-nullable-numbers/README.md)
 checks native search/conversion results before using them as Numbers.
 
+The [substring example](examples/compiler-substring/README.md) exercises nullable
+String results, guarded returns, and nullable/negative indices.
+
 The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
 initialization and a typed native startup callback with a null-state check.
 

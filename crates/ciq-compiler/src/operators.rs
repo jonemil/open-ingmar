@@ -15,7 +15,7 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
     }
 }
 
-/// Resolve supported comparison types to Boolean. Number/Dictionary-or-null values
+/// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality with Null; Boolean pairs support equality only.
 /// Other comparisons currently require Numbers.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
@@ -24,12 +24,16 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
         kind == ComparisonOp::Equal && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
+    let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
     let null_check = kind == ComparisonOp::Equal
         && ((left == &Type::Null
             && (right == &Type::Null
                 || right == &nullable_dictionary
-                || right == &nullable_number))
-            || ((left == &nullable_dictionary || left == &nullable_number)
+                || right == &nullable_number
+                || right == &nullable_string))
+            || ((left == &nullable_dictionary
+                || left == &nullable_number
+                || left == &nullable_string)
                 && right == &Type::Null));
     (numbers || booleans || null_check).then(|| Type::named("Toybox.Lang.Boolean"))
 }
@@ -45,6 +49,7 @@ mod tests {
             ValueType::Integer,
             ValueType::NullableInteger,
             ValueType::String,
+            ValueType::NullableString,
             ValueType::Boolean,
             ValueType::Null,
             ValueType::NullableDictionary,
@@ -71,8 +76,11 @@ mod tests {
                                 ValueType::Null
                                     | ValueType::NullableDictionary
                                     | ValueType::NullableInteger
+                                    | ValueType::NullableString
                             ) | (
-                                ValueType::NullableDictionary | ValueType::NullableInteger,
+                                ValueType::NullableDictionary
+                                    | ValueType::NullableInteger
+                                    | ValueType::NullableString,
                                 ValueType::Null
                             )
                         );
@@ -103,6 +111,7 @@ mod tests {
             ValueType::Integer,
             ValueType::NullableInteger,
             ValueType::String,
+            ValueType::NullableString,
             ValueType::Boolean,
             ValueType::Null,
             ValueType::NullableDictionary,
