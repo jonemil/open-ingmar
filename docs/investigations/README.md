@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Native value calls](compiler-native-calls.md): inherited Number conversion
+  and explicit receiver invocation.
 - [Initial frontend](first-compiler.md): constant-return source and scaffold use.
 - [Native/text pipeline](compiler-pipeline.md): IR/CODE parity and terminology.
 - [Arithmetic](compiler-arithmetic.md): grouped expressions and lowering.

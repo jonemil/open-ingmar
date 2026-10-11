@@ -56,11 +56,31 @@ fn emit(
                 ));
             }
             if locals.contains_key(&module) || parameters.contains_key(&module) {
-                return Err(Diagnostic::at(
+                let receiver = emit(
                     source,
-                    expression.span.start,
-                    "calls on local receivers are unsupported",
-                ));
+                    parser::Expression {
+                        kind: parser::ExpressionKind::Local(module),
+                        span: expression.span,
+                    },
+                    locals,
+                    parameters,
+                    operations,
+                )?;
+                let arguments = arguments
+                    .into_iter()
+                    .map(|argument| emit(source, argument, locals, parameters, operations))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let result = ValueId(operations.len() as u32);
+                operations.push(LocatedOperation {
+                    operation: Operation::NativeCall {
+                        result,
+                        receiver,
+                        member,
+                        arguments,
+                    },
+                    span: Some(expression.span),
+                });
+                return Ok(result);
             }
             let arguments = arguments
                 .into_iter()

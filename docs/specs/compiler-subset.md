@@ -12,8 +12,9 @@ Restricted frontend. Design:
 Integer/string/null restrictions below describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
 The [core type/API model](../design/api-declarations.md) connects values to
-`Lang` identities for operator validation; general member lookup and target API
-availability checking are not yet supported. No API declaration-file syntax is specified here.
+`Lang` identities for operator validation and the bounded native calls below.
+General member lookup and target API availability checking remain unsupported.
+No API declaration-file syntax is specified here.
 
 The default mode accepts exactly one top-level function.
 [Compilation-unit mode](compiler-unit.md) adds global/module declarations and
@@ -36,6 +37,7 @@ expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = decimal-integer | string-literal | "null" | parameter-or-local-identifier
         | module "." member "(" argument-list? ")" | "(" expression ")"
+        | parameter-or-local-identifier "." "toString" "(" ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
@@ -92,8 +94,8 @@ source. CODE output is a raw payload, not a PRG. See
 
 The source subset supports binary `+` and `-` with equal precedence and left
 associativity, and parentheses for grouping. Literals remain decimal `0..=127`;
-subtraction results may be negative. Unary signs, other operators, object calls,
-and other statement forms remain unsupported. Parse nesting is
+subtraction results may be negative. Unary signs, other operators, and general
+object calls remain unsupported; the bounded native calls below are separate. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
 
@@ -219,7 +221,8 @@ longer than 65535 UTF-8 bytes are rejected. Empty strings are allowed. Source
 Unicode escape syntax is not supported; IR/assembly use their own documented
 escape syntax.
 
-String literals and string-valued local reads can initialize locals or supply
+String literals, native conversion results, and string-valued local reads can
+initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
 initializations and accept one integer or string value. Parameters, arithmetic,
 user-module arguments/results, and the final return remain integer-only. The
@@ -260,7 +263,8 @@ frontend profile, not a specification of all Monkey C namespace behavior.
 Reject duplicate bindings, shadowing by parameters/locals/functions/owners,
 aliases of reserved identities, import aliases, declarations after functions,
 and native modules outside this profile. General source namespace aliases and
-native type/member lookup remain unsupported. Calls on ordinary user modules
+general native type/member lookup remain unsupported. Number conversion uses
+inherited lookup only as specified below. Calls on ordinary user modules
 and `self` keep their existing rules. Supported native spellings resolve to the
 same semantic operation or superclass identity before IR construction; aliases
 are not serialized as VM symbols or executable import indexes.
@@ -469,3 +473,22 @@ Null literals and opaque nullable callback-state locals support equality checks;
 general object values/fields, source inheritance,
 and general native calls remain open. See [runtime
 evidence](../investigations/compiler-class.md).
+
+## Native value calls
+
+A named integer local or integer parameter may appear as the receiver in
+`name.toString()`. Resolve its Number type through the API catalogue and inherit
+`toString` from `Lang.Object`. The call takes no arguments and produces String.
+Its result may initialize/replace a String local or be printed; existing user
+call arguments and function return restrictions remain unchanged.
+
+The frontend distinguishes visible local/parameter receivers from module calls.
+Only this value-producing native call is supported. Literal/computed receiver
+syntax, chained calls, String/null/Dictionary receivers, and discarded method
+statements remain unsupported. Unknown catalogue members, wrong arity, and known
+members lacking lowering are distinct errors. There is no target availability
+selection or general native dispatch yet.
+
+[Native call IR](compiler-ir-text.md#native-value-calls) preserves receiver/member
+identity separately from executable IDs. Runtime evidence and reproduction are
+in the [native call experiment](../investigations/compiler-native-calls.md).

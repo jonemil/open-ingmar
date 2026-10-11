@@ -64,6 +64,9 @@ Readable IR and assembly provide inspection and editing points in the compiler
 pipeline. See [compiler design](docs/design/compiler-ir.md) for the stages and
 [IR syntax](docs/specs/compiler-ir-text.md) for saved text.
 
+The [native call example](examples/compiler-native-calls/README.md) exercises
+inherited Number-to-String conversion on locals and parameters.
+
 The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
 initialization and a typed native startup callback with a null-state check.
 

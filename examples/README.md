@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-native-calls](compiler-native-calls/README.md): inherited Number
+  conversion on local and parameter receivers.
 - [compiler-probe](compiler-probe/README.md): a standalone function input to our
   Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a
@@ -16,6 +18,8 @@ and future Rust toolchain experiments.
   function, with console/display `46`.
 - [module-names](module-names/README.md): two modules with the same `answer()`
   spelling, returning `21` and `22`.
+- [compiler-native-calls](compiler-native-calls/README.md): inherited Number
+  conversion on local and parameter receivers.
 - [compiler-probe](compiler-probe/README.md): standalone inputs for the Rust
   frontend, including literal returns, grouped integer arithmetic, initialized
   locals, external module calls, and integer parameters/arguments.

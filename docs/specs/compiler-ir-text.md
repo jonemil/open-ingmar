@@ -120,7 +120,7 @@ symbol name is `globals/<module>` and the member's is `<member>`; this is not
 numeric symbol allocation or method metadata generation.
 
 Calls, prints, and writes are effectful. If a function contains any `.call`,
-`.println`, or `.assign`, all its operations must match the backend's
+`.println`, `.call-native`, or `.assign`, all its operations must match the backend's
 left-to-right expression traversal and ordered
 initialization/assignment/print/branch/return sinks. The shared validator
 rejects incompatible schedules, including moving a call across an initialization
@@ -517,3 +517,34 @@ object construction, fields, native self calls, and
 source inheritance are unsupported.
 
 [class-ir]: compiler-classes.md#native-and-textual-ir
+
+## Native value calls
+
+`.call-native %<result-id> %<receiver-id> <member> [%<argument-id> ...]` invokes a
+runtime-provided method and defines its semantic result. The receiver and
+arguments must be earlier values with the usual single-use/block restrictions.
+Optional source spans use the ordinary syntax.
+
+Current validation accepts only a Number receiver, member `toString`, and no
+arguments. Resolve its inherited Object contract through the API catalogue;
+its result is String. A typed/text producer may supply any validated Number
+expression as receiver; the source frontend currently accepts named locals and
+parameters only. Unsupported members, receivers, arity, and result contracts
+are rejected before lowering.
+
+Native calls are effectful: receiver evaluation precedes invocation, and their
+operation order must agree with dependency traversal at statement sinks. The
+backend emits receiver evaluation, `getsv @__ciq_native_toString`, and
+`invokemz`. Binding requires exactly one stored symbol named `toString` in an
+explicit symbol source, or the supported complete application's native profile.
+IR contains no symbol ID or import index.
+
+```text
+ciq-ir
+.function show parameters=1
+.parameter %0 0
+.call-native %1 %0 toString
+.println %1
+.return-void
+.end
+```

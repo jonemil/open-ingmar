@@ -131,6 +131,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".equal") => (13, 4),
             Some(".greater") => (14, 4),
             Some(".null") => (21, 2),
+            Some(".call-native") => (22, call_width()),
             Some(".assign") => (15, 3),
             Some(".base-initialize") => (20, 2),
             _ => {
@@ -140,7 +141,8 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         if ((kind == 6 && width < 4)
             || (kind == 17 && width < 3)
             || (kind == 18 && width < 3)
-            || (kind == 19 && width < 2))
+            || (kind == 19 && width < 2)
+            || (kind == 22 && width < 4))
             || fields.len() < width
             || fields.len() > width + 1
         {
@@ -199,7 +201,17 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 21 {
+        let operation = if kind == 22 {
+            Operation::NativeCall {
+                result: parse_value(&fields[1])?,
+                receiver: parse_value(&fields[2])?,
+                member: fields[3].clone(),
+                arguments: fields[4..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 21 {
             Operation::Null {
                 result: parse_value(&fields[1])?,
             }

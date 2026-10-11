@@ -7,14 +7,13 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Resolve core member calls through API declarations.** Use the bounded
-   catalogue's inherited lookup in source resolution. Start with a Number value
-   calling inherited `toString()` and printing its result in a complete app.
-   Establish its receiver/invocation form with a focused SDK specimen before
-   lowering; known declarations alone do not make calls compilable. Extend
-   value-producing native call IR and its text form together. Migrate remaining
-   Application/System special cases as they acquire supported call forms.
-   See [API declaration design][api-design].
+1. **Expand core member calls through API declarations.** Extend supported
+   receiver syntax to computed expressions where runnable examples need it, and
+   add an argument-taking Number method such as `format` using a focused SDK
+   specimen. Preserve left-to-right receiver/argument evaluation in source, IR,
+   and lowering. Keep native support explicit: catalogue entries alone do not
+   make calls compilable. Migrate remaining Application/System special cases as
+   they acquire supported call forms. See [API declaration design][api-design].
 
    Read the language reference alongside `Lang` contracts when extending
    operator rules. Grow numeric conversions, mixed arithmetic, string addition,

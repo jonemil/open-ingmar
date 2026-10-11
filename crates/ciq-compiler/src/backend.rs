@@ -50,7 +50,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
             | Operation::ModuleCall { result, .. }
-            | Operation::SelfCall { result, .. } => {
+            | Operation::SelfCall { result, .. }
+            | Operation::NativeCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. } => {
@@ -205,6 +206,7 @@ fn expression(
         Compare(ComparisonOp),
         Invoke(usize),
         Context,
+        NativeMember,
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
@@ -217,6 +219,15 @@ fn expression(
                 Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
                 Operation::Integer { value, .. } => {
                     (Opcode::Ipush1, vec![Operand::Bits(*value as u64)])
+                }
+                Operation::NativeCall {
+                    receiver,
+                    arguments,
+                    ..
+                } => {
+                    debug_assert!(arguments.is_empty());
+                    tasks.extend([Task::Invoke(0), Task::NativeMember, Task::Value(*receiver)]);
+                    continue;
                 }
                 Operation::ModuleCall {
                     member, arguments, ..
@@ -266,6 +277,10 @@ fn expression(
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),
+            Task::NativeMember => (
+                Opcode::Getsv,
+                vec![Operand::Symbol("__ciq_native_toString".into())],
+            ),
             Task::Compare(kind) => (
                 match kind {
                     ComparisonOp::Equal => Opcode::Eq,

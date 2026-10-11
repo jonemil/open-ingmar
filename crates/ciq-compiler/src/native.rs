@@ -31,3 +31,28 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
         .find(|candidate| candidate.api_type() == method.result)?;
     Some(CallbackSignature { parameters, result })
 }
+
+/// Resolve a value-call contract through the catalogue, then require its bounded
+/// executable profile. API existence and supported lowering are separate checks.
+pub(crate) fn value_call(
+    receiver: &api::Type,
+    member: &str,
+    count: usize,
+) -> Result<api::Type, &'static str> {
+    let api::Type::Named(class) = receiver else {
+        return Err("native calls require a supported class-valued receiver");
+    };
+    let resolved = api::core()
+        .method(class, member)
+        .ok_or("native member is not known in the API catalogue")?;
+    if resolved.method.parameters.len() != count {
+        return Err("native call argument count does not match its API contract");
+    }
+    if class != "Toybox.Lang.Number"
+        || resolved.declaring_class.name != "Toybox.Lang.Object"
+        || member != "toString"
+    {
+        return Err("native member has no supported lowering for this receiver");
+    }
+    Ok(resolved.method.result.clone())
+}

@@ -228,6 +228,14 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Invoke a runtime-provided member on an explicit value receiver.
+    /// Validation resolves its inherited contract and supported native lowering.
+    NativeCall {
+        result: ValueId,
+        receiver: ValueId,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Invoke a qualified user method for effects, discarding any VM result.
     /// Unit validation permits an integer or void callee and checks its arity.
     ModuleCallStatement {
@@ -541,6 +549,22 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
+                Operation::NativeCall {
+                    result,
+                    receiver,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let result_type =
+                        native::value_call(&type_of(receiver).api_type(), member, arguments.len())
+                            .map_err(fail)?;
+                    let result_type = ValueType::from_api_type(&result_type)
+                        .ok_or_else(|| fail("native call result type has no supported lowering"))?;
+                    types.insert(result, result_type);
+                    let mut operands = vec![receiver];
+                    operands.extend(arguments);
+                    (Some(result), operands)
+                }
                 Operation::ModuleCall {
                     ref module,
                     ref member,
@@ -691,6 +715,7 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::ModuleCall { .. }
+                    | Operation::NativeCall { .. }
                     | Operation::ModuleCallStatement { .. }
                     | Operation::SelfCall { .. }
                     | Operation::SelfCallStatement { .. }
@@ -735,6 +760,14 @@ impl Function {
                                 Operation::Binary { left, right, .. }
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
+                                }
+                                Operation::NativeCall {
+                                    receiver,
+                                    arguments,
+                                    ..
+                                } => {
+                                    tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
+                                    tasks.push(Task::Value(*receiver));
                                 }
                                 Operation::ModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
@@ -869,6 +902,21 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::NativeCall {
+                    result,
+                    receiver,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(
+                        ".call-native %{} %{} {member}{arguments}",
+                        result.0, receiver.0
+                    )
+                }
                 Operation::ModuleCall {
                     result,
                     ref module,

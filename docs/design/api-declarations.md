@@ -18,8 +18,8 @@ Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related methods, AppBase initialization/startup, and System
 printing. Parameter/result subset types expose `api_type()` mappings. Internal
 value categories map to Number, String, Boolean, Null, and nullable Dictionary;
-operator validation uses those semantic types. Numeric member calls remain
-unsupported.
+operator validation uses those semantic types. The bounded native call profile
+resolves Number's inherited `toString` contract and lowers it separately.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types

@@ -47,7 +47,9 @@ bindings. Startup callback validation reads that model. Supported parameter and
 result contracts and internal value categories map to core `Lang` identities.
 A separate operator-rule layer checks API operand types and supplies result
 types before VM instruction selection. It retains the restricted executable
-profile; general API member lookup remains separate work. Object semantics do
+profile. Value-producing native calls retain an explicit receiver and member;
+validation resolves the inherited API contract before checking executable support.
+General API member lookup remains separate work. Object semantics do
 not require every IR value to denote a heap allocation.
 
 ## Native and textual pipelines
