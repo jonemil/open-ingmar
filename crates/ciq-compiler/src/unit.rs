@@ -293,8 +293,10 @@ impl CompilationUnit {
                     return Err(fail(
                         Some(index),
                         None,
-                        "onStart requires one nullable-dictionary parameter and a void result"
-                            .into(),
+                        format!(
+                            "{} requires one nullable-dictionary parameter and a void result",
+                            function.name()
+                        ),
                     ));
                 }
             } else if function
@@ -303,7 +305,7 @@ impl CompilationUnit {
                 .any(|t| *t != crate::ParameterType::Integer)
             {
                 return Err(fail(Some(index), None,
-                    "noninteger parameter contracts are currently supported only for AppBase.onStart".into()));
+                    "noninteger parameter contracts are currently supported only for native lifecycle callbacks".into()));
             }
             let base_calls = function
                 .operations()
@@ -409,11 +411,16 @@ impl CompilationUnit {
                         format!("unresolved function {}.{}", key.0.name(), key.1),
                     ));
                 };
-                if matches!(key.0, Owner::Class(_)) && key.1 == "onStart" {
+                if matches!(key.0, Owner::Class(_))
+                    && crate::native::callback(ClassBase::ApplicationAppBase, key.1).is_some()
+                {
                     return Err(fail(
                         Some(index),
                         Some(operation),
-                        "onStart is a native lifecycle callback, not a user-call target".into(),
+                        format!(
+                            "{} is a native lifecycle callback, not a user-call target",
+                            key.1
+                        ),
                     ));
                 }
                 if value_call && *result == ReturnType::Void {

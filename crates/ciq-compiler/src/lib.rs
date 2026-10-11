@@ -172,6 +172,13 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Invoke a catalogue-resolved native module function as a Void statement.
+    /// Names are canonical API identities, independent of executable bindings.
+    NativeModuleCallStatement {
+        module: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Define a Boolean literal, distinct from integer zero/one and null.
     Boolean {
         result: ValueId,
@@ -578,6 +585,19 @@ impl Function {
                     }
                     (None, vec![value])
                 }
+                Operation::NativeModuleCallStatement {
+                    ref module,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let types = arguments
+                        .iter()
+                        .map(|v| type_of(*v).api_type())
+                        .collect::<Vec<_>>();
+                    native::module_statement(module, member, &types, context)
+                        .map_err(|message| fail(&message))?;
+                    (None, arguments.clone())
+                }
                 Operation::Binary {
                     result,
                     left,
@@ -776,6 +796,7 @@ impl Function {
                 located.operation,
                 Operation::ModuleCall { .. }
                     | Operation::NativeCall { .. }
+                    | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
                     | Operation::SelfCall { .. }
                     | Operation::SelfCallStatement { .. }
@@ -799,6 +820,7 @@ impl Function {
                     | Operation::Println { value } => vec![*value],
                     Operation::Branch { condition, .. } => vec![*condition],
                     Operation::ModuleCallStatement { arguments, .. }
+                    | Operation::NativeModuleCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
                     Operation::Block { .. }
                     | Operation::Jump { .. }
@@ -942,6 +964,17 @@ impl Function {
                     right.0
                 ),
                 Operation::Null { result } => format!(".null %{}", result.0),
+                Operation::NativeModuleCallStatement {
+                    ref module,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let mut line = format!(".call-native-module-discard {module} {member}");
+                    for argument in arguments {
+                        line.push_str(&format!(" %{}", argument.0));
+                    }
+                    line
+                }
                 Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {
@@ -1084,7 +1117,7 @@ fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'stati
         return Err("invalid module or member name");
     }
     if module == Some("System") {
-        return Err("System calls are supported only as println statements");
+        return Err("System calls require supported native statement forms");
     }
     if module == Some("self") {
         return Err("self calls require explicit receiver IR operations");

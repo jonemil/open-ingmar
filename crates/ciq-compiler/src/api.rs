@@ -324,12 +324,23 @@ fn build_core() -> Catalogue {
             ApiLevel(5, 0, 0),
         ),
     ];
-    let mut on_start = method("onStart", vec![nullable_dictionary], Type::Void, initial);
+    let mut on_start = method(
+        "onStart",
+        vec![nullable_dictionary.clone()],
+        Type::Void,
+        initial,
+    );
     on_start.callback = true;
+    let mut on_stop = method("onStop", vec![nullable_dictionary], Type::Void, initial);
+    on_stop.callback = true;
     classes
         .get_mut("Toybox.Application.AppBase")
         .unwrap()
-        .methods = vec![method("initialize", vec![], Type::Void, initial), on_start];
+        .methods = vec![
+        method("initialize", vec![], Type::Void, initial),
+        on_start,
+        on_stop,
+    ];
     let mut modules = BTreeMap::new();
     for name in ["Toybox.Lang", "Toybox.Application", "Toybox.System"] {
         modules.insert(
@@ -351,6 +362,11 @@ fn build_core() -> Catalogue {
             Type::Void,
             initial,
         ));
+    modules
+        .get_mut("Toybox.System")
+        .unwrap()
+        .functions
+        .push(method("exit", vec![], Type::Void, initial));
     Catalogue { modules, classes }
 }
 

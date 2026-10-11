@@ -32,10 +32,10 @@ void. Expression calls require integer results; string and
 Boolean arguments are rejected. These are the current subset's fixed type
 rules, not general Monkey C type inference.
 
-AppBase.onStart has a [native nullable-state
+AppBase.onStart/onStop have a [native nullable-state
 contract](compiler-classes.md#source-startup-callback).
-Its parameter types and void result must match the resolved callback signature;
-it cannot be invoked as an ordinary source callee.
+Their parameter types and void result must match the resolved callback signature;
+neither can be invoked as an ordinary source callee.
 
 The [native name profile](compiler-subset.md#native-name-declarations) defines
 supported `using`/`import` declarations and lexical boundaries. Native bindings

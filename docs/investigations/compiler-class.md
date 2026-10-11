@@ -256,6 +256,38 @@ is `startup-monkeydo.log` there. Constructor and blank View remain generated.
 Resource generation, additional callbacks, and real-watch execution remain
 unverified.
 
+## Normal exit and shutdown callback
+
+Reviewed 2026-10-11. Public [System documentation][system-exit] defines
+zero-argument `exit()` returning Void since API 1.0.0; [AppBase.onStop][app-stop]
+takes Dictionary-or-null and returns Void at the same level. Its parameter notes
+describe an empty Dictionary for ordinary termination, while the declared type
+also permits null.
+
+Reuse the minimal-console manifest/resources under `scratch/lifecycle-stop/`
+with our own source AppBase: `onStart(state)` prints a marker and calls
+`System.exit()`; `onStop(state)` prints a shutdown marker and `state == missing`
+with local `missing = null`. Keep the ordinary initializer and generated View
+source scaffold. Build with `sh scripts/build-example.sh scratch/lifecycle-stop`
+and export `build/fr265/lifecycle-stop.prg` with `ciq-dis all` into a fresh
+scratch directory. No compiler/SDK implementation is inspected.
+
+**Observed SDK 9.2.0 / fr265:** exit uses `getmv @Toybox_System @exit`,
+`invokemz`, `popv`; its stored symbol is `0x0080006d`. The shutdown callback's
+stored symbol is `0x008002a1`. Our catalogue stores their contracts separately
+from those executable bindings.
+
+**Observed independent app:** the [lifecycle example][lifecycle-example] prints
+`source onStop` and `true` after its startup/Boolean sequence, then monkeydo
+exits with code 0. Startup and shutdown each execute once. Thus this exit path
+supplies null to onStop, despite the parameter notes' Dictionary description;
+other termination states and Intent payloads remain unverified. Exiting during
+startup does not establish initial-View execution. Native and resumed unit-IR
+PRGs match; tests reject bad signatures, user calls to callbacks, wrong exit
+arity, and reordered effectful IR.
+
+[system-exit]: https://developer.garmin.com/connect-iq/api-docs/Toybox/System.html#exit-instance_function
+[app-stop]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/AppBase.html#onStop-instance_function
 [profile]: ../specs/compiler-classes.md
 [example]: ../../examples/compiler-class/README.md
 [objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/

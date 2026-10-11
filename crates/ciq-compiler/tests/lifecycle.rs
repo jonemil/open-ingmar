@@ -113,3 +113,103 @@ fn saved_ir_retains_and_checks_callback_types() {
         assert!(parse_unit_ir(&bad).is_err());
     }
 }
+
+#[test]
+fn shutdown_callback_uses_native_contract_and_has_one_data_binding() {
+    let unit = example();
+    let stop = unit.classes()[0]
+        .methods
+        .iter()
+        .find(|f| f.name() == "onStop")
+        .unwrap();
+    assert_eq!(stop.parameter_types(), [ParameterType::NullableDictionary]);
+    assert_eq!(stop.return_type(), ciq_compiler::ReturnType::Void);
+    let native = build_console_application(&unit, &options("StartupApp.onStart")).unwrap();
+    let resumed = build_console_application(
+        &parse_unit_ir(&unit.to_ir_text()).unwrap(),
+        &options("StartupApp.onStart"),
+    )
+    .unwrap();
+    assert_eq!(native, resumed);
+    let data = native.unique_section(ciq_prg::DATA).unwrap().payload();
+    let stops = records(data)
+        .unwrap()
+        .iter()
+        .filter_map(|r| match r {
+            Record::Class(class) => Some(class.fields.iter()),
+            _ => None,
+        })
+        .flatten()
+        .filter(|f| f.symbol_id() == 0x008002a1)
+        .count();
+    assert_eq!(stops, 1);
+    for declaration in [
+        "function onStop() {}",
+        "function onStop(a,b) {}",
+        "function onStop(state) { return 1; }",
+        "function onStop(state) { System.println(state); }",
+        "function onStop(state) { var n = state + 1; }",
+        "function onStop(state) { self.onStop(1); }",
+    ] {
+        let source = format!("class C extends Application.AppBase {{ {declaration} }}");
+        assert!(compile_sources(&[&source]).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn native_module_exit_preserves_aliases_bindings_and_effect_order() {
+    for receiver in ["System", "Toybox.System", "Sys"] {
+        let source = format!("using Toybox.System as Sys; function f() {{ {receiver}.exit(); }}");
+        let function = ciq_compiler::compile(&source).unwrap();
+        assert_eq!(
+            function,
+            ciq_compiler::parse_ir(&function.to_ir_text()).unwrap()
+        );
+        let assembly = function.lower();
+        assert!(
+            assembly
+                .to_text()
+                .contains("getmv @__ciq_sdk_System @__ciq_native_exit\ninvokemz\npopv")
+        );
+        let symbols = ciq_assembly::Program::parse(
+            ".symbol system \"Toybox_System\" id=0x00800005\n.symbol exit \"exit\" id=0x0080006d",
+        )
+        .unwrap();
+        let bindings = ciq_compiler::symbol_bindings(&assembly, &symbols).unwrap();
+        assert_eq!(bindings["__ciq_native_exit"], 0x0080006d);
+        assembly
+            .encode_with_references(&bindings, &Default::default())
+            .unwrap();
+    }
+    let source = "function f() { System.println(1); System.exit(); }";
+    let function = ciq_compiler::compile(source).unwrap();
+    let text = function.to_ir_text();
+    let exit = ".call-native-module-discard Toybox.System exit";
+    assert!(
+        ciq_compiler::parse_ir(
+            &text
+                .replace(exit, "")
+                .replace(".println %0", &format!("{exit}\n.println %0"))
+        )
+        .is_err()
+    );
+    for (source, message) in [
+        ("function f() { System.exit(1); }", "argument count"),
+        ("function f() { System.missing(); }", "not known"),
+        ("function f() { return System.exit(); }", "System calls"),
+        ("function f(System) { System.exit(); }", "System"),
+    ] {
+        let error = ciq_compiler::compile(source).unwrap_err();
+        assert!(error.message.contains(message), "{error}");
+    }
+    assert!(
+        ciq_compiler::parse_ir(&text.replace("Toybox.System exit", "Toybox.Application exit"))
+            .is_err()
+    );
+    let collision = compile_sources(&[
+        "class exit extends Application.AppBase { function start() { System.exit(); } }",
+    ])
+    .unwrap();
+    let error = build_console_application(&collision, &options("exit.start")).unwrap_err();
+    assert!(error.message.contains("pinned native symbol"));
+}

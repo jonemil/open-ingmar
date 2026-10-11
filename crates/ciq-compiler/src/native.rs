@@ -66,3 +66,34 @@ pub(crate) fn value_call(
     }
     Ok(resolved.method.result.clone())
 }
+
+/// Resolve a module statement contract, then require supported Void lowering.
+/// Declarations and introduction levels are checked before executable support.
+pub(crate) fn module_statement(
+    module: &str,
+    member: &str,
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<(), String> {
+    let catalogue = api::core();
+    let method = if let Some(context) = context {
+        context.function(catalogue, module, member)?
+    } else {
+        catalogue
+            .module(module)
+            .and_then(|m| m.functions.iter().find(|f| f.name == member))
+            .ok_or_else(|| {
+                format!("native function {module}.{member} is not known in the API catalogue")
+            })?
+    };
+    if method.parameters.len() != arguments.len() {
+        return Err("native call argument count does not match its API contract".into());
+    }
+    if method.parameters != arguments {
+        return Err("native call argument types do not match its API contract".into());
+    }
+    if method.result != api::Type::Void || (module, member) != ("Toybox.System", "exit") {
+        return Err("native module member has no supported statement lowering".into());
+    }
+    Ok(())
+}

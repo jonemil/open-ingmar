@@ -1,7 +1,7 @@
 # API declarations and core types
 
 `ciq-compiler::api::core()` supplies a bounded shared catalogue. Native callback
-validation reads its `onStart` contract; supported imports obtain their module
+validation reads its `onStart`/`onStop` contracts; supported imports obtain module
 name from its declarations. Native lowering and application bindings remain
 restricted profiles. [The plan](../plan.md) owns migration and expansion.
 
@@ -15,10 +15,10 @@ model. No declaration-file syntax or new crate is required initially.
 Current entries cover Lang's Object, Number, String, Boolean, Char, and
 Dictionary, plus Application.AppBase and the Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
-Number arithmetic-related methods, AppBase initialization/startup, and System
-printing. Parameter/result subset types expose `api_type()` mappings. Internal
-value categories map to Number, String, Boolean, Null, and nullable Dictionary;
-operator validation uses those semantic types. The bounded native call profile
+Number arithmetic-related methods, AppBase initialization/startup/shutdown, and
+System printing/exit. Parameter/result subset types expose `api_type()` mappings.
+Internal value categories map to Number, String, Boolean, Null, and nullable
+Dictionary; operator validation uses those semantic types. The bounded native call profile
 resolves Number's inherited `toString` and direct `format`/`abs` contracts.
 Argument types must match their signatures; executable support remains a
 separate check. The Number result of `abs` uses the existing integer value
@@ -79,12 +79,19 @@ entry points omit API-level checks and retain their bounded lowering checks.
 Saved IR builds must resupply the context. It neither changes serialized IR
 nor configures PRG deployment metadata.
 
-Current checks cover Number value calls, System printing, AppBase bases,
+Current checks cover Number value calls, System printing/exit, AppBase bases,
 initialization, and known callbacks. All executable catalogue contracts currently
 require API 1.0.0; later known Number methods exercise availability diagnostics
 without gaining lowering. Context levels are caller assertions: no device
 database, permission, app-type, execution-scope, or VM-capability validation is
 implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.
+
+Native module statements have canonical module/member identities and no result
+value. Catalogue lookup validates their contract and optional API context before
+checking executable support. The current profile admits only zero-argument
+`Toybox.System.exit`; printing retains its dedicated IR operation. Exit is an
+effectful statement, separate from an IR return or branch. This establishes a
+module-call path without adding runtime bodies to declarations.
 
 ## Core language relationship
 

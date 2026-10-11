@@ -282,6 +282,32 @@ impl Builder<'_> {
                         Some(span),
                     );
                 }
+                parser::Statement::NativeModuleCall {
+                    module,
+                    member,
+                    arguments,
+                    ..
+                } => {
+                    if locals.contains_key("System") || self.parameters.contains_key("System") {
+                        return Err(Diagnostic::at(
+                            self.source,
+                            span.start,
+                            "a local/parameter cannot be used as the System module receiver",
+                        ));
+                    }
+                    let arguments = arguments
+                        .into_iter()
+                        .map(|arg| self.value(arg, locals))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    self.push(
+                        Operation::NativeModuleCallStatement {
+                            module,
+                            member,
+                            arguments,
+                        },
+                        Some(span),
+                    );
+                }
                 parser::Statement::Call {
                     module,
                     member,
@@ -493,7 +519,7 @@ fn build_body(
             return Err(Diagnostic::at(
                 source,
                 ast.body_span.start,
-                "onStart requires one nullable-dictionary parameter",
+                format!("{} requires one nullable-dictionary parameter", ast.name),
             ));
         }
         signature.parameters

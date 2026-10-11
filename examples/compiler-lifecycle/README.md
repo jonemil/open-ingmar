@@ -5,6 +5,8 @@ The callback copies its opaque nullable Dictionary state, checks it against
 null, stores/prints that Boolean decision, and invokes a method that calls
 [helpers.mc](helpers.mc). A Boolean local controls a loop and is set to false
 after one iteration; equality and printing confirm the resulting value.
+The app requests normal termination with `System.exit()` and supplies an
+`onStop(state)` callback to verify shutdown and its nullable state.
 Constructor and blank View remain generated; this is a console watch app.
 
 From the repository root:
@@ -32,12 +34,16 @@ null state
 Boolean loop
 true
 false
+source onStop
+true
 ```
 
-Initialization and startup each print once. A non-null state selects
+Initialization, startup, and shutdown each print once; `monkeydo` exits normally.
+This simulator path supplies null at startup and shutdown. A non-null startup
+state selects
 `dictionary state`; that launch path has not yet been exercised. The compiler
 accepts the native Dictionary-or-null contract without dictionary access,
-construction, or general object calls. The callback's void result is not printed.
+construction, or general object calls. The callbacks' void results are not printed.
 
 See [source callback rules](../../docs/specs/compiler-classes.md#source-startup-callback)
 and [runtime evidence](../../docs/investigations/compiler-class.md).

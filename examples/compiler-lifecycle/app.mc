@@ -25,6 +25,12 @@ class StartupApp extends App.AppBase {
         }
         Sys.println(again == false);
         Sys.println(again);
+        Sys.exit();
+    }
+    function onStop(state) {
+        Sys.println("source onStop");
+        var missing = null;
+        Sys.println(state == missing);
     }
     function printAnswer() {
         Sys.println(Helpers.answer());

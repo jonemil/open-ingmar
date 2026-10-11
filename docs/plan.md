@@ -27,8 +27,9 @@ compiling a project.
 2. **Extend native calls and callback values.** Use the declaration model for
    AppBase/View inherited members and callback contracts. Extend Boolean
    arguments/results, object-reference, array, and nullable values as required,
-   retaining `Void`
-   as a result contract. Compare new dispatch forms with focused specimens.
+   retaining `Void` as a result contract. Start the View path with one
+   constructed native View in the array returned by source `getInitialView`.
+   Compare new dispatch forms with focused specimens.
    Acceptance: a source `getInitialView` returns a constructed View under its
    resolved result contract. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.

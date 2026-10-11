@@ -128,6 +128,7 @@ pub(crate) fn parse_ir_context(
             ),
             Some(".integer") => (0, 3),
             Some(".boolean") => (23, 3),
+            Some(".call-native-module-discard") => (24, call_width()),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
             Some(".subtract") => (3, 4),
@@ -163,6 +164,7 @@ pub(crate) fn parse_ir_context(
             || (kind == 18 && width < 3)
             || (kind == 19 && width < 2)
             || (kind == 22 && width < 4))
+            || (kind == 24 && width < 3)
             || fields.len() < width
             || fields.len() > width + 1
         {
@@ -221,7 +223,16 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 23 {
+        let operation = if kind == 24 {
+            Operation::NativeModuleCallStatement {
+                module: fields[1].clone(),
+                member: fields[2].clone(),
+                arguments: fields[3..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 23 {
             Operation::Boolean {
                 result: parse_value(&fields[1])?,
                 value: match fields[2].as_str() {

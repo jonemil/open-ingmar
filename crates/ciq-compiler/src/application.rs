@@ -25,9 +25,11 @@ const TO_STRING: u32 = 0x008000af;
 const FORMAT: u32 = 0x0080009c;
 const ABS: u32 = 0x008000a6;
 const PRINTLN: u32 = 0x00800067;
+const EXIT: u32 = 0x0080006d;
 const VIEW: u32 = 0x0080019f;
 const APP_BASE: u32 = 0x0080029c;
 const ON_START: u32 = 0x0080029f;
+const ON_STOP: u32 = 0x008002a1;
 const GET_INITIAL_VIEW: u32 = 0x008002a0;
 const GLOBALS: u32 = 0x008002e6;
 
@@ -180,6 +182,8 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool
 /// source initialize method, which replaces the default initializer's DATA target.
 /// A validated source onStart also replaces its wrapper and requires selecting
 /// Class.onStart; the runtime supplies its nullable Dictionary argument directly.
+/// A source onStop is bound as the native shutdown callback with the same
+/// Dictionary-or-null parameter and Void result; it is not a bootstrap entry.
 ///
 /// Allocates user symbols and all CODE/DATA positions deterministically. Global,
 /// module, and class methods bind to unit CODE labels; literals use shared DATA layout.
@@ -265,15 +269,22 @@ pub fn build_console_application(
     let mut ids = BTreeMap::from([
         ("initialize".to_owned(), INITIALIZE),
         ("println".into(), PRINTLN),
+        ("exit".into(), EXIT),
         ("toString".into(), TO_STRING),
         ("format".into(), FORMAT),
         ("abs".into(), ABS),
         ("View".into(), VIEW),
         ("AppBase".into(), APP_BASE),
         ("onStart".into(), ON_START),
+        ("onStop".into(), ON_STOP),
         ("getInitialView".into(), GET_INITIAL_VIEW),
     ]);
     for class in unit.classes() {
+        if ids.contains_key(&class.name) {
+            return Err(error(
+                "source class name collides with a pinned native symbol",
+            ));
+        }
         ids.insert(class.name.clone(), 1);
     }
     let names: BTreeSet<_> = unit
@@ -305,6 +316,7 @@ pub fn build_console_application(
         ("__ciq_native_AppBase".into(), APP_BASE),
         ("__ciq_native_initialize".into(), INITIALIZE),
         ("__ciq_member_println".into(), PRINTLN),
+        ("__ciq_native_exit".into(), EXIT),
         ("__ciq_native_toString".into(), TO_STRING),
         ("__ciq_native_format".into(), FORMAT),
         ("__ciq_native_abs".into(), ABS),

@@ -481,6 +481,20 @@ general object values/fields, source inheritance,
 and general native calls remain open. See [runtime
 evidence](../investigations/compiler-class.md).
 
+## Native module statements
+
+`System.exit();` requests application termination and has no expression result.
+Recognized aliases and `Toybox.System.exit()` use the native module-name rules.
+The call requires zero arguments and is validated through its catalogue Void
+contract and optional API context before lowering. Unknown module members,
+wrong arity, and known members lacking supported lowering are rejected.
+
+Source and saved IR retain this as an ordered native module statement; it is
+not an IR return or branch. User module calls and dedicated `System.println`
+operations retain their own forms. No other native module statement is enabled
+by this profile. Runtime exit invokes a supplied source `onStop` callback in the
+validated console app; its Dictionary-or-null state is not a user-call argument.
+
 ## Native value calls
 
 A Number-valued expression may receive these catalogue-resolved methods:

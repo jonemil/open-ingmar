@@ -27,6 +27,12 @@ pub(crate) enum Statement {
         arguments: Vec<Expression>,
         span: Span,
     },
+    NativeModuleCall {
+        module: String,
+        member: String,
+        arguments: Vec<Expression>,
+        span: Span,
+    },
     Return {
         value: Option<Expression>,
         span: Span,
@@ -58,6 +64,7 @@ impl Statement {
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
             | Self::Call { span, .. }
+            | Self::NativeModuleCall { span, .. }
             | Self::If { span, .. }
             | Self::Break { span }
             | Self::Continue { span }
@@ -691,14 +698,24 @@ impl<'a> Parser<'a> {
                                 span: Span { start, end },
                             }
                         } else if module == "System" {
-                            if member != "println" || arguments.len() != 1 {
-                                return Err(
-                                    self.error(start, "expected System.println with one argument")
-                                );
-                            }
-                            Statement::Println {
-                                argument: arguments.remove(0),
-                                span: Span { start, end },
+                            if member == "println" {
+                                if arguments.len() != 1 {
+                                    return Err(self.error(
+                                        start,
+                                        "expected System.println with one argument",
+                                    ));
+                                }
+                                Statement::Println {
+                                    argument: arguments.remove(0),
+                                    span: Span { start, end },
+                                }
+                            } else {
+                                Statement::NativeModuleCall {
+                                    module: "Toybox.System".into(),
+                                    member,
+                                    arguments,
+                                    span: Span { start, end },
+                                }
                             }
                         } else {
                             Statement::Call {

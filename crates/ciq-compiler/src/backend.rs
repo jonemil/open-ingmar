@@ -186,6 +186,19 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 items.push(instruction(Opcode::Popv, vec![]));
                 continue;
             }
+            Operation::NativeModuleCallStatement { ref member, .. } => {
+                // Validation currently admits only zero-argument System.exit.
+                items.push(instruction(
+                    Opcode::Getmv,
+                    vec![
+                        Operand::Symbol("__ciq_sdk_System".into()),
+                        Operand::Symbol(format!("__ciq_native_{member}")),
+                    ],
+                ));
+                items.push(instruction(Opcode::Invokemz, vec![]));
+                items.push(instruction(Opcode::Popv, vec![]));
+                continue;
+            }
             _ => continue,
         };
         expression(value, &definitions, &slots, &strings, &mut items);

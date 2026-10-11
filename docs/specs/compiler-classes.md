@@ -134,6 +134,12 @@ parameters. Callback contracts are resolved independently of VM symbol IDs,
 slot numbers, and import indexes. Unit validation rejects wrong callback
 signatures and direct user calls to onStart.
 
+`function onStop(state)` uses the same resolved nullable-state/Void contract.
+Its method record binds to native symbol `0x008002a1`; the runtime invokes it
+on termination. It is neither a bootstrap entry nor an ordinary user-call
+target. Supplying it does not change startup-entry selection. Normal shutdown
+can be requested with [System.exit](compiler-subset.md#native-module-statements).
+
 Complete application generation requires `--entry Class.onStart` when that
 callback exists. Its DATA method record binds directly to source CODE; the
 generated startup wrapper is omitted. Constructor and blank View remain
@@ -146,6 +152,11 @@ without changing their declared contract. Dictionary access/construction,
 printing, numeric operations, returns, and forwarding through integer user
 calls remain unsupported. Null locals can only receive null; this subset does
 not infer wider local types. Tests preserve these types through saved IR.
+
+These state restrictions also apply to onStop. The tested simulator exit path
+supplies null; other termination states remain unverified. Application
+generation rejects class names colliding with pinned native symbols before
+allocating class IDs, so a name such as `exit` cannot overwrite a native binding.
 
 Backend self calls select `getselfv @__ciq_member_<name>`, followed by `invokemz`
 for zero arguments or `frpush`, ordered arguments, and `invokem <count + 1>`.

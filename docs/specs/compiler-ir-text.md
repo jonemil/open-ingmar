@@ -503,15 +503,16 @@ Instance-function metadata may include
 `parameters=<count>`; omitted types are integers. Unsupported names, duplicate
 type lists, mismatched counts, or lists without an instance receiver are errors.
 Unit validation currently permits noninteger parameters only for the native
-AppBase.onStart contract. For example:
+AppBase.onStart/onStop contracts. For example:
 
 ```text
 .function onStart parameters=1 receiver=instance parameter-types=nullable-dictionary
 ```
 
 `.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits integer
-pairs, null pairs, and nullable Dictionary/null pairs; `.greater` remains
-integer-only. Callback-state reads/locals preserve their opaque nullable type.
+pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
+`.greater` remains integer-only. Callback-state reads/locals preserve their
+opaque nullable type.
 Printing, arithmetic, integer returns, and user-call arguments reject null and
 Dictionary values. A nullable Dictionary local may be assigned null; other
 assignments preserve the initializer type. Lowering uses `npush` for null and
@@ -556,6 +557,23 @@ object construction, fields, native self calls, and
 source inheritance are unsupported.
 
 [class-ir]: compiler-classes.md#native-and-textual-ir
+
+## Native module statements
+
+`.call-native-module-discard <module> <member> [%<argument-id> ...]` invokes a
+runtime-provided module function without defining a value. Module names are
+canonical API paths, distinct from user module owners; arguments follow the
+ordinary definition/use and effect-order rules. Optional spans use the usual
+syntax. The current profile accepts only
+`.call-native-module-discard Toybox.System exit`, with no arguments and a Void
+catalogue result. API context checks are the same as for source compilation.
+
+Lowering selects `getmv @__ciq_sdk_System @__ciq_native_exit`, `invokemz`, and
+`popv`. Explicit symbol sources must contain exactly one stored `Toybox_System`
+and `exit`; console application generation provides the observed native IDs.
+The operation is an ordered statement, not a CFG terminator. IR still requires
+its ordinary returns and branches; exit has no expression value. Wrong arity,
+unknown declarations, and unsupported native statement contracts are errors.
 
 ## Native value calls
 

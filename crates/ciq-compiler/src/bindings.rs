@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 /// while members use their short names. The dedicated `__ciq_sdk_System` alias
 /// uses `Toybox_System`; no general SDK module-name inference is performed.
 /// Native initialization binds AppBase/initialize, and Number methods bind
-/// toString/format/abs, by their stored names.
+/// toString/format/abs, by their stored names. Native System.exit binds exit.
 /// Missing, ambiguous, or conflicting
 /// bindings are errors. No PRG symbol records are generated or modified.
 pub fn symbol_bindings(
@@ -61,6 +61,8 @@ pub fn symbol_bindings(
                 "format".to_string()
             } else if alias == "__ciq_native_abs" {
                 "abs".to_string()
+            } else if alias == "__ciq_native_exit" {
+                "exit".to_string()
             } else if alias == "__ciq_native_initialize" {
                 "initialize".to_string()
             } else if let Some(module) = alias.strip_prefix("__ciq_module_") {
