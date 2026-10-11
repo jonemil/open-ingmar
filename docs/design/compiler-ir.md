@@ -48,7 +48,9 @@ result contracts and internal value categories map to core `Lang` identities.
 A separate operator-rule layer checks API operand types and supplies result
 types before VM instruction selection. It retains the restricted executable
 profile. Value-producing native calls retain an explicit receiver and member;
-validation resolves the inherited API contract before checking executable support.
+validation resolves the API contract and argument types before checking
+executable support. Native receivers are evaluated before their arguments;
+text resumption and effect-order checks preserve the same traversal.
 General API member lookup remains separate work. Object semantics do
 not require every IR value to denote a heap allocation.
 

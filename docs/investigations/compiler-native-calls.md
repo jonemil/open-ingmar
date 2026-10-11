@@ -50,16 +50,40 @@ function covers a parameter and zero. The Rust backend emits receiver evaluation
 `getsv @__ciq_native_toString`, and `invokemz`; the application profile binds the
 alias to the observed ID separately from semantic IR.
 
-**Observed:** our generated app printed exactly `41`, `-1`, and `0`, in that order,
+**Observed:** Number conversion produced `41`, `-1`, and `0`, in that order,
 on SDK 9.2.0 / fr265. The conversion result is validated as String; storing and
 printing it are supported. Tests compare complete PRGs from native and saved IR
 paths and check invalid receivers, arity, unsupported members, and effect order.
 Captures and large logs remain ignored under `scratch/`.
 
-**Limits:** no general native arguments, object construction, String receivers,
+## Number formatting and evaluation order
+
+The public [Number contract][number] defines `format(String)` returning String,
+available since API 1.0.0. Use the same SDK scaffold with startup expressions
+`(n + 1).format("%03d")` and a Number-returning module call as receiver. Build
+and export under `scratch/number-format/`; generated files remain ignored.
+
+**Observed:** formatting uses receiver evaluation, `getsv @format`, `frpush`,
+String argument evaluation, and `invokem 2`. Its symbol ID is `0x0080009c`.
+A nested argument call occurs after receiver evaluation/member selection in the
+SDK specimen. Our IR retains this order independently of those executable IDs.
+
+**Observed:** the expanded Rust example printed `41`, `-1`, `0`, `042`, `07`,
+`receiver`, `argument`, and `0045` on SDK 9.2.0 / fr265. This covers a computed
+receiver, a literal receiver, a String local argument, and left-to-right calls
+inside receiver arithmetic. Tests also check receiver-before-argument ordering,
+bad argument types/arity, saved-IR parity, and the existing nesting bounds.
+
+**Observed limitation:** the runtime rejected format String `"4"` and the
+attempted pattern `"%%0%dd"` with `Unexpected input to format`. A String type
+alone does not establish valid formatting syntax. The successful example uses
+verified zero-padding patterns; no general printf compatibility is established.
+
+**Limits:** no other native arguments, object construction, String receivers,
 method-call statements, or String-returning user functions are established.
 Catalogue entries for other Number methods do not enable executable calls.
 API introduction lookup does not validate a selected device or firmware profile.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+[number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [example]: ../../examples/compiler-native-calls/README.md

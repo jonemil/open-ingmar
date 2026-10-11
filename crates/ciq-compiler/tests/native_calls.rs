@@ -26,6 +26,7 @@ fn inherited_number_calls_preserve_complete_application_and_text_paths() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     assert!(assembly.to_text().contains("getsv @__ciq_native_toString"));
+    assert!(assembly.to_text().contains("getsv @__ciq_native_format"));
     let function = compile("function show(n) { System.println(n.toString()); }").unwrap();
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
 }
@@ -36,6 +37,10 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         ("n.toString(1)", "argument count"),
         ("n.abs()", "no supported lowering"),
         ("n.missing()", "not known"),
+        ("n.format()", "argument count"),
+        ("n.format(1)", "argument types"),
+        ("n.format(null)", "argument types"),
+        ("n.format(\"%d\", \"%d\")", "argument count"),
     ] {
         let error = compile(&format!(
             "function show(n) {{ System.println({expression}); }}"
@@ -58,6 +63,108 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         function onStart(state) { System.println(state.toString()); } }"])
         .is_err()
     );
+}
+
+#[test]
+fn computed_receivers_and_format_arguments_preserve_types_and_precedence() {
+    for source in [
+        "function f() { System.println((40 + 2).format(\"%03d\")); }",
+        "function f() { System.println(41.toString()); }",
+        "function f(n) { var fmt = \"%d\"; var text = n.format(fmt); System.println(text); }",
+        "function f(n) { System.println((n - 42).toString()); }",
+        "function f() { System.println(M.value().format(M.arg().toString())); }",
+    ] {
+        let native = compile(source).unwrap();
+        let resumed = parse_ir(&native.to_ir_text()).unwrap();
+        assert_eq!(native.lower(), resumed.lower());
+    }
+    let function = compile("function f() { System.println((40 + 2).format(\"%03d\")); }").unwrap();
+    let assembly = function.assembly();
+    let addition = assembly.find("addv").unwrap();
+    let member = assembly.find("getsv @__ciq_native_format").unwrap();
+    let argument = assembly[member..].find("news").unwrap() + member;
+    let invoke = assembly[argument..].find("invokem 0x02").unwrap() + argument;
+    assert!(addition < member && member < argument && argument < invoke);
+    for source in [
+        "function f() { System.println((40 + 2).format(1)); }",
+        "function f() { System.println(\"text\".toString()); }",
+        "function f() { System.println(41.format(\"%d\").toString()); }",
+        "function f() { System.println(41.format(\"%d\") + 1); }",
+        "function f() { System.println(41.format); }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn format_ir_rejects_bad_types_and_argument_receiver_reordering() {
+    let function =
+        compile("function f() { System.println(M.value().format(M.arg().toString())); }").unwrap();
+    let operations = function.operations().to_vec();
+    let receiver = operations
+        .iter()
+        .position(|op| {
+            matches!(&op.operation,
+        Operation::ModuleCall { member, .. } if member == "value")
+        })
+        .unwrap();
+    let argument = operations
+        .iter()
+        .position(|op| {
+            matches!(&op.operation,
+        Operation::ModuleCall { member, .. } if member == "arg")
+        })
+        .unwrap();
+    let mut reordered = operations;
+    reordered.swap(receiver, argument);
+    assert!(
+        Function::new("reordered".into(), reordered)
+            .unwrap_err()
+            .message
+            .contains("order")
+    );
+
+    let text = compile("function f(n) { System.println(n.format(\"%d\")); }")
+        .unwrap()
+        .to_ir_text();
+    let string_line = text
+        .lines()
+        .find(|line| line.starts_with(".string"))
+        .unwrap();
+    let result = string_line.split_whitespace().nth(1).unwrap();
+    let bad = text.replace(string_line, &format!(".integer {result} 1"));
+    assert!(
+        parse_ir(&bad)
+            .unwrap_err()
+            .message
+            .contains("argument types")
+    );
+    let deep = format!(
+        "function f(n) {{ System.println(n{}); }}",
+        ".toString()".repeat(70)
+    );
+    assert!(compile(&deep).unwrap_err().message.contains("nesting"));
+}
+
+#[test]
+fn positional_call_nesting_keeps_the_existing_bound() {
+    for (prefix, inner) in [("M.value(", "1"), ("41.format(", "\"%d\"")] {
+        let source = |depth| {
+            format!(
+                "function f() {{ var value = {}{}{}; System.println(value); }}",
+                prefix.repeat(depth),
+                inner,
+                ")".repeat(depth)
+            )
+        };
+        assert!(compile(&source(64)).is_ok());
+        assert!(
+            compile(&source(65))
+                .unwrap_err()
+                .message
+                .contains("nesting")
+        );
+    }
 }
 
 #[test]

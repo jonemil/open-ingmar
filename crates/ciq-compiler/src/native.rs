@@ -37,7 +37,7 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
 pub(crate) fn value_call(
     receiver: &api::Type,
     member: &str,
-    count: usize,
+    arguments: &[api::Type],
 ) -> Result<api::Type, &'static str> {
     let api::Type::Named(class) = receiver else {
         return Err("native calls require a supported class-valued receiver");
@@ -45,12 +45,17 @@ pub(crate) fn value_call(
     let resolved = api::core()
         .method(class, member)
         .ok_or("native member is not known in the API catalogue")?;
-    if resolved.method.parameters.len() != count {
+    if resolved.method.parameters.len() != arguments.len() {
         return Err("native call argument count does not match its API contract");
     }
+    if resolved.method.parameters != arguments {
+        return Err("native call argument types do not match its API contract");
+    }
     if class != "Toybox.Lang.Number"
-        || resolved.declaring_class.name != "Toybox.Lang.Object"
-        || member != "toString"
+        || !matches!(
+            (resolved.declaring_class.name.as_str(), member),
+            ("Toybox.Lang.Object", "toString") | ("Toybox.Lang.Number", "format")
+        )
     {
         return Err("native member has no supported lowering for this receiver");
     }

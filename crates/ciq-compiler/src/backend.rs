@@ -206,7 +206,7 @@ fn expression(
         Compare(ComparisonOp),
         Invoke(usize),
         Context,
-        NativeMember,
+        NativeMember(String),
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
@@ -222,11 +222,16 @@ fn expression(
                 }
                 Operation::NativeCall {
                     receiver,
+                    member,
                     arguments,
                     ..
                 } => {
-                    debug_assert!(arguments.is_empty());
-                    tasks.extend([Task::Invoke(0), Task::NativeMember, Task::Value(*receiver)]);
+                    tasks.push(Task::Invoke(arguments.len()));
+                    if !arguments.is_empty() {
+                        tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
+                        tasks.push(Task::Context);
+                    }
+                    tasks.extend([Task::NativeMember(member.clone()), Task::Value(*receiver)]);
                     continue;
                 }
                 Operation::ModuleCall {
@@ -277,9 +282,9 @@ fn expression(
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),
-            Task::NativeMember => (
+            Task::NativeMember(member) => (
                 Opcode::Getsv,
-                vec![Operand::Symbol("__ciq_native_toString".into())],
+                vec![Operand::Symbol(format!("__ciq_native_{member}"))],
             ),
             Task::Compare(kind) => (
                 match kind {

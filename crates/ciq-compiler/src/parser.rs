@@ -87,6 +87,11 @@ pub(crate) enum ExpressionKind {
         member: String,
         arguments: Vec<Expression>,
     },
+    ValueCall {
+        receiver: Box<Expression>,
+        member: String,
+        arguments: Vec<Expression>,
+    },
     Binary {
         kind: crate::BinaryOp,
         left: Box<Expression>,
@@ -367,6 +372,74 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
     fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let mut expression = if self.peek()? == Kind::Punctuation('(') {
+            let open = self.token()?;
+            if depth >= 64 {
+                return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
+            }
+            let mut expression = self.expression(depth + 1)?;
+            let close = self.expect(Kind::Punctuation(')'), "')'")?;
+            expression.span = Span {
+                start: open.span.start,
+                end: close.span.end,
+            };
+            expression
+        } else {
+            self.atom(depth)?
+        };
+        let mut call_depth = depth;
+        while self.peek()? == Kind::Punctuation('.') {
+            self.token()?;
+            let token = self.identifier()?;
+            let Kind::Word(member) = token.kind else {
+                unreachable!()
+            };
+            let start = expression.span.start;
+            let (arguments, end) = self.call_arguments(start, call_depth)?;
+            call_depth += 1;
+            expression = self.node(
+                ExpressionKind::ValueCall {
+                    receiver: Box::new(expression),
+                    member: member.into(),
+                    arguments,
+                },
+                Span { start, end },
+            )?;
+        }
+        Ok(expression)
+    }
+
+    /// Parse bounded positional arguments and return the closing source offset.
+    fn call_arguments(
+        &mut self,
+        start: usize,
+        depth: usize,
+    ) -> Result<(Vec<Expression>, usize), Diagnostic> {
+        self.expect(
+            Kind::Punctuation('('),
+            "'(' (member calls require parentheses)",
+        )?;
+        if depth >= 64 {
+            return Err(self.error(start, "expression nesting exceeds 64 levels"));
+        }
+        let mut arguments = Vec::new();
+        if self.peek()? != Kind::Punctuation(')') {
+            loop {
+                if arguments.len() >= crate::MAX_PARAMETERS {
+                    return Err(self.error(start, "call exceeds 254-argument limit"));
+                }
+                arguments.push(self.expression(depth + 1)?);
+                if self.peek()? != Kind::Punctuation(',') {
+                    break;
+                }
+                self.token()?;
+            }
+        }
+        let end = self.expect(Kind::Punctuation(')'), "')'")?.span.end;
+        Ok((arguments, end))
+    }
+
+    fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
             Kind::String(literal) => {
@@ -440,31 +513,7 @@ impl<'a> Parser<'a> {
                     } else {
                         module
                     };
-                    self.expect(
-                        Kind::Punctuation('('),
-                        "'(' (only module calls are supported)",
-                    )?;
-                    if depth >= 64 {
-                        return Err(
-                            self.error(token.span.start, "expression nesting exceeds 64 levels")
-                        );
-                    }
-                    let mut arguments = Vec::new();
-                    if self.peek()? != Kind::Punctuation(')') {
-                        loop {
-                            if arguments.len() >= crate::MAX_PARAMETERS {
-                                return Err(
-                                    self.error(token.span.start, "call exceeds 254-argument limit")
-                                );
-                            }
-                            arguments.push(self.expression(depth + 1)?);
-                            if self.peek()? != Kind::Punctuation(',') {
-                                break;
-                            }
-                            self.token()?;
-                        }
-                    }
-                    let end = self.expect(Kind::Punctuation(')'), "')'")?.span.end;
+                    let (arguments, end) = self.call_arguments(token.span.start, depth)?;
                     self.node(
                         ExpressionKind::ModuleCall {
                             module: module.into(),
@@ -481,20 +530,6 @@ impl<'a> Parser<'a> {
                 } else {
                     self.node(ExpressionKind::Local(name.into()), token.span)
                 }
-            }
-            Kind::Punctuation('(') => {
-                if depth >= 64 {
-                    return Err(
-                        self.error(token.span.start, "expression nesting exceeds 64 levels")
-                    );
-                }
-                let mut expression = self.expression(depth + 1)?;
-                let close = self.expect(Kind::Punctuation(')'), "')'")?;
-                expression.span = Span {
-                    start: token.span.start,
-                    end: close.span.end,
-                };
-                Ok(expression)
             }
             _ => Err(self.error(
                 token.span.start,

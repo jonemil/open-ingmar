@@ -525,19 +525,21 @@ runtime-provided method and defines its semantic result. The receiver and
 arguments must be earlier values with the usual single-use/block restrictions.
 Optional source spans use the ordinary syntax.
 
-Current validation accepts only a Number receiver, member `toString`, and no
-arguments. Resolve its inherited Object contract through the API catalogue;
-its result is String. A typed/text producer may supply any validated Number
-expression as receiver; the source frontend currently accepts named locals and
-parameters only. Unsupported members, receivers, arity, and result contracts
-are rejected before lowering.
+Validation accepts a Number receiver and either `toString` with no arguments
+or `format` with one String argument. Resolve the inherited Object or direct
+Number contract through the API catalogue. Both results are String. Source,
+typed, and text producers may supply validated Number expressions as receivers.
+Unsupported members, receivers, argument counts/types, and result contracts are
+rejected before lowering. Format-content validity remains a runtime obligation.
 
-Native calls are effectful: receiver evaluation precedes invocation, and their
+Native calls are effectful: receiver evaluation precedes arguments and
+invocation, and their
 operation order must agree with dependency traversal at statement sinks. The
-backend emits receiver evaluation, `getsv @__ciq_native_toString`, and
-`invokemz`. Binding requires exactly one stored symbol named `toString` in an
-explicit symbol source, or the supported complete application's native profile.
-IR contains no symbol ID or import index.
+backend emits receiver evaluation and `getsv @__ciq_native_<member>`. A
+zero-argument call uses `invokemz`; a format call adds `frpush`, evaluates its
+String argument, and uses `invokem 2`. Binding requires exactly one stored symbol
+named `toString` or `format` in an explicit source, or the supported complete
+application's native profile. IR contains no symbol ID or import index.
 
 ```text
 ciq-ir

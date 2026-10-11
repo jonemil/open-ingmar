@@ -7,21 +7,19 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Expand core member calls through API declarations.** Extend supported
-   receiver syntax to computed expressions where runnable examples need it, and
-   add an argument-taking Number method such as `format` using a focused SDK
-   specimen. Preserve left-to-right receiver/argument evaluation in source, IR,
-   and lowering. Keep native support explicit: catalogue entries alone do not
-   make calls compilable. Migrate remaining Application/System special cases as
-   they acquire supported call forms. See [API declaration design][api-design].
+1. **Supply target context for API checking.** Connect declaration introduction
+   levels to explicit target API and application minimum-API inputs before
+   expanding native contracts. Keep unsupported lowering distinct from unknown
+   declarations and target-unavailable members. Establish which constraints are
+   known for the selected device/app profile rather than assuming SDK version is
+   its API level. Migrate remaining Application/System special cases as they
+   acquire supported call forms. See [API declaration design][api-design].
 
    Read the language reference alongside `Lang` contracts when extending
    operator rules. Grow numeric conversions, mixed arithmetic, string addition,
    and equality through focused specimens; do not attempt all core operators in
-   one increment. Acceptance: inherited member calls produce the expected output
-   in the simulator and retain native/text pipeline equivalence. Diagnose missing
-   catalogue knowledge separately from known unavailable APIs and declarations
-   whose lowering is unsupported.
+   one increment. Preserve native/text pipeline equivalence and complete-app
+   simulator validation as new call contracts and operators are added.
 
    Define explicit target context alongside availability: selected device/API,
    app type, permissions, and execution scope. Keep the app's minimum API and VM

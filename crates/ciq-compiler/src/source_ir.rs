@@ -43,64 +43,15 @@ fn emit(
                 ));
             }
         }
-        parser::ExpressionKind::ModuleCall {
-            module,
-            member,
-            arguments,
-        } => {
-            if module == "Application.AppBase" {
-                return Err(Diagnostic::at(
-                    source,
-                    expression.span.start,
-                    "native base initialization has no expression result",
-                ));
-            }
-            if locals.contains_key(&module) || parameters.contains_key(&module) {
-                let receiver = emit(
-                    source,
-                    parser::Expression {
-                        kind: parser::ExpressionKind::Local(module),
-                        span: expression.span,
-                    },
-                    locals,
-                    parameters,
-                    operations,
-                )?;
-                let arguments = arguments
-                    .into_iter()
-                    .map(|argument| emit(source, argument, locals, parameters, operations))
-                    .collect::<Result<Vec<_>, _>>()?;
-                let result = ValueId(operations.len() as u32);
-                operations.push(LocatedOperation {
-                    operation: Operation::NativeCall {
-                        result,
-                        receiver,
-                        member,
-                        arguments,
-                    },
-                    span: Some(expression.span),
-                });
-                return Ok(result);
-            }
-            let arguments = arguments
-                .into_iter()
-                .map(|argument| emit(source, argument, locals, parameters, operations))
-                .collect::<Result<Vec<_>, _>>()?;
-            if module == "self" {
-                Operation::SelfCall {
-                    result: ValueId(operations.len() as u32),
-                    member,
-                    arguments,
-                }
-            } else {
-                Operation::ModuleCall {
-                    result: ValueId(operations.len() as u32),
-                    module,
-                    member,
-                    arguments,
-                }
-            }
-        }
+        kind @ (parser::ExpressionKind::ValueCall { .. }
+        | parser::ExpressionKind::ModuleCall { .. }) => emit_call(
+            source,
+            kind,
+            expression.span,
+            locals,
+            parameters,
+            operations,
+        )?,
         parser::ExpressionKind::Binary { kind, left, right } => {
             let left = emit(source, *left, locals, parameters, operations)?;
             let right = emit(source, *right, locals, parameters, operations)?;
@@ -128,6 +79,81 @@ fn emit(
         span: Some(expression.span),
     });
     Ok(result)
+}
+
+/// Resolve call ownership and emit receiver/arguments in source order. Keep call
+/// construction separate so long arithmetic trees retain small recursive frames.
+fn emit_call(
+    source: &str,
+    kind: parser::ExpressionKind,
+    span: Span,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+) -> Result<Operation, Diagnostic> {
+    let (receiver, module, member, arguments) = match kind {
+        parser::ExpressionKind::ValueCall {
+            receiver,
+            member,
+            arguments,
+        } => (Some(*receiver), None, member, arguments),
+        parser::ExpressionKind::ModuleCall {
+            module,
+            member,
+            arguments,
+        } => {
+            if module == "Application.AppBase" {
+                return Err(Diagnostic::at(
+                    source,
+                    span.start,
+                    "native base initialization has no expression result",
+                ));
+            }
+            if locals.contains_key(&module) || parameters.contains_key(&module) {
+                (
+                    Some(parser::Expression {
+                        kind: parser::ExpressionKind::Local(module),
+                        span,
+                    }),
+                    None,
+                    member,
+                    arguments,
+                )
+            } else {
+                (None, Some(module), member, arguments)
+            }
+        }
+        _ => unreachable!("only calls enter call construction"),
+    };
+    let receiver = receiver
+        .map(|value| emit(source, value, locals, parameters, operations))
+        .transpose()?;
+    let arguments = arguments
+        .into_iter()
+        .map(|argument| emit(source, argument, locals, parameters, operations))
+        .collect::<Result<Vec<_>, _>>()?;
+    let result = ValueId(operations.len() as u32);
+    Ok(if let Some(receiver) = receiver {
+        Operation::NativeCall {
+            result,
+            receiver,
+            member,
+            arguments,
+        }
+    } else if module.as_deref() == Some("self") {
+        Operation::SelfCall {
+            result,
+            member,
+            arguments,
+        }
+    } else {
+        Operation::ModuleCall {
+            result,
+            module: module.unwrap(),
+            member,
+            arguments,
+        }
+    })
 }
 
 struct Builder<'a> {

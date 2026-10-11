@@ -555,8 +555,12 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
+                    let argument_types = arguments
+                        .iter()
+                        .map(|v| type_of(*v).api_type())
+                        .collect::<Vec<_>>();
                     let result_type =
-                        native::value_call(&type_of(receiver).api_type(), member, arguments.len())
+                        native::value_call(&type_of(receiver).api_type(), member, &argument_types)
                             .map_err(fail)?;
                     let result_type = ValueType::from_api_type(&result_type)
                         .ok_or_else(|| fail("native call result type has no supported lowering"))?;

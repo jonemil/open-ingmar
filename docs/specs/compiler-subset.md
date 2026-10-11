@@ -35,9 +35,9 @@ statement = "var" identifier "=" expression ";"
           | "break" ";" | "continue" ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
-primary = decimal-integer | string-literal | "null" | parameter-or-local-identifier
-        | module "." member "(" argument-list? ")" | "(" expression ")"
-        | parameter-or-local-identifier "." "toString" "(" ")"
+primary = atom ("." member "(" argument-list? ")")*
+atom = decimal-integer | string-literal | "null" | parameter-or-local-identifier
+     | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
@@ -476,18 +476,26 @@ evidence](../investigations/compiler-class.md).
 
 ## Native value calls
 
-A named integer local or integer parameter may appear as the receiver in
-`name.toString()`. Resolve its Number type through the API catalogue and inherit
-`toString` from `Lang.Object`. The call takes no arguments and produces String.
-Its result may initialize/replace a String local or be printed; existing user
-call arguments and function return restrictions remain unchanged.
+A Number-valued expression may receive `toString()` or `format(expression)`.
+Resolve its type through the API catalogue: `toString` is inherited from
+`Lang.Object`, while `format` is declared on Number and requires one String.
+Both produce String. Their result may initialize/replace a String local or be
+printed; existing user-call arguments and return restrictions remain unchanged.
+
+Postfix calls bind more tightly than addition/subtraction; parenthesize a
+computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
+local, parameter, and Number-returning call receivers are accepted. Evaluate
+the receiver first, then arguments left to right, then invoke the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.
-Only this value-producing native call is supported. Literal/computed receiver
-syntax, chained calls, String/null/Dictionary receivers, and discarded method
-statements remain unsupported. Unknown catalogue members, wrong arity, and known
-members lacking lowering are distinct errors. There is no target availability
-selection or general native dispatch yet.
+Only these value-producing native calls are supported. String/null/Dictionary
+receivers and discarded method statements remain unsupported. Postfix syntax
+can parse chained calls, but every receiver must have a supported Number type;
+chaining a method on a String conversion result is rejected. Unknown catalogue
+members, wrong arity/types, and known members lacking lowering are distinct
+errors. No target availability selection or general native dispatch exists yet.
+Format content is passed to the runtime; type checking does not establish that
+a String contains a valid format pattern.
 
 [Native call IR](compiler-ir-text.md#native-value-calls) preserves receiver/member
 identity separately from executable IDs. Runtime evidence and reproduction are
