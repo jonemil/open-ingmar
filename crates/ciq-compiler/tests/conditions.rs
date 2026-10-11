@@ -101,7 +101,6 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
         "function f(x) { if (\"x\" == x) { return 1; } else { return 2; } }",
         "function f(x) { return (x == 0) + 1; }",
         "function f(x) { return x > 0; }",
-        "function f(x) { return Numbers.call(x == 0); }",
         "function f(x) { if (x > 0 > 1) { return 1; } else { return 2; } }",
     ] {
         assert!(compile(source).is_err(), "{source}");
@@ -128,7 +127,6 @@ fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
         "function f() { var n = 1; n = false; return 0; }",
         "function f() { return true + 1; }",
         "function f() { return false; }",
-        "function f() { return M.consume(true); }",
         "function f() { if (true == 1) { return 1; } else { return 2; } }",
         "function f() { if (true > false) { return 1; } else { return 2; } }",
         "function f() { var true = 1; return 0; }",

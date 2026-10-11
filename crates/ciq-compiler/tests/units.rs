@@ -90,11 +90,11 @@ fn source_unit_checks_callees_arity_types_and_file_locations() {
         ),
         (
             "function f() { return Numbers.difference(\"x\",2); }",
-            "integer arguments",
+            "argument type does not match parameter contract",
         ),
         (
             "function f() { return Numbers.difference(1 == 1,2); }",
-            "integer arguments",
+            "argument type does not match parameter contract",
         ),
     ] {
         let error = compile_sources(&[callee, caller]).unwrap_err();

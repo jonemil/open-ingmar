@@ -25,7 +25,7 @@ impl<'a> Owner<'a> {
 pub struct FunctionDeclaration {
     /// None for a global function, otherwise its unqualified module name.
     pub module: Option<String>,
-    /// Validated function body with integer parameters and integer/void result.
+    /// Validated function body with explicit parameter and result contracts.
     pub function: Function,
 }
 
@@ -148,10 +148,10 @@ impl CompilationUnit {
     ///
     /// Accepts forward and recursive calls. Rejects duplicate identities,
     /// invalid/reserved module names, global/module name collisions, unresolved
-    /// callees, wrong argument counts, void calls used as values, and units outside
-    /// 1..=256 functions.
-    /// Each immutable Function has already checked argument/result types and
-    /// local control-flow invariants. This does not prove recursive termination.
+    /// callees, wrong argument/result contracts, void calls used as values, and
+    /// units outside 1..=256 functions.
+    /// Each immutable Function has checked its internal types and control-flow
+    /// invariants. This does not prove recursive termination.
     pub fn new(declarations: Vec<FunctionDeclaration>) -> Result<Self, UnitError> {
         Self::with_classes(declarations, Vec::new())
     }
@@ -160,7 +160,7 @@ impl CompilationUnit {
     ///
     /// Resolves self calls only against the enclosing class, and module calls
     /// only against module functions. Checks owner/name uniqueness, exact arity,
-    /// receiver contracts, and integer/void results. Requires 1..=256 bodies.
+    /// receiver contracts, and call argument/result types. Requires 1..=256 bodies.
     /// Class errors use flattened body indexes after all global/module functions.
     pub fn with_classes(
         declarations: Vec<FunctionDeclaration>,
@@ -301,11 +301,10 @@ impl CompilationUnit {
                 }
             } else if function
                 .parameter_types()
-                .iter()
-                .any(|t| *t != crate::ParameterType::Integer)
+                .contains(&crate::ParameterType::NullableDictionary)
             {
                 return Err(fail(Some(index), None,
-                    "noninteger parameter contracts are currently supported only for native lifecycle callbacks".into()));
+                    "nullable-dictionary parameters are supported only for native lifecycle callbacks".into()));
             }
             let base_calls = function
                 .operations()
@@ -352,7 +351,7 @@ impl CompilationUnit {
             if signatures
                 .insert(
                     (owner, function.name()),
-                    (function.parameter_count(), function.return_type()),
+                    (function.parameter_types(), function.return_type()),
                 )
                 .is_some()
             {
@@ -404,7 +403,7 @@ impl CompilationUnit {
                         "self calls require a class method".into(),
                     ));
                 }
-                let Some((count, result)) = signatures.get(&key) else {
+                let Some((parameters, result)) = signatures.get(&key) else {
                     return Err(fail(
                         Some(index),
                         Some(operation),
@@ -434,7 +433,8 @@ impl CompilationUnit {
                         ),
                     ));
                 }
-                if *count != arguments.len() {
+                let count = parameters.len();
+                if count != arguments.len() {
                     return Err(fail(
                         Some(index),
                         Some(operation),
@@ -443,6 +443,35 @@ impl CompilationUnit {
                             key.0.name(),
                             key.1,
                             arguments.len()
+                        ),
+                    ));
+                }
+                for (argument, parameter) in arguments.iter().zip(*parameters) {
+                    if function.value_types[argument].api_type() != parameter.api_type() {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!(
+                                "{}.{} argument type does not match parameter contract",
+                                key.0.name(),
+                                key.1
+                            ),
+                        ));
+                    }
+                }
+                let expected_result = match located.operation {
+                    Operation::ModuleCall { result_type, .. }
+                    | Operation::SelfCall { result_type, .. } => Some(result_type),
+                    _ => None,
+                };
+                if expected_result.is_some_and(|expected| expected != *result) {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        format!(
+                            "{}.{} call result type does not match callee contract",
+                            key.0.name(),
+                            key.1
                         ),
                     ));
                 }
@@ -560,12 +589,36 @@ fn compile_sources_context(
     let mut classes = Vec::new();
     let mut origins = Vec::new();
     let mut class_origins = Vec::new();
-    for (source_index, source) in sources.iter().enumerate() {
+    let parsed_sources = sources
+        .iter()
+        .enumerate()
+        .map(|(source, text)| {
+            parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut calls = source_ir::CallResults::new();
+    for parsed in &parsed_sources {
+        for (module, ast) in &parsed.functions {
+            calls.insert(
+                (module.clone().unwrap_or_default(), ast.name.clone()),
+                source_ir::declared_result(ast),
+            );
+        }
+        for class in &parsed.classes {
+            for ast in &class.methods {
+                calls.insert(
+                    (class.name.clone(), ast.name.clone()),
+                    source_ir::declared_result(ast),
+                );
+            }
+        }
+    }
+    for (source_index, parsed) in parsed_sources.into_iter().enumerate() {
+        let source = sources[source_index];
         let diagnostic = |diagnostic| SourceDiagnostic {
             source: source_index,
             diagnostic,
         };
-        let parsed = parser::declarations(source).map_err(diagnostic)?;
         for (module, ast) in parsed.functions {
             if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
                 return Err(diagnostic(Diagnostic::at(
@@ -577,7 +630,8 @@ fn compile_sources_context(
             origins.push((source_index, ast.body_span.start));
             declarations.push(FunctionDeclaration {
                 module,
-                function: source_ir::build(source, ast, context).map_err(diagnostic)?,
+                function: source_ir::build_with_calls(source, ast, context, false, &calls)
+                    .map_err(diagnostic)?,
             });
         }
         for class in parsed.classes {
@@ -587,6 +641,13 @@ fn compile_sources_context(
                     .map_err(|message| diagnostic(Diagnostic::at(source, 0, message)))?;
             }
             let mut methods = Vec::new();
+            let mut method_calls = calls.clone();
+            for ast in &class.methods {
+                method_calls.insert(
+                    ("self".into(), ast.name.clone()),
+                    source_ir::declared_result(ast),
+                );
+            }
             for ast in class.methods {
                 if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
                     return Err(diagnostic(Diagnostic::at(
@@ -596,7 +657,10 @@ fn compile_sources_context(
                     )));
                 }
                 class_origins.push((source_index, ast.body_span.start));
-                methods.push(source_ir::build_method(source, ast, context).map_err(diagnostic)?);
+                methods.push(
+                    source_ir::build_with_calls(source, ast, context, true, &method_calls)
+                        .map_err(diagnostic)?,
+                );
             }
             classes.push(ClassDeclaration {
                 name: class.name,

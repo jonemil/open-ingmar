@@ -55,8 +55,9 @@ Hello Monkey C!
 Number expressions support `toString()`, `format(String)`, and `abs()`. String
 expressions support `length()`, `toLower()`, `toUpper()`, and `toString()`.
 String results can be stored, printed, or receive further supported calls;
-Number results can feed integer operations and returns. User function returns
-remain integer/void. The marker calls
+Number results can feed integer operations and returns. The
+[typed function example](../compiler-lang-values/README.md) extends this to
+String/Boolean user arguments and returns. The marker calls
 run left to right before formatting their sum. See [source rules][source],
 [native call IR][ir], and
 [experiment evidence][evidence].

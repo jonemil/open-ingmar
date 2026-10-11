@@ -168,9 +168,10 @@ fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
             .encode_with_references(&bindings, &Default::default())
             .unwrap()
     );
-    // Changing a numeric-result call to a String-result call invalidates the
-    // consuming arithmetic and return contract, including after text edits.
-    assert!(parse_ir(&function.to_ir_text().replace("abs", "toString")).is_err());
+    // Changing a numeric-result call to a String-result call invalidates
+    // consuming arithmetic, including after text edits.
+    let arithmetic = compile("function f(n) { return n.abs() + 1; }").unwrap();
+    assert!(parse_ir(&arithmetic.to_ir_text().replace("abs", "toString")).is_err());
     assert!(compile("function f(n) { return n.abs().format(\"%d\"); }").is_err());
     assert!(compile("function f(n) { System.println(n.abs(1)); }").is_err());
     assert!(compile("function f() { System.println(\"bad\".abs()); }").is_err());
@@ -294,6 +295,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
     let operations = vec![
         Operation::ModuleCall {
             result: ValueId(0),
+            result_type: ciq_compiler::ReturnType::Integer,
             module: "M".into(),
             member: "next".into(),
             arguments: vec![],

@@ -63,8 +63,6 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
         "function f(x) { if (x == 0) { return; } else { return; } return; }",
         "function f() { var M = 1; M.run(); }",
         "function f(M) { M.run(); }",
-        "function f() { M.run(\"x\"); }",
-        "function f() { M.run(1 == 1); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

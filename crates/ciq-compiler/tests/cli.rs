@@ -130,7 +130,8 @@ fn cli_refuses_overwrite_and_creates_no_output_for_invalid_input() {
     assert!(!failed.status.success());
     assert!(!output.exists());
     let diagnostic = String::from_utf8(failed.stderr).unwrap();
-    assert!(diagnostic.contains("probe.mc:1:18:"));
+    assert!(diagnostic.contains("probe.mc:1:"));
+    assert!(diagnostic.contains("unsupported parameter type annotation"));
     fs::remove_dir_all(dir).unwrap();
 }
 

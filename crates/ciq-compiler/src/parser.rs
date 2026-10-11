@@ -3,6 +3,8 @@ use crate::{Diagnostic, Span};
 pub(crate) struct ParsedFunction {
     pub name: String,
     pub parameters: Vec<String>,
+    pub parameter_types: Vec<Option<crate::ParameterType>>,
+    pub result_type: Option<crate::ReturnType>,
     pub statements: Vec<Statement>,
     pub body_span: Span,
 }
@@ -769,6 +771,7 @@ impl Parser<'_> {
         };
         self.expect(Kind::Punctuation('('), "'('")?;
         let mut parameters = Vec::new();
+        let mut parameter_types = Vec::new();
         if self.peek()? != Kind::Punctuation(')') {
             loop {
                 let parameter = self.identifier()?;
@@ -788,6 +791,18 @@ impl Parser<'_> {
                     ));
                 }
                 parameters.push(name.to_owned());
+                parameter_types.push(if self.peek()? == Kind::Word("as") {
+                    self.token()?;
+                    let at = self.offset;
+                    Some(match self.path()?.as_str() {
+                        "Toybox.Lang.Number" => crate::ParameterType::Integer,
+                        "Toybox.Lang.String" => crate::ParameterType::String,
+                        "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
+                        _ => return Err(self.error(at, "unsupported parameter type annotation")),
+                    })
+                } else {
+                    None
+                });
                 if self.peek()? != Kind::Punctuation(',') {
                     break;
                 }
@@ -795,10 +810,25 @@ impl Parser<'_> {
             }
         }
         self.expect(Kind::Punctuation(')'), "')'")?;
+        let result_type = if self.peek()? == Kind::Word("as") {
+            self.token()?;
+            let at = self.offset;
+            Some(match self.path()?.as_str() {
+                "Toybox.Lang.Number" => crate::ReturnType::Integer,
+                "Toybox.Lang.String" => crate::ReturnType::String,
+                "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
+                "Void" => crate::ReturnType::Void,
+                _ => return Err(self.error(at, "unsupported result type annotation")),
+            })
+        } else {
+            None
+        };
         let (statements, body_span) = self.block(0)?;
         Ok(ParsedFunction {
             name: identifier.to_owned(),
             parameters,
+            parameter_types,
+            result_type,
             statements,
             body_span,
         })

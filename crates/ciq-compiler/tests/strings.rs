@@ -114,7 +114,6 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
     for source in [
         "function probe() { return \"x\"; }",
         "function probe() { var x = \"x\"; return x + 1; }",
-        "function probe() { return Numbers.answer(\"x\"); }",
         "function probe() { return System.println(1); }",
         "function probe() { var x = System.println(1); return x; }",
         "function probe() { System.println(); return 1; }",
@@ -129,9 +128,7 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
         assert!(compile(source).is_err(), "{source}");
     }
     for body in [
-        ".string %0 \"x\"\n.return %0",
         ".string %0 \"x\"\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.add %3 %1 %2\n.return %3",
-        ".string %0 \"x\"\n.call %1 Numbers answer %0\n.return %1",
         ".integer %0 1\n.integer %1 2\n.println %0\n.return %1",
         ".string %0 unquoted\n.println %0\n.integer %1 1\n.return %1",
         ".println %9\n.integer %0 1\n.return %0",
@@ -144,7 +141,7 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
     }
     let error = compile("function probe() { return \"x\"; }").unwrap_err();
     assert_eq!(error.column, 20);
-    assert!(error.message.contains("integer"));
+    assert!(error.message.contains("explicit annotation"));
 }
 
 #[test]

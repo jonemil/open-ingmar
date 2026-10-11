@@ -10,6 +10,7 @@ fn emit(
     locals: &std::collections::BTreeMap<String, LocalId>,
     parameters: &std::collections::BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
+    calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
         parser::ExpressionKind::Boolean(value) => Operation::Boolean {
@@ -55,10 +56,11 @@ fn emit(
             locals,
             parameters,
             operations,
+            calls,
         )?,
         parser::ExpressionKind::Binary { kind, left, right } => {
-            let left = emit(source, *left, locals, parameters, operations)?;
-            let right = emit(source, *right, locals, parameters, operations)?;
+            let left = emit(source, *left, locals, parameters, operations, calls)?;
+            let right = emit(source, *right, locals, parameters, operations, calls)?;
             Operation::Binary {
                 result: ValueId(operations.len() as u32),
                 kind,
@@ -67,8 +69,8 @@ fn emit(
             }
         }
         parser::ExpressionKind::Compare { kind, left, right } => {
-            let left = emit(source, *left, locals, parameters, operations)?;
-            let right = emit(source, *right, locals, parameters, operations)?;
+            let left = emit(source, *left, locals, parameters, operations, calls)?;
+            let right = emit(source, *right, locals, parameters, operations, calls)?;
             Operation::Compare {
                 result: ValueId(operations.len() as u32),
                 kind,
@@ -94,6 +96,7 @@ fn emit_call(
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
+    calls: &CallResults,
 ) -> Result<Operation, Diagnostic> {
     let (receiver, module, member, arguments) = match kind {
         parser::ExpressionKind::ValueCall {
@@ -130,11 +133,11 @@ fn emit_call(
         _ => unreachable!("only calls enter call construction"),
     };
     let receiver = receiver
-        .map(|value| emit(source, value, locals, parameters, operations))
+        .map(|value| emit(source, value, locals, parameters, operations, calls))
         .transpose()?;
     let arguments = arguments
         .into_iter()
-        .map(|argument| emit(source, argument, locals, parameters, operations))
+        .map(|argument| emit(source, argument, locals, parameters, operations, calls))
         .collect::<Result<Vec<_>, _>>()?;
     let result = ValueId(operations.len() as u32);
     Ok(if let Some(receiver) = receiver {
@@ -147,12 +150,20 @@ fn emit_call(
     } else if module.as_deref() == Some("self") {
         Operation::SelfCall {
             result,
+            result_type: calls
+                .get(&("self".into(), member.clone()))
+                .copied()
+                .unwrap_or(crate::ReturnType::Integer),
             member,
             arguments,
         }
     } else {
         Operation::ModuleCall {
             result,
+            result_type: calls
+                .get(&(module.clone().unwrap(), member.clone()))
+                .copied()
+                .unwrap_or(crate::ReturnType::Integer),
             module: module.unwrap(),
             member,
             arguments,
@@ -162,6 +173,7 @@ fn emit_call(
 
 struct Builder<'a> {
     source: &'a str,
+    calls: &'a CallResults,
     parameters: BTreeMap<String, usize>,
     operations: Vec<LocatedOperation>,
     next_local: u32,
@@ -189,6 +201,7 @@ impl Builder<'_> {
             locals,
             &self.parameters,
             &mut self.operations,
+            self.calls,
         )
     }
 
@@ -436,23 +449,27 @@ impl Builder<'_> {
     }
 }
 
-/// Resolve source names and emit validated integer-return or void function IR.
-/// Integer functions require a value on every path. Void fallthrough gains a
+/// Resolve source names and emit function IR under declared type contracts.
+/// Value functions require a result on every path. Void fallthrough gains a
 /// return terminator; mixed returns and unreachable statements are rejected.
 pub(crate) fn build(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, false, context)
+    build_body(source, ast, false, context, &CallResults::new())
 }
 
-pub(crate) fn build_method(
+pub(crate) type CallResults = BTreeMap<(String, String), crate::ReturnType>;
+
+pub(crate) fn build_with_calls(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
+    method: bool,
+    calls: &CallResults,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, true, context)
+    build_body(source, ast, method, context, calls)
 }
 
 fn build_body(
@@ -460,20 +477,14 @@ fn build_body(
     ast: parser::ParsedFunction,
     method: bool,
     context: Option<crate::api::ApiContext>,
+    calls: &CallResults,
 ) -> Result<Function, Diagnostic> {
-    fn has_value_return(statements: &[parser::Statement]) -> bool {
-        statements.iter().any(|s| match s {
-            parser::Statement::Return { value: Some(_), .. } => true,
-            parser::Statement::If {
-                on_true, on_false, ..
-            } => has_value_return(on_true) || has_value_return(on_false),
-            parser::Statement::While { body, .. } => has_value_return(body),
-            _ => false,
-        })
-    }
-    let integer_result = has_value_return(&ast.statements);
+    let value_result = declared_result(&ast) != crate::ReturnType::Void;
+    let result_type = ast.result_type;
+    let annotations = ast.parameter_types;
     let mut builder = Builder {
         source,
+        calls,
         parameters: ast
             .parameters
             .into_iter()
@@ -495,11 +506,11 @@ fn build_body(
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
     if !builder.sequence(ast.statements, &mut BTreeMap::new())? {
-        if integer_result {
+        if value_result {
             return Err(Diagnostic::at(
                 source,
                 ast.body_span.end - 1,
-                "function requires an integer return on every path",
+                "function requires a value return on every path",
             ));
         }
         builder.push(
@@ -522,9 +533,23 @@ fn build_body(
                 format!("{} requires one nullable-dictionary parameter", ast.name),
             ));
         }
+        if annotations
+            .iter()
+            .zip(&signature.parameters)
+            .any(|(annotation, expected)| annotation.is_some_and(|ty| ty != *expected))
+        {
+            return Err(Diagnostic::at(
+                source,
+                ast.body_span.start,
+                "parameter annotation conflicts with native callback contract",
+            ));
+        }
         signature.parameters
     } else {
-        vec![crate::ParameterType::Integer; builder.parameters.len()]
+        annotations
+            .into_iter()
+            .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+            .collect()
     };
     let result = Function::construct_for_api(
         ast.name,
@@ -533,11 +558,56 @@ fn build_body(
         method,
         context,
     );
-    result.map_err(|error| {
+    let function = result.map_err(|error| {
         let offset = error
             .operation
             .and_then(|index| spans.get(index).copied().flatten())
             .map_or(0, |span| span.start);
         Diagnostic::at(source, offset, error.message)
+    })?;
+    let expected = result_type.unwrap_or(if value_result {
+        crate::ReturnType::Integer
+    } else {
+        crate::ReturnType::Void
+    });
+    if function.return_type() != expected {
+        return Err(Diagnostic::at(
+            source,
+            function
+                .operations()
+                .iter()
+                .find_map(|op| {
+                    matches!(
+                        op.operation,
+                        Operation::Return { .. } | Operation::ReturnVoid
+                    )
+                    .then_some(op.span)
+                    .flatten()
+                    .map(|span| span.start)
+                })
+                .unwrap_or(ast.body_span.start),
+            "return type does not match function contract; String/Boolean results require an explicit annotation",
+        ));
+    }
+    Ok(function)
+}
+
+pub(crate) fn declared_result(ast: &parser::ParsedFunction) -> crate::ReturnType {
+    ast.result_type
+        .unwrap_or(if has_value_return(&ast.statements) {
+            crate::ReturnType::Integer
+        } else {
+            crate::ReturnType::Void
+        })
+}
+
+fn has_value_return(statements: &[parser::Statement]) -> bool {
+    statements.iter().any(|s| match s {
+        parser::Statement::Return { value: Some(_), .. } => true,
+        parser::Statement::If {
+            on_true, on_false, ..
+        } => has_value_return(on_true) || has_value_return(on_false),
+        parser::Statement::While { body, .. } => has_value_return(body),
+        _ => false,
     })
 }

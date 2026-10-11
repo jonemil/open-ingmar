@@ -130,8 +130,13 @@ and parity evidence are in [the pipeline investigation][pipeline].
 
 Collect declarations and signatures before checking calls so forward and
 recursive references work across files. Separate ownership from file boundaries.
-Unit validation adds identity, arity, and result checks to function validation;
-standalone functions can retain explicit external-binding obligations.
+Source collection resolves declared result contracts before building bodies.
+Value calls carry an expected result type so function validation can check their
+consumers without assuming Number. Validated functions retain their value types
+for unit argument checks. Unit validation compares argument and result contracts
+against callees; standalone functions retain external-binding obligations.
+Unannotated ordinary parameters default to Number; noninteger source results
+require annotations. General dynamic inference remains outside this subset.
 
 Lower all bodies into one assembly layout with owner-qualified labels. Metadata
 uses those same identities and labels. Unit text preserves ownership alongside
@@ -153,7 +158,7 @@ arbitrary SDK identities and return types are not inferred from spelling.
 ## Void results and effect-only calls
 
 Void returns have no value dependency. Statement calls preserve argument order
-and define no semantic result, whether their callee returns integer or void.
+and define no semantic result, whether their callee returns a value or Void.
 This keeps effect-only calls outside the expression graph. Unit validation
 rejects void callees in value contexts; lowering discards statement-call runtime
 results. The application wrapper follows the entry's result contract.

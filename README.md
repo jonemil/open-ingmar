@@ -67,6 +67,9 @@ pipeline. See [compiler design](docs/design/compiler-ir.md) for the stages and
 The [native call example](examples/compiler-native-calls/README.md) exercises
 inherited Number-to-String conversion on locals and parameters.
 
+The [typed Lang example](examples/compiler-lang-values/README.md) passes String
+and Boolean values through module and instance methods.
+
 The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
 initialization and a typed native startup callback with a null-state check.
 

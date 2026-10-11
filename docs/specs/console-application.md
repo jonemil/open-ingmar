@@ -9,8 +9,8 @@ See [runtime evidence][evidence] and [application design][design].
 ## Input and lifecycle
 
 The caller supplies sixteen application-ID bytes and a global entry function
-name. The entry must have zero parameters and an integer or void result under
-the existing function rules. CLI default: `main`. The ID identifies the
+name. The entry must have zero parameters and a Number, String, Boolean, or
+Void result under the existing function rules. CLI default: `main`. The ID identifies the
 application; it is independent of the signing key.
 
 Generated lifecycle behavior:
@@ -18,7 +18,7 @@ Generated lifecycle behavior:
 - A synthesized class extends native `Application.AppBase`. Its constructor and
   default `initialize` invoke the corresponding native base methods. A validated
   source initializer replaces the initialize method's DATA target.
-- `onStart(state)` ignores state, calls the global entry once, prints its integer
+- `onStart(state)` ignores state, calls the global entry once, prints its value
   result using `System.println`, discards the print result, and returns void.
   A void entry is invoked without that print; its VM result is discarded.
 - `getInitialView()` returns a one-element array containing an initialized native
@@ -158,7 +158,7 @@ representing the named source class. Plain member names equal to the class
 reuse `1`; other user/native names retain the allocation rules above.
 
 Generated onStart selects the startup using `getselfv`, then the existing call
-and integer/void result policy. Source class methods extend the application DATA
+and supported value/Void result policy. Source class methods extend application DATA
 record with sorted fields bound to their owner-qualified CODE labels. Existing
 global/module methods stay in their own DATA owners. Class names, native base
 identity, and method ownership survive saved unit IR.

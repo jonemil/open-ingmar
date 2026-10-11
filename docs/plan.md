@@ -7,17 +7,15 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Support String/Boolean
-   arguments and results in user functions through source, typed IR, saved IR,
-   and complete applications. Keep callback contracts distinct from ordinary
-   function contracts. Then add nullable Number/String results for operations
-   such as String `find` and `toNumber`, with null checks before typed consumers.
+1. **Extend core Lang contracts and value types.** Add nullable Number/String
+   results for String `find` and `toNumber`, with null checks before typed
+   consumers.
    Grow Object equality and other core methods through documented assignability
    rules rather than weakening argument validation to accept any value.
 
    Connect the explicit API context to verified device/app inputs as project
-   resolution develops. Add
-   app type, permission, scope, and VM constraints when supported calls need
+   resolution develops. Add app type, permission, scope, and VM constraints
+   when supported calls need
    them; keep unknown constraints explicit. Plan `has`-guarded optional APIs
    before claiming portable references newer than the app minimum. Migrate
    remaining Application/System special cases as they acquire supported call

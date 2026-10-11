@@ -1,7 +1,7 @@
 # Restricted source classes and receiver calls
 
 This profile adds AppBase-derived classes to [compilation units][unit]. Existing
-integer/void function rules still apply. The [console application builder][app]
+function parameter and result rules still apply. The [console application builder][app]
 can use one declared class and invoke a selected method on its instance.
 See [receiver design][design] and [runtime evidence][evidence].
 
@@ -30,9 +30,10 @@ be rebound, passed as a value, or used for property access. Bare member calls,
 class-name calls, and calls on other objects remain unsupported. Module calls
 from methods retain their existing rules.
 
-A self expression call requires a declared integer-return method in the same
-class. A self statement call permits an integer or void result and discards it.
-Arguments remain integers; counts must match exactly. Forward and recursive
+A self expression call requires a declared value-returning method in the same
+class. A self statement call discards any supported result, including Void.
+Number/String/Boolean arguments and result contracts must match the callee;
+counts must match exactly. Forward and recursive
 references are checked after collecting signatures. Self lookup never falls
 back to a global/module member or an inherited native method. Recursion is
 accepted but termination is not proven.
@@ -46,7 +47,8 @@ operations. Unit validation requires instance bodies in classes and ordinary
 bodies in global/module owners. An instance method can have no self calls and
 still retains its receiver requirement.
 
-`SelfCall` defines an integer value. `SelfCallStatement` consumes argument values
+`SelfCall` defines a value under its explicit result contract, using the same
+`result=<type>` text field as a module call. `SelfCallStatement` consumes arguments
 without defining a result. Both share dependency, type, one-use, block-local,
 control-flow, and effect-schedule checks with existing calls. The hidden receiver
 context is not an explicit parameter or a semantic value; positional parameters
@@ -86,8 +88,9 @@ indexes follow this layout order; serialized spans remain provenance only.
 
 Complete PRG generation permits exactly one declared AppBase class and requires
 `--entry Class.method`. The selected method must have zero parameters, except
-source onStart follows the callback contract below. Integer
-results are printed by generated onStart; void results are discarded. Class symbol `1` identifies the application class. Plain names
+source onStart follows the callback contract below. Value results are printed
+by generated onStart; void results are discarded. Class symbol `1` identifies
+the application class. Plain names
 matching the class reuse that identity; other names retain deterministic
 allocation. Class methods are sorted DATA fields bound to their CODE labels,
 separate from globals/modules even when member names share one symbol ID.

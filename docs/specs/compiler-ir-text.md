@@ -83,7 +83,7 @@ Boolean literals use `.boolean %<result-id> true|false`, with exactly these
 lowercase spellings. They produce `Toybox.Lang.Boolean`, distinct from integer
 zero/one and Null. Boolean values may initialize/read/assign Boolean locals,
 feed branches, compare for equality with another Boolean, or be printed. They
-cannot be integer operands, user-call arguments, or function returns. Lowering
+cannot be integer operands; typed user calls and returns accept them. Lowering
 uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 
 ## API context inputs
@@ -149,9 +149,12 @@ ciq-ir
 
 ## Module calls and operation order
 
-`.call %<result-id> <module> <member> [%<argument-id> ...]` defines the integer
-result of a positional-argument call to an externally supplied top-level user
-module. Names use ASCII identifier rules and remain symbolic. The optional span
+`.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
+defines the result of a positional-argument call to a top-level user module.
+The result type is `integer`, `string`, or `boolean`; omission means integer.
+Canonical text omits the integer default and writes noninteger contracts.
+Void is invalid in a value call. Names use ASCII identifier rules and remain
+symbolic. The optional span
 has the same meaning as for other operations. The module's expected stored
 symbol name is `globals/<module>` and the member's is `<member>`; this is not
 numeric symbol allocation or method metadata generation.
@@ -180,8 +183,8 @@ ciq-ir
 ```
 
 Names and result expectations are not checked against a whole-program type
-environment in standalone mode: the scaffold must supply integer-return
-callees. Unit mode checks names, arity, and integer/void result contracts.
+environment in standalone mode: the scaffold must supply matching callees.
+Unit mode checks names, exact arity, argument types, and call result contracts.
 Object calls and global unqualified calls remain unsupported.
 
 ## Parameter metadata and reads
@@ -189,8 +192,9 @@ Object calls and global unqualified calls remain unsupported.
 The optional `parameters=<nonnegative-decimal-count>` field on `.function`
 defaults to zero, with a maximum of 254. `Function::with_parameters(name, count,
 operations)` uses the shared validator; `Function::new` retains zero-parameter
-behavior. `.parameter %<result-id> <zero-based-index>` defines a fresh integer
-value from a signature position. Index must be below the parameter count;
+behavior. `Function::with_parameter_types` supplies explicit contracts.
+`.parameter %<result-id> <zero-based-index>` defines a fresh value with the
+signature position's type. Index must be below the parameter count;
 repeated reads and unused declared parameters are allowed. Source parameter
 names are resolved by the frontend, not stored in IR. Position is independent of
 value/local IDs and VM slots.
@@ -275,9 +279,10 @@ consumes an integer, String, or Boolean without defining a result. Both accept
 optional spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
-local initialization/assignment/reads; arithmetic, parameters, user-call
-arguments and expression-call results remain integer-only; valued returns
-require integers. Void returns have no value. All existing use/dependency/
+locals, function parameters, user calls, and returns. Arithmetic requires
+integers. A function's value returns must all have the same supported type;
+Number, String, and Boolean results are inferred from validated return values.
+Void returns have no value. All existing use/dependency/
 order rules apply.
 
 ```text
@@ -454,9 +459,9 @@ Void returns and effect-only calls use:
 - `.call-discard <module> <member> [%<argument> ...] [span=<start>:<end>]`:
   invoke a qualified user function for effects without defining a value.
 
-`.call-discard` may target an integer-return or void function; the caller
-discards its result. Argument IDs name earlier integer
-values in the same block and each counts as a use. Calls use identifier rules,
+`.call-discard` may target any supported user result, including Void; the caller
+discards it. Argument IDs name earlier Number, String, or Boolean values in the
+same block and each counts as a use. Calls use identifier rules,
 argument limits, and left-to-right effect scheduling already required by
 `.call`. Names, arity, and callee result contracts are checked in unit mode;
 standalone functions retain their external-callee obligations.
@@ -470,7 +475,8 @@ ciq-ir
 .end
 ```
 
-Every return in a function must agree: `.return` yields an integer,
+Every return in a function must agree: `.return` yields its value's supported
+type,
 `.return-void` yields void. The shared validator infers and exposes that result
 contract; no separate result annotation is stored. A block may terminate with
 either form. The final declared block still returns, and the existing
@@ -499,11 +505,12 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer,nullable-dictionary,...`. The list must match
-`parameters=<count>`; omitted types are integers. Unsupported names, duplicate
-type lists, mismatched counts, or lists without an instance receiver are errors.
-Unit validation currently permits noninteger parameters only for the native
-AppBase.onStart/onStop contracts. For example:
+`parameter-types=integer:string:boolean:...`. Separate entries with colons;
+the list must match `parameters=<count>`. Omitted types are integers. This field
+applies to ordinary functions and instance methods. `nullable-dictionary` is
+also accepted; unit validation restricts it to native AppBase.onStart/onStop
+contracts. Unsupported names, duplicate lists, and mismatched counts are
+errors. For example:
 
 ```text
 .function onStart parameters=1 receiver=instance parameter-types=nullable-dictionary
@@ -528,12 +535,13 @@ calls. The receiver is the hidden context, not an explicit parameter/value ID.
 
 Two additional directives require an instance method:
 
-- `.call-self %<result> <member> [%<argument> ...] [span=<start>:<end>]`:
-  define an integer result from a current-receiver member call.
+- `.call-self %<result> <member> [result=<type>] [%<argument> ...] [span=<start>:<end>]`:
+  define a value under the same result contract rules as `.call`.
 - `.call-self-discard <member> [%<argument> ...] [span=<start>:<end>]`:
   invoke a current-receiver member for effects and discard its result.
 
-Arguments remain integer, ordered, earlier-defined values in the same block.
+Arguments are ordered, earlier-defined Number/String/Boolean values in the same
+block.
 The existing use/effect/control-flow checks apply. Unit validation binds calls
 only to declared methods in the enclosing class, checks arity/result contracts,
 and rejects instance bodies in global/module owners. Standalone method IR

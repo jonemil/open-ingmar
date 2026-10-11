@@ -26,11 +26,11 @@ as an intrinsic receiver and cannot be declared as a module.
 All function bodies use the existing grammar and limits. Qualified user calls
 must resolve to a module member in this unit, regardless of declaration order.
 Call argument counts must exactly match the callee's parameter count. All
-ordinary parameters and user-call arguments are integers; functions return
-integers or
-void. Expression calls require integer results; string and
-Boolean arguments are rejected. These are the current subset's fixed type
-rules, not general Monkey C type inference.
+ordinary parameters accept Number, String, or Boolean contracts; functions
+return one of those types or Void. Expression calls require a value result.
+Arguments must exactly match the corresponding parameter type. Source contract
+annotations and defaults follow the [function rules][function-types]; these are
+subset rules, not general Monkey C type inference.
 
 AppBase.onStart/onStop have a [native nullable-state
 contract](compiler-classes.md#source-startup-callback).
@@ -45,8 +45,8 @@ across files before calls are checked.
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the
 separate intrinsic. Global functions can serve as entry methods but cannot yet
-be called by bare source names. Imports, nested/empty modules, typed
-signatures, optional/default parameters, overloading, and arbitrary SDK calls
+be called by bare source names. General imports, nested/empty modules,
+optional/default parameters, overloading, and arbitrary SDK calls
 remain unsupported.
 
 The unit contains 1..=256 functions total across all files. Function operation,
@@ -138,9 +138,11 @@ with source or saved unit IR. The [console application
 profile](console-application.md)
 specifies the generated lifecycle, metadata, entry selection, and restrictions.
 
-Unit signatures include each function's validated integer/void result contract.
-Expression `.call` requires an integer callee; statement `.call-discard` permits
-either result and discards it. Both check integer arguments and exact arity.
+Unit signatures include explicit parameter types and the validated result
+contract. Expression `.call` carries the expected Number/String/Boolean result;
+unit validation requires it to match the callee. Statement `.call-discard`
+permits any supported result, including Void, and discards it. Both check
+argument types and exact arity.
 Inner functions permit [void-return IR][void-ir]. See [void source
 rules][void-source].
 
@@ -161,3 +163,5 @@ within each group. Lowering follows that same grouped order, with distinct class
 CODE label prefixes. Error body indexes follow globals/modules, then methods.
 The 256-body total includes both groups. Multiple classes may pass unit/IR
 validation; the complete console PRG profile currently permits exactly one.
+
+[function-types]: compiler-subset.md#function-type-contracts

@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Typed Lang values](compiler-lang-values.md): String/Boolean arguments,
+  results, and module/instance calls.
 - [Native value calls](compiler-native-calls.md): inherited Number conversion
   and explicit receiver invocation.
 - [Initial frontend](first-compiler.md): constant-return source and scaffold use.

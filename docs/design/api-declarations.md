@@ -28,9 +28,10 @@ category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User parameters and returns still have narrower contracts;
-declarations alone do not enable those types. Nullable conversions need result
-unions and validation of their consumers before executable support is added.
+supported calls. User functions accept Number, String, and Boolean parameters
+and results; API declarations alone do not enable other types. Nullable
+conversions need result unions and validation of their consumers before
+executable support is added.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types

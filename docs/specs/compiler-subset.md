@@ -24,9 +24,12 @@ The default mode accepts exactly one top-level function.
 cross-function validation across files. The per-function grammar is:
 
 ```text
-function = "function" identifier "(" parameter-list? ")" block
+function = "function" identifier "(" parameter-list? ")" ("as" result-type)? block
 block = "{" statement* "}"
-parameter-list = identifier ("," identifier)*
+parameter-list = parameter ("," parameter)*
+parameter = identifier ("as" value-type)?
+value-type = "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean"
+result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
@@ -51,7 +54,7 @@ letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 are reserved. `true` and `false` produce Boolean literals. Whitespace and
 `//` or non-nested `/* ... */` comments are supported. The integer literal domain
 is `0..=127`; computed results may be negative or exceed 127. Unary signs,
-larger literals, other literal forms, typed parameters, types, unsupported
+larger literals, other literal forms, other types, unsupported
 statements/additional functions in default mode, and other operators are
 rejected. This is a frontend limit, not a Monkey C language or VM integer limit.
 The domain deliberately avoids unresolved high-bit one-byte immediate behavior.
@@ -65,8 +68,8 @@ whole-program analysis, or optimizer yet.
 
 The IR contains integer/string/Boolean constants, binary add/subtract definitions,
 parameter reads, local initialization/read, module calls, print statements, and
-integer comparisons, branches, and integer returns using value IDs, with
-optional source spans. Source
+comparisons, branches, and typed value returns using value IDs, with optional
+source spans. Source
 compilation supplies them; IR text may omit them. Without locals, lowering emits
 a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
 or `ipush1` for a positive supported literal, left/right operands followed by
@@ -153,20 +156,36 @@ IR text represents locals with `.local $<decimal-u32-id> %<value-id>` and
 `.read %<result-id> $<local-id>`, each with an optional span. Semantic
 IDs need not be contiguous; their numeric values never select physical slots.
 
+## Function type contracts
+
+Ordinary source parameters default to Number. `as` annotations accept the fully
+qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`, and
+`Toybox.Lang.Boolean`; result annotations also accept `Void`. Short names,
+module aliases in annotations, unions, nullable types, and other type syntax
+are outside this subset. These declarations require no `using` statement.
+
+Unannotated functions with value returns require Number results; those with no
+value returns have a Void contract. String and Boolean source results require
+explicit annotations. Every value-returning path must return the same declared
+type; mixed types, value/void mixtures, and missing returns are errors. Typed IR
+construction infers the uniform result from its returns. Native callbacks retain
+their independently resolved signatures; annotations cannot override them.
+
 ## User module calls
 
-The supported call form is `<module>.<member>(<arguments>?)` in integer
-expressions/initializers. The module is a top-level user module provided by the
-surrounding PRG scaffold, and the member is an existing integer-return function
-with matching positional arity. Global unqualified calls, local/object
-receivers, nested modules, and string-return user-module calls remain
-unsupported. Void module calls are supported as statements, as described below.
+The supported call form is `<module>.<member>(<arguments>?)` in expressions
+and initializers. The module is a top-level user module provided by the
+surrounding PRG scaffold. Value calls return Number, String, or Boolean;
+arguments must match the declared types and positional arity. Global unqualified
+calls, arbitrary local/object receivers, and nested modules remain unsupported.
+Void module calls are supported as statements, as described below.
 The separate `System.println` statement is described below. Module/member names
 stay symbolic until encoding; neither IDs nor DATA method records are generated
 here.
 
-IR contains `ModuleCall { result, module, member, arguments }` and provisional
-`.call %<result> <module> <member> [%<argument> ...]` text. Calls may have
+IR contains `ModuleCall { result, result_type, module, member, arguments }`.
+[Call text](compiler-ir-text.md#module-calls-and-operation-order) preserves the
+result contract. Calls may have
 effects. For any function containing a call, IR operations must appear in the
 backend's left-to-right expression evaluation order, with initialization and
 print statements in order. Reject incompatible schedules rather than silently
@@ -228,11 +247,10 @@ escape syntax.
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
-initializations and accept one integer, String, or Boolean value. Parameters,
-arithmetic, user-module arguments/results, and the final return remain
-integer-only. The shared validator propagates string types through locals and
-rejects incompatible
-uses. Concatenation, string returns/parameters, arbitrary SDK calls, and using
+initializations and accept one Number, String, or Boolean value. String types
+propagate through locals and annotated function parameters/results; incompatible
+uses are rejected. Arithmetic remains Number-only. Concatenation, arbitrary
+SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
 provide the SDK module. The native name profile below resolves its supported
@@ -302,11 +320,11 @@ described below. Loop syntax is specified separately below.
 two Booleans. Dictionary/null equality follows the callback rules below.
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
 one comparison is accepted per expression level; parentheses retain their grouping
-behavior. The condition must produce a Boolean: a literal, local read, or
-supported comparison. Boolean locals, assignments, and print arguments are
-accepted. Boolean parameters, user-call arguments, arithmetic, and returns
-remain unsupported. Integer truthiness, mixed Boolean/Number equality, Boolean
-ordering, other comparison operators, and short-circuit operators are unsupported.
+behavior. The condition must produce a Boolean: a literal, typed parameter or
+local read, supported call, or comparison. Boolean locals, assignments, and print arguments are
+accepted. Annotated Boolean parameters/results and user-call arguments use
+these same rules. Boolean arithmetic, integer truthiness, mixed Boolean/Number
+equality, Boolean ordering, other comparison operators, and short-circuit operators are unsupported.
 
 Lowering emits an entry block, condition evaluation, and branch, then separate
 arm blocks. Both arms may read parameters and enclosing locals. The
@@ -424,12 +442,12 @@ See [loop-control.mc](../../examples/compiler-probe/loop-control.mc) and
 
 ## Void functions and statement calls
 
-A function with any valued return must return an integer on every path. If it
-has no valued return, it is void: `return;` terminates immediately, and reaching
-the final closing brace inserts a void return. Integer and void return forms
-cannot be mixed, including across branches. Returning strings or Booleans stays
-unsupported. Unreachable statements after bare returns are rejected, as after
-integer returns. Loops and scoped locals retain their existing rules.
+A value-returning function must return its declared type on every path. A Void
+function's `return;` terminates immediately; reaching the final closing brace
+inserts a void return. Value and void return forms cannot be mixed, including
+across branches. Unreachable statements after either form are rejected. Loops
+and scoped locals retain their existing rules. See [function type
+contracts](#function-type-contracts) for annotations and defaults.
 
 ```monkeyc
 function main() {
@@ -443,8 +461,8 @@ module Startup {
 }
 ```
 
-Qualified user calls may be expression statements. They take integer arguments
-and discard the result of either an integer-return or void function. Void calls
+Qualified user calls may be expression statements. They take typed positional
+arguments and discard any supported result, including Void. Void calls
 cannot initialize locals, provide arguments, or appear in any other expression.
 Unit mode checks the callee's result type and arity after collecting all
 signatures. Single-function mode still leaves external callee contracts to the
@@ -452,15 +470,15 @@ caller; expression calls there assume integers. No void expression value is
 created. Statement calls preserve argument evaluation and statement order.
 
 Typed IR adds `ReturnVoid` and `ModuleCallStatement`; `Function::return_type()`
-reports the validated integer/void contract. Saved text uses
+reports the validated Number/String/Boolean/Void contract. Saved text uses
 [IR](compiler-ir-text.md#void-returns-and-statement-calls).
 Both forms share type, control-flow, use, and effect-schedule validation.
 A void function may contain only its return, so the operation bound is now
 1..=1024. The backend emits bare `return`; statement calls use the existing call
 sequence and discard the VM result with `popv`.
 
-The [console application profile](console-application.md) accepts either entry
-result type and prints only integer results. The [example][void-example] and
+The [console application profile](console-application.md) prints a value entry's
+Number, String, or Boolean result and discards a Void entry's result. The [example][void-example] and
 [simulator evidence][void-evidence] verify both void return forms and caller
 continuation after discarded calls. Source class/receiver syntax follows the
 [restricted class profile](compiler-classes.md).
@@ -472,7 +490,7 @@ continuation after discarded calls. Source class/receiver syntax follows the
 
 Unit mode also accepts [AppBase-derived class
 declarations](compiler-classes.md). Their methods may call `self.<member>(...)`
-as integer expressions or statements; class ownership and receiver contracts
+as typed value expressions or statements; class ownership and receiver contracts
 remain explicit in typed/saved IR. Default single-function source mode does not
 accept self calls. Source initialization and onStart use the
 [native lifecycle contracts](compiler-classes.md#source-startup-callback).
@@ -519,17 +537,16 @@ Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, integer parameter, and supported native-result receivers are accepted.
-Evaluate
-the receiver first, then arguments left to right, then invoke the member.
+local, Number/String parameter, and supported call-result receivers are
+accepted. Evaluate the receiver first, then arguments left to right, then invoke the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.
 Only these value-producing native calls are supported. Null/Dictionary/Boolean
 receivers and discarded method statements remain unsupported. Chained calls
 must resolve each member against the preceding result's type, for example
-`41.toString().toUpper().length().format("%03d")`. String arguments and returns
-in user functions remain unsupported. Nullable String methods such as `find`
-and `toNumber` are outside this profile. Unknown catalogue
+`41.toString().toUpper().length().format("%03d")`. String and Boolean user
+parameters/results require the function annotations defined above. Nullable
+String methods such as `find` and `toNumber` are outside this profile. Unknown catalogue
 members, wrong arity/types, and known members lacking lowering are distinct
 errors. Explicit [API context inputs][api-context] check introduction levels;
 general native dispatch remains unsupported.

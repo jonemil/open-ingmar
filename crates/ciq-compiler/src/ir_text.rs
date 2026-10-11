@@ -82,9 +82,11 @@ pub(crate) fn parse_ir_context(
             }
             parameter_types = Some(
                 types
-                    .split(',')
+                    .split(':')
                     .map(|t| match t {
                         "integer" => Ok(crate::ParameterType::Integer),
+                        "string" => Ok(crate::ParameterType::String),
+                        "boolean" => Ok(crate::ParameterType::Boolean),
                         "nullable-dictionary" => Ok(crate::ParameterType::NullableDictionary),
                         _ => Err(fail(*name_at, "unsupported parameter type")),
                     })
@@ -263,10 +265,12 @@ pub(crate) fn parse_ir_context(
                 base: crate::ClassBase::ApplicationAppBase,
             }
         } else if kind == 18 {
+            let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
             Operation::SelfCall {
                 result: parse_value(&fields[1])?,
+                result_type,
                 member: fields[2].clone(),
-                arguments: fields[3..width]
+                arguments: fields[arguments_at..width]
                     .iter()
                     .map(|f| parse_value(f))
                     .collect::<Result<_, _>>()?,
@@ -358,11 +362,13 @@ pub(crate) fn parse_ir_context(
                 local: parse_local(&fields[2])?,
             }
         } else if kind == 6 {
+            let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
             Operation::ModuleCall {
                 result: parse_value(&fields[1])?,
+                result_type,
                 module: fields[2].clone(),
                 member: fields[3].clone(),
-                arguments: fields[4..width]
+                arguments: fields[arguments_at..width]
                     .iter()
                     .map(|field| parse_value(field))
                     .collect::<Result<_, _>>()?,
@@ -397,11 +403,8 @@ pub(crate) fn parse_ir_context(
         return Err(fail(source.len(), "expected .end"));
     }
     let types = if let Some(types) = parameter_types {
-        if !instance_method || types.len() != parameter_count {
-            return Err(fail(
-                *name_at,
-                "parameter types require an instance receiver and matching count",
-            ));
+        if types.len() != parameter_count {
+            return Err(fail(*name_at, "parameter types require a matching count"));
         }
         types
     } else {
@@ -423,4 +426,25 @@ pub(crate) fn parse_ir_context(
             error.message,
         )
     })
+}
+
+// A value call carries its expected result contract; unit validation checks
+// that it agrees with the callee before lowering.
+fn call_contract(
+    fields: &[String],
+    at: usize,
+    offset: usize,
+    text: &str,
+) -> Result<(crate::ReturnType, usize), Diagnostic> {
+    if let Some(field) = fields.get(at).and_then(|s| s.strip_prefix("result=")) {
+        let result = match field {
+            "integer" => crate::ReturnType::Integer,
+            "string" => crate::ReturnType::String,
+            "boolean" => crate::ReturnType::Boolean,
+            _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
+        };
+        Ok((result, at + 1))
+    } else {
+        Ok((crate::ReturnType::Integer, at))
+    }
 }

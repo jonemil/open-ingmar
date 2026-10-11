@@ -227,11 +227,13 @@ fn self_calls_use_receiver_lookup_and_preserve_nested_argument_order() {
         vec![
             op(Operation::SelfCall {
                 result: ValueId(0),
+                result_type: ciq_compiler::ReturnType::Integer,
                 member: "left".into(),
                 arguments: vec![],
             }),
             op(Operation::SelfCall {
                 result: ValueId(1),
+                result_type: ciq_compiler::ReturnType::Integer,
                 member: "right".into(),
                 arguments: vec![],
             }),

@@ -122,7 +122,7 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool
     if !source_start {
         items.push(Item::Label("__ciq_on_start".into()));
         items.push(instruction(Argc, vec![bits(2)]));
-        if result == ReturnType::Integer {
+        if result != ReturnType::Void {
             items.push(instruction(
                 Getmv,
                 vec![sym("__ciq_sdk_System"), sym("__ciq_member_println")],
@@ -136,7 +136,7 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool
             instruction(Getmv, vec![sym("__ciq_app_globals"), member])
         });
         items.push(instruction(Invokemz, vec![]));
-        if result == ReturnType::Integer {
+        if result != ReturnType::Void {
             items.push(instruction(Invokem, vec![bits(2)]));
         }
         items.push(instruction(Popv, vec![]));

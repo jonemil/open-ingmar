@@ -98,6 +98,8 @@ pub enum BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnType {
     Integer,
+    String,
+    Boolean,
     Void,
 }
 
@@ -105,6 +107,8 @@ pub enum ReturnType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParameterType {
     Integer,
+    String,
+    Boolean,
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
 }
@@ -114,6 +118,8 @@ impl ParameterType {
     pub fn api_type(self) -> api::Type {
         match self {
             Self::Integer => ValueType::Integer.api_type(),
+            Self::String => ValueType::String.api_type(),
+            Self::Boolean => ValueType::Boolean.api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -124,6 +130,8 @@ impl ReturnType {
     pub fn api_type(self) -> api::Type {
         match self {
             Self::Integer => ValueType::Integer.api_type(),
+            Self::String => ValueType::String.api_type(),
+            Self::Boolean => ValueType::Boolean.api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -236,6 +244,7 @@ pub enum Operation {
     },
     ModuleCall {
         result: ValueId,
+        result_type: ReturnType,
         module: String,
         member: String,
         arguments: Vec<ValueId>,
@@ -249,15 +258,16 @@ pub enum Operation {
         arguments: Vec<ValueId>,
     },
     /// Invoke a qualified user method for effects, discarding any VM result.
-    /// Unit validation permits an integer or void callee and checks its arity.
+    /// Unit validation checks its parameter contracts and exact arity.
     ModuleCallStatement {
         module: String,
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Invoke an integer-return member on this method's instance receiver.
+    /// Invoke a value-returning member on this method's instance receiver.
     SelfCall {
         result: ValueId,
+        result_type: ReturnType,
         member: String,
         arguments: Vec<ValueId>,
     },
@@ -314,10 +324,11 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals retain supported value types; printing accepts integers or strings.
-/// Arithmetic and user-call arguments require integers. Native callback
-/// parameters may carry opaque nullable Dictionary state. Returns consistently produce integers or
-/// no value; comparisons produce Booleans used by branches. Statement calls
+/// Locals retain supported value types; printing accepts Number, String, or
+/// Boolean. Arithmetic requires Numbers. User calls carry result contracts;
+/// unit validation checks arguments and results against callee signatures.
+/// Native callback parameters may carry opaque nullable Dictionary state.
+/// Returns consistently produce one supported type or no value. Statement calls
 /// discard results; unit validation rejects using a void callee as a value.
 /// Instance methods permit self calls and require class ownership at unit
 /// validation. Other functions cannot assume an instance receiver.
@@ -329,6 +340,7 @@ pub struct Function {
     return_type: ReturnType,
     instance_method: bool,
     operations: Vec<LocatedOperation>,
+    value_types: std::collections::BTreeMap<ValueId, ValueType>,
 }
 
 impl Function {
@@ -379,7 +391,7 @@ impl Function {
     ///
     /// Parameter count includes unused parameters and excludes the VM context.
     /// Rejects invalid names, spans, value/local dependencies, effect ordering,
-    /// incompatible value types or mixed integer/void returns, malformed or
+    /// incompatible value types or inconsistent returns, malformed or
     /// unreachable blocks, cross-block expression uses, and unsupported
     /// operation or parameter/local counts.
     /// External callee arity and types are not checked here.
@@ -412,6 +424,16 @@ impl Function {
         operations: Vec<LocatedOperation>,
     ) -> Result<Self, IrError> {
         Self::construct(name, parameter_types, operations, true)
+    }
+
+    /// Construct and validate function IR with explicit positional types.
+    /// Callee parameter and result contracts are checked by unit validation.
+    pub fn with_parameter_types(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct(name, parameter_types, operations, false)
     }
 
     /// Return explicit parameter types in source order, excluding the receiver.
@@ -622,6 +644,8 @@ impl Function {
                         result,
                         match parameter_types[index] {
                             ParameterType::Integer => ValueType::Integer,
+                            ParameterType::String => ValueType::String,
+                            ParameterType::Boolean => ValueType::Boolean,
                             ParameterType::NullableDictionary => ValueType::NullableDictionary,
                         },
                     );
@@ -664,7 +688,13 @@ impl Function {
                 } => {
                     validate_call_names(Some(module), member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    let result = if let Operation::ModuleCall { result, .. } = located.operation {
+                    let result = if let Operation::ModuleCall {
+                        result,
+                        result_type,
+                        ..
+                    } = located.operation
+                    {
+                        types.insert(result, call_result_type(result_type).map_err(fail)?);
                         Some(result)
                     } else {
                         None
@@ -685,7 +715,13 @@ impl Function {
                     }
                     validate_call_names(None, member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    let result = if let Operation::SelfCall { result, .. } = located.operation {
+                    let result = if let Operation::SelfCall {
+                        result,
+                        result_type,
+                        ..
+                    } = located.operation
+                    {
+                        types.insert(result, call_result_type(result_type).map_err(fail)?);
                         Some(result)
                     } else {
                         None
@@ -731,8 +767,11 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {
-                    if return_type.replace(ReturnType::Void) == Some(ReturnType::Integer) {
-                        return Err(fail("function cannot mix integer and void returns"));
+                    if return_type
+                        .replace(ReturnType::Void)
+                        .is_some_and(|previous| previous != ReturnType::Void)
+                    {
+                        return Err(fail("function cannot mix value and void returns"));
                     }
                     if !structure.explicit && index + 1 != operations.len() {
                         return Err(fail("return must be the final operation"));
@@ -740,11 +779,19 @@ impl Function {
                     (None, vec![])
                 }
                 Operation::Return { value } => {
-                    if return_type.replace(ReturnType::Integer) == Some(ReturnType::Void) {
-                        return Err(fail("function cannot mix integer and void returns"));
-                    }
-                    if type_of(value) != ValueType::Integer {
-                        return Err(fail("return requires an integer value"));
+                    let result = match type_of(value) {
+                        ValueType::Integer => ReturnType::Integer,
+                        ValueType::String => ReturnType::String,
+                        ValueType::Boolean => ReturnType::Boolean,
+                        _ => {
+                            return Err(fail("return requires a Number, String, or Boolean value"));
+                        }
+                    };
+                    if return_type
+                        .replace(result)
+                        .is_some_and(|previous| previous != result)
+                    {
+                        return Err(fail("function cannot mix different return types"));
                     }
                     if !structure.explicit && index + 1 != operations.len() {
                         return Err(fail("return must be the final operation"));
@@ -882,6 +929,7 @@ impl Function {
             instance_method,
             return_type: return_type.expect("final return establishes result type"),
             operations,
+            value_types: types,
         })
     }
 
@@ -929,10 +977,12 @@ impl Function {
                     .iter()
                     .map(|t| match t {
                         ParameterType::Integer => "integer",
+                        ParameterType::String => "string",
+                        ParameterType::Boolean => "boolean",
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
                     .collect::<Vec<_>>()
-                    .join(",")
+                    .join(":")
             )
         };
         let mut text = format!(
@@ -1013,6 +1063,7 @@ impl Function {
                 }
                 Operation::ModuleCall {
                     result,
+                    result_type,
                     ref module,
                     ref member,
                     ref arguments,
@@ -1021,7 +1072,11 @@ impl Function {
                         .iter()
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
-                    format!(".call %{} {module} {member}{arguments}", result.0)
+                    format!(
+                        ".call %{} {module} {member}{}{arguments}",
+                        result.0,
+                        call_type_text(result_type)
+                    )
                 }
                 Operation::ModuleCallStatement {
                     ref module,
@@ -1036,6 +1091,7 @@ impl Function {
                 }
                 Operation::SelfCall {
                     result,
+                    result_type,
                     ref member,
                     ref arguments,
                 } => {
@@ -1043,7 +1099,11 @@ impl Function {
                         .iter()
                         .map(|v| format!(" %{}", v.0))
                         .collect::<String>();
-                    format!(".call-self %{} {member}{arguments}", result.0)
+                    format!(
+                        ".call-self %{} {member}{}{arguments}",
+                        result.0,
+                        call_type_text(result_type)
+                    )
                 }
                 Operation::SelfCallStatement {
                     ref member,
@@ -1089,7 +1149,7 @@ impl Function {
 /// resolves their supported aliases before IR construction.
 /// Resolves parameters and scoped locals, lowers conditions and while loops
 /// (including innermost break/continue) to blocks, and retains source spans.
-/// Functions with value returns require an integer return on every path;
+/// Value functions require a consistent typed return on every path;
 /// otherwise bare returns and fallthrough produce void returns. Mixed return
 /// types, unreachable statements, and local/parameter shadowing are rejected.
 /// Assignments require a visible initialized local and preserve its supported type.
@@ -1128,14 +1188,36 @@ fn validate_call_arguments(
     arguments: &[ValueId],
     types: &std::collections::BTreeMap<ValueId, ValueType>,
 ) -> Result<(), &'static str> {
-    if arguments
-        .iter()
-        .any(|v| types.get(v).is_some_and(|t| *t != ValueType::Integer))
-    {
-        return Err("user calls currently require integer arguments");
+    if arguments.iter().any(|v| {
+        types.get(v).is_some_and(|t| {
+            !matches!(
+                t,
+                ValueType::Integer | ValueType::String | ValueType::Boolean
+            )
+        })
+    }) {
+        return Err("user calls require Number, String, or Boolean arguments");
     }
     if arguments.len() > MAX_PARAMETERS {
         return Err("call exceeds 254-argument limit");
     }
     Ok(())
+}
+
+fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
+    match result {
+        ReturnType::Integer => Ok(ValueType::Integer),
+        ReturnType::String => Ok(ValueType::String),
+        ReturnType::Boolean => Ok(ValueType::Boolean),
+        ReturnType::Void => Err("void function cannot be used as a value"),
+    }
+}
+
+fn call_type_text(result: ReturnType) -> &'static str {
+    match result {
+        ReturnType::Integer => "",
+        ReturnType::String => " result=string",
+        ReturnType::Boolean => " result=boolean",
+        ReturnType::Void => unreachable!("validated value calls cannot be void"),
+    }
 }
