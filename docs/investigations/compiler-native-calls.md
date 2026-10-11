@@ -140,6 +140,55 @@ explicit symbol binding, bad receivers/arity, and invalid String results used
 as integer returns. No other Number-result methods or signed-overflow behavior
 are established by this experiment.
 
+## String receivers and result chains
+
+**Officially documented:** the [String contract][string], reviewed 2026-10-11,
+defines zero-argument `length()` returning Number, and `toLower()`, `toUpper()`,
+and `toString()` returning String, all since API 1.0.0. `find` and numeric
+conversions have nullable results; those are not established by this experiment.
+
+Use the SDK scaffold above under `scratch/string-methods/` and replace its
+startup body with these calls followed by `System.exit()`:
+
+```monkeyc
+var text = "Hello Monkey C!";
+System.println(text.length());
+System.println(text.toLower());
+System.println(text.toUpper());
+System.println(text.toString());
+System.println(text);
+System.println("".length());
+System.println("é猫".length());
+System.println(41.toString().toUpper().length().format("%03d"));
+```
+
+Build with `sh scripts/build-example.sh scratch/string-methods`; export its
+`build/fr265/string-methods.prg` with `ciq-dis all` into a fresh directory.
+Only our compiled specimen is inspected. **Observed on SDK 9.2.0 / fr265:**
+local String receivers use `getlocalv ... @member; invokemz`; literal/chained
+receivers use `getsv @member; invokemz`. Stored symbol IDs are:
+
+| Member | ID |
+|---|---|
+| `length` | `0x008000bb` |
+| `toLower` | `0x008000be` |
+| `toUpper` | `0x008000bf` |
+| `toString` | `0x008000af` |
+
+The SDK-built specimen prints `15`, `hello monkey c!`, `HELLO MONKEY C!`, the
+original greeting twice, `0`, `2`, and `002`. The multibyte literal has two
+characters and five UTF-8 bytes; this specimen's length is a character count.
+The unchanged greeting after case conversion is consistent with a new result.
+It does not establish all Unicode case or character-count rules.
+
+The independently compiled [example][example] produces the same String output
+after its Number checks, then `6` from a module function returning a String's
+length plus one. Its source and saved unit IR produce identical unsigned PRGs
+with explicit target 5.2.0 and minimum 1.0.0. The signed PRG's simulator output
+matches all 21 expected lines. String/Boolean user parameters and returns,
+nullable results, other String methods, and other devices remain untested here.
+
+[string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [example]: ../../examples/compiler-native-calls/README.md

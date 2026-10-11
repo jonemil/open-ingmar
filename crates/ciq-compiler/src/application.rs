@@ -24,6 +24,9 @@ const INITIALIZE: u32 = 0x0080005e;
 const TO_STRING: u32 = 0x008000af;
 const FORMAT: u32 = 0x0080009c;
 const ABS: u32 = 0x008000a6;
+const LENGTH: u32 = 0x008000bb;
+const TO_LOWER: u32 = 0x008000be;
+const TO_UPPER: u32 = 0x008000bf;
 const PRINTLN: u32 = 0x00800067;
 const EXIT: u32 = 0x0080006d;
 const VIEW: u32 = 0x0080019f;
@@ -273,6 +276,9 @@ pub fn build_console_application(
         ("toString".into(), TO_STRING),
         ("format".into(), FORMAT),
         ("abs".into(), ABS),
+        ("length".into(), LENGTH),
+        ("toLower".into(), TO_LOWER),
+        ("toUpper".into(), TO_UPPER),
         ("View".into(), VIEW),
         ("AppBase".into(), APP_BASE),
         ("onStart".into(), ON_START),
@@ -320,6 +326,9 @@ pub fn build_console_application(
         ("__ciq_native_toString".into(), TO_STRING),
         ("__ciq_native_format".into(), FORMAT),
         ("__ciq_native_abs".into(), ABS),
+        ("__ciq_native_length".into(), LENGTH),
+        ("__ciq_native_toLower".into(), TO_LOWER),
+        ("__ciq_native_toUpper".into(), TO_UPPER),
         ("__ciq_app_globals".into(), GLOBALS),
         ("__ciq_app_base".into(), APP_BASE),
         ("__ciq_app_init".into(), INIT),

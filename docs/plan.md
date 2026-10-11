@@ -7,8 +7,16 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend target constraints and core contracts.** Connect the explicit API
-   context to verified device/app inputs as project resolution develops. Add
+1. **Extend core Lang contracts and value types.** Support String/Boolean
+   arguments and results in user functions through source, typed IR, saved IR,
+   and complete applications. Keep callback contracts distinct from ordinary
+   function contracts. Then add nullable Number/String results for operations
+   such as String `find` and `toNumber`, with null checks before typed consumers.
+   Grow Object equality and other core methods through documented assignability
+   rules rather than weakening argument validation to accept any value.
+
+   Connect the explicit API context to verified device/app inputs as project
+   resolution develops. Add
    app type, permission, scope, and VM constraints when supported calls need
    them; keep unknown constraints explicit. Plan `has`-guarded optional APIs
    before claiming portable references newer than the app minimum. Migrate
@@ -25,8 +33,8 @@ compiling a project.
    selection. A full Jungle driver and API definition parser are not
    prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View inherited members and callback contracts. Extend Boolean
-   arguments/results, object-reference, array, and nullable values as required,
+   AppBase/View inherited members and callback contracts. Extend object-reference,
+   array, and nullable values as required,
    retaining `Void` as a result contract. Start the View path with one
    constructed native View in the array returned by source `getInitialView`.
    Compare new dispatch forms with focused specimens.

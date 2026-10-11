@@ -1,4 +1,7 @@
 module Numbers {
+    function textLength() {
+        return "hello".toLower().length();
+    }
     function absolute(number) {
         return number.abs();
     }

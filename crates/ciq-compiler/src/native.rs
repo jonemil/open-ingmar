@@ -56,12 +56,21 @@ pub(crate) fn value_call(
     if resolved.method.parameters != arguments {
         return Err("native call argument types do not match its API contract".into());
     }
-    if class != "Toybox.Lang.Number"
-        || !matches!(
-            (resolved.declaring_class.name.as_str(), member),
-            ("Toybox.Lang.Object", "toString") | ("Toybox.Lang.Number", "format" | "abs")
-        )
-    {
+    let supported = matches!(
+        (
+            class.as_str(),
+            resolved.declaring_class.name.as_str(),
+            member
+        ),
+        ("Toybox.Lang.Number", "Toybox.Lang.Object", "toString")
+            | ("Toybox.Lang.Number", "Toybox.Lang.Number", "format" | "abs")
+            | (
+                "Toybox.Lang.String",
+                "Toybox.Lang.String",
+                "length" | "toLower" | "toUpper" | "toString"
+            )
+    );
+    if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
     Ok(resolved.method.result.clone())

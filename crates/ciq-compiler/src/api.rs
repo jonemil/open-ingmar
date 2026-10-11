@@ -324,6 +324,12 @@ fn build_core() -> Catalogue {
             ApiLevel(5, 0, 0),
         ),
     ];
+    classes.get_mut(string).unwrap().methods = vec![
+        method("length", vec![], Type::named(number), initial),
+        method("toLower", vec![], Type::named(string), initial),
+        method("toUpper", vec![], Type::named(string), initial),
+        method("toString", vec![], Type::named(string), initial),
+    ];
     let mut on_start = method(
         "onStart",
         vec![nullable_dictionary.clone()],

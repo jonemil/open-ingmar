@@ -15,15 +15,22 @@ model. No declaration-file syntax or new crate is required initially.
 Current entries cover Lang's Object, Number, String, Boolean, Char, and
 Dictionary, plus Application.AppBase and the Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
-Number arithmetic-related methods, AppBase initialization/startup/shutdown, and
-System printing/exit. Parameter/result subset types expose `api_type()` mappings.
+Number arithmetic-related methods, String length/case/string methods, AppBase
+initialization/startup/shutdown, and System printing/exit. Parameter/result
+subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Null, and nullable
-Dictionary; operator validation uses those semantic types. The bounded native call profile
-resolves Number's inherited `toString` and direct `format`/`abs` contracts.
+Dictionary; operator validation uses those semantic types. The bounded native
+call profile resolves Number's inherited `toString` and direct `format`/`abs`,
+and String's direct `length`/`toLower`/`toUpper`/`toString` contracts.
 Argument types must match their signatures; executable support remains a
-separate check. The Number result of `abs` uses the existing integer value
+separate check. Number results use the existing integer value
 category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
+
+String results use the existing String category and can receive further
+supported calls. User parameters and returns still have narrower contracts;
+declarations alone do not enable those types. Nullable conversions need result
+unions and validation of their consumers before executable support is added.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types

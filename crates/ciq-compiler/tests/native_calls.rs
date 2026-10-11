@@ -28,8 +28,79 @@ fn inherited_number_calls_preserve_complete_application_and_text_paths() {
     assert!(assembly.to_text().contains("getsv @__ciq_native_toString"));
     assert!(assembly.to_text().contains("getsv @__ciq_native_format"));
     assert!(assembly.to_text().contains("getsv @__ciq_native_abs"));
+    for member in ["length", "toLower", "toUpper"] {
+        assert!(
+            assembly
+                .to_text()
+                .contains(&format!("getsv @__ciq_native_{member}"))
+        );
+    }
     let function = compile("function show(n) { System.println(n.toString()); }").unwrap();
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+}
+
+#[test]
+fn string_methods_preserve_contracts_and_explicit_bindings() {
+    for source in [
+        "function f() { return \"é猫\".length(); }",
+        "function f() { return \"\".length() + 1; }",
+        "function f() { System.println(41.format(\"%d\").toUpper().length().toString()); }",
+        "function f() { var s = \"Hello\"; s = s.toLower(); System.println(s.toUpper()); }",
+        "function f() { System.println(\"text\".toString()); }",
+        "function f() { if (\"text\".length() > 0) { return 1; } else { return 0; } }",
+    ] {
+        let function = compile(source).unwrap();
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        function
+            .validate_api(
+                ciq_compiler::api::ApiContext::new(
+                    ciq_compiler::api::ApiLevel(1, 0, 0),
+                    ciq_compiler::api::ApiLevel(1, 0, 0),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    for (member, id) in [
+        ("length", 0x008000bb),
+        ("toLower", 0x008000be),
+        ("toUpper", 0x008000bf),
+        ("toString", 0x008000af),
+    ] {
+        let function = compile(&format!(
+            "function f() {{ System.println(\"Hi\".{member}()); }}"
+        ))
+        .unwrap();
+        let assembly = function.lower();
+        let symbols = ciq_assembly::Program::parse(&format!(
+            ".symbol native \"{member}\" id=0x{id:08x}\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol println \"println\" id=0x00800067"
+        )).unwrap();
+        let bindings = ciq_compiler::symbol_bindings(&assembly, &symbols).unwrap();
+        assert_eq!(bindings[&format!("__ciq_native_{member}")], id);
+        assert!(
+            assembly
+                .to_text()
+                .contains(&format!("getsv @__ciq_native_{member}\ninvokemz"))
+        );
+    }
+    // Result contracts must be rechecked after an IR edit, not inferred from
+    // the consumer's expected type.
+    let text = compile("function f() { return \"Hi\".length() + 1; }")
+        .unwrap()
+        .to_ir_text();
+    assert!(parse_ir(&text.replace("length", "toUpper")).is_err());
+    for source in [
+        "function f() { System.println(1.length()); }",
+        "function f() { System.println(true.toUpper()); }",
+        "function f() { System.println(\"Hi\".length(1)); }",
+        "function f() { System.println(\"Hi\".toLower(\"x\")); }",
+        "function f() { System.println(\"Hi\".toUpper(null)); }",
+        "function f() { return \"Hi\".toLower(); }",
+        "function f() { System.println(\"Hi\".toUpper() + 1); }",
+        "function f() { System.println(\"Hi\".find(\"i\")); }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
 }
 
 #[test]
@@ -51,7 +122,6 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         assert!(error.message.contains(message), "{error}");
     }
     for source in [
-        "function f() { var s = \"hello\"; System.println(s.toString()); }",
         "function f() { var n = null; System.println(n.toString()); }",
         "function f(n) { return n.toString(); }",
         "function f(n) { var x = n.toString() + 1; return x; }",
@@ -128,8 +198,6 @@ fn computed_receivers_and_format_arguments_preserve_types_and_precedence() {
     assert!(addition < member && member < argument && argument < invoke);
     for source in [
         "function f() { System.println((40 + 2).format(1)); }",
-        "function f() { System.println(\"text\".toString()); }",
-        "function f() { System.println(41.format(\"%d\").toString()); }",
         "function f() { System.println(41.format(\"%d\") + 1); }",
         "function f() { System.println(41.format); }",
     ] {
@@ -217,7 +285,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
         valid.replace("toString", "hashCode"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
-        valid.replace(".parameter %0 0", ".string %0 \"bad\""),
+        valid.replace(".parameter %0 0", ".boolean %0 true"),
     ] {
         assert!(parse_ir(&bad).is_err(), "{bad}");
     }

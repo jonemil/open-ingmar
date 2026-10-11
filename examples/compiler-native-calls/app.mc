@@ -14,4 +14,14 @@ function start() {
     System.println((negative - 40).abs().format("%03d"));
     System.println(0.abs());
     System.println(7.abs().abs());
+    var greeting = "Hello Monkey C!";
+    System.println(greeting.length());
+    System.println(greeting.toLower());
+    System.println(greeting.toUpper());
+    System.println(greeting.toString());
+    System.println(greeting);
+    System.println("".length());
+    System.println("é猫".length());
+    System.println(number.toString().toUpper().length().format("%03d"));
+    System.println(Numbers.textLength() + 1);
 }

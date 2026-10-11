@@ -505,22 +505,31 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `format(String)` | `Lang.Number` | String |
 | `abs()` | `Lang.Number` | Number |
 
-String results may initialize/replace a String local or be printed. The Number
-result of `abs` supports integer locals, arithmetic, comparisons, user-call
+String-valued expressions support these zero-argument methods, declared by
+`Lang.String`: `length()` returns Number; `toLower()`, `toUpper()`, and
+`toString()` return String. All methods in this profile are available since
+API 1.0.0. Runtime implementations determine character counts and case mapping;
+the compiler does not evaluate these calls at compile time.
+
+String results may initialize/replace a String local or be printed. Number
+results support integer locals, arithmetic, comparisons, user-call
 arguments, integer returns, and further Number calls. For example,
 `(0 - 41).abs().format("%03d")` produces `"041"` on the validated profile.
 Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, parameter, and Number-returning call receivers are accepted. Evaluate
+local, integer parameter, and supported native-result receivers are accepted.
+Evaluate
 the receiver first, then arguments left to right, then invoke the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.
-Only these value-producing native calls are supported. String/null/Dictionary
-receivers and discarded method statements remain unsupported. Postfix syntax
-can parse chained calls, but every receiver must have a supported Number type;
-chaining a method on a String conversion result is rejected. Unknown catalogue
+Only these value-producing native calls are supported. Null/Dictionary/Boolean
+receivers and discarded method statements remain unsupported. Chained calls
+must resolve each member against the preceding result's type, for example
+`41.toString().toUpper().length().format("%03d")`. String arguments and returns
+in user functions remain unsupported. Nullable String methods such as `find`
+and `toNumber` are outside this profile. Unknown catalogue
 members, wrong arity/types, and known members lacking lowering are distinct
 errors. Explicit [API context inputs][api-context] check introduction levels;
 general native dispatch remains unsupported.
