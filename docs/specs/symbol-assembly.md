@@ -102,8 +102,7 @@ serialized into SYMBOLS. Inline declarations resolve code IDs and do not
 implicitly add table entries. An include mechanism is not implemented.
 
 The `.symbols.txt` sidecar remains inspection-only. Raw and structured payloads
-are never both authoritative for the same section. Existing version 1/raw-symbol
-projects continue to work.
+are never both authoritative for the same section. Raw symbol payloads are accepted in every project version.
 
 Inspect or assemble the symbol payload independently:
 

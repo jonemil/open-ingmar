@@ -124,8 +124,8 @@ specifies the generated lifecycle, metadata, entry selection, and restrictions.
 Unit signatures include each function's validated integer/void result contract.
 Expression `.call` requires an integer callee; statement `.call-discard` permits
 either result and discards it. Both check integer arguments and exact arity.
-Inner functions may use [IR version 3][void-ir] without changing the unit
-envelope. See [void source rules][void-source].
+Both accepted unit envelopes permit inner functions using
+[void-return IR][void-ir]. See [void source rules][void-source].
 
 [void-ir]: compiler-ir-text.md#version-3-void-returns-and-statement-calls
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
@@ -137,7 +137,7 @@ instance receiver contracts, and self-call validation. `classes()` exposes
 ordered class declarations; `with_classes` validates them alongside ordinary
 functions. Existing `new` and `declarations()` retain their global/module roles.
 
-Unit version 2 adds `.class <name> Application.AppBase` containers ending at
+Unit version 2 permits `.class <name> Application.AppBase` containers ending at
 `.end-class`. Class bodies use receiver-bearing function IR version 4. Canonical
 text places global/module records before class containers, preserving order
 within each group. Lowering follows that same grouped order, with distinct class

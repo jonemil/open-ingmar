@@ -83,8 +83,7 @@ changed by inspection.
 Evidence: [serialization and relocation
 investigation][ref-serialization-and-relocation-investigati]. Complete supported
 DATA exports put class declarations alongside string declarations in the
-authoritative version 3 DATA source. Older `.bytes` class spans remain valid
-input. The class inspection sidecar is still not assembly input.
+authoritative DATA source. Opaque `.bytes` spans are also valid input. The class inspection sidecar is still not assembly input.
 
 ```text
 .class at=0x0000047b version=0x02 extends=none statics=none parent=none module=0x008002e6 app_flags=0x0000
@@ -117,7 +116,7 @@ are not automatically relocated.
 
 Complete DATA walks export classes and strings only after checking that
 re-encoding reproduces the original payload. Unsupported walks retain the
-previous referenced-string/opaque-span fallback or raw DATA. Standalone
+referenced-string/opaque-span fallback or raw DATA. Standalone
 `ciq-asm data` accepts this grammar; complete project import still enforces
 section lengths. Editing a method target or field is a program modification and
 must be re-signed and runtime-validated. Serialization does not establish that a

@@ -51,8 +51,8 @@ control-flow, and effect-schedule checks with existing calls. The hidden receive
 context is not an explicit parameter or a semantic value; positional parameters
 still map after slot zero.
 
-Function [IR version 4][ir] adds `receiver=instance`, `.call-self`, and
-`.call-self-discard`. Unit version 2 adds class containers:
+Function [IR version 4][ir] permits `receiver=instance`, `.call-self`, and
+`.call-self-discard`. Unit version 2 permits class containers:
 
 ```text
 ciq-unit 2
@@ -87,8 +87,7 @@ indexes follow this layout order; serialized spans remain provenance only.
 
 Complete PRG generation permits exactly one declared AppBase class and requires
 `--entry Class.method`. The selected method must have zero parameters. Integer
-results are printed by generated onStart; void results are discarded. Class
-symbol `1` replaces the previously anonymous application identity. Plain names
+results are printed by generated onStart; void results are discarded. Class symbol `1` identifies the application class. Plain names
 matching the class reuse that identity; other names retain deterministic
 allocation. Class methods are sorted DATA fields bound to their CODE labels,
 separate from globals/modules even when member names share one symbol ID.

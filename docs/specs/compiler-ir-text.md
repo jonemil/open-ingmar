@@ -1,4 +1,4 @@
-# Provisional compiler IR text, versions 1 through 4
+# Provisional compiler IR text
 
 This semantic IR format supports inspection and resumption of compiler stages.
 It is separate from Garmin MIR and VM assembly. Syntax/API can change as
@@ -19,9 +19,17 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be `1`, `2`, `3`, or `4`. Version 1 describes a single-block
-integer-return body; version 2 adds control flow and local assignment. Version 3
-adds void returns and statement calls; version 4 adds instance receivers. Exactly one
+Header version must be `1`, `2`, `3`, or `4`. These are currently accepted
+syntax profiles:
+
+| Minimum version | Permitted constructs |
+|---|---|
+| 1 | Single-block integer returns, locals, expressions, calls, and printing |
+| 2 | Explicit blocks, comparisons, branches, jumps, and local assignment |
+| 3 | Void returns and calls with discarded results |
+| 4 | Instance receivers and self calls |
+
+Each profile accepts the constructs of lower-numbered profiles. Exactly one
 `.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. The supported
@@ -68,8 +76,7 @@ directly; it does not print/reparse text. `Function::assembly()` is convenience
 lowering plus assembly printing. This gives a native source → IR → assembly
 model → CODE encoder path and text stop/resume points at both IR and assembly.
 
-The arithmetic directives extend provisional version 1; existing literal-only
-input remains accepted. For example:
+Arithmetic directives use expression value IDs. For example:
 
 ```text
 ciq-ir 1
@@ -114,9 +121,6 @@ ciq-ir 1
 .end
 ```
 
-These are additive version-1 extensions; literal/arithmetic input stays
-accepted.
-
 ## Module calls and operation order
 
 `.call %<result-id> <module> <member> [%<argument-id> ...]` defines the integer
@@ -131,8 +135,7 @@ Calls, prints, and writes are effectful. If a function contains any `.call`,
 left-to-right expression traversal and ordered
 initialization/assignment/print/branch/return sinks. The shared validator
 rejects incompatible schedules, including moving a call across an initialization
-or reversing call operands. Pure-only functions retain the earlier
-definition-order flexibility. This conservative policy keeps runtime/IR
+or reversing call operands. Pure-only functions permit flexible definition order. This conservative policy keeps runtime/IR
 operation order consistent until a general scheduler is implemented.
 
 ```text
@@ -286,7 +289,7 @@ the same DATA bindings. See
 
 ## Version 2 control flow
 
-Version 2 accepts all version-1 directives and additionally:
+Explicit control flow requires header version 2 or higher:
 
 ```text
 ciq-ir 2
@@ -374,11 +377,10 @@ left-to-right expression evaluation and ordered statement sinks, as for calls
 and prints. A read defined before a write and used after it is rejected, since
 dependency lowering would move the read past the write. Store a snapshot in a
 separate initialized local before the write when that behavior is needed. This
-rule applies to native typed construction and text resumption equally. Existing
-assignment-free pure functions retain their earlier scheduling flexibility.
+rule applies to native typed construction and text resumption equally. Assignment-free pure functions permit flexible definition order.
 
-The canonical printer emits version 2 for assignments even without blocks.
-Version-1 syntax remains unchanged. [The source subset][assignment-source]
+Assignments require header version 2 or higher, even without blocks.
+[The source subset][assignment-source]
 specifies name resolution and supported statement forms; source names/scopes
 are not part of this IR.
 
@@ -386,11 +388,10 @@ are not part of this IR.
 
 ## Cyclic control flow
 
-Version 2 also accepts backward branch/jump targets. The graph is checked for
+Backward branch/jump targets are permitted. The graph is checked for
 reachability by walking from the first block, including cycles. Having a
 predecessor alone does not make a block reachable. The final declared block must
 still end in `.return`; this does not prove every runtime path terminates.
-Neither a new directive nor a new header version is needed for loops.
 
 Definite-local sets are computed to a greatest fixed point. Start incoming and
 outgoing sets at the universe of declared local IDs. For every block, intersect
@@ -418,7 +419,7 @@ See [loop source rules](compiler-subset.md#while-loops) and
 
 ## Version 3 void returns and statement calls
 
-`ciq-ir 3` accepts all version-1/version-2 directives and adds:
+Header version 3 or higher permits:
 
 - `.return-void [span=<start>:<end>]`: terminate without a semantic result.
 - `.call-discard <module> <member> [%<argument> ...] [span=<start>:<end>]`:
@@ -448,12 +449,10 @@ reachability, definite-local, and empty-edge-stack rules apply. A single
 `.return-void` is a valid function body. Implicit text fallthrough is rejected;
 only source compilation inserts a final void return.
 
-Versions 1 and 2 reject these two new directives. Canonical printing emits
-version 3 when either operation is present, version 2 for existing control flow
-or assignment, otherwise version 1. Old function/unit documents remain valid;
-the `ciq-unit 1` envelope needs no change. Void values, class ownership,
-receiver/object/null/array operations, and arbitrary SDK calls are not
-introduced. See [source rules][void-source] and [runtime
+Versions 1 and 2 reject `.return-void` and `.call-discard`. These operations
+are permitted inside either accepted unit envelope version. Void values,
+general object/null/array operations, and arbitrary SDK calls are unsupported.
+See [source rules][void-source] and [runtime
 evidence][void-evidence].
 
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
@@ -461,8 +460,8 @@ evidence][void-evidence].
 
 ## Version 4 instance receivers
 
-`ciq-ir 4` accepts all earlier directives. The optional declaration field
-`receiver=instance` marks an instance method; ordinary bodies omit it. It may
+Header version 4 permits the optional declaration field `receiver=instance`,
+which marks an instance method; ordinary bodies omit it. It may
 appear before or after `parameters=<count>`; duplicate or unknown fields are
 rejected. Receiver metadata requires version 4, even for a method without self
 calls. The receiver is the hidden context, not an explicit parameter/value ID.
@@ -492,9 +491,9 @@ ciq-ir 4
 ```
 
 Canonical method output always uses version 4 and keeps `receiver=instance`.
-Ordinary functions keep their earlier canonical versions. Native base-class
+Ordinary functions use the canonical version selected by their operations. Native base-class
 identity and enclosing class name belong to [unit class containers][class-ir],
-not function IR; neither carries a VM import index. No general receiver values,
-object construction, fields, native self calls, or source inheritance are added.
+not function IR; neither carries a VM import index. General receiver values, object construction, fields, native self calls, and
+source inheritance are unsupported.
 
 [class-ir]: compiler-classes.md#native-and-textual-ir

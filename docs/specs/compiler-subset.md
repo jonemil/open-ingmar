@@ -130,8 +130,8 @@ results][ref-controlled-sdk-output-and-simulator-resu] confirm two/three-local
 bodies; the 255-local limit is checked structurally in tests, not established as
 a device runtime limit.
 
-Provisional version-1 text gains `.local $<decimal-u32-id> %<value-id>` and
-`.read %<result-id> $<local-id>`, each with the existing optional span. Semantic
+IR text represents locals with `.local $<decimal-u32-id> %<value-id>` and
+`.read %<result-id> $<local-id>`, each with an optional span. Semantic
 IDs need not be contiguous; their numeric values never select physical slots.
 
 ## User module calls
@@ -277,7 +277,7 @@ terminators. The 255 parameter/local slots count all declarations across the
 function, including mutually exclusive arms; slots are not reused. Local
 initializers, prints, comparison operands, and module call arguments retain
 source evaluation order within the selected path. Common initializers run once
-before the branch. This uses existing version-2 IR without new directives.
+before the branch. These forms use the control-flow IR directives.
 
 See [nested-conditions.mc](../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator evidence][nested]. Full language scoping,
@@ -334,7 +334,7 @@ limit. "Bounded subset" refers to supported syntax and compilation limits.
 Lowering uses explicit test/body/exit blocks and a symbolic backward jump from
 continuing body paths. Conditions are evaluated in the test block each visit;
 body effects stay in the body. Every edge has an empty evaluation stack. These
-use the existing version-2 branch/jump directives; cyclic initialization checks
+use branch/jump directives; cyclic initialization checks
 are specified in [IR text](compiler-ir-text.md#cyclic-control-flow).
 
 See [loops.mc](../../examples/compiler-probe/loops.mc) and
@@ -356,7 +356,7 @@ fallthrough return requirement. Mixed returning/breaking/continuing arms omit
 a join when all paths terminate, but the loop's false-condition exit remains.
 Skipped declarations stay scoped to their body/arm; initialized enclosing
 locals retain their slots and fixed types. These statements emit existing
-version-2 `.jump` operations; no new IR directives or VM opcodes are needed.
+`.jump` operations.
 
 See [loop-control.mc](../../examples/compiler-probe/loop-control.mc) and
 [simulator evidence](../investigations/compiler-loop-control.md).

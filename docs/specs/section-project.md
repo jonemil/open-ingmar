@@ -1,15 +1,22 @@
-# Complete PRG section project, versions 1–5
+# Complete PRG section project
 
 `ciq-dis all <input.prg> <directory>` exports the complete section stream. The
 directory must not already exist. `ciq-asm project <directory> <output.prg>`
 reconstructs it without the original PRG. The output PRG must not already exist.
 
 `sections.ciq` is a UTF-8 manifest. The first meaningful line is
-`ciq-project 1` through `ciq-project 5`. Version 2
-enables structured symbol input; version 3 adds DATA strings and opaque spans;
-version 4 adds structured DEBUG strings and LINE_NUMBERS; version 5 adds
-structured EXCEPTIONS. Older projects remain
-supported. Each subsequent meaningful line has five whitespace-separated fields:
+`ciq-project <version>`, with versions 1–5 accepted. Encoding availability is:
+
+| Minimum version | Encodings |
+|---|---|
+| 1 | `raw`, `assembly` |
+| 2 | `symbols` |
+| 3 | `data` |
+| 4 | `debug`, `lines` |
+| 5 | `exceptions` |
+
+Each version accepts the encodings of lower-numbered versions. Each subsequent
+meaningful line has five whitespace-separated fields:
 
 ```text
 section 0xd000d00d 33 raw 000-header_versioned-d000d00d.bin
