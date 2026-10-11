@@ -104,6 +104,7 @@ pub enum ReturnType {
     String,
     NullableString,
     Boolean,
+    Char,
     Void,
 }
 
@@ -115,6 +116,7 @@ pub enum ParameterType {
     String,
     NullableString,
     Boolean,
+    Char,
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
 }
@@ -128,6 +130,7 @@ impl ParameterType {
             Self::Integer => ValueType::Integer.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
+            Self::Char => ValueType::Char.api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -142,6 +145,7 @@ impl ReturnType {
             Self::Integer => ValueType::Integer.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
+            Self::Char => ValueType::Char.api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -154,6 +158,7 @@ enum ValueType {
     String,
     NullableString,
     Boolean,
+    Char,
     Null,
     NullableDictionary,
 }
@@ -183,6 +188,7 @@ impl ValueType {
                 api::Type::Null,
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
+            Self::Char => api::Type::named("Toybox.Lang.Char"),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Dictionary"),
@@ -199,6 +205,7 @@ impl ValueType {
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
+                "Toybox.Lang.Char" => Some(Self::Char),
                 _ => None,
             },
             api::Type::Null => Some(Self::Null),
@@ -551,6 +558,16 @@ impl Function {
                     })?;
             }
         }
+        if let Some(context) = context {
+            for ty in parameter_types.iter().map(|ty| ty.api_type()) {
+                context
+                    .check_type(api::core(), &ty)
+                    .map_err(|message| IrError {
+                        operation: None,
+                        message,
+                    })?;
+            }
+        }
         let parameter_count = parameter_types.len();
         if parameter_count > MAX_PARAMETERS {
             return Err(IrError {
@@ -691,10 +708,13 @@ impl Function {
                     }
                     if !matches!(
                         type_of(value),
-                        ValueType::Integer | ValueType::String | ValueType::Boolean
+                        ValueType::Integer
+                            | ValueType::String
+                            | ValueType::Boolean
+                            | ValueType::Char
                     ) {
                         return Err(fail(
-                            "println currently accepts only integers, strings, or Booleans",
+                            "println currently accepts only Number, String, Boolean, or Char",
                         ));
                     }
                     (None, vec![value])
@@ -899,6 +919,7 @@ impl Function {
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
+                            ValueType::Char => ReturnType::Char,
                             _ => {
                                 return Err(fail(
                                     "nullable returns require an explicit result contract",
@@ -919,6 +940,13 @@ impl Function {
                 }
             };
             if let Some(result) = result {
+                if let Some(context) = context {
+                    if let Some(ty) = types.get(&result) {
+                        context
+                            .check_type(api::core(), &ty.api_type())
+                            .map_err(|message| fail(&message))?;
+                    }
+                }
                 types.entry(result).or_insert(ValueType::Integer);
             }
             for operand in operands {
@@ -938,6 +966,14 @@ impl Function {
                     return Err(fail("duplicate value definition"));
                 }
             }
+        }
+        if let (Some(context), Some(result)) = (context, declared_result) {
+            context
+                .check_type(api::core(), &result.api_type())
+                .map_err(|message| IrError {
+                    operation: None,
+                    message,
+                })?;
         }
         if !matches!(
             operations.last().unwrap().operation,
@@ -1100,6 +1136,7 @@ impl Function {
                         ParameterType::Integer => "integer",
                         ParameterType::String => "string",
                         ParameterType::Boolean => "boolean",
+                        ParameterType::Char => "char",
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
                     .collect::<Vec<_>>()
@@ -1322,6 +1359,7 @@ fn validate_call_arguments(
                 ValueType::Integer
                     | ValueType::String
                     | ValueType::Boolean
+                    | ValueType::Char
                     | ValueType::Null
                     | ValueType::NullableInteger
                     | ValueType::NullableString
@@ -1343,6 +1381,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Integer => Ok(ValueType::Integer),
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
+        ReturnType::Char => Ok(ValueType::Char),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
 }
@@ -1354,6 +1393,7 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::Integer => "",
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
+        ReturnType::Char => " result=char",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
 }

@@ -84,14 +84,19 @@ pub(crate) fn value_call(
             "Toybox.Lang.Object",
             "weak"
         ) | (
-            "Toybox.Lang.Number" | "Toybox.Lang.Boolean",
+            "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
             | (
                 "Toybox.Lang.Number",
                 "Toybox.Lang.Number",
-                "format" | "abs" | "toNumber" | "compareTo"
+                "format" | "abs" | "toNumber" | "toChar" | "compareTo"
+            )
+            | (
+                "Toybox.Lang.Char",
+                "Toybox.Lang.Char",
+                "toLower" | "toUpper" | "toNumber" | "toString" | "compareTo"
             )
             | (
                 "Toybox.Lang.String",
@@ -112,12 +117,14 @@ pub(crate) fn value_call(
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
-    if matches!(class.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean")
-        && member == "compareTo"
-        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean"))
+    if matches!(
+        class.as_str(),
+        "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+    ) && member == "compareTo"
+        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"))
     {
         return Err(format!(
-            "{class}.compareTo lowering currently requires Number or Boolean"
+            "{class}.compareTo lowering currently requires Number, Boolean, or Char"
         ));
     }
     if class == "Toybox.Lang.String"
@@ -139,7 +146,10 @@ fn scalar_or_null(ty: &api::Type) -> bool {
         api::Type::Null => true,
         api::Type::Named(name) => matches!(
             name.as_str(),
-            "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean"
+            "Toybox.Lang.Number"
+                | "Toybox.Lang.String"
+                | "Toybox.Lang.Boolean"
+                | "Toybox.Lang.Char"
         ),
         api::Type::Union(types) => types.iter().all(scalar_or_null),
         _ => false,

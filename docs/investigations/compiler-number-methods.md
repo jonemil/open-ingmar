@@ -14,9 +14,9 @@ implementation prerequisites are our interpretation of the compiler's profile.
 |---|---|---|---|
 | `abs()` | Number | 1.0.0 | Supported |
 | `format(String)` | String | 1.0.0 | Supported; runtime validates format content |
-| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean arguments |
+| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean/Char arguments |
 | `toNumber()` | Number | 1.0.0 | Supported |
-| `toChar()` | Char | 1.3.0 | Needs Char values and consumers |
+| `toChar()` | Char | 1.3.0 | Supported; [Char group probe][char-results] |
 | `toDouble()` | Double | 1.0.0 | Needs Double values and contracts |
 | `toFloat()` | Float | 1.0.0 | Needs Float values and contracts |
 | `toLong()` | Long | 1.0.0 | Needs Long values and contracts |
@@ -26,8 +26,9 @@ implementation prerequisites are our interpretation of the compiler's profile.
 | inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbol and callable Method values |
 | inherited `weak()` | WeakReference; effective Number | 1.2.0 | Supported; [separate probe][weak-results] |
 
-**Documented:** comparison also admits other numeric types and Char. These
-alternatives need executable value support. Its result promises a sign, not
+**Documented:** comparison also admits other numeric types. These alternatives
+need executable value support. Char comparisons have [separate evidence][char-results].
+Its result promises a sign, not
 an exact magnitude. The [immutable weak probe][weak-results] establishes the
 receiver-specific result and SDK checker discrepancy. Deferred conversions,
 callables, and ordinary object weak references were not tested here.
@@ -65,7 +66,7 @@ explicit bindings, supported alternatives, rejected consumers and IR edits,
 and source/IR diagnostics around the 5.0.0 comparison threshold. Known
 inheritance permits Object arguments; it does not make arbitrary types or
 undeclared classes acceptable. Native comparison has its additional bounded
-Number/Boolean argument check. General operator equality remains unchanged.
+Number/Boolean/Char argument check. General operator equality remains unchanged.
 Overflow, wide numeric values, and other firmware/device profiles remain
 unverified.
 
@@ -74,3 +75,5 @@ unverified.
 [example]: ../../examples/compiler-number-methods/README.md
 
 [weak-results]: compiler-immutable-weak.md
+
+[char-results]: compiler-char-methods.md

@@ -151,7 +151,7 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `string`, `boolean`, `nullable-integer`, or
+The result type is `integer`, `string`, `boolean`, `char`, `nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
 Void is invalid in a value call. Names use ASCII identifier rules and remain
@@ -277,13 +277,13 @@ without either option.
 ## String values and print statements
 
 `.string %<result-id> "value"` defines a string value; `.println %<value-id>`
-consumes an integer, String, or Boolean without defining a result. Both accept
+consumes a Number, String, Boolean, or Char without defining a result. Both accept
 optional spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
 locals, function parameters, user calls, and returns. Arithmetic requires
 integers. A function's value returns must all have the same supported type;
-Number, String, and Boolean results are inferred from uniform return values,
+Number, String, Boolean, and Char results are inferred from uniform return values,
 unless a nullable result is declared as specified below.
 Void returns have no value. All existing use/dependency/
 order rules apply.
@@ -509,7 +509,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:...`. Ordinary signatures also accept
+`parameter-types=integer:string:boolean:char:...`. Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
@@ -597,12 +597,12 @@ Optional source spans use the ordinary syntax.
 
 Validation accepts a Number receiver with `toString`, `abs`, `toNumber`, or
 `hashCode` taking no arguments, `format` taking one String argument,
-`compareTo` taking Number/Boolean, or `equals` taking a supported scalar,
+`compareTo` taking Number/Boolean/Char, or `equals` taking a supported scalar,
 nullable scalar, or Null. Number comparison requires API 5.0.0 when a context
 is supplied. Its broad Object declaration does not enable other argument
 profiles. Equality returns Boolean; hash and conversion return Number.
 Boolean receivers accept zero-argument `toString` and `hashCode`, `compareTo`
-with one Number/Boolean argument, and `equals` with a supported scalar,
+with one Number/Boolean/Char argument, and `equals` with a supported scalar,
 nullable scalar, or Null. Their results are String, Number, Number, and Boolean
 respectively. Boolean comparison requires API 5.0.0 with explicit context;
 the other three methods date from 1.0.0. The same shared argument/result
@@ -628,6 +628,20 @@ Unsupported members, receivers, argument counts/types, and result contracts are
 rejected before lowering. String `toNumberWithBase` requires API 1.4.1 and
 String `compareTo` requires 5.0.0 with explicit context. Format content, numeric
 base ranges, and conversion content remain runtime obligations.
+
+Number's zero-argument `toChar` defines Char. Char receivers accept zero-argument
+`toLower`/`toUpper` returning Char, `toNumber`/`hashCode` returning Number, and
+`toString` returning String. `compareTo` accepts Number/Boolean/Char and returns
+Number; inherited `equals` accepts Number/String/Boolean/Char, Null, or nullable
+Number/String and returns Boolean. Other equality profiles also accept Char.
+Char has a distinct value category retained by locals, user calls, and returns.
+Parameter text uses `char`; value-producing user calls use `result=char`.
+Function result text is inferred as for other scalars, so `.function result=char`
+is not accepted. Char class/signature/value use and conversion require API 1.3.0
+with context; comparison additionally requires 5.0.0. Source and saved IR share
+these checks. Char literals, nullable Char, and Char operators are unsupported.
+No new constant directive or VM allocation is introduced. See the
+[Char evidence](../investigations/compiler-char-methods.md).
 
 Zero-argument `weak` accepts Number, String, or Boolean and defines that exact
 receiver type under the catalogue's specialized result contract. It requires

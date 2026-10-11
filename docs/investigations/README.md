@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Char methods](compiler-char-methods.md): conversion boundaries, typed values,
+  and grouped simulator comparison.
 - [Immutable weak results](compiler-immutable-weak.md): receiver-specific
   contracts, SDK checker discrepancy, and runtime comparison.
 - [Boolean methods](compiler-boolean-methods.md): inherited contracts, mixed

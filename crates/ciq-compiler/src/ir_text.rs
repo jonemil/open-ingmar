@@ -99,6 +99,7 @@ pub(crate) fn parse_ir_context(
                         "integer" => Ok(crate::ParameterType::Integer),
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
+                        "char" => Ok(crate::ParameterType::Char),
                         "nullable-dictionary" => Ok(crate::ParameterType::NullableDictionary),
                         _ => Err(fail(*name_at, "unsupported parameter type")),
                     })
@@ -456,6 +457,7 @@ fn call_contract(
             "integer" => crate::ReturnType::Integer,
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
+            "char" => crate::ReturnType::Char,
             _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
         };
         Ok((result, at + 1))

@@ -7,14 +7,16 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Review Char next, including
-   Number's `toChar` conversion, using a small runnable specimen to establish
-   value encoding, result consumers, and conversion limits. Keep array-returning
-   conversions deferred until array values are supported. Follow the
+1. **Extend core Lang contracts and value types.** Add Char literals next using
+   isolated specimens to establish their encoding and escape syntax. Keep Char
+   operators separate from native comparison; probe equality, ordering, and
+   mixed arithmetic before widening operator rules. Follow the
    [class-focused strategy](#native-lang-strategy) for
    subsequent groups; revisit deferred [Number][number-methods],
    [String][string-methods], and [Boolean][boolean-methods] methods as their
    prerequisites become available.
+   Add array values when String's `toCharArray` or source `getInitialView` needs
+   them, rather than treating an array-returning declaration as executable support.
    Keep ordinary object weak references separate from the verified
    [immutable-value specialization][weak-results]; probe lifetime and nullable
    dereference contracts when object ownership requires them.

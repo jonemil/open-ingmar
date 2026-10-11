@@ -9,7 +9,7 @@ See [runtime evidence][evidence] and [application design][design].
 ## Input and lifecycle
 
 The caller supplies sixteen application-ID bytes and a global entry function
-name. The entry must have zero parameters and a Number, String, Boolean, or
+name. The entry must have zero parameters and a Number, String, Boolean, Char, or
 Void result under the existing function rules. CLI default: `main`. The ID identifies the
 application; it is independent of the signing key.
 Nullable entries are rejected because the generated wrapper prints valued
@@ -69,6 +69,7 @@ Fixed native symbol IDs in this profile:
 | weak | `0x00800418` |
 | compareTo | `0x00800e50` |
 | toNumber | `0x008000a7` |
+| toChar | `0x008004c6` |
 | toNumberWithBase | `0x008004c3` |
 | toString | `0x008000af` |
 | length | `0x008000bb` |

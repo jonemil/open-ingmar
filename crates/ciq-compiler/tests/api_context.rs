@@ -30,13 +30,13 @@ fn context_requires_explicit_consistent_levels() {
 }
 
 #[test]
-fn availability_errors_precede_unsupported_lowering_in_source_and_ir() {
-    let source = "function show(n) { System.println(n.toChar()); }";
-    let text = "ciq-ir\n.function show parameters=1\n.parameter %0 0\n.call-native %1 %0 toChar\n.println %1\n.return-void\n.end\n";
+fn availability_errors_precede_argument_validation_in_source_and_ir() {
+    let source = "function show(n) { System.println(n.toChar(1)); }";
+    let text = "ciq-ir\n.function show parameters=1\n.parameter %0 0\n.integer %1 1\n.call-native %2 %0 toChar %1\n.println %2\n.return-void\n.end\n";
     for (target, minimum, expected) in [
         ("1.2.9", "1.0.0", "unavailable on target API 1.2.9"),
         ("1.3.0", "1.0.0", "application minimum API is 1.0.0"),
-        ("1.3.0", "1.3.0", "no supported lowering"),
+        ("1.3.0", "1.3.0", "argument count"),
     ] {
         let context = context(target, minimum);
         let source_error = compile_with_api(source, context).unwrap_err();
@@ -44,13 +44,13 @@ fn availability_errors_precede_unsupported_lowering_in_source_and_ir() {
         assert!(source_error.message.contains(expected), "{source_error}");
         assert_eq!(source_error.message, ir_error.message);
         assert!(source_error.offset > 0);
-        assert_eq!(ir_error.line, 4);
+        assert_eq!(ir_error.line, 5);
     }
     assert!(
         compile(source)
             .unwrap_err()
             .message
-            .contains("no supported lowering")
+            .contains("argument count")
     );
     let unknown = compile_with_api(
         "function show(n) { System.println(n.missing()); }",

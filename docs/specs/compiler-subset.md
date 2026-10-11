@@ -9,7 +9,7 @@ Restricted frontend. Design:
 [parameters/arguments](../investigations/compiler-arguments.md), and
 [strings/printing](../investigations/compiler-strings.md).
 
-Integer/string/Boolean/null restrictions describe the current implementation.
+Number/String/Boolean/Char/null restrictions describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
 The [core type/API model](../design/api-declarations.md) connects values to
 `Lang` identities for operator validation and the bounded native calls below.
@@ -28,7 +28,8 @@ function = "function" identifier "(" parameter-list? ")" ("as" result-type)? blo
 block = "{" statement* "}"
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
-value-type = "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean"
+value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
+           | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -159,17 +160,19 @@ IDs need not be contiguous; their numeric values never select physical slots.
 ## Function type contracts
 
 Ordinary source parameters default to Number. `as` annotations accept the fully
-qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`, and
-`Toybox.Lang.Boolean`; result annotations also accept `Void`. Short names,
-module aliases in annotations, and general unions are outside this subset.
+qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`,
+`Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
+`Void`. Short names, module aliases in annotations, and general unions are
+outside this subset.
 Number and String annotations additionally accept the exact suffix `or Null`
-for both parameters and results. Nullable Boolean, reversed alternatives,
+for both parameters and results. Nullable Boolean/Char, reversed alternatives,
 parenthesized unions, and other type syntax remain unsupported. These
 declarations require no `using` statement.
 
 Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. String, Boolean, and nullable source results
-require explicit annotations. Each return must be assignable to its contract:
+value returns have a Void contract. String, Boolean, Char, and nullable source
+results require explicit annotations. Each return must be assignable to its
+contract:
 a nullable result accepts its scalar type, Null, or the same union. Unrelated
 types, value/void mixtures, and missing returns are errors. Typed IR constructors
 infer uniform scalar/Void returns unless an explicit signature is supplied.
@@ -254,7 +257,7 @@ escape syntax.
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
-initializations and accept one Number, String, or Boolean value. String types
+initializations and accept one Number, String, Boolean, or Char value. String types
 propagate through locals and annotated function parameters/results; incompatible
 uses are rejected. Arithmetic remains Number-only. Concatenation, arbitrary
 SDK calls, and using
@@ -485,7 +488,8 @@ A void function may contain only its return, so the operation bound is now
 sequence and discard the VM result with `popv`.
 
 The [console application profile](console-application.md) prints a value entry's
-Number, String, or Boolean result and discards a Void entry's result. The [example][void-example] and
+Number, String, Boolean, or Char result and discards a Void entry's result.
+The [example][void-example] and
 [simulator evidence][void-evidence] verify both void return forms and caller
 continuation after discarded calls. Source class/receiver syntax follows the
 [restricted class profile](compiler-classes.md).
@@ -530,14 +534,15 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `format(String)` | `Lang.Number` | String |
 | `abs()` | `Lang.Number` | Number |
 | `toNumber()` | `Lang.Number` | Number |
-| `compareTo(Number or Boolean)` | `Lang.Number` | Number |
+| `compareTo(Number, Boolean, or Char)` | `Lang.Number` | Number |
 | `equals(scalar or nullable scalar)` | `Lang.Object` | Boolean |
 | `hashCode()` | `Lang.Object` | Number |
 
 Number `compareTo` requires API 5.0.0; the other listed Number methods require
 1.0.0. Its declaration takes Object, but current lowering admits Number or
-Boolean only. Unchecked nullable comparison arguments are rejected. `equals`
-accepts Number, String, Boolean, Null, or nullable Number/String; it returns
+Boolean or Char only. Unchecked nullable comparison arguments are rejected.
+`equals`
+accepts Number, String, Boolean, Char, Null, or nullable Number/String; it returns
 Boolean. Dictionary arguments remain outside this lowering profile.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
@@ -564,10 +569,23 @@ runtime without compiler validation. See the
 Boolean receivers support `toString()` returning String, `hashCode()` returning
 Number, and `equals` returning Boolean with the same scalar/nullable argument
 profile as Number/String equality. These inherited methods date from API 1.0.0.
-Boolean `compareTo` returns Number and accepts Number/Boolean arguments, since
-API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
+Boolean `compareTo` returns Number and accepts Number/Boolean/Char arguments
+since API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
 does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
+
+Char values originate from Number's zero-argument `toChar()` and are distinct
+from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
+returning Number, and `toString()` returning String. Char's direct `compareTo`
+returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
+`equals` accepts the scalar/nullable scalar profile above and returns Boolean;
+`hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
+including when it appears only in a function signature. Typed arguments,
+returns, local initialization/assignment, printing, and chained calls retain
+the exact Char type. Char literals, nullable Char, and Char operators are
+unsupported. Conversion ranges and case/String behavior are runtime obligations;
+the compiler adds no Unicode scalar-range validation. See the
+[Char group evidence](../investigations/compiler-char-methods.md).
 
 Number, String, and Boolean receivers also support zero-argument `weak()` since
 API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
@@ -584,8 +602,8 @@ Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, Number/String/Boolean parameter, and supported call-result receivers are
-accepted. Evaluate the receiver first, then arguments left to right, then invoke
+local, Number/String/Boolean/Char parameter, and supported call-result receivers
+are accepted. Evaluate the receiver first, then arguments left to right, then invoke
 the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.

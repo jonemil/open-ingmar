@@ -12,7 +12,7 @@ bounded compiler profile.
 
 | Method | Result | Since | Executable scope or prerequisite |
 |---|---|---|---|
-| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean arguments |
+| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean/Char arguments |
 | inherited `toString()` | String | 1.0.0 | Supported |
 | inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
 | inherited `hashCode()` | Number | 1.0.0 | Supported |
@@ -20,8 +20,9 @@ bounded compiler profile.
 | inherited `weak()` | WeakReference; effective Boolean | 1.2.0 | Supported; [separate probe][weak-results] |
 
 **Documented:** comparison treats false as zero and true as one, and admits
-Numeric, Boolean, or Char arguments. Other numeric types and Char require
-executable value support. Results promise a sign, not an exact magnitude.
+Numeric, Boolean, or Char arguments. Other numeric types require executable value
+support. Char comparisons have [separate evidence][char-results]. Results promise
+a sign, not an exact magnitude.
 The [immutable weak probe][weak-results] establishes the receiver-specific result
 and SDK checker discrepancy. Callable values and ordinary object weak references
 were not tested here. Nullable Boolean remains outside the source/IR profile.
@@ -72,3 +73,5 @@ expand operator equality, ordering, or arithmetic.
 [example]: ../../examples/compiler-boolean-methods/README.md
 
 [weak-results]: compiler-immutable-weak.md
+
+[char-results]: compiler-char-methods.md

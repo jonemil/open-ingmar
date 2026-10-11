@@ -51,6 +51,7 @@ mod tests {
             ValueType::String,
             ValueType::NullableString,
             ValueType::Boolean,
+            ValueType::Char,
             ValueType::Null,
             ValueType::NullableDictionary,
         ];
@@ -113,6 +114,7 @@ mod tests {
             ValueType::String,
             ValueType::NullableString,
             ValueType::Boolean,
+            ValueType::Char,
             ValueType::Null,
             ValueType::NullableDictionary,
         ] {

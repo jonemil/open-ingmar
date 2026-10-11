@@ -32,6 +32,7 @@ const LENGTH: u32 = 0x008000bb;
 const SUBSTRING: u32 = 0x008000bd;
 const FIND: u32 = 0x008000bc;
 const TO_NUMBER: u32 = 0x008000a7;
+const TO_CHAR: u32 = 0x008004c6;
 const TO_NUMBER_WITH_BASE: u32 = 0x008004c3;
 const TO_LOWER: u32 = 0x008000be;
 const TO_UPPER: u32 = 0x008000bf;
@@ -300,6 +301,7 @@ pub fn build_console_application(
         ("substring".into(), SUBSTRING),
         ("find".into(), FIND),
         ("toNumber".into(), TO_NUMBER),
+        ("toChar".into(), TO_CHAR),
         ("toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
         ("toLower".into(), TO_LOWER),
         ("toUpper".into(), TO_UPPER),
@@ -358,6 +360,7 @@ pub fn build_console_application(
         ("__ciq_native_substring".into(), SUBSTRING),
         ("__ciq_native_find".into(), FIND),
         ("__ciq_native_toNumber".into(), TO_NUMBER),
+        ("__ciq_native_toChar".into(), TO_CHAR),
         ("__ciq_native_toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
         ("__ciq_native_toLower".into(), TO_LOWER),
         ("__ciq_native_toUpper".into(), TO_UPPER),

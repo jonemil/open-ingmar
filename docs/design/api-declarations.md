@@ -19,7 +19,7 @@ Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, AppBase initialization/startup/shutdown, and System
 printing/exit. Parameter/result subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Null, nullable Number,
+Internal value categories map to Number, String, Boolean, Char, Null, nullable Number,
 nullable String, and nullable Dictionary; operator validation uses those
 semantic types. The
 bounded native call profile resolves Number's inherited `toString`, `equals`,
@@ -27,20 +27,22 @@ and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
 and String's length, case, string, search, slicing, numeric conversion, equality,
 hash, and comparison contracts. Boolean uses direct comparison and inherited
 Object string conversion, equality, and hash contracts.
+Char supplies case/number/string conversion and comparison, with inherited
+Object equality/hash contracts; Number supplies `toChar`.
 Inherited `weak` retains Number, String, or Boolean for those exact receivers.
 Argument types must satisfy their signatures or a declared union; every
 alternative of an actual union must be accepted. This does not
 permit implicit conversions or unknown classes. Named arguments may widen
 through catalogue-declared superclass paths. Executable method profiles can
-restrict a broad declaration further: Number/Boolean comparison admits
-Number/Boolean, String comparison admits String, and all three equality
+restrict a broad declaration further: Number/Boolean/Char comparison admits
+Number/Boolean/Char, String comparison admits String, and all four equality
 profiles admit supported scalars and nullable scalars. Executable support remains
 a separate check. Number results use the existing integer
 value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User functions accept Number, String, Boolean, and nullable
+supported calls. User functions accept Number, String, Boolean, Char, and nullable
 Number/String parameters and results; API declarations alone do not enable
 other types. String `find`, `toNumber`, and `toNumberWithBase` retain
 Number-or-Null result contracts; `substring` retains
@@ -112,16 +114,21 @@ entry points omit API-level checks and retain their bounded lowering checks.
 Saved IR builds must resupply the context. It neither changes serialized IR
 nor configures PRG deployment metadata.
 
-Current checks cover supported Number/String/Boolean value calls, System
+Current checks cover supported Number/String/Boolean/Char value calls, System
 printing/exit, AppBase bases, initialization, and known callbacks. Method
 introductions in the executable profile are API 1.0.0 except
-Number/String/Boolean.compareTo at 5.0.0, Object.weak at 1.2.0, and
-String.toNumberWithBase at 1.4.1;
+Number/String/Boolean/Char.compareTo at 5.0.0, Object.weak at 1.2.0,
+String.toNumberWithBase at 1.4.1, and Number.toChar/Char conversions at 1.3.0;
 substring's nullable index form additionally requires 3.3.2. Catalogue knowledge
 does not enable methods whose executable types or profiles are unsupported.
 Context levels are caller assertions: no device database, permission, app-type,
 execution-scope, or VM-capability validation is implied. The console PRG generator
 remains the SDK 9.2.0 / fr265-tested profile.
+
+Signature and value types also receive introduction checks. Char's API 1.3.0
+class requirement applies to parameters/results and saved IR, even without a
+native member call. It uses ordinary value storage and dispatch; no Char literal
+or operator encoding is implied. See the [Char evidence][char-evidence].
 
 Native module statements have canonical module/member identities and no result
 value. Catalogue lookup validates their contract and optional API context before
@@ -177,3 +184,5 @@ silently expand those contracts.
 [evidence]: ../investigations/official-garmin-documentation.md#core-lang-types-and-api-declarations
 
 [weak-evidence]: ../investigations/compiler-immutable-weak.md
+
+[char-evidence]: ../investigations/compiler-char-methods.md

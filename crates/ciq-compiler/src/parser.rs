@@ -798,6 +798,7 @@ impl Parser<'_> {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
+                        "Toybox.Lang.Char" => crate::ParameterType::Char,
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
                     };
                     Some(if self.peek()? == Kind::Word("or") {
@@ -828,6 +829,7 @@ impl Parser<'_> {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
+                "Toybox.Lang.Char" => crate::ReturnType::Char,
                 "Void" => crate::ReturnType::Void,
                 _ => return Err(self.error(at, "unsupported result type annotation")),
             };

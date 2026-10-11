@@ -95,6 +95,18 @@ impl ApiContext {
         self.require(path, catalogue.class_level(class))
     }
 
+    /// Check every named alternative in a value or signature type. Null and Void
+    /// have no class introduction level; unions require all alternatives.
+    pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
+        match ty {
+            Type::Named(name) => self.check_class(catalogue, name),
+            Type::Union(types) => types
+                .iter()
+                .try_for_each(|ty| self.check_type(catalogue, ty)),
+            Type::Null | Type::Void => Ok(()),
+        }
+    }
+
     /// Resolve an inherited method and check its unguarded introduction level.
     /// Unknown declarations and unavailable declarations produce different errors.
     pub fn method<'a>(
@@ -325,6 +337,22 @@ fn build_core() -> Catalogue {
         .into_iter()
         .map(|name| (name.into(), Type::named(name)))
         .collect();
+    let char_type = "Toybox.Lang.Char";
+    let char_initial = ApiLevel(1, 3, 0);
+    let char_class = classes.get_mut(char_type).unwrap();
+    char_class.since = char_initial;
+    char_class.methods = vec![
+        method("toLower", vec![], Type::named(char_type), char_initial),
+        method("toUpper", vec![], Type::named(char_type), char_initial),
+        method("toNumber", vec![], Type::named(number), char_initial),
+        method("toString", vec![], Type::named(string), char_initial),
+        method(
+            "compareTo",
+            vec![Type::named(object)],
+            Type::named(number),
+            ApiLevel(5, 0, 0),
+        ),
+    ];
     classes.get_mut(number).unwrap().methods = vec![
         method("abs", vec![], Type::named(number), initial),
         method("toNumber", vec![], Type::named(number), initial),

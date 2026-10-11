@@ -88,6 +88,9 @@ comparison, equality, hashing, and string conversion.
 The [immutable weak example](examples/compiler-immutable-weak/README.md) checks
 receiver-specific results on Number, String, and Boolean.
 
+The [Char method example](examples/compiler-char-methods/README.md) groups
+character conversion, comparison, equality, and hashing.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 
