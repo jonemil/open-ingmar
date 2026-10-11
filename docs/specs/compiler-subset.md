@@ -546,10 +546,20 @@ and hash consistency are the contracts, not particular magnitudes or hashes.
 See the [Number group evidence](../investigations/compiler-number-methods.md).
 
 String-valued expressions support these zero-argument methods, declared by
-`Lang.String`: `length()` returns Number; `toLower()`, `toUpper()`, and
-`toString()` return String. These String methods are available since
+`Lang.String`: `length()` and `hashCode()` return Number; `toLower()`,
+`toUpper()`, and `toString()` return String. These methods are available since
 API 1.0.0. Runtime implementations determine character counts and case mapping;
 the compiler does not evaluate these calls at compile time.
+
+String `compareTo(String)` returns Number and requires API 5.0.0. Its Object
+argument declaration is narrowed to String by the executable profile; unchecked
+nullable arguments are rejected. String `equals` returns Boolean and accepts
+the same scalar/nullable scalar arguments as Number equality, since API 1.0.0.
+`toNumberWithBase(Number)` returns Number or Null, since API 1.4.1, and follows
+the existing null-check rules. The base is 0 for prefix detection or 2..=36 for
+an explicit radix. Numeric ranges and conversion content are passed to the
+runtime without compiler validation. See the
+[String group evidence][string-group].
 
 String results may initialize/replace a String local or be printed. Number
 results support integer locals, arithmetic, comparisons, user-call
@@ -569,7 +579,8 @@ receivers and discarded method statements remain unsupported. Chained calls
 must resolve each member against the preceding result's type, for example
 `41.toString().toUpper().length().format("%03d")`. String and Boolean user
 parameters/results require the function annotations defined above.
-String `find(String)` and `toNumber()` return Number or Null;
+String `find(String)`, `toNumber()`, and `toNumberWithBase(Number)` return
+Number or Null;
 `substring(Number or Null, Number or Null)` returns String or Null. These follow the
 [null-check rules](#nullable-results). Unknown catalogue
 members, wrong arity/types, and known members lacking lowering are distinct
@@ -585,7 +596,7 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 ## Nullable results
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
-Number or Null. String `substring` and user calls may also return nullable
+Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1. String `substring` and user calls may also return nullable
 values. Compare nullable parameters or stored results with null.
 A direct `if (value == null)` or `if (null == value)` proves that parameter or
 local non-null on the false path. Fresh reads there have the non-null Number or String type
@@ -628,3 +639,5 @@ from API 3.3.2. Numeric ranges are not analyzed, so callers using negative
 values must select a compatible minimum themselves. No API context means these
 compatibility checks are omitted. Index normalization/error behavior remains
 a runtime obligation; the declared result remains nullable.
+
+[string-group]: ../investigations/compiler-string-methods.md

@@ -7,12 +7,12 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Review String next using the
+1. **Extend core Lang contracts and value types.** Review Boolean next using the
    [class-focused strategy](#native-lang-strategy), including inherited methods.
    Implement the group that fits supported value types and dispatch. Revisit
-   deferred Number methods as their [recorded prerequisites][number-methods]
-   become available; investigate receiver-dependent `weak()` contracts before
-   claiming support for its immutable-value behavior.
+   deferred [Number][number-methods] and [String][string-methods] methods as
+   their prerequisites become available. Investigate receiver-dependent `weak()`
+   contracts before claiming support for immutable-value behavior.
    Retain branch-proof validation through saved IR, joins, loops, and writes.
    Extend supported comparisons without trusting frontend-only assumptions;
    support nullable Boolean when a runnable case requires it.
@@ -224,3 +224,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [api-design]: design/api-declarations.md
 
 [number-methods]: investigations/compiler-number-methods.md#method-inventory
+
+[string-methods]: investigations/compiler-string-methods.md#method-inventory

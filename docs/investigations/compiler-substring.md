@@ -49,7 +49,8 @@ validated profile. Source and resumed IR produce equal PRGs in tests, and the
 independently generated application runs successfully. Range normalization is
 an observation of this simulator/device profile; it is not a guarantee for
 other APIs, firmware, or every numeric input. No older simulator was tested.
-Unicode index behavior remains unverified. Full SDK CODE export encountered an
+A [String group specimen](compiler-string-methods.md) records UTF-8 index
+observations; broader Unicode behavior remains unverified. Full SDK CODE export encountered an
 unsupported opcode; the symbol observation and runtime comparison do not depend
 on decoding that instruction.
 

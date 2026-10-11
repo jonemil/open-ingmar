@@ -23,13 +23,15 @@ nullable String, and nullable Dictionary; operator validation uses those
 semantic types. The
 bounded native call profile resolves Number's inherited `toString`, `equals`,
 and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
-and String's length, case, string, find, substring, and Number-conversion contracts.
+and String's length, case, string, search, slicing, numeric conversion, equality,
+hash, and comparison contracts.
 Argument types must satisfy their signatures or a declared union; every
 alternative of an actual union must be accepted. This does not
 permit implicit conversions or unknown classes. Named arguments may widen
 through catalogue-declared superclass paths. Executable method profiles can
 restrict a broad declaration further: Number comparison admits Number/Boolean,
-and Number equality admits supported scalars and nullable scalars. Executable
+String comparison admits String, and both equality profiles admit supported
+scalars and nullable scalars. Executable
 support remains a separate check. Number results use the existing integer
 value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
@@ -37,8 +39,8 @@ need no new IR operation or type.
 String results use the existing String category and can receive further
 supported calls. User functions accept Number, String, Boolean, and nullable
 Number/String parameters and results; API declarations alone do not enable
-other types. String `find`
-and `toNumber` retain Number-or-Null result contracts; `substring` retains
+other types. String `find`, `toNumber`, and `toNumberWithBase` retain
+Number-or-Null result contracts; `substring` retains
 String-or-Null. Flow validation permits non-null consumers for local or parameter
 reads proved non-null by a direct branch.
 Other result unions need corresponding validation before executable support.
@@ -99,8 +101,9 @@ nor configures PRG deployment metadata.
 
 Current checks cover supported Number/String value calls, System printing/exit,
 AppBase bases, initialization, and known callbacks. Method introductions in the
-executable profile are API 1.0.0 except Number.compareTo at 5.0.0; substring's
-nullable index form additionally requires 3.3.2. Catalogue knowledge does not
+executable profile are API 1.0.0 except Number/String.compareTo at 5.0.0 and
+String.toNumberWithBase at 1.4.1; substring's nullable index form additionally
+requires 3.3.2. Catalogue knowledge does not
 enable methods whose executable types or profiles are unsupported. Context
 levels are caller assertions: no device database, permission, app-type, execution-scope, or VM-capability validation is
 implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.

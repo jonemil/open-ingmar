@@ -327,6 +327,25 @@ fn build_core() -> Catalogue {
     ];
     classes.get_mut(string).unwrap().methods = vec![
         method(
+            "compareTo",
+            vec![Type::named(object)],
+            Type::named(number),
+            ApiLevel(5, 0, 0),
+        ),
+        method(
+            "equals",
+            vec![Type::Union(vec![Type::named(object), Type::Null])],
+            Type::named("Toybox.Lang.Boolean"),
+            initial,
+        ),
+        method("hashCode", vec![], Type::named(number), initial),
+        method(
+            "toNumberWithBase",
+            vec![Type::named(number)],
+            Type::Union(vec![Type::named(number), Type::Null]),
+            ApiLevel(1, 4, 1),
+        ),
+        method(
             "substring",
             vec![Type::Union(vec![Type::named(number), Type::Null]); 2],
             Type::Union(vec![Type::named(string), Type::Null]),

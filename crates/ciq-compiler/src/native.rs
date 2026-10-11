@@ -89,7 +89,17 @@ pub(crate) fn value_call(
         ) | (
             "Toybox.Lang.String",
             "Toybox.Lang.String",
-            "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber" | "substring"
+            "length"
+                | "toLower"
+                | "toUpper"
+                | "toString"
+                | "find"
+                | "toNumber"
+                | "substring"
+                | "compareTo"
+                | "equals"
+                | "hashCode"
+                | "toNumberWithBase"
         )
     );
     if !supported {
@@ -101,10 +111,16 @@ pub(crate) fn value_call(
     {
         return Err("Number.compareTo lowering currently requires Number or Boolean".into());
     }
-    if class == "Toybox.Lang.Number" && member == "equals" && !scalar_or_null(&arguments[0]) {
-        return Err(
-            "Number.equals lowering currently requires scalar or nullable scalar arguments".into(),
-        );
+    if class == "Toybox.Lang.String"
+        && member == "compareTo"
+        && arguments != [api::Type::named("Toybox.Lang.String")]
+    {
+        return Err("String.compareTo lowering currently requires String".into());
+    }
+    if member == "equals" && !scalar_or_null(&arguments[0]) {
+        return Err(format!(
+            "{class}.equals lowering currently requires scalar or nullable scalar arguments"
+        ));
     }
     Ok(resolved.method.result.clone())
 }

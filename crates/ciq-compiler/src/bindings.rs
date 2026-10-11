@@ -75,6 +75,8 @@ pub fn symbol_bindings(
                 "find".to_string()
             } else if alias == "__ciq_native_toNumber" {
                 "toNumber".to_string()
+            } else if alias == "__ciq_native_toNumberWithBase" {
+                "toNumberWithBase".to_string()
             } else if alias == "__ciq_native_toLower" {
                 "toLower".to_string()
             } else if alias == "__ciq_native_toUpper" {

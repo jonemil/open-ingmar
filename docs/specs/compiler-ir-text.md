@@ -601,29 +601,36 @@ Validation accepts a Number receiver with `toString`, `abs`, `toNumber`, or
 nullable scalar, or Null. Number comparison requires API 5.0.0 when a context
 is supplied. Its broad Object declaration does not enable other argument
 profiles. Equality returns Boolean; hash and conversion return Number.
-String receivers accept
-zero-argument `length`, `toLower`, `toUpper`, `toString`, and `toNumber`, plus
-`find` with one String argument and `substring` with two Number-or-Null
-arguments. Each index accepts Number, Null, or Number-or-Null. Resolve contracts
-through the API catalogue:
+String receivers accept zero-argument `length`, `hashCode`, `toLower`,
+`toUpper`, `toString`, and `toNumber`, plus `find` with one String argument,
+`toNumberWithBase` with one Number argument,
+`compareTo` with one String argument, `equals` with a supported scalar/nullable
+scalar or Null, and `substring` with two Number-or-Null arguments. Each index
+accepts Number, Null, or Number-or-Null. Resolve contracts through the API
+catalogue:
 Number `abs`, `toNumber`, `hashCode`, and `compareTo`, and String `length`,
-produce Number. Number `equals` produces Boolean. String `find`/`toNumber`
-produce Number or Null; `substring` produces String or Null. Formatting,
-string conversion, and case conversion produce String.
+produce Number. String `hashCode` and `compareTo` also produce Number;
+Number/String `equals` produces Boolean.
+String `find`/`toNumber`/`toNumberWithBase` produce Number or Null;
+`substring` produces String or Null. Formatting, string conversion, and case
+conversion produce String.
 Number results retain ordinary integer operand/return rules. Each chained call
 must resolve against its receiver's type. Source, typed, and text producers
 share these requirements.
 Unsupported members, receivers, argument counts/types, and result contracts are
-rejected before lowering. Format-content validity remains a runtime obligation.
+rejected before lowering. String `toNumberWithBase` requires API 1.4.1 and
+String `compareTo` requires 5.0.0 with explicit context. Format content, numeric
+base ranges, and conversion content remain runtime obligations.
 
 Native calls are effectful: receiver evaluation precedes arguments and
-invocation, and their
-operation order must agree with dependency traversal at statement sinks. The
+invocation, and their operation order must agree with dependency traversal at
+statement sinks. The
 backend emits receiver evaluation and `getsv @__ciq_native_<member>`. A
 zero-argument call uses `invokemz`; calls with arguments add `frpush`, evaluate
 arguments in order, and use `invokem` with argument count plus one (the
-receiver). Substring therefore uses `invokem 3`. Binding requires exactly one stored symbol
-with the method's stored name in an explicit source, or the supported complete
+receiver). Substring therefore uses `invokem 3`. Binding requires exactly one
+stored symbol with the method's stored name in an explicit source, or the
+supported complete
 application's native profile. IR contains no symbol ID or import index.
 
 ```text
@@ -638,8 +645,9 @@ ciq-ir
 
 ## Nullable results
 
-`.call-native` for String `find` and `toNumber` defines Number-or-Null according
-to its API contract; String `substring` defines String-or-Null. Index API
+`.call-native` for String `find`, `toNumber`, and `toNumberWithBase` defines
+Number-or-Null according to its API contract; String `substring` defines
+String-or-Null. Index API
 requirements are the same as the [source contract][nullable-source]. The existing
 `.local`, `.read`, `.null`, `.equal`, and
 `.branch` forms carry this behavior; no assertion or unchecked cast operation

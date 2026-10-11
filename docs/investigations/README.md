@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [String methods](compiler-string-methods.md): method inventory, grouped
+  simulator validation, base conversion, and UTF-8 index observations.
 - [Number methods](compiler-number-methods.md): full method inventory, deferred
   prerequisites, and grouped simulator validation.
 - [Nullable user contracts](compiler-nullable-contracts.md): union signatures,

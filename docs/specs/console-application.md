@@ -68,6 +68,7 @@ Fixed native symbol IDs in this profile:
 | hashCode | `0x008000ad` |
 | compareTo | `0x00800e50` |
 | toNumber | `0x008000a7` |
+| toNumberWithBase | `0x008004c3` |
 | toString | `0x008000af` |
 | length | `0x008000bb` |
 | find | `0x008000bc` |

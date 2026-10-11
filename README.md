@@ -79,6 +79,9 @@ String results, guarded returns, and nullable/negative indices.
 The [Number method example](examples/compiler-number-methods/README.md) groups
 conversion, comparison, equality, and hashing checks.
 
+The [String method example](examples/compiler-string-methods/README.md) groups
+text operations, base conversion, comparison, equality, and hashing.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 
