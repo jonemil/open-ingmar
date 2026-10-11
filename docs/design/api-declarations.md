@@ -1,21 +1,30 @@
 # API declarations and core types
 
-This is the intended boundary; a shared catalogue is not implemented yet.
-Current native names, callback contracts, intrinsics, and executable bindings
-are bounded special cases. [The plan](../plan.md) owns migration and expansion.
+`ciq-compiler::api::core()` supplies a bounded shared catalogue. Native callback
+validation reads its `onStart` contract; supported imports obtain their module
+name from its declarations. Native lowering and application bindings remain
+restricted profiles. [The plan](../plan.md) owns migration and expansion.
 
 ## Declaration model
 
-Start with semantic declarations populated directly in Rust inside
-`ciq-compiler`. A future definition-file reader should produce the same model;
-consumers must not depend on how declarations were loaded. No declaration-file
-syntax or new crate is required initially.
+Semantic declarations are populated directly in Rust inside `ciq-compiler`.
+The catalogue owns names, signatures, and superclass paths; callers receive
+immutable declarations. A future definition-file reader should produce the same
+model. No declaration-file syntax or new crate is required initially.
 
-Represent module/class ownership, superclass identity, methods, fields, and
-constants. Members retain receiver kind, parameter/result types, and relevant
-callback contracts. Type expressions must grow to describe unions, nullability,
-and containers. Declarations describe runtime-provided APIs without compiling
-replacement method bodies. Keep compiler analysis state outside this model.
+Current entries cover Lang's Object, Number, String, Boolean, Char, and
+Dictionary, plus Application.AppBase and the Lang/Application/System modules.
+Only selected methods are recorded: Object equality/string/hash contracts,
+Number arithmetic-related methods, AppBase initialization/startup, and System
+printing. Parameter/result subset types expose `api_type()` mappings. This does
+not yet replace the internal value-type model or enable numeric member calls.
+
+Classes hold instance methods; modules hold module functions. Methods carry
+parameter/result types, an introduction API level, and a callback flag. Types
+represent named classes, Null, Void, and unions. Add fields, constants, explicit
+static member distinctions, and parameterized containers as needed. Declarations
+describe runtime-provided APIs without compiling replacement method bodies.
+Keep compiler analysis state outside this model.
 
 Semantic identities such as `Toybox.Lang.Number` are independent of VM symbol
 IDs, import indexes, section offsets, and implementation functions. Native
@@ -25,9 +34,14 @@ crate only when another consumer needs it.
 
 ## Availability
 
-Record availability on classes and individual members, including inherited
-members through their declaring class. Track introduction levels and documented
-signature changes or removal where relevant; deprecation alone does not mean
+`Catalogue::method()` follows superclass paths and returns the declaring class,
+member, and effective minimum API level. `available_at()` checks that level,
+including the requested class and intervening bases. It does not validate a
+complete device/app profile. The fixed catalogue's inheritance and type
+references are checked by tests; a future reader needs equivalent validation.
+
+Introduction levels are recorded on modules, classes, and methods. Add documented
+signature changes or removal when relevant; deprecation alone does not mean
 unavailable. Preserve sources and unknown restrictions rather than treating
 missing information as universal support.
 

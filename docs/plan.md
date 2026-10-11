@@ -7,14 +7,12 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Establish core types and API declarations.** Define a shared semantic
-   declaration model in `ciq-compiler`, initially populated directly in Rust.
-   Start with `Lang.Object`, `Number`, `Boolean`, `String`, and the nullable
-   `Dictionary` contract already needed by startup. Record class inheritance,
-   member signatures, and per-declaration API availability from public docs;
-   catalogue coverage does not imply executable support. Migrate existing
-   Application/System contracts to this model before expanding native support.
-   Keep semantic identities independent of binary bindings and compiler state.
+1. **Connect core types and API declarations.** Extend the bounded catalogue
+   in `ciq-compiler` where current language behavior requires it. Connect internal
+   value types and operator validation to its Lang identities, then use inherited
+   member lookup in source resolution. Keep native lowering support explicit:
+   known declarations alone do not make calls compilable. Migrate remaining
+   Application/System special cases before expanding native support.
    See [API declaration design][api-design].
 
    Connect current integer/string/null behavior to those identities. Read the

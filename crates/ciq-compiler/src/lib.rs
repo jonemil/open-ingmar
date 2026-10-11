@@ -9,6 +9,7 @@
 //! [`application::build_console_application`] adds generated lifecycle/metadata
 //! and returns an unsigned PRG for the supported console bootstrap profile.
 
+pub mod api;
 pub mod application;
 pub mod backend;
 mod bindings;
@@ -105,6 +106,29 @@ pub enum ParameterType {
     Integer,
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
+}
+
+impl ParameterType {
+    /// Return the API type represented by this supported parameter contract.
+    pub fn api_type(self) -> api::Type {
+        match self {
+            Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::NullableDictionary => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Dictionary"),
+                api::Type::Null,
+            ]),
+        }
+    }
+}
+
+impl ReturnType {
+    /// Return the API type represented by this supported result contract.
+    pub fn api_type(self) -> api::Type {
+        match self {
+            Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::Void => api::Type::Void,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

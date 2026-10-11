@@ -34,7 +34,11 @@ impl Names {
             "Toybox.System" => NativeModule::System,
             _ => return Err(format!("unsupported native module {path:?}")),
         };
-        let name = alias.unwrap_or(module.name());
+        let declaration = crate::api::core()
+            .module(path)
+            .expect("supported module must have a catalogue declaration");
+        let canonical_name = declaration.name.rsplit('.').next().unwrap();
+        let name = alias.unwrap_or(canonical_name);
         if matches!(name, "self" | "Toybox" | "AppBase")
             || (name == "Application" && module != NativeModule::Application)
             || (name == "System" && module != NativeModule::System)

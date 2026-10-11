@@ -27,7 +27,8 @@ crates are currently unpublished.
   packing, and IQ creation. Depends on `ciq-prg`, `ciq-sign`, `zip`,
   `sevenz-rust2`, and `quick-xml`; archive/XML dependencies stay here.
 - **`ciq-compiler`**: restricted source parsing, semantic IR validation/text
-  I/O, VM lowering, and explicit symbol/literal binding. Depends on `ciq-mc`,
+  I/O, core API declarations, VM lowering, and explicit symbol/literal binding.
+  Depends on `ciq-mc`,
   `ciq-assembly`, and `ciq-prg` for DATA sources.
 
 See [the documentation guide](README.md) for the distinction between design,

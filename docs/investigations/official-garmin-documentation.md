@@ -251,6 +251,12 @@ that layout, allocation timing, or a boxing protocol. Mixed numeric behavior,
 string addition, equality, and guarded optional API binding still need focused
 specimens before extending our supported profile. See [API design][api-design].
 
+The initial catalogue records selected Object/Number contracts, type declarations,
+and the existing AppBase initializer/startup and System print contracts. The
+[System API][system-api] declares `println(Object or Null)` returning Void;
+our frontend still limits printing to integer/string values. Declaration coverage
+must not be confused with executable support or tested target availability.
+
 ## Lifecycle contracts
 
 **Officially documented:** [AppBase][appbase] is the application base class.
@@ -321,3 +327,5 @@ specifying our supported subset.
 [lang-object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [lang-number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [api-design]: ../design/api-declarations.md
+
+[system-api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/System.html
