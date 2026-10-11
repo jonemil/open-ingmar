@@ -173,6 +173,45 @@ Bindings are file-local in our supported profile; cross-file native binding
 visibility and alias shadowing rules in the full language are not established
 by these specimens. The VM backend and generated lifecycle remain unchanged.
 
+## Native superclass initialization
+
+2026-10-11. Question: can source initialization call the native superclass
+without virtual self dispatch, and replace the generated initializer target?
+SDK 9.2.0 / Java 17 / fr265; specimens are the native-name sources above.
+
+**Observed SDK CODE:** the bare `AppBase.initialize()` specimen selects
+`getselfv AppBase; getsv initialize; invokemz; popv`. The qualified
+`App.AppBase.initialize()` specimen instead selects
+`getmv Toybox_Application AppBase; getsv initialize; invokemz; popv`.
+These differ from source `self` calls, which select the member directly with
+`getselfv`, and module calls, which select `getmv module member`. The
+constructor's `<init>` member is distinct from `initialize`.
+
+Rebuild the `import.jungle` and `alias.jungle` variants with
+`CIQ_JUNGLE_FILES=<absolute-jungle-path> sh scripts/build-example.sh scratch/native-names`.
+Inspect each generated PRG with `cargo run -p ciq-dis -- code <prg>` before
+the next build overwrites it. Local CODE listings are
+`scratch/native-names/sdk-import-code.txt` and `sdk-code.txt`.
+
+**Interpretation:** resolve supported superclass spellings to a native class
+identity, then lower the initializer as a separate ordered effect. Our backend
+uses the inherited-base lookup for all spellings; reproducing the SDK's source
+spelling-dependent instruction sequence is not required. This establishes only
+the AppBase initializer, not arbitrary native members or superclass dispatch.
+
+**Observed simulator execution:** the independently generated source-class app
+prints `source initialize` once before `class startup`, followed by
+`1`, `2`, `47`, `receiver call`, `3`, `2`, `9`, without a runtime error. The
+source initializer calls the native base and owns the only initialize DATA
+method record. Native and saved-unit-IR builds have identical unsigned PRGs.
+The [example instructions][example] reproduce compilation/signing/execution.
+Local PRGs are `scratch/native-names/initialize-unsigned.prg` and
+`initialize.prg`; the captured console is `initialize-monkeydo.log` there.
+
+The simulator used default memory and our developer key. Constructor, startup
+wrapper, and blank View remain generated. Callback state types, source
+`onStart`, and other devices remain unverified.
+
 [profile]: ../specs/compiler-classes.md
 [example]: ../../examples/compiler-class/README.md
 [objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/

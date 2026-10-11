@@ -9,15 +9,15 @@ compiling a project.
 
 1. **Resolve names, types, and native calls.** Start with the names and contracts
    needed by an AppBase-derived class: extend the bounded native name profile
-   with member lookup, explicit base initialization, and inherited methods.
-   First compare base, self,
-   and module dispatch in a minimal specimen. Represent native module,
+   with inherited member contracts and callback types. Extend source
+   initialization to source lifecycle callbacks; compare new dispatch forms
+   with focused specimens. Represent native module,
    class, member, receiver, argument, and result identities independently of VM
    symbol IDs and import indexes. Add null, Boolean, and object-reference values
    needed by callbacks; retain `Void` as a result contract. Begin with a small
    documented API subset, not a complete Toybox database or strict type checker.
-   Acceptance: source `initialize()` calls the resolved base initializer, and a
-   source `onStart(state)` runs once with the native callback contract.
+   Acceptance: source `onStart(state)` runs once after source initialization,
+   with the native callback contract and correct state value representation.
    Define the manifest/target context alongside this work: entry class, app
    type, minimum API, and permissions constrain native binding before a full
    project driver exists. Keep the console bootstrap's selected method distinct

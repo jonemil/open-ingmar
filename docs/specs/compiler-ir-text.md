@@ -447,6 +447,16 @@ evidence][void-evidence].
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
 [void-evidence]: ../investigations/compiler-void.md
 
+## Native superclass initialization
+
+`.base-initialize Application.AppBase` invokes the supported native superclass
+initializer on the current instance, with no explicit arguments or value result.
+It accepts the usual optional source span. Other base names or additional fields
+are rejected. Function validation requires an instance receiver and preserves
+the call's effect order; unit validation additionally enforces the
+[source initializer contract](compiler-classes.md#source-initialization).
+Source, typed, and text paths use the same operation and VM lowering.
+
 ## Instance receivers
 
 The optional declaration field `receiver=instance` marks an instance method;

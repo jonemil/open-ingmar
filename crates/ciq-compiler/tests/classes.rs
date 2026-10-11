@@ -296,7 +296,7 @@ fn class_application_validates_entry_and_metadata_conflicts() {
             "{entry}"
         );
     }
-    for name in ["onStart", "initialize", "getInitialView", "AppBase"] {
+    for name in ["onStart", "getInitialView"] {
         let unit = compile_sources(&[&format!(
             "class C extends Application.AppBase {{ function start() {{}} function {name}() {{}} }}"
         )])

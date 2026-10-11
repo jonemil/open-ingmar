@@ -251,6 +251,34 @@ impl CompilationUnit {
         }
         let mut signatures = BTreeMap::new();
         for (index, &(owner, function)) in bodies.iter().enumerate() {
+            let base_calls = function
+                .operations()
+                .iter()
+                .filter(|op| matches!(op.operation, Operation::NativeBaseInitialize { .. }))
+                .count();
+            if matches!(owner, Owner::Class(_)) && function.name() == "initialize" {
+                let first = function
+                    .operations()
+                    .iter()
+                    .find(|op| !matches!(op.operation, Operation::Block { .. }));
+                if function.parameter_count() != 0
+                    || function.return_type() != crate::ReturnType::Void
+                    || base_calls != 1
+                    || !first.is_some_and(|op| {
+                        matches!(op.operation, Operation::NativeBaseInitialize { .. })
+                    })
+                {
+                    return Err(fail(Some(index), None,
+                        "source initialize requires zero parameters, a void result, and one native base call as its first statement".into()));
+                }
+            } else if base_calls != 0 {
+                return Err(fail(
+                    Some(index),
+                    None,
+                    "native base initialization is supported only in a class initialize method"
+                        .into(),
+                ));
+            }
             if function.is_instance_method() != matches!(owner, Owner::Class(_)) {
                 return Err(fail(
                     Some(index),

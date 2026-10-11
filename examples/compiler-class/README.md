@@ -24,6 +24,7 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-class/generated.prg
 Expected console output, with a blank native View:
 
 ```text
+source initialize
 class startup
 1
 2
@@ -37,9 +38,10 @@ receiver call
 Changing `left()` from `return 50;` to `return 51;` changes `47` to `48`.
 Choosing `--entry Counter.left` instead prints `1` followed by its result `50`.
 
-The compiler generates lifecycle methods that invoke the selected method on the
-application instance. Base initialization and the blank View remain generated;
-this example does not yet define source `onStart`, `initialize`, or
+The source `initialize` calls the native base initializer and prints once before
+startup. The compiler generates lifecycle methods that invoke the selected
+startup method on the application instance. Constructor and blank View remain
+generated; this example does not yet define source `onStart` or
 `getInitialView`. Class fields, arbitrary receivers, object construction,
 general native imports, and source inheritance remain unsupported. Supported
 native aliases resolve before IR construction; they do not change the generated

@@ -2,6 +2,10 @@ using Toybox.Application as App;
 
 class Counter extends App.AppBase {
     using Toybox.System as Sys;
+    function initialize() {
+        App.AppBase.initialize();
+        Sys.println("source initialize");
+    }
     function start() {
         Sys.println("class startup");
         Sys.println(self.answer(self.left(), self.right()));

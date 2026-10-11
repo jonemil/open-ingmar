@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 /// aliases must match exactly one stored name: modules use `globals/<name>`,
 /// while members use their short names. The dedicated `__ciq_sdk_System` alias
 /// uses `Toybox_System`; no general SDK module-name inference is performed.
+/// Native superclass initialization binds AppBase and initialize by their stored names.
 /// Missing, ambiguous, or conflicting
 /// bindings are errors. No PRG symbol records are generated or modified.
 pub fn symbol_bindings(
@@ -51,6 +52,10 @@ pub fn symbol_bindings(
             };
             let name = if alias == "__ciq_sdk_System" {
                 "Toybox_System".to_string()
+            } else if alias == "__ciq_native_AppBase" {
+                "AppBase".to_string()
+            } else if alias == "__ciq_native_initialize" {
+                "initialize".to_string()
             } else if let Some(module) = alias.strip_prefix("__ciq_module_") {
                 format!("globals/{module}")
             } else if let Some(member) = alias.strip_prefix("__ciq_member_") {

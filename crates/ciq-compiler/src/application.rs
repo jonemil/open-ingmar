@@ -169,7 +169,8 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool) -> Vec<Item> {
 /// the sole declared AppBase class. Class entries use Class.method names and
 /// current-receiver lookup. onStart invokes it once and prints only integer
 /// results; getInitialView returns a blank native View. Source callbacks that
-/// collide with generated lifecycle/base fields are rejected.
+/// collide with generated lifecycle/base fields are rejected, except a validated
+/// source initialize method, which replaces the default initializer's DATA target.
 ///
 /// Allocates user symbols and all CODE/DATA positions deterministically. Global,
 /// module, and class methods bind to unit CODE labels; literals use shared DATA layout.
@@ -208,12 +209,11 @@ pub fn build_console_application(
         let Some(entry) = class.methods.iter().find(|f| f.name() == member) else {
             return Err(error("application entry method is not declared"));
         };
-        if class.methods.iter().any(|f| {
-            matches!(
-                f.name(),
-                "initialize" | "onStart" | "getInitialView" | "AppBase"
-            )
-        }) {
+        if class
+            .methods
+            .iter()
+            .any(|f| matches!(f.name(), "onStart" | "getInitialView" | "AppBase"))
+        {
             return Err(error(
                 "source methods collide with generated lifecycle or base fields",
             ));
@@ -222,6 +222,9 @@ pub fn build_console_application(
     };
     if entry.parameter_count() != 0 {
         return Err(error("application entry must have zero parameters"));
+    }
+    if instance && entry.name() == "initialize" {
+        return Err(error("initialize cannot be selected as the startup entry"));
     }
     let modules: BTreeSet<_> = unit
         .declarations()
@@ -277,6 +280,8 @@ pub fn build_console_application(
     }
     let mut bindings = BTreeMap::from([
         ("__ciq_sdk_System".into(), SYSTEM),
+        ("__ciq_native_AppBase".into(), APP_BASE),
+        ("__ciq_native_initialize".into(), INITIALIZE),
         ("__ciq_member_println".into(), PRINTLN),
         ("__ciq_app_globals".into(), GLOBALS),
         ("__ciq_app_base".into(), APP_BASE),
@@ -351,6 +356,15 @@ pub fn build_console_application(
         ],
     );
     for source_class in unit.classes() {
+        if source_class
+            .methods
+            .iter()
+            .any(|f| f.name() == "initialize")
+        {
+            application
+                .fields
+                .retain(|f| f.key != Key::Raw((INITIALIZE << 8) | 0x10));
+        }
         application.fields.extend(
             source_class
                 .methods

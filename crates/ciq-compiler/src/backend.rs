@@ -117,6 +117,23 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
             Operation::Return { value } => (value, Opcode::Return, vec![]),
+            Operation::NativeBaseInitialize {
+                base: crate::ClassBase::ApplicationAppBase,
+            } => {
+                items.extend([
+                    instruction(
+                        Opcode::Getselfv,
+                        vec![Operand::Symbol("__ciq_native_AppBase".into())],
+                    ),
+                    instruction(
+                        Opcode::Getsv,
+                        vec![Operand::Symbol("__ciq_native_initialize".into())],
+                    ),
+                    instruction(Opcode::Invokemz, vec![]),
+                    instruction(Opcode::Popv, vec![]),
+                ]);
+                continue;
+            }
             Operation::ReturnVoid => {
                 items.push(instruction(Opcode::Return, vec![]));
                 continue;

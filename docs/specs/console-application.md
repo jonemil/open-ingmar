@@ -16,7 +16,8 @@ application; it is independent of the signing key.
 Generated lifecycle behavior:
 
 - A synthesized class extends native `Application.AppBase`. Its constructor and
-  `initialize` invoke the corresponding native base methods.
+  default `initialize` invoke the corresponding native base methods. A validated
+  source initializer replaces the initialize method's DATA target.
 - `onStart(state)` ignores state, calls the global entry once, prints its integer
   result using `System.println`, discards the print result, and returns void.
   A void entry is invoked without that print; its VM result is discarded.
@@ -160,9 +161,11 @@ record with sorted fields bound to their owner-qualified CODE labels. Existing
 global/module methods stay in their own DATA owners. Class names, native base
 identity, and method ownership survive saved unit IR.
 
-Source methods named `initialize`, `onStart`, `getInitialView`, or `AppBase` are
-rejected because those fields remain generated. Native base initialization,
-constructor, imports, and blank View generation are unchanged. This does not yet
-compile source lifecycle callbacks, fields, arbitrary object receivers, or View
+Source `initialize` follows the
+[initializer contract](compiler-classes.md#source-initialization) and owns its
+single method record when supplied. `onStart`, `getInitialView`, and `AppBase`
+source methods remain unsupported. Constructor, imports, and blank View
+generation are unchanged. This does not yet compile other source lifecycle
+callbacks, fields, arbitrary object receivers, or View
 construction. [Runtime evidence](../investigations/compiler-class.md) verifies
 void/integer startup, nested self calls, and the source edit.

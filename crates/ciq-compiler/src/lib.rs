@@ -132,6 +132,11 @@ pub enum Operation {
     Println {
         value: ValueId,
     },
+    /// Invoke the native superclass initializer on the current instance.
+    /// The supported call has no explicit arguments and no semantic result.
+    NativeBaseInitialize {
+        base: ClassBase,
+    },
     Binary {
         result: ValueId,
         kind: BinaryOp,
@@ -376,6 +381,14 @@ impl Function {
                     string_values.insert(result);
                     (Some(result), vec![])
                 }
+                Operation::NativeBaseInitialize { .. } => {
+                    if !instance_method {
+                        return Err(fail(
+                            "native base initialization requires an instance method",
+                        ));
+                    }
+                    (None, vec![])
+                }
                 Operation::Println { value } => {
                     if boolean_values.contains(&value) {
                         return Err(fail("println currently accepts only integers or strings"));
@@ -558,6 +571,7 @@ impl Function {
                     | Operation::SelfCallStatement { .. }
                     | Operation::Println { .. }
                     | Operation::LocalAssign { .. }
+                    | Operation::NativeBaseInitialize { .. }
             )
         }) {
             // Calls, prints, and writes make operation order observable. A read
@@ -576,7 +590,10 @@ impl Function {
                     Operation::Branch { condition, .. } => vec![*condition],
                     Operation::ModuleCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
-                    Operation::Block { .. } | Operation::Jump { .. } | Operation::ReturnVoid => {
+                    Operation::Block { .. }
+                    | Operation::Jump { .. }
+                    | Operation::ReturnVoid
+                    | Operation::NativeBaseInitialize { .. } => {
                         schedule.push(index);
                         continue;
                     }
@@ -747,6 +764,9 @@ impl Function {
                         .collect::<String>();
                     format!(".call-self-discard {member}{arguments}")
                 }
+                Operation::NativeBaseInitialize {
+                    base: ClassBase::ApplicationAppBase,
+                } => ".base-initialize Application.AppBase".into(),
                 Operation::ReturnVoid => ".return-void".into(),
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)

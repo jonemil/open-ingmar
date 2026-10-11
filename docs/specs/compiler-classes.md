@@ -91,12 +91,38 @@ matching the class reuse that identity; other names retain deterministic
 allocation. Class methods are sorted DATA fields bound to their CODE labels,
 separate from globals/modules even when member names share one symbol ID.
 
-Methods named `initialize`, `onStart`, `getInitialView`, or `AppBase` collide with
-generated lifecycle/base fields and are rejected by this application profile.
-Those bodies, native imports, empty resources, and the blank View remain
+Methods named `onStart`, `getInitialView`, or `AppBase` remain unsupported.
+The source initializer contract below permits `initialize`; otherwise its
+body, native imports, empty resources, and the blank View remain
 provided by the bootstrap. Unit/IR stages can represent multiple classes, but
 this PRG profile rejects them. Source callbacks and general object/native-call
 operations remain subsequent work.
+
+## Source initialization
+
+A declared class may supply `function initialize()`. It must return void,
+accept no parameters, and call the native base initializer exactly once as its
+first statement. These are subset restrictions, not general language rules.
+Subsequent supported statements may print or call source methods. Initialization
+cannot be selected as the generated onStart entry.
+
+Accepted base calls are `AppBase.initialize()`,
+`Application.AppBase.initialize()`, fully qualified
+`Toybox.Application.AppBase.initialize()`, and equivalent module aliases.
+Bare AppBase here identifies the inherited superclass even without an import;
+this member-call rule does not make bare AppBase legal in an `extends` clause.
+Arguments, value uses, other base members, and base calls outside a class
+initializer are rejected. Conditional, late, duplicate, or absent base calls
+are also rejected by unit validation.
+
+`NativeBaseInitialize { base: ClassBase::ApplicationAppBase }` is an ordered
+effect with an implicit current instance and no explicit arguments/result.
+It identifies a native superclass, not a source callee or executable import
+index. Lowering selects `getselfv AppBase; getsv initialize; invokemz; popv`.
+The application builder binds native aliases and directs the initializer's
+single DATA method record to source CODE. It keeps the default initializer when
+the source omits one. Constructor, onStart, and blank View generation remain
+provided by the bootstrap.
 
 Backend self calls select `getselfv @__ciq_member_<name>`, followed by `invokemz`
 for zero arguments or `frpush`, ordered arguments, and `invokem <count + 1>`.

@@ -13,6 +13,9 @@ pub(crate) enum Statement {
         argument: Expression,
         span: Span,
     },
+    BaseInitialize {
+        span: Span,
+    },
     Assign {
         name: String,
         value: Expression,
@@ -59,6 +62,7 @@ impl Statement {
             | Self::Break { span }
             | Self::Continue { span }
             | Self::While { span, .. } => *span,
+            Self::BaseInitialize { span } => *span,
         }
     }
 }
@@ -115,6 +119,7 @@ struct Parser<'a> {
     lookahead: Option<Token<'a>>,
     expressions: usize,
     names: crate::names::Names,
+    native_base: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -164,7 +169,7 @@ impl<'a> Parser<'a> {
 
     fn reject_binding(&self, token: &Token<'_>) -> Result<(), Diagnostic> {
         if let Kind::Word(name) = token.kind {
-            if self.names.bound(name) {
+            if self.names.bound(name) || (self.native_base && name == "AppBase") {
                 return Err(self.error(
                     token.span.start,
                     format!("declaration shadows native binding {name:?}"),
@@ -420,6 +425,10 @@ impl<'a> Parser<'a> {
                     let (module, member) = path.rsplit_once('.').unwrap();
                     let module = if let Some(native) = self.names.module(module) {
                         native.name()
+                    } else if self.native_base
+                        && (module == "AppBase" || self.names.app_base(module))
+                    {
+                        "Application.AppBase"
                     } else if module.contains('.') {
                         return Err(
                             self.error(token.span.start, "unsupported qualified module path")
@@ -629,7 +638,17 @@ impl<'a> Parser<'a> {
                         else {
                             return Err(self.error(start, "only assignment and qualified calls are supported as expression statements"));
                         };
-                        if module == "System" {
+                        if module == "Application.AppBase" {
+                            if member != "initialize" || !arguments.is_empty() {
+                                return Err(self.error(
+                                    start,
+                                    "only a zero-argument native base initialize call is supported",
+                                ));
+                            }
+                            Statement::BaseInitialize {
+                                span: Span { start, end },
+                            }
+                        } else if module == "System" {
                             if member != "println" || arguments.len() != 1 {
                                 return Err(
                                     self.error(start, "expected System.println with one argument")
@@ -672,6 +691,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         lookahead: None,
         expressions: 0,
         names: crate::names::Names::default(),
+        native_base: false,
     };
     parser.imports()?;
     let function = parser.function()?;
@@ -744,6 +764,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
         lookahead: None,
         expressions: 0,
         names: crate::names::Names::default(),
+        native_base: false,
     };
     let mut unit = ParsedUnit {
         functions: Vec::new(),
@@ -773,6 +794,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
             let outer_names = parser.names.clone();
+            parser.native_base = is_class;
             parser.imports()?;
             let mut methods = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
@@ -787,6 +809,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.token()?;
             parser.names = outer_names;
+            parser.native_base = false;
             if methods.is_empty() {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }

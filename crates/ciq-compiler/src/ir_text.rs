@@ -116,6 +116,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".equal") => (13, 4),
             Some(".greater") => (14, 4),
             Some(".assign") => (15, 3),
+            Some(".base-initialize") => (20, 2),
             _ => {
                 return Err(fail(*at, "unknown IR directive"));
             }
@@ -182,7 +183,14 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 18 {
+        let operation = if kind == 20 {
+            if fields[1] != "Application.AppBase" {
+                return Err(fail(*at, "unsupported native initializer base"));
+            }
+            Operation::NativeBaseInitialize {
+                base: crate::ClassBase::ApplicationAppBase,
+            }
+        } else if kind == 18 {
             Operation::SelfCall {
                 result: parse_value(&fields[1])?,
                 member: fields[2].clone(),

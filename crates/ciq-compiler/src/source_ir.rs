@@ -45,6 +45,13 @@ fn emit(
             member,
             arguments,
         } => {
+            if module == "Application.AppBase" {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "native base initialization has no expression result",
+                ));
+            }
             if locals.contains_key(&module) || parameters.contains_key(&module) {
                 return Err(Diagnostic::at(
                     source,
@@ -213,6 +220,14 @@ impl Builder<'_> {
                     })?;
                     let value = self.value(value, locals)?;
                     self.push(Operation::LocalAssign { local, value }, Some(span));
+                }
+                parser::Statement::BaseInitialize { span } => {
+                    self.push(
+                        Operation::NativeBaseInitialize {
+                            base: crate::ClassBase::ApplicationAppBase,
+                        },
+                        Some(span),
+                    );
                 }
                 parser::Statement::Call {
                     module,
