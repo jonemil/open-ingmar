@@ -1,4 +1,4 @@
-# Research and documentation conventions
+# Research conventions
 
 ## Evidence
 
@@ -21,8 +21,9 @@ writing.
 
 ## Investigation records
 
-Create a Markdown record under `docs/investigations/` for each substantial
-investigation or experiment. Include:
+For substantial investigations, extend a relevant record under
+`docs/investigations/` or create one for a distinct question. Include applicable
+evidence rather than treating every item below as a mandatory template:
 
 1. Date, question, and scope.
 2. Source URLs, exact revisions, relevant source locations, and applicable
@@ -49,9 +50,8 @@ its location and document its origin and reproducibility.
 ## Specifications and design
 
 Follow [the documentation guide](README.md) for formatting and scope. Keep
-component intent and decisions in `docs/design/`, format/language/protocol
-contracts in `docs/specs/`, and API guarantees in Rustdoc. Investigations should
-be concise while retaining the evidence needed to reproduce their conclusions.
+investigations concise while retaining the evidence needed to reproduce their
+conclusions.
 
 Explain formats and instructions in our own documentation under `docs/specs/`.
 Link specifications to local evidence records; keep detailed external-source
@@ -68,5 +68,5 @@ copy Garmin implementation code. Investigate upstream licenses before
 incorporating any third-party code; the default is to document behavior and
 write our own implementation.
 
-Keep [plan.md](plan.md) focused on upcoming work and newly discovered needs, and
-[architecture.md](architecture.md) current as evidence changes the design.
+Update the relevant design/spec pages when evidence changes their conclusions;
+put newly discovered work in [the plan](plan.md).

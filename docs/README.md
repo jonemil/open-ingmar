@@ -1,10 +1,18 @@
-# Documentation
+# Documentation conventions
 
-Start with [architecture](architecture.md) for component boundaries and
-[the plan](plan.md) for current work.
+The [root README](../README.md) introduces the project and indexes its
+documentation. This page defines how to write and organize that documentation.
 
 ## Where information belongs
 
+- **Root README**: project overview, getting started, and links to further
+  reading. Keep detailed contracts, architecture, and research procedures in
+  their own pages; brief summaries should link to those authoritative pages.
+- **Crate READMEs** (`crates/<name>/README.md`): purpose, API entry points or
+  brief CLI usage, and links to detailed contracts. Keep API documentation in
+  Rustdoc; do not duplicate format specifications here.
+- **Architecture** (`architecture.md`): crate responsibilities, dependencies,
+  shared pipelines, and implementation boundaries.
 - **Design** (`design/`): responsibilities, invariants, decisions, tradeoffs,
   current structure, and intent. Explain why a component or API exists.
 - **Plan** (`plan.md`): where we are heading, next work, newly discovered needs,
@@ -14,6 +22,8 @@ Start with [architecture](architecture.md) for component boundaries and
   rules, limits, and errors precisely enough to implement independently.
 - **Investigations** (`investigations/`): questions, procedures, observations,
   provenance, and uncertainty. These provide evidence for design and formats.
+- **Research conventions** (`research.md`): evidence categories, attribution,
+  and requirements for reproducible investigations.
 - **Rustdoc**: what an API does, what it produces, and its requirements and
   restrictions. Include relevant failure conditions and guarantees.
 
@@ -56,25 +66,15 @@ files or a custom documentation build. Do not link to repository-relative
 Markdown or separately generated HTML from Rustdoc. External research links
 belong in investigations.
 
-## Reading and building documentation
+## Rendering and API documentation
 
-Read the root README and linked Markdown pages directly in the repository, in
-a terminal or through GitHub/GitLab's Markdown rendering. Keep relative links
-between repository pages; no separate documentation generator is required.
+Keep relative links between repository Markdown pages so they work in
+GitHub/GitLab and local previews. See [preview setup and limits][preview] for
+browser review and local link checking.
 
-For local browser review, run `sh scripts/preview-docs.sh` and open
-`http://localhost:8000/README.md`. The optional preview renders Markdown as
-you browse and picks up edits on refresh. `--check` verifies local files and
-heading links. See [preview setup and limits][preview].
-This does not change the Markdown sources or the crate documentation build.
-
-Build crate API documentation with standard Cargo:
-
-```sh
-cargo doc --workspace --no-deps
-```
-
-The API pages are under `target/doc/<crate_name>/index.html`. Public types and
+Standard Cargo/Rustdoc builds produce API pages under
+`target/doc/<crate_name>/index.html`; see the [root build instructions][build].
+Public types and
 functions document the contracts needed to use each crate. Design and format
 pages provide broader project context in the repository; API docs must remain
 useful independently of those pages. Broken intra-doc links are build errors
@@ -87,3 +87,4 @@ directory layout. Publishing configuration remains separate future work.
 See [research conventions](research.md) for attribution and evidence rules.
 
 [preview]: ../scripts/README.md#preview-repository-documentation
+[build]: ../README.md#build-and-check
