@@ -59,10 +59,20 @@ Fixed native symbol IDs in this profile:
 | `<init>` | `0x00800018` |
 | initialize | `0x0080005e` |
 | println | `0x00800067` |
+| exit | `0x0080006d` |
+| format | `0x0080009c` |
+| abs | `0x008000a6` |
+| toNumber | `0x008000a7` |
+| toString | `0x008000af` |
+| length | `0x008000bb` |
+| find | `0x008000bc` |
+| toLower | `0x008000be` |
+| toUpper | `0x008000bf` |
 | View | `0x0080019f` |
 | AppBase | `0x0080029c` |
 | onStart | `0x0080029f` |
 | getInitialView | `0x008002a0` |
+| onStop | `0x008002a1` |
 | globals | `0x008002e6` |
 
 DATA contains [version-2 records][classes] in this order: statics, globals,

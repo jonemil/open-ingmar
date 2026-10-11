@@ -325,6 +325,18 @@ fn build_core() -> Catalogue {
         ),
     ];
     classes.get_mut(string).unwrap().methods = vec![
+        method(
+            "find",
+            vec![Type::named(string)],
+            Type::Union(vec![Type::named(number), Type::Null]),
+            initial,
+        ),
+        method(
+            "toNumber",
+            vec![],
+            Type::Union(vec![Type::named(number), Type::Null]),
+            initial,
+        ),
         method("length", vec![], Type::named(number), initial),
         method("toLower", vec![], Type::named(string), initial),
         method("toUpper", vec![], Type::named(string), initial),

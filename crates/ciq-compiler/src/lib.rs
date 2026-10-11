@@ -18,6 +18,7 @@ pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod names;
 mod native;
+mod null_flow;
 mod operators;
 mod parser;
 mod source_ir;
@@ -140,6 +141,7 @@ impl ReturnType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
     Integer,
+    NullableInteger,
     String,
     Boolean,
     Null,
@@ -151,6 +153,10 @@ impl ValueType {
     fn api_type(self) -> api::Type {
         match self {
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::NullableInteger => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Number"),
+                api::Type::Null,
+            ]),
             Self::String => api::Type::named("Toybox.Lang.String"),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Null => api::Type::Null,
@@ -173,6 +179,7 @@ impl ValueType {
             },
             api::Type::Null => Some(Self::Null),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
+            _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
             _ => None,
         }
     }
@@ -512,11 +519,13 @@ impl Function {
             });
         }
         let mut return_type = None;
-        let mut definitions = std::collections::BTreeMap::new();
+        let mut definitions = std::collections::BTreeMap::<ValueId, usize>::new();
         let structure = control_flow::validate(&operations)?;
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
+        let non_null_inputs = null_flow::local_inputs(&structure, &operations);
+        let mut non_null = std::collections::BTreeSet::new();
         let mut types = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
@@ -533,6 +542,7 @@ impl Function {
             let (result, operands) = match located.operation {
                 Operation::Block { block } => {
                     available_locals = local_inputs[&block].clone();
+                    non_null = non_null_inputs[&block].clone();
                     (None, vec![])
                 }
                 Operation::Compare {
@@ -541,11 +551,28 @@ impl Function {
                     right,
                     kind,
                 } => {
+                    let checked_type = |value| {
+                        if kind == ComparisonOp::Equal
+                            && (type_of(left) == ValueType::Null
+                                || type_of(right) == ValueType::Null)
+                        {
+                            if let Some(&at) = definitions.get(&value) {
+                                if let Operation::LocalRead { local, .. } = operations[at].operation
+                                {
+                                    if local_types.get(&local) == Some(&ValueType::NullableInteger)
+                                    {
+                                        return ValueType::NullableInteger;
+                                    }
+                                }
+                            }
+                        }
+                        type_of(value)
+                    };
                     let result_type = operators::comparison_result(
-                        kind, &type_of(left).api_type(), &type_of(right).api_type(),
+                        kind, &checked_type(left).api_type(), &checked_type(right).api_type(),
                     ).and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail(
-                            "comparison requires integers, Boolean equality, or dictionary/null equality",
+                            "comparison requires integers, Boolean equality, or nullable/null equality",
                         ))?;
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
@@ -729,6 +756,7 @@ impl Function {
                     (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
+                    non_null.remove(&local);
                     local_types.insert(local, type_of(value));
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
@@ -752,9 +780,12 @@ impl Function {
                     if local_types[&local] != incoming
                         && !(local_types[&local] == ValueType::NullableDictionary
                             && incoming == ValueType::Null)
+                        && !(local_types[&local] == ValueType::NullableInteger
+                            && matches!(incoming, ValueType::Integer | ValueType::Null))
                     {
                         return Err(fail("assignment must preserve the local's value type"));
                     }
+                    non_null.remove(&local);
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } => {
@@ -763,7 +794,15 @@ impl Function {
                             "local read must refer to an earlier initialized local",
                         ));
                     }
-                    types.insert(result, local_types[&local]);
+                    let ty = local_types[&local];
+                    types.insert(
+                        result,
+                        if ty == ValueType::NullableInteger && non_null.contains(&local) {
+                            ValueType::Integer
+                        } else {
+                            ty
+                        },
+                    );
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {

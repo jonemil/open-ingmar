@@ -70,6 +70,9 @@ inherited Number-to-String conversion on locals and parameters.
 The [typed Lang example](examples/compiler-lang-values/README.md) passes String
 and Boolean values through module and instance methods.
 
+The [nullable Number example](examples/compiler-nullable-numbers/README.md)
+checks native search/conversion results before using them as Numbers.
+
 The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
 initialization and a typed native startup callback with a null-state check.
 

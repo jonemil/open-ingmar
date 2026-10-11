@@ -15,7 +15,7 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
     }
 }
 
-/// Resolve supported comparison types to Boolean. Dictionary-or-null values
+/// Resolve supported comparison types to Boolean. Number/Dictionary-or-null values
 /// support equality with Null; Boolean pairs support equality only.
 /// Other comparisons currently require Numbers.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
@@ -23,9 +23,14 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let booleans =
         kind == ComparisonOp::Equal && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
+    let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
     let null_check = kind == ComparisonOp::Equal
-        && ((left == &Type::Null && (right == &Type::Null || right == &nullable_dictionary))
-            || (left == &nullable_dictionary && right == &Type::Null));
+        && ((left == &Type::Null
+            && (right == &Type::Null
+                || right == &nullable_dictionary
+                || right == &nullable_number))
+            || ((left == &nullable_dictionary || left == &nullable_number)
+                && right == &Type::Null));
     (numbers || booleans || null_check).then(|| Type::named("Toybox.Lang.Boolean"))
 }
 
@@ -38,6 +43,7 @@ mod tests {
     fn operator_rules_preserve_supported_types_and_reject_other_pairs() {
         let types = [
             ValueType::Integer,
+            ValueType::NullableInteger,
             ValueType::String,
             ValueType::Boolean,
             ValueType::Null,
@@ -62,8 +68,13 @@ mod tests {
                             (left, right),
                             (
                                 ValueType::Null,
-                                ValueType::Null | ValueType::NullableDictionary
-                            ) | (ValueType::NullableDictionary, ValueType::Null)
+                                ValueType::Null
+                                    | ValueType::NullableDictionary
+                                    | ValueType::NullableInteger
+                            ) | (
+                                ValueType::NullableDictionary | ValueType::NullableInteger,
+                                ValueType::Null
+                            )
                         );
                     assert_eq!(
                         result.is_some(),
@@ -90,6 +101,7 @@ mod tests {
     fn subset_value_types_round_trip_through_known_api_identities() {
         for ty in [
             ValueType::Integer,
+            ValueType::NullableInteger,
             ValueType::String,
             ValueType::Boolean,
             ValueType::Null,

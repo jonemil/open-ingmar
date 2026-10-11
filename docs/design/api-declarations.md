@@ -18,10 +18,10 @@ Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related methods, String length/case/string methods, AppBase
 initialization/startup/shutdown, and System printing/exit. Parameter/result
 subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Null, and nullable
-Dictionary; operator validation uses those semantic types. The bounded native
-call profile resolves Number's inherited `toString` and direct `format`/`abs`,
-and String's direct `length`/`toLower`/`toUpper`/`toString` contracts.
+Internal value categories map to Number, String, Boolean, Null, nullable Number,
+and nullable Dictionary; operator validation uses those semantic types. The
+bounded native call profile resolves Number's inherited `toString` and direct `format`/`abs`,
+and String's direct length, case, string, find, and Number-conversion contracts.
 Argument types must match their signatures; executable support remains a
 separate check. Number results use the existing integer value
 category, so arithmetic, call arguments, returns, and further Number calls
@@ -29,9 +29,10 @@ need no new IR operation or type.
 
 String results use the existing String category and can receive further
 supported calls. User functions accept Number, String, and Boolean parameters
-and results; API declarations alone do not enable other types. Nullable
-conversions need result unions and validation of their consumers before
-executable support is added.
+and results; API declarations alone do not enable other types. String `find`
+and `toNumber` retain Number-or-Null result contracts. Flow validation permits
+Number consumers only for local reads proved non-null by a direct branch.
+Other result unions need corresponding validation before executable support.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types
@@ -115,8 +116,8 @@ value category. Parameter/result mappings share that bridge. The internal enum
 remains a bounded profile, not a replacement for arbitrary API type expressions.
 
 Current rules accept Number/Number addition, subtraction, equality, and greater
-comparison; equality also accepts Null/Null and nullable Dictionary/Null in
-either order; Boolean pairs support equality. Arithmetic produces Number and
+comparison; equality also accepts Null/Null and nullable Number/Dictionary with
+Null in either order; Boolean pairs support equality. Arithmetic produces Number and
 comparisons produce Boolean. Boolean literals and locals share that semantic
 identity and use ordinary conditions, assignments, and printing.
 These are our supported rules, not a complete Monkey C operator specification.

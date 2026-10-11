@@ -592,10 +592,11 @@ Optional source spans use the ordinary syntax.
 
 Validation accepts a Number receiver with `toString` or `abs` taking no
 arguments, or `format` taking one String argument. String receivers accept
-zero-argument `length`, `toLower`, `toUpper`, and `toString`. Resolve contracts
-through the API catalogue: `abs` and `length` produce Number; the other
-supported methods produce String. Number results retain ordinary integer
-operand/return rules. Each chained call must resolve against its receiver's
+zero-argument `length`, `toLower`, `toUpper`, `toString`, and `toNumber`, plus
+`find` with one String argument. Resolve contracts through the API catalogue:
+`abs` and `length` produce Number; String `find`/`toNumber` produce Number or
+Null; the remaining supported methods produce String. Number results retain
+ordinary integer operand/return rules. Each chained call must resolve against its receiver's
 type. Source, typed, and text producers share these requirements.
 Unsupported members, receivers, argument counts/types, and result contracts are
 rejected before lowering. Format-content validity remains a runtime obligation.
@@ -604,7 +605,7 @@ Native calls are effectful: receiver evaluation precedes arguments and
 invocation, and their
 operation order must agree with dependency traversal at statement sinks. The
 backend emits receiver evaluation and `getsv @__ciq_native_<member>`. A
-zero-argument call uses `invokemz`; a format call adds `frpush`, evaluates its
+zero-argument call uses `invokemz`; a format/find call adds `frpush`, evaluates its
 String argument, and uses `invokem 2`. Binding requires exactly one stored symbol
 with the method's stored name in an explicit source, or the supported complete
 application's native profile. IR contains no symbol ID or import index.
@@ -618,3 +619,30 @@ ciq-ir
 .return-void
 .end
 ```
+
+## Nullable Number results
+
+`.call-native` for String `find` and `toNumber` defines Number-or-Null according
+to its API contract. The existing `.local`, `.read`, `.null`, `.equal`, and
+`.branch` forms carry this behavior; no assertion or unchecked cast operation
+is introduced. Equality with Null is accepted in either order.
+
+Shared IR validation computes non-null local facts from control flow. A branch
+whose condition is a direct `.equal` between `.read` and `.null` establishes the
+checked local's fact on its false edge. The checked read must be in the branch's
+block and have no intervening write to that local. Both outcomes reaching the
+same target provide no new proof. Entry has no external facts; joins intersect
+incoming facts and every initialization/assignment kills that local's proof.
+The fixed-point analysis handles backedges without treating a later guard as
+proof for a loop's first entry.
+
+A fresh read of a nullable Number local under this proof defines Number;
+otherwise it defines Number-or-Null. Storage remains nullable. Assignment can
+supply Number, Null, or Number-or-Null, but always requires another proof before
+Number use. Existing effect-order, one-use, and block-local value rules apply.
+Stored Boolean guards and comparisons against null-valued locals are not proof
+forms. Number-or-Null values cannot use ordinary user parameter/result contracts
+or Number consumers. Readers and typed constructors recompute all facts; IR
+text carries no trusted narrowing metadata. See [source examples][nullable-source].
+
+[nullable-source]: compiler-subset.md#nullable-number-results

@@ -25,6 +25,17 @@ expression order. Pure expressions may be scheduled by dependencies.
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
 
+## Null-check facts
+
+Nullable native Number results preserve their union until control flow proves a
+local non-null. `null_flow` computes facts shared by typed construction and text
+resumption; fresh local reads use those facts, while the storage contract remains
+nullable. Facts survive only when every incoming path provides them, and writes
+invalidate them. No runtime conversion or assertion is emitted for narrowing.
+Keeping this proof in IR validation prevents edited text from bypassing source
+checks. [IR rules](../specs/compiler-ir-text.md#nullable-number-results) define
+the supported guard forms and their limits.
+
 ## Layer responsibilities and naming
 
 The frontend resolves source syntax, names, and scopes into semantic IR.

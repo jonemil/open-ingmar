@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Nullable Number results](compiler-nullable-numbers.md): native search and
+  conversion, null checks, and guarded consumers.
 - [Typed Lang values](compiler-lang-values.md): String/Boolean arguments,
   results, and module/instance calls.
 - [Native value calls](compiler-native-calls.md): inherited Number conversion

@@ -67,7 +67,7 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.String",
                 "Toybox.Lang.String",
-                "length" | "toLower" | "toUpper" | "toString"
+                "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber"
             )
     );
     if !supported {
