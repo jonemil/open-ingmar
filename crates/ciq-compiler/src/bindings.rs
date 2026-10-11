@@ -61,6 +61,12 @@ pub fn symbol_bindings(
                 "format".to_string()
             } else if alias == "__ciq_native_abs" {
                 "abs".to_string()
+            } else if alias == "__ciq_native_equals" {
+                "equals".to_string()
+            } else if alias == "__ciq_native_hashCode" {
+                "hashCode".to_string()
+            } else if alias == "__ciq_native_compareTo" {
+                "compareTo".to_string()
             } else if alias == "__ciq_native_length" {
                 "length".to_string()
             } else if alias == "__ciq_native_substring" {

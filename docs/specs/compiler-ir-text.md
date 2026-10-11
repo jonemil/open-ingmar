@@ -595,16 +595,24 @@ runtime-provided method and defines its semantic result. The receiver and
 arguments must be earlier values with the usual single-use/block restrictions.
 Optional source spans use the ordinary syntax.
 
-Validation accepts a Number receiver with `toString` or `abs` taking no
-arguments, or `format` taking one String argument. String receivers accept
+Validation accepts a Number receiver with `toString`, `abs`, `toNumber`, or
+`hashCode` taking no arguments, `format` taking one String argument,
+`compareTo` taking Number/Boolean, or `equals` taking a supported scalar,
+nullable scalar, or Null. Number comparison requires API 5.0.0 when a context
+is supplied. Its broad Object declaration does not enable other argument
+profiles. Equality returns Boolean; hash and conversion return Number.
+String receivers accept
 zero-argument `length`, `toLower`, `toUpper`, `toString`, and `toNumber`, plus
 `find` with one String argument and `substring` with two Number-or-Null
 arguments. Each index accepts Number, Null, or Number-or-Null. Resolve contracts
 through the API catalogue:
-`abs` and `length` produce Number; String `find`/`toNumber` produce Number or
-Null; `substring` produces String or Null. The remaining methods produce String.
+Number `abs`, `toNumber`, `hashCode`, and `compareTo`, and String `length`,
+produce Number. Number `equals` produces Boolean. String `find`/`toNumber`
+produce Number or Null; `substring` produces String or Null. Formatting,
+string conversion, and case conversion produce String.
 Number results retain ordinary integer operand/return rules. Each chained call
-must resolve against its receiver's type. Source, typed, and text producers share these requirements.
+must resolve against its receiver's type. Source, typed, and text producers
+share these requirements.
 Unsupported members, receivers, argument counts/types, and result contracts are
 rejected before lowering. Format-content validity remains a runtime obligation.
 

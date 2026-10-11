@@ -107,7 +107,7 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
 fn catalogue_knowledge_does_not_enable_other_native_calls() {
     for (expression, message) in [
         ("n.toString(1)", "argument count"),
-        ("n.hashCode()", "no supported lowering"),
+        ("n.toChar()", "no supported lowering"),
         ("n.abs(1)", "argument count"),
         ("n.missing()", "not known"),
         ("n.format()", "argument count"),
@@ -283,7 +283,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
         .unwrap()
         .to_ir_text();
     for bad in [
-        valid.replace("toString", "hashCode"),
+        valid.replace("toString", "toChar"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
         valid.replace(".parameter %0 0", ".boolean %0 true"),

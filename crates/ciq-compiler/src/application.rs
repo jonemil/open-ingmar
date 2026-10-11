@@ -24,6 +24,9 @@ const INITIALIZE: u32 = 0x0080005e;
 const TO_STRING: u32 = 0x008000af;
 const FORMAT: u32 = 0x0080009c;
 const ABS: u32 = 0x008000a6;
+const EQUALS: u32 = 0x008000b3;
+const HASH_CODE: u32 = 0x008000ad;
+const COMPARE_TO: u32 = 0x00800e50;
 const LENGTH: u32 = 0x008000bb;
 const SUBSTRING: u32 = 0x008000bd;
 const FIND: u32 = 0x008000bc;
@@ -287,6 +290,9 @@ pub fn build_console_application(
         ("toString".into(), TO_STRING),
         ("format".into(), FORMAT),
         ("abs".into(), ABS),
+        ("equals".into(), EQUALS),
+        ("hashCode".into(), HASH_CODE),
+        ("compareTo".into(), COMPARE_TO),
         ("length".into(), LENGTH),
         ("substring".into(), SUBSTRING),
         ("find".into(), FIND),
@@ -340,6 +346,9 @@ pub fn build_console_application(
         ("__ciq_native_toString".into(), TO_STRING),
         ("__ciq_native_format".into(), FORMAT),
         ("__ciq_native_abs".into(), ABS),
+        ("__ciq_native_equals".into(), EQUALS),
+        ("__ciq_native_hashCode".into(), HASH_CODE),
+        ("__ciq_native_compareTo".into(), COMPARE_TO),
         ("__ciq_native_length".into(), LENGTH),
         ("__ciq_native_substring".into(), SUBSTRING),
         ("__ciq_native_find".into(), FIND),

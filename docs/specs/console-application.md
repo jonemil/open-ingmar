@@ -64,6 +64,9 @@ Fixed native symbol IDs in this profile:
 | exit | `0x0080006d` |
 | format | `0x0080009c` |
 | abs | `0x008000a6` |
+| equals | `0x008000b3` |
+| hashCode | `0x008000ad` |
+| compareTo | `0x00800e50` |
 | toNumber | `0x008000a7` |
 | toString | `0x008000af` |
 | length | `0x008000bb` |

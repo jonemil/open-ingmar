@@ -7,10 +7,12 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Start with Number using the
-   [class-focused strategy](#native-lang-strategy): review its full method surface,
-   then implement the group that fits supported value types and dispatch. Record
-   prerequisites for the remaining methods before moving to another class.
+1. **Extend core Lang contracts and value types.** Review String next using the
+   [class-focused strategy](#native-lang-strategy), including inherited methods.
+   Implement the group that fits supported value types and dispatch. Revisit
+   deferred Number methods as their [recorded prerequisites][number-methods]
+   become available; investigate receiver-dependent `weak()` contracts before
+   claiming support for its immutable-value behavior.
    Retain branch-proof validation through saved IR, joins, loops, and writes.
    Extend supported comparisons without trusting frontend-only assumptions;
    support nullable Boolean when a runnable case requires it.
@@ -220,3 +222,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [boundary]: investigations/string-address-boundary.md
 
 [api-design]: design/api-declarations.md
+
+[number-methods]: investigations/compiler-number-methods.md#method-inventory

@@ -529,10 +529,25 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `toString()` | `Lang.Object` | String |
 | `format(String)` | `Lang.Number` | String |
 | `abs()` | `Lang.Number` | Number |
+| `toNumber()` | `Lang.Number` | Number |
+| `compareTo(Number or Boolean)` | `Lang.Number` | Number |
+| `equals(scalar or nullable scalar)` | `Lang.Object` | Boolean |
+| `hashCode()` | `Lang.Object` | Number |
+
+Number `compareTo` requires API 5.0.0; the other listed Number methods require
+1.0.0. Its declaration takes Object, but current lowering admits Number or
+Boolean only. Unchecked nullable comparison arguments are rejected. `equals`
+accepts Number, String, Boolean, Null, or nullable Number/String; it returns
+Boolean. Dictionary arguments remain outside this lowering profile.
+Object arguments use catalogue-declared inheritance, not implicit conversions
+or acceptance of unknown classes. Scalar user-function contracts remain exact.
+Comparison/equality/hash behavior is supplied by the runtime; comparison signs
+and hash consistency are the contracts, not particular magnitudes or hashes.
+See the [Number group evidence](../investigations/compiler-number-methods.md).
 
 String-valued expressions support these zero-argument methods, declared by
 `Lang.String`: `length()` returns Number; `toLower()`, `toUpper()`, and
-`toString()` return String. All methods in this profile are available since
+`toString()` return String. These String methods are available since
 API 1.0.0. Runtime implementations determine character counts and case mapping;
 the compiler does not evaluate these calls at compile time.
 

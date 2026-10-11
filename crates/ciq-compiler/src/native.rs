@@ -78,22 +78,51 @@ pub(crate) fn value_call(
             resolved.declaring_class.name.as_str(),
             member
         ),
-        ("Toybox.Lang.Number", "Toybox.Lang.Object", "toString")
-            | ("Toybox.Lang.Number", "Toybox.Lang.Number", "format" | "abs")
-            | (
-                "Toybox.Lang.String",
-                "Toybox.Lang.String",
-                "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber" | "substring"
-            )
+        (
+            "Toybox.Lang.Number",
+            "Toybox.Lang.Object",
+            "toString" | "equals" | "hashCode"
+        ) | (
+            "Toybox.Lang.Number",
+            "Toybox.Lang.Number",
+            "format" | "abs" | "toNumber" | "compareTo"
+        ) | (
+            "Toybox.Lang.String",
+            "Toybox.Lang.String",
+            "length" | "toLower" | "toUpper" | "toString" | "find" | "toNumber" | "substring"
+        )
     );
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
+    if class == "Toybox.Lang.Number"
+        && member == "compareTo"
+        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean"))
+    {
+        return Err("Number.compareTo lowering currently requires Number or Boolean".into());
+    }
+    if class == "Toybox.Lang.Number" && member == "equals" && !scalar_or_null(&arguments[0]) {
+        return Err(
+            "Number.equals lowering currently requires scalar or nullable scalar arguments".into(),
+        );
+    }
     Ok(resolved.method.result.clone())
 }
 
-/// Check exact types or union membership, without implicit conversions or
-/// inheritance widening. Every alternative of an actual union must be accepted.
+fn scalar_or_null(ty: &api::Type) -> bool {
+    match ty {
+        api::Type::Null => true,
+        api::Type::Named(name) => matches!(
+            name.as_str(),
+            "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean"
+        ),
+        api::Type::Union(types) => types.iter().all(scalar_or_null),
+        _ => false,
+    }
+}
+
+/// Check exact types, declared inheritance, or union membership without implicit
+/// conversions. Every alternative of an actual union must be accepted.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual {
         return true;
@@ -102,7 +131,19 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         return types.iter().all(|ty| accepts(expected, ty));
     }
     if let api::Type::Union(types) = expected {
-        return types.iter().any(|ty| ty == actual);
+        return types.iter().any(|ty| accepts(ty, actual));
+    }
+    if let (api::Type::Named(expected), api::Type::Named(actual)) = (expected, actual) {
+        let mut class = api::core().class(actual);
+        while let Some(current) = class {
+            if current.name == *expected {
+                return true;
+            }
+            class = current
+                .superclass
+                .as_deref()
+                .and_then(|name| api::core().class(name));
+        }
     }
     false
 }
@@ -136,4 +177,27 @@ pub(crate) fn module_statement(
         return Err("native module member has no supported statement lowering".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assignability_rejects_unknown_classes_and_unrelated_or_nullable_types() {
+        let object = api::Type::named("Toybox.Lang.Object");
+        let number = api::Type::named("Toybox.Lang.Number");
+        let boolean = api::Type::named("Toybox.Lang.Boolean");
+        let nullable = api::Type::Union(vec![number.clone(), api::Type::Null]);
+        assert!(accepts(&object, &number));
+        assert!(accepts(&object, &boolean));
+        assert!(!accepts(&object, &api::Type::named("Unknown")));
+        assert!(!accepts(&object, &nullable));
+        assert!(!accepts(&number, &boolean));
+        assert!(!accepts(&number, &nullable));
+        assert!(accepts(
+            &api::Type::Union(vec![object, api::Type::Null]),
+            &nullable
+        ));
+    }
 }

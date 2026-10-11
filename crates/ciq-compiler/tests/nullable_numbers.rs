@@ -109,7 +109,7 @@ fn nullable_methods_reject_bad_arguments_and_other_receivers() {
         "function f() { var n = \"text\".find(1); }",
         "function f() { var n = \"text\".find(null); }",
         "function f() { var n = \"text\".toNumber(1); }",
-        "function f() { var n = 41.toNumber(); }",
+        "function f() { var n = true.toNumber(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

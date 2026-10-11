@@ -76,6 +76,9 @@ checks native search/conversion results before using them as Numbers.
 The [substring example](examples/compiler-substring/README.md) exercises nullable
 String results, guarded returns, and nullable/negative indices.
 
+The [Number method example](examples/compiler-number-methods/README.md) groups
+conversion, comparison, equality, and hashing checks.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

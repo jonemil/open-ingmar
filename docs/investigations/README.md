@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number methods](compiler-number-methods.md): full method inventory, deferred
+  prerequisites, and grouped simulator validation.
 - [Nullable user contracts](compiler-nullable-contracts.md): union signatures,
   call validation, and matching SDK/generated application output.
 - [Substring results](compiler-substring.md): nullable String validation and

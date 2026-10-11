@@ -19,14 +19,19 @@ Number arithmetic-related methods, String length/case/string methods, AppBase
 initialization/startup/shutdown, and System printing/exit. Parameter/result
 subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Null, nullable Number,
-nullable String, and nullable Dictionary; operator validation uses those semantic types. The
-bounded native call profile resolves Number's inherited `toString` and direct `format`/`abs`,
+nullable String, and nullable Dictionary; operator validation uses those
+semantic types. The
+bounded native call profile resolves Number's inherited `toString`, `equals`,
+and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
 and String's length, case, string, find, substring, and Number-conversion contracts.
-Argument types must match their signatures or be alternatives of a declared
-union; every alternative of an actual union must be accepted. This does not
-imply inheritance widening or conversions. Executable support remains a
-separate check. Number results use the existing integer value
-category, so arithmetic, call arguments, returns, and further Number calls
+Argument types must satisfy their signatures or a declared union; every
+alternative of an actual union must be accepted. This does not
+permit implicit conversions or unknown classes. Named arguments may widen
+through catalogue-declared superclass paths. Executable method profiles can
+restrict a broad declaration further: Number comparison admits Number/Boolean,
+and Number equality admits supported scalars and nullable scalars. Executable
+support remains a separate check. Number results use the existing integer
+value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
@@ -94,10 +99,10 @@ nor configures PRG deployment metadata.
 
 Current checks cover supported Number/String value calls, System printing/exit,
 AppBase bases, initialization, and known callbacks. Method introductions in the
-executable profile are API 1.0.0; substring's nullable index form additionally
-requires 3.3.2. Later known Number methods exercise availability diagnostics
-without gaining lowering. Context levels are caller assertions: no device
-database, permission, app-type, execution-scope, or VM-capability validation is
+executable profile are API 1.0.0 except Number.compareTo at 5.0.0; substring's
+nullable index form additionally requires 3.3.2. Catalogue knowledge does not
+enable methods whose executable types or profiles are unsupported. Context
+levels are caller assertions: no device database, permission, app-type, execution-scope, or VM-capability validation is
 implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.
 
 Native module statements have canonical module/member identities and no result

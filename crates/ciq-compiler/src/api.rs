@@ -305,6 +305,7 @@ fn build_core() -> Catalogue {
     ];
     classes.get_mut(number).unwrap().methods = vec![
         method("abs", vec![], Type::named(number), initial),
+        method("toNumber", vec![], Type::named(number), initial),
         method(
             "format",
             vec![Type::named(string)],
