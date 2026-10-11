@@ -409,21 +409,27 @@ impl Builder<'_> {
 /// Resolve source names and emit validated integer-return or void function IR.
 /// Integer functions require a value on every path. Void fallthrough gains a
 /// return terminator; mixed returns and unreachable statements are rejected.
-pub(crate) fn build(source: &str, ast: parser::ParsedFunction) -> Result<Function, Diagnostic> {
-    build_body(source, ast, false)
+pub(crate) fn build(
+    source: &str,
+    ast: parser::ParsedFunction,
+    context: Option<crate::api::ApiContext>,
+) -> Result<Function, Diagnostic> {
+    build_body(source, ast, false, context)
 }
 
 pub(crate) fn build_method(
     source: &str,
     ast: parser::ParsedFunction,
+    context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, true)
+    build_body(source, ast, true, context)
 }
 
 fn build_body(
     source: &str,
     ast: parser::ParsedFunction,
     method: bool,
+    context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
     fn has_value_return(statements: &[parser::Statement]) -> bool {
         statements.iter().any(|s| match s {
@@ -475,12 +481,7 @@ fn build_body(
         );
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
-    let construct = if method {
-        Function::method
-    } else {
-        Function::with_parameters
-    };
-    let result = if let Some(signature) = method
+    let parameter_types = if let Some(signature) = method
         .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
         .flatten()
     {
@@ -491,14 +492,17 @@ fn build_body(
                 "onStart requires one nullable-dictionary parameter",
             ));
         }
-        Function::method_with_parameter_types(
-            ast.name,
-            signature.parameters.to_vec(),
-            builder.operations,
-        )
+        signature.parameters
     } else {
-        construct(ast.name, builder.parameters.len(), builder.operations)
+        vec![crate::ParameterType::Integer; builder.parameters.len()]
     };
+    let result = Function::construct_for_api(
+        ast.name,
+        parameter_types,
+        builder.operations,
+        method,
+        context,
+    );
     result.map_err(|error| {
         let offset = error
             .operation

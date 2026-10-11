@@ -1,6 +1,112 @@
 use std::{fs, process::Command};
 
 #[test]
+fn cli_api_context_checks_source_and_ir_and_rejects_invalid_options() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-api-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let output = dir.join("probe.ciqir");
+    let run = |options: &[&str], input: &std::path::Path, output: &std::path::Path| {
+        Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(options)
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap()
+    };
+    fs::write(&source, "function show(n) { System.println(n.toChar()); }").unwrap();
+    let failure = run(
+        &["--target-api", "1.0.0", "--min-api", "1.0.0"],
+        &source,
+        &output,
+    );
+    assert!(String::from_utf8_lossy(&failure.stderr).contains("unavailable on target API"));
+    assert!(!failure.status.success());
+    assert!(!output.exists());
+    fs::write(
+        &source,
+        "function show(n) { System.println(n.toString()); }",
+    )
+    .unwrap();
+    let success = run(
+        &[
+            "--target-api",
+            "1.0.0",
+            "--min-api",
+            "1.0.0",
+            "--emit",
+            "ir",
+        ],
+        &source,
+        &output,
+    );
+    assert!(
+        success.status.success(),
+        "{}",
+        String::from_utf8_lossy(&success.stderr)
+    );
+    let resumed = dir.join("resumed.mcasm");
+    let success = run(
+        &[
+            "--from",
+            "ir",
+            "--target-api",
+            "1.0.0",
+            "--min-api",
+            "1.0.0",
+        ],
+        &output,
+        &resumed,
+    );
+    assert!(success.status.success());
+    let invalid = dir.join("invalid.mcasm");
+    for (options, expected) in [
+        (vec!["--target-api", "1.0.0"], "supplied together"),
+        (vec!["--min-api", "1.0.0"], "supplied together"),
+        (
+            vec!["--target-api", "1.0", "--min-api", "1.0.0"],
+            "major.minor.patch",
+        ),
+        (
+            vec!["--target-api", "1.0.0", "--min-api", "1.3.0"],
+            "exceeds target API",
+        ),
+        (
+            vec![
+                "--target-api",
+                "1.0.0",
+                "--target-api",
+                "1.0.0",
+                "--min-api",
+                "1.0.0",
+            ],
+            "duplicate",
+        ),
+        (
+            vec![
+                "--from",
+                "assembly",
+                "--target-api",
+                "1.0.0",
+                "--min-api",
+                "1.0.0",
+            ],
+            "assembly has no API contracts",
+        ),
+    ] {
+        let failure = run(&options, &source, &invalid);
+        assert!(!failure.status.success());
+        assert!(
+            String::from_utf8_lossy(&failure.stderr).contains(expected),
+            "{}",
+            String::from_utf8_lossy(&failure.stderr)
+        );
+        assert!(!invalid.exists());
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn cli_refuses_overwrite_and_creates_no_output_for_invalid_input() {
     let dir = std::env::temp_dir().join(format!("ciq-compiler-cli-{}", std::process::id()));
     fs::create_dir(&dir).unwrap();

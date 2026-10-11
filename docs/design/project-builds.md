@@ -56,6 +56,12 @@ Keep catalogue coverage, selected-device capabilities, application minimum API,
 and VM encoding capabilities distinct. Target resolution supplies constraints;
 it does not duplicate the API catalogue for each device.
 
+The compiler currently accepts explicit API-level inputs through `ApiContext`
+and paired `--target-api`/`--min-api` options. These are caller assertions, not
+device selection or manifest resolution; they do not set PRG deployment
+metadata. The resolver should supply these inputs from verified target and
+manifest data rather than using the SDK version as a target capability.
+
 Build mode (debug/release/test) and execution scope (foreground/background/
 glance) are separate inputs. Preserve declaration annotations and resource
 scopes, with provenance, for selection and reference checking. A test build

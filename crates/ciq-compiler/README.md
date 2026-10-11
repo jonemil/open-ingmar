@@ -21,6 +21,11 @@ contracts with inherited lookup and introduction-level checks. It does not
 enable arbitrary API calls or perform complete target availability validation.
 See [API declaration design](../../docs/design/api-declarations.md).
 
+Supply `--target-api 1.0.0 --min-api 1.0.0` for explicit unguarded API-level
+checks on source or IR inputs. Library entry points with `_with_api` accept an
+`api::ApiContext`; typed models expose `validate_api`. See
+[input rules](../../docs/specs/compiler-ir-text.md#api-context-inputs).
+
 Start with `compile`, `compile_sources`, `Function`, and `CompilationUnit` in
 the [library API](src/lib.rs). See [compiler design](../../docs/design/compiler-ir.md),
 [source/CLI rules](../../docs/specs/compiler-subset.md),

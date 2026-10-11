@@ -13,8 +13,11 @@ Integer/string/null restrictions below describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
 The [core type/API model](../design/api-declarations.md) connects values to
 `Lang` identities for operator validation and the bounded native calls below.
-General member lookup and target API availability checking remain unsupported.
+General member lookup remains unsupported. Explicit API-level checks cover the
+known native references; see [API context inputs][api-context].
 No API declaration-file syntax is specified here.
+
+[api-context]: compiler-ir-text.md#api-context-inputs
 
 The default mode accepts exactly one top-level function.
 [Compilation-unit mode](compiler-unit.md) adds global/module declarations and

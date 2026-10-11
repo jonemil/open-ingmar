@@ -15,6 +15,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut data_path = None;
     let mut app_id = None;
     let mut app_entry = None;
+    let mut target_api = None;
+    let mut min_api = None;
     let mut args = env::args_os().skip(1);
     let mut options = std::collections::BTreeSet::new();
     while let Some(arg) = args.next() {
@@ -31,6 +33,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             || arg == "--data"
             || arg == "--app-id"
             || arg == "--entry"
+            || arg == "--target-api"
+            || arg == "--min-api"
         {
             if !options.insert(arg.clone()) {
                 return Err("duplicate pipeline option".into());
@@ -51,6 +55,10 @@ fn run() -> Result<(), Box<dyn Error>> {
                 app_id = Some(value);
             } else if arg == "--entry" {
                 app_entry = Some(value);
+            } else if arg == "--target-api" {
+                target_api = Some(value.parse::<ciq_compiler::api::ApiLevel>()?);
+            } else if arg == "--min-api" {
+                min_api = Some(value.parse::<ciq_compiler::api::ApiLevel>()?);
             } else if arg == "--from" {
                 from = value;
             } else {
@@ -62,8 +70,16 @@ fn run() -> Result<(), Box<dyn Error>> {
             paths.push(arg);
         }
     }
+    let context = match (target_api, min_api) {
+        (None, None) => None,
+        (Some(target), Some(minimum)) => Some(ciq_compiler::api::ApiContext::new(target, minimum)?),
+        _ => return Err("--target-api and --min-api must be supplied together".into()),
+    };
+    if context.is_some() && from == "assembly" {
+        return Err("API checks require source or IR input; assembly has no API contracts".into());
+    }
     if paths.len() < 2 || (paths.len() != 2 && (!unit || from != "source")) {
-        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--app-id <32-hex-digits>] [--entry <global-function|Class.method>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
+        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--target-api <major.minor.patch> --min-api <major.minor.patch>] [--app-id <32-hex-digits>] [--entry <global-function|Class.method>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
         || !matches!(emit.as_str(), "ir" | "assembly" | "code" | "prg")
@@ -108,7 +124,12 @@ fn run() -> Result<(), Box<dyn Error>> {
     let (ir, assembly) = if unit && from != "assembly" {
         let model = if from == "source" {
             let inputs = sources.iter().map(String::as_str).collect::<Vec<_>>();
-            ciq_compiler::compile_sources(&inputs).map_err(|error| {
+            let result = if let Some(context) = context {
+                ciq_compiler::compile_sources_with_api(&inputs, context)
+            } else {
+                ciq_compiler::compile_sources(&inputs)
+            };
+            result.map_err(|error| {
                 format!(
                     "{}:{}",
                     paths[error.source].to_string_lossy(),
@@ -116,8 +137,12 @@ fn run() -> Result<(), Box<dyn Error>> {
                 )
             })?
         } else {
-            ciq_compiler::parse_unit_ir(source)
-                .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?
+            let result = if let Some(context) = context {
+                ciq_compiler::parse_unit_ir_with_api(source, context)
+            } else {
+                ciq_compiler::parse_unit_ir(source)
+            };
+            result.map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?
         };
         if let Some(application) = &application {
             prg = Some(
@@ -132,10 +157,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             )
         }
     } else if from != "assembly" {
-        let function = if from == "source" {
-            ciq_compiler::compile(source)
-        } else {
-            ciq_compiler::parse_ir(source)
+        let function = match (from.as_str(), context) {
+            ("source", Some(context)) => ciq_compiler::compile_with_api(source, context),
+            ("source", None) => ciq_compiler::compile(source),
+            (_, Some(context)) => ciq_compiler::parse_ir_with_api(source, context),
+            (_, None) => ciq_compiler::parse_ir(source),
         }
         .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?;
         (

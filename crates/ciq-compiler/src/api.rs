@@ -9,6 +9,133 @@ use std::sync::OnceLock;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ApiLevel(pub u16, pub u16, pub u16);
 
+impl std::fmt::Display for ApiLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.0, self.1, self.2)
+    }
+}
+
+impl std::str::FromStr for ApiLevel {
+    type Err = &'static str;
+
+    /// Parse exactly three decimal u16 components, such as `1.3.0`.
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let components = text.split('.').collect::<Vec<_>>();
+        if components.len() != 3
+            || components
+                .iter()
+                .any(|c| c.is_empty() || !c.bytes().all(|b| b.is_ascii_digit()))
+        {
+            return Err("API level requires major.minor.patch decimal components");
+        }
+        let parse = |c: &str| {
+            c.parse::<u16>()
+                .map_err(|_| "API level component exceeds u16")
+        };
+        Ok(Self(
+            parse(components[0])?,
+            parse(components[1])?,
+            parse(components[2])?,
+        ))
+    }
+}
+
+/// Explicit API-level inputs for unguarded declaration checking.
+/// This does not establish device, permission, app-type, or VM compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApiContext {
+    target: ApiLevel,
+    minimum: ApiLevel,
+}
+
+impl ApiContext {
+    /// Construct a context with a deployment minimum no higher than the target.
+    /// Both levels must be at least the initial Connect IQ API, `1.0.0`.
+    pub fn new(target: ApiLevel, minimum: ApiLevel) -> Result<Self, &'static str> {
+        if minimum < ApiLevel(1, 0, 0) || target < ApiLevel(1, 0, 0) {
+            return Err("target and minimum API must be at least 1.0.0");
+        }
+        if minimum > target {
+            return Err("application minimum API exceeds target API");
+        }
+        Ok(Self { target, minimum })
+    }
+
+    /// Return the caller-supplied target capability level, not the SDK version.
+    pub fn target(self) -> ApiLevel {
+        self.target
+    }
+
+    /// Return the application's caller-supplied deployment requirement.
+    pub fn minimum(self) -> ApiLevel {
+        self.minimum
+    }
+
+    fn require(self, name: &str, since: ApiLevel) -> Result<(), String> {
+        if since > self.target {
+            return Err(format!(
+                "{name} requires API {since}; unavailable on target API {}",
+                self.target
+            ));
+        }
+        if since > self.minimum {
+            return Err(format!(
+                "unguarded {name} requires API {since}; application minimum API is {}",
+                self.minimum
+            ));
+        }
+        Ok(())
+    }
+
+    /// Check a known class and its enclosing module introduction levels.
+    pub fn check_class(self, catalogue: &Catalogue, path: &str) -> Result<(), String> {
+        let class = catalogue
+            .class(path)
+            .ok_or_else(|| format!("class {path} is not known in the API catalogue"))?;
+        self.require(path, catalogue.class_level(class))
+    }
+
+    /// Resolve an inherited method and check its unguarded introduction level.
+    /// Unknown declarations and unavailable declarations produce different errors.
+    pub fn method<'a>(
+        self,
+        catalogue: &'a Catalogue,
+        class: &str,
+        member: &str,
+    ) -> Result<ResolvedMethod<'a>, String> {
+        self.check_class(catalogue, class)?;
+        let method = catalogue.method(class, member).ok_or_else(|| {
+            format!("native member {class}.{member} is not known in the API catalogue")
+        })?;
+        self.require(&format!("{class}.{member}"), method.required_api)?;
+        Ok(method)
+    }
+
+    /// Resolve a module function and check the module and member levels.
+    pub fn function<'a>(
+        self,
+        catalogue: &'a Catalogue,
+        module: &str,
+        member: &str,
+    ) -> Result<&'a Method, String> {
+        let declaration = catalogue
+            .module(module)
+            .ok_or_else(|| format!("module {module} is not known in the API catalogue"))?;
+        let method = declaration
+            .functions
+            .iter()
+            .find(|m| m.name == member)
+            .ok_or_else(|| {
+                format!("native function {module}.{member} is not known in the API catalogue")
+            })?;
+        self.require(
+            &format!("{module}.{member}"),
+            declaration.since.max(method.since),
+        )?;
+        Ok(method)
+    }
+}
+
 /// Semantic types in API signatures; named types use canonical class paths.
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,7 +188,7 @@ pub struct Module {
 pub struct ResolvedMethod<'a> {
     pub declaring_class: &'a Class,
     pub method: &'a Method,
-    /// Includes the requested class, intervening bases, and the member itself.
+    /// Includes the requested class, bases, enclosing modules, and the member.
     pub required_api: ApiLevel,
 }
 
@@ -81,6 +208,18 @@ pub struct Catalogue {
 }
 
 impl Catalogue {
+    fn class_level(&self, class: &Class) -> ApiLevel {
+        let mut level = class.since;
+        let mut path = class.name.as_str();
+        while let Some((parent, _)) = path.rsplit_once('.') {
+            if let Some(module) = self.module(parent) {
+                level = level.max(module.since);
+            }
+            path = parent;
+        }
+        level
+    }
+
     /// Look up a canonical module path; missing entries mean unknown coverage.
     pub fn module(&self, path: &str) -> Option<&Module> {
         self.modules.get(path)
@@ -95,9 +234,9 @@ impl Catalogue {
     /// declaring class and effective introduction level. Unknown paths return None.
     pub fn method(&self, class: &str, name: &str) -> Option<ResolvedMethod<'_>> {
         let mut current = self.class(class)?;
-        let mut required_api = current.since;
+        let mut required_api = self.class_level(current);
         loop {
-            required_api = required_api.max(current.since);
+            required_api = required_api.max(self.class_level(current));
             if let Some(method) = current.methods.iter().find(|method| method.name == name) {
                 return Some(ResolvedMethod {
                     declaring_class: current,
@@ -218,6 +357,37 @@ fn build_core() -> Catalogue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enclosing_module_and_inherited_base_levels_are_required() {
+        let mut catalogue = build_core();
+        catalogue.modules.get_mut("Toybox.Lang").unwrap().since = ApiLevel(2, 0, 0);
+        let old = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
+        assert!(
+            old.check_class(&catalogue, "Toybox.Lang.Number")
+                .unwrap_err()
+                .contains("requires API 2.0.0")
+        );
+        assert_eq!(
+            catalogue
+                .method("Toybox.Application.AppBase", "toString")
+                .unwrap()
+                .required_api,
+            ApiLevel(2, 0, 0)
+        );
+        catalogue
+            .classes
+            .get_mut("Toybox.Lang.Object")
+            .unwrap()
+            .since = ApiLevel(3, 0, 0);
+        assert_eq!(
+            catalogue
+                .method("Toybox.Lang.Number", "toString")
+                .unwrap()
+                .required_api,
+            ApiLevel(3, 0, 0)
+        );
+    }
 
     #[test]
     fn class_existence_does_not_enable_later_members() {

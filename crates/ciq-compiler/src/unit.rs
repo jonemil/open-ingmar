@@ -112,6 +112,38 @@ pub struct CompilationUnit {
 }
 
 impl CompilationUnit {
+    /// Check known native bases and unguarded API references in all bodies.
+    /// Errors retain the unit's flattened body indexes. The context is external
+    /// to semantic IR; this does not validate a device or application profile.
+    pub fn validate_api(&self, context: crate::api::ApiContext) -> Result<(), UnitError> {
+        for class in &self.classes {
+            match class.base {
+                ClassBase::ApplicationAppBase => {
+                    context.check_class(crate::api::core(), "Toybox.Application.AppBase")
+                }
+            }
+            .map_err(|message| UnitError {
+                declaration: None,
+                operation: None,
+                message,
+            })?;
+        }
+        for (index, body) in self
+            .declarations
+            .iter()
+            .map(|d| &d.function)
+            .chain(self.classes.iter().flat_map(|c| &c.methods))
+            .enumerate()
+        {
+            body.validate_api(context).map_err(|error| UnitError {
+                declaration: Some(index),
+                operation: error.operation,
+                message: error.message,
+            })?;
+        }
+        Ok(())
+    }
+
     /// Validate declarations and qualified calls against all function signatures.
     ///
     /// Accepts forward and recursive calls. Rejects duplicate identities,
@@ -501,6 +533,22 @@ impl std::error::Error for SourceDiagnostic {}
 /// Application lifecycle, metadata, signing, and project configuration are not
 /// generated here.
 pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagnostic> {
+    compile_sources_context(sources, None)
+}
+
+/// Compile a source unit with explicit target and deployment API levels.
+/// Checks known unguarded references; device and permission checks are separate.
+pub fn compile_sources_with_api(
+    sources: &[&str],
+    context: crate::api::ApiContext,
+) -> Result<CompilationUnit, SourceDiagnostic> {
+    compile_sources_context(sources, Some(context))
+}
+
+fn compile_sources_context(
+    sources: &[&str],
+    context: Option<crate::api::ApiContext>,
+) -> Result<CompilationUnit, SourceDiagnostic> {
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
     let mut origins = Vec::new();
@@ -522,10 +570,15 @@ pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagno
             origins.push((source_index, ast.body_span.start));
             declarations.push(FunctionDeclaration {
                 module,
-                function: source_ir::build(source, ast).map_err(diagnostic)?,
+                function: source_ir::build(source, ast, context).map_err(diagnostic)?,
             });
         }
         for class in parsed.classes {
+            if let Some(context) = context {
+                context
+                    .check_class(crate::api::core(), "Toybox.Application.AppBase")
+                    .map_err(|message| diagnostic(Diagnostic::at(source, 0, message)))?;
+            }
             let mut methods = Vec::new();
             for ast in class.methods {
                 if origins.len() + class_origins.len() >= MAX_FUNCTIONS {
@@ -536,7 +589,7 @@ pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagno
                     )));
                 }
                 class_origins.push((source_index, ast.body_span.start));
-                methods.push(source_ir::build_method(source, ast).map_err(diagnostic)?);
+                methods.push(source_ir::build_method(source, ast, context).map_err(diagnostic)?);
             }
             classes.push(ClassDeclaration {
                 name: class.name,
@@ -583,6 +636,22 @@ pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagno
 /// AppBase classes contain instance-method function IR. Diagnostics
 /// use text positions; serialized source spans are provenance only.
 pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
+    parse_unit_ir_context(text, None)
+}
+
+/// Parse unit IR while checking known unguarded API references against the
+/// supplied context. Supply the context again when resuming a saved text build.
+pub fn parse_unit_ir_with_api(
+    text: &str,
+    context: crate::api::ApiContext,
+) -> Result<CompilationUnit, Diagnostic> {
+    parse_unit_ir_context(text, Some(context))
+}
+
+fn parse_unit_ir_context(
+    text: &str,
+    context: Option<crate::api::ApiContext>,
+) -> Result<CompilationUnit, Diagnostic> {
     let rows = text
         .split_inclusive('\n')
         .scan(0, |offset, line| {
@@ -608,13 +677,18 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
     let mut classes = Vec::new();
     let mut locations = Vec::new();
     let mut class_locations = Vec::new();
-    fn function(text: &str, rows: &[(usize, &str)], i: &mut usize) -> Result<Function, Diagnostic> {
+    fn function(
+        text: &str,
+        rows: &[(usize, &str)],
+        i: &mut usize,
+        context: Option<crate::api::ApiContext>,
+    ) -> Result<Function, Diagnostic> {
         let start = rows.get(*i).map_or(text.len(), |r| r.0);
         while let Some((_, line)) = rows.get(*i) {
             *i += 1;
             if line.split('#').next().unwrap().trim() == ".end" {
                 let end = rows.get(*i).map_or(text.len(), |r| r.0);
-                return crate::parse_ir(&text[start..end])
+                return crate::ir_text::parse_ir_context(&text[start..end], context)
                     .map_err(|e| Diagnostic::at(text, start + e.offset, e.message));
             }
         }
@@ -637,10 +711,15 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
                 locations.push(at);
                 declarations.push(FunctionDeclaration {
                     module,
-                    function: function(text, &rows, &mut i)?,
+                    function: function(text, &rows, &mut i, context)?,
                 });
             }
             [".class", name, "Application.AppBase"] => {
+                if let Some(context) = context {
+                    context
+                        .check_class(crate::api::core(), "Toybox.Application.AppBase")
+                        .map_err(|message| Diagnostic::at(text, at, message))?;
+                }
                 let name = (*name).to_owned();
                 let mut methods = Vec::new();
                 let mut ended = false;
@@ -663,7 +742,7 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
                         ));
                     }
                     class_locations.push(method_at);
-                    methods.push(function(text, &rows, &mut i)?);
+                    methods.push(function(text, &rows, &mut i, context)?);
                 }
                 if !ended {
                     return Err(Diagnostic::at(text, at, "expected .end-class"));

@@ -84,6 +84,25 @@ method-call statements, or String-returning user functions are established.
 Catalogue entries for other Number methods do not enable executable calls.
 API introduction lookup does not validate a selected device or firmware profile.
 
+## Explicit API context
+
+**Observed:** the downloaded local
+`scratch/garmin-data/Devices/fr265/compiler.json` records
+`partNumbers[0].connectIQVersion` as `5.2.0` and `firmwareVersion` as `2502`.
+This device description is separate from SDK 9.2.0; it does not establish the
+API level of the user's installed firmware. Device data remains ignored.
+
+The complete native-call example ran with explicit target API 5.2.0 and
+application minimum 1.0.0, printing the same eight expected lines. Reproduce
+with the [example commands][example], adding
+`--target-api 5.2.0 --min-api 1.0.0` to the compiler invocation. This verifies
+that the context preserves the executable path for the example's 1.0.0
+contracts; it does not exercise later APIs or prove broader target compatibility.
+
+Tests check Number.toChar's documented 1.3.0 threshold, a deployment minimum
+below that threshold, and the separate unsupported-lowering error. Those are
+compiler diagnostic checks, not runtime validation of toChar.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [example]: ../../examples/compiler-native-calls/README.md

@@ -38,18 +38,23 @@ pub(crate) fn value_call(
     receiver: &api::Type,
     member: &str,
     arguments: &[api::Type],
-) -> Result<api::Type, &'static str> {
+    context: Option<api::ApiContext>,
+) -> Result<api::Type, String> {
     let api::Type::Named(class) = receiver else {
-        return Err("native calls require a supported class-valued receiver");
+        return Err("native calls require a supported class-valued receiver".into());
     };
-    let resolved = api::core()
-        .method(class, member)
-        .ok_or("native member is not known in the API catalogue")?;
+    let resolved = if let Some(context) = context {
+        context.method(api::core(), class, member)?
+    } else {
+        api::core()
+            .method(class, member)
+            .ok_or("native member is not known in the API catalogue")?
+    };
     if resolved.method.parameters.len() != arguments.len() {
-        return Err("native call argument count does not match its API contract");
+        return Err("native call argument count does not match its API contract".into());
     }
     if resolved.method.parameters != arguments {
-        return Err("native call argument types do not match its API contract");
+        return Err("native call argument types do not match its API contract".into());
     }
     if class != "Toybox.Lang.Number"
         || !matches!(
@@ -57,7 +62,7 @@ pub(crate) fn value_call(
             ("Toybox.Lang.Object", "toString") | ("Toybox.Lang.Number", "format")
         )
     {
-        return Err("native member has no supported lowering for this receiver");
+        return Err("native member has no supported lowering for this receiver".into());
     }
     Ok(resolved.method.result.clone())
 }

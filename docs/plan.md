@@ -7,13 +7,13 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Supply target context for API checking.** Connect declaration introduction
-   levels to explicit target API and application minimum-API inputs before
-   expanding native contracts. Keep unsupported lowering distinct from unknown
-   declarations and target-unavailable members. Establish which constraints are
-   known for the selected device/app profile rather than assuming SDK version is
-   its API level. Migrate remaining Application/System special cases as they
-   acquire supported call forms. See [API declaration design][api-design].
+1. **Extend target constraints and core contracts.** Connect the explicit API
+   context to verified device/app inputs as project resolution develops. Add
+   app type, permission, scope, and VM constraints when supported calls need
+   them; keep unknown constraints explicit. Plan `has`-guarded optional APIs
+   before claiming portable references newer than the app minimum. Migrate
+   remaining Application/System special cases as they acquire supported call
+   forms. See [API declaration design][api-design].
 
    Read the language reference alongside `Lang` contracts when extending
    operator rules. Grow numeric conversions, mixed arithmetic, string addition,
@@ -21,11 +21,9 @@ compiling a project.
    one increment. Preserve native/text pipeline equivalence and complete-app
    simulator validation as new call contracts and operators are added.
 
-   Define explicit target context alongside availability: selected device/API,
-   app type, permissions, and execution scope. Keep the app's minimum API and VM
-   capabilities distinct. Plan guarded optional references through `has` before
-   claiming compatibility across API levels. A full Jungle driver and API
-   definition parser are not prerequisites.
+   Keep the app's minimum API and VM capabilities distinct from device/API
+   selection. A full Jungle driver and API definition parser are not
+   prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
    AppBase/View inherited members and callback contracts. Extend Boolean,
    object-reference, array, and nullable values as required, retaining `Void`

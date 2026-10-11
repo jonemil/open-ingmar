@@ -22,10 +22,10 @@ mod operators;
 mod parser;
 mod source_ir;
 mod unit;
-pub use ir_text::parse_ir;
+pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FunctionDeclaration, SourceDiagnostic, UnitError,
-    compile_sources, parse_unit_ir,
+    compile_sources, compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
 
 use std::fmt;
@@ -342,6 +342,20 @@ impl Function {
         &self.operations
     }
 
+    /// Check this immutable function's known unguarded API references against
+    /// explicit target and deployment levels. Returns an operation-indexed error
+    /// where possible; does not change IR or establish device compatibility.
+    pub fn validate_api(&self, context: api::ApiContext) -> Result<(), IrError> {
+        Self::construct_for_api(
+            self.name.clone(),
+            self.parameter_types.clone(),
+            self.operations.clone(),
+            self.instance_method,
+            Some(context),
+        )
+        .map(|_| ())
+    }
+
     /// Construct and validate a zero-parameter function from IR operations.
     ///
     /// Uses [`Self::with_parameters`] with a parameter count of zero.
@@ -419,6 +433,26 @@ impl Function {
         operations: Vec<LocatedOperation>,
         instance_method: bool,
     ) -> Result<Self, IrError> {
+        Self::construct_for_api(name, parameter_types, operations, instance_method, None)
+    }
+
+    fn construct_for_api(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        operations: Vec<LocatedOperation>,
+        instance_method: bool,
+        context: Option<api::ApiContext>,
+    ) -> Result<Self, IrError> {
+        if instance_method && native::callback(ClassBase::ApplicationAppBase, &name).is_some() {
+            if let Some(context) = context {
+                context
+                    .method(api::core(), "Toybox.Application.AppBase", &name)
+                    .map_err(|message| IrError {
+                        operation: None,
+                        message,
+                    })?;
+            }
+        }
         let parameter_count = parameter_types.len();
         if parameter_count > MAX_PARAMETERS {
             return Err(IrError {
@@ -507,6 +541,11 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::NativeBaseInitialize { .. } => {
+                    if let Some(context) = context {
+                        context
+                            .method(api::core(), "Toybox.Application.AppBase", "initialize")
+                            .map_err(|message| fail(&message))?;
+                    }
                     if !instance_method {
                         return Err(fail(
                             "native base initialization requires an instance method",
@@ -515,6 +554,11 @@ impl Function {
                     (None, vec![])
                 }
                 Operation::Println { value } => {
+                    if let Some(context) = context {
+                        context
+                            .function(api::core(), "Toybox.System", "println")
+                            .map_err(|message| fail(&message))?;
+                    }
                     if !matches!(type_of(value), ValueType::Integer | ValueType::String) {
                         return Err(fail("println currently accepts only integers or strings"));
                     }
@@ -559,9 +603,13 @@ impl Function {
                         .iter()
                         .map(|v| type_of(*v).api_type())
                         .collect::<Vec<_>>();
-                    let result_type =
-                        native::value_call(&type_of(receiver).api_type(), member, &argument_types)
-                            .map_err(fail)?;
+                    let result_type = native::value_call(
+                        &type_of(receiver).api_type(),
+                        member,
+                        &argument_types,
+                        context,
+                    )
+                    .map_err(|message| fail(&message))?;
                     let result_type = ValueType::from_api_type(&result_type)
                         .ok_or_else(|| fail("native call result type has no supported lowering"))?;
                     types.insert(result, result_type);
@@ -1007,7 +1055,13 @@ impl Function {
 /// diagnostics rather than partial output. VM instruction selection and symbol
 /// binding occur later.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
-    source_ir::build(source, parser::parse(source)?)
+    source_ir::build(source, parser::parse(source)?, None)
+}
+
+/// Parse a supported function and check unguarded API references against explicit
+/// target and deployment levels before lowering support. No device is inferred.
+pub fn compile_with_api(source: &str, context: api::ApiContext) -> Result<Function, Diagnostic> {
+    source_ir::build(source, parser::parse(source)?, Some(context))
 }
 
 fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'static str> {

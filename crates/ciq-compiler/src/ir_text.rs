@@ -8,6 +8,22 @@ use crate::{
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
 pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
+    parse_ir_context(source, None)
+}
+
+/// Parse function IR with explicit unguarded API-level checks. The context is
+/// a build input and is not read from, or written into, semantic IR text.
+pub fn parse_ir_with_api(
+    source: &str,
+    context: crate::api::ApiContext,
+) -> Result<Function, Diagnostic> {
+    parse_ir_context(source, Some(context))
+}
+
+pub(crate) fn parse_ir_context(
+    source: &str,
+    context: Option<crate::api::ApiContext>,
+) -> Result<Function, Diagnostic> {
     let mut rows = Vec::new();
     let mut offset = 0;
     for line in source.split_inclusive('\n') {
@@ -85,6 +101,9 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             return Err(fail(*name_at, "invalid or duplicate function metadata"));
         }
+    }
+    if parameter_count > crate::MAX_PARAMETERS {
+        return Err(fail(*name_at, "function exceeds 254-parameter limit"));
     }
     let mut operations = Vec::new();
     let mut operation_offsets = Vec::new();
@@ -356,22 +375,24 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     if !ended {
         return Err(fail(source.len(), "expected .end"));
     }
-    let construct = if instance_method {
-        Function::method
-    } else {
-        Function::with_parameters
-    };
-    let result = if let Some(types) = parameter_types {
+    let types = if let Some(types) = parameter_types {
         if !instance_method || types.len() != parameter_count {
             return Err(fail(
                 *name_at,
                 "parameter types require an instance receiver and matching count",
             ));
         }
-        Function::method_with_parameter_types(declaration[1].to_string(), types, operations)
+        types
     } else {
-        construct(declaration[1].to_string(), parameter_count, operations)
+        vec![crate::ParameterType::Integer; parameter_count]
     };
+    let result = Function::construct_for_api(
+        declaration[1].to_string(),
+        types,
+        operations,
+        instance_method,
+        context,
+    );
     result.map_err(|error| {
         Diagnostic::at(
             source,

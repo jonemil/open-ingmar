@@ -39,9 +39,10 @@ crate only when another consumer needs it.
 
 `Catalogue::method()` follows superclass paths and returns the declaring class,
 member, and effective minimum API level. `available_at()` checks that level,
-including the requested class and intervening bases. It does not validate a
-complete device/app profile. The fixed catalogue's inheritance and type
-references are checked by tests; a future reader needs equivalent validation.
+including the requested class, intervening bases, and enclosing modules. It does
+not validate a complete device/app profile. The fixed catalogue's inheritance
+and type references are checked by tests; a future reader needs equivalent
+validation.
 
 Introduction levels are recorded on modules, classes, and methods. Add documented
 signature changes or removal when relevant; deprecation alone does not mean
@@ -60,10 +61,27 @@ A known declaration can be unavailable on a target or lack implemented lowering.
 Those cases need different diagnostics from an unknown declaration. Defining a
 class does not establish support for every member or runtime binding.
 
-Optional APIs guarded by `has` need explicit availability analysis. Do not reject
-all references newer than the application's minimum API indiscriminately, or
-claim portable guarded code before its compilation/runtime behavior is tested.
-Exact checking and target-specialization rules remain to be established.
+`ApiContext` holds an explicit target API and application minimum API. The
+minimum must be at least 1.0.0 and no higher than the target. Contextual source
+and IR entry points check known native references before executable support:
+unknown declaration, unavailable on target, above the deployment minimum, and
+unsupported lowering are distinct errors. The current source subset has no
+`has` guards, so its direct calls must fit both levels. Guarded optional APIs
+need availability analysis before this unconditional rule can be relaxed.
+
+The context is external to semantic IR. Source/IR functions with `_with_api`
+accept it explicitly; `Function::validate_api` and
+`CompilationUnit::validate_api` check already constructed models. The ordinary
+entry points omit API-level checks and retain their bounded lowering checks.
+Saved IR builds must resupply the context. It neither changes serialized IR
+nor configures PRG deployment metadata.
+
+Current checks cover Number value calls, System printing, AppBase bases,
+initialization, and known callbacks. All executable catalogue contracts currently
+require API 1.0.0; later known Number methods exercise availability diagnostics
+without gaining lowering. Context levels are caller assertions: no device
+database, permission, app-type, execution-scope, or VM-capability validation is
+implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.
 
 ## Core language relationship
 
