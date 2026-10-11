@@ -46,13 +46,14 @@ prints and, for integer entries, its result provide the runtime observation.
 Void entries run once with their result discarded and no wrapper print;
 [the void-call experiment](../investigations/compiler-void.md) verifies this path.
 
-## Next extension
+## Extension boundary
 
 Source class ownership, instance receiver calls, and integer/void startup are
-[implemented](../investigations/compiler-class.md). Next add typed native-base
-calls and source initialization, then the null/object/array and SDK-call types
-needed for source lifecycle callbacks and View creation. Generate corresponding method records and imports from those
-identities instead of fixed wrapper choices. Preserve native/text equivalence
+[implemented](../investigations/compiler-class.md). Source-authored lifecycle
+requires resolved base calls, constructor/receiver semantics, callback types,
+and null/object/array values. Method records and imports should follow those
+identities rather than fixed wrapper choices. [The plan](../plan.md) defines
+the sequence and runnable acceptance examples. Preserve native/text equivalence
 and complete-application simulator tests as each construct is added.
 
 Jungle/manifest resolution should supply application identity, source inputs,

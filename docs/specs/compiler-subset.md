@@ -401,7 +401,8 @@ sequence and discard the VM result with `popv`.
 The [console application profile](console-application.md) accepts either entry
 result type and prints only integer results. The [example][void-example] and
 [simulator evidence][void-evidence] verify both void return forms and caller
-continuation after discarded calls. Source class/receiver syntax remains open.
+continuation after discarded calls. Source class/receiver syntax follows the
+[restricted class profile](compiler-classes.md).
 
 [void-example]: ../../examples/compiler-void/README.md
 [void-evidence]: ../investigations/compiler-void.md

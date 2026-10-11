@@ -13,13 +13,16 @@ a reading map, not an exhaustive review or a claim of implementation support.
 - [Jungle reference][jungle]: project configuration and barrel dependencies.
 - [Toybox API documentation][api]: module/class contracts, signatures, API
   levels, device support, and links to related types.
+- [Core Topics][core]: application, resource, native-service, and tooling
+  articles. The scope review below maps these to compiler/build work.
 
-The guide and reference pages load their article bodies from JavaScript. On
-this review the browser text reader returned navigation alone. The site's
-`/page-data/connect-iq/<page>/page-data.json` identifies each article; the
-linked JavaScript bundle contains its HTML. Reading those article bodies
-provided the findings below. Downloaded page data and extracted text are local
-under ignored `scratch/official-docs/`, not implementation dependencies.
+The guide and reference pages may return navigation alone to a browser text
+reader. The site's `/page-data/connect-iq/<page>/page-data.json` identifies each
+article through `result.pageContext.fileName`. Its body is directly available at
+`https://developer.garmin.com/connect-iq/articles/<fileName>`; the earlier review
+used article HTML embedded in the site's JavaScript. Downloaded page data and
+extracted text are local under ignored `scratch/official-docs/`, not
+implementation dependencies.
 
 Live documentation can change independently of our SDK 9.2.0 specimens. Check
 API levels and target availability before adding a feature. Documentation
@@ -87,6 +90,116 @@ The [coding conventions][conventions] recommend one class per source file and
 calling the superclass initializer first. These are guidance, not evidence of
 parser restrictions. Keep source organization separate from declaration
 ownership in our multi-file compiler.
+
+## Planning review: language, API, and project gaps
+
+Reviewed 2026-10-11 against the current compiler subset. Re-read the functions,
+objects, containers, types, exceptions, annotations, language/Jungle references,
+and core topics for manifests, resources, build configuration, and application
+lifecycle. Article snapshots and a URL list are local under
+`scratch/official-docs/plan-review/`. No new SDK/runtime evidence was collected.
+
+**Officially documented:** [Functions][functions] and the [language reference][language]
+cover numeric types, operators/precedence, constants/enums, symbols, additional
+loop/switch forms, member lookup, and method-reference callbacks. The
+[objects guide][objects] also covers fields, static members, visibility,
+construction, inheritance/dispatch, and weak references. These are broader than
+our integer/string, explicit-module/self-call subset; implementing one opcode
+does not establish the corresponding complete language feature.
+
+**Officially documented:** [Manifest and Permissions][manifest] defines an
+application entry as its AppBase class, with identity, app type, products, API
+requirements, permissions, languages, and dependencies. Application name and
+launcher icon refer to resources. Our CLI's selected startup method is a
+bootstrap convenience, not the project's manifest entry contract.
+
+**Officially documented:** [Resources][resources] describes XML input compiled
+into a resource database and generated `Rez` identifiers, including strings,
+bitmaps, fonts, menus, and JSON data. Resource scopes and target/localization
+selection affect what is available. [Build Configuration][configuration]
+describes device/family/language qualifiers; [application lifecycle][lifecycle]
+extends beyond launching one console entry. These contracts do not specify
+resource binary encodings or all PRG entry fields.
+
+**Interpretation:** separate the backlog into language semantics, native API
+descriptors/binding, lifecycle/UI, resources/containers, and project resolution.
+Choose language increments through complete app examples. Project resolution
+can be tested on selected inputs before complete language/resource support.
+Packing an exported tree does not implement a resource compiler or Jungle
+evaluator. [The plan](../plan.md) owns the order and acceptance criteria.
+
+## Core Topics planning review
+
+Reviewed 2026-10-11: all 44 linked article headings and overviews, with closer
+reading of manifest, lifecycle, background/glance, resources/configuration,
+input, properties/storage, styles, libraries, debugging, and unit testing.
+This is a planning review, not an exhaustive API or example audit. Public
+article snapshots and the navigation/article URL map are ignored under
+`scratch/official-docs/core-topics-review/`. No new runtime evidence was collected.
+
+The tree adds several distinct contracts:
+
+- **Project and distribution:** manifest, build configuration, shareable
+  libraries, security, publishing, beta/trial apps, and review requests.
+  The first three affect resolved build inputs; signing already has a separate
+  component. Store workflows do not require compiler implementations.
+- **Application state and execution:** lifecycle, persistence, backgrounding,
+  glances, properties/settings, intents, and notifications. These combine
+  callbacks, compiled metadata, execution scopes, and native services.
+- **UI and resources:** Views, layouts, graphics, input, native controls,
+  resources, Monkey Style, attention APIs, and on-device watch-face editing.
+  Source bindings, generated resource identities, and device capabilities must
+  agree; a drawable example does not establish every resource format.
+- **Native feature families:** HTTPS/authentication, mobile messaging/content,
+  ANT/BLE/pairing, sensors/location, activity recording/control/prompts, user
+  metrics, and complications. Grow descriptors and callback support through
+  selected app examples. Companion Android/iOS SDKs are host integrations.
+- **Validation tools:** debugging, unit testing, ERA, and profiling. Test builds
+  and source/debug metadata affect compiler output; reproducing all SDK tools
+  is outside the current plan.
+
+**Officially documented:** [Manifest and Permissions][manifest] lists
+`watchface`, `datafield`, `widget`, `watch-app`, and
+`audio-content-provider-app`. Entry identifies an AppBase class; application
+name/icon identify resources. API availability depends on app type as well as
+target/API level and permissions, with operation-specific exceptions.
+Barrel dependencies use their declared namespace and optional version
+requirements: exact, minimum (`>=`), pessimistic (`~>`), or unrestricted.
+The documented pessimistic example keeps major/minor fixed and allows later
+micro versions. These external library contracts are distinct from our
+current-only provisional format grammars.
+
+**Officially documented:** [Backgrounding][background] selects annotated code
+and scoped resources for a smaller execution environment, reached through
+AppBase/service callbacks. [Glances][glances] similarly select code and have
+device-dependent update lifecycles. Glance support begins at API 3.1.0; the
+article distinguishes behavior before and after 4.0.0. Neither is simply a
+different archive flag, and a glance is not an additional manifest app type.
+
+**Officially documented:** [Input Handling][input] uses delegate callbacks
+whose Boolean result reports whether input was handled; capabilities differ by
+app type/device. [Properties and Settings][settings] defines resource-backed
+defaults and settings references. [Persisting Data][persistence] distinguishes
+those properties from runtime `Application.Storage` data.
+[Monkey Style][styles] introduces a separate personality language, Jungle
+selection, resource references, and generated `Rez.Styles` bindings.
+
+**Officially documented:** [Unit Testing][tests] runs in the simulator. Test
+functions use `:test`, accept a `Test.Logger`, return a Boolean verdict, and
+must be static when members. They are excluded from ordinary builds and
+included by a test build. Release assertions are removed.
+[Shareable Libraries][libraries] includes barrel testing; [Debugging][debugging]
+requires the executable, target, and debug XML for command-line debugging.
+These document output requirements, not the runner/debug binary encodings.
+
+**Interpretation:** supply manifest/target context while resolving native
+contracts, then validate a visible and interactive source app. Extend project
+resolution with mode/scope selection, resource references, and library
+requirements. Settings, styles, tests, and other app profiles are explicit
+extensions rather than prerequisites for the first app. The
+[plan](../plan.md) owns sequencing; [project-build design][build-design] owns
+the proposed build boundary. Scope partitioning, test discovery, resource
+encoding, and device budgets still require controlled specimens.
 
 ## Language and class findings
 
@@ -160,3 +273,18 @@ specifying our supported subset.
 [annotations]: https://developer.garmin.com/connect-iq/monkey-c/annotations/
 [conventions]: https://developer.garmin.com/connect-iq/monkey-c/coding-conventions/
 [options]: https://developer.garmin.com/connect-iq/monkey-c/compiler-options/
+[manifest]: https://developer.garmin.com/connect-iq/core-topics/manifest-and-permissions/
+[resources]: https://developer.garmin.com/connect-iq/core-topics/resources/
+[configuration]: https://developer.garmin.com/connect-iq/core-topics/build-configuration/
+[lifecycle]: https://developer.garmin.com/connect-iq/core-topics/application-and-system-modules/
+[core]: https://developer.garmin.com/connect-iq/core-topics/
+[background]: https://developer.garmin.com/connect-iq/core-topics/backgrounding/
+[glances]: https://developer.garmin.com/connect-iq/core-topics/glances/
+[input]: https://developer.garmin.com/connect-iq/core-topics/input-handling/
+[settings]: https://developer.garmin.com/connect-iq/core-topics/properties-and-app-settings/
+[persistence]: https://developer.garmin.com/connect-iq/core-topics/persisting-data/
+[styles]: https://developer.garmin.com/connect-iq/core-topics/monkey-style/
+[tests]: https://developer.garmin.com/connect-iq/core-topics/unit-testing/
+[libraries]: https://developer.garmin.com/connect-iq/core-topics/shareable-libraries/
+[debugging]: https://developer.garmin.com/connect-iq/core-topics/debugging/
+[build-design]: ../design/project-builds.md

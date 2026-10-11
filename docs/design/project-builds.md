@@ -37,6 +37,27 @@ current `pack-barrel` only consumes an already exported canonical tree and
 preserves its Jungle bytes. It does not perform this project-to-package
 transformation.
 
+## Manifest and build context
+
+The resolved manifest identifies the AppBase-derived entry class, application
+UUID/type, supported products/languages, minimum API, permissions, resource
+references, and barrel namespace/version requirements. The console CLI's
+startup method is not a manifest entry. Preserve these identities without
+assigning binary fields until the relevant target profile has evidence.
+
+Native API validation needs the selected device, app type, API level,
+permissions, and execution scope. Permission checks can depend on individual
+operations, not just modules. Resource validation must resolve name/icon and
+settings references against the selected resources. An unsupported manifest
+feature must be diagnosed rather than silently omitted.
+
+Build mode (debug/release/test) and execution scope (foreground/background/
+glance) are separate inputs. Preserve declaration annotations and resource
+scopes, with provenance, for selection and reference checking. A test build
+requires test entry discovery and runner metadata; a barrel test needs a
+runnable application rather than an archive alone. Exact rules and encodings
+remain to be specified from public contracts and controlled specimens.
+
 ## Target constraints and section layout
 
 Proposed boundary: resolve a device and app type for a complete application
@@ -90,32 +111,28 @@ build should validate against its resolved profile and record explicit
 experimental capacity overrides. Exact profile fields, accounting rules, and
 compatibility checks remain to be specified from evidence.
 
-## Investigation and implementation sequence
+## Resolution and export requirements
 
 The [official documentation review][official-docs] records configuration
 evaluation, path bases, precedence, and direct barrel-project dependencies.
-Use those documented rules to choose SDK experiments before defining our subset.
+Define the supported Jungle grammar/resolution rules from those contracts and
+controlled SDK experiments. Unsupported constructs must produce diagnostics
+with configuration file/location, rather than silently changing selected inputs.
+
+The resolved build description must retain input provenance and deterministic
+selection. Its rules need to cover variables/substitution, lists, multiple
+Jungle files, defaults/inheritance, device overrides, annotations, resource
+personalities/localization, and dependencies. These semantics are not yet
+specified locally; they remain separate from Monkey C parsing and archive I/O.
+
+Project-to-barrel export must define file selection, archive path mapping,
+generated Jungle content, manifest handling, and dependency policy. Application
+builds use the same description to supply compiler/resource inputs and IQ export
+settings as the supported target profile grows. Keep direct assembly and
+canonical-tree packing usable independently. [The plan](../plan.md) owns the
+implementation order.
 
 [official-docs]: ../investigations/official-garmin-documentation.md
-
-1. Before implementation, document a supported Jungle grammar and resolution
-   rules using bundled Garmin documentation and controlled SDK experiments.
-   Investigate variables/substitution, path bases, lists and multiple Jungle
-   inputs, setting inheritance/precedence, device overrides, annotations,
-   resource personalities/localization, and barrel dependencies. These semantics
-   are not yet locally specified.
-2. Implement configuration parsing and resolution separately from Monkey C
-   parsing. Produce a deterministic resolved build description with diagnostics
-   identifying configuration file and location. Report unsupported constructs
-   explicitly rather than silently selecting different inputs.
-3. Add project-to-barrel export using resolved inputs: define file selection,
-   archive path mapping, generated Jungle content, manifest handling, and
-   dependency policy. Validate exported member bytes and SDK consumption before
-   claiming compatibility.
-4. When the compiler and resource generation support the necessary target
-   features, connect the same build description to complete application builds
-   and IQ export. Keep direct assembly and canonical-tree packing available
-   independently.
 
 Acceptance examples should cover a multi-file app, code-only and resource
 barrels, an app consuming multiple barrels, device-specific selection, and
