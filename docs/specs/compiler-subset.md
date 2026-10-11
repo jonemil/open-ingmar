@@ -9,6 +9,12 @@ Restricted frontend. Design:
 [parameters/arguments](../investigations/compiler-arguments.md), and
 [strings/printing](../investigations/compiler-strings.md).
 
+Integer/string/null restrictions below describe the current implementation.
+They do not define separate primitive types for the full Monkey C language.
+The planned [core type/API model](../design/api-declarations.md) connects values
+to `Lang` declarations; general member lookup and API availability checking are
+not yet supported. No API declaration-file syntax is specified here.
+
 The default mode accepts exactly one top-level function.
 [Compilation-unit mode](compiler-unit.md) adds global/module declarations and
 cross-function validation across files. The per-function grammar is:

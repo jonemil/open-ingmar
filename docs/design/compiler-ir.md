@@ -39,6 +39,15 @@ outside the frontend. Extract `ciq-ir` or `ciq-codegen` only when independent
 consumers or dependencies justify it; a future IR crate must not depend on its
 VM backend. Keep `ciq-asm` and `ciq-dis` as the paired tools.
 
+## API declarations and built-in values
+
+The intended [API declaration model](api-declarations.md) supplies class/member
+contracts and availability independently of executable bindings. Current native
+contracts remain a bounded set of special cases until that model is implemented.
+Built-in values will refer to core `Lang` type identities; operator rules and VM
+instruction selection remain separate from the API method catalogue. Object
+semantics do not require every IR value to denote a heap allocation.
+
 ## Native and textual pipelines
 
 Source → semantic IR → assembly model → CODE is the in-memory path. IR and

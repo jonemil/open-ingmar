@@ -51,6 +51,11 @@ operations, not just modules. Resource validation must resolve name/icon and
 settings references against the selected resources. An unsupported manifest
 feature must be diagnosed rather than silently omitted.
 
+The [API declaration model](api-declarations.md) owns class/member availability.
+Keep catalogue coverage, selected-device capabilities, application minimum API,
+and VM encoding capabilities distinct. Target resolution supplies constraints;
+it does not duplicate the API catalogue for each device.
+
 Build mode (debug/release/test) and execution scope (foreground/background/
 glance) are separate inputs. Preserve declaration annotations and resource
 scopes, with provenance, for selection and reference checking. A test build

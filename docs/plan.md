@@ -7,24 +7,40 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Resolve names, types, and native calls.** Start with the names and contracts
-   needed by an AppBase-derived class: extend the bounded native name profile
-   with inherited member contracts and callback types. Extend the native callback descriptors and value model for visible Views;
-   compare new dispatch forms
-   with focused specimens. Represent native module,
-   class, member, receiver, argument, and result identities independently of VM
-   symbol IDs and import indexes. Add null, Boolean, and object-reference values
-   needed by callbacks; retain `Void` as a result contract. Begin with a small
-   documented API subset, not a complete Toybox database or strict type checker.
-   Acceptance: a source getInitialView returns a constructed View under its
-   resolved native result contract. Exercise a non-null launch-state dictionary
-   when an intent example is available; do not infer its behavior from null-state
-   simulator startup.
-   Define the manifest/target context alongside this work: entry class, app
-   type, minimum API, and permissions constrain native binding before a full
-   project driver exists. Keep the console bootstrap's selected method distinct
-   from the manifest entry class.
-2. **Compile source-authored lifecycle and a visible View.** Add construction,
+1. **Establish core types and API declarations.** Define a shared semantic
+   declaration model in `ciq-compiler`, initially populated directly in Rust.
+   Start with `Lang.Object`, `Number`, `Boolean`, `String`, and the nullable
+   `Dictionary` contract already needed by startup. Record class inheritance,
+   member signatures, and per-declaration API availability from public docs;
+   catalogue coverage does not imply executable support. Migrate existing
+   Application/System contracts to this model before expanding native support.
+   Keep semantic identities independent of binary bindings and compiler state.
+   See [API declaration design][api-design].
+
+   Connect current integer/string/null behavior to those identities. Read the
+   language reference alongside `Lang` contracts to define operator operand and
+   result rules separately from method signatures and VM lowering. Grow numeric
+   conversions, mixed arithmetic, string addition, and equality through focused
+   specimens; do not attempt all core types/operators in one increment.
+   Acceptance: existing examples retain their behavior through native and text
+   paths; inherited lookup and class/member availability have focused checks.
+   Diagnose missing catalogue knowledge separately from known unavailable APIs
+   and declarations whose lowering is unsupported.
+
+   Define explicit target context alongside availability: selected device/API,
+   app type, permissions, and execution scope. Keep the app's minimum API and VM
+   capabilities distinct. Plan guarded optional references through `has` before
+   claiming compatibility across API levels. A full Jungle driver and API
+   definition parser are not prerequisites.
+2. **Extend native calls and callback values.** Use the declaration model for
+   AppBase/View inherited members and callback contracts. Extend Boolean,
+   object-reference, array, and nullable values as required, retaining `Void`
+   as a result contract. Compare new dispatch forms with focused specimens.
+   Acceptance: a source `getInitialView` returns a constructed View under its
+   resolved result contract. Exercise a non-null launch-state dictionary when
+   an intent example is available; null-state startup does not establish it.
+   Keep the console bootstrap's selected method distinct from manifest entry.
+3. **Compile source-authored lifecycle and a visible View.** Add construction,
    source/native inheritance, instance fields, ordinary object-member calls,
    array literals, and object/array returns as required by `getInitialView()`.
    Resolve AppBase/View callback signatures, including inherited annotations,
@@ -36,7 +52,7 @@ compiling a project.
    Follow with a View/delegate pair whose input handler updates a counter and
    returns whether it handled the event. This exercises mutable fields and
    Boolean callback results; select an event supported by the target.
-3. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a
+4. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a
    deterministic build description: selected sources/resources, application
    identity and class entry, device/API target, permissions, supported products
    and languages, exclusions, and barrel dependencies with namespace/version
@@ -45,7 +61,7 @@ compiling a project.
    defaults, precedence, multiple Jungle files, and working-directory changes.
    This resolver work can proceed alongside language work after the target and
    declaration interfaces are clear. See [project-build design][builds].
-4. **Generate resources and extend the PRG profile.** Start with resource strings
+5. **Generate resources and extend the PRG profile.** Start with resource strings
    and their `Rez` identities, then application name/icon resources and a small
    drawable/layout example. Keep DATA literals separate from compiled resources.
    Derive imports, method/class records, entry points, permissions, and resource
@@ -58,7 +74,7 @@ compiling a project.
    selection and generated `Rez.Styles` bindings when a layout example needs
    them. Keep runtime `Application.Storage` calls separate from compiled
    property defaults and settings metadata.
-5. **Connect project builds to barrels and IQ export.** Reuse `ciq-package` and
+6. **Connect project builds to barrels and IQ export.** Reuse `ciq-package` and
    `ciq-sign`. Export a barrel from resolved source/resources and generate its
    packaged configuration; consume both archive and direct-project dependencies.
    Build selected device PRGs before creating IQ products/signatures. Acceptance:
@@ -175,3 +191,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [official-docs]: investigations/official-garmin-documentation.md
 [source]: specs/compiler-subset.md
 [boundary]: investigations/string-address-boundary.md
+
+[api-design]: design/api-declarations.md

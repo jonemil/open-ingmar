@@ -222,6 +222,35 @@ Name binding must determine ownership before instruction selection. Confirm
 dispatch and constructor behavior with minimal SDK specimens before expanding
 our class profile.
 
+## Core Lang types and API declarations
+
+Reviewed 2026-10-11: [language reference][language], [Object][lang-object], and
+[Number][lang-number]. This review adds public-contract evidence, not new
+SDK/simulator observations.
+
+**Officially documented:** basic numeric/Boolean values are objects with methods.
+The type table marks Long, Double, String, Array, and Dictionary as requiring
+heap allocation; Number, Float, Boolean, Char, and Symbol are unmarked. Object
+is the class-hierarchy root; modules do not inherit it.
+
+Availability applies to individual members. Number exists since API 1.0.0,
+`toChar()` since 1.3.0, and `compareTo()` since 5.0.0. Object's `weak()` starts
+at 1.2.0. A class's introduction level does not establish all member availability.
+
+The language reference reserves `native` for internal use. This review found no
+publicly documented external/prototype declaration mechanism suitable for our
+catalogue; it does not establish what internal SDK declaration forms exist.
+
+**Interpretation:** core type identities and operator semantics should be read
+alongside API contracts. Arithmetic need not be lowered as a method call or
+preceded by heap allocation. Declarations and executable bindings are separate.
+
+**Unverified hypothesis:** tagged values with immediate payloads or heap
+references could explain these semantics. The documentation does not establish
+that layout, allocation timing, or a boxing protocol. Mixed numeric behavior,
+string addition, equality, and guarded optional API binding still need focused
+specimens before extending our supported profile. See [API design][api-design].
+
 ## Lifecycle contracts
 
 **Officially documented:** [AppBase][appbase] is the application base class.
@@ -288,3 +317,7 @@ specifying our supported subset.
 [libraries]: https://developer.garmin.com/connect-iq/core-topics/shareable-libraries/
 [debugging]: https://developer.garmin.com/connect-iq/core-topics/debugging/
 [build-design]: ../design/project-builds.md
+
+[lang-object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+[lang-number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
+[api-design]: ../design/api-declarations.md
