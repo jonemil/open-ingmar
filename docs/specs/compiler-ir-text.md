@@ -79,6 +79,13 @@ ciq-ir
 .end
 ```
 
+Boolean literals use `.boolean %<result-id> true|false`, with exactly these
+lowercase spellings. They produce `Toybox.Lang.Boolean`, distinct from integer
+zero/one and Null. Boolean values may initialize/read/assign Boolean locals,
+feed branches, compare for equality with another Boolean, or be printed. They
+cannot be integer operands, user-call arguments, or function returns. Lowering
+uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
+
 ## API context inputs
 
 `--target-api <major.minor.patch>` and `--min-api <major.minor.patch>` enable
@@ -264,8 +271,8 @@ without either option.
 ## String values and print statements
 
 `.string %<result-id> "value"` defines a string value; `.println %<value-id>`
-consumes an integer or string without defining a result. Both accept optional
-spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
+consumes an integer, String, or Boolean without defining a result. Both accept
+optional spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
 local initialization/assignment/reads; arithmetic, parameters, user-call
@@ -331,7 +338,9 @@ ciq-ir
 - `.block ^<id>` starts a block; IDs are decimal `u32`, distinct from `%` values
   and `$` locals. Block IDs must be unique; the first block is entry.
 - `.equal %<result> %<left> %<right>` and `.greater` compare integers and define
-  a Boolean result. Only `.branch` may consume it.
+  a Boolean result. `.equal` also accepts two Booleans and the supported
+  dictionary/null checks. Branches, Boolean locals, equality, and printing may
+  consume Boolean results.
 - `.branch %<condition> ^<true-target> ^<false-target>` consumes a Boolean and
   terminates the block. The two targets may be the same block.
 - `.jump ^<target>` terminates the block unconditionally.
@@ -387,8 +396,8 @@ ciq-ir
 The target must be initialized on every incoming path. `.assign` does not
 introduce an identity, count as another local, or establish initialization.
 Repeated `.local` declarations for one ID remain invalid. Local IDs retain their
-initializer's integer/string type; assignments must match it. Boolean values,
-undefined values/locals, wrong-path targets, shared values, and cross-block RHS
+initializer's supported type; assignments must match it. Undefined
+values/locals, wrong-path targets, shared values, and cross-block RHS
 values are rejected. The RHS contributes one use; assignment defines no result.
 Each write counts toward the 1024-operation limit and reuses the existing slot.
 
@@ -426,7 +435,7 @@ initialization.
 This accepts common initialized locals carried around a loop and rejects values
 initialized only on its backedge. Local initializer IDs remain globally unique;
 one declaration may execute repeatedly, resetting its existing slot each visit.
-Types retain their initializer's integer/string classification. Expression
+Types retain their initializer's supported classification. Expression
 values still refer to earlier definitions in the same block and have one static
 use; runtime execution may visit that definition/use repeatedly. No expression
 values or evaluation-stack state cross an edge.

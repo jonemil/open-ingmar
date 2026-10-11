@@ -10,12 +10,21 @@ class StartupApp extends App.AppBase {
         Sys.println("source onStart");
         var saved = state;
         var missing = null;
-        if (saved == missing) {
+        var isMissing = saved == missing;
+        Sys.println(isMissing);
+        if (isMissing) {
             Sys.println("null state");
         } else {
             Sys.println("dictionary state");
         }
         self.printAnswer();
+        var again = true;
+        while (again) {
+            Sys.println("Boolean loop");
+            again = false;
+        }
+        Sys.println(again == false);
+        Sys.println(again);
     }
     function printAnswer() {
         Sys.println(Helpers.answer());

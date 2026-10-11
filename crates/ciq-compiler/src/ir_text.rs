@@ -127,6 +127,7 @@ pub(crate) fn parse_ir_context(
                 fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span="))),
             ),
             Some(".integer") => (0, 3),
+            Some(".boolean") => (23, 3),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
             Some(".subtract") => (3, 4),
@@ -220,7 +221,16 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 22 {
+        let operation = if kind == 23 {
+            Operation::Boolean {
+                result: parse_value(&fields[1])?,
+                value: match fields[2].as_str() {
+                    "true" => true,
+                    "false" => false,
+                    _ => return Err(fail(*at, "Boolean literal requires true or false")),
+                },
+            }
+        } else if kind == 22 {
             Operation::NativeCall {
                 result: parse_value(&fields[1])?,
                 receiver: parse_value(&fields[2])?,

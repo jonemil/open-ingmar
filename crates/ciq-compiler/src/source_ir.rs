@@ -12,6 +12,10 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Boolean(value) => Operation::Boolean {
+            result: ValueId(operations.len() as u32),
+            value,
+        },
         parser::ExpressionKind::Null => Operation::Null {
             result: ValueId(operations.len() as u32),
         },

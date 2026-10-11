@@ -9,7 +9,7 @@ Restricted frontend. Design:
 [parameters/arguments](../investigations/compiler-arguments.md), and
 [strings/printing](../investigations/compiler-strings.md).
 
-Integer/string/null restrictions below describe the current implementation.
+Integer/string/Boolean/null restrictions describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
 The [core type/API model](../design/api-declarations.md) connects values to
 `Lang` identities for operator validation and the bounded native calls below.
@@ -39,7 +39,8 @@ statement = "var" identifier "=" expression ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = atom ("." member "(" argument-list? ")")*
-atom = decimal-integer | string-literal | "null" | parameter-or-local-identifier
+atom = decimal-integer | string-literal | "true" | "false" | "null"
+     | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
 
@@ -47,8 +48,8 @@ Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `true`, `while`, `break`, `continue`, `class`, `extends`, `self`, `false`,
 `using`, `import`, `as`, and `null`
-are reserved. Boolean literals are not supported yet. Whitespace, `//` comments,
-and non-nested `/* ... */` comments are supported. The accepted literal domain
+are reserved. `true` and `false` produce Boolean literals. Whitespace and
+`//` or non-nested `/* ... */` comments are supported. The integer literal domain
 is `0..=127`; computed results may be negative or exceed 127. Unary signs,
 larger literals, other literal forms, typed parameters, types, unsupported
 statements/additional functions in default mode, and other operators are
@@ -62,7 +63,7 @@ covers parameters and earlier initialized locals in the current arm and its
 enclosing scopes. There is no general type inference, global/member resolver,
 whole-program analysis, or optimizer yet.
 
-The IR contains integer/string constants, binary add/subtract definitions,
+The IR contains integer/string/Boolean constants, binary add/subtract definitions,
 parameter reads, local initialization/read, module calls, print statements, and
 integer comparisons, branches, and integer returns using value IDs, with
 optional source spans. Source
@@ -227,9 +228,10 @@ escape syntax.
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
-initializations and accept one integer or string value. Parameters, arithmetic,
-user-module arguments/results, and the final return remain integer-only. The
-shared validator propagates string types through locals and rejects incompatible
+initializations and accept one integer, String, or Boolean value. Parameters,
+arithmetic, user-module arguments/results, and the final return remain
+integer-only. The shared validator propagates string types through locals and
+rejects incompatible
 uses. Concatenation, string returns/parameters, arbitrary SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
@@ -296,16 +298,18 @@ return. Arms may also contain local declarations, print statements, and nested
 conditions, as
 described below. Loop syntax is specified separately below.
 
-`==` and `>` compare integer expressions and produce Booleans. Arithmetic has
-higher precedence, so `value + 1 > 2` compares the sum. At most one comparison
-is accepted per expression level; parentheses retain their existing grouping
-behavior. The condition must produce a Boolean comparison result. Boolean
-locals, parameters, literals, print arguments, call arguments, arithmetic, and
-returns are rejected. Integer truthiness, other comparison operators, and
-short-circuit operators are not supported.
+`==` and `>` compare integer expressions and produce Booleans; `==` also accepts
+two Booleans. Dictionary/null equality follows the callback rules below.
+Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
+one comparison is accepted per expression level; parentheses retain their grouping
+behavior. The condition must produce a Boolean: a literal, local read, or
+supported comparison. Boolean locals, assignments, and print arguments are
+accepted. Boolean parameters, user-call arguments, arithmetic, and returns
+remain unsupported. Integer truthiness, mixed Boolean/Number equality, Boolean
+ordering, other comparison operators, and short-circuit operators are unsupported.
 
-Lowering emits an entry block, comparison, and branch, then separate arm
-blocks. Both arms may read parameters and enclosing locals. The
+Lowering emits an entry block, condition evaluation, and branch, then separate
+arm blocks. Both arms may read parameters and enclosing locals. The
 [IR rules](compiler-ir-text.md#control-flow) validate
 block-local values and initialization on every path. See
 [conditions.mc](../../examples/compiler-probe/conditions.mc) and
@@ -349,8 +353,8 @@ and arm locals used outside their scope are rejected. Assignment is a statement,
 not an expression; compound assignment and increment/decrement are unsupported.
 
 The initializer fixes the local's supported type. Each assignment must preserve
-it, except a nullable Dictionary local may receive null. Boolean assignments
-and general type changes are rejected. RHS evaluation finishes before the write,
+it, including Boolean locals; a nullable Dictionary local may receive null.
+General type changes are rejected. RHS evaluation finishes before the write,
 so `n = n + 1` reads the old
 value. Later reads observe the new content on that path. Assigning an enclosing
 local inside an arm is allowed; assignment does not create a declaration.
@@ -372,7 +376,7 @@ Assignment-containing IR uses the conservative schedule specified in
 ## While loops
 
 `while (<condition>) { <statements> }` evaluates its condition before each
-iteration. The condition must be an integer `==` or `>` comparison, with the
+iteration. The condition must produce a Boolean, with the
 same Boolean/type rules as `if`. Braces are required; the body may be empty or
 contain locals, assignments, prints, nested conditions/loops, and early returns.
 `for` and `do/while` are unsupported.
@@ -380,7 +384,7 @@ contain locals, assignments, prints, nested conditions/loops, and early returns.
 Body locals are visible within that body and nested scopes, but not after the
 loop or in its condition. Their existing slots are initialized anew on each
 iteration; new slots are not allocated per iteration. Enclosing local writes
-persist into later tests and after exit. Fixed integer/string types still apply.
+persist into later tests and after exit. Fixed local types still apply.
 
 The body may execute zero times. Its declarations cannot establish a local
 needed at the test or exit. A function ending with a loop still needs a return

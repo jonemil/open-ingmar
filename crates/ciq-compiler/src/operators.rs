@@ -16,14 +16,17 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 }
 
 /// Resolve supported comparison types to Boolean. Dictionary-or-null values
-/// support equality with Null; other comparisons currently require Numbers.
+/// support equality with Null; Boolean pairs support equality only.
+/// Other comparisons currently require Numbers.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     let numbers = *left == Type::named("Toybox.Lang.Number") && left == right;
+    let booleans =
+        kind == ComparisonOp::Equal && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let null_check = kind == ComparisonOp::Equal
         && ((left == &Type::Null && (right == &Type::Null || right == &nullable_dictionary))
             || (left == &nullable_dictionary && right == &Type::Null));
-    (numbers || null_check).then(|| Type::named("Toybox.Lang.Boolean"))
+    (numbers || booleans || null_check).then(|| Type::named("Toybox.Lang.Boolean"))
 }
 
 #[cfg(test)]
@@ -64,7 +67,11 @@ mod tests {
                         );
                     assert_eq!(
                         result.is_some(),
-                        numbers || null_check,
+                        numbers
+                            || null_check
+                            || (op == ComparisonOp::Equal
+                                && left == ValueType::Boolean
+                                && right == ValueType::Boolean),
                         "{op:?}: {left:?}, {right:?}"
                     );
                     if let Some(result) = result {

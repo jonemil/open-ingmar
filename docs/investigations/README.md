@@ -69,4 +69,6 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Console application bootstrap](application-bootstrap.md): lifecycle/imports,
   sorted fields, and template-free PRG generation.
 - [Void functions](compiler-void.md): startup, early return, and discarded results.
+- [Boolean values](compiler-booleans.md): literals, stored decisions, mutable
+  loop flags, equality, and printing in a source callback.
 - [Classes and receiver calls](compiler-class.md): ownership and self calls.

@@ -101,7 +101,9 @@ remains a bounded profile, not a replacement for arbitrary API type expressions.
 
 Current rules accept Number/Number addition, subtraction, equality, and greater
 comparison; equality also accepts Null/Null and nullable Dictionary/Null in
-either order. Arithmetic produces Number and comparisons produce Boolean.
+either order; Boolean pairs support equality. Arithmetic produces Number and
+comparisons produce Boolean. Boolean literals and locals share that semantic
+identity and use ordinary conditions, assignments, and printing.
 These are our supported rules, not a complete Monkey C operator specification.
 String addition, mixed numeric conversions, and general equality need evidence
 and lowering support before being added.

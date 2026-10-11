@@ -25,8 +25,9 @@ compiling a project.
    selection. A full Jungle driver and API definition parser are not
    prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View inherited members and callback contracts. Extend Boolean,
-   object-reference, array, and nullable values as required, retaining `Void`
+   AppBase/View inherited members and callback contracts. Extend Boolean
+   arguments/results, object-reference, array, and nullable values as required,
+   retaining `Void`
    as a result contract. Compare new dispatch forms with focused specimens.
    Acceptance: a source `getInitialView` returns a constructed View under its
    resolved result contract. Exercise a non-null launch-state dictionary when

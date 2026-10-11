@@ -2,7 +2,9 @@
 
 [app.mc](app.mc) defines AppBase initialization and `onStart(state)`.
 The callback copies its opaque nullable Dictionary state, checks it against
-null, and invokes a method that calls [helpers.mc](helpers.mc).
+null, stores/prints that Boolean decision, and invokes a method that calls
+[helpers.mc](helpers.mc). A Boolean local controls a loop and is set to false
+after one iteration; equality and printing confirm the resulting value.
 Constructor and blank View remain generated; this is a console watch app.
 
 From the repository root:
@@ -10,6 +12,7 @@ From the repository root:
 ```sh
 mkdir -p scratch/compiler-lifecycle
 cargo run -p ciq-compiler -- --unit --emit prg \
+  --target-api 5.2.0 --min-api 1.0.0 \
   --app-id 3c94c9e5ba2c43fa849d64ecff33264e --entry StartupApp.onStart \
   examples/compiler-lifecycle/app.mc examples/compiler-lifecycle/helpers.mc \
   scratch/compiler-lifecycle/unsigned.prg
@@ -23,8 +26,12 @@ Observed console output on SDK 9.2.0 / fr265 simulator:
 ```text
 source initialize
 source onStart
+true
 null state
 41
+Boolean loop
+true
+false
 ```
 
 Initialization and startup each print once. A non-null state selects
@@ -34,3 +41,5 @@ construction, or general object calls. The callback's void result is not printed
 
 See [source callback rules](../../docs/specs/compiler-classes.md#source-startup-callback)
 and [runtime evidence](../../docs/investigations/compiler-class.md).
+The [Boolean experiment](../../docs/investigations/compiler-booleans.md)
+records stored decisions and loop behavior.

@@ -172,11 +172,16 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Define a Boolean literal, distinct from integer zero/one and null.
+    Boolean {
+        result: ValueId,
+        value: bool,
+    },
     /// Start a uniquely named block; the first declared block is entry.
     Block {
         block: BlockId,
     },
-    /// Compare two integers, defining a Boolean for a branch in this block.
+    /// Compare supported operands, defining a Boolean in this block.
     Compare {
         result: ValueId,
         kind: ComparisonOp,
@@ -258,7 +263,7 @@ pub enum Operation {
         local: LocalId,
         value: ValueId,
     },
-    /// Replace an initialized local's value without changing its integer/string
+    /// Replace an initialized local's value without changing its supported
     /// type or allocating a new local. The right-hand value is consumed first.
     LocalAssign {
         local: LocalId,
@@ -511,18 +516,22 @@ impl Function {
                         kind, &type_of(left).api_type(), &type_of(right).api_type(),
                     ).and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail(
-                            "comparison requires integer values or a dictionary/null equality check",
+                            "comparison requires integers, Boolean equality, or dictionary/null equality",
                         ))?;
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }
                 Operation::Branch { condition, .. } => {
                     if type_of(condition) != ValueType::Boolean {
-                        return Err(fail("branch requires a Boolean comparison result"));
+                        return Err(fail("branch requires a Boolean value"));
                     }
                     (None, vec![condition])
                 }
                 Operation::Jump { .. } => (None, vec![]),
+                Operation::Boolean { result, .. } => {
+                    types.insert(result, ValueType::Boolean);
+                    (Some(result), vec![])
+                }
                 Operation::Integer { result, value } => {
                     if !(0..=127).contains(&value) {
                         return Err(fail("supported integer literal range is 0..=127"));
@@ -559,8 +568,13 @@ impl Function {
                             .function(api::core(), "Toybox.System", "println")
                             .map_err(|message| fail(&message))?;
                     }
-                    if !matches!(type_of(value), ValueType::Integer | ValueType::String) {
-                        return Err(fail("println currently accepts only integers or strings"));
+                    if !matches!(
+                        type_of(value),
+                        ValueType::Integer | ValueType::String | ValueType::Boolean
+                    ) {
+                        return Err(fail(
+                            "println currently accepts only integers, strings, or Booleans",
+                        ));
                     }
                     (None, vec![value])
                 }
@@ -659,9 +673,6 @@ impl Function {
                     (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
-                    if type_of(value) == ValueType::Boolean {
-                        return Err(fail("Boolean locals are not yet supported"));
-                    }
                     local_types.insert(local, type_of(value));
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
@@ -680,9 +691,6 @@ impl Function {
                         return Err(fail(
                             "assignment requires an initialized local on every incoming path",
                         ));
-                    }
-                    if type_of(value) == ValueType::Boolean {
-                        return Err(fail("Boolean locals are not yet supported"));
                     }
                     let incoming = type_of(value);
                     if local_types[&local] != incoming
@@ -934,6 +942,7 @@ impl Function {
                     right.0
                 ),
                 Operation::Null { result } => format!(".null %{}", result.0),
+                Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)
@@ -1050,7 +1059,7 @@ impl Function {
 /// Functions with value returns require an integer return on every path;
 /// otherwise bare returns and fallthrough produce void returns. Mixed return
 /// types, unreachable statements, and local/parameter shadowing are rejected.
-/// Assignments require a visible initialized local and preserve its integer/string type.
+/// Assignments require a visible initialized local and preserve its supported type.
 /// Unsupported syntax, unresolved names, and invalid IR produce source
 /// diagnostics rather than partial output. VM instruction selection and symbol
 /// binding occur later.

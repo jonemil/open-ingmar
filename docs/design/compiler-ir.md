@@ -70,7 +70,9 @@ making temporary text files mandatory in the compiler pipeline.
 
 Explicit blocks and terminators describe control flow independently of textual
 order. Every block is reachable from entry and has a return, branch, or jump;
-there is no implicit fallthrough. Boolean comparisons feed branches.
+there is no implicit fallthrough. Boolean literals, local reads, and comparison
+results feed branches. Boolean locals use ordinary initialization/assignment
+rules; printing and Boolean equality also consume these values.
 
 Expression values remain block-local. Lower each expression into a statement or
 terminator sink, leaving an empty evaluation stack on every edge. Stored locals
@@ -85,7 +87,7 @@ shadowing, unreachable statements, and return requirements.
 
 ## Mutable locals
 
-Initialization establishes a stored identity and its fixed integer/string type.
+Initialization establishes a stored identity and its fixed supported type.
 Assignment replaces content in the existing slot and cannot establish initial
 availability. These restrictions belong to our subset, not all Monkey C.
 

@@ -79,6 +79,7 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     Null,
+    Boolean(bool),
     Integer(i32),
     String(String),
     Local(String),
@@ -461,6 +462,8 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::Integer(value), token.span)
             }
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
+            Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),
+            Kind::Word("false") => self.node(ExpressionKind::Boolean(false), token.span),
             Kind::Word(name)
                 if !matches!(
                     name,

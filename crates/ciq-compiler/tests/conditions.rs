@@ -20,6 +20,8 @@ fn execute(function: &Function, argument: i32) -> i32 {
         match ins.opcode() {
             Opcode::Argc | Opcode::Argcincsp => (),
             Opcode::Ipushz => stack.push(0),
+            Opcode::Btpush => stack.push(1),
+            Opcode::Bfpush => stack.push(0),
             Opcode::Ipush1 => stack.push(ins.operands()[0] as i32),
             Opcode::Lgetv => stack.push(locals[ins.operands()[0] as usize]),
             Opcode::Lputv => locals[ins.operands()[0] as usize] = stack.pop().unwrap(),
@@ -99,12 +101,57 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
         "function f(x) { if (\"x\" == x) { return 1; } else { return 2; } }",
         "function f(x) { return (x == 0) + 1; }",
         "function f(x) { return x > 0; }",
-        "function f(x) { var a = x == 0; return 1; }",
         "function f(x) { return Numbers.call(x == 0); }",
         "function f(x) { if (x > 0 > 1) { return 1; } else { return 2; } }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
+}
+
+#[test]
+fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
+    for (literal, opcode, expected) in [("true", "btpush", 1), ("false", "bfpush", 2)] {
+        let source =
+            format!("function f() {{ if ({literal}) {{ return 1; }} else {{ return 2; }} }}");
+        let function = compile(&source).unwrap();
+        assert!(function.assembly().contains(opcode));
+        assert_eq!(execute(&function, 0), expected);
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    }
+    let function = compile("function f(x) { var again = x > 0; var count = 0; while (again) { count = count + 1; again = x > count; } if (again == false) { return count; } else { return 127; } }").unwrap();
+    for input in [0, 1, 7, 40] {
+        assert_eq!(execute(&function, input), input);
+    }
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    for source in [
+        "function f() { var flag = true; flag = 1; return 0; }",
+        "function f() { var n = 1; n = false; return 0; }",
+        "function f() { return true + 1; }",
+        "function f() { return false; }",
+        "function f() { return M.consume(true); }",
+        "function f() { if (true == 1) { return 1; } else { return 2; } }",
+        "function f() { if (true > false) { return 1; } else { return 2; } }",
+        "function f() { var true = 1; return 0; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn boolean_text_literals_have_strict_syntax_and_keep_semantic_types() {
+    let function =
+        compile("function f() { var flag = true; flag = false; System.println(flag); }").unwrap();
+    let text = function.to_ir_text();
+    assert!(text.contains(".boolean %0 true"));
+    assert_eq!(function, parse_ir(&text).unwrap());
+    for invalid in ["True", "1", "0", "null", "\"true\""] {
+        assert!(parse_ir(&text.replace("%0 true", &format!("%0 {invalid}"))).is_err());
+    }
+    assert!(parse_ir(&text.replace(".boolean %0 true", ".integer %0 1")).is_err());
+    // A comparison can be stored and later printed, with each read owning its
+    // own semantic value; storing does not relax one-use or scope rules.
+    let function = compile("function f(n) { var zero = n == 0; System.println(zero); if (zero) { System.println(true); } }").unwrap();
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
 }
 
 fn cfg(tail: &str) -> String {
@@ -283,14 +330,14 @@ fn nested_effects_text_resumption_and_arm_local_ids_preserve_order() {
     assert!(
         assembly.find("__ciq_member_after").unwrap() > assembly.find("__ciq_block_f_3:").unwrap()
     );
-    // Boolean and string type restrictions still apply to branch-local uses.
+    // String returns remain unsupported; Boolean locals may hold comparisons.
     assert!(
         compile("function f(x) { if (x == 0) { var n = \"str\"; return n; } else { return 1; } }")
             .is_err()
     );
     assert!(
         compile("function f(x) { if (x == 0) { var n = x > 1; return 1; } else { return 2; } }")
-            .is_err()
+            .is_ok()
     );
 }
 
