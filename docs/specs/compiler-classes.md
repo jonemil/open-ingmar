@@ -8,14 +8,15 @@ See [receiver design][design] and [runtime evidence][evidence].
 ## Source and ownership
 
 ```text
-class = "class" identifier "extends" "Application" "." "AppBase"
-        "{" function+ "}"
+class = "class" identifier "extends" native-app-base
+        "{" native-declaration* function+ "}"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
 Classes are top-level declarations. The base is a recognized native identity,
-not a general import/name resolver. No `using` declaration is required or
-accepted yet. Fields, static methods, annotations, source superclass lookup,
+resolved through the [native name profile](compiler-subset.md#native-name-declarations).
+It accepts canonical/qualified, aliased, and imported AppBase spellings, not
+general native classes. Fields, static methods, annotations, source superclass lookup,
 nested/empty classes, and `new` are unsupported. Class names must be unique;
 classes cannot be reopened. Reject class/module/global-function name collisions.
 

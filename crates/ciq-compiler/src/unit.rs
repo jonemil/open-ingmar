@@ -436,6 +436,8 @@ impl std::error::Error for SourceDiagnostic {}
 /// before resolving qualified calls, so declarations may follow their callers.
 /// Modules may be reopened across files; class names and member identities
 /// must remain unique. Calls on self resolve within their own class.
+/// Resolves the supported native module aliases and imported superclass names;
+/// native bindings are file-local and inherited by class/module scopes.
 /// All user callees must be present. Rejects empty units and more than 256
 /// functions; existing syntax/type/control-flow bounds apply per function.
 /// Diagnostics identify the source index and byte/line/column within that file.

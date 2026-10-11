@@ -1,6 +1,8 @@
 # Source class and current-receiver calls
 
-[app.mc](app.mc) declares `Counter extends Application.AppBase`. Its `start`
+[app.mc](app.mc) aliases `Toybox.Application` as `App` and declares
+`Counter extends App.AppBase`. A class-local `Sys` alias names `Toybox.System`.
+Its `start`
 method calls integer/void methods through `self`, including nested argument
 calls and a loop with an early return. [numbers.mc](numbers.mc) deliberately
 uses the same `answer` name in global and module scopes; self calls select the
@@ -39,7 +41,9 @@ The compiler generates lifecycle methods that invoke the selected method on the
 application instance. Base initialization and the blank View remain generated;
 this example does not yet define source `onStart`, `initialize`, or
 `getInitialView`. Class fields, arbitrary receivers, object construction,
-imports, and source inheritance remain unsupported.
+general native imports, and source inheritance remain unsupported. Supported
+native aliases resolve before IR construction; they do not change the generated
+application layout.
 
 Source, typed IR, and saved unit IR produce the same complete unsigned PRG.
 See [class rules](../../docs/specs/compiler-classes.md) and

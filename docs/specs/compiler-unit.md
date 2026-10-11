@@ -10,8 +10,10 @@ remain the per-function contracts.
 ## Source declarations
 
 ```text
-unit = declaration+
-declaration = function | "module" identifier "{" function+ "}" | class
+unit = native-declaration* declaration+
+declaration = function
+            | "module" identifier "{" native-declaration* function+ "}"
+            | class
 ```
 
 Inputs are one or more source files in caller-supplied order. Global functions
@@ -28,6 +30,11 @@ parameters and user-call arguments are integers; functions return integers or
 void. Expression calls require integer results; string and
 Boolean arguments are rejected. These are the current subset's fixed type
 rules, not general Monkey C type inference.
+
+The [native name profile](compiler-subset.md#native-name-declarations) defines
+supported `using`/`import` declarations and lexical boundaries. Native bindings
+are resolved before unit call validation; user declarations still collect
+across files before calls are checked.
 
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the

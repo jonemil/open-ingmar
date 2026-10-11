@@ -8,8 +8,9 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 1. **Resolve names, types, and native calls.** Start with the names and contracts
-   needed by an AppBase-derived class: `using`/`import`, qualified lookup,
-   explicit base initialization, and inherited methods. First compare base, self,
+   needed by an AppBase-derived class: extend the bounded native name profile
+   with member lookup, explicit base initialization, and inherited methods.
+   First compare base, self,
    and module dispatch in a minimal specimen. Represent native module,
    class, member, receiver, argument, and result identities independently of VM
    symbol IDs and import indexes. Add null, Boolean, and object-reference values

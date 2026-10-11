@@ -21,6 +21,12 @@ accepts those source constructs. Source classes supply method ownership and self
 calls; typed SDK calls and object/null/array operations still need validation
 before replacing the remaining wrapper.
 
+The frontend's bounded native name environment resolves Application/System
+module bindings and imported AppBase names before IR construction. These use
+native identities independently of VM symbols/import indexes. Aliases and
+qualified spellings select the same superclass/print operation; general native
+member descriptors and base calls remain upcoming work.
+
 No SDK files, compiled PRG template, copied DATA prefix, or signing key are read
 by the generator. Native identities and opaque header/entry profile values are
 explicit compatibility constants. Keep unknown meanings visible and extend

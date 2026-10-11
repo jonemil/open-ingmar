@@ -34,7 +34,8 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
-`true`, `while`, `break`, `continue`, `class`, `extends`, `self`, and `false`
+`true`, `while`, `break`, `continue`, `class`, `extends`, `self`, `false`,
+`using`, `import`, and `as`
 are reserved. Boolean literals are not supported yet. Whitespace, `//` comments,
 and non-nested `/* ... */` comments are supported. The accepted literal domain
 is `0..=127`; computed results may be negative or exceed 127. Unary signs,
@@ -214,7 +215,42 @@ shared validator propagates string types through locals and rejects incompatible
 uses. Concatenation, string returns/parameters, arbitrary SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
-provide the SDK module; import/Jungle resolution is not implemented.
+provide the SDK module. The native name profile below resolves its supported
+spellings; Jungle resolution remains unimplemented.
+
+## Native name declarations
+
+Default and unit source modes accept these declarations before functions or
+owners at the start of a file, and before methods at the start of a class/module:
+
+```text
+native-declaration = "using" native-module ("as" identifier)? ";"
+                   | "import" native-module ";"
+native-module = "Toybox.Application" | "Toybox.System"
+```
+
+`using` introduces a module binding, optionally aliased. `import` introduces
+the module name and its supported class names: currently only Application's
+`AppBase`. Therefore `import Toybox.Application;` permits `extends AppBase`,
+while `using Toybox.Application;` requires `extends Application.AppBase`.
+Aliased modules permit `extends App.AppBase` and `Sys.println(value)`.
+Fully qualified `Toybox.Application.AppBase` and `Toybox.System.println(value)`
+are also accepted. Existing `Application.AppBase` and `System.println` spellings
+remain accepted without declarations.
+
+Bindings apply to following declarations in their file and are inherited by
+class/module bodies. Owner-local bindings do not escape their owner; bindings
+are not shared between files, including reopened source modules. Imports in
+the body cannot resolve that class's superclass clause. This is a bounded
+frontend profile, not a specification of all Monkey C namespace behavior.
+
+Reject duplicate bindings, shadowing by parameters/locals/functions/owners,
+aliases of reserved identities, import aliases, declarations after functions,
+and native modules outside this profile. General source namespace aliases and
+native type/member lookup remain unsupported. Calls on ordinary user modules
+and `self` keep their existing rules. Supported native spellings resolve to the
+same semantic operation or superclass identity before IR construction; aliases
+are not serialized as VM symbols or executable import indexes.
 
 `String { result, value }` defines a semantic string; `Println { value }` is an
 effectful sink without a result. Printing participates in the same conservative

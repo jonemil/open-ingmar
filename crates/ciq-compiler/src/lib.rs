@@ -15,6 +15,7 @@ mod bindings;
 mod control_flow;
 pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
+mod names;
 mod parser;
 mod source_ir;
 mod unit;
@@ -773,6 +774,8 @@ impl Function {
 
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
+/// Accepts leading native name declarations for Application and System and
+/// resolves their supported aliases before IR construction.
 /// Resolves parameters and scoped locals, lowers conditions and while loops
 /// (including innermost break/continue) to blocks, and retains source spans.
 /// Functions with value returns require an integer return on every path;

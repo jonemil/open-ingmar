@@ -120,11 +120,60 @@ class framing/limits, exact arity and integer/void signatures, effect order,
 method fields and distinct owner targets, entry selection, and CLI output
 preservation. Tests use no SDK files or key.
 
-Next add typed native-base calls and source initialization, then the value types
-needed for source-authored callbacks and View creation. General objects,
-fields, native inherited self calls, imports, and multiple application classes
-are not established by this step. Other devices and real-watch execution remain
-unverified.
+General objects, fields, native inherited self calls, and multiple application
+classes remain unverified. [The plan](../plan.md) covers native-base calls and
+source initialization. Other devices and real-watch execution remain unverified.
+
+## Native name resolution
+
+2026-10-11. Question: which supported source spellings identify the native
+Application superclass and System module? Public
+[Objects and Memory][objects] distinguishes `using` module names from `import`
+class names. The frontend's [bounded name profile][names] retains that
+distinction without putting VM symbol/import indexes in the name environment.
+
+**Experimentally observed:** SDK 9.2.0, Java 17, fr265 accepted both
+`import Toybox.Application;` with `extends AppBase`, and
+`using Toybox.Application as App;` with `extends App.AppBase`. In both specimens
+a class-local `using Toybox.System as Sys;` permits `Sys.println`; fully
+qualified `Toybox.System.println` and `new Toybox.WatchUi.View()` also compile.
+Changing the import specimen to `using Toybox.Application;` fails with
+`Cannot resolve super class name 'AppBase'`.
+
+Reproduce with an ignored copy of `examples/minimal-console` and replace its
+source with the following import specimen. Keep its manifest/resources and
+Jungle path settings. Build with `sh scripts/build-example.sh <copy> fr265`.
+
+```monkeyc
+import Toybox.Application;
+class MinimalConsoleApp extends AppBase {
+    using Toybox.System as Sys;
+    function initialize() { AppBase.initialize(); }
+    function onStart(state) {
+        Sys.println("native names");
+        Toybox.System.println(41);
+    }
+    function getInitialView() { return [new Toybox.WatchUi.View()]; }
+}
+```
+
+For the alias specimen replace the first line with
+`using Toybox.Application as App;`, superclass with `App.AppBase`, and
+initializer call with `App.AppBase.initialize()`. For the rejection specimen
+change only the import to `using Toybox.Application;`.
+Local inputs/logs are under `scratch/native-names/`; each variant uses a Jungle
+file selecting its own source. SDK compilation success establishes name
+acceptance, not simulator execution or a native dispatch encoding.
+
+**Implementation check:** canonical, qualified, aliased, and imported versions
+of our small source class produce identical complete unsigned PRGs. Each also
+agrees with saved-unit-IR resumption. Scope tests distinguish class/module-local
+native aliases from user modules of the same name and check source diagnostics.
+Bindings are file-local in our supported profile; cross-file native binding
+visibility and alias shadowing rules in the full language are not established
+by these specimens. The VM backend and generated lifecycle remain unchanged.
 
 [profile]: ../specs/compiler-classes.md
 [example]: ../../examples/compiler-class/README.md
+[objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/
+[names]: ../specs/compiler-subset.md#native-name-declarations

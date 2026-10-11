@@ -114,9 +114,65 @@ struct Parser<'a> {
     offset: usize,
     lookahead: Option<Token<'a>>,
     expressions: usize,
+    names: crate::names::Names,
 }
 
 impl<'a> Parser<'a> {
+    fn path(&mut self) -> Result<String, Diagnostic> {
+        let token = self.identifier()?;
+        let Kind::Word(name) = token.kind else {
+            unreachable!()
+        };
+        let mut path = name.to_owned();
+        while self.peek()? == Kind::Punctuation('.') {
+            self.token()?;
+            let token = self.identifier()?;
+            let Kind::Word(name) = token.kind else {
+                unreachable!()
+            };
+            path.push('.');
+            path.push_str(name);
+        }
+        Ok(path)
+    }
+
+    fn imports(&mut self) -> Result<(), Diagnostic> {
+        while matches!(self.peek()?, Kind::Word("using" | "import")) {
+            let token = self.token()?;
+            let import = token.kind == Kind::Word("import");
+            let path = self.path()?;
+            let alias = if self.peek()? == Kind::Word("as") {
+                if import {
+                    return Err(self.error(token.span.start, "import aliases are unsupported"));
+                }
+                self.token()?;
+                let token = self.identifier()?;
+                let Kind::Word(name) = token.kind else {
+                    unreachable!()
+                };
+                Some(name)
+            } else {
+                None
+            };
+            self.expect(Kind::Punctuation(';'), "';'")?;
+            self.names
+                .declare(&path, alias, import)
+                .map_err(|message| self.error(token.span.start, message))?;
+        }
+        Ok(())
+    }
+
+    fn reject_binding(&self, token: &Token<'_>) -> Result<(), Diagnostic> {
+        if let Kind::Word(name) = token.kind {
+            if self.names.bound(name) {
+                return Err(self.error(
+                    token.span.start,
+                    format!("declaration shadows native binding {name:?}"),
+                ));
+            }
+        }
+        Ok(())
+    }
     fn error(&self, offset: usize, message: impl Into<String>) -> Diagnostic {
         Diagnostic::at(self.source, offset, message)
     }
@@ -237,6 +293,9 @@ impl<'a> Parser<'a> {
                         | "module"
                         | "class"
                         | "extends"
+                        | "using"
+                        | "import"
+                        | "as"
                         | "return"
                         | "var"
                         | "if"
@@ -328,6 +387,9 @@ impl<'a> Parser<'a> {
                         | "module"
                         | "class"
                         | "extends"
+                        | "using"
+                        | "import"
+                        | "as"
                         | "return"
                         | "var"
                         | "if"
@@ -344,6 +406,26 @@ impl<'a> Parser<'a> {
                     let member = self.identifier()?;
                     let Kind::Word(member) = member.kind else {
                         unreachable!()
+                    };
+                    let mut path = format!("{name}.{member}");
+                    while self.peek()? == Kind::Punctuation('.') {
+                        self.token()?;
+                        let token = self.identifier()?;
+                        let Kind::Word(part) = token.kind else {
+                            unreachable!()
+                        };
+                        path.push('.');
+                        path.push_str(part);
+                    }
+                    let (module, member) = path.rsplit_once('.').unwrap();
+                    let module = if let Some(native) = self.names.module(module) {
+                        native.name()
+                    } else if module.contains('.') {
+                        return Err(
+                            self.error(token.span.start, "unsupported qualified module path")
+                        );
+                    } else {
+                        module
                     };
                     self.expect(
                         Kind::Punctuation('('),
@@ -372,7 +454,7 @@ impl<'a> Parser<'a> {
                     let end = self.expect(Kind::Punctuation(')'), "')'")?.span.end;
                     self.node(
                         ExpressionKind::ModuleCall {
-                            module: name.into(),
+                            module: module.into(),
                             member: member.into(),
                             arguments,
                         },
@@ -435,6 +517,7 @@ impl<'a> Parser<'a> {
                 Kind::Word("var") => {
                     self.token()?;
                     let token = self.identifier()?;
+                    self.reject_binding(&token)?;
                     let Kind::Word(name) = token.kind else {
                         unreachable!()
                     };
@@ -588,7 +671,9 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         offset: 0,
         lookahead: None,
         expressions: 0,
+        names: crate::names::Names::default(),
     };
+    parser.imports()?;
     let function = parser.function()?;
     parser.expect(Kind::End, "end of input (only one function is supported)")?;
     Ok(function)
@@ -599,6 +684,7 @@ impl Parser<'_> {
         self.expressions = 0;
         self.expect(Kind::Word("function"), "'function'")?;
         let name = self.identifier()?;
+        self.reject_binding(&name)?;
         let Kind::Word(identifier) = name.kind else {
             unreachable!()
         };
@@ -607,6 +693,7 @@ impl Parser<'_> {
         if self.peek()? != Kind::Punctuation(')') {
             loop {
                 let parameter = self.identifier()?;
+                self.reject_binding(&parameter)?;
                 let Kind::Word(name) = parameter.kind else {
                     unreachable!()
                 };
@@ -656,28 +743,37 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
         offset: 0,
         lookahead: None,
         expressions: 0,
+        names: crate::names::Names::default(),
     };
     let mut unit = ParsedUnit {
         functions: Vec::new(),
         classes: Vec::new(),
     };
     let mut count = 0;
+    parser.imports()?;
     while parser.peek()? != Kind::End {
         if matches!(parser.peek()?, Kind::Word("module" | "class")) {
             let is_class = parser.token()?.kind == Kind::Word("class");
             let token = parser.identifier()?;
+            parser.reject_binding(&token)?;
             let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
             if is_class {
                 parser.expect(Kind::Word("extends"), "'extends Application.AppBase'")?;
-                parser.expect(Kind::Word("Application"), "'Application.AppBase'")?;
-                parser.expect(Kind::Punctuation('.'), "'.'")?;
-                parser.expect(Kind::Word("AppBase"), "'AppBase'")?;
+                let base = parser.path()?;
+                if !parser.names.app_base(&base) {
+                    return Err(parser.error(
+                        token.span.start,
+                        format!("unsupported or unresolved native superclass {base:?}"),
+                    ));
+                }
             } else if name == "System" {
                 return Err(parser.error(token.span.start, "System is reserved for SDK intrinsics"));
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
+            let outer_names = parser.names.clone();
+            parser.imports()?;
             let mut methods = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
                 methods.push(parser.function()?);
@@ -690,6 +786,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                 }
             }
             parser.token()?;
+            parser.names = outer_names;
             if methods.is_empty() {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }

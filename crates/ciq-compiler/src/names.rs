@@ -1,0 +1,73 @@
+//! Bounded native name resolution before semantic IR construction.
+use std::collections::BTreeMap;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NativeModule {
+    Application,
+    System,
+}
+
+impl NativeModule {
+    /// Return the canonical module name used by the current semantic profile.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Application => "Application",
+            Self::System => "System",
+        }
+    }
+}
+
+/// Lexical module bindings; imports additionally expose native class names.
+/// No symbol IDs or executable import indexes belong in this environment.
+#[derive(Clone, Default)]
+pub(crate) struct Names {
+    bindings: BTreeMap<String, NativeModule>,
+    app_base: bool,
+}
+
+impl Names {
+    /// Bind a supported Toybox module; imports also expose its supported classes.
+    /// Reject unsupported modules and duplicate or reserved bindings.
+    pub fn declare(&mut self, path: &str, alias: Option<&str>, import: bool) -> Result<(), String> {
+        let module = match path {
+            "Toybox.Application" => NativeModule::Application,
+            "Toybox.System" => NativeModule::System,
+            _ => return Err(format!("unsupported native module {path:?}")),
+        };
+        let name = alias.unwrap_or(module.name());
+        if matches!(name, "self" | "Toybox" | "AppBase")
+            || (name == "Application" && module != NativeModule::Application)
+            || (name == "System" && module != NativeModule::System)
+            || self.bindings.contains_key(name)
+        {
+            return Err(format!("conflicting native binding {name:?}"));
+        }
+        self.bindings.insert(name.into(), module);
+        self.app_base |= import && module == NativeModule::Application;
+        Ok(())
+    }
+
+    /// Check explicit module/class bindings before accepting a declaration name.
+    pub fn bound(&self, name: &str) -> bool {
+        self.bindings.contains_key(name) || (self.app_base && name == "AppBase")
+    }
+
+    /// Resolve an alias or supported canonical module path to a native identity.
+    pub fn module(&self, name: &str) -> Option<NativeModule> {
+        self.bindings.get(name).copied().or(match name {
+            "System" | "Toybox.System" => Some(NativeModule::System),
+            "Application" | "Toybox.Application" => Some(NativeModule::Application),
+            _ => None,
+        })
+    }
+
+    /// Resolve the supported superclass spellings, including imported bare names.
+    pub fn app_base(&self, path: &str) -> bool {
+        if path == "AppBase" {
+            return self.app_base;
+        }
+        path.rsplit_once('.').is_some_and(|(module, member)| {
+            member == "AppBase" && self.module(module) == Some(NativeModule::Application)
+        })
+    }
+}
