@@ -17,15 +17,14 @@ bounded compiler profile.
 | inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
 | inherited `hashCode()` | Number | 1.0.0 | Supported |
 | inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbol and callable Method values |
-| inherited `weak()` | WeakReference | 1.2.0 | Needs receiver-dependent result contracts |
+| inherited `weak()` | WeakReference; effective Boolean | 1.2.0 | Supported; [separate probe][weak-results] |
 
 **Documented:** comparison treats false as zero and true as one, and admits
 Numeric, Boolean, or Char arguments. Other numeric types and Char require
 executable value support. Results promise a sign, not an exact magnitude.
-Object's `weak()` note says immutable values, including Boolean, return their
-values despite its WeakReference result declaration. Do not apply that declared
-result unchanged; specialization and a probe are required. Neither deferred
-member was tested here. Nullable Boolean remains outside the source/IR profile.
+The [immutable weak probe][weak-results] establishes the receiver-specific result
+and SDK checker discrepancy. Callable values and ordinary object weak references
+were not tested here. Nullable Boolean remains outside the source/IR profile.
 
 ## Experiment
 
@@ -71,3 +70,5 @@ expand operator equality, ordering, or arithmetic.
 [boolean]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Boolean.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-boolean-methods/README.md
+
+[weak-results]: compiler-immutable-weak.md

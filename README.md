@@ -85,6 +85,9 @@ text operations, base conversion, comparison, equality, and hashing.
 The [Boolean method example](examples/compiler-boolean-methods/README.md) groups
 comparison, equality, hashing, and string conversion.
 
+The [immutable weak example](examples/compiler-immutable-weak/README.md) checks
+receiver-specific results on Number, String, and Boolean.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

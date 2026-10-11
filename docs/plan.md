@@ -7,14 +7,17 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Investigate immutable-value
-   `weak()` next across Number, String, and Boolean. Probe runtime results and
-   choose receiver-dependent contracts before implementing this exception to
-   Object's declared WeakReference result. Keep ordinary object weak references
-   separate. Follow the [class-focused strategy](#native-lang-strategy) for
+1. **Extend core Lang contracts and value types.** Review Char next, including
+   Number's `toChar` conversion, using a small runnable specimen to establish
+   value encoding, result consumers, and conversion limits. Keep array-returning
+   conversions deferred until array values are supported. Follow the
+   [class-focused strategy](#native-lang-strategy) for
    subsequent groups; revisit deferred [Number][number-methods],
    [String][string-methods], and [Boolean][boolean-methods] methods as their
    prerequisites become available.
+   Keep ordinary object weak references separate from the verified
+   [immutable-value specialization][weak-results]; probe lifetime and nullable
+   dereference contracts when object ownership requires them.
    Retain branch-proof validation through saved IR, joins, loops, and writes.
    Extend supported comparisons without trusting frontend-only assumptions;
    support nullable Boolean when a runnable case requires it.
@@ -230,3 +233,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [string-methods]: investigations/compiler-string-methods.md#method-inventory
 
 [boolean-methods]: investigations/compiler-boolean-methods.md#method-inventory
+
+[weak-results]: investigations/compiler-immutable-weak.md

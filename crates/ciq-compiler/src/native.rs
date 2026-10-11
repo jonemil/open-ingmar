@@ -33,7 +33,8 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
 }
 
 /// Resolve a value-call contract through the catalogue, then require its bounded
-/// executable profile. API existence and supported lowering are separate checks.
+/// executable profile. Return the effective receiver-specific result; declaration
+/// availability, arguments, and executable support must all pass first.
 pub(crate) fn value_call(
     receiver: &api::Type,
     member: &str,
@@ -79,6 +80,10 @@ pub(crate) fn value_call(
             member
         ),
         (
+            "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean",
+            "Toybox.Lang.Object",
+            "weak"
+        ) | (
             "Toybox.Lang.Number" | "Toybox.Lang.Boolean",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
@@ -126,7 +131,7 @@ pub(crate) fn value_call(
             "{class}.equals lowering currently requires scalar or nullable scalar arguments"
         ));
     }
-    Ok(resolved.method.result.clone())
+    Ok(resolved.result.clone())
 }
 
 fn scalar_or_null(ty: &api::Type) -> bool {
@@ -202,6 +207,18 @@ pub(crate) fn module_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weak_reference_declaration_does_not_enable_object_lowering() {
+        for class in ["Object", "Dictionary", "Char", "WeakReference"] {
+            let receiver = api::Type::named(format!("Toybox.Lang.{class}"));
+            assert!(
+                value_call(&receiver, "weak", &[], None)
+                    .unwrap_err()
+                    .contains("no supported lowering")
+            );
+        }
+    }
 
     #[test]
     fn assignability_rejects_unknown_classes_and_unrelated_or_nullable_types() {

@@ -30,14 +30,14 @@ documented. Prerequisites describe our executable subset.
 | `toUpper()` | String | 1.0.0 | Supported |
 | `toUtf8Array()` | Array of Number | 1.3.0 | Needs arrays |
 | inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbols and callable values |
-| inherited `weak()` | WeakReference | 1.2.0 | Needs receiver-dependent contracts |
+| inherited `weak()` | WeakReference; effective String | 1.2.0 | Supported; [separate probe][weak-results] |
 
 Comparison's Object declaration admits only String at runtime. Our lowering
 rejects other arguments, including unchecked String-or-Null. Equality's broader
 contract uses the shared declared-inheritance check and bounded scalar profile.
-The Object note about immutable `weak()` results needs specialization and a
-probe, as recorded in the [Number review][number-review]. Deferred conversion,
-array, callable, and weak-reference behavior was not tested here.
+The [immutable weak probe][weak-results] establishes the receiver-specific result
+and SDK checker discrepancy. Deferred conversions, arrays, callables, and
+ordinary object weak references were not tested here.
 
 ## Experiment
 
@@ -83,4 +83,4 @@ and older simulators were not tested.
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-string-methods/README.md
-[number-review]: compiler-number-methods.md#method-inventory
+[weak-results]: compiler-immutable-weak.md

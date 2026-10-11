@@ -158,7 +158,11 @@ impl Type {
 pub struct Method {
     pub name: String,
     pub parameters: Vec<Type>,
+    /// Generic declared result, before exact receiver specialization.
     pub result: Type,
+    /// Exact canonical receiver paths with specialized results. Other receivers
+    /// retain `result`; superclass lookup does not propagate these overrides.
+    pub receiver_results: BTreeMap<String, Type>,
     pub since: ApiLevel,
     /// Whether the runtime calls this method as a lifecycle callback.
     pub callback: bool,
@@ -188,6 +192,8 @@ pub struct Module {
 pub struct ResolvedMethod<'a> {
     pub declaring_class: &'a Class,
     pub method: &'a Method,
+    /// Effective result for the requested receiver, after exact specialization.
+    pub result: &'a Type,
     /// Includes the requested class, bases, enclosing modules, and the member.
     pub required_api: ApiLevel,
 }
@@ -231,7 +237,8 @@ impl Catalogue {
     }
 
     /// Resolve an instance method through the superclass chain, retaining its
-    /// declaring class and effective introduction level. Unknown paths return None.
+    /// declaring class, effective result, and introduction level. Result overrides
+    /// match the requested class exactly. Unknown paths return None.
     pub fn method(&self, class: &str, name: &str) -> Option<ResolvedMethod<'_>> {
         let mut current = self.class(class)?;
         let mut required_api = self.class_level(current);
@@ -241,6 +248,7 @@ impl Catalogue {
                 return Some(ResolvedMethod {
                     declaring_class: current,
                     method,
+                    result: method.receiver_results.get(class).unwrap_or(&method.result),
                     required_api: required_api.max(method.since),
                 });
             }
@@ -262,6 +270,7 @@ fn method(name: &str, parameters: Vec<Type>, result: Type, since: ApiLevel) -> M
         name: name.into(),
         parameters,
         result,
+        receiver_results: BTreeMap::new(),
         since,
         callback: false,
     }
@@ -281,6 +290,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.Boolean",
         "Toybox.Lang.Char",
         "Toybox.Lang.Dictionary",
+        "Toybox.Lang.WeakReference",
         "Toybox.Application.AppBase",
     ] {
         classes.insert(
@@ -302,7 +312,19 @@ fn build_core() -> Catalogue {
             initial,
         ),
         method("hashCode", vec![], Type::named(number), initial),
+        method(
+            "weak",
+            vec![],
+            Type::named("Toybox.Lang.WeakReference"),
+            ApiLevel(1, 2, 0),
+        ),
     ];
+    classes.get_mut("Toybox.Lang.WeakReference").unwrap().since = ApiLevel(1, 2, 0);
+    let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
+    weak.receiver_results = [number, string, "Toybox.Lang.Boolean"]
+        .into_iter()
+        .map(|name| (name.into(), Type::named(name)))
+        .collect();
     classes.get_mut(number).unwrap().methods = vec![
         method("abs", vec![], Type::named(number), initial),
         method("toNumber", vec![], Type::named(number), initial),
@@ -502,6 +524,23 @@ mod tests {
     }
 
     #[test]
+    fn receiver_result_overrides_do_not_leak_to_subclasses() {
+        let mut api = build_core();
+        api.classes.insert(
+            "Example.LaterNumber".into(),
+            Class {
+                name: "Example.LaterNumber".into(),
+                superclass: Some("Toybox.Lang.Number".into()),
+                since: ApiLevel(6, 0, 0),
+                methods: vec![],
+            },
+        );
+        let resolved = api.method("Example.LaterNumber", "weak").unwrap();
+        assert_eq!(*resolved.result, Type::named("Toybox.Lang.WeakReference"));
+        assert_eq!(resolved.required_api, ApiLevel(6, 0, 0));
+    }
+
+    #[test]
     fn core_inheritance_and_signature_references_are_closed() {
         let api = core();
         fn check_type(api: &Catalogue, ty: &Type) {
@@ -529,6 +568,10 @@ mod tests {
             .chain(api.modules.values().flat_map(|m| &m.functions))
         {
             check_type(api, &method.result);
+            for (receiver, result) in &method.receiver_results {
+                assert!(api.class(receiver).is_some(), "unknown receiver {receiver}");
+                check_type(api, result);
+            }
             for parameter in &method.parameters {
                 check_type(api, parameter);
             }

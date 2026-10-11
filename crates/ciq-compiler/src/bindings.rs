@@ -65,6 +65,8 @@ pub fn symbol_bindings(
                 "equals".to_string()
             } else if alias == "__ciq_native_hashCode" {
                 "hashCode".to_string()
+            } else if alias == "__ciq_native_weak" {
+                "weak".to_string()
             } else if alias == "__ciq_native_compareTo" {
                 "compareTo".to_string()
             } else if alias == "__ciq_native_length" {

@@ -66,6 +66,7 @@ Fixed native symbol IDs in this profile:
 | abs | `0x008000a6` |
 | equals | `0x008000b3` |
 | hashCode | `0x008000ad` |
+| weak | `0x00800418` |
 | compareTo | `0x00800e50` |
 | toNumber | `0x008000a7` |
 | toNumberWithBase | `0x008004c3` |

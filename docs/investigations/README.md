@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Immutable weak results](compiler-immutable-weak.md): receiver-specific
+  contracts, SDK checker discrepancy, and runtime comparison.
 - [Boolean methods](compiler-boolean-methods.md): inherited contracts, mixed
   comparison arguments, and grouped simulator validation.
 - [String methods](compiler-string-methods.md): method inventory, grouped

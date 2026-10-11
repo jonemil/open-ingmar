@@ -13,7 +13,8 @@ immutable declarations. A future definition-file reader should produce the same
 model. No declaration-file syntax or new crate is required initially.
 
 Current entries cover Lang's Object, Number, String, Boolean, Char, and
-Dictionary, plus Application.AppBase and the Lang/Application/System modules.
+Dictionary and WeakReference, plus Application.AppBase and the
+Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, AppBase initialization/startup/shutdown, and System
@@ -26,6 +27,7 @@ and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
 and String's length, case, string, search, slicing, numeric conversion, equality,
 hash, and comparison contracts. Boolean uses direct comparison and inherited
 Object string conversion, equality, and hash contracts.
+Inherited `weak` retains Number, String, or Boolean for those exact receivers.
 Argument types must satisfy their signatures or a declared union; every
 alternative of an actual union must be accepted. This does not
 permit implicit conversions or unknown classes. Named arguments may widen
@@ -47,8 +49,9 @@ reads proved non-null by a direct branch.
 Other result unions need corresponding validation before executable support.
 
 Classes hold instance methods; modules hold module functions. Methods carry
-parameter/result types, an introduction API level, and a callback flag. Types
-represent named classes, Null, Void, and unions. Add fields, constants, explicit
+parameter/result types, exact receiver-result overrides, an introduction API
+level, and a callback flag. Types represent named classes, Null, Void, and unions.
+Add fields, constants, explicit
 static member distinctions, and parameterized containers as needed. Declarations
 describe runtime-provided APIs without compiling replacement method bodies.
 Keep compiler analysis state outside this model.
@@ -62,8 +65,17 @@ crate only when another consumer needs it.
 ## Availability
 
 `Catalogue::method()` follows superclass paths and returns the declaring class,
-member, and effective minimum API level. `available_at()` checks that level,
-including the requested class, intervening bases, and enclosing modules. It does
+member, effective result, and minimum API level. The original `Method.result`
+remains the generic declaration; `ResolvedMethod.result` applies an exact
+receiver override from `Method.receiver_results`, without propagating it to
+subclasses. `Object.weak` declares WeakReference, but known Number, String, and
+Boolean receivers resolve to their own types. This models the documented
+immutable-value exception independently of VM instructions. Executable
+lowering admits only those three weak-call receivers; other classes retain
+the generic result. See the [weak-result evidence][weak-evidence].
+
+`available_at()` checks introduction levels, including the requested class,
+intervening bases, and enclosing modules. It does
 not validate a complete device/app profile. The fixed catalogue's inheritance
 and type references are checked by tests; a future reader needs equivalent
 validation.
@@ -103,7 +115,8 @@ nor configures PRG deployment metadata.
 Current checks cover supported Number/String/Boolean value calls, System
 printing/exit, AppBase bases, initialization, and known callbacks. Method
 introductions in the executable profile are API 1.0.0 except
-Number/String/Boolean.compareTo at 5.0.0 and String.toNumberWithBase at 1.4.1;
+Number/String/Boolean.compareTo at 5.0.0, Object.weak at 1.2.0, and
+String.toNumberWithBase at 1.4.1;
 substring's nullable index form additionally requires 3.3.2. Catalogue knowledge
 does not enable methods whose executable types or profiles are unsupported.
 Context levels are caller assertions: no device database, permission, app-type,
@@ -162,3 +175,5 @@ remain specified by the existing compiler specs; catalogue entries must not
 silently expand those contracts.
 
 [evidence]: ../investigations/official-garmin-documentation.md#core-lang-types-and-api-declarations
+
+[weak-evidence]: ../investigations/compiler-immutable-weak.md

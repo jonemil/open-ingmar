@@ -24,14 +24,13 @@ implementation prerequisites are our interpretation of the compiler's profile.
 | inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
 | inherited `hashCode()` | Number | 1.0.0 | Supported |
 | inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbol and callable Method values |
-| inherited `weak()` | WeakReference | 1.2.0 | Needs receiver-dependent result contracts |
+| inherited `weak()` | WeakReference; effective Number | 1.2.0 | Supported; [separate probe][weak-results] |
 
 **Documented:** comparison also admits other numeric types and Char. These
 alternatives need executable value support. Its result promises a sign, not
-an exact magnitude. Object's `weak()` note says immutable values, including
-Number, return their values despite its WeakReference result declaration.
-That needs explicit contract specialization and a probe before lowering it.
-No deferred conversion, callable, or weak-reference behavior was tested here.
+an exact magnitude. The [immutable weak probe][weak-results] establishes the
+receiver-specific result and SDK checker discrepancy. Deferred conversions,
+callables, and ordinary object weak references were not tested here.
 
 ## Experiment
 
@@ -73,3 +72,5 @@ unverified.
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-number-methods/README.md
+
+[weak-results]: compiler-immutable-weak.md

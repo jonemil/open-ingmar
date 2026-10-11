@@ -629,6 +629,14 @@ rejected before lowering. String `toNumberWithBase` requires API 1.4.1 and
 String `compareTo` requires 5.0.0 with explicit context. Format content, numeric
 base ranges, and conversion content remain runtime obligations.
 
+Zero-argument `weak` accepts Number, String, or Boolean and defines that exact
+receiver type under the catalogue's specialized result contract. It requires
+API 1.2.0 with explicit context. Nullable receivers need the usual non-null
+proof; other weak-reference receivers/results are unsupported. Saved IR
+recomputes this result from the receiver rather than trusting a frontend
+annotation. `weak` uses ordinary `getsv`/`invokemz` lowering and is retained as
+a call. See [the evidence](../investigations/compiler-immutable-weak.md).
+
 Native calls are effectful: receiver evaluation precedes arguments and
 invocation, and their operation order must agree with dependency traversal at
 statement sinks. The

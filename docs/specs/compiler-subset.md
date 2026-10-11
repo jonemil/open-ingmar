@@ -569,6 +569,13 @@ API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
 does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
 
+Number, String, and Boolean receivers also support zero-argument `weak()` since
+API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
+It remains an effectful native call; the compiler does not replace it with its
+receiver. Nullable Number/String receivers require a direct non-null proof
+before the call. Other classes and ordinary object weak references are outside
+this lowering profile. See the [weak-result evidence][weak-evidence].
+
 String results may initialize/replace a String local or be printed. Number
 results support integer locals, arithmetic, comparisons, user-call
 arguments, integer returns, and further Number calls. For example,
@@ -649,3 +656,5 @@ compatibility checks are omitted. Index normalization/error behavior remains
 a runtime obligation; the declared result remains nullable.
 
 [string-group]: ../investigations/compiler-string-methods.md
+
+[weak-evidence]: ../investigations/compiler-immutable-weak.md
