@@ -275,7 +275,5 @@ stack/context markers; it is not a full VM/frame implementation. All 148
 workspace tests pass on Rust 1.99; formatting and workspace/all-target Clippy
 with warnings denied pass.
 
-Next investigate strings and SDK module calls such as `System.println`,
-including DATA placement, symbol-name resolution, and discarding call results.
-Whole-program signature/type checking, module metadata generation, and Jungle
-builds remain later work.
+Follow-up evidence: [strings and printing](compiler-strings.md) and
+[compilation units](compiler-unit.md).

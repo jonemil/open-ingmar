@@ -256,7 +256,5 @@ instruction test make dropped/repeated/reordered calls observable; this is not a
 full VM/frame emulator. All 142 workspace tests pass with Rust 1.99, plus
 formatting and workspace/all-target Clippy with warnings denied.
 
-Next investigate parameter slots and a first argument-bearing call with
-controlled specimens, then string/member calls such as `System.println`.
-Multi-function/module compilation, metadata generation, recursion, and
-project/Jungle builds remain later work.
+Follow-up evidence: [parameters and arguments](compiler-arguments.md) and
+[strings and printing](compiler-strings.md).

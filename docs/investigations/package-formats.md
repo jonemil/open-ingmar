@@ -203,9 +203,8 @@ simulated.
 
 ## Plan and dependency findings
 
-The user approved the `ciq-package` boundary; the concrete staged design is in
-[package-crate.md](../design/package-crate.md). No new crate stub, dependencies,
-or signing APIs were implemented during this research task.
+See [package design](../design/package-crate.md) for the current crate boundary.
+The dependency observations below describe candidates at the research date.
 
 Candidate libraries can handle established archive formats independently of
 Garmin implementation code. `zip 6.0.0` declares Rust 1.83 and MIT;
@@ -217,16 +216,8 @@ option if the workspace's compiler requirement is deliberately updated later.
 The local installed libarchive remains an investigation aid, not the planned
 implementation backend.
 
-First implementation target is list/safe unpack for both formats, with raw XML
-preservation and member/product inventory. Then add verified signing support,
-independent barrel repacking, unchanged IQ repacking, and own-key IQ writing.
-Keep PRG assembly as a separate stage and preserve `at=` behavior. No linker,
-Jungle evaluator, or archive compressor implementation from scratch is proposed.
-
-Implementation follow-up:
-[Rust package reading and extraction](package-reading.md) completes stage 1 for
-its documented profile, including actual dependency/MSRV validation. This record
-above remains the preceding format-research evidence.
+See [package reading and extraction](package-reading.md) for the subsequent
+dependency/MSRV validation and archive-adapter experiments.
 
 [ref-7-zip-s-format-specification]: https://github.com/ip7z/7zip/blob/main/DOC/7zFormat.txt
 [ref-method-id-reference]: https://github.com/ip7z/7zip/blob/main/DOC/Methods.txt

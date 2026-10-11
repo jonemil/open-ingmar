@@ -34,6 +34,13 @@ investigation or experiment. Include:
 5. Findings with evidence categories, uncertainty, and conflicting observations.
 6. Implications for local specs or Rust APIs, and the next experiment.
 
+Lead with the question, result, and limits. Keep the investigation index a short
+topic map, not a milestone report. Omit routine workspace test counts and
+implementation summaries already covered by design/specs; retain checks that
+support a specific observation. Replace superseded next-step lists with links
+to follow-up evidence. Keep source inputs, reproduction commands, artifact
+identity, conflicting results, and relevant failed experiments.
+
 Avoid committing SDK distributions, credentials, signing keys, downloaded
 repositories, or incidental build artifacts. Use `scratch/` for local specimens.
 If an independently redistributable fixture is needed later, deliberately choose

@@ -221,8 +221,8 @@ Artifact SHA-256 values:
 Tests cover native/IR/assembly/CLI parity, UTF-8 lengths and escapes, repeated
 local reads, ordered print sinks, required result discards, invalid string uses,
 missing/ambiguous bindings, pinned declarations, and DATA layout before method
-binding. Full workspace checks and limits are recorded in the plan.
+binding.
 
-Next investigate branch/exception metadata before adding conditions or general
-relocation. Whole-program types, imports, DATA/module generation, and Jungle
-builds remain future work.
+Follow-up evidence: [control flow](control-flow.md),
+[conditions](compiler-conditions.md), and
+[application bootstrap](application-bootstrap.md).

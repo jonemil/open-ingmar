@@ -213,6 +213,7 @@ noncontiguous semantic IDs versus slots, source/IR local and total-operation
 limits, and CLI output/diagnostics. The restricted instruction evaluator checks
 stack balance and store-before-read within this subset, not physical frames. All
 136 workspace tests pass on Rust 1.99; formatting and workspace/all-target
-Clippy with warnings denied pass. Next: controlled call/frame specimens and a
-first supported function-call form. Reassignment needs its own semantic ordering
-extension.
+Clippy with warnings denied pass.
+
+Follow-up evidence: [module calls](compiler-calls.md) and
+[local reassignment](compiler-assignments.md).
