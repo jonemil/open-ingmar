@@ -42,7 +42,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }
         }
         match &located.operation {
-            Operation::String { result, .. }
+            Operation::Null { result }
+            | Operation::String { result, .. }
             | Operation::Integer { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Compare { result, .. }
@@ -209,6 +210,7 @@ fn expression(
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::Null { .. } => (Opcode::Npush, vec![]),
                 Operation::String { value, .. } => {
                     (Opcode::News, vec![Operand::String(strings[value].clone())])
                 }

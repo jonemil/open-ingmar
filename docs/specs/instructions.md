@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 38 opcodes currently encoded and decoded by
+This reference covers each of the 39 opcodes currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -38,6 +38,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 ## Index
 
 - [`popv`](#popv): discard the top value.
+- [`npush`](#npush): push null.
 - [`addv`](#addv): add two values.
 - [`subv`](#subv): subtract two values.
 - [`divv`](#divv): divide two values.
@@ -631,6 +632,15 @@ Physical Boolean representation is unverified.
 Source-derived stack effect: `[...] → [..., false]`. Observed at CODE+`0x1f0`
 as the argument to `caught(false)`, which returns without throwing.
 Physical Boolean representation is unverified.
+
+## npush
+
+**Push null.** Opcode `0x2c`; length **1 byte**; no operands.
+Stack effect: `[...] → [..., null]`. SDK 9.2.0 / fr265 / `-O 0` emits it for
+`var missing = null`. Our generated startup callback executes it with local
+storage and equality in the simulator. Null's physical representation remains
+unknown; it is distinct from an integer zero in semantic IR. See the
+[startup investigation](../investigations/compiler-class.md#source-startup-and-nullable-state).
 
 ## Runtime evidence and limits
 

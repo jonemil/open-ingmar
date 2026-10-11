@@ -16,6 +16,7 @@ mod control_flow;
 pub use bindings::{string_bindings, symbol_bindings};
 mod ir_text;
 mod names;
+mod native;
 mod parser;
 mod source_ir;
 mod unit;
@@ -74,7 +75,7 @@ pub struct LocalId(pub u32);
 pub struct BlockId(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Integer comparisons whose Boolean results are consumed by branches.
+/// Comparisons producing branch conditions; equality also supports null checks.
 pub enum ComparisonOp {
     Equal,
     Greater,
@@ -91,11 +92,28 @@ pub enum BinaryOp {
 }
 
 /// The supported function result contract, inferred from validated returns.
-/// Void functions produce no semantic value; parameters remain integers.
+/// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnType {
     Integer,
     Void,
+}
+
+/// Supported explicit parameter contracts, independent of VM slot allocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParameterType {
+    Integer,
+    /// An opaque native Dictionary or null; contents are not yet accessible.
+    NullableDictionary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValueType {
+    Integer,
+    String,
+    Boolean,
+    Null,
+    NullableDictionary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,6 +142,9 @@ pub enum Operation {
     Integer {
         result: ValueId,
         value: i32,
+    },
+    Null {
+        result: ValueId,
     },
     String {
         result: ValueId,
@@ -219,8 +240,9 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals and prints accept integers or strings. Arithmetic, parameters, and
-/// call arguments require integers. Returns consistently produce integers or
+/// Locals retain supported value types; printing accepts integers or strings.
+/// Arithmetic and user-call arguments require integers. Native callback
+/// parameters may carry opaque nullable Dictionary state. Returns consistently produce integers or
 /// no value; comparisons produce Booleans used by branches. Statement calls
 /// discard results; unit validation rejects using a void callee as a value.
 /// Instance methods permit self calls and require class ownership at unit
@@ -229,6 +251,7 @@ impl std::error::Error for IrError {}
 pub struct Function {
     name: String,
     parameter_count: usize,
+    parameter_types: Vec<ParameterType>,
     return_type: ReturnType,
     instance_method: bool,
     operations: Vec<LocatedOperation>,
@@ -277,7 +300,7 @@ impl Function {
         parameter_count: usize,
         operations: Vec<LocatedOperation>,
     ) -> Result<Self, IrError> {
-        Self::construct(name, parameter_count, operations, false)
+        Self::integer_parameters(name, parameter_count, operations, false)
     }
 
     /// Construct and validate an instance method with integer positional parameters.
@@ -290,15 +313,51 @@ impl Function {
         parameter_count: usize,
         operations: Vec<LocatedOperation>,
     ) -> Result<Self, IrError> {
-        Self::construct(name, parameter_count, operations, true)
+        Self::integer_parameters(name, parameter_count, operations, true)
+    }
+
+    /// Construct instance-method IR with explicit parameter contracts.
+    /// Unit validation checks these against native callbacks or user signatures.
+    pub fn method_with_parameter_types(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        operations: Vec<LocatedOperation>,
+    ) -> Result<Self, IrError> {
+        Self::construct(name, parameter_types, operations, true)
+    }
+
+    /// Return explicit parameter types in source order, excluding the receiver.
+    pub fn parameter_types(&self) -> &[ParameterType] {
+        &self.parameter_types
+    }
+
+    fn integer_parameters(
+        name: String,
+        count: usize,
+        operations: Vec<LocatedOperation>,
+        instance: bool,
+    ) -> Result<Self, IrError> {
+        if count > MAX_PARAMETERS {
+            return Err(IrError {
+                operation: None,
+                message: "function exceeds 254-parameter limit".into(),
+            });
+        }
+        Self::construct(
+            name,
+            vec![ParameterType::Integer; count],
+            operations,
+            instance,
+        )
     }
 
     fn construct(
         name: String,
-        parameter_count: usize,
+        parameter_types: Vec<ParameterType>,
         operations: Vec<LocatedOperation>,
         instance_method: bool,
     ) -> Result<Self, IrError> {
+        let parameter_count = parameter_types.len();
         if parameter_count > MAX_PARAMETERS {
             return Err(IrError {
                 operation: None,
@@ -328,11 +387,10 @@ impl Function {
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
-        let mut boolean_values = std::collections::BTreeSet::new();
+        let mut types = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
-        let mut string_values = std::collections::BTreeSet::new();
-        let mut string_locals = std::collections::BTreeSet::new();
+        let mut local_types = std::collections::BTreeMap::new();
         for (index, located) in operations.iter().enumerate() {
             let fail = |message: &str| IrError {
                 operation: Some(index),
@@ -341,6 +399,7 @@ impl Function {
             if located.span.is_some_and(|span| span.start > span.end) {
                 return Err(fail("source span ends before it starts"));
             }
+            let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
             let (result, operands) = match located.operation {
                 Operation::Block { block } => {
                     available_locals = local_inputs[&block].clone();
@@ -350,19 +409,27 @@ impl Function {
                     result,
                     left,
                     right,
-                    ..
+                    kind,
                 } => {
-                    if [left, right]
-                        .iter()
-                        .any(|v| string_values.contains(v) || boolean_values.contains(v))
-                    {
-                        return Err(fail("comparison requires integer values"));
+                    let pair = (type_of(left), type_of(right));
+                    let null_check = kind == ComparisonOp::Equal
+                        && matches!(
+                            pair,
+                            (
+                                ValueType::NullableDictionary | ValueType::Null,
+                                ValueType::Null
+                            ) | (ValueType::Null, ValueType::NullableDictionary)
+                        );
+                    if pair != (ValueType::Integer, ValueType::Integer) && !null_check {
+                        return Err(fail(
+                            "comparison requires integer values or a dictionary/null equality check",
+                        ));
                     }
-                    boolean_values.insert(result);
+                    types.insert(result, ValueType::Boolean);
                     (Some(result), vec![left, right])
                 }
                 Operation::Branch { condition, .. } => {
-                    if !boolean_values.contains(&condition) {
+                    if type_of(condition) != ValueType::Boolean {
                         return Err(fail("branch requires a Boolean comparison result"));
                     }
                     (None, vec![condition])
@@ -374,11 +441,15 @@ impl Function {
                     }
                     (Some(result), vec![])
                 }
+                Operation::Null { result } => {
+                    types.insert(result, ValueType::Null);
+                    (Some(result), vec![])
+                }
                 Operation::String { result, ref value } => {
                     if value.len() > u16::MAX as usize {
                         return Err(fail("string UTF-8 byte length exceeds u16"));
                     }
-                    string_values.insert(result);
+                    types.insert(result, ValueType::String);
                     (Some(result), vec![])
                 }
                 Operation::NativeBaseInitialize { .. } => {
@@ -390,7 +461,7 @@ impl Function {
                     (None, vec![])
                 }
                 Operation::Println { value } => {
-                    if boolean_values.contains(&value) {
+                    if !matches!(type_of(value), ValueType::Integer | ValueType::String) {
                         return Err(fail("println currently accepts only integers or strings"));
                     }
                     (None, vec![value])
@@ -403,7 +474,7 @@ impl Function {
                 } => {
                     if [left, right]
                         .iter()
-                        .any(|v| string_values.contains(v) || boolean_values.contains(v))
+                        .any(|v| type_of(*v) != ValueType::Integer)
                     {
                         return Err(fail("arithmetic requires integer values"));
                     }
@@ -413,6 +484,13 @@ impl Function {
                     if index >= parameter_count {
                         return Err(fail("parameter index is outside the function signature"));
                     }
+                    types.insert(
+                        result,
+                        match parameter_types[index] {
+                            ParameterType::Integer => ValueType::Integer,
+                            ParameterType::NullableDictionary => ValueType::NullableDictionary,
+                        },
+                    );
                     (Some(result), vec![])
                 }
                 Operation::ModuleCall {
@@ -427,8 +505,7 @@ impl Function {
                     ref arguments,
                 } => {
                     validate_call_names(Some(module), member).map_err(fail)?;
-                    validate_call_arguments(arguments, &string_values, &boolean_values)
-                        .map_err(fail)?;
+                    validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::ModuleCall { result, .. } = located.operation {
                         Some(result)
                     } else {
@@ -449,8 +526,7 @@ impl Function {
                         return Err(fail("self calls require an instance method"));
                     }
                     validate_call_names(None, member).map_err(fail)?;
-                    validate_call_arguments(arguments, &string_values, &boolean_values)
-                        .map_err(fail)?;
+                    validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::SelfCall { result, .. } = located.operation {
                         Some(result)
                     } else {
@@ -459,12 +535,10 @@ impl Function {
                     (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
-                    if boolean_values.contains(&value) {
+                    if type_of(value) == ValueType::Boolean {
                         return Err(fail("Boolean locals are not yet supported"));
                     }
-                    if string_values.contains(&value) {
-                        string_locals.insert(local);
-                    }
+                    local_types.insert(local, type_of(value));
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
                     }
@@ -483,13 +557,15 @@ impl Function {
                             "assignment requires an initialized local on every incoming path",
                         ));
                     }
-                    if boolean_values.contains(&value) {
+                    if type_of(value) == ValueType::Boolean {
                         return Err(fail("Boolean locals are not yet supported"));
                     }
-                    if string_locals.contains(&local) != string_values.contains(&value) {
-                        return Err(fail(
-                            "assignment must preserve the local's integer/string type",
-                        ));
+                    let incoming = type_of(value);
+                    if local_types[&local] != incoming
+                        && !(local_types[&local] == ValueType::NullableDictionary
+                            && incoming == ValueType::Null)
+                    {
+                        return Err(fail("assignment must preserve the local's value type"));
                     }
                     (None, vec![value])
                 }
@@ -499,9 +575,7 @@ impl Function {
                             "local read must refer to an earlier initialized local",
                         ));
                     }
-                    if string_locals.contains(&local) {
-                        string_values.insert(result);
-                    }
+                    types.insert(result, local_types[&local]);
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {
@@ -517,7 +591,7 @@ impl Function {
                     if return_type.replace(ReturnType::Integer) == Some(ReturnType::Void) {
                         return Err(fail("function cannot mix integer and void returns"));
                     }
-                    if string_values.contains(&value) || boolean_values.contains(&value) {
+                    if type_of(value) != ValueType::Integer {
                         return Err(fail("return requires an integer value"));
                     }
                     if !structure.explicit && index + 1 != operations.len() {
@@ -526,6 +600,9 @@ impl Function {
                     (None, vec![value])
                 }
             };
+            if let Some(result) = result {
+                types.entry(result).or_insert(ValueType::Integer);
+            }
             for operand in operands {
                 if !definitions.contains_key(&operand) {
                     return Err(fail("operand must refer to an earlier defined value"));
@@ -638,6 +715,7 @@ impl Function {
         Ok(Self {
             name,
             parameter_count,
+            parameter_types,
             instance_method,
             return_type: return_type.expect("final return establishes result type"),
             operations,
@@ -675,7 +753,29 @@ impl Function {
         } else {
             ""
         };
-        let mut text = format!("ciq-ir\n.function {}{parameters}{receiver}\n", self.name);
+        let parameter_types = if self
+            .parameter_types
+            .iter()
+            .all(|t| *t == ParameterType::Integer)
+        {
+            String::new()
+        } else {
+            format!(
+                " parameter-types={}",
+                self.parameter_types
+                    .iter()
+                    .map(|t| match t {
+                        ParameterType::Integer => "integer",
+                        ParameterType::NullableDictionary => "nullable-dictionary",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        let mut text = format!(
+            "ciq-ir\n.function {}{parameters}{receiver}{parameter_types}\n",
+            self.name
+        );
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Block { block } => format!(".block ^{}", block.0),
@@ -700,6 +800,7 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::Null { result } => format!(".null %{}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)
@@ -829,12 +930,11 @@ fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'stati
 }
 fn validate_call_arguments(
     arguments: &[ValueId],
-    strings: &std::collections::BTreeSet<ValueId>,
-    booleans: &std::collections::BTreeSet<ValueId>,
+    types: &std::collections::BTreeMap<ValueId, ValueType>,
 ) -> Result<(), &'static str> {
     if arguments
         .iter()
-        .any(|v| strings.contains(v) || booleans.contains(v))
+        .any(|v| types.get(v).is_some_and(|t| *t != ValueType::Integer))
     {
         return Err("user calls currently require integer arguments");
     }

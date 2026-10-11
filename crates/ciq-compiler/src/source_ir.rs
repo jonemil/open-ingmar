@@ -12,6 +12,9 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Null => Operation::Null {
+            result: ValueId(operations.len() as u32),
+        },
         parser::ExpressionKind::String(value) => Operation::String {
             result: ValueId(operations.len() as u32),
             value,
@@ -431,7 +434,26 @@ fn build_body(
     } else {
         Function::with_parameters
     };
-    construct(ast.name, builder.parameters.len(), builder.operations).map_err(|error| {
+    let result = if let Some(signature) = method
+        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
+        .flatten()
+    {
+        if builder.parameters.len() != signature.parameters.len() {
+            return Err(Diagnostic::at(
+                source,
+                ast.body_span.start,
+                "onStart requires one nullable-dictionary parameter",
+            ));
+        }
+        Function::method_with_parameter_types(
+            ast.name,
+            signature.parameters.to_vec(),
+            builder.operations,
+        )
+    } else {
+        construct(ast.name, builder.parameters.len(), builder.operations)
+    };
+    result.map_err(|error| {
         let offset = error
             .operation
             .and_then(|index| spans.get(index).copied().flatten())

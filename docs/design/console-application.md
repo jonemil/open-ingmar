@@ -1,7 +1,8 @@
 # Minimal application generation
 
 `ciq-compiler::application` turns a validated compilation unit into a complete
-unsigned console watch application. This keeps metadata and lifecycle generation separate from source compilation. The
+unsigned console watch application. This keeps metadata and lifecycle generation
+separate from source compilation. The
 [profile](../specs/console-application.md) is deliberately small and
 [simulator-verified](../investigations/application-bootstrap.md).
 
@@ -29,7 +30,12 @@ initialization now has its own ordered semantic operation with an implicit
 instance and no result. Unit validation constrains it to the first statement of
 a zero-parameter void source initializer. The application builder replaces the
 default initializer's DATA target with the source method, avoiding duplicate
-method fields. General native member descriptors remain upcoming work.
+method fields. A small native callback descriptor supplies AppBase.onStart
+parameter/result
+contracts. The function IR preserves its nullable Dictionary parameter
+separately
+from VM slots; source onStart replaces the generated wrapper and owns its method
+record. Broader native member descriptors remain upcoming work.
 
 No SDK files, compiled PRG template, copied DATA prefix, or signing key are read
 by the generator. Native identities and opaque header/entry profile values are
@@ -60,7 +66,7 @@ Void entries run once with their result discarded and no wrapper print;
 
 Source class ownership, instance receiver calls, and integer/void startup are
 [implemented](../investigations/compiler-class.md). Source-authored lifecycle
-requires broader constructor/receiver semantics, callback types,
+requires broader constructor/receiver semantics, callback contracts,
 and null/object/array values. Method records and imports should follow those
 identities rather than fixed wrapper choices. [The plan](../plan.md) defines
 the sequence and runnable acceptance examples. Preserve native/text equivalence

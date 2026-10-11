@@ -85,18 +85,19 @@ indexes follow this layout order; serialized spans remain provenance only.
 ## Application and VM binding
 
 Complete PRG generation permits exactly one declared AppBase class and requires
-`--entry Class.method`. The selected method must have zero parameters. Integer
+`--entry Class.method`. The selected method must have zero parameters, except
+source onStart follows the callback contract below. Integer
 results are printed by generated onStart; void results are discarded. Class symbol `1` identifies the application class. Plain names
 matching the class reuse that identity; other names retain deterministic
 allocation. Class methods are sorted DATA fields bound to their CODE labels,
 separate from globals/modules even when member names share one symbol ID.
 
-Methods named `onStart`, `getInitialView`, or `AppBase` remain unsupported.
+Methods named `getInitialView` or `AppBase` remain unsupported.
 The source initializer contract below permits `initialize`; otherwise its
 body, native imports, empty resources, and the blank View remain
 provided by the bootstrap. Unit/IR stages can represent multiple classes, but
 this PRG profile rejects them. Source callbacks and general object/native-call
-operations remain subsequent work.
+operations beyond the contracts below remain subsequent work.
 
 ## Source initialization
 
@@ -122,7 +123,29 @@ index. Lowering selects `getselfv AppBase; getsv initialize; invokemz; popv`.
 The application builder binds native aliases and directs the initializer's
 single DATA method record to source CODE. It keeps the default initializer when
 the source omits one. Constructor, onStart, and blank View generation remain
-provided by the bootstrap.
+provided by the bootstrap unless source onStart is supplied.
+
+## Source startup callback
+
+An AppBase class may define `function onStart(state)` with one parameter and a
+void result. Its inherited native contract is Dictionary-or-null, represented
+by `ParameterType::NullableDictionary`; other functions retain integer
+parameters. Callback contracts are resolved independently of VM symbol IDs,
+slot numbers, and import indexes. Unit validation rejects wrong callback
+signatures and direct user calls to onStart.
+
+Complete application generation requires `--entry Class.onStart` when that
+callback exists. Its DATA method record binds directly to source CODE; the
+generated startup wrapper is omitted. Constructor and blank View remain
+generated, and a source initializer is optional. Without source onStart, the
+existing zero-parameter startup-entry workflow remains available.
+
+The state parameter can be read, copied into locals, and compared with null
+using `==` in either operand order. Nullable Dictionary locals may receive null
+without changing their declared contract. Dictionary access/construction,
+printing, numeric operations, returns, and forwarding through integer user
+calls remain unsupported. Null locals can only receive null; this subset does
+not infer wider local types. Tests preserve these types through saved IR.
 
 Backend self calls select `getselfv @__ciq_member_<name>`, followed by `invokemz`
 for zero arguments or `frpush`, ordered arguments, and `invokem <count + 1>`.

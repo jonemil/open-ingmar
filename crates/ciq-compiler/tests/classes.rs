@@ -296,18 +296,16 @@ fn class_application_validates_entry_and_metadata_conflicts() {
             "{entry}"
         );
     }
-    for name in ["onStart", "getInitialView"] {
-        let unit = compile_sources(&[&format!(
-            "class C extends Application.AppBase {{ function start() {{}} function {name}() {{}} }}"
-        )])
-        .unwrap();
-        assert!(
-            build_console_application(&unit, &app("C.start"))
-                .unwrap_err()
-                .message
-                .contains("collide")
-        );
-    }
+    let unsupported = compile_sources(&[
+        "class C extends Application.AppBase { function start() {} function getInitialView() {} }",
+    ])
+    .unwrap();
+    assert!(
+        build_console_application(&unsupported, &app("C.start"))
+            .unwrap_err()
+            .message
+            .contains("collide")
+    );
     let unit =
         compile_sources(&["class C extends Application.AppBase { function C() { return 41; } }"])
             .unwrap();

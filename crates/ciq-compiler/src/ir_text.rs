@@ -50,15 +50,30 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     let Some((name_at, declaration)) = rows.get(1) else {
         return Err(fail(source.len(), "expected .function <name>"));
     };
-    if !(2..=4).contains(&declaration.len()) || declaration[0] != ".function" {
+    if !(2..=5).contains(&declaration.len()) || declaration[0] != ".function" {
         return Err(fail(*name_at, "expected .function <name>"));
     }
     let mut parameter_count = 0;
     let mut parameters = false;
+    let mut parameter_types = None;
     let mut instance_method = false;
     for field in declaration.iter().skip(2) {
         if field == "receiver=instance" && !instance_method {
             instance_method = true;
+        } else if let Some(types) = field.strip_prefix("parameter-types=") {
+            if parameter_types.is_some() {
+                return Err(fail(*name_at, "duplicate parameter types"));
+            }
+            parameter_types = Some(
+                types
+                    .split(',')
+                    .map(|t| match t {
+                        "integer" => Ok(crate::ParameterType::Integer),
+                        "nullable-dictionary" => Ok(crate::ParameterType::NullableDictionary),
+                        _ => Err(fail(*name_at, "unsupported parameter type")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
         } else if let Some(digits) = field
             .strip_prefix("parameters=")
             .filter(|s| !parameters && !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
@@ -115,6 +130,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".jump") => (12, 2),
             Some(".equal") => (13, 4),
             Some(".greater") => (14, 4),
+            Some(".null") => (21, 2),
             Some(".assign") => (15, 3),
             Some(".base-initialize") => (20, 2),
             _ => {
@@ -183,7 +199,11 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         } else {
             None
         };
-        let operation = if kind == 20 {
+        let operation = if kind == 21 {
+            Operation::Null {
+                result: parse_value(&fields[1])?,
+            }
+        } else if kind == 20 {
             if fields[1] != "Application.AppBase" {
                 return Err(fail(*at, "unsupported native initializer base"));
             }
@@ -329,7 +349,18 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     } else {
         Function::with_parameters
     };
-    construct(declaration[1].to_string(), parameter_count, operations).map_err(|error| {
+    let result = if let Some(types) = parameter_types {
+        if !instance_method || types.len() != parameter_count {
+            return Err(fail(
+                *name_at,
+                "parameter types require an instance receiver and matching count",
+            ));
+        }
+        Function::method_with_parameter_types(declaration[1].to_string(), types, operations)
+    } else {
+        construct(declaration[1].to_string(), parameter_count, operations)
+    };
+    result.map_err(|error| {
         Diagnostic::at(
             source,
             error

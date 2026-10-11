@@ -64,6 +64,9 @@ Readable IR and assembly provide inspection and editing points in the compiler
 pipeline. See [compiler design](docs/design/compiler-ir.md) for the stages and
 [IR syntax](docs/specs/compiler-ir-text.md) for saved text.
 
+The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
+initialization and a typed native startup callback with a null-state check.
+
 ## Disassemble and assemble
 
 Build the [Minimal Console reference](examples/minimal-console/README.md), then

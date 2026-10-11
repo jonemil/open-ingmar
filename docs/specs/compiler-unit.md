@@ -26,10 +26,16 @@ as an intrinsic receiver and cannot be declared as a module.
 All function bodies use the existing grammar and limits. Qualified user calls
 must resolve to a module member in this unit, regardless of declaration order.
 Call argument counts must exactly match the callee's parameter count. All
-parameters and user-call arguments are integers; functions return integers or
+ordinary parameters and user-call arguments are integers; functions return
+integers or
 void. Expression calls require integer results; string and
 Boolean arguments are rejected. These are the current subset's fixed type
 rules, not general Monkey C type inference.
+
+AppBase.onStart has a [native nullable-state
+contract](compiler-classes.md#source-startup-callback).
+Its parameter types and void result must match the resolved callback signature;
+it cannot be invoked as an ordinary source callee.
 
 The [native name profile](compiler-subset.md#native-name-declarations) defines
 supported `using`/`import` declarations and lexical boundaries. Native bindings
@@ -106,7 +112,8 @@ and its parser remain independently supported.
 
 ## CLI
 
-`--unit` selects compilation-unit source or IR mode. With source input it accepts
+`--unit` selects compilation-unit source or IR mode. With source input it
+accepts
 multiple input paths, with the final path always the new output:
 
 ```sh
@@ -116,8 +123,10 @@ cargo run -p ciq-compiler -- --unit --from ir scratch/unit.ciqir scratch/resumed
 ```
 
 `--from ir` and `--from assembly` require one input. Assembly is the existing
-shared format, so `--unit` is unnecessary when resuming it. `--emit code` accepts
-the existing explicit `--symbols`/`--data` bindings and emits raw CODE, not a PRG.
+shared format, so `--unit` is unnecessary when resuming it. `--emit code`
+accepts
+the existing explicit `--symbols`/`--data` bindings and emits raw CODE, not a
+PRG.
 All outputs must be new files. Without `--unit`, the original single-function
 CLI behavior is unchanged.
 
@@ -125,13 +134,15 @@ See [the example](../../examples/compiler-unit/README.md) and
 [simulator evidence](../investigations/compiler-unit.md).
 
 For complete unsigned application output, use `--emit prg --app-id <id>`
-with source or saved unit IR. The [console application profile](console-application.md)
+with source or saved unit IR. The [console application
+profile](console-application.md)
 specifies the generated lifecycle, metadata, entry selection, and restrictions.
 
 Unit signatures include each function's validated integer/void result contract.
 Expression `.call` requires an integer callee; statement `.call-discard` permits
 either result and discards it. Both check integer arguments and exact arity.
-Inner functions permit [void-return IR][void-ir]. See [void source rules][void-source].
+Inner functions permit [void-return IR][void-ir]. See [void source
+rules][void-source].
 
 [void-ir]: compiler-ir-text.md#void-returns-and-statement-calls
 [void-source]: compiler-subset.md#void-functions-and-statement-calls

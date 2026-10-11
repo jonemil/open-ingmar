@@ -212,7 +212,53 @@ The simulator used default memory and our developer key. Constructor, startup
 wrapper, and blank View remain generated. Callback state types, source
 `onStart`, and other devices remain unverified.
 
+## Source startup and nullable state
+
+2026-10-11. Question: can source onStart receive the native state value without
+an integer parameter assumption, and run after source initialization?
+
+**Officially documented:** [AppBase.onStart][appbase] takes a Dictionary or null
+and returns void. Its launch-state prose describes an empty Dictionary without
+an Intent. Keep the nullable signature; a normal simulator launch need not
+demonstrate a dictionary-backed launch. API level 1.0.0 is documented.
+
+**Observed SDK CODE:** SDK 9.2.0 / Java 17 / fr265 / `-O 0`, using our minimal
+console scaffold with this body:
+
+```monkeyc
+function onStart(state) {
+    var missing = null;
+    if (state == missing) { System.println("null state"); }
+    else { System.println("dictionary state"); }
+}
+```
+
+At CODE+`0x24`: `argcincsp 2 1; npush; lputv 2; lgetv 1; lgetv 2; eq; bf ...`.
+The null push is byte `0x2c` with no operand. The explicit state occupies slot 1;
+the hidden context occupies slot 0. A direct `state == null` specimen instead
+uses an unimplemented `0x20` instruction; its decoding is deferred. The frontend
+does not require that optimization and uses null plus ordinary equality.
+Local source/Jungle/logs are `scratch/native-names/startup.*` and
+`startup-sdk.log`; build with the corresponding absolute Jungle path as above.
+
+**Observed simulator execution:** the independent two-file
+[lifecycle example][lifecycle-example] prints `source initialize`,
+`source onStart`, `null state`, and `41`, each once in that order, without a
+runtime error. This verifies source callback selection, null handling, locals,
+self/module calls, and the void callback result. It does not verify a non-null
+launch state or dictionary access. Default simulator memory and our developer
+key were used. Native and saved-IR PRGs agree; callback signature/type checks
+also reject integer operations on state and invalid resumed signatures.
+
+The example documents compilation/signing/simulator commands. Local PRGs are
+`scratch/native-names/startup-unsigned.prg` and `startup.prg`; captured console
+is `startup-monkeydo.log` there. Constructor and blank View remain generated.
+Resource generation, additional callbacks, and real-watch execution remain
+unverified.
+
 [profile]: ../specs/compiler-classes.md
 [example]: ../../examples/compiler-class/README.md
 [objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/
 [names]: ../specs/compiler-subset.md#native-name-declarations
+[appbase]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/AppBase.html#onStart-instance_function
+[lifecycle-example]: ../../examples/compiler-lifecycle/README.md

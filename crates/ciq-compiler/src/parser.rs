@@ -78,6 +78,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    Null,
     Integer(i32),
     String(String),
     Local(String),
@@ -310,6 +311,7 @@ impl<'a> Parser<'a> {
                         | "continue"
                         | "true"
                         | "false"
+                        | "null"
                 ) =>
             {
                 Ok(token)
@@ -385,6 +387,7 @@ impl<'a> Parser<'a> {
                     })?;
                 self.node(ExpressionKind::Integer(value), token.span)
             }
+            Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
             Kind::Word(name)
                 if !matches!(
                     name,
@@ -404,6 +407,7 @@ impl<'a> Parser<'a> {
                         | "continue"
                         | "true"
                         | "false"
+                        | "null"
                 ) =>
             {
                 if self.peek()? == Kind::Punctuation('.') {

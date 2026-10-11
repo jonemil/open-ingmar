@@ -28,14 +28,14 @@ statement = "var" identifier "=" expression ";"
           | "break" ";" | "continue" ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
-primary = decimal-integer | string-literal | parameter-or-local-identifier
+primary = decimal-integer | string-literal | "null" | parameter-or-local-identifier
         | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `true`, `while`, `break`, `continue`, `class`, `extends`, `self`, `false`,
-`using`, `import`, and `as`
+`using`, `import`, `as`, and `null`
 are reserved. Boolean literals are not supported yet. Whitespace, `//` comments,
 and non-nested `/* ... */` comments are supported. The accepted literal domain
 is `0..=127`; computed results may be negative or exceed 127. Unary signs,
@@ -221,7 +221,8 @@ spellings; Jungle resolution remains unimplemented.
 ## Native name declarations
 
 Default and unit source modes accept these declarations before functions or
-owners at the start of a file, and before methods at the start of a class/module:
+owners at the start of a file, and before methods at the start of a
+class/module:
 
 ```text
 native-declaration = "using" native-module ("as" identifier)? ";"
@@ -328,9 +329,10 @@ The target must be a bare identifier. Parameters, fields, unknown/forward names,
 and arm locals used outside their scope are rejected. Assignment is a statement,
 not an expression; compound assignment and increment/decrement are unsupported.
 
-The initializer fixes the local's integer or string type. Each assignment must
-preserve it; Boolean assignments and changing between integer/string are
-rejected. RHS evaluation finishes before the write, so `n = n + 1` reads the old
+The initializer fixes the local's supported type. Each assignment must preserve
+it, except a nullable Dictionary local may receive null. Boolean assignments
+and general type changes are rejected. RHS evaluation finishes before the write,
+so `n = n + 1` reads the old
 value. Later reads observe the new content on that path. Assigning an enclosing
 local inside an arm is allowed; assignment does not create a declaration.
 
@@ -449,6 +451,9 @@ Unit mode also accepts [AppBase-derived class
 declarations](compiler-classes.md). Their methods may call `self.<member>(...)`
 as integer expressions or statements; class ownership and receiver contracts
 remain explicit in typed/saved IR. Default single-function source mode does not
-accept self calls. Class callbacks, object values/fields, source inheritance,
+accept self calls. Source initialization and onStart use the
+[native lifecycle contracts](compiler-classes.md#source-startup-callback).
+Null literals and opaque nullable callback-state locals support equality checks;
+general object values/fields, source inheritance,
 and general native calls remain open. See [runtime
 evidence](../investigations/compiler-class.md).

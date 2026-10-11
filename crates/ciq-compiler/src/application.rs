@@ -28,13 +28,15 @@ const ON_START: u32 = 0x0080029f;
 const GET_INITIAL_VIEW: u32 = 0x008002a0;
 const GLOBALS: u32 = 0x008002e6;
 
-/// Application identity and a zero-parameter global or class startup entry.
+/// Application identity and a startup entry or source native onStart callback.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsoleApplication {
     /// Sixteen manifest application-ID bytes, independent of signing identity.
     pub id: [u8; 16],
     /// Global function name, or Class.method for a declared AppBase class.
     /// Invoked once by onStart; integer results are printed, void discarded.
+    /// Select Class.onStart when that source callback exists; its state is
+    /// supplied by the runtime and its result contract is void.
     pub entry: String,
 }
 
@@ -95,7 +97,7 @@ fn class(
     }
 }
 
-fn lifecycle(entry: &str, result: ReturnType, instance: bool) -> Vec<Item> {
+fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool) -> Vec<Item> {
     use Opcode::*;
     let mut items = vec![
         Item::Label("__ciq_bootstrap".into()),
@@ -108,28 +110,30 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool) -> Vec<Item> {
         instruction(Getsv, vec![sym("__ciq_app_init")]),
         instruction(Invokemz, vec![]),
         instruction(Return, vec![]),
-        Item::Label("__ciq_on_start".into()),
-        instruction(Argc, vec![bits(2)]),
     ];
-    if result == ReturnType::Integer {
-        items.push(instruction(
-            Getmv,
-            vec![sym("__ciq_sdk_System"), sym("__ciq_member_println")],
-        ));
-        items.push(instruction(Frpush, vec![]));
+    if !source_start {
+        items.push(Item::Label("__ciq_on_start".into()));
+        items.push(instruction(Argc, vec![bits(2)]));
+        if result == ReturnType::Integer {
+            items.push(instruction(
+                Getmv,
+                vec![sym("__ciq_sdk_System"), sym("__ciq_member_println")],
+            ));
+            items.push(instruction(Frpush, vec![]));
+        }
+        let member = sym(&format!("__ciq_member_{entry}"));
+        items.push(if instance {
+            instruction(Getselfv, vec![member])
+        } else {
+            instruction(Getmv, vec![sym("__ciq_app_globals"), member])
+        });
+        items.push(instruction(Invokemz, vec![]));
+        if result == ReturnType::Integer {
+            items.push(instruction(Invokem, vec![bits(2)]));
+        }
+        items.push(instruction(Popv, vec![]));
+        items.push(instruction(Return, vec![]));
     }
-    let member = sym(&format!("__ciq_member_{entry}"));
-    items.push(if instance {
-        instruction(Getselfv, vec![member])
-    } else {
-        instruction(Getmv, vec![sym("__ciq_app_globals"), member])
-    });
-    items.push(instruction(Invokemz, vec![]));
-    if result == ReturnType::Integer {
-        items.push(instruction(Invokem, vec![bits(2)]));
-    }
-    items.push(instruction(Popv, vec![]));
-    items.push(instruction(Return, vec![]));
     items.extend([
         Item::Label("__ciq_initial_view".into()),
         instruction(Argc, vec![bits(1)]),
@@ -171,6 +175,8 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool) -> Vec<Item> {
 /// results; getInitialView returns a blank native View. Source callbacks that
 /// collide with generated lifecycle/base fields are rejected, except a validated
 /// source initialize method, which replaces the default initializer's DATA target.
+/// A validated source onStart also replaces its wrapper and requires selecting
+/// Class.onStart; the runtime supplies its nullable Dictionary argument directly.
 ///
 /// Allocates user symbols and all CODE/DATA positions deterministically. Global,
 /// module, and class methods bind to unit CODE labels; literals use shared DATA layout.
@@ -212,7 +218,7 @@ pub fn build_console_application(
         if class
             .methods
             .iter()
-            .any(|f| matches!(f.name(), "onStart" | "getInitialView" | "AppBase"))
+            .any(|f| matches!(f.name(), "getInitialView" | "AppBase"))
         {
             return Err(error(
                 "source methods collide with generated lifecycle or base fields",
@@ -220,7 +226,17 @@ pub fn build_console_application(
         }
         (entry, true)
     };
-    if entry.parameter_count() != 0 {
+    let source_start = instance
+        && unit.classes()[0]
+            .methods
+            .iter()
+            .any(|f| f.name() == "onStart");
+    if source_start && entry.name() != "onStart" {
+        return Err(error(
+            "a source onStart requires selecting Class.onStart as the entry",
+        ));
+    }
+    if !source_start && entry.parameter_count() != 0 {
         return Err(error("application entry must have zero parameters"));
     }
     if instance && entry.name() == "initialize" {
@@ -304,7 +320,7 @@ pub fn build_console_application(
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
     }
-    let mut items = lifecycle(entry.name(), entry.return_type(), instance);
+    let mut items = lifecycle(entry.name(), entry.return_type(), instance, source_start);
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
@@ -356,6 +372,11 @@ pub fn build_console_application(
         ],
     );
     for source_class in unit.classes() {
+        if source_class.methods.iter().any(|f| f.name() == "onStart") {
+            application
+                .fields
+                .retain(|f| f.key != Key::Raw((ON_START << 8) | 0x10));
+        }
         if source_class
             .methods
             .iter()

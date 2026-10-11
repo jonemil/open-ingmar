@@ -28,7 +28,8 @@ Generated lifecycle behavior:
 
 User functions may print strings/integers, call declared module members, and use
 existing locals/control flow. The [class extension](compiler-classes.md) adds source ownership and self calls;
-array, object, and null values remain unsupported. Void functions and qualified statement calls follow
+Null and opaque callback-state values are supported; general arrays/objects remain
+unsupported. Void functions and qualified statement calls follow
 [the source rules][void-source]. Generated lifecycle assembly supplies those
 fixed operations separately from semantic function IR.
 
@@ -150,7 +151,8 @@ exported and reconstructed through the existing section-project tools.
 ## Source class startup
 
 A unit containing [source classes](compiler-classes.md) must contain exactly one
-AppBase class and select a zero-parameter startup method with `Class.method`.
+AppBase class and select a zero-parameter startup method with `Class.method`,
+or select `Class.onStart` when the source supplies that native callback.
 The global application field and ENTRY_POINTS class identity remain symbol `1`,
 representing the named source class. Plain member names equal to the class
 reuse `1`; other user/native names retain the allocation rules above.
@@ -163,9 +165,10 @@ identity, and method ownership survive saved unit IR.
 
 Source `initialize` follows the
 [initializer contract](compiler-classes.md#source-initialization) and owns its
-single method record when supplied. `onStart`, `getInitialView`, and `AppBase`
+single method record when supplied. Source onStart similarly follows its native
+callback contract and replaces the startup wrapper. `getInitialView` and `AppBase`
 source methods remain unsupported. Constructor, imports, and blank View
-generation are unchanged. This does not yet compile other source lifecycle
+generation are unchanged. This does not yet compile additional source lifecycle
 callbacks, fields, arbitrary object receivers, or View
 construction. [Runtime evidence](../investigations/compiler-class.md) verifies
 void/integer startup, nested self calls, and the source edit.

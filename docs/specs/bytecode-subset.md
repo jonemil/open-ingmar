@@ -38,6 +38,7 @@ resolution occur in assembly, without stack interpretation.
 | `28` | `bt` | 2 |
 | `29` | `bf` | 2 |
 | `2a` | `frpush` | none |
+| `2c` | `npush` | none |
 | `2e` | `dup` | 1 |
 | `30` | `getm` | none |
 | `33` | `throw` | none |

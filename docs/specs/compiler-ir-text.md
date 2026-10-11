@@ -20,8 +20,8 @@ ciq-ir
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
 The header is `ciq-ir`, with no version field. Exactly one
-`.function <identifier>
-[parameters=<count>]` and trailing `.end` are required; input after `.end` is
+`.function <identifier>` with optional parameter/receiver/type metadata and
+trailing `.end` are required; input after `.end` is
 rejected. Identifiers use the assembly label identifier rules. An implicit
 single-block body contains ordered local initializations, print
 statements, calls, and expression trees, ending with `.return <value-id>` or
@@ -456,6 +456,27 @@ are rejected. Function validation requires an instance receiver and preserves
 the call's effect order; unit validation additionally enforces the
 [source initializer contract](compiler-classes.md#source-initialization).
 Source, typed, and text paths use the same operation and VM lowering.
+
+## Nullable callback state
+
+Instance-function metadata may include
+`parameter-types=integer,nullable-dictionary,...`. The list must match
+`parameters=<count>`; omitted types are integers. Unsupported names, duplicate
+type lists, mismatched counts, or lists without an instance receiver are errors.
+Unit validation currently permits noninteger parameters only for the native
+AppBase.onStart contract. For example:
+
+```text
+.function onStart parameters=1 receiver=instance parameter-types=nullable-dictionary
+```
+
+`.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits integer
+pairs, null pairs, and nullable Dictionary/null pairs; `.greater` remains
+integer-only. Callback-state reads/locals preserve their opaque nullable type.
+Printing, arithmetic, integer returns, and user-call arguments reject null and
+Dictionary values. A nullable Dictionary local may be assigned null; other
+assignments preserve the initializer type. Lowering uses `npush` for null and
+the existing local-slot and equality instructions.
 
 ## Instance receivers
 

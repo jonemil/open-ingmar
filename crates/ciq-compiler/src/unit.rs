@@ -251,6 +251,28 @@ impl CompilationUnit {
         }
         let mut signatures = BTreeMap::new();
         for (index, &(owner, function)) in bodies.iter().enumerate() {
+            let callback = matches!(owner, Owner::Class(_))
+                .then(|| crate::native::callback(ClassBase::ApplicationAppBase, function.name()))
+                .flatten();
+            if let Some(signature) = callback {
+                if function.parameter_types() != signature.parameters
+                    || function.return_type() != signature.result
+                {
+                    return Err(fail(
+                        Some(index),
+                        None,
+                        "onStart requires one nullable-dictionary parameter and a void result"
+                            .into(),
+                    ));
+                }
+            } else if function
+                .parameter_types()
+                .iter()
+                .any(|t| *t != crate::ParameterType::Integer)
+            {
+                return Err(fail(Some(index), None,
+                    "noninteger parameter contracts are currently supported only for AppBase.onStart".into()));
+            }
             let base_calls = function
                 .operations()
                 .iter()
@@ -355,6 +377,13 @@ impl CompilationUnit {
                         format!("unresolved function {}.{}", key.0.name(), key.1),
                     ));
                 };
+                if matches!(key.0, Owner::Class(_)) && key.1 == "onStart" {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        "onStart is a native lifecycle callback, not a user-call target".into(),
+                    ));
+                }
                 if value_call && *result == ReturnType::Void {
                     return Err(fail(
                         Some(index),

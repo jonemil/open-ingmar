@@ -36,3 +36,6 @@ keys and SDK installations stay outside the examples.
 
 - [Source class and receiver calls](compiler-class/README.md): AppBase ownership
   and nested instance-method calls in a complete generated application.
+
+- [Source application lifecycle](compiler-lifecycle/README.md): initialization,
+  native startup callback typing, and a null-state check across two source files.

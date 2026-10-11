@@ -50,6 +50,7 @@ opcodes! {
     Bt = 0x28, "bt", [2];
     Bf = 0x29, "bf", [2];
     Frpush = 0x2a, "frpush", [];
+    Npush = 0x2c, "npush", [];
     Dup = 0x2e, "dup", [1];
     Getm = 0x30, "getm", [];
     Throw = 0x33, "throw", [];
