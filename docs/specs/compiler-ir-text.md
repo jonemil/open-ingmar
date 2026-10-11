@@ -195,7 +195,8 @@ defaults to zero, with a maximum of 254. `Function::with_parameters(name, count,
 operations)` uses the shared validator; `Function::new` retains zero-parameter
 behavior. `Function::with_parameter_types` supplies explicit contracts.
 `.parameter %<result-id> <zero-based-index>` defines a fresh value with the
-signature position's type. Index must be below the parameter count;
+signature position's type, narrowed under the [null-check proof](#nullable-results)
+when available. Index must be below the parameter count;
 repeated reads and unused declared parameters are allowed. Source parameter
 names are resolved by the frontend, not stored in IR. Position is independent of
 value/local IDs and VM slots.
@@ -636,25 +637,28 @@ requirements are the same as the [source contract][nullable-source]. The existin
 `.branch` forms carry this behavior; no assertion or unchecked cast operation
 is introduced. Equality with Null is accepted in either order.
 
-Shared IR validation computes non-null local facts from control flow. A branch
-whose condition is a direct `.equal` between `.read` and `.null` establishes the
-checked local's fact on its false edge. The checked read must be in the branch's
-block and have no intervening write to that local. Both outcomes reaching the
+Shared IR validation computes non-null local and parameter facts from control
+flow. A branch whose condition is a direct `.equal` between `.read` or
+`.parameter` and `.null` establishes that storage identity's fact on its false
+edge. The checked read must be in the branch's block; a checked local must have
+no intervening write. Both outcomes reaching the
 same target provide no new proof. Entry has no external facts; joins intersect
 incoming facts and every initialization/assignment kills that local's proof.
 The fixed-point analysis handles backedges without treating a later guard as
 proof for a loop's first entry.
 
-A fresh read of a nullable Number/String local under this proof defines its
-non-null type; otherwise it defines the original union. Storage remains nullable.
-Assignment can supply Null, the non-null type, or the same union, but always
+A fresh read of a nullable Number/String local or parameter under this proof
+defines its non-null type; otherwise it defines the original union. Storage
+remains nullable. Local assignment can supply Null, the non-null type, or the same union, but always
 requires another proof before non-null use. Existing effect-order, one-use,
 and block-local value rules apply.
 Stored Boolean guards and comparisons against null-valued locals are not proof
 forms. Nullable values may use matching user parameter/result contracts,
-but cannot use non-null consumers without proof. Nullable Numbers may be passed as substring indices,
+but cannot use non-null consumers without proof. Nullable Numbers may be passed
+as substring indices,
 which explicitly accept that union. Readers and typed constructors recompute
-all facts; IR text carries no trusted narrowing metadata. See [source examples][nullable-source].
+all facts; IR text carries no trusted narrowing metadata. See
+[source examples][nullable-source].
 
 [nullable-source]: compiler-subset.md#nullable-results
 
@@ -684,7 +688,10 @@ Call result contracts must equal the callee's declared result, even when its
 body always returns a scalar. This prevents edited call metadata from hiding
 nullable results. Standalone IR has no callee signature environment.
 
-Parameter reads preserve their declared union. Copy a nullable parameter into
-a local to use the existing branch proofs; direct parameter-read guards do not
-narrow later reads. No casts or new VM instructions are introduced. See the
+Parameter reads retain their declared union until a direct branch proves the
+parameter non-null. Later reads under that proof define the scalar alternative.
+Local and parameter identities are distinct; neither a copied value nor another
+parameter is narrowed by the original's proof. Parameters have no write
+operation, so unrelated local writes preserve parameter facts.
+No casts or new VM instructions are introduced. See the
 [complete example](../../examples/compiler-nullable-contracts/README.md).

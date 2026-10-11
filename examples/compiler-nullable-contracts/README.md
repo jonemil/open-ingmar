@@ -2,8 +2,8 @@
 
 [app.mc](app.mc) and [values.mc](values.mc) pass Number-or-Null and String-or-Null
 values through module and instance calls. Scalar and Null arguments satisfy
-matching nullable parameters. Nullable parameters are copied to locals for
-guarded scalar use. The app also retries a nullable user result in a loop.
+matching nullable parameters. Direct parameter null guards allow scalar use
+without an intermediate local. The app also retries a nullable user result in a loop.
 
 From the repository root:
 

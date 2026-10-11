@@ -571,10 +571,9 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
 Number or Null. String `substring` and user calls may also return nullable
-values. Store nullable
-results in locals and compare them with null.
-A direct `if (value == null)` or `if (null == value)` proves that local non-null
-on the false path. Fresh reads there have the non-null Number or String type
+values. Compare nullable parameters or stored results with null.
+A direct `if (value == null)` or `if (null == value)` proves that parameter or
+local non-null on the false path. Fresh reads there have the non-null Number or String type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc
@@ -591,15 +590,16 @@ A join retains a proof only if all incoming paths provide it. The false exit of
 assignments of non-null values. Nullable locals accept Null, their non-null
 type, or the same union; their declared storage type stays nullable.
 
-Only direct local-read/literal-null comparisons used by the branch establish
-facts. A stored Boolean condition, a null-valued local used as the comparison
-operand, or a check of a different local does not narrow the target. Checking
-one local does not narrow aliases or later native-call results. Unchecked nullable
-values cannot be printed or used as non-null operands/receivers. They may be
+Only direct parameter/local-read comparisons with literal null used by the
+branch establish facts. A stored Boolean condition, a null-valued local used
+as the comparison operand, or a check of a different storage identity does not narrow the target.
+Checking one local or parameter does not narrow aliases, copies, or later
+native-call results. Unchecked nullable values cannot be printed or used as non-null operands/receivers. They may be
 passed to matching nullable parameters and returned under matching nullable
 result contracts. Scalar parameters/results still require a non-null value.
-Nullable parameters can be copied to locals for narrowing; a direct comparison
-of a parameter read does not establish a local proof.
+Fresh parameter reads on the non-null path use the scalar type directly.
+Parameter slots cannot be assigned in this subset. Local writes do not
+invalidate parameter facts, even when their numeric local/parameter IDs match.
 Other unions remain outside this profile. Conversion, search, and slicing
 behavior is supplied by the runtime, not folded by the compiler. See
 [Number evidence](../investigations/compiler-nullable-numbers.md) and

@@ -175,7 +175,6 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
     );
     for source in [
         "function f(x as Toybox.Lang.String or Null) { return x.length(); }",
-        "function f(x as Toybox.Lang.String or Null) { if (x == null) { return 0; } return x.length(); }",
         "function f(x as Toybox.Lang.String or Null) { var s = x; if (s == null) { return 0; } s = null; return s.length(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");

@@ -159,6 +159,16 @@ enum ValueType {
 }
 
 impl ValueType {
+    /// Return the scalar alternative of a supported nullable value. Opaque
+    /// callback Dictionaries retain their union because non-null use is unsupported.
+    fn without_null(self) -> Self {
+        match self {
+            Self::NullableInteger => Self::Integer,
+            Self::NullableString => Self::String,
+            _ => self,
+        }
+    }
+
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(self) -> api::Type {
         match self {
@@ -571,7 +581,7 @@ impl Function {
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
-        let non_null_inputs = null_flow::local_inputs(&structure, &operations);
+        let non_null_inputs = null_flow::inputs(&structure, &operations);
         let mut non_null = std::collections::BTreeSet::new();
         let mut types = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
@@ -604,16 +614,20 @@ impl Function {
                                 || type_of(right) == ValueType::Null)
                         {
                             if let Some(&at) = definitions.get(&value) {
-                                if let Operation::LocalRead { local, .. } = operations[at].operation
-                                {
-                                    if let Some(&ty) = local_types.get(&local) {
-                                        if matches!(
-                                            ty,
-                                            ValueType::NullableInteger | ValueType::NullableString
-                                        ) {
-                                            return ty;
-                                        }
+                                let declared = match operations[at].operation {
+                                    Operation::LocalRead { local, .. } => {
+                                        local_types.get(&local).copied()
                                     }
+                                    Operation::ParameterRead { index, .. } => parameter_types
+                                        .get(index)
+                                        .and_then(|ty| ValueType::from_api_type(&ty.api_type())),
+                                    _ => None,
+                                };
+                                if let Some(
+                                    ty @ (ValueType::NullableInteger | ValueType::NullableString),
+                                ) = declared
+                                {
+                                    return ty;
                                 }
                             }
                         }
@@ -718,15 +732,14 @@ impl Function {
                     if index >= parameter_count {
                         return Err(fail("parameter index is outside the function signature"));
                     }
+                    let ty = ValueType::from_api_type(&parameter_types[index].api_type())
+                        .expect("parameter contracts have supported value types");
                     types.insert(
                         result,
-                        match parameter_types[index] {
-                            ParameterType::NullableInteger => ValueType::NullableInteger,
-                            ParameterType::NullableString => ValueType::NullableString,
-                            ParameterType::Integer => ValueType::Integer,
-                            ParameterType::String => ValueType::String,
-                            ParameterType::Boolean => ValueType::Boolean,
-                            ParameterType::NullableDictionary => ValueType::NullableDictionary,
+                        if non_null.contains(&null_flow::Place::Parameter(index)) {
+                            ty.without_null()
+                        } else {
+                            ty
                         },
                     );
                     (Some(result), vec![])
@@ -809,7 +822,7 @@ impl Function {
                     (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
-                    non_null.remove(&local);
+                    non_null.remove(&null_flow::Place::Local(local));
                     local_types.insert(local, type_of(value));
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
@@ -840,7 +853,7 @@ impl Function {
                     {
                         return Err(fail("assignment must preserve the local's value type"));
                     }
-                    non_null.remove(&local);
+                    non_null.remove(&null_flow::Place::Local(local));
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } => {
@@ -852,12 +865,8 @@ impl Function {
                     let ty = local_types[&local];
                     types.insert(
                         result,
-                        if non_null.contains(&local) {
-                            match ty {
-                                ValueType::NullableInteger => ValueType::Integer,
-                                ValueType::NullableString => ValueType::String,
-                                _ => ty,
-                            }
+                        if non_null.contains(&null_flow::Place::Local(local)) {
+                            ty.without_null()
                         } else {
                             ty
                         },

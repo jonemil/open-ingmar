@@ -20,8 +20,15 @@ class NullableApp extends AppBase {
             System.println("retry");
             retry = self.choose(true);
         }
-        System.println(retry.length());
+        System.println(self.lengthOrZero(retry));
         System.exit();
+    }
+
+    function lengthOrZero(value as Toybox.Lang.String or Null)
+            as Toybox.Lang.Number {
+        if (value == null) { return 0; }
+        if (null == value) { return 0; }
+        return value.length();
     }
 
     function passString(value as Toybox.Lang.String or Null)

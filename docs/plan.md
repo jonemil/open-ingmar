@@ -8,9 +8,9 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 1. **Extend core Lang contracts and value types.** Retain branch-proof validation
-   through saved IR, joins, loops, and writes. Extend guard forms to nullable
-   parameters and additional comparisons without trusting frontend-only
-   assumptions; support nullable Boolean when a runnable case requires it.
+   through saved IR, joins, loops, and writes. Extend supported comparisons
+   without trusting frontend-only assumptions; support nullable Boolean when a
+   runnable case requires it.
    Grow Object equality and other core methods through documented assignability
    rules rather than weakening argument validation to accept any value.
 

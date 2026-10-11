@@ -35,10 +35,12 @@ available for functions without an explicit result declaration.
 ## Null-check facts
 
 Nullable Number/String values preserve their union until control flow proves
-a local non-null. `null_flow` computes facts shared by typed construction and text
-resumption; fresh local reads use those facts, while the storage contract remains
-nullable. Facts survive only when every incoming path provides them, and writes
-invalidate them. No runtime conversion or assertion is emitted for narrowing.
+a local or parameter non-null. `null_flow` tracks those storage identities
+separately, sharing facts between typed construction and text resumption. Fresh
+reads use the facts while declared types remain nullable. Joins retain only
+facts provided by every path. Local writes invalidate that local's fact;
+parameter slots are immutable in the supported IR. Copies are separate
+identities and do not inherit a later proof of the original. No runtime conversion or assertion is emitted for narrowing.
 Keeping this proof in IR validation prevents edited text from bypassing source
 checks. [IR rules](../specs/compiler-ir-text.md#nullable-results) define
 the supported guard forms and their limits.
