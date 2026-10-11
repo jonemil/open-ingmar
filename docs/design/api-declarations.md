@@ -34,8 +34,8 @@ supported calls. User functions accept Number, String, Boolean, and nullable
 Number/String parameters and results; API declarations alone do not enable
 other types. String `find`
 and `toNumber` retain Number-or-Null result contracts; `substring` retains
-String-or-Null. Flow validation permits non-null consumers only for local reads
-proved non-null by a direct branch.
+String-or-Null. Flow validation permits non-null consumers for local or parameter
+reads proved non-null by a direct branch.
 Other result unions need corresponding validation before executable support.
 
 Classes hold instance methods; modules hold module functions. Methods carry
@@ -92,9 +92,10 @@ entry points omit API-level checks and retain their bounded lowering checks.
 Saved IR builds must resupply the context. It neither changes serialized IR
 nor configures PRG deployment metadata.
 
-Current checks cover Number value calls, System printing/exit, AppBase bases,
-initialization, and known callbacks. All executable catalogue contracts currently
-require API 1.0.0; later known Number methods exercise availability diagnostics
+Current checks cover supported Number/String value calls, System printing/exit,
+AppBase bases, initialization, and known callbacks. Method introductions in the
+executable profile are API 1.0.0; substring's nullable index form additionally
+requires 3.3.2. Later known Number methods exercise availability diagnostics
 without gaining lowering. Context levels are caller assertions: no device
 database, permission, app-type, execution-scope, or VM-capability validation is
 implied. The console PRG generator remains the SDK 9.2.0 / fr265-tested profile.

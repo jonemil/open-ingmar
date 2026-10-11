@@ -68,5 +68,11 @@ copy Garmin implementation code. Investigate upstream licenses before
 incorporating any third-party code; the default is to document behavior and
 write our own implementation.
 
+For native Lang investigations, use the
+[class-focused strategy](plan.md#native-lang-strategy).
+Review related method contracts together and reuse specimens where useful;
+isolate calls that could prevent later observations. Record prerequisites and
+unknowns without duplicating the supported contracts in specs.
+
 Update the relevant design/spec pages when evidence changes their conclusions;
 put newly discovered work in [the plan](plan.md).

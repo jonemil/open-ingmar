@@ -7,10 +7,13 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Retain branch-proof validation
-   through saved IR, joins, loops, and writes. Extend supported comparisons
-   without trusting frontend-only assumptions; support nullable Boolean when a
-   runnable case requires it.
+1. **Extend core Lang contracts and value types.** Start with Number using the
+   [class-focused strategy](#native-lang-strategy): review its full method surface,
+   then implement the group that fits supported value types and dispatch. Record
+   prerequisites for the remaining methods before moving to another class.
+   Retain branch-proof validation through saved IR, joins, loops, and writes.
+   Extend supported comparisons without trusting frontend-only assumptions;
+   support nullable Boolean when a runnable case requires it.
    Grow Object equality and other core methods through documented assignability
    rules rather than weakening argument validation to accept any value.
 
@@ -86,6 +89,29 @@ compiling a project.
 After each dependency is established, take the next language feature from the
 backlog below that a representative application needs. Do not wait for complete
 language coverage before advancing a working project example.
+
+## Native Lang strategy
+
+Organize native Lang work around one class at a time. The compiler implements
+contracts, availability checks, and dispatch; the runtime supplies method bodies.
+Completing every method of a class is not a prerequisite for moving on.
+
+- Review the class's methods, including inherited members, together. Record
+  argument/result contracts, API constraints, evidence, and unknowns in a focused
+  investigation. Identify methods that fit existing types and dispatch, and
+  name the prerequisites for deferred methods, such as new numeric types,
+  arrays, or callable values. Do not treat declarations as executable support.
+- Implement the supported group together. Add shared type, assignability, or
+  lowering machinery once where needed; keep operator work separate from native
+  method dispatch. Extend specs only for the accepted contracts.
+- Reuse a complete application for grouped SDK/generated simulator comparison
+  and source/IR/assembly equivalence. Cover method-specific behavior and failures,
+  wrong arguments, nullable results, and API boundaries with focused tests.
+  Run shared checks after the group rather than repeating them for every method;
+  isolate probes whose runtime failures would hide later results.
+- Move to the next useful class or prerequisite after validating the group.
+  Revisit deferred methods when their dependencies exist. Keep application and
+  project work moving without waiting for complete Lang coverage.
 
 ## Language and API backlog
 
