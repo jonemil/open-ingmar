@@ -19,7 +19,7 @@ external repository dependencies.
 
 Experimentally observed here:
 
-- Both original examples export as version 4 projects with DEBUG strings and
+- Both original examples export as section projects with DEBUG strings and
   line entries as authoritative assembly. Complete reassembly preserves every
   byte, including signatures.
 - Hello World has eight DEBUG strings, 45 line entries, and a 744-byte ordinary

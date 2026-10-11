@@ -30,7 +30,7 @@ fn empty_explicit_and_falling_through_functions_have_void_returns() {
     ] {
         let function = compile(source).unwrap();
         assert_eq!(function.return_type(), ReturnType::Void, "{source}");
-        assert!(function.to_ir_text().starts_with("ciq-ir 3\n"));
+        assert!(function.to_ir_text().starts_with("ciq-ir\n"));
         assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
         let assembly = function.lower();
         assert_eq!(
@@ -79,17 +79,9 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
         ".integer %0 1\n.integer %1 2\n.call-discard M run %1 %0\n.return-void",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir 3\n.function f\n{body}\n.end")).is_err(),
+            parse_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err(),
             "{body}"
         );
-    }
-    for version in [1, 2] {
-        for body in [
-            ".return-void",
-            ".call-discard M run\n.integer %0 1\n.return %0",
-        ] {
-            assert!(parse_ir(&format!("ciq-ir {version}\n.function f\n{body}\n.end")).is_err());
-        }
     }
     assert!(Function::new("f".into(), vec![]).is_err());
     assert!(

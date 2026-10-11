@@ -35,7 +35,7 @@ fn forward_calls_across_files_preserve_unit_ir_assembly_and_bytes() {
     }
     let decorated = unit
         .to_ir_text()
-        .replace("ciq-unit 1", "ciq-unit 1 # header")
+        .replace("ciq-unit", "ciq-unit # header")
         .replace(".owner global", "\n# owner\n.owner global # entry")
         .replace(".end\n", ".end # function end\n")
         .replace('\n', "\r\n");
@@ -153,7 +153,7 @@ fn duplicate_and_conflicting_declarations_fail_for_source_typed_and_text_units()
     }
     let unit = CompilationUnit::new(vec![declaration]).unwrap();
     let text = unit.to_ir_text();
-    assert!(parse_unit_ir(&(text.clone() + &text["ciq-unit 1\n".len()..])).is_err());
+    assert!(parse_unit_ir(&(text.clone() + &text["ciq-unit\n".len()..])).is_err());
 }
 
 #[test]
@@ -212,23 +212,23 @@ fn reopened_modules_and_recursive_calls_share_collected_signatures() {
 
 #[test]
 fn unit_text_framing_and_combined_function_bounds_are_checked() {
-    let function = "ciq-ir 1\n.function f\n.integer %0 1\n.return %0\n.end\n";
+    let function = "ciq-ir\n.function f\n.integer %0 1\n.return %0\n.end\n";
     for text in [
         "".to_owned(),
-        "ciq-unit 3\n".to_owned(),
-        "ciq-unit 1\n".to_owned(),
-        format!("ciq-unit 1\n{function}"),
-        format!("ciq-unit 1\n.owner global extra\n{function}"),
+        "ciq-unit unexpected\n".to_owned(),
+        "ciq-unit\n".to_owned(),
+        format!("ciq-unit\n{function}"),
+        format!("ciq-unit\n.owner global extra\n{function}"),
         format!(
-            "ciq-unit 1\n.owner module A\n{}",
+            "ciq-unit\n.owner module A\n{}",
             function.replace(".end\n", "")
         ),
-        format!("ciq-unit 1\n.owner global\n{function}trailing\n"),
+        format!("ciq-unit\n.owner global\n{function}trailing\n"),
     ] {
         assert!(parse_unit_ir(&text).is_err(), "{text}");
     }
     let error = parse_unit_ir(&format!(
-        "ciq-unit 1\n.owner global\n{}",
+        "ciq-unit\n.owner global\n{}",
         function.replace(".return %0", ".return %1")
     ))
     .unwrap_err();
@@ -244,7 +244,7 @@ fn unit_text_framing_and_combined_function_bounds_are_checked() {
     assert!(compile_sources(&[&source, extra]).is_err());
     assert!(compile_sources(&[&(source + extra)]).is_err());
     let text = unit.to_ir_text()
-        + ".owner global\nciq-ir 1\n.function extra\n.integer %0 1\n.return %0\n.end\n";
+        + ".owner global\nciq-ir\n.function extra\n.integer %0 1\n.return %0\n.end\n";
     assert!(parse_unit_ir(&text).is_err());
 }
 

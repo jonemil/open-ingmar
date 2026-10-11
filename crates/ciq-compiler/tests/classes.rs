@@ -37,7 +37,7 @@ fn class_ownership_receiver_and_text_pipeline_preserve_complete_prg() {
     assert_eq!(class.base, ClassBase::ApplicationAppBase);
     assert!(class.methods.iter().all(Function::is_instance_method));
     assert_eq!(class.methods[0].return_type(), ReturnType::Void);
-    assert!(unit.to_ir_text().starts_with("ciq-unit 2\n"));
+    assert!(unit.to_ir_text().starts_with("ciq-unit\n"));
     assert!(
         unit.to_ir_text()
             .contains(".class Counter Application.AppBase\n")
@@ -165,12 +165,11 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         assert!(compile(source).is_err(), "{source}");
     }
     for text in [
-        "ciq-ir 4\n.function f\n.call-self-discard f\n.return-void\n.end",
-        "ciq-ir 3\n.function f receiver=instance\n.return-void\n.end",
-        "ciq-ir 4\n.function f receiver=instance receiver=instance\n.return-void\n.end",
-        "ciq-ir 4\n.function f receiver=unknown\n.return-void\n.end",
-        "ciq-ir 4\n.function f receiver=instance\n.call-self %0\n.return %0\n.end",
-        "ciq-ir 4\n.function f receiver=instance\n.call-self-discard\n.return-void\n.end",
+        "ciq-ir\n.function f\n.call-self-discard f\n.return-void\n.end",
+        "ciq-ir\n.function f receiver=instance receiver=instance\n.return-void\n.end",
+        "ciq-ir\n.function f receiver=unknown\n.return-void\n.end",
+        "ciq-ir\n.function f receiver=instance\n.call-self %0\n.return %0\n.end",
+        "ciq-ir\n.function f receiver=instance\n.call-self-discard\n.return-void\n.end",
     ] {
         assert!(parse_ir(text).is_err(), "{text}");
     }
@@ -196,7 +195,6 @@ fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
     }
     let text = example().to_ir_text();
     for bad in [
-        text.replace("ciq-unit 2", "ciq-unit 1"),
         text.replace(".end-class", ""),
         text.replace("Application.AppBase", "Other"),
         text.replace("receiver=instance", ""),
@@ -204,7 +202,7 @@ fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
         assert!(parse_unit_ir(&bad).is_err());
     }
     let plain = compile_sources(&["function main() {}"]).unwrap();
-    assert!(plain.to_ir_text().starts_with("ciq-unit 1\n"));
+    assert!(plain.to_ir_text().starts_with("ciq-unit\n"));
     assert_eq!(parse_unit_ir(&plain.to_ir_text()).unwrap(), plain);
     let too_many = format!(
         "class C extends Application.AppBase {{ {} }}",

@@ -13,6 +13,8 @@
   lists or document routine maintenance.
 - Follow [docs/README.md](docs/README.md) for readable prose, design/spec
   boundaries, and concrete Rustdoc descriptions of behavior and requirements.
+  Keep our provisional formats current-only; do not add compatibility paths for
+  superseded local grammars.
 - For repeated mechanical checks, reuse existing commands or add a small helper
   with meaningful pass/fail exit codes and concise diagnostics. Save large logs
   under `scratch/`; inspect relevant excerpts on failure or when investigating
@@ -21,8 +23,9 @@
 - Run checks appropriate to the change and required final checks. Repeat passed
   checks only after relevant changes or when unresolved concerns justify it.
 - Do not commit changes. The user manages Git and commits.
-- You may write or refresh `scratch/commit_msg` for the user to load as a commit
-  message. Use a precise one-line summary, a blank line, and a concise body
+- Refresh `scratch/commit_msg` after repository changes so the user can load it
+  as a commit message for the current uncommitted work. Use a precise one-line
+  summary, a blank line, and a concise body
   describing the proposed changes and why they were made. Include fixed ticket
   numbers when relevant; do not invent them or include unrelated changes.
 - Download external reference projects into `references/`, which is ignored by

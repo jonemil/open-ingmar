@@ -5,17 +5,7 @@ directory must not already exist. `ciq-asm project <directory> <output.prg>`
 reconstructs it without the original PRG. The output PRG must not already exist.
 
 `sections.ciq` is a UTF-8 manifest. The first meaningful line is
-`ciq-project <version>`, with versions 1–5 accepted. Encoding availability is:
-
-| Minimum version | Encodings |
-|---|---|
-| 1 | `raw`, `assembly` |
-| 2 | `symbols` |
-| 3 | `data` |
-| 4 | `debug`, `lines` |
-| 5 | `exceptions` |
-
-Each version accepts the encodings of lower-numbered versions. Each subsequent
+`ciq-project`, with no version field. Each subsequent
 meaningful line has five whitespace-separated fields:
 
 ```text
@@ -24,8 +14,8 @@ section 0xc0debabe 556 assembly 003-code-c0debabe.mcasm
 ```
 
 Fields are the `section` keyword, hexadecimal nonzero u32 identifier, original
-decimal payload length, encoding (`raw`, `assembly`, or version 2+ `symbols`, or
-version 3+ `data`, version 4+ `debug`/`lines`, or version 5 `exceptions`), and a local filename. `#`
+decimal payload length, encoding (`raw`, `assembly`, `symbols`, `data`,
+`debug`, `lines`, or `exceptions`), and a local filename. `#`
 starts a comment; blank lines are ignored. Manifest order determines section
 order, including duplicate identifiers. Filenames are simple ASCII basenames
 using letters, digits, `.`, `_`, or `-`; `.` and `..` are forbidden. Import
@@ -43,8 +33,8 @@ Supported unique EXCEPTIONS uses `exceptions` source.
 Other sections retain raw payloads, including unknown identifiers, empty
 payloads, extended code, and original signing material. Assembly encoding is
 permitted only for ordinary code (`0xc0debabe`); `symbols` encoding is permitted
-only for SYMBOLS (`0x5717b015`) in versions 2–5. DATA encoding is permitted only
-for DATA (`0xda7ababe`) in versions 3–5.
+only for SYMBOLS (`0x5717b015`). DATA encoding is permitted only
+for DATA (`0xda7ababe`).
 
 When a symbol table decodes successfully, export adds an inspection-only
 `.symbols.txt` listing. Losslessly representable unique tables become
@@ -55,12 +45,12 @@ not change the PRG. Symbol declarations are loaded before code regardless of
 section order. See [symbol assembly](symbol-assembly.md).
 
 ```text
-ciq-project 2
+ciq-project
 section 0xc0debabe 556 assembly 003-code-c0debabe.mcasm
 section 0x5717b015 95991 symbols 010-symbols-5717b015.mcasm
 ```
 
-All versions require each reconstructed payload to match the manifest length.
+Each reconstructed payload must match the manifest length.
 Shared labels resolve supported method, line, branch, and exception references, but general
 relocation is not implemented; changing a declared length is an explicit edit,
 not a check that opaque references remain valid. It regenerates section wrappers
@@ -80,10 +70,10 @@ signature payload length. Keys are never part of the export. See
 unedited preservation tests; signed transformations compare program content and
 signature validity separately.
 
-## DATA source in versions 3–5
+## DATA source
 
 ```text
-ciq-project 3
+ciq-project
 section 0xda7ababe 12974 data 002-data-da7ababe.mcasm
 section 0xc0debabe 556 assembly 003-code-c0debabe.mcasm
 section 0x5717b015 95991 symbols 010-symbols-5717b015.mcasm
@@ -106,10 +96,10 @@ ignored by import, like the symbol listing. Class declarations in authoritative
 DATA source are used for full supported walks; opaque spans or raw payload
 remain fallbacks. See [class assembly](data-classes.md).
 
-## DEBUG and line source in versions 4 and 5
+## DEBUG and line source
 
 ```text
-ciq-project 4
+ciq-project
 section 0xc0debabe 744 assembly 003-code-c0debabe.mcasm
 section 0xd0000d1e 225 debug 004-debug-d0000d1e.mcasm
 section 0xc0de7ab1 722 lines 005-line_numbers-c0de7ab1.mcasm
@@ -133,10 +123,10 @@ references have no inferred fixups. Unknown DEBUG record kinds, malformed line
 framing, and duplicate metadata sections export raw and preserve their bytes.
 Placement constraints remain enforced; there is no ignore-`at` option.
 
-## Exception source in version 5
+## Exception source
 
 ```text
-ciq-project 5
+ciq-project
 section 0xc0debabe 1021 assembly 003-code-c0debabe.mcasm
 section 0x0ece7105 20 exceptions 009-exceptions-0ece7105.mcasm
 ```

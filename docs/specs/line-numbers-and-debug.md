@@ -3,7 +3,7 @@
 Evidence: [controlled SDK
 comparison][ref-controlled-sdk-comparison] and
 [structured metadata experiment](../investigations/line-metadata.md), SDK 9.2.0
-debug builds / `fr265`. Project version 4 selects structured `debug` and `lines`
+debug builds / `fr265`. Section projects select structured `debug` and `lines`
 input when each section is unique and its payload is losslessly representable.
 Unsupported or duplicate sections remain raw.
 

@@ -11,7 +11,7 @@ Java 17, Forerunner 265, default memory, our developer key.
 `return;` is explicit; reaching the final brace inserts a void terminator.
 Integer-return functions retain their every-path requirement. Mixed returns are
 rejected. Function IR records the validated common result type; saved text uses
-[version 3][ir] for void returns and statement calls. Unit validation checks
+[IR][ir] for void returns and statement calls. Unit validation checks
 arity and rejects using a void callee as a value, including forward references.
 
 The [two-file example][example] has a void global startup, three void module
@@ -96,8 +96,8 @@ Six new tests cover void inference/terminators, typed and text validation,
 control-flow/effect ordering, unit result/arity checks, VM call/result-discard
 sequences, complete-PRG parity, and CLI rejection before output creation.
 Existing rejection cases now valid as void functions or statement calls move
-to positive coverage; integer-return missing-path checks remain. Unknown IR
-versions still fail, with the rejection fixture advanced from version 3 to 4.
+to positive coverage; integer-return missing-path checks remain. Malformed IR
+headers are rejected.
 
 Next establish source class ownership and receiver/context semantics, then the
 null/object/array and native-call operations required by AppBase/View lifecycle
@@ -105,5 +105,5 @@ bodies. Void return support does not itself provide class syntax or project
 configuration.
 
 [source]: ../specs/compiler-subset.md#void-functions-and-statement-calls
-[ir]: ../specs/compiler-ir-text.md#version-3-void-returns-and-statement-calls
+[ir]: ../specs/compiler-ir-text.md#void-returns-and-statement-calls
 [example]: ../../examples/compiler-void/README.md

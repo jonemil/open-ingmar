@@ -14,7 +14,7 @@ prints, or assignments require IR operation order matching statement and
 left-to-right expression evaluation. This rejects a saved read defined before a
 write but used after it, since dependency lowering would move the read. Source
 snapshots use a separate initialized local. The [design][design] explains the
-choice; [source syntax][source] and [version-2 IR][ir] specify the rules.
+choice; [source syntax][source] and [IR][ir] specify the rules.
 
 The [checked-in source](../../examples/compiler-probe/assignments.mc) initializes
 `answer = 40` and `message = "start"`. Both condition arms update the same two
@@ -149,5 +149,5 @@ account for repeated writes and initialization without assuming a body executes.
 
 [design]: ../design/compiler-ir.md#mutable-locals
 [source]: ../specs/compiler-subset.md#local-reassignment
-[ir]: ../specs/compiler-ir-text.md#version-2-local-assignment
+[ir]: ../specs/compiler-ir-text.md#local-assignment
 [scaffold]: control-flow.md#reproduction

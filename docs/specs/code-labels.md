@@ -60,7 +60,7 @@ numeric targets remain raw/numeric rather than being guessed. Labels are source
 identities, not new VM symbols or evidence of a complete function signature.
 
 [Structured line mappings](line-numbers-and-debug.md) share these labels in
-version 4 projects. Export adds labels for verified line-PC instruction
+section projects. Export adds labels for verified line-PC instruction
 boundaries; named PCs move when those labels move. Named branch operands also
 follow layout as described below. Named
 [exception references](exceptions.md) also follow these labels. Header offsets,

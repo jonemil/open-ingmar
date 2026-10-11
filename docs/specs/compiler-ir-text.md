@@ -11,7 +11,7 @@ operations are introduced; it is not a stable interchange contract. Evidence:
 [strings/printing](../investigations/compiler-strings.md).
 
 ```text
-ciq-ir 1
+ciq-ir
 .function probe
 .integer %0 41 span=120:122
 .return %0 span=113:123
@@ -19,24 +19,14 @@ ciq-ir 1
 ```
 
 One nonempty directive per line. Blank lines and `#` comments are accepted.
-Header version must be `1`, `2`, `3`, or `4`. These are currently accepted
-syntax profiles:
-
-| Minimum version | Permitted constructs |
-|---|---|
-| 1 | Single-block integer returns, locals, expressions, calls, and printing |
-| 2 | Explicit blocks, comparisons, branches, jumps, and local assignment |
-| 3 | Void returns and calls with discarded results |
-| 4 | Instance receivers and self calls |
-
-Each profile accepts the constructs of lower-numbered profiles. Exactly one
+The header is `ciq-ir`, with no version field. Exactly one
 `.function <identifier>
 [parameters=<count>]` and trailing `.end` are required; input after `.end` is
-rejected. Identifiers use the assembly label identifier rules. The supported
-version-1/version-2 body is ordered local initializations, print statements,
-and expression trees (which may include module calls), ending with integer
-`.return
-<value-id>`. Definitions are `.integer <result-id> <value>`, `.add <result-id>
+rejected. Identifiers use the assembly label identifier rules. An implicit
+single-block body contains ordered local initializations, print
+statements, calls, and expression trees, ending with `.return <value-id>` or
+`.return-void`. Explicit blocks support branches and loops as specified below.
+Definitions are `.integer <result-id> <value>`, `.add <result-id>
 <left-id> <right-id>`, and `.subtract <result-id> <left-id> <right-id>`. Value
 IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
 values are nonnegative decimal `0..=127`, matching the backend's currently
@@ -58,7 +48,9 @@ Local initialization consumes an expression value; each local read defines a
 fresh expression value. The function is limited to 1024 operations including
 return; parameter metadata is not an operation. Invalid names/spans,
 out-of-range literals, shared values, dead definitions, forward/undefined uses,
-multiple returns, and blocks are rejected in version 1. For pure-only functions,
+and malformed control flow are rejected. An implicit single-block body must
+end with exactly one return; explicit blocks follow the control-flow rules below.
+For pure-only functions,
 definition order need not match VM stack order: the backend walks dependencies
 for each initialization/return in statement order and emits each binary left
 operand before its right operand. `parse_ir` reports positions in the IR input;
@@ -66,11 +58,8 @@ typed validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
-preserving value IDs. It emits version 4 for instance methods, version 3 for
-void returns or statement calls,
-version 2 for blocks/comparisons/assignments, otherwise version 1, independently
-of the input header. `parse_ir`
-reconstructs them. `backend::lower()` (also
+preserving value IDs and receiver metadata. `parse_ir` reconstructs them.
+`backend::lower()` (also
 exposed through `Function::lower()`) creates the shared assembly `Program`
 directly; it does not print/reparse text. `Function::assembly()` is convenience
 lowering plus assembly printing. This gives a native source → IR → assembly
@@ -79,7 +68,7 @@ model → CODE encoder path and text stop/resume points at both IR and assembly.
 Arithmetic directives use expression value IDs. For example:
 
 ```text
-ciq-ir 1
+ciq-ir
 .function probe
 .integer %0 40
 .integer %1 8
@@ -107,10 +96,10 @@ and executes every initializer before proceeding. Repeated reads may refer to
 one local, while each resulting value still has one use. Pure-only functions use
 dependency traversal while locals retain their initialized value.
 Functions with calls, prints, or assignments add the ordering restriction below.
-Version 2 provides explicit assignment without repeating initialization.
+`.assign` writes a local without repeating initialization.
 
 ```text
-ciq-ir 1
+ciq-ir
 .function probe
 .integer %10 42
 .local $99 %10
@@ -135,11 +124,12 @@ Calls, prints, and writes are effectful. If a function contains any `.call`,
 left-to-right expression traversal and ordered
 initialization/assignment/print/branch/return sinks. The shared validator
 rejects incompatible schedules, including moving a call across an initialization
-or reversing call operands. Pure-only functions permit flexible definition order. This conservative policy keeps runtime/IR
+or reversing call operands. Pure-only functions permit flexible definition order.
+This conservative policy keeps runtime/IR
 operation order consistent until a general scheduler is implemented.
 
 ```text
-ciq-ir 1
+ciq-ir
 .function probe
 .call %0 Numbers left
 .local $0 %0
@@ -176,7 +166,7 @@ literal/locals IR remain compatible. Parameters and locals together cannot
 exceed 255, preserving u8 slot indexes.
 
 ```text
-ciq-ir 1
+ciq-ir
 .function difference parameters=2
 .parameter %0 0
 .integer %1 3
@@ -254,7 +244,7 @@ require integers. Void returns have no value. All existing use/dependency/
 order rules apply.
 
 ```text
-ciq-ir 1
+ciq-ir
 .function probe
 .string %0 "Hello # from Rust"
 .println %0
@@ -287,12 +277,12 @@ the same DATA bindings. See
 [reproduction](../investigations/compiler-strings.md) for source → IR → assembly
 → signed PRG and native CODE parity.
 
-## Version 2 control flow
+## Control flow
 
-Explicit control flow requires header version 2 or higher:
+Explicit control flow uses block declarations and terminators:
 
 ```text
-ciq-ir 2
+ciq-ir
 .function choose parameters=1
 .block ^0
 .parameter %0 0
@@ -323,7 +313,7 @@ the next block. Targets may name earlier or later blocks. Every block must be
 reachable from entry; missing targets, duplicate blocks, disconnected cycles,
 and implicit
 fallthrough are rejected. The final block returns.
-A version-2 body without these operations retains the implicit single block.
+A body without these operations uses an implicit single block.
 
 Expression definitions still precede their uses, are globally unique, and have
 exactly one use, restricted to their defining block. Locals can cross edges,
@@ -344,14 +334,14 @@ continuing arms, including nested statements and early returns. Source local
 names/scopes are resolved before serialization; the IR only retains globally
 unique local identities. See [the source subset](compiler-subset.md).
 
-## Version 2 local assignment
+## Local assignment
 
 `.assign $<local-id> %<value-id> [span=<start>:<end>]` consumes an earlier value
-and replaces an initialized local. It is accepted with `ciq-ir 2` or `3`; no
+and replaces an initialized local. It is accepted with `ciq-ir` or `3`; no
 explicit blocks are required for a straight-line assignment body.
 
 ```text
-ciq-ir 2
+ciq-ir
 .function probe
 .integer %0 40
 .local $0 %0
@@ -377,9 +367,9 @@ left-to-right expression evaluation and ordered statement sinks, as for calls
 and prints. A read defined before a write and used after it is rejected, since
 dependency lowering would move the read past the write. Store a snapshot in a
 separate initialized local before the write when that behavior is needed. This
-rule applies to native typed construction and text resumption equally. Assignment-free pure functions permit flexible definition order.
+rule applies to native typed construction and text resumption equally.
+Assignment-free pure functions permit flexible definition order.
 
-Assignments require header version 2 or higher, even without blocks.
 [The source subset][assignment-source]
 specifies name resolution and supported statement forms; source names/scopes
 are not part of this IR.
@@ -417,9 +407,9 @@ construction, text resumption, and source compilation use the same validator.
 See [loop source rules](compiler-subset.md#while-loops) and
 [the runtime experiment](../investigations/compiler-loops.md).
 
-## Version 3 void returns and statement calls
+## Void returns and statement calls
 
-Header version 3 or higher permits:
+Void returns and effect-only calls use:
 
 - `.return-void [span=<start>:<end>]`: terminate without a semantic result.
 - `.call-discard <module> <member> [%<argument> ...] [span=<start>:<end>]`:
@@ -433,7 +423,7 @@ argument limits, and left-to-right effect scheduling already required by
 standalone functions retain their external-callee obligations.
 
 ```text
-ciq-ir 3
+ciq-ir
 .function startup
 .integer %0 41
 .call-discard Startup greet %0
@@ -449,8 +439,7 @@ reachability, definite-local, and empty-edge-stack rules apply. A single
 `.return-void` is a valid function body. Implicit text fallthrough is rejected;
 only source compilation inserts a final void return.
 
-Versions 1 and 2 reject `.return-void` and `.call-discard`. These operations
-are permitted inside either accepted unit envelope version. Void values,
+Void values,
 general object/null/array operations, and arbitrary SDK calls are unsupported.
 See [source rules][void-source] and [runtime
 evidence][void-evidence].
@@ -458,12 +447,12 @@ evidence][void-evidence].
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
 [void-evidence]: ../investigations/compiler-void.md
 
-## Version 4 instance receivers
+## Instance receivers
 
-Header version 4 permits the optional declaration field `receiver=instance`,
-which marks an instance method; ordinary bodies omit it. It may
+The optional declaration field `receiver=instance` marks an instance method;
+ordinary bodies omit it. It may
 appear before or after `parameters=<count>`; duplicate or unknown fields are
-rejected. Receiver metadata requires version 4, even for a method without self
+rejected. Every instance method requires receiver metadata, even without self
 calls. The receiver is the hidden context, not an explicit parameter/value ID.
 
 Two additional directives require an instance method:
@@ -480,7 +469,7 @@ and rejects instance bodies in global/module owners. Standalone method IR
 retains its required receiver and unbound class/callee obligations.
 
 ```text
-ciq-ir 4
+ciq-ir
 .function start receiver=instance
 .integer %0 50
 .integer %1 3
@@ -490,10 +479,10 @@ ciq-ir 4
 .end
 ```
 
-Canonical method output always uses version 4 and keeps `receiver=instance`.
-Ordinary functions use the canonical version selected by their operations. Native base-class
+Canonical method output keeps `receiver=instance`. Native base-class
 identity and enclosing class name belong to [unit class containers][class-ir],
-not function IR; neither carries a VM import index. General receiver values, object construction, fields, native self calls, and
+not function IR; neither carries a VM import index. General receiver values,
+object construction, fields, native self calls, and
 source inheritance are unsupported.
 
 [class-ir]: compiler-classes.md#native-and-textual-ir

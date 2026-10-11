@@ -3,7 +3,7 @@ use crate::{
     Span, ValueId,
 };
 
-/// Parse `ciq-ir` versions 1 through 4 text into a validated semantic function.
+/// Parse provisional `ciq-ir` text into a validated semantic function.
 ///
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
@@ -38,21 +38,18 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         offset += line.len();
     }
     let fail = |offset, message: &str| Diagnostic::at(source, offset, message);
-    if !rows.first().is_some_and(|(_, fields)| {
-        fields == &["ciq-ir", "1"]
-            || fields == &["ciq-ir", "2"]
-            || fields == &["ciq-ir", "3"]
-            || fields == &["ciq-ir", "4"]
-    }) {
+    if !rows
+        .first()
+        .is_some_and(|(_, fields)| fields == &["ciq-ir"])
+    {
         return Err(fail(
             rows.first().map_or(0, |row| row.0),
-            "expected 'ciq-ir 1', 'ciq-ir 2', 'ciq-ir 3', or 'ciq-ir 4'",
+            "expected 'ciq-ir' header",
         ));
     }
     let Some((name_at, declaration)) = rows.get(1) else {
         return Err(fail(source.len(), "expected .function <name>"));
     };
-    let version_four = rows[0].1[1] == "4";
     if !(2..=4).contains(&declaration.len()) || declaration[0] != ".function" {
         return Err(fail(*name_at, "expected .function <name>"));
     }
@@ -60,7 +57,7 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     let mut parameters = false;
     let mut instance_method = false;
     for field in declaration.iter().skip(2) {
-        if field == "receiver=instance" && version_four && !instance_method {
+        if field == "receiver=instance" && !instance_method {
             instance_method = true;
         } else if let Some(digits) = field
             .strip_prefix("parameters=")
@@ -71,15 +68,10 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
                 .map_err(|_| fail(*name_at, "parameter count exceeds usize"))?;
             parameters = true;
         } else {
-            return Err(fail(
-                *name_at,
-                "invalid or duplicate function metadata (receiver requires ciq-ir 4)",
-            ));
+            return Err(fail(*name_at, "invalid or duplicate function metadata"));
         }
     }
     let mut operations = Vec::new();
-    let version_three = rows[0].1[1] == "3" || version_four;
-    let version_two = rows[0].1[1] == "2" || version_three;
     let mut operation_offsets = Vec::new();
     let mut ended = false;
     for (index, (at, fields)) in rows.iter().enumerate().skip(2) {
@@ -93,10 +85,10 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
         let call_width =
             || fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span=")));
         let (kind, width) = match fields.first().map(String::as_str) {
-            Some(".call-self") if version_four => (18, call_width()),
-            Some(".call-self-discard") if version_four => (19, call_width()),
-            Some(".return-void") if version_three => (16, 1),
-            Some(".call-discard") if version_three => (
+            Some(".call-self") => (18, call_width()),
+            Some(".call-self-discard") => (19, call_width()),
+            Some(".return-void") => (16, 1),
+            Some(".call-discard") => (
                 17,
                 fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span="))),
             ),
@@ -118,17 +110,14 @@ pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
             Some(".parameter") => (7, 3),
             Some(".string") => (8, 3),
             Some(".println") => (9, 2),
-            Some(".block") if version_two => (10, 2),
-            Some(".branch") if version_two => (11, 4),
-            Some(".jump") if version_two => (12, 2),
-            Some(".equal") if version_two => (13, 4),
-            Some(".greater") if version_two => (14, 4),
-            Some(".assign") if version_two => (15, 3),
+            Some(".block") => (10, 2),
+            Some(".branch") => (11, 4),
+            Some(".jump") => (12, 2),
+            Some(".equal") => (13, 4),
+            Some(".greater") => (14, 4),
+            Some(".assign") => (15, 3),
             _ => {
-                return Err(fail(
-                    *at,
-                    "unknown IR directive (control flow and assignments require ciq-ir 2; void returns and statement calls require ciq-ir 3; receivers require ciq-ir 4)",
-                ));
+                return Err(fail(*at, "unknown IR directive"));
             }
         };
         if ((kind == 6 && width < 4)

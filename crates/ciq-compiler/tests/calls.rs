@@ -142,14 +142,14 @@ fn incompatible_effectful_ir_orders_are_rejected_but_pure_orders_still_work() {
         ".call %0 Numbers left\n.integer %1 1\n.local $0 %1\n.return %0", // moves call across store
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir 1\n.function probe\n{body}\n.end")).is_err(),
+            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
-    let text = "ciq-ir 1\n.function probe\n.call %0 Numbers left\n.call %1 Numbers right\n.subtract %2 %0 %1\n.return %2\n.end";
+    let text = "ciq-ir\n.function probe\n.call %0 Numbers left\n.call %1 Numbers right\n.subtract %2 %0 %1\n.return %2\n.end";
     let ir = parse_ir(text).unwrap();
     assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
-    assert!(parse_ir("ciq-ir 1\n.function probe\n.integer %0 8\n.integer %1 40\n.subtract %2 %1 %0\n.return %2\n.end").is_ok());
+    assert!(parse_ir("ciq-ir\n.function probe\n.integer %0 8\n.integer %1 40\n.subtract %2 %1 %0\n.return %2\n.end").is_ok());
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
     ] {
         assert!(
             parse_ir(&format!(
-                "ciq-ir 1\n.function probe\n{call}\n.return %0\n.end"
+                "ciq-ir\n.function probe\n{call}\n.return %0\n.end"
             ))
             .is_err()
         );

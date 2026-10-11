@@ -138,7 +138,7 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
         ".integer %0, 1\n.return %0",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir 1\n.function probe\n{body}\n.end")).is_err(),
+            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
@@ -168,7 +168,7 @@ fn utf8_literal_size_and_string_escape_limits_are_checked() {
         compile(r#"function probe() { System.println("\t\r\n\"\\"); return 0; }"#).unwrap();
     assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
     // IR uses assembly escapes, independently of the source escape subset.
-    assert!(parse_ir("ciq-ir 1\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());
+    assert!(parse_ir("ciq-ir\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());
 }
 
 #[test]

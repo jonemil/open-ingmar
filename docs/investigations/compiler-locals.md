@@ -90,7 +90,7 @@ previous arithmetic/literal output is unchanged. The current scheduling policy
 relies on pure expressions and absence of reassignment; effectful operations
 require explicit ordering before extension.
 
-[Provisional version-1 IR text](../specs/compiler-ir-text.md) adds
+[Provisional IR text](../specs/compiler-ir-text.md) adds
 `.local $<local-id> %<value-id>` and `.read %<result-id> $<local-id>`. Both use
 shared validation and optional source spans. No new crate, signing dependency,
 or application metadata generation is introduced. Limits: 255 locals, 1024 total

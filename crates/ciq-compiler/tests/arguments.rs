@@ -206,13 +206,18 @@ fn parameter_positions_and_argument_dependencies_are_visible_in_ir() {
     assert!(ir.to_ir_text().contains(".parameter %0 1"));
     assert!(ir.to_ir_text().contains(".call %2 Numbers subtract %0 %1"));
     assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
-    assert!(parse_ir("ciq-ir 1\n.function probe\n.parameter %0 0\n.return %0\n.end").is_err());
+    assert!(parse_ir("ciq-ir\n.function probe\n.parameter %0 0\n.return %0\n.end").is_err());
     assert!(
-        parse_ir("ciq-ir 1\n.function probe parameters=1\n.parameter %0 1\n.return %0\n.end")
+        parse_ir("ciq-ir\n.function probe parameters=1\n.parameter %0 1\n.return %0\n.end")
             .is_err()
     );
-    assert!(parse_ir("ciq-ir 1\n.function probe\n.integer %0 40\n.call %1 Numbers adjust %9\n.return %1\n.end").is_err());
-    assert!(parse_ir("ciq-ir 1\n.function probe\n.call %0 Numbers next\n.call %1 Numbers two\n.call %2 Numbers subtract %1 %0\n.return %2\n.end").is_err());
+    assert!(
+        parse_ir(
+            "ciq-ir\n.function probe\n.integer %0 40\n.call %1 Numbers adjust %9\n.return %1\n.end"
+        )
+        .is_err()
+    );
+    assert!(parse_ir("ciq-ir\n.function probe\n.call %0 Numbers next\n.call %1 Numbers two\n.call %2 Numbers subtract %1 %0\n.return %2\n.end").is_err());
     let typed = Function::with_parameters("probe".into(), 0, ir.operations().to_vec());
     assert!(typed.is_err());
 }
@@ -236,7 +241,7 @@ fn malformed_parameter_and_argument_lists_are_rejected() {
     for header in ["parameters=-1", "parameters=255", "parameters=", "arity=2"] {
         assert!(
             parse_ir(&format!(
-                "ciq-ir 1\n.function probe {header}\n.integer %0 41\n.return %0\n.end"
+                "ciq-ir\n.function probe {header}\n.integer %0 41\n.return %0\n.end"
             ))
             .is_err()
         );
@@ -296,10 +301,10 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
     let args = (0..254).map(|n| format!(" %{n}")).collect::<String>();
     assert!(
         parse_ir(&format!(
-            "ciq-ir 1\n.function probe\n{body}.call %254 Numbers adjust{args}\n.return %254\n.end"
+            "ciq-ir\n.function probe\n{body}.call %254 Numbers adjust{args}\n.return %254\n.end"
         ))
         .is_ok()
     );
     let body = format!("{body}.integer %254 1\n");
-    assert!(parse_ir(&format!("ciq-ir 1\n.function probe\n{body}.call %255 Numbers adjust{args} %254\n.return %255\n.end")).is_err());
+    assert!(parse_ir(&format!("ciq-ir\n.function probe\n{body}.call %255 Numbers adjust{args} %254\n.return %255\n.end")).is_err());
 }

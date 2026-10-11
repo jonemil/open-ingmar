@@ -28,7 +28,7 @@ semantics remain unresolved.
 
 ## Section source
 
-Version 5 section projects support `exceptions` encoding. Each line has exactly
+Section projects support `exceptions` encoding. Each line has exactly
 the following directive and attributes, in this order:
 
 ```text

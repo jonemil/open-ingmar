@@ -12,7 +12,7 @@ research was consulted or implementation copied.
 The parser now represents statement sequences and nested `if/else` arms. A
 separate internal source builder resolves names and emits the existing semantic
 blocks, branches, jumps, and returns. No new IR directives or VM opcodes are
-needed. Straight-line inputs still emit version 1; conditions emit version 2.
+needed.
 
 Arm scopes inherit enclosing names and discard new declarations on exit.
 Sibling arms may reuse a name, with distinct local identities/frame slots.

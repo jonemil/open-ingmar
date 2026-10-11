@@ -68,28 +68,28 @@ unit lowering does not merge literals across functions.
 Canonical text wraps existing complete function IR documents:
 
 ```text
-ciq-unit 1
+ciq-unit
 .owner global
-ciq-ir 1
+ciq-ir
 .function probe
 .call %0 Numbers answer
 .return %0
 .end
 .owner module Numbers
-ciq-ir 1
+ciq-ir
 .function answer
 .integer %0 41
 .return %0
 .end
 ```
 
-The first line is the unit header. Each `.owner global` or
+The first line is `ciq-unit`, with no version field. Each `.owner global` or
 `.owner module <identifier>` applies to exactly one following function document,
 including its own supported function IR header and `.end`. There is no unit end
 directive. Blank lines and `#` comments between records are accepted, as are
 LF/CRLF line endings; function text retains its existing quoting/comment rules.
 Each inner function is validated before checking ownership and calls together.
-Malformed framing, unsupported versions, duplicates, unresolved calls, and
+Malformed framing, invalid headers, duplicates, unresolved calls, and
 signature mismatches are errors.
 
 Source spans remain optional per-function provenance. Filenames and source-file
@@ -124,10 +124,9 @@ specifies the generated lifecycle, metadata, entry selection, and restrictions.
 Unit signatures include each function's validated integer/void result contract.
 Expression `.call` requires an integer callee; statement `.call-discard` permits
 either result and discards it. Both check integer arguments and exact arity.
-Both accepted unit envelopes permit inner functions using
-[void-return IR][void-ir]. See [void source rules][void-source].
+Inner functions permit [void-return IR][void-ir]. See [void source rules][void-source].
 
-[void-ir]: compiler-ir-text.md#version-3-void-returns-and-statement-calls
+[void-ir]: compiler-ir-text.md#void-returns-and-statement-calls
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
 
 ## Class extension
@@ -137,8 +136,8 @@ instance receiver contracts, and self-call validation. `classes()` exposes
 ordered class declarations; `with_classes` validates them alongside ordinary
 functions. Existing `new` and `declarations()` retain their global/module roles.
 
-Unit version 2 permits `.class <name> Application.AppBase` containers ending at
-`.end-class`. Class bodies use receiver-bearing function IR version 4. Canonical
+Unit IR permits `.class <name> Application.AppBase` containers ending at
+`.end-class`. Class bodies use receiver-bearing function IR. Canonical
 text places global/module records before class containers, preserving order
 within each group. Lowering follows that same grouped order, with distinct class
 CODE label prefixes. Error body indexes follow globals/modules, then methods.

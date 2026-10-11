@@ -58,7 +58,7 @@ fn cli_can_stop_and_resume_each_pipeline_stage() {
     let invalid = dir.join("invalid.bin");
     fs::write(
         &ir,
-        "ciq-ir 1\n.function probe\n.integer %0 42\n.return %1\n.end",
+        "ciq-ir\n.function probe\n.integer %0 42\n.return %1\n.end",
     )
     .unwrap();
     assert!(!run("ir", "code", &ir, &invalid).status.success());

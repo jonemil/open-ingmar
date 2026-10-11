@@ -250,7 +250,7 @@ short-circuit operators are not supported.
 
 Lowering emits an entry block, comparison, and branch, then separate arm
 blocks. Both arms may read parameters and enclosing locals. The
-[version-2 IR rules](compiler-ir-text.md#version-2-control-flow) validate
+[IR rules](compiler-ir-text.md#control-flow) validate
 block-local values and initialization on every path. See
 [conditions.mc](../../examples/compiler-probe/conditions.mc) and
 [initial simulator evidence](../investigations/compiler-conditions.md).
@@ -306,7 +306,7 @@ join because its initializer executes before the condition.
 
 Source, typed IR, and text IR share type, availability, and effect-order checks.
 Assignment-containing IR uses the conservative schedule specified in
-[IR text](compiler-ir-text.md#version-2-local-assignment). See
+[IR text](compiler-ir-text.md#local-assignment). See
 [assignments.mc](../../examples/compiler-probe/assignments.mc) and
 [integer/string simulator evidence][assignments].
 
@@ -392,7 +392,7 @@ created. Statement calls preserve argument evaluation and statement order.
 
 Typed IR adds `ReturnVoid` and `ModuleCallStatement`; `Function::return_type()`
 reports the validated integer/void contract. Saved text uses
-[IR version 3](compiler-ir-text.md#version-3-void-returns-and-statement-calls).
+[IR](compiler-ir-text.md#void-returns-and-statement-calls).
 Both forms share type, control-flow, use, and effect-schedule validation.
 A void function may contain only its return, so the operation bound is now
 1..=1024. The backend emits bare `return`; statement calls use the existing call

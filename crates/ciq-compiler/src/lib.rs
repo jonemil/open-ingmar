@@ -643,9 +643,8 @@ impl Function {
 
     /// Serialize this function as provisional `ciq-ir` text.
     ///
-    /// Retains semantic IDs, operation order, and optional source spans. The
-    /// output uses version 4 for instance methods, version 3 for void returns or
-    /// statement calls, version 2 for blocks/assignments, otherwise version 1.
+    /// Retains semantic IDs, operation order, receiver metadata, and optional
+    /// source spans.
     /// It can be read by [`parse_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
@@ -658,29 +657,7 @@ impl Function {
         } else {
             ""
         };
-        let version = if self.instance_method {
-            4
-        } else if self.operations.iter().any(|o| {
-            matches!(
-                o.operation,
-                Operation::ReturnVoid | Operation::ModuleCallStatement { .. }
-            )
-        }) {
-            3
-        } else if self.operations.iter().any(|o| {
-            matches!(
-                o.operation,
-                Operation::Block { .. } | Operation::Compare { .. } | Operation::LocalAssign { .. }
-            )
-        }) {
-            2
-        } else {
-            1
-        };
-        let mut text = format!(
-            "ciq-ir {version}\n.function {}{parameters}{receiver}\n",
-            self.name
-        );
+        let mut text = format!("ciq-ir\n.function {}{parameters}{receiver}\n", self.name);
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Block { block } => format!(".block ^{}", block.0),

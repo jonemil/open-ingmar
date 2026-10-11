@@ -102,7 +102,7 @@ remain unsupported by our frontend.
 cargo run -p ciq-compiler -- examples/compiler-probe/conditions.mc scratch/compiler-example/conditions.mcasm
 ```
 
-`--emit ir` produces version-2 text with explicit blocks and a Boolean branch.
+`--emit ir` produces IR text with explicit blocks and a Boolean branch.
 Both `==` and `>` have [simulator evidence][conditions].
 
 [conditions]: ../../docs/investigations/compiler-conditions.md

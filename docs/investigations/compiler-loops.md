@@ -9,7 +9,7 @@ consulted or copied.
 
 ## Implementation and scope
 
-The source builder lowers `while` to existing version-2 test/body/exit blocks.
+The source builder lowers `while` to test/body/exit blocks.
 It reevaluates the comparison on each visit and emits a symbolic backedge from
 continuing body paths. Returning paths omit the backedge. Body-local declarations
 retain their fixed slots but initialize on every iteration. There is no generated

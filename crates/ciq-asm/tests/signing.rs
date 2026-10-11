@@ -105,7 +105,7 @@ fn cli_signs_template_and_project_verifies_and_refuses_invalid_options_and_overw
     fs::create_dir(&project).unwrap();
     fs::write(
         project.join("sections.ciq"),
-        "ciq-project 1\nsection 0xc0debabe 3 assembly code.mcasm\n",
+        "ciq-project\nsection 0xc0debabe 3 assembly code.mcasm\n",
     )
     .unwrap();
     fs::copy(&code, project.join("code.mcasm")).unwrap();

@@ -18,10 +18,9 @@ against [our specification](../specs/data-classes.md).
 Implemented `.class` / `.field` / `.endclass` blocks in the shared DATA source.
 They preserve complete keys, explicit/embedded types, ordered duplicate fields,
 presence versus zero, app flags, and raw relationship words. Supported full
-exports now choose this authoritative source; older opaque-span DATA sources
-still import unchanged. The inspection sidecar remains ignored on import. No new
-project encoding or manifest version is needed; this extends the version 3 DATA
-source grammar.
+exports choose this authoritative source; opaque-span DATA sources also import
+unchanged. The inspection sidecar remains ignored on import. Classes and strings
+share the DATA source grammar.
 
 Placement and values remain explicit numeric constraints. This first step makes
 method targets editable without introducing unverified name allocation or code

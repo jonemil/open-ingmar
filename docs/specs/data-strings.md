@@ -101,7 +101,7 @@ remains a symbol-ID reference; neither may substitute for the other. Numeric
 data addresses remain supported. Project assembly resolves DATA declarations
 before encoding code, regardless of manifest order.
 
-In a [version 3 section project](section-project.md), the DATA source is
+In a [section project](section-project.md), the DATA source is
 authoritative. Project code files reference its aliases; `.string` declarations
 embedded in those code files are rejected to avoid silently ignoring or
 duplicating string content. Other sections, including RESOURCES and signing

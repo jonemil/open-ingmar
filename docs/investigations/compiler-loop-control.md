@@ -11,7 +11,7 @@ The experiment reuses the [control-flow scaffold][scaffold] and existing
 The parser accepts optional `else` and semicolon-terminated `break`/`continue`.
 An omitted false arm falls through. The source builder tracks enclosing loop
 pairs: `break` selects the innermost exit and `continue` its test. They lower to
-existing version-2 jumps; no IR syntax or VM opcode changes are required.
+jumps; no IR syntax or VM opcode changes are required.
 
 Statement sequences report path termination, including return and loop control.
 Only falling-through paths contribute join edges or an implicit loop backedge.

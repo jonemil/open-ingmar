@@ -23,8 +23,8 @@ This implementation follows
 [the symbol assembly specification](../specs/symbol-assembly.md). The allocation
 policy is a local design choice, not a claim about Garmin's compiler. Numeric
 IDs stay mandatory; API binding and allocation of application-local IDs are not
-inferred from placement freedom. The version 2 manifest introduces authoritative
-`symbols` encoding while retaining version 1 import support.
+inferred from placement freedom. The manifest selects authoritative `symbols`
+encoding or raw payloads.
 
 ## Reproduction and observations
 
@@ -42,7 +42,7 @@ cmp examples/minimal-console/build/fr265/minimal-console.prg scratch/symbol-asse
 cmp examples/hello-world/build/fr265/hello-world.prg scratch/symbol-assembly-hello-v2.prg
 ```
 
-**Experimentally observed:** each export has 13 ordered sections and a version 2
+**Experimentally observed:** each export has 13 ordered sections and a
 manifest. The symbol section is selected as
 `symbols 010-symbols-5717b015.mcasm`. Minimal Console's 3,224 entries serialize
 to 95,991 bytes; Hello World's 3,225 entries serialize to 96,013 bytes. Each

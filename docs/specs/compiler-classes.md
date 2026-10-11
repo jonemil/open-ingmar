@@ -51,18 +51,18 @@ control-flow, and effect-schedule checks with existing calls. The hidden receive
 context is not an explicit parameter or a semantic value; positional parameters
 still map after slot zero.
 
-Function [IR version 4][ir] permits `receiver=instance`, `.call-self`, and
-`.call-self-discard`. Unit version 2 permits class containers:
+Function [IR][ir] permits `receiver=instance`, `.call-self`, and
+`.call-self-discard`. Unit IR permits class containers:
 
 ```text
-ciq-unit 2
+ciq-unit
 .class Counter Application.AppBase
-ciq-ir 4
+ciq-ir
 .function start receiver=instance
 .call-self-discard announce
 .return-void
 .end
-ciq-ir 4
+ciq-ir
 .function announce receiver=instance
 .integer %0 41
 .println %0
@@ -72,9 +72,7 @@ ciq-ir 4
 ```
 
 `.class <name> Application.AppBase` contains complete function documents until
-`.end-class`. Global/module owner records remain valid alongside classes. Unit
-version 1 rejects class records. Canonical output uses version 2 only when
-classes exist; old function/unit documents remain accepted.
+`.end-class`. Global/module owner records remain valid alongside classes. The unit header is `ciq-unit` for both class-bearing and ordinary units.
 
 CODE layout places global/module bodies first, then class bodies. Each group
 retains file/declaration order; methods retain order within their class. Class
@@ -107,6 +105,6 @@ other device/API profiles and broader inherited lookup remain unverified.
 
 [unit]: compiler-unit.md
 [app]: console-application.md
-[ir]: compiler-ir-text.md#version-4-instance-receivers
+[ir]: compiler-ir-text.md#instance-receivers
 [design]: ../design/compiler-ir.md#class-ownership-and-instance-receivers
 [evidence]: ../investigations/compiler-class.md

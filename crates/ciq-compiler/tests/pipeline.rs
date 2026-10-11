@@ -21,7 +21,7 @@ fn all_literal_pipelines_preserve_ir_labels_and_bytes() {
 
 #[test]
 fn edited_ir_uses_explicit_value_ids_and_optional_source_metadata() {
-    let text = "ciq-ir 1\n.function probe\n.integer %17 42\n.return %17\n.end\n";
+    let text = "ciq-ir\n.function probe\n.integer %17 42\n.return %17\n.end\n";
     let ir = parse_ir(text).unwrap();
     assert_eq!(ir.operations()[0].span, None);
     assert_eq!(ir.lower().encode().unwrap(), [0x35, 1, 0x38, 42, 0x16]);
@@ -64,15 +64,29 @@ fn text_and_constructed_ir_share_semantic_validation() {
         assert!(Function::new("probe".into(), operations).is_err());
     }
     for text in [
-        "ciq-ir 5\n.function probe\n.integer %0 41\n.return %0\n.end",
-        "ciq-ir 1\n.function probe\n.integer %0 128\n.return %0\n.end",
-        "ciq-ir 1\n.function probe\n.integer %0 41\n.integer %0 42\n.return %0\n.end",
-        "ciq-ir 1\n.function probe\n.integer %0 41 span=7:3\n.return %0\n.end",
-        "ciq-ir 1\n.function probe\n.integer %0 41\n.return %0",
-        "ciq-ir 1\n.function probe\n.integer %0 41\n.return %0\n.end\n.return %0",
-        "ciq-ir 1\n.function probe\n.integer %4294967296 41\n.return %0\n.end",
+        "ciq-ir unexpected\n.function probe\n.integer %0 41\n.return %0\n.end",
+        "ciq-ir\n.function probe\n.integer %0 128\n.return %0\n.end",
+        "ciq-ir\n.function probe\n.integer %0 41\n.integer %0 42\n.return %0\n.end",
+        "ciq-ir\n.function probe\n.integer %0 41 span=7:3\n.return %0\n.end",
+        "ciq-ir\n.function probe\n.integer %0 41\n.return %0",
+        "ciq-ir\n.function probe\n.integer %0 41\n.return %0\n.end\n.return %0",
+        "ciq-ir\n.function probe\n.integer %4294967296 41\n.return %0\n.end",
     ] {
         assert!(parse_ir(text).is_err(), "{text}");
     }
     assert!(Function::new("invalid.name".into(), vec![integer(41), returned(0)]).is_err());
+}
+
+#[test]
+fn numbered_headers_are_rejected() {
+    let function = "\n.function f\n.integer %0 41\n.return %0\n.end\n";
+    for number in 0..=5 {
+        assert!(parse_ir(&format!("ciq-ir {number}{function}")).is_err());
+        assert!(
+            ciq_compiler::parse_unit_ir(&format!(
+                "ciq-unit {number}\n.owner global\nciq-ir{function}"
+            ))
+            .is_err()
+        );
+    }
 }

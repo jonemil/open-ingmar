@@ -17,7 +17,7 @@ jumps. Validation requires forward edges, reachable terminated blocks,
 block-local expression values, and initialized locals on every incoming path.
 The frontend initially accepts only a terminal conditional with a single return
 per arm. [Design](../design/compiler-ir.md), [source grammar][source], and
-[version-2 IR](../specs/compiler-ir-text.md#version-2-control-flow) describe the
+[IR](../specs/compiler-ir-text.md#control-flow) describe the
 contract. Loops, reassignment, Boolean locals, and exception compilation remain
 unsupported.
 

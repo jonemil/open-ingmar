@@ -93,7 +93,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/symbol-project scratch/symbol-project.prg
 ```
 
-The [version 2+ manifest](section-project.md) chooses `symbols` encoding for the
+The [manifest](section-project.md) chooses `symbols` encoding for the
 authoritative symbol `.mcasm` file. Code files reference those declarations even
 when the symbol section follows CODE in the manifest. There must be exactly one
 symbol section when structured symbols are used. Code may add inline
@@ -102,7 +102,7 @@ serialized into SYMBOLS. Inline declarations resolve code IDs and do not
 implicitly add table entries. An include mechanism is not implemented.
 
 The `.symbols.txt` sidecar remains inspection-only. Raw and structured payloads
-are never both authoritative for the same section. Raw symbol payloads are accepted in every project version.
+are never both authoritative for the same section. Raw symbol payloads are also accepted.
 
 Inspect or assemble the symbol payload independently:
 

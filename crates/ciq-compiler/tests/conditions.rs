@@ -70,7 +70,7 @@ fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages
     );
     assert_eq!(execute(&f, 0), 47);
     assert_eq!(execute(&f, 1), 49);
-    assert!(f.to_ir_text().starts_with("ciq-ir 2"));
+    assert!(f.to_ir_text().starts_with("ciq-ir"));
     let reloaded = parse_ir(&f.to_ir_text()).unwrap();
     assert_eq!(f, reloaded);
     assert_eq!(
@@ -109,7 +109,7 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
 
 fn cfg(tail: &str) -> String {
     format!(
-        "ciq-ir 2\n.function f\n.block ^0\n.integer %0 0\n.integer %1 1\n.equal %2 %0 %1\n.branch %2 ^1 ^2\n{tail}\n.end\n"
+        "ciq-ir\n.function f\n.block ^0\n.integer %0 0\n.integer %1 1\n.equal %2 %0 %1\n.branch %2 ^1 ^2\n{tail}\n.end\n"
     )
 }
 
@@ -135,7 +135,7 @@ fn control_flow_rejects_bad_edges_terminators_and_cross_block_values() {
 
 #[test]
 fn joins_require_definite_local_initialization_without_inventing_phi_values() {
-    let common = "ciq-ir 2\n.function f\n.block ^0\n.integer %0 7\n.local $0 %0\n.integer %1 0\n.integer %2 1\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^1\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.read %4 $0\n.return %4\n.end";
+    let common = "ciq-ir\n.function f\n.block ^0\n.integer %0 7\n.local $0 %0\n.integer %1 0\n.integer %2 1\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^1\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.read %4 $0\n.return %4\n.end";
     let f = parse_ir(common).unwrap();
     assert_eq!(execute(&f, 0), 7);
     let partial = cfg(
@@ -182,7 +182,6 @@ fn effects_remain_in_order_and_inside_the_selected_block() {
     let mut swapped = lines.clone();
     swapped.swap(left, right);
     assert!(parse_ir(&swapped.join("\n")).is_err());
-    assert!(parse_ir(&text.replacen("ciq-ir 2", "ciq-ir 1", 1)).is_err());
 }
 
 #[test]
@@ -386,7 +385,7 @@ fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
         .unwrap();
     let span = assigned.span.unwrap();
     assert_eq!(&source[span.start..span.end], "n = n + 2;");
-    assert!(f.to_ir_text().starts_with("ciq-ir 2"));
+    assert!(f.to_ir_text().starts_with("ciq-ir"));
 }
 
 #[test]
@@ -415,7 +414,7 @@ fn source_assignments_reject_type_changes_parameters_and_escaping_names() {
 
 #[test]
 fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedules() {
-    let stale = "ciq-ir 2\n.function f\n.integer %0 1\n.local $0 %0\n.read %1 $0\n.integer %2 2\n.assign $0 %2\n.return %1\n.end";
+    let stale = "ciq-ir\n.function f\n.integer %0 1\n.local $0 %0\n.read %1 $0\n.integer %2 2\n.assign $0 %2\n.return %1\n.end";
     assert!(
         parse_ir(stale)
             .unwrap_err()
@@ -442,7 +441,7 @@ fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedul
         ".integer %0 1\n.local $0 %0\n.string %1 \"str\"\n.assign $0 %1\n.integer %2 2\n.return %2",
         ".string %0 \"str\"\n.local $0 %0\n.integer %1 1\n.assign $0 %1\n.return %1",
     ] {
-        assert!(parse_ir(&format!("ciq-ir 2\n.function f\n{body}\n.end")).is_err());
+        assert!(parse_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err());
     }
     let partial = cfg(
         ".block ^1\n.integer %3 1\n.local $0 %3\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.integer %4 2\n.assign $0 %4\n.integer %5 3\n.return %5",
@@ -453,7 +452,6 @@ fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedul
             .message
             .contains("incoming path")
     );
-    assert!(parse_ir(&ordered.replacen("ciq-ir 2", "ciq-ir 1", 1)).is_err());
     // Aliases need not be small slot indexes; assignment reuses the initializer slot.
     let f = parse_ir(&ordered.replace("$0", "$4294967295")).unwrap();
     assert_eq!(execute(&f, 0), 2);
@@ -540,7 +538,7 @@ fn while_early_returns_leave_the_zero_iteration_exit_available() {
 #[test]
 fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_values() {
     // Numeric IDs and declaration order intentionally differ from execution order.
-    let text = "ciq-ir 2\n.function f parameters=1\n.block ^100\n.jump ^5\n.block ^1\n.integer %0 7\n.local $0 %0\n.jump ^5\n.block ^5\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^50\n.block ^50\n.read %4 $0\n.return %4\n.end";
+    let text = "ciq-ir\n.function f parameters=1\n.block ^100\n.jump ^5\n.block ^1\n.integer %0 7\n.local $0 %0\n.jump ^5\n.block ^5\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^50\n.block ^50\n.read %4 $0\n.return %4\n.end";
     // Changing the first edge to the body makes its initializer definite at exit.
     let mandatory_body = text.replacen(".jump ^5", ".jump ^1", 1);
     assert_eq!(execute(&parse_ir(&mandatory_body).unwrap(), 0), 7);
@@ -566,7 +564,7 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
         .replace(".parameter %1 0", ".read %1 $0")
         .replace(".read %4 $0", ".integer %4 1");
     assert!(parse_ir(&header).is_err());
-    let disconnected = "ciq-ir 2\n.function f\n.block ^0\n.jump ^3\n.block ^1\n.jump ^2\n.block ^2\n.jump ^1\n.block ^3\n.integer %0 1\n.return %0\n.end";
+    let disconnected = "ciq-ir\n.function f\n.block ^0\n.jump ^3\n.block ^1\n.jump ^2\n.block ^2\n.jump ^1\n.block ^3\n.integer %0 1\n.return %0\n.end";
     assert!(
         parse_ir(disconnected)
             .unwrap_err()
@@ -574,7 +572,7 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
             .contains("unreachable")
     );
     // An initializer inside a cyclic block must still precede its first local read.
-    let bad = "ciq-ir 2\n.function f parameters=1\n.block ^0\n.jump ^1\n.block ^1\n.read %0 $0\n.local $0 %0\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^2\n.integer %4 1\n.return %4\n.end";
+    let bad = "ciq-ir\n.function f parameters=1\n.block ^0\n.jump ^1\n.block ^1\n.read %0 $0\n.local $0 %0\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^2\n.integer %4 1\n.return %4\n.end";
     assert!(parse_ir(bad).is_err());
 }
 

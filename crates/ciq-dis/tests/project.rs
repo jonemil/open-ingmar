@@ -21,7 +21,7 @@ fn exception_labels_include_code_end_and_resolve_independently_of_section_order(
     ]);
     let manifest = ciq_dis::export_project(&original, &directory).unwrap();
     assert_eq!(manifest.entries[0].encoding, Encoding::Exceptions);
-    assert!(manifest.to_text().starts_with("ciq-project 5"));
+    assert!(manifest.to_text().starts_with("ciq-project"));
     let path = directory.join(&manifest.entries[0].file);
     let source = fs::read_to_string(&path).unwrap();
     assert!(
@@ -313,7 +313,7 @@ fn structured_symbols_are_authoritative_and_named_code_tracks_alias_changes() {
     assert!(
         fs::read_to_string(directory.join(FILE_NAME))
             .unwrap()
-            .starts_with("ciq-project 2\n")
+            .starts_with("ciq-project\n")
     );
     let code_path = directory.join(&manifest.entries[0].file);
     let symbol_path = directory.join(&manifest.entries[1].file);
@@ -579,7 +579,7 @@ fn structured_debug_and_line_labels_roundtrip_and_move_together() {
     let mut manifest = ciq_dis::export_project(&original, &directory).unwrap();
     assert_eq!(manifest.entries[0].encoding, Encoding::Lines);
     assert_eq!(manifest.entries[1].encoding, Encoding::Debug);
-    assert!(manifest.to_text().starts_with("ciq-project 4"));
+    assert!(manifest.to_text().starts_with("ciq-project"));
     assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
     let code_path = directory.join(&manifest.entries[2].file);
     let text = fs::read_to_string(&code_path).unwrap();

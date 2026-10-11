@@ -57,8 +57,7 @@ fn valid_file(file: &str) -> bool {
 impl Manifest {
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut entries = Vec::new();
-        let mut version_seen = false;
-        let mut version = "1";
+        let mut header_seen = false;
         for (index, line) in text.lines().enumerate() {
             let fail = |message| Error {
                 line: index + 1,
@@ -68,17 +67,11 @@ impl Manifest {
             if fields.is_empty() {
                 continue;
             }
-            if !version_seen {
-                if fields != ["ciq-project", "1"]
-                    && fields != ["ciq-project", "2"]
-                    && fields != ["ciq-project", "3"]
-                    && fields != ["ciq-project", "4"]
-                    && fields != ["ciq-project", "5"]
-                {
-                    return Err(fail("expected ciq-project 1, 2, 3, 4, or 5 header"));
+            if !header_seen {
+                if fields != ["ciq-project"] {
+                    return Err(fail("expected ciq-project header"));
                 }
-                version = fields[1];
-                version_seen = true;
+                header_seen = true;
                 continue;
             }
             if fields.len() != 5 || fields[0] != "section" {
@@ -108,17 +101,13 @@ impl Manifest {
             let encoding = match fields[3] {
                 "raw" => Encoding::Raw,
                 "assembly" if kind == CODE => Encoding::Assembly,
-                "symbols" if kind == SYMBOLS && matches!(version, "2" | "3" | "4" | "5") => {
-                    Encoding::Symbols
-                }
-                "data" if kind == DATA && matches!(version, "3" | "4" | "5") => Encoding::Data,
-                "debug" if kind == DEBUG && matches!(version, "4" | "5") => Encoding::Debug,
-                "lines" if kind == LINES && matches!(version, "4" | "5") => Encoding::Lines,
-                "exceptions" if kind == EXCEPTIONS && version == "5" => Encoding::Exceptions,
+                "symbols" if kind == SYMBOLS => Encoding::Symbols,
+                "data" if kind == DATA => Encoding::Data,
+                "debug" if kind == DEBUG => Encoding::Debug,
+                "lines" if kind == LINES => Encoding::Lines,
+                "exceptions" if kind == EXCEPTIONS => Encoding::Exceptions,
                 _ => {
-                    return Err(fail(
-                        "unsupported encoding for this version or section kind",
-                    ));
+                    return Err(fail("unsupported encoding for this section kind"));
                 }
             };
             if !valid_file(fields[4]) {
@@ -131,37 +120,18 @@ impl Manifest {
                 file: fields[4].into(),
             });
         }
-        if !version_seen {
+        if !header_seen {
             return Err(Error {
                 line: 1,
-                message: "missing ciq-project 1, 2, 3, 4, or 5 header",
+                message: "missing ciq-project header",
             });
         }
         Ok(Self { entries })
     }
 
     pub fn to_text(&self) -> String {
-        let version = if self
-            .entries
-            .iter()
-            .any(|e| e.encoding == Encoding::Exceptions)
-        {
-            5
-        } else if self
-            .entries
-            .iter()
-            .any(|e| matches!(e.encoding, Encoding::Debug | Encoding::Lines))
-        {
-            4
-        } else if self.entries.iter().any(|e| e.encoding == Encoding::Data) {
-            3
-        } else if self.entries.iter().any(|e| e.encoding == Encoding::Symbols) {
-            2
-        } else {
-            1
-        };
-        let mut text = format!(
-            "ciq-project {version}\n# Ordered sections: identifier, original payload length, encoding, file\n"
+        let mut text = String::from(
+            "ciq-project\n# Ordered sections: identifier, original payload length, encoding, file\n",
         );
         for entry in &self.entries {
             let encoding = match entry.encoding {
@@ -189,11 +159,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exception_encoding_requires_version_five_and_the_ordinary_section_kind() {
-        let source = "ciq-project 5\nsection 0x0ece7105 2 exceptions e.mcasm\n";
+    fn exception_encoding_requires_the_ordinary_section_kind() {
+        let source = "ciq-project\nsection 0x0ece7105 2 exceptions e.mcasm\n";
         let manifest = Manifest::parse(source).unwrap();
         assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
-        assert!(Manifest::parse(&source.replace("project 5", "project 4")).is_err());
         assert!(Manifest::parse(&source.replace("0x0ece7105", "0xeece7105")).is_err());
         for encoding in ["assembly", "symbols", "data", "debug", "lines"] {
             let (kind, length) = match encoding {
@@ -205,7 +174,7 @@ mod tests {
             };
             assert!(
                 Manifest::parse(&format!(
-                    "ciq-project 5\nsection 0x{kind:08x} {length} {encoding} a.mcasm\n"
+                    "ciq-project\nsection 0x{kind:08x} {length} {encoding} a.mcasm\n"
                 ))
                 .is_ok()
             );
@@ -214,7 +183,7 @@ mod tests {
 
     #[test]
     fn comments_blank_lines_and_duplicate_identifiers_are_preserved_in_order() {
-        let manifest = Manifest::parse("# project\n\nciq-project 1\nsection 0x12345678 3 raw first.bin\nsection 0x12345678 0 raw empty.bin # duplicate\n").unwrap();
+        let manifest = Manifest::parse("# project\n\nciq-project\nsection 0x12345678 3 raw first.bin\nsection 0x12345678 0 raw empty.bin # duplicate\n").unwrap();
         assert_eq!(manifest.entries.len(), 2);
         assert_eq!(manifest.entries[0].kind, manifest.entries[1].kind);
         assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
@@ -237,7 +206,7 @@ mod tests {
             "section 0x12345678 3 unknown file.bin",
         ] {
             assert_eq!(
-                Manifest::parse(&format!("ciq-project 1\n{entry}"))
+                Manifest::parse(&format!("ciq-project\n{entry}"))
                     .unwrap_err()
                     .line,
                 2,
@@ -247,14 +216,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_or_unsupported_version() {
+    fn rejects_missing_or_invalid_header() {
         for text in [
             "",
             "# comment",
-            "ciq-project 6",
+            "ciq-project extra",
             "section 0x12345678 0 raw empty.bin",
         ] {
             assert!(Manifest::parse(text).is_err());
+        }
+        for number in 0..=6 {
+            assert!(Manifest::parse(&format!("ciq-project {number}\n")).is_err());
         }
     }
 }
@@ -263,12 +235,11 @@ mod tests {
 mod symbol_manifest_tests {
     use super::*;
     #[test]
-    fn symbols_require_version_two_and_the_symbol_section_identifier() {
-        let text = "ciq-project 2\nsection 0x5717b015 2 symbols symbols.mcasm\n";
+    fn symbols_require_the_symbol_section_identifier() {
+        let text = "ciq-project\nsection 0x5717b015 2 symbols symbols.mcasm\n";
         let manifest = Manifest::parse(text).unwrap();
         assert_eq!(manifest.entries[0].encoding, Encoding::Symbols);
         assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
-        assert!(Manifest::parse(&text.replace("project 2", "project 1")).is_err());
         assert!(Manifest::parse(&text.replace("5717b015", "c0debabe")).is_err());
     }
 }
@@ -277,16 +248,11 @@ mod symbol_manifest_tests {
 mod data_manifest_tests {
     use super::*;
     #[test]
-    fn data_requires_version_three_and_its_section_kind() {
-        let text = "ciq-project 3\nsection 0xda7ababe 0 data data.mcasm\n";
+    fn data_requires_its_section_kind() {
+        let text = "ciq-project\nsection 0xda7ababe 0 data data.mcasm\n";
         let manifest = Manifest::parse(text).unwrap();
         assert_eq!(manifest.entries[0].encoding, Encoding::Data);
         assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
-        for version in [1, 2] {
-            assert!(
-                Manifest::parse(&text.replace("project 3", &format!("project {version}"))).is_err()
-            );
-        }
         assert!(Manifest::parse(&text.replace("da7ababe", "c0debabe")).is_err());
     }
 }
@@ -295,15 +261,10 @@ mod data_manifest_tests {
 mod metadata_tests {
     use super::*;
     #[test]
-    fn debug_and_lines_require_version_four_and_correct_identifiers() {
-        let text = "ciq-project 4\nsection 0xd0000d1e 0 debug debug.mcasm\nsection 0xc0de7ab1 2 lines lines.mcasm\n";
+    fn debug_and_lines_require_correct_identifiers() {
+        let text = "ciq-project\nsection 0xd0000d1e 0 debug debug.mcasm\nsection 0xc0de7ab1 2 lines lines.mcasm\n";
         let manifest = Manifest::parse(text).unwrap();
         assert_eq!(Manifest::parse(&manifest.to_text()).unwrap(), manifest);
-        for version in [1, 2, 3] {
-            assert!(
-                Manifest::parse(&text.replace("project 4", &format!("project {version}"))).is_err()
-            );
-        }
         assert!(Manifest::parse(&text.replace("d0000d1e", "da7ababe")).is_err());
         assert!(Manifest::parse(&text.replace("c0de7ab1", "c0debabe")).is_err());
     }

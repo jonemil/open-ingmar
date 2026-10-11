@@ -22,10 +22,11 @@ questions. Investigations can retain relevant history when it explains the
 evidence; they do not need a record of every completed step. The plan owns work
 sequencing; link to it instead of maintaining extension orders in design pages.
 
-Use Git history for superseded designs and implementation evolution. Describe
-format versions as current acceptance rules when the tools still support them,
-not as a sequence of features added. SDK/device versions in investigations
-identify the evidence and its compatibility limits.
+Use Git history for superseded designs and implementation evolution. Our
+provisional formats have one current grammar and unnumbered headers; update
+their readers, writers, tests, and examples together without retaining older
+profiles. Garmin format and SDK/device versions identify compatibility rules
+and the scope of investigation evidence.
 
 Specs describe our supported profiles, not complete Garmin compatibility. Keep
 unknowns explicit and link to evidence instead of repeating experiments. An API

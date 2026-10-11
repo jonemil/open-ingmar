@@ -148,7 +148,7 @@ fn local_text_and_typed_validation_reject_uninitialized_or_duplicate_locals() {
         ".integer %0 41\n.local $4294967296 %0\n.read %1 $9\n.return %1",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir 1\n.function probe\n{body}\n.end")).is_err(),
+            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
@@ -175,7 +175,7 @@ fn local_text_and_typed_validation_reject_uninitialized_or_duplicate_locals() {
 
 #[test]
 fn semantic_local_ids_do_not_select_vm_slots() {
-    let text = "ciq-ir 1\n.function probe\n.integer %10 40\n.local $4294967295 %10\n.read %20 $4294967295\n.integer %30 3\n.add %40 %20 %30\n.local $9 %40\n.read %50 $9\n.read %60 $4294967295\n.subtract %70 %50 %60\n.return %70\n.end";
+    let text = "ciq-ir\n.function probe\n.integer %10 40\n.local $4294967295 %10\n.read %20 $4294967295\n.integer %30 3\n.add %40 %20 %30\n.local $9 %40\n.read %50 $9\n.read %60 $4294967295\n.subtract %70 %50 %60\n.return %70\n.end";
     let ir = parse_ir(text).unwrap();
     let bytes = ir.lower().encode().unwrap();
     assert_eq!(evaluate(&bytes), 3);
@@ -226,7 +226,7 @@ fn local_and_total_operation_limits_include_initializers_and_reads() {
         .collect::<String>();
     assert!(
         parse_ir(&format!(
-            "ciq-ir 1\n.function probe\n{body}.read %300 $255\n.return %300\n.end"
+            "ciq-ir\n.function probe\n{body}.read %300 $255\n.return %300\n.end"
         ))
         .unwrap_err()
         .message

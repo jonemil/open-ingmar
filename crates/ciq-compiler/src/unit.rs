@@ -393,11 +393,10 @@ impl CompilationUnit {
 
     /// Serialize validated function/class ownership and bodies as unit IR text.
     ///
-    /// Uses unit version 2 when classes are present, otherwise version 1. Inner
-    /// functions use versions 1..=4 and optional spans. Classes retain native
+    /// Inner functions retain optional spans. Classes retain native
     /// base identity without a VM import index. Source filenames are not stored.
     pub fn to_ir_text(&self) -> String {
-        let mut text = format!("ciq-unit {}\n", if self.classes.is_empty() { 1 } else { 2 });
+        let mut text = String::from("ciq-unit\n");
         for d in &self.declarations {
             match &d.module {
                 None => text.push_str(".owner global\n"),
@@ -521,8 +520,8 @@ pub fn compile_sources(sources: &[&str]) -> Result<CompilationUnit, SourceDiagno
     Ok(unit)
 }
 
-/// Parse version-1/version-2 unit text and validate owners and call signatures.
-/// Version 2 adds AppBase classes with instance-method function IR. Diagnostics
+/// Parse provisional unit text and validate owners and call signatures.
+/// AppBase classes contain instance-method function IR. Diagnostics
 /// use text positions; serialized source spans are provenance only.
 pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
     let rows = text
@@ -542,10 +541,9 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
             .collect::<Vec<_>>()
     };
     let header = rows.first().map(|(_, l)| fields(l)).unwrap_or_default();
-    if header != ["ciq-unit", "1"] && header != ["ciq-unit", "2"] {
-        return Err(Diagnostic::at(text, 0, "expected ciq-unit 1 or 2 header"));
+    if header != ["ciq-unit"] {
+        return Err(Diagnostic::at(text, 0, "expected ciq-unit header"));
     }
-    let version_two = header[1] == "2";
     let mut i = 1;
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
@@ -583,7 +581,7 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
                     function: function(text, &rows, &mut i)?,
                 });
             }
-            [".class", name, "Application.AppBase"] if version_two => {
+            [".class", name, "Application.AppBase"] => {
                 let name = (*name).to_owned();
                 let mut methods = Vec::new();
                 let mut ended = false;
@@ -621,7 +619,7 @@ pub fn parse_unit_ir(text: &str) -> Result<CompilationUnit, Diagnostic> {
                 return Err(Diagnostic::at(
                     text,
                     at,
-                    "expected owner record or version-2 AppBase class",
+                    "expected owner record or AppBase class",
                 ));
             }
         }

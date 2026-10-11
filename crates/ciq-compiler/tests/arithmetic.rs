@@ -81,7 +81,7 @@ fn representative_operand_pairs_check_zero_negative_and_large_results() {
 
 #[test]
 fn backend_follows_dependencies_instead_of_ir_definition_order() {
-    let text = "ciq-ir 1\n.function probe\n.integer %10 8\n.integer %20 5\n.integer %30 40\n.subtract %40 %10 %20\n.add %50 %30 %40\n.return %50\n.end\n";
+    let text = "ciq-ir\n.function probe\n.integer %10 8\n.integer %20 5\n.integer %30 40\n.subtract %40 %10 %20\n.add %50 %30 %40\n.return %50\n.end\n";
     let ir = parse_ir(text).unwrap();
     assert_eq!(result(&ir.lower().encode().unwrap()), 43);
     assert_eq!(ir.lower().encode().unwrap()[3], 40);
@@ -100,7 +100,7 @@ fn invalid_expression_graphs_are_rejected_before_codegen() {
         ".integer %0 41\n.subtract %1 %0\n.return %1", // missing operand
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir 1\n.function probe\n{body}\n.end")).is_err(),
+            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }

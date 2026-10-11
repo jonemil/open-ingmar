@@ -8,7 +8,7 @@ license attribution, SDK source, and original hash are recorded in the research.
 ## Implementation and evidence
 
 Independent `ciq-prg` now parses/writes ordered exception triples and their
-`.exception` source. Version 5 section projects resolve named offsets after
+`.exception` source. Section projects resolve named offsets after
 CODE layout. Export shares method, line, and branch labels, adding verified
 exception boundaries. Raw malformed/duplicate sections and invalid numeric
 targets remain preserved. See [the exception specification](../specs/exceptions.md).
