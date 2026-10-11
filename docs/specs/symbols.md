@@ -21,7 +21,7 @@ names only for symbol operand fields of known instructions: `spush`, `getselfv`,
 `getsv`, both fields of `getmv`, and the second field of `getlocalv`. It does
 not treat every numeric operand as a symbol.
 
-Symbols now have
+Symbols have
 [assembly declarations and named instruction operands](symbol-assembly.md).
 Export pins IDs, table entry indexes, and name offsets, then verifies exact
 serialization before choosing the structured source as authoritative.

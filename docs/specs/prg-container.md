@@ -1,4 +1,4 @@
-# PRG container: initial supported subset
+# PRG container: supported subset
 
 Evidence: [initial Rust investigation](../investigations/rust-bootstrap.md).
 This is a structural specification for the two local SDK 9.2.0 `fr265`
@@ -23,7 +23,7 @@ numeric identifiers. Names are research-derived annotations, not evidence that a
 section's payload has been decoded. Unrecognized identifiers are labelled
 `UNKNOWN` and preserved.
 
-The first writer reconstructs the section headers and terminator. Replacing code
+The writer reconstructs the section headers and terminator. Replacing code
 currently requires the same payload length, because internal addresses, line
 metadata, and other references are not relocated. Equal length alone does not
 establish validity: edits can invalidate references or signatures. The container

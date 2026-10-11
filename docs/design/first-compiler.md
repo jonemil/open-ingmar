@@ -1,80 +1,36 @@
-# First Monkey C compiler milestone
+# Compiler goals and acceptance
 
-Compile a function independently, integrate it into known-good application
-scaffolding, and verify its behavior in Garmin's simulator. This milestone is
-complete; it established the pipeline used for later language extensions.
+Compile the supported Monkey C subset independently through semantic IR and
+symbolic VM assembly. Support function CODE for explicit scaffold integration
+and complete PRGs through the [application builder](console-application.md).
+The [source specification](../specs/compiler-subset.md) defines accepted syntax;
+[the plan](../plan.md) defines current priorities.
 
-## Observable result and boundary
+## Boundaries
 
-The first source was:
+Parsing and name resolution construct validated semantic IR. The VM backend
+selects instructions and frame storage; assembly handles layout and binding.
+Application generation supplies metadata and lifecycle code. Signing, packaging,
+and project configuration remain separate. See [representation
+design](compiler-ir.md).
 
-```monkeyc
-function probe() {
-    return 41;
-}
-```
-
-Hello World supplied lifecycle methods, resources, method bindings, and other
-container metadata. Shared CODE labels selected the generated function; the
-assembler reconstructed and signed the PRG with our key. The simulator verified
-`41` and a source edit to `42`. See
-[evidence](../investigations/first-compiler.md).
-
-The default compiler mode emits a function. The later
-[console application profile](console-application.md) generates a complete PRG
-from a compilation unit. Source diagnostics reject unsupported input. Independent Rust parsing and semantic IR construction
-have no optimizer/Ghidra implementation dependency. VM lowering produces the
-same assembly model used by handwritten code and disassembly; encoding, layout,
-and signing remain separate.
-
-[Compiler design](compiler-ir.md) explains the semantic/backend boundary.
-[The source subset](../specs/compiler-subset.md) and
-[IR text](../specs/compiler-ir-text.md) specify accepted inputs. The
-[native/text checkpoint](../investigations/compiler-pipeline.md) verifies both
-in-memory composition and editable stage resumption.
-
-## Extension order
-
-1. Completed: constant returns, integer addition/subtraction/grouping,
-   initialized locals, user-module calls, integer parameters, and positional
-   arguments, strings/locals, and `System.println` statements.
-   [The plan](../plan.md) links their runtime evidence.
-2. Terminal conditional returns with `==`/`>` and forward-only semantic blocks
-   are [implemented and simulator-verified](../investigations/compiler-conditions.md).
-   Nested statements, scoped arm locals, early returns, and continuing joins are
-   [also verified](../investigations/compiler-nested-conditions.md). Local
-   reassignment is [also verified](../investigations/compiler-assignments.md);
-   `while` loops are [verified](../investigations/compiler-loops.md), including
-   zero iterations and nested branches. Innermost `break`/`continue` and optional
-   `else` are [verified](../investigations/compiler-loop-control.md). Branch-label and
-   exception assembly are implemented; exception source compilation still needs
-   stack/frame research. See the [control-flow design](control-flow.md).
-3. Multiple-function units with qualified-call binding and integer arity/type
-   checks are [verified](../investigations/compiler-unit.md). Independent
-   console application metadata is
-   [implemented and verified](../investigations/application-bootstrap.md) without
-   SDK-provided scaffolding. Next add source-authored lifecycle classes and
-   [Jungle-driven project builds](project-builds.md).
-
-Complete applications take priority over broader section-size/address research.
-Use their placement needs and larger generated programs to expose concrete
-limits; investigate necessary blockers without assuming universal region bounds.
-
-Define source grammar and calling conventions before adding syntax. Preserve
-source spans for diagnostics. Assess evaluation/effect order, temporary/local
-storage, receiver/context handling, and stack compatibility at control-flow
-joins. Distinguish verified behavior from assumptions; broad package
-compatibility and every relocation format are not prerequisites for a bounded
-straight-line compiler.
+Keep source spans for diagnostics and readable assembly for low-level debugging.
+Unsupported input must produce an explicit diagnostic. Implement independently
+of external research repositories; SDK tools provide reference output and
+runtime checks, not compiler implementation code.
 
 ## Acceptance
 
-Require intended function behavior and valid own-key signing, rather than byte
-equality with Garmin's compiler. Check unrelated scaffold preservation and
-native/IR/assembly equivalence. Compiler tests must run without the SDK;
-official SDK/simulator experiments provide separate compatibility evidence.
+Require intended behavior and valid own-key signing, not byte equality with
+Garmin's compiler. For scaffold integration, verify preservation of unrelated
+sections. Source, typed IR, saved IR, and saved assembly must agree under the
+same bindings. Every operation extension updates validation, lowering, text I/O,
+and parity checks together.
 
-Every IR extension updates semantic validation, lowering, text I/O, and parity
-checks together. Keep readable `.mcasm` for low-level debugging. Formats and
-APIs remain provisional; no optimizer framework, new crate split, or Garmin MIR
-compatibility is required by this milestone.
+Compiler tests run without the SDK. Controlled SDK builds and simulator runs
+provide separate compatibility evidence; encoding success does not establish
+execution. Record specimens, versions, observations, and uncertainty in
+[investigations](../investigations/README.md).
+
+The representations remain provisional. Extract crates or add optimizer/linker
+infrastructure when actual consumers or representation needs justify them.

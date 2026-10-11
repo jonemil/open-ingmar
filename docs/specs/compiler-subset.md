@@ -1,6 +1,6 @@
-# First Monkey C compiler subset
+# Supported Monkey C compiler subset
 
-Initial restricted frontend, 2026-10-10. Design:
+Restricted frontend. Design:
 [small semantic IR](../design/compiler-ir.md). Runtime evidence:
 [constant returns](../investigations/first-compiler.md),
 [arithmetic](../investigations/compiler-arithmetic.md),
@@ -33,16 +33,15 @@ primary = decimal-integer | string-literal | parameter-or-local-identifier
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
-letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`, `true`,
-`while`, `break`, `continue`, `class`, `extends`, `self`, and `false` are reserved. Boolean literals are not
-supported yet.
-Whitespace, `//` comments, and non-nested `/* ... */` comments are supported.
-The accepted literal domain is `0..=127`; computed results may be negative or
-exceed 127. Unary signs, larger literals, other literal forms, typed parameters,
-types, unsupported statements/additional functions in default mode, and other
-operators are rejected. This is a frontend limit, not a Monkey C language or VM
-integer limit. The domain deliberately avoids unresolved high-bit one-byte
-immediate behavior.
+letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
+`true`, `while`, `break`, `continue`, `class`, `extends`, `self`, and `false`
+are reserved. Boolean literals are not supported yet. Whitespace, `//` comments,
+and non-nested `/* ... */` comments are supported. The accepted literal domain
+is `0..=127`; computed results may be negative or exceed 127. Unary signs,
+larger literals, other literal forms, typed parameters, types, unsupported
+statements/additional functions in default mode, and other operators are
+rejected. This is a frontend limit, not a Monkey C language or VM integer limit.
+The domain deliberately avoids unresolved high-bit one-byte immediate behavior.
 
 Diagnostics identify the input byte offset and one-based line/column (columns
 count Unicode scalar values). The caller supplies the filename. Unsupported
@@ -77,7 +76,7 @@ constructed operations, `parse_ir` resumes [IR text](compiler-ir-text.md), and
 assembler/signing commands consume the output after explicitly integrating it
 into an application section project.
 
-The compiler CLI now supports `--from source|ir|assembly` and `--emit
+The compiler CLI supports `--from source|ir|assembly` and `--emit
 ir|assembly|code`. The default two-path invocation still emits assembly from
 source. CODE output is a raw payload, not a PRG. See
 [pipeline commands and limits](compiler-ir-text.md#command-line-stages).
@@ -141,8 +140,8 @@ The supported call form is `<module>.<member>(<arguments>?)` in integer
 expressions/initializers. The module is a top-level user module provided by the
 surrounding PRG scaffold, and the member is an existing integer-return function
 with matching positional arity. Global unqualified calls, local/object
-receivers, nested modules, and string-return user-module calls remain unsupported.
-Void module calls are supported as statements, as described below.
+receivers, nested modules, and string-return user-module calls remain
+unsupported. Void module calls are supported as statements, as described below.
 The separate `System.println` statement is described below. Module/member names
 stay symbolic until encoding; neither IDs nor DATA method records are generated
 here.
@@ -266,13 +265,12 @@ after `return`, `break`, `continue`, or a conditional whose arms both terminate
 are rejected as unreachable. A path with no return is rejected at the function's
 closing brace.
 
-Continuing arms jump to a shared block after both arms. Returning or loop-control
-arms do not contribute an edge to that join; when both arms terminate, no join
-is generated.
-Only enclosing locals are visible after the condition. Even if both arms
-declare the same name, those distinct declarations do not define a result at
-the join. Enclosing locals can carry results using assignment; no phi values or
-shared stack values are introduced.
+Continuing arms jump to a shared block after both arms. Returning or
+loop-control arms do not contribute an edge to that join; when both arms
+terminate, no join is generated. Only enclosing locals are visible after the
+condition. Even if both arms declare the same name, those distinct declarations
+do not define a result at the join. Enclosing locals can carry results using
+assignment; no phi values or shared stack values are introduced.
 
 The semantic 1024-operation limit includes generated block markers and
 terminators. The 255 parameter/local slots count all declarations across the
@@ -410,9 +408,10 @@ continuation after discarded calls. Source class/receiver syntax remains open.
 
 ## Instance class extension
 
-Unit mode also accepts [AppBase-derived class declarations](compiler-classes.md).
-Their methods may call `self.<member>(...)` as integer expressions or statements;
-class ownership and receiver contracts remain explicit in typed/saved IR.
-Default single-function source mode does not accept self calls. Class callbacks,
-object values/fields, source inheritance, and general native calls remain open.
-See [runtime evidence](../investigations/compiler-class.md).
+Unit mode also accepts [AppBase-derived class
+declarations](compiler-classes.md). Their methods may call `self.<member>(...)`
+as integer expressions or statements; class ownership and receiver contracts
+remain explicit in typed/saved IR. Default single-function source mode does not
+accept self calls. Class callbacks, object values/fields, source inheritance,
+and general native calls remain open. See [runtime
+evidence](../investigations/compiler-class.md).

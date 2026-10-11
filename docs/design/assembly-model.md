@@ -1,7 +1,7 @@
 # Shared CODE assembly model
 
-Implemented 2026-10-10 in `ciq-assembly`, a standard-library-only layer
-depending on `ciq-mc` and `ciq-prg`. See
+`ciq-assembly` is a standard-library-only layer depending on `ciq-mc` and
+`ciq-prg`. See
 [pipeline evidence](../investigations/compiler-pipeline.md). It owns the
 existing ordinary CODE assembly grammar/model, not full section-project assembly
 or signing.

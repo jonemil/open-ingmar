@@ -68,4 +68,4 @@ are Git-ignored. Existing output files/symlinks are never overwritten.
 decoding, alternate-key tests, and simulator execution of an assembly-edited PRG
 extracted from the created IQ. Upload/store/install acceptance of the IQ archive
 itself remains untested. Real multi-device and historical/store variants remain
-follow-up research, not prerequisites for the first compiler milestone.
+outside the supported creation profile.

@@ -1,8 +1,8 @@
 # Monkey Barrel package: observed ZIP profile
 
-Status: documented 2026-10-10; Rust reading/extraction implemented for
+Reading and extraction support
 [the supported profile](package-reading.md); deterministic
-[canonical-tree packing](barrel-packing.md) is implemented and SDK-validated.
+[canonical-tree packing](barrel-packing.md) supports the canonical exported tree.
 Evidence: [package investigation](../investigations/package-formats.md), SDK
 9.2.0 / `fr265`, and the earlier
 [library experiment](../investigations/multi-file-and-barrels.md). This is the
@@ -67,14 +67,14 @@ produce a runnable program.
 
 ## Reader/writer scope
 
-Implemented reader: recognize ZIP framing, inventory members, parse library
+The reader must recognize ZIP framing, inventory members, parse library
 identity and the canonical `content/manifest.xml`, and extract source/resources
 as opaque member bytes. Arbitrary Jungle-selected manifest paths are deferred.
 Unknown ordinary members remain available for preservation. Validate CRCs and
 reject duplicate or conflicting paths, unsupported compression/encryption,
 links, and out-of-root paths rather than overwriting another entry.
 
-Implemented first writer: repack an already canonical extracted package tree,
+The writer must repack an already canonical extracted package tree,
 validating the required manifests and `barrel.jungle`, then emit deterministic
 ZIP/Deflate with stable order/timestamps. Its success criterion is equal member
 bytes and SDK consumption, not identical compressed archive bytes. A later

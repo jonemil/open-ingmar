@@ -110,3 +110,29 @@ text boundary. Resource/project generation can evolve independently.
 
 - **Artifact:** Signed `43` PRG. **SHA-256:**
   `f11a38bbd04bb46e57775a873a475ad2f485052b51ac51fd8a8101d04fdddbf8`.
+
+## Representation terminology references
+
+External comparisons consulted on 2026-10-10:
+[LLVM code generation](https://llvm.org/docs/CodeGenerator.html),
+[Clang toolchains](https://clang.llvm.org/docs/Toolchain.html), [LLVM
+IR][ref-llvm-ir], [LLVM MC][ref-llvm-mc],
+[llvm-mc](https://llvm.org/docs/CommandGuide/llvm-mc.html),
+[GIMPLE](https://gcc.gnu.org/onlinedocs/gccint/GIMPLE.html),
+[RTL](https://gcc.gnu.org/onlinedocs/gccint/RTL.html),
+[GNU as](https://sourceware.org/binutils/docs/as/), and [Cargo target
+names][ref-cargo-target-names]. These informed terminology; they are not
+compatibility requirements.
+
+Local evidence:
+[initial replacement](../investigations/function-replacement.md),
+[instruction semantics](../investigations/instruction-semantics.md),
+[MIR/module observations](../investigations/module-method-names.md),
+[pipeline parity](../investigations/compiler-pipeline.md),
+[locals](../investigations/compiler-locals.md),
+[module calls](../investigations/compiler-calls.md), and
+[parameters/arguments](../investigations/compiler-arguments.md).
+
+[ref-llvm-ir]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/IR/CMakeLists.txt
+[ref-llvm-mc]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/CMakeLists.txt
+[ref-cargo-target-names]: https://doc.rust-lang.org/cargo/reference/cargo-targets.html

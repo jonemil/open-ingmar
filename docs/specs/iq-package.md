@@ -1,10 +1,9 @@
 # Connect IQ distribution package: observed 7z and signing profile
 
-Status: documented 2026-10-10; Rust reading/extraction implemented for
-[the supported profile](package-reading.md); modern developer
-[verification](package-verification.md) implemented;
-[unchanged repacking](iq-repacking.md) is implemented;
-[own-key creation](iq-creation.md) is implemented for supplied modern metadata.
+Supported operations are [reading/extraction](package-reading.md), modern
+developer [verification](package-verification.md),
+[unchanged repacking](iq-repacking.md), and
+[own-key creation](iq-creation.md) using supplied modern metadata.
 Evidence: [independent archive/signature
 investigation][ref-independent-archive-signature-investigat], SDK 9.2.0 /
 `fr265`. This profile covers our own dual-hash developer-signed export. Store
@@ -57,7 +56,7 @@ application retains its ID, type, entry class, and resource references and adds
 `apiVersion`.
 
 Paths come from the manifest; do not assume an SDK device ID such as `fr265` is
-the directory name. The first reader must enumerate all products, not choose the
+the directory name. The reader must enumerate all products, not choose the
 first one silently. Multiple products may need to reference the same file;
 establish sharing semantics before enforcing one path per product. `debug.xml`
 is external debug information; it is not required to execute the extracted PRG,
@@ -123,9 +122,9 @@ do not automatically update its ranges/source mappings. A low-level
 unchanged-member repack can preserve existing signatures without any private
 key, but a changed product/manifest requires renewed corresponding signatures.
 
-The first writer targets SDK-produced developer packages. IQ archive acceptance
+The writer targets SDK-produced developer packages. IQ archive acceptance
 by Garmin upload/install workflows has not been tested independently; existing
 simulator runs only validate extracted/reassembled PRGs. See
-[the staged crate plan](../design/package-crate.md).
+[package design](../design/package-crate.md).
 
 [ref-independent-archive-signature-investigat]: ../investigations/package-formats.md

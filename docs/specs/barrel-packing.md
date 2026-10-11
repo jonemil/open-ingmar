@@ -1,6 +1,6 @@
 # Deterministic barrel packing
 
-Implemented 2026-10-10 in `ciq-package::pack_barrel(source, output, Limits)`
+Packing uses `ciq-package::pack_barrel(source, output, Limits)`
 and:
 
 ```sh
@@ -18,7 +18,7 @@ builder or Jungle interpreter.
 The input is an ordinary directory containing ordinary `manifest.xml`,
 `content/manifest.xml`, and `barrel.jungle` files. Both manifests must be **byte
 identical**, valid supported manifest XML, and declare a barrel identity. The
-reader permits differing XML with matching identity; this first writer
+reader permits differing XML with matching identity; this writer
 deliberately requires identical copies instead of deciding which to rewrite. XML
 and Jungle bytes are never regenerated. Source, resources, and unknown ordinary
 files are copied unchanged.
@@ -63,4 +63,4 @@ is not atomic, no durability sync is promised, and process termination can leave
 a partial output.
 
 No developer key or signature is required for this observed source-barrel
-format. IQ writing remains a separate stage.
+format. IQ writing uses its own [package profile](iq-package.md).

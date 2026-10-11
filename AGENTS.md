@@ -1,15 +1,25 @@
 # Working instructions
 
 - Read [README.md](README.md) and [docs/plan.md](docs/plan.md) before
-  substantial work.
+  substantial work. Reuse context already read; follow relevant links rather
+  than rereading the documentation tree.
 - Follow [docs/research.md](docs/research.md) for investigations and evidence,
   and [docs/architecture.md](docs/architecture.md) for implementation
   boundaries.
 - Keep findings, designs, experiments, and outstanding questions in this
   repository's Markdown documentation. Update relevant docs when new evidence
-  changes a conclusion.
+  changes a conclusion. The plan covers upcoming work and discovered needs;
+  design describes current structure and intent. Do not maintain completed-work
+  lists or document routine maintenance.
 - Follow [docs/README.md](docs/README.md) for readable prose, design/spec
   boundaries, and concrete Rustdoc descriptions of behavior and requirements.
+- For repeated mechanical checks, reuse existing commands or add a small helper
+  with meaningful pass/fail exit codes and concise diagnostics. Save large logs
+  under `scratch/`; inspect relevant excerpts on failure or when investigating
+  unknown behavior. Do not build helpers for trivial one-off checks or replace
+  necessary visual/semantic review with a successful process exit.
+- Run checks appropriate to the change and required final checks. Repeat passed
+  checks only after relevant changes or when unresolved concerns justify it.
 - Do not commit changes. The user manages Git and commits.
 - You may write or refresh `scratch/commit_msg` for the user to load as a commit
   message. Use a precise one-line summary, a blank line, and a concise body
@@ -26,9 +36,6 @@
   or SDK.
 - Preserve source attribution and distinguish observations, interpretations, and
   unverified hypotheses. Do not turn assumptions into specifications.
-- Start with PRG parsing, lossless writing, and a small instruction modification
-  validated in Garmin's official simulator. Do not start a Monkey C frontend,
-  LLVM backend, or full VM prematurely.
 - Keep this file lightweight. Put detailed plans and technical specifications in
   `docs/` and link them here as needed.
 

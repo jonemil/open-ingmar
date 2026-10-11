@@ -1,4 +1,4 @@
-# Bytecode and initial assembly syntax
+# Bytecode and assembly syntax
 
 Evidence and provenance:
 [initial Rust investigation](../investigations/rust-bootstrap.md). The following

@@ -1,9 +1,9 @@
 # Package reading and extraction
 
-Implemented 2026-10-10 in `ciq-package`. Format references:
+`ciq-package` reads and extracts the supported profiles. Format references:
 [barrels](barrel-package.md), [IQ packages](iq-package.md). Evidence and
 dependency review: [reader investigation](../investigations/package-reading.md).
-This is the initial supported profile, not a general-purpose archive extractor.
+This is a bounded supported profile, not a general-purpose archive extractor.
 
 ## Commands and outputs
 
@@ -29,10 +29,11 @@ executable bits, or other permissions. Inspection reports go to stdout, not into
 the extracted package.
 
 Both commands print `Signatures were not verified.` The separate
-[verify command](package-verification.md) now checks the modern developer IQ
+[verify command](package-verification.md) checks the modern developer IQ
 profile and its PRGs. Canonical barrel packing and
-[unchanged IQ repacking](iq-repacking.md) are implemented; package re-signing
-and automatic disassembly remain later stages. Pass an extracted PRG to the
+[unchanged IQ repacking](iq-repacking.md) are supported.
+[Own-key creation](iq-creation.md) signs edited packages; automatic disassembly
+is outside the package tool. Pass an extracted PRG to the
 existing tools explicitly:
 
 ```sh

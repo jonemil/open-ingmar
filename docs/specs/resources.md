@@ -5,7 +5,7 @@ Section ID: `0xf00d600d`. Evidence:
 Resource strings are independently indexed assets; they are not `news` literals
 or symbol-name records.
 
-## Implemented read-only string inspection
+## Read-only string inspection
 
 A supported index consists of a big-endian u16 entry count followed by count ×
 8-byte entries: u32 ID and u32 offset relative to the RESOURCES payload. Strings
@@ -32,7 +32,7 @@ language=0x008002e7 resource=0x00000083 @0x00001e46 "Minimal Console"
 
 The parser validates table bounds, duplicate IDs within each table, string
 bounds/encoding/termination, and cyclic or shared language-table offsets. Shared
-language indexes are unsupported by this initial reader. It inspects the string
+language indexes are unsupported by the reader. It inspects the string
 category only and leaves other categories uninterpreted. String offsets are
 currently limited to the same zero-prefix 24-bit range as the shared record
 decoder.
@@ -42,19 +42,14 @@ name is `<valyrian>`; the source reference's English example uses `0x008002eb`,
 named `<eng>` locally. We have not established the compiler's
 default-language/fallback rules and do not label the observed key as English.
 
-## Preservation and next targets
+## Preservation and unsupported scope
 
 RESOURCES remains raw binary in section projects. There is no resource string
 assembler or resource relocation yet. The read-only reader can validate the
 current string indexes without changing any resource bytes.
 
-Next investigate resource IDs and generated `Rez` bindings, language selection
-and fallback with controlled multilingual examples, and a lossless
-representation of index tables and pinned containers. Decode
-bitmap/font/JSON/animation containers only after reproducing their boundaries
-and references. Background/glance resource indexes and
-compressed/device-specific assets remain unverified.
-
-DATA class/module structure is another target: its framing is known enough for
-string discovery, but field types, relationship IDs, generated initialization,
-and references must be decoded before length-changing edits can be safe.
+Resource-ID binding, generated `Rez` declarations, language selection/fallback,
+and lossless resource assembly remain unspecified. Bitmap/font/JSON/animation
+containers, background/glance indexes, and compressed/device-specific assets
+are outside this inspection profile. [The plan](../plan.md) owns research
+priorities.

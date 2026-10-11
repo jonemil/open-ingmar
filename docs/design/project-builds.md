@@ -1,9 +1,8 @@
 # Future project builds and Jungle configuration
 
-Status: planned; no Rust Jungle parser or project build driver exists. Recorded
-after the user's clarification that the eventual open-source compiler should
-work with real application and barrel projects. This is future scope and does
-not replace the immediate [package implementation stages](package-crate.md).
+Project builds are planned; no Rust Jungle parser or project build driver
+exists. Resolve real application and barrel projects into explicit compiler and
+packaging inputs. [The plan](../plan.md) owns implementation priorities.
 
 ## Inputs and boundaries
 
@@ -14,7 +13,7 @@ exclusions. The Monkey C compiler consumes those resolved inputs; archive
 writing remains in `ciq-package`, and signing remains in `ciq-sign`. Decide
 crate names and public APIs when implementation begins.
 
-The future compiler should collect declarations across all selected source files
+The build layer must collect declarations across all selected source files
 before binding references, allowing forward references and mutual recursion
 without requiring dependency-ordered input files. Source file boundaries and
 module namespaces are separate concerns; investigate `using`/`import` visibility
@@ -126,5 +125,4 @@ Shared-source variants and multiple barrel outputs from one repository need
 explicit configurations and experiments before promising a particular project
 model.
 
-No compiler frontend, Jungle evaluator, or new build crate is introduced by this
-plan.
+Crate names and public build APIs remain undecided.

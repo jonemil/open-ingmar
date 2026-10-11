@@ -1,6 +1,6 @@
 # DATA class/module record inspection
 
-Inspection and constrained assembly implemented on 2026-10-08. Evidence:
+Evidence:
 [class/module investigation](../investigations/data-classes.md). Records belong
 to DATA (`0xda7ababe`), interleaved with [string records](data-strings.md). All
 multibyte values are big-endian.
@@ -73,16 +73,16 @@ framing is an error for this command.
 
 Complete export adds `NNN-data.classes.txt` when inspection succeeds. It is an
 inspection-only sidecar, excluded from `sections.ciq`. Editing it never changes
-reassembly. Authoritative DATA source now uses the class assembly described
+reassembly. Authoritative DATA source uses the class assembly described
 below when the full walk succeeds; partial/raw fallbacks remain supported.
 Relocation is not implemented. No signing material or executable bytes are
 changed by inspection.
 
 ## Class assembly
 
-Implemented on 2026-10-08; [serialization and relocation
+Evidence: [serialization and relocation
 investigation][ref-serialization-and-relocation-investigati]. Complete supported
-DATA exports now put class declarations alongside string declarations in the
+DATA exports put class declarations alongside string declarations in the
 authoritative version 3 DATA source. Older `.bytes` class spans remain valid
 input. The class inspection sidecar is still not assembly input.
 
@@ -112,7 +112,7 @@ The source model serializes independently of the borrowed inspection model.
 Parsed record offsets are inspection metadata; field offsets are recomputed from
 the serialized layout. The named forms below resolve typed class/string/symbol
 references. Numeric fallbacks remain supported;
-[shared code labels](code-labels.md) now resolve method targets. Numeric values
+[shared code labels](code-labels.md) resolve method targets. Numeric values
 are not automatically relocated.
 
 Complete DATA walks export classes and strings only after checking that
@@ -125,10 +125,9 @@ chosen target has the right calling convention, and does not enable relocation.
 
 ## Named declarations and references
 
-Implemented on 2026-10-08;
-[named class investigation](../investigations/named-classes.md). An optional
-alias follows `.class`, before optional `at`. Aliases obey symbol/string
-identifier rules but use a separate class namespace.
+Evidence: [named class investigation](../investigations/named-classes.md). An
+optional alias follows `.class`, before optional `at`. Aliases obey
+symbol/string identifier rules but use a separate class namespace.
 
 ```text
 .class globals at=0x0000047b version=0x02 extends=none statics=none parent=none module=@globals app_flags=0x007f

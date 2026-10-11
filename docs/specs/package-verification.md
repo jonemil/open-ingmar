@@ -1,6 +1,6 @@
 # IQ package verification
 
-Implemented 2026-10-10 in `ciq-package` using `ciq-prg` and `ciq-sign`. The
+`ciq-package` verifies IQ packages using `ciq-prg` and `ciq-sign`. The
 format/coverage reference is [the observed modern IQ profile](iq-package.md);
 [the investigation](../investigations/package-verification.md) records SDK and
 synthetic validation. Archive acceptance still follows

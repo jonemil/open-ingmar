@@ -114,6 +114,28 @@ successful run, `monkeydo` remained active until the runner ended the session.
 See [the simulator investigation][ref-the-simulator-investigation] for evidence
 and the visible desktop alternative.
 
+### Check deterministic console output
+
+For a console-only experiment with an exact expected transcript, use `cmp`
+instead of manually reading the entire log. For Hello World:
+
+```sh
+printf 'Hello from Monkey C!\n41\n' > scratch/hello-world.expected
+cmp -s scratch/hello-world.expected scratch/simulator/monkeydo.log
+```
+
+Check the simulator runner's exit status first and use the log from that fresh
+run. `cmp` returns 0 for equal files, 1 for a mismatch, and 2 for a file error.
+On failure, inspect the difference and relevant simulator diagnostics. Compare
+the whole transcript: extra output or runtime errors must not be discarded to
+make it match. This verifies console output only; experiments involving the
+display still require checking the captured screen.
+
+For repeated checks that need parsing, add a focused helper that reports a
+short result and returns nonzero on failed expectations or unreadable input.
+Keep full logs under `scratch/` and inspect excerpts when a check fails or new
+behavior needs investigation. Reuse ordinary commands for simple comparisons.
+
 ## Download a device package
 
 Run on your desktop with Python 3.10 or newer and a browser on the same

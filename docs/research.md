@@ -61,5 +61,5 @@ copy Garmin implementation code. Investigate upstream licenses before
 incorporating any third-party code; the default is to document behavior and
 write our own implementation.
 
-Keep [plan.md](plan.md) current as milestones advance and
+Keep [plan.md](plan.md) focused on upcoming work and newly discovered needs, and
 [architecture.md](architecture.md) current as evidence changes the design.

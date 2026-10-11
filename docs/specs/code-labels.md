@@ -1,6 +1,6 @@
 # Shared CODE labels
 
-Implemented 2026-10-08. Evidence: [label and relocation
+Evidence: [label and relocation
 investigation][ref-label-and-relocation-investigation].
 
 A label is an identifier followed by `:`, on its own line (comments allowed). It
@@ -59,7 +59,7 @@ Multiple method fields may refer to one label. Unsupported CODE or invalid
 numeric targets remain raw/numeric rather than being guessed. Labels are source
 identities, not new VM symbols or evidence of a complete function signature.
 
-[Structured line mappings](line-numbers-and-debug.md) now share these labels in
+[Structured line mappings](line-numbers-and-debug.md) share these labels in
 version 4 projects. Export adds labels for verified line-PC instruction
 boundaries; named PCs move when those labels move. Named branch operands also
 follow layout as described below. Named
@@ -92,5 +92,5 @@ input without silently rewriting it.
 Project export and `code-symbolic` name branch targets only when they denote
 verified instruction boundaries. Project export reuses method/line labels,
 adding `code_<offset>` names for remaining targets. Numeric `code` listings
-retain original operand bits. Structured EXCEPTIONS now shares labels too. See
+retain original operand bits. Structured EXCEPTIONS shares labels too. See
 [the implementation experiment](../investigations/branch-labels.md).

@@ -10,8 +10,8 @@ See [runtime evidence][evidence] and [application design][design].
 
 The caller supplies sixteen application-ID bytes and a global entry function
 name. The entry must have zero parameters and an integer or void result under
-the existing function rules. CLI default: `main`. The ID identifies the application;
-it is independent of the signing key.
+the existing function rules. CLI default: `main`. The ID identifies the
+application; it is independent of the signing key.
 
 Generated lifecycle behavior:
 
@@ -114,7 +114,8 @@ This does not establish every native-reference address space.
 RESOURCE padding aligns the unsigned section stream, excluding its final zero
 terminator, to a multiple of 32 bytes. No resource assets, debug/line/symbol
 sections, settings, or signing material are generated. Ordinary PRG framing and
-its terminator use [the container format](prg-container.md). Signing is separate.
+its terminator use [the container format](prg-container.md). Signing is
+separate.
 
 ## CLI and saved stages
 
@@ -127,11 +128,11 @@ cargo run -p ciq-asm -- sign scratch/hello-unsigned.prg scratch/hello.prg -y \
 ```
 
 `--emit prg` requires `--unit` and source or unit-IR input. `--app-id` requires
-exactly 32 hexadecimal digits. `--entry <global-function>` overrides `main`; class units require
-`--entry Class.method` under the profile below.
-Application options are rejected for other outputs; external `--symbols`/`--data`
-inputs are rejected for PRG output because the generator owns their layout.
-Outputs must be new files.
+exactly 32 hexadecimal digits. `--entry <global-function>` overrides `main`;
+class units require `--entry Class.method` under the profile below. Application
+options are rejected for other outputs; external `--symbols`/`--data` inputs are
+rejected for PRG output because the generator owns their layout. Outputs must be
+new files.
 
 Saved unit IR resumes complete PRG generation with the same application options
 and produces identical unsigned bytes. Raw unit assembly still represents user
@@ -150,7 +151,7 @@ exported and reconstructed through the existing section-project tools.
 A unit containing [source classes](compiler-classes.md) must contain exactly one
 AppBase class and select a zero-parameter startup method with `Class.method`.
 The global application field and ENTRY_POINTS class identity remain symbol `1`,
-now representing the named source class. Plain member names equal to the class
+representing the named source class. Plain member names equal to the class
 reuse `1`; other user/native names retain the allocation rules above.
 
 Generated onStart selects the startup using `getselfv`, then the existing call

@@ -581,16 +581,16 @@ otherwise execution falls through. General truth conversion is unverified.
 ## eq
 
 **Compare equality.** Opcode `0x1a`; length **1 byte**; no operands.
-Source-derived stack effect: `[..., left, right] → [..., Boolean(left == right)]`.
-Observed at CODE+`0xb4`, after an integer parameter and zero are loaded.
-Both comparison outcomes execute in the simulator. Object/string equality and
-mixed-type behavior remain unverified.
+Source-derived stack effect: `[..., left, right] → [..., Boolean(left ==
+right)]`. Observed at CODE+`0xb4`, after an integer parameter and zero are
+loaded. Both comparison outcomes execute in the simulator. Object/string
+equality and mixed-type behavior remain unverified.
 
 ## gt
 
 **Compare greater-than.** Opcode `0x1d`; length **1 byte**; no operands.
-Source-derived stack effect: `[..., left, right] → [..., Boolean(left > right)]`.
-Observed at CODE+`0x8f`, testing the countdown parameter against zero.
+Source-derived stack effect: `[..., left, right] → [..., Boolean(left >
+right)]`. Observed at CODE+`0x8f`, testing the countdown parameter against zero.
 The loop executes three times and exits at zero. Other operand types remain
 unverified.
 
@@ -604,10 +604,11 @@ interaction are unresolved. This is distinct from `invokem` and `invokemz`.
 
 ## ret
 
-**Return from a local subroutine.** Opcode `0x17`; length **1 byte**; no operands.
-Observed at CODE+`0x50`, shared by several `jsr` sites. Source-derived behavior
-resumes their continuation, rather than returning the containing function.
-Exact continuation storage and invalid-call behavior remain unresolved.
+**Return from a local subroutine.** Opcode `0x17`; length **1 byte**; no
+operands. Observed at CODE+`0x50`, shared by several `jsr` sites. Source-derived
+behavior resumes their continuation, rather than returning the containing
+function. Exact continuation storage and invalid-call behavior remain
+unresolved.
 
 ## throw
 
@@ -631,42 +632,18 @@ Source-derived stack effect: `[...] → [..., false]`. Observed at CODE+`0x1f0`
 as the argument to `caught(false)`, which returns without throwing.
 Physical Boolean representation is unverified.
 
-## Runtime evidence for arithmetic and local-frame instructions
+## Runtime evidence and limits
 
-The [same-size function replacement](../investigations/function-replacement.md)
-executes
-`argcincsp 0x01 0x01; ipush1 0x28; ipush1 0x02; addv; lputv 0x01; lgetv 0x01; return`
-in SDK 9.2.0's `fr265` simulator and prints/displays `42`. This supports integer
-addition, local slot 1 storage/retrieval, and the combined prologue for this
-particular body. Exact physical frame layout and the broader calling convention
-remain unverified.
+Encoding and stack descriptions above apply to the supported observations.
+Physical frame layout, larger local/argument counts, overflow, and general type
+promotion remain incompletely characterized. Do not infer universal VM limits
+from the small bodies used for validation.
 
-The [compiler arithmetic experiment](../investigations/compiler-arithmetic.md)
-executes `40 + (8 - 5)` as pushes followed by `subv`, `addv`, returning `43`;
-`2 - 5` returns `-3`. Console and screen captures support left-minus-right
-operand order and a negative integer result for these operands. This does not
-establish overflow or type-promotion behavior.
-
-The [compiler local-variable experiment](../investigations/compiler-locals.md)
-observes SDK `argcincsp 0x01 0x02` and slots 1/2 for a parameterless two-local
-function. Our generated two/three-local bodies execute successfully with slots 1
-onward, preserving initializer values through repeated `lgetv` reads. General
-frame layout and larger local-count runtime limits remain unverified.
-
-The [compiler call experiment](../investigations/compiler-calls.md) observes SDK
-`getmv` selecting `globals/Numbers` plus the member ID, followed by `invokemz`,
-for zero-argument user module calls. Independent generated callers run
-successfully with and without local allocation, preserve two observable
-helper-call orders, and consume integer results. Module identity differs from
-the short `Numbers` field symbol. Argument-bearing calls, general receiver
-binding, and void results remain unverified for the frontend.
-
-The [parameter/argument experiment](../investigations/compiler-arguments.md)
-observes and executes `getmv; frpush; <left-to-right arguments>; invokem 0x03`
-for two explicit arguments, including nested zero-argument calls. A generated
-two-parameter callee uses `argcincsp 0x03 0x01`, parameters in slots 1/2, and
-its local in slot 3. Runtime `48`/`-40` and ordered helper logs support this
-context/count mapping for these bodies; general receiver/frame representation
-and maximum-count runtime behavior remain unverified.
+Procedures and runtime results belong in the investigations:
+[function replacement](../investigations/function-replacement.md),
+[arithmetic](../investigations/compiler-arithmetic.md),
+[locals](../investigations/compiler-locals.md),
+[calls](../investigations/compiler-calls.md), and
+[arguments](../investigations/compiler-arguments.md).
 
 [ref-larger-string-offset]: ../investigations/string-address-boundary.md

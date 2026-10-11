@@ -1,70 +1,10 @@
-# Plan and current status
-
-## Objective
-
-Build an independent Rust toolchain for Monkey C and Connect IQ. Use Garmin's
-compiler for reference specimens and its simulator for runtime compatibility.
-The current reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
-
-[Architecture](architecture.md) defines implementation boundaries; design pages
-describe planned behavior and investigations record the supporting evidence.
-
-Use the [official documentation reading map][official-docs] when extending
-language, lifecycle, or project configuration support. Its documented contracts
-guide SDK experiments; they do not replace binary-format evidence.
-
-[official-docs]: investigations/official-garmin-documentation.md
-
-## Current capabilities
-
-- Eight workspace crates implement PRG handling, instructions, assembly,
-  disassembly, signing, packaging, and the restricted compiler. See
-  [crate responsibilities](architecture.md#scope-and-boundaries).
-- Full section export/import reconstructs both SDK reference PRGs byte for byte,
-  with structured supported metadata and opaque fallback.
-- Named symbols, DATA strings/classes, method CODE labels, DEBUG strings, and
-  line mappings support the documented constrained assembly profiles.
-- Named branch/subroutine operands resolve signed relative displacements;
-  symbolic CODE export shares method/line/branch labels. An assembler-produced
-  loop edit is simulator-verified. Ordered exception records and named offsets
-  round-trip losslessly; a moved handler is simulator-verified.
-- Own-key PRG signing/verification and supported barrel/IQ reading, packing,
-  verification, and IQ creation are implemented.
-- Source → IR → assembly → CODE works in memory and through saved text. Integer
-  arithmetic, initialized locals, user-module calls, integer parameters,
-  positional arguments, string literals/locals, `System.println` statements,
-  and nested `if/else` statements using `==` or `>` are simulator-verified.
-  Conditions support scoped arm locals, early returns, and forward joins.
-  Fixed-type integer/string reassignment is [also simulator-verified][assignments].
-  `while` loops with mutable locals and nested branches are [verified][loops],
-  including zero and multiple iterations. Innermost `break`/`continue` and
-  optional `else` are [also verified](investigations/compiler-loop-control.md).
-- Compilation units collect global/module functions across files, resolve forward
-  calls, and check integer argument counts/types. Native/unit-IR/assembly CODE
-  agrees; [the simulator](investigations/compiler-unit.md) verifies all four
-  generated bodies and reversed arguments.
-- A [complete console app](investigations/application-bootstrap.md) now generates
-  lifecycle CODE, DATA/modules, native imports, and all unsigned container fields
-  without SDK payloads. Own-key signed greeting `41`/`42` and two-file `48` runs
-  are verified; the View is blank and output is in the console.
-- Void functions and qualified statement calls are
-  [simulator-verified](investigations/compiler-void.md), including early loop
-  returns, argument order, discarded integer results, and void startup. Saved
-  unit IR produces identical complete unsigned PRGs.
-- AppBase-derived source classes and explicit `self` calls are
-  [simulator-verified](investigations/compiler-class.md). Unit ownership and
-  instance contracts resolve same-name methods separately from globals/modules;
-  saved class IR regenerates the same complete PRG. Lifecycle/View/base setup
-  remains generated.
-- The latest implementation checkpoint passes 216 Rust tests, Clippy, and
-  formatting on Rust 1.99. The earlier 94-test checkpoint also passed Rust 1.85.
+# Plan
 
 ## Next work
 
 1. Extend the [console application bootstrap](design/console-application.md) to
-   source-authored lifecycle methods. Class ownership, current-receiver calls,
-   void returns, and statement calls are implemented. Next add typed native-base
-   calls and source initialization, then callback parameter types and the
+   source-authored lifecycle methods. Add typed native-base calls and source
+   initialization, then callback parameter types and the
    null/object/array operations required for View creation. Keep complete-PRG
    native/text parity and simulator checks. Broader application profiles and
    resource assets remain open.
@@ -97,39 +37,21 @@ An independent runtime remains a possible longer-term direction. It should reuse
 subset before watch GUI/device simulation. This needs further VM semantics
 research and is not part of the current implementation plan.
 
-## Evidence and reproduction
+## Objective
 
-Detailed chronology, source inputs, commands, hashes, and runtime observations
-belong in [investigations](investigations/README.md). Key checkpoints:
+Build an independent Rust toolchain for Monkey C and Connect IQ. Use Garmin's
+compiler for reference specimens and its simulator for runtime compatibility.
+The current reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
 
-- [Initial format/instruction survey](investigations/rust-bootstrap.md),
-  [Hello World](investigations/hello-world-build.md), and
-  [simulator setup](investigations/simulator-container.md).
-- [Signing](investigations/developer-signing.md),
-  [function replacement](investigations/function-replacement.md),
-  [CODE labels/size changes](investigations/code-labels-and-relocation.md), and
-  [line metadata](investigations/line-metadata.md).
-- [Multi-file/barrels](investigations/multi-file-and-barrels.md),
-  [package reading](investigations/package-reading.md),
-  [verification](investigations/package-verification.md),
-  [barrel packing](investigations/barrel-packing.md),
-  [IQ repacking](investigations/iq-repacking.md), and
-  [IQ creation](investigations/iq-creation.md).
-- [Initial compiler](investigations/first-compiler.md),
-  [native/text pipeline](investigations/compiler-pipeline.md),
-  [arithmetic](investigations/compiler-arithmetic.md),
-  [locals](investigations/compiler-locals.md),
-  [module calls](investigations/compiler-calls.md),
-  [parameters/arguments](investigations/compiler-arguments.md), and
-  [strings/printing](investigations/compiler-strings.md).
+[Architecture](architecture.md) defines implementation boundaries; design pages
+describe current structure and intent; investigations record supporting evidence.
 
-Use [SDK support scripts](../scripts/README.md) for device downloads, reference
-builds, and simulator sessions. The build helpers default to ignored
-`scratch/garmin-data/` for device definitions/fonts. Temporary artifacts are
-reproducible inputs/outputs, not checked-in evidence requirements.
+Use the [official documentation reading map][official-docs] when extending
+language, lifecycle, or project configuration support. Its documented contracts
+guide SDK experiments; they do not replace binary-format evidence.
 
-[nested]: investigations/compiler-nested-conditions.md
+[official-docs]: investigations/official-garmin-documentation.md
 
-[assignments]: investigations/compiler-assignments.md
-
-[loops]: investigations/compiler-loops.md
+Use [investigations](investigations/README.md) for supporting evidence and
+[SDK support scripts](../scripts/README.md) for device downloads, reference
+builds, and simulator sessions.

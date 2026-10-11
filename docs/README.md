@@ -6,7 +6,9 @@ Start with [architecture](architecture.md) for component boundaries and
 ## Where information belongs
 
 - **Design** (`design/`): responsibilities, invariants, decisions, tradeoffs,
-  and intended evolution. Explain why a component or API exists.
+  current structure, and intent. Explain why a component or API exists.
+- **Plan** (`plan.md`): where we are heading, next work, newly discovered needs,
+  and deferred directions. Do not keep a list of completed steps.
 - **Specifications** (`specs/`): source languages, text syntax, binary layouts,
   archive profiles, and external protocols. Define accepted inputs, output
   rules, limits, and errors precisely enough to implement independently.
@@ -14,6 +16,11 @@ Start with [architecture](architecture.md) for component boundaries and
   provenance, and uncertainty. These provide evidence for design and formats.
 - **Rustdoc**: what an API does, what it produces, and its requirements and
   restrictions. Include relevant failure conditions and guarantees.
+
+Design and specs describe current intent, supported behavior, and open design
+questions. Investigations can retain relevant history when it explains the
+evidence; they do not need a record of every completed step. The plan owns work
+sequencing; link to it instead of maintaining extension orders in design pages.
 
 Specs describe our supported profiles, not complete Garmin compatibility. Keep
 unknowns explicit and link to evidence instead of repeating experiments. An API
@@ -34,13 +41,14 @@ not record routine cleanup of ignored files.
 
 Start function documentation with a short, concrete description: what it does,
 what input or format it handles, and what it returns or produces. Then describe
-relevant requirements, restrictions, errors, or guarantees about how it operates.
-Do not replace that description with an abstract rationale inferred from the
-implementation. Explain non-obvious choices when useful, without narrating each
-line of code. Use intra-doc links for related APIs. Crate Rustdoc must work with
-ordinary Cargo builds and when published, without repository files or a custom
-documentation build. Do not link to repository-relative Markdown or separately
-generated HTML from Rustdoc. External research links belong in investigations.
+relevant requirements, restrictions, errors, or guarantees about how it
+operates. Do not replace that description with an abstract rationale inferred
+from the implementation. Explain non-obvious choices when useful, without
+narrating each line of code. Use intra-doc links for related APIs. Crate Rustdoc
+must work with ordinary Cargo builds and when published, without repository
+files or a custom documentation build. Do not link to repository-relative
+Markdown or separately generated HTML from Rustdoc. External research links
+belong in investigations.
 
 ## Reading and building documentation
 

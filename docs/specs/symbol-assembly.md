@@ -1,6 +1,6 @@
 # Symbol assembly and named operands
 
-Implemented on 2026-10-08. Evidence and validation:
+Evidence and validation:
 [symbol assembly investigation](../investigations/symbol-assembly.md). Binary
 layout: [symbol table format](symbols.md).
 
@@ -142,7 +142,7 @@ update unknown data/class/debug records. An inline declaration's name documents
 an ID binding rather than changing the template's stored name.
 
 Without `-y`, unchanged source preserves the original signature and all bytes.
-The assembler can now re-sign complete PRGs with a supplied developer key;
+The assembler can re-sign complete PRGs with a supplied developer key;
 intentional content changes still require runtime validation. See
 [developer signatures](developer-signatures.md). No new simulator acceptance is
 established by successful symbol assembly alone.

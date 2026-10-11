@@ -1,9 +1,8 @@
 # Provisional compiler IR text, versions 1 through 4
 
-Implemented 2026-10-10 to exercise the compiler stage boundaries while the
-language subset is small. This is our semantic IR format, separate from Garmin
-MIR and VM assembly. Syntax/API can change as operations are introduced; it is
-not a stable interchange contract. Evidence:
+This semantic IR format supports inspection and resumption of compiler stages.
+It is separate from Garmin MIR and VM assembly. Syntax/API can change as
+operations are introduced; it is not a stable interchange contract. Evidence:
 [pipeline experiment](../investigations/compiler-pipeline.md),
 [arithmetic extension](../investigations/compiler-arithmetic.md),
 [local declarations](../investigations/compiler-locals.md),
@@ -53,9 +52,9 @@ return; parameter metadata is not an operation. Invalid names/spans,
 out-of-range literals, shared values, dead definitions, forward/undefined uses,
 multiple returns, and blocks are rejected in version 1. For pure-only functions,
 definition order need not match VM stack order: the backend walks dependencies
-for each initialization/return in statement order and emits each binary left operand
-before its right operand. `parse_ir` reports positions in the IR input; typed
-validation reports the offending operation index when available. Source
+for each initialization/return in statement order and emits each binary left
+operand before its right operand. `parse_ir` reports positions in the IR input;
+typed validation reports the offending operation index when available. Source
 compilation also constructs its IR through this validator.
 
 `Function::to_ir_text()` prints the semantic operations and optional spans,
@@ -128,13 +127,13 @@ symbol name is `globals/<module>` and the member's is `<member>`; this is not
 numeric symbol allocation or method metadata generation.
 
 Calls, prints, and writes are effectful. If a function contains any `.call`,
-`.println`, or `.assign`, all its
-operations must match the backend's left-to-right expression traversal and
-ordered initialization/assignment/print/branch/return sinks. The shared validator
-rejects incompatible schedules, including moving a call across an initialization or
-reversing call operands. Pure-only functions retain the earlier definition-order
-flexibility. This conservative policy keeps runtime/IR operation order
-consistent until a general scheduler is implemented.
+`.println`, or `.assign`, all its operations must match the backend's
+left-to-right expression traversal and ordered
+initialization/assignment/print/branch/return sinks. The shared validator
+rejects incompatible schedules, including moving a call across an initialization
+or reversing call operands. Pure-only functions retain the earlier
+definition-order flexibility. This conservative policy keeps runtime/IR
+operation order consistent until a general scheduler is implemented.
 
 ```text
 ciq-ir 1
@@ -324,7 +323,7 @@ fallthrough are rejected. The final block returns.
 A version-2 body without these operations retains the implicit single block.
 
 Expression definitions still precede their uses, are globally unique, and have
-exactly one use, now restricted to their defining block. Locals can cross edges,
+exactly one use, restricted to their defining block. Locals can cross edges,
 but reads and assignments require the unique initializer to execute on every
 incoming path. Its declaration must also precede the textual use. Availability
 is the fixed-point intersection described below. A local initialized in only
@@ -397,10 +396,11 @@ Definite-local sets are computed to a greatest fixed point. Start incoming and
 outgoing sets at the universe of declared local IDs. For every block, intersect
 its predecessor outgoing sets to obtain its incoming set; its outgoing set adds
 all its `.local` initializers. Entry additionally has an empty external
-predecessor, so its incoming set is always empty. Repeat until sets stop changing.
-Scan each block's operations from its final incoming set, adding initializers
-only when encountered. Reads/assignments require membership at their position
-and an earlier textual declaration; assignments do not add initialization.
+predecessor, so its incoming set is always empty. Repeat until sets stop
+changing. Scan each block's operations from its final incoming set, adding
+initializers only when encountered. Reads/assignments require membership at
+their position and an earlier textual declaration; assignments do not add
+initialization.
 
 This accepts common initialized locals carried around a loop and rejects values
 initialized only on its backedge. Local initializer IDs remain globally unique;
@@ -452,8 +452,9 @@ Versions 1 and 2 reject these two new directives. Canonical printing emits
 version 3 when either operation is present, version 2 for existing control flow
 or assignment, otherwise version 1. Old function/unit documents remain valid;
 the `ciq-unit 1` envelope needs no change. Void values, class ownership,
-receiver/object/null/array operations, and arbitrary SDK calls are not introduced.
-See [source rules][void-source] and [runtime evidence][void-evidence].
+receiver/object/null/array operations, and arbitrary SDK calls are not
+introduced. See [source rules][void-source] and [runtime
+evidence][void-evidence].
 
 [void-source]: compiler-subset.md#void-functions-and-statement-calls
 [void-evidence]: ../investigations/compiler-void.md

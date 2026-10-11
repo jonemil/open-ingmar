@@ -1,6 +1,6 @@
 # DEBUG strings and LINE_NUMBERS assembly
 
-Implemented 2026-10-09. Evidence: [controlled SDK
+Evidence: [controlled SDK
 comparison][ref-controlled-sdk-comparison] and
 [structured metadata experiment](../investigations/line-metadata.md), SDK 9.2.0
 debug builds / `fr265`. Project version 4 selects structured `debug` and `lines`
@@ -89,10 +89,9 @@ are not embedded by our PRG project export.
 
 These supported framings describe the named specimens, not all SDK versions,
 targets, optimization modes, or DEBUG record kinds. Successful raw preservation
-does not guarantee validity after code moves. The
-[in-place size experiment](../investigations/line-metadata.md) deliberately uses
-branch-free CODE, empty EXCEPTIONS, and zero background/glance header offsets;
-the shrunk variant now has confirmed host execution returning `45`. Runtime
-execution does not independently test debugger behavior or every line mapping.
+does not guarantee validity after code moves. Runtime execution alone does not
+validate debugger behavior or every line mapping. [Controlled size
+experiments](../investigations/line-metadata.md) record the tested relocation
+constraints and runtime observations.
 
 [ref-controlled-sdk-comparison]: ../investigations/code-labels-and-relocation.md

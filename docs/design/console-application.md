@@ -1,25 +1,25 @@
 # Minimal application generation
 
 `ciq-compiler::application` turns a validated compilation unit into a complete
-unsigned console watch application. This establishes independent metadata and
-lifecycle generation before general class/project compilation. The first
+unsigned console watch application. This keeps metadata and lifecycle generation separate from source compilation. The
 [profile](../specs/console-application.md) is deliberately small and
 [simulator-verified](../investigations/application-bootstrap.md).
 
 ## Boundaries
 
 The frontend resolves restricted global/module functions and source AppBase
-class methods into semantic IR. Unit validation handles declaration identities and integer call signatures.
-The VM backend selects user-function instructions. Application generation then
-combines those bodies with typed lifecycle assembly and constructs DATA and
-container sections; signing and package/project configuration remain separate.
+class methods into semantic IR. Unit validation handles declaration identities
+and integer call signatures. The VM backend selects user-function instructions.
+Application generation then combines those bodies with typed lifecycle assembly
+and constructs DATA and container sections; signing and package/project
+configuration remain separate.
 
 This avoids embedding application metadata or native import indexes in semantic
 function IR. The lifecycle generator uses fixed receiver/object/array/void
 operations with recorded evidence, rather than pretending the frontend already
-accepts those source constructs. Source classes now supply method ownership and self calls; typed SDK calls
-and object/null/array operations still need validation before replacing the
-remaining wrapper.
+accepts those source constructs. Source classes supply method ownership and self
+calls; typed SDK calls and object/null/array operations still need validation
+before replacing the remaining wrapper.
 
 No SDK files, compiled PRG template, copied DATA prefix, or signing key are read
 by the generator. Native identities and opaque header/entry profile values are
@@ -31,8 +31,8 @@ profiles only with evidence; they are not universal device/format rules.
 User symbols are assigned deterministically; module lookup identities remain
 separate from plain member names. Existing unit CODE labels bind all methods.
 Generated fields are sorted by numeric key because the runtime experiment found
-an out-of-order method unresolvable. The shared DATA reader/writer still preserves
-existing record order for lossless work.
+an out-of-order method unresolvable. The shared DATA reader/writer still
+preserves existing record order for lossless work.
 
 The builder lays out class/module records first, calculates numeric statics
 references required by the current DATA model, then appends literal records.

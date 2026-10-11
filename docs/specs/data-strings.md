@@ -1,6 +1,6 @@
 # DATA strings and opaque record spans
 
-Implemented on 2026-10-08. Evidence:
+Evidence:
 [DATA and resource investigation](../investigations/data-and-resources.md).
 Section ID: `0xda7ababe`.
 
@@ -18,7 +18,7 @@ A symbol ID is a different kind of reference. Other address prefixes remain
 numeric and uninterpreted.
 
 The 24-bit offset restriction is an implementation policy adopted from external
-research's prefixed-address patterns. It is now known to exclude a working VM
+research's prefixed-address patterns. It excludes a working VM
 address: [a simulator experiment](../investigations/string-address-boundary.md)
 loaded a literal at DATA+`0x01000000` after increasing the simulated app memory
 allowance. The authoring profile has not yet been expanded. The exact upper

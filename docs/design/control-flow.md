@@ -1,71 +1,39 @@
 # Branches and exception metadata
 
-Add assembler control-flow support before extending the frontend with
-conditions. The [controlled investigation](../investigations/control-flow.md)
-establishes relative branch operands and a nonempty exception-table specimen.
-It does not establish general exception execution or arbitrary relocation.
+Keep concrete instruction encodings in `ciq-mc`, named branch binding in
+`ciq-assembly`, and exception records in `ciq-prg`. Source conditions and loops
+lower through semantic blocks; source exception handling still needs unwinding
+and frame research. See [compiler representation](compiler-ir.md).
 
 ## Assembly responsibilities
 
-Keep concrete operand bytes in `ciq-mc`. Expose which instructions contain a
-relative CODE target and how to interpret that displacement, without resolving
-names there. Start with observed `goto`, `bt`, `bf`, and `jsr` encodings;
-comparisons, Boolean pushes, `throw`, and `ret` need their own documented
-encodings. A local subroutine return is distinct from a function return.
+Expose relative-target instruction fields without resolving names in the
+instruction crate. Assembly resolves typed CODE-label operands after layout;
+methods, line metadata, branches, and exception records share labels.
 
-`ciq-assembly` now uses a typed CODE-label operand with the existing `code:`
-namespace:
-
-```text
-loop_test:
-lgetv 0x01
-ipushz
-gt
-bf code:loop_end
-# loop body goes here
-goto code:loop_test
-loop_end:
-lgetv 0x02
-return
-```
-
-After layout, calculate `target - (instruction_offset + instruction_length)`.
-Reject undefined labels, non-instruction targets, and displacements outside
-signed 16-bit range. Do not silently truncate or invent long-branch expansion.
-Numeric operands continue to preserve raw bits for inspection and lossless
-assembly; they do not acquire automatic relocation.
-
-Project disassembly should name verified branch-target instruction boundaries
-using the same labels as methods and line PCs. Preserve numeric operands when
-a target cannot be safely named. Tests must cover forward/backward branches,
-range endpoints and overflow, invalid targets, and native/text equivalence.
+Undefined labels, invalid target boundaries, and displacement overflow are
+errors. Do not silently truncate operands or invent long-branch expansion.
+Numeric operands preserve raw bits and do not imply automatic relocation.
+[CODE-label rules](../specs/code-labels.md#relative-instruction-operands) specify
+encoding and target constraints.
 
 ## Exception section responsibilities
 
-`ciq-prg` should parse and write the observed count and ordered triples without
-sorting, merging, or deduplicating them. The explicit three-byte field width is
-an encoding constraint, independently of the DATA-address investigation.
-Unsupported section layouts retain the existing raw fallback.
+Preserve ordered records without sorting, merging, or deduplicating them.
+Unsupported layouts retain raw fallback. Structured records can refer to CODE
+labels for range boundaries and handlers; resolve them after CODE layout.
+The [exception specification](../specs/exceptions.md) defines framing and
+accepted source, including the distinction between range endpoints and handlers.
 
-Expose structured exception source in section projects, with numeric offsets
-and optional CODE-label references for range starts, ends, and handlers.
-Boundary labels may denote the end of CODE for a range endpoint, but handlers
-must denote instructions. Confirm endpoint semantics before specifying strict
-interval validation. Keep record order and preserve original bytes on unchanged
-export/import. The [exception specification](../specs/exceptions.md) defines the implemented
-text syntax.
+Keep unverified interval semantics explicit. Branch and exception fixups alone
+do not establish general relocation safety: length-changing edits must account
+for header offsets and opaque references as well.
 
-Resolve this metadata after CODE layout, alongside method and line bindings.
-Length-changing edits still require accounting for header offsets and other
-opaque references. Branch and exception fixups alone do not establish general
-relocation safety.
+## Validation
 
-## Implementation order
-
-1. Completed: observed instruction encodings and branch-label binding/export,
-   with an [assembler-produced simulator edit](../investigations/branch-labels.md).
-2. Completed: lossless exception parsing, writing, and project source, with
-   [named moved-function reproduction](../investigations/exception-assembly.md).
-3. Extend semantic IR and frontend conditions after documenting control-flow
-   joins, value types, and stack requirements. Exception source syntax can remain
-   deferred while exception-bearing scaffolds are preserved correctly.
+Cover forward/backward branches, displacement endpoints and overflow, invalid
+targets, ordered exception preservation, and native/text equivalence. Use
+controlled runtime experiments to establish changed behavior separately from
+successful reconstruction. Evidence: [branch
+labels](../investigations/branch-labels.md) and [exception
+assembly](../investigations/exception-assembly.md).

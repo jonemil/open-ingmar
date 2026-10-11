@@ -201,7 +201,7 @@ commands, evidence, and limits.
 
 - [Working instructions](AGENTS.md)
 - [Documentation guide](docs/README.md)
-- [Plan and current status](docs/plan.md)
+- [Plan](docs/plan.md)
 - [Architecture](docs/architecture.md)
 - [Research and documentation conventions](docs/research.md)
 - [Official Garmin reference reading map](docs/investigations/official-garmin-documentation.md)
@@ -217,7 +217,7 @@ commands, evidence, and limits.
 - [IQ package/signing profile](docs/specs/iq-package.md)
 - [IQ verification commands and reports](docs/specs/package-verification.md)
 - [Package crate design and remaining stages](docs/design/package-crate.md)
-- [First Monkey C compiler milestone](docs/design/first-compiler.md)
+- [Compiler goals and acceptance](docs/design/first-compiler.md)
 - [Future project builds and Jungle support](docs/design/project-builds.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)
