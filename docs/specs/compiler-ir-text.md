@@ -555,10 +555,12 @@ runtime-provided method and defines its semantic result. The receiver and
 arguments must be earlier values with the usual single-use/block restrictions.
 Optional source spans use the ordinary syntax.
 
-Validation accepts a Number receiver and either `toString` with no arguments
-or `format` with one String argument. Resolve the inherited Object or direct
-Number contract through the API catalogue. Both results are String. Source,
-typed, and text producers may supply validated Number expressions as receivers.
+Validation accepts a Number receiver with `toString` or `abs` taking no
+arguments, or `format` taking one String argument. Resolve the inherited Object
+or direct Number contract through the API catalogue. `abs` produces Number;
+`toString` and `format` produce String. Number results retain ordinary integer
+operand/return rules and may receive further native calls. Source, typed, and
+text producers may supply validated Number expressions as receivers.
 Unsupported members, receivers, argument counts/types, and result contracts are
 rejected before lowering. Format-content validity remains a runtime obligation.
 
@@ -568,8 +570,8 @@ operation order must agree with dependency traversal at statement sinks. The
 backend emits receiver evaluation and `getsv @__ciq_native_<member>`. A
 zero-argument call uses `invokemz`; a format call adds `frpush`, evaluates its
 String argument, and uses `invokem 2`. Binding requires exactly one stored symbol
-named `toString` or `format` in an explicit source, or the supported complete
-application's native profile. IR contains no symbol ID or import index.
+named `toString`, `format`, or `abs` in an explicit source, or the supported
+complete application's native profile. IR contains no symbol ID or import index.
 
 ```text
 ciq-ir

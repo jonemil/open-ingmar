@@ -59,7 +59,7 @@ pub(crate) fn value_call(
     if class != "Toybox.Lang.Number"
         || !matches!(
             (resolved.declaring_class.name.as_str(), member),
-            ("Toybox.Lang.Object", "toString") | ("Toybox.Lang.Number", "format")
+            ("Toybox.Lang.Object", "toString") | ("Toybox.Lang.Number", "format" | "abs")
         )
     {
         return Err("native member has no supported lowering for this receiver".into());

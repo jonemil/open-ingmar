@@ -23,6 +23,7 @@ const INIT: u32 = 0x00800018;
 const INITIALIZE: u32 = 0x0080005e;
 const TO_STRING: u32 = 0x008000af;
 const FORMAT: u32 = 0x0080009c;
+const ABS: u32 = 0x008000a6;
 const PRINTLN: u32 = 0x00800067;
 const VIEW: u32 = 0x0080019f;
 const APP_BASE: u32 = 0x0080029c;
@@ -266,6 +267,7 @@ pub fn build_console_application(
         ("println".into(), PRINTLN),
         ("toString".into(), TO_STRING),
         ("format".into(), FORMAT),
+        ("abs".into(), ABS),
         ("View".into(), VIEW),
         ("AppBase".into(), APP_BASE),
         ("onStart".into(), ON_START),
@@ -305,6 +307,7 @@ pub fn build_console_application(
         ("__ciq_member_println".into(), PRINTLN),
         ("__ciq_native_toString".into(), TO_STRING),
         ("__ciq_native_format".into(), FORMAT),
+        ("__ciq_native_abs".into(), ABS),
         ("__ciq_app_globals".into(), GLOBALS),
         ("__ciq_app_base".into(), APP_BASE),
         ("__ciq_app_init".into(), INIT),

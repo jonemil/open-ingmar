@@ -9,4 +9,9 @@ function start() {
     var pattern = "%02d";
     System.println(7.format(pattern));
     System.println((Numbers.receiver() + Numbers.argument()).format("%04d"));
+    var magnitude = Numbers.absolute(negative - 40);
+    System.println(magnitude + 1);
+    System.println((negative - 40).abs().format("%03d"));
+    System.println(0.abs());
+    System.println(7.abs().abs());
 }

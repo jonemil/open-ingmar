@@ -27,6 +27,7 @@ fn inherited_number_calls_preserve_complete_application_and_text_paths() {
     );
     assert!(assembly.to_text().contains("getsv @__ciq_native_toString"));
     assert!(assembly.to_text().contains("getsv @__ciq_native_format"));
+    assert!(assembly.to_text().contains("getsv @__ciq_native_abs"));
     let function = compile("function show(n) { System.println(n.toString()); }").unwrap();
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
 }
@@ -35,7 +36,8 @@ fn inherited_number_calls_preserve_complete_application_and_text_paths() {
 fn catalogue_knowledge_does_not_enable_other_native_calls() {
     for (expression, message) in [
         ("n.toString(1)", "argument count"),
-        ("n.abs()", "no supported lowering"),
+        ("n.hashCode()", "no supported lowering"),
+        ("n.abs(1)", "argument count"),
         ("n.missing()", "not known"),
         ("n.format()", "argument count"),
         ("n.format(1)", "argument types"),
@@ -63,6 +65,45 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         function onStart(state) { System.println(state.toString()); } }"])
         .is_err()
     );
+}
+
+#[test]
+fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
+    for source in [
+        "function f(n) { return n.abs(); }",
+        "function f(n) { return n.abs() + 1; }",
+        "function f(n) { var magnitude = n.abs(); return magnitude - 1; }",
+        "function f(n) { System.println(n.abs().abs().format(\"%03d\")); }",
+        "function f(n) { if (n.abs() > 0) { return 1; } else { return 0; } }",
+        "function f(n) { return M.consume(n.abs()); }",
+    ] {
+        let function = compile(source).unwrap();
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    }
+    let function = compile("function f(n) { return n.abs(); }").unwrap();
+    assert_eq!(function.return_type(), ciq_compiler::ReturnType::Integer);
+    let assembly = function.lower();
+    let text = assembly.to_text();
+    assert!(text.contains("getsv @__ciq_native_abs\ninvokemz\nreturn"));
+    let symbols = ciq_assembly::Program::parse(".symbol abs \"abs\" id=0x008000a6").unwrap();
+    let bindings = ciq_compiler::symbol_bindings(&assembly, &symbols).unwrap();
+    assert_eq!(bindings["__ciq_native_abs"], 0x008000a6);
+    let code = assembly
+        .encode_with_references(&bindings, &Default::default())
+        .unwrap();
+    let resumed = parse_ir(&function.to_ir_text()).unwrap().lower();
+    assert_eq!(
+        code,
+        resumed
+            .encode_with_references(&bindings, &Default::default())
+            .unwrap()
+    );
+    // Changing a numeric-result call to a String-result call invalidates the
+    // consuming arithmetic and return contract, including after text edits.
+    assert!(parse_ir(&function.to_ir_text().replace("abs", "toString")).is_err());
+    assert!(compile("function f(n) { return n.abs().format(\"%d\"); }").is_err());
+    assert!(compile("function f(n) { System.println(n.abs(1)); }").is_err());
+    assert!(compile("function f() { System.println(\"bad\".abs()); }").is_err());
 }
 
 #[test]
@@ -173,7 +214,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
         .unwrap()
         .to_ir_text();
     for bad in [
-        valid.replace("toString", "abs"),
+        valid.replace("toString", "hashCode"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
         valid.replace(".parameter %0 0", ".string %0 \"bad\""),

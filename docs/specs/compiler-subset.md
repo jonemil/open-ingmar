@@ -479,11 +479,19 @@ evidence](../investigations/compiler-class.md).
 
 ## Native value calls
 
-A Number-valued expression may receive `toString()` or `format(expression)`.
-Resolve its type through the API catalogue: `toString` is inherited from
-`Lang.Object`, while `format` is declared on Number and requires one String.
-Both produce String. Their result may initialize/replace a String local or be
-printed; existing user-call arguments and return restrictions remain unchanged.
+A Number-valued expression may receive these catalogue-resolved methods:
+
+| Method | Declaring class | Result |
+|---|---|---|
+| `toString()` | `Lang.Object` | String |
+| `format(String)` | `Lang.Number` | String |
+| `abs()` | `Lang.Number` | Number |
+
+String results may initialize/replace a String local or be printed. The Number
+result of `abs` supports integer locals, arithmetic, comparisons, user-call
+arguments, integer returns, and further Number calls. For example,
+`(0 - 41).abs().format("%03d")` produces `"041"` on the validated profile.
+Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
@@ -496,7 +504,8 @@ receivers and discarded method statements remain unsupported. Postfix syntax
 can parse chained calls, but every receiver must have a supported Number type;
 chaining a method on a String conversion result is rejected. Unknown catalogue
 members, wrong arity/types, and known members lacking lowering are distinct
-errors. No target availability selection or general native dispatch exists yet.
+errors. Explicit [API context inputs][api-context] check introduction levels;
+general native dispatch remains unsupported.
 Format content is passed to the runtime; type checking does not establish that
 a String contains a valid format pattern.
 

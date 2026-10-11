@@ -103,6 +103,43 @@ Tests check Number.toChar's documented 1.3.0 threshold, a deployment minimum
 below that threshold, and the separate unsupported-lowering error. Those are
 compiler diagnostic checks, not runtime validation of toChar.
 
+## Number-result calls
+
+The public [Number contract][number] defines zero-argument `abs()` returning
+Number since API 1.0.0. Reuse the SDK scaffold above under
+`scratch/number-abs/` with these startup expressions and a module helper:
+
+```monkeyc
+var n = 0 - 41;
+System.println(n.abs());
+System.println((n + 1).abs().format("%03d"));
+System.println(Numbers.absolute(n) + 1);
+System.println(0.abs());
+System.println(7.abs());
+// In module Numbers:
+function absolute(number) { return number.abs(); }
+```
+
+Build with `sh scripts/build-example.sh scratch/number-abs`; export
+`build/fr265/number-abs.prg` using `ciq-dis all` into a fresh scratch directory.
+Only our compiled specimen is inspected. **Observed:** parameter/local receivers
+use `getlocalv ... @abs; invokemz`; computed receivers use `getsv @abs;
+invokemz`. A chained `format` selects its member after this invocation. The
+stored `abs` symbol ID is `0x008000a6` in this SDK 9.2.0 / fr265 specimen.
+
+The independently compiled [example][example] binds this ID in the console
+profile and uses the ordinary semantic native-call operation. **Observed:**
+the simulator prints `42`, `041`, `0`, and `7` after the existing eight lines.
+These exercise a Number result returned by a user function and added to one,
+a negative computed receiver followed by formatting, zero, and repeated
+positive `abs` calls. Source and saved-unit-IR paths produce identical unsigned
+PRGs with explicit target 5.2.0 and minimum 1.0.0.
+
+Tests also cover numeric-result comparisons, locals, user-call arguments,
+explicit symbol binding, bad receivers/arity, and invalid String results used
+as integer returns. No other Number-result methods or signed-overflow behavior
+are established by this experiment.
+
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [example]: ../../examples/compiler-native-calls/README.md

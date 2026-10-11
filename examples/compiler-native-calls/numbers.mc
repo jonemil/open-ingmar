@@ -1,4 +1,7 @@
 module Numbers {
+    function absolute(number) {
+        return number.abs();
+    }
     function print(number) {
         System.println(number.toString());
     }

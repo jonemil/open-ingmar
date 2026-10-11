@@ -19,8 +19,11 @@ Number arithmetic-related methods, AppBase initialization/startup, and System
 printing. Parameter/result subset types expose `api_type()` mappings. Internal
 value categories map to Number, String, Boolean, Null, and nullable Dictionary;
 operator validation uses those semantic types. The bounded native call profile
-resolves Number's inherited `toString` and direct `format` contracts. Argument
-types must match their signatures; executable support remains a separate check.
+resolves Number's inherited `toString` and direct `format`/`abs` contracts.
+Argument types must match their signatures; executable support remains a
+separate check. The Number result of `abs` uses the existing integer value
+category, so arithmetic, call arguments, returns, and further Number calls
+need no new IR operation or type.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, an introduction API level, and a callback flag. Types
