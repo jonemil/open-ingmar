@@ -80,7 +80,7 @@ fn char_operator_profiles_reject_unverified_pairs_and_edited_consumers() {
         "function f() as Toybox.Lang.Char { return 'A' + 'B'; }",
         "function f() as Toybox.Lang.String { return 'A' + 1; }",
         "function f() { System.println('A' + true); }",
-        "function f() { System.println('A' + \"B\"); }",
+        "function f() { System.println('A' - \"B\"); }",
         "function f() { System.println('A' == true); }",
         "function f() { System.println('A' > true); }",
         "function f() { System.println('A' == null); }",

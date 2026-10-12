@@ -657,11 +657,14 @@ impl Function {
                         type_of(value)
                     };
                     let result_type = operators::comparison_result(
-                        kind, &checked_type(left).api_type(), &checked_type(right).api_type(),
-                    ).and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail(
-                            "comparison requires Number/Char operands, Boolean equality, or nullable/null equality",
-                        ))?;
+                        kind,
+                        &checked_type(left).api_type(),
+                        &checked_type(right).api_type(),
+                    )
+                    .and_then(|ty| ValueType::from_api_type(&ty))
+                    .ok_or_else(|| {
+                        fail("operand types do not match a supported comparison contract")
+                    })?;
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }

@@ -85,7 +85,7 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
     }
     // Result contracts must be rechecked after an IR edit, not inferred from
     // the consumer's expected type.
-    let text = compile("function f() { return \"Hi\".length() + 1; }")
+    let text = compile("function f() { return (\"Hi\".length() + 1).abs(); }")
         .unwrap()
         .to_ir_text();
     assert!(parse_ir(&text.replace("length", "toUpper")).is_err());
@@ -96,7 +96,7 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
         "function f() { System.println(\"Hi\".toLower(\"x\")); }",
         "function f() { System.println(\"Hi\".toUpper(null)); }",
         "function f() { return \"Hi\".toLower(); }",
-        "function f() { System.println(\"Hi\".toUpper() + 1); }",
+        "function f() { System.println(\"Hi\".toUpper() - 1); }",
         "function f() { System.println(\"Hi\".find(\"i\")); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
@@ -168,9 +168,10 @@ fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
             .encode_with_references(&bindings, &Default::default())
             .unwrap()
     );
-    // Changing a numeric-result call to a String-result call invalidates
-    // consuming arithmetic, including after text edits.
-    let arithmetic = compile("function f(n) { return n.abs() + 1; }").unwrap();
+    // Changing a numeric-result call to a String-result call invalidates the
+    // Number-only formatting consumer, including after text edits.
+    let arithmetic =
+        compile("function f(n) { System.println((n.abs() + 1).format(\"%d\")); }").unwrap();
     assert!(parse_ir(&arithmetic.to_ir_text().replace("abs", "toString")).is_err());
     assert!(compile("function f(n) { return n.abs().format(\"%d\"); }").is_err());
     assert!(compile("function f(n) { System.println(n.abs(1)); }").is_err());
@@ -199,7 +200,7 @@ fn computed_receivers_and_format_arguments_preserve_types_and_precedence() {
     assert!(addition < member && member < argument && argument < invoke);
     for source in [
         "function f() { System.println((40 + 2).format(1)); }",
-        "function f() { System.println(41.format(\"%d\") + 1); }",
+        "function f() { System.println(41.format(\"%d\") - 1); }",
         "function f() { System.println(41.format); }",
     ] {
         assert!(compile(source).is_err(), "{source}");

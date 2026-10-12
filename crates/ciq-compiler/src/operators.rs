@@ -4,9 +4,16 @@ use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number pairs support addition/subtraction. Addition of Char/Number in either
-/// order returns Char; two Chars concatenate to String. Other pairs are rejected.
+/// order returns Char; two Chars concatenate to String. An exact String operand
+/// concatenates supported scalar/null alternatives. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
     match kind {
+        BinaryOp::Add
+            if (*left == Type::named("Toybox.Lang.String") && string_operand(right, true))
+                || (*right == Type::named("Toybox.Lang.String") && string_operand(left, true)) =>
+        {
+            Some(Type::named("Toybox.Lang.String"))
+        }
         BinaryOp::Add | BinaryOp::Subtract
             if *left == Type::named("Toybox.Lang.Number") && left == right =>
         {
@@ -30,6 +37,8 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality with Null; Boolean pairs support equality only.
 /// Number/Char pairs support equality and greater comparison through numeric values.
+/// String equality uses object identity with supported String/Number/Char/null
+/// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     let numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
     let numbers = numeric(left) && numeric(right);
@@ -48,7 +57,24 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || left == &nullable_number
                 || left == &nullable_string)
                 && right == &Type::Null));
-    (numbers || booleans || null_check).then(|| Type::named("Toybox.Lang.Boolean"))
+    let strings = kind == ComparisonOp::Equal
+        && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
+            || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));
+    (numbers || booleans || null_check || strings).then(|| Type::named("Toybox.Lang.Boolean"))
+}
+
+fn string_operand(ty: &Type, boolean: bool) -> bool {
+    match ty {
+        Type::Null => true,
+        Type::Named(name) => {
+            matches!(
+                name.as_str(),
+                "Toybox.Lang.String" | "Toybox.Lang.Number" | "Toybox.Lang.Char"
+            ) || (boolean && name == "Toybox.Lang.Boolean")
+        }
+        Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
+        Type::Void => false,
+    }
 }
 
 #[cfg(test)]
@@ -75,6 +101,21 @@ mod tests {
                 for op in [BinaryOp::Add, BinaryOp::Subtract] {
                     let result = binary_result(op, &lhs, &rhs);
                     let expected = match (op, left, right) {
+                        (BinaryOp::Add, ValueType::String, other)
+                        | (BinaryOp::Add, other, ValueType::String)
+                            if matches!(
+                                other,
+                                ValueType::Integer
+                                    | ValueType::NullableInteger
+                                    | ValueType::String
+                                    | ValueType::NullableString
+                                    | ValueType::Boolean
+                                    | ValueType::Char
+                                    | ValueType::Null
+                            ) =>
+                        {
+                            Some(ValueType::String)
+                        }
                         (_, ValueType::Integer, ValueType::Integer) => Some(ValueType::Integer),
                         (BinaryOp::Add, ValueType::Char, ValueType::Char) => {
                             Some(ValueType::String)
@@ -109,11 +150,32 @@ mod tests {
                                 ValueType::Null
                             )
                         );
+                    let strings = op == ComparisonOp::Equal
+                        && matches!(
+                            (left, right),
+                            (
+                                ValueType::String,
+                                ValueType::Integer
+                                    | ValueType::NullableInteger
+                                    | ValueType::String
+                                    | ValueType::NullableString
+                                    | ValueType::Char
+                                    | ValueType::Null
+                            ) | (
+                                ValueType::Integer
+                                    | ValueType::NullableInteger
+                                    | ValueType::NullableString
+                                    | ValueType::Char
+                                    | ValueType::Null,
+                                ValueType::String
+                            )
+                        );
                     assert_eq!(
                         result.is_some(),
                         (matches!(left, ValueType::Integer | ValueType::Char)
                             && matches!(right, ValueType::Integer | ValueType::Char))
                             || null_check
+                            || strings
                             || (op == ComparisonOp::Equal
                                 && left == ValueType::Boolean
                                 && right == ValueType::Boolean),

@@ -97,6 +97,9 @@ BMP literals and escapes through source, IR, and native calls.
 The [Char operator example](examples/compiler-char-operators/README.md) exercises
 numeric comparisons, mixed addition, and Char concatenation.
 
+The [String operator example](examples/compiler-string-operators/README.md)
+exercises scalar concatenation, nullable inputs, and identity equality.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

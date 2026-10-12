@@ -1,0 +1,45 @@
+using Toybox.System;
+
+function start() {
+    System.println("a" + "b");
+    System.println("n=" + 7);
+    System.println(7 + "n");
+    System.println("b=" + true);
+    System.println(false + "b");
+    System.println("c=" + 'A');
+    System.println('A' + "c");
+    System.println("z=" + null);
+    System.println(null + "z");
+    System.println("same" == "same");
+    var text = "same";
+    var copy = text;
+    System.println(text == text);
+    System.println(copy == text);
+    System.println(text == Strings.identity(text));
+    System.println(text == ("s" + "ame"));
+    System.println(text.equals("s" + "ame"));
+    System.println("7" == 7);
+    System.println(7 == "7");
+    System.println("A" == 'A');
+    System.println('A' == "A");
+    System.println(text == null);
+    System.println(null == text);
+    var number = "7".toNumber();
+    System.println(Strings.number(number));
+    number = null;
+    System.println(Strings.number(number));
+    System.println(number + "n");
+    System.println(text == number);
+    var piece = text.substring(0, 4);
+    System.println(Strings.present(piece));
+    System.println(text == piece);
+    piece = null;
+    System.println(Strings.present(piece));
+    System.println(text == piece);
+    text = text + "!";
+    System.println(text);
+    System.println(text == copy);
+    System.println(("hello " + "world").toUpper());
+    System.println(Strings.left() + Strings.right());
+    System.exit();
+}

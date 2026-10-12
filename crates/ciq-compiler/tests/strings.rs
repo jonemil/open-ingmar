@@ -128,7 +128,7 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
         assert!(compile(source).is_err(), "{source}");
     }
     for body in [
-        ".string %0 \"x\"\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.add %3 %1 %2\n.return %3",
+        ".string %0 \"x\"\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.subtract %3 %1 %2\n.return %3",
         ".integer %0 1\n.integer %1 2\n.println %0\n.return %1",
         ".string %0 unquoted\n.println %0\n.integer %1 1\n.return %1",
         ".println %9\n.integer %0 1\n.return %0",

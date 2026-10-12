@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [String operators](compiler-string-operators.md): concatenation conversions,
+  reference identity, and grouped simulator comparison.
 - [Char operators](compiler-char-operators.md): operand/result contracts and
   grouped simulator comparison.
 - [Char literals](compiler-char-literals.md): immediate encoding, source escapes,

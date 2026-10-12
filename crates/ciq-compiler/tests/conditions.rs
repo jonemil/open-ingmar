@@ -98,7 +98,7 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
         "function f(x) { if (x) { return 1; } else { return 2; } }",
         "function f(x) { if (x == 0) return 1; else return 2; }",
         "function f(x) { if (x == 0) { return 1; } else { return 2; } return 3; }",
-        "function f(x) { if (\"x\" == x) { return 1; } else { return 2; } }",
+        "function f(x) { if (\"x\" > x) { return 1; } else { return 2; } }",
         "function f(x) { return (x == 0) + 1; }",
         "function f(x) { return x > 0; }",
         "function f(x) { if (x > 0 > 1) { return 1; } else { return 2; } }",

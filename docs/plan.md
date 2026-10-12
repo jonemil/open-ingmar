@@ -7,10 +7,11 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Probe String addition and
-   equality next with supported scalar operands. Derive result and conversion
-   rules from runnable specimens; keep operator contracts separate from native
-   methods. Investigate the SDK's
+1. **Extend core Lang contracts and value types.** Expand Number literals next
+   beyond the current 0..=127 subset. Probe wider immediate encodings and sign
+   extension before supporting the full signed 32-bit range in source/IR.
+   Keep unary operators and Long/Float/Double values separate from that change.
+   Investigate the SDK's
    [supplementary literal discrepancy][char-literals] before expanding BMP source
    literals. Follow the
    [class-focused strategy](#native-lang-strategy) for
@@ -136,6 +137,7 @@ all their encodings or runtime behavior are understood:
   compound-assignment operators. Confirm precedence, overflow, evaluation order,
   and immediate encodings with focused specimens.
 - **Declarations and lookup:** global/module variables and initialization,
+  the complete reserved-keyword set (including `alias` and `typedef`),
   constants/enums, lexical/member lookup, bare calls, qualified names,
   `using` aliases and `import` type visibility. Add field/static initialization,
   access modifiers, overriding, and source superclass dispatch as the object

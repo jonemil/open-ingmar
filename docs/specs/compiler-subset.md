@@ -125,14 +125,24 @@ Validation resolves operand API types to these result contracts:
 | Number / Number | `+`, `-` | Number |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |
+| Exact String / supported scalar or null, either order | `+` | String |
 | Number / Number, Char / Char, Number / Char, Char / Number | `==`, `>` | Boolean |
 | Boolean / Boolean | `==` | Boolean |
+| Exact String / String, Number, Char, or Null, either order | `==` | Boolean |
 
 Mixed Char/Number addition changes the numeric character value, including
 negative Number offsets. Char + Char concatenates the two characters.
 Comparison uses numeric values: `'A' == 65` is true on the validated profile,
-while `'A'.equals(65)` is false. Subtraction involving Char is unsupported, as
-are mixed Boolean/String operands outside the existing null-check rules.
+while `'A'.equals(65)` is false. Subtraction involving Char is unsupported.
+With one exact String operand, concatenation accepts Number, String, Boolean,
+Char, Null, or nullable Number/String, returning String. The VM supplies scalar
+conversion and formats Null as `null`. Equality accepts the same profile except
+Boolean, using String identity: copied references compare true, while separately
+created equal-content strings compare false. Use `.equals()` for content.
+Nullable alternatives are accepted only with an exact String on the other side;
+this does not establish a non-null proof for subsequent use. String ordering,
+subtraction, and other object/container operands are unsupported. See the
+[String operator evidence](../investigations/compiler-string-operators.md).
 Unchecked nullable operands require a non-null proof before numeric use.
 Result contracts remain exact in assignments, calls, and returns. Overflow and
 invalid Unicode ranges are runtime responsibilities. See the
@@ -289,7 +299,7 @@ initialize locals or supply
 initializations and accept one Number, String, Boolean, or Char value. String types
 propagate through locals and annotated function parameters/results; incompatible
 uses are rejected. Addition follows the operator table above, including Char
-concatenation. String-operand concatenation, arbitrary
+concatenation and supported scalar conversions. Arbitrary
 SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
@@ -356,8 +366,9 @@ return. Arms may also contain local declarations, print statements, and nested
 conditions, as
 described below. Loop syntax is specified separately below.
 
-`==` and `>` compare Number/Char expressions and produce Booleans; `==` also accepts
-two Booleans. Dictionary/null equality follows the callback rules below.
+`==` and `>` compare Number/Char expressions and produce Booleans; `==` also
+accepts Boolean pairs and the String identity profile above. Dictionary/null
+equality follows the callback rules below.
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
 one comparison is accepted per expression level; parentheses retain their grouping
 behavior. The condition must produce a Boolean: a literal, typed parameter or

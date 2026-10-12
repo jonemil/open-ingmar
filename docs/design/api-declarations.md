@@ -161,13 +161,19 @@ Current rules accept Number/Number addition/subtraction returning Number;
 Char/Number addition in either order returns Char, and Char/Char addition
 returns String. Number/Char pairs support numeric equality and greater
 comparison; equality also accepts Null/Null and nullable Number/String/Dictionary
-with Null in either order. Boolean pairs support equality. Comparisons produce
+with Null in either order. Boolean pairs support equality.
+String-operand addition accepts supported scalars/null alternatives in either
+order and returns String; this does not narrow nullable inputs. String equality
+uses identity, with Number/String/Char/Null alternatives on the other side,
+excluding Boolean. DATA literal deduplication shares content without merging
+distinct runtime String evaluations; optimizations must preserve observable
+identity. See the [String operator evidence][string-operators]. Comparisons produce
 Boolean. Operator equality differs from Object.equals for Char/Number pairs.
 These contracts have [separate operator evidence][char-operators].
 Boolean literals and locals share that semantic
 identity and use ordinary conditions, assignments, and printing.
 These are our supported rules, not a complete Monkey C operator specification.
-String addition, mixed numeric conversions, and general equality need evidence
+Other mixed numeric conversions and general object equality need evidence
 and lowering support before being added.
 
 Semantic IR preserves operations such as addition; the backend selects VM
@@ -195,3 +201,5 @@ silently expand those contracts.
 [char-literal-evidence]: ../investigations/compiler-char-literals.md
 
 [char-operators]: ../investigations/compiler-char-operators.md
+
+[string-operators]: ../investigations/compiler-string-operators.md

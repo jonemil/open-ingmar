@@ -357,7 +357,7 @@ ciq-ir
 - `.block ^<id>` starts a block; IDs are decimal `u32`, distinct from `%` values
   and `$` locals. Block IDs must be unique; the first block is entry.
 - `.equal %<result> %<left> %<right>` and `.greater` compare Number/Char pairs and define
-  a Boolean result. `.equal` also accepts two Booleans and the supported
+  a Boolean result. `.equal` also accepts the String identity profile, two Booleans, and the supported
   dictionary/null checks. Branches, Boolean locals, equality, and printing may
   consume Boolean results.
 - `.branch %<condition> ^<true-target> ^<false-target>` consumes a Boolean and
@@ -534,6 +534,7 @@ errors. For example:
 
 `.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits
 Number/Char pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
+it also accepts the String identity profile below.
 `.greater` permits Number/Char pairs. Callback-state reads/locals preserve their
 opaque nullable type.
 Printing and arithmetic reject Null and Dictionary values. Null may be used
@@ -659,7 +660,14 @@ See the
 `.add` on Number/Number defines Number, on Char/Number or Number/Char defines
 Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.
 `.equal`/`.greater` accept Number/Char in either order and Char/Char, defining
-Boolean. Other Boolean and null comparison rules remain as described above.
+Boolean. An exact String on either side of `.add` accepts Number/String/Boolean/
+Char/Null and supported nullable Number/String alternatives, defining String.
+The corresponding `.equal` profile excludes Boolean and compares String
+identity, not content. String ordering and subtraction are unsupported. These
+operations provide no non-null proof for the other operand; two unchecked
+nullable operands do not satisfy the exact String requirement. Other Boolean
+and null comparison rules remain as described above. See the
+[String evidence](../investigations/compiler-string-operators.md).
 Numeric mixed equality differs from Object.equals; no implicit conversion is
 added to user signatures. Every producer and resumed text recomputes these
 results from operand types. Lowering uses `addv`, `subv`, `eq`, or `gt`, without
