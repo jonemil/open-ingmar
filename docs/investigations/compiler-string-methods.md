@@ -18,7 +18,7 @@ documented. Prerequisites describe our executable subset.
 | `hashCode()` | Number | 1.0.0 | Supported |
 | `length()` | Number | 1.0.0 | Supported |
 | `substring(Number or Null, Number or Null)` | String or Null | 1.0.0 | Nullable indices require 3.3.2 |
-| `toCharArray()` | Array of Char | 1.3.0 | Needs arrays and Char values |
+| `toCharArray()` | Array of Char | 1.3.0 | [Char-array profile](compiler-char-arrays.md) |
 | `toDouble()` | Double or Null | 3.1.0 | Needs Double and nullable Double |
 | `toFloat()` | Float or Null | 1.0.0 | Needs Float and nullable Float |
 | `toLong()` | Long or Null | 3.1.0 | Needs Long and nullable Long |

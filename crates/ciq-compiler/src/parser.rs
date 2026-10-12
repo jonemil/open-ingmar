@@ -173,6 +173,17 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Parse the supported Array element annotation after its canonical path.
+    /// Only explicit Char elements are accepted; raw and nullable arrays are not.
+    fn char_array_annotation(&mut self) -> Result<(), Diagnostic> {
+        self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
+        let at = self.offset;
+        if self.path()? != "Toybox.Lang.Char" {
+            return Err(self.error(at, "only Array<Toybox.Lang.Char> is supported"));
+        }
+        self.expect(Kind::Punctuation('>'), "'>'")?;
+        Ok(())
+    }
     fn path(&mut self) -> Result<String, Diagnostic> {
         let token = self.identifier()?;
         let Kind::Word(name) = token.kind else {
@@ -352,7 +363,9 @@ impl<'a> Parser<'a> {
                 self.offset += 2;
                 Kind::EqualEqual
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>' | '!')) => {
+            Some(
+                c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>' | '<' | '!'),
+            ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -966,6 +979,10 @@ impl Parser<'_> {
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
+                        "Toybox.Lang.Array" => {
+                            self.char_array_annotation()?;
+                            crate::ParameterType::CharArray
+                        }
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
                     };
                     Some(if self.peek()? == Kind::Word("or") {
@@ -997,6 +1014,10 @@ impl Parser<'_> {
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
+                "Toybox.Lang.Array" => {
+                    self.char_array_annotation()?;
+                    crate::ReturnType::CharArray
+                }
                 "Void" => crate::ReturnType::Void,
                 _ => return Err(self.error(at, "unsupported result type annotation")),
             };

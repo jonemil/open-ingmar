@@ -95,7 +95,7 @@ pub enum BinaryOp {
 }
 
 /// The supported function result contract, declared explicitly or inferred
-/// from uniform scalar/Void returns.
+/// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnType {
@@ -105,6 +105,8 @@ pub enum ReturnType {
     NullableString,
     Boolean,
     Char,
+    /// Non-null Array whose elements have the Char contract.
+    CharArray,
     Void,
 }
 
@@ -117,6 +119,8 @@ pub enum ParameterType {
     NullableString,
     Boolean,
     Char,
+    /// Non-null Array whose elements have the Char contract.
+    CharArray,
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
 }
@@ -131,6 +135,7 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::CharArray => ValueType::CharArray.api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -146,6 +151,7 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::CharArray => ValueType::CharArray.api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -159,6 +165,7 @@ enum ValueType {
     NullableString,
     Boolean,
     Char,
+    CharArray,
     Null,
     NullableDictionary,
 }
@@ -189,6 +196,7 @@ impl ValueType {
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
+            Self::CharArray => api::Type::Array(Box::new(api::Type::named("Toybox.Lang.Char"))),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Dictionary"),
@@ -201,6 +209,9 @@ impl ValueType {
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
+            api::Type::Array(element) if **element == api::Type::named("Toybox.Lang.Char") => {
+                Some(Self::CharArray)
+            }
             api::Type::Named(name) => match name.as_str() {
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.String" => Some(Self::String),
@@ -956,6 +967,7 @@ impl Function {
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
+                            ValueType::CharArray => ReturnType::CharArray,
                             _ => {
                                 return Err(fail(
                                     "nullable returns require an explicit result contract",
@@ -1177,6 +1189,7 @@ impl Function {
                         ParameterType::String => "string",
                         ParameterType::Boolean => "boolean",
                         ParameterType::Char => "char",
+                        ParameterType::CharArray => "char-array",
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
                     .collect::<Vec<_>>()
@@ -1407,13 +1420,14 @@ fn validate_call_arguments(
                     | ValueType::String
                     | ValueType::Boolean
                     | ValueType::Char
+                    | ValueType::CharArray
                     | ValueType::Null
                     | ValueType::NullableInteger
                     | ValueType::NullableString
             )
         })
     }) {
-        return Err("user calls require supported scalar or nullable arguments");
+        return Err("user calls require supported scalar, Char-array, or nullable arguments");
     }
     if arguments.len() > MAX_PARAMETERS {
         return Err("call exceeds 254-argument limit");
@@ -1429,6 +1443,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
+        ReturnType::CharArray => Ok(ValueType::CharArray),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
 }
@@ -1441,6 +1456,7 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
+        ReturnType::CharArray => " result=char-array",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
 }

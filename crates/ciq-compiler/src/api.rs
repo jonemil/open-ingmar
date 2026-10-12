@@ -95,10 +95,14 @@ impl ApiContext {
         self.require(path, catalogue.class_level(class))
     }
 
-    /// Check every named alternative in a value or signature type. Null and Void
-    /// have no class introduction level; unions require all alternatives.
+    /// Check class introduction levels in a value or signature type, including
+    /// Array elements. Null/Void have no class level; unions require all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::Array(element) => {
+                self.check_class(catalogue, "Toybox.Lang.Array")?;
+                self.check_type(catalogue, element)
+            }
             Type::Named(name) => self.check_class(catalogue, name),
             Type::Union(types) => types
                 .iter()
@@ -152,6 +156,9 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Mutable Array with an explicit element contract. Array element contracts
+    /// are invariant; this does not imply executable support for every element.
+    Array(Box<Type>),
     Named(String),
     Null,
     Void,
@@ -301,6 +308,7 @@ fn build_core() -> Catalogue {
         string,
         "Toybox.Lang.Boolean",
         "Toybox.Lang.Char",
+        "Toybox.Lang.Array",
         "Toybox.Lang.Dictionary",
         "Toybox.Lang.WeakReference",
         "Toybox.Application.AppBase",
@@ -381,7 +389,23 @@ fn build_core() -> Catalogue {
         Type::named(number),
         ApiLevel(5, 0, 0),
     )];
+    classes.get_mut("Toybox.Lang.Array").unwrap().methods = vec![
+        method("size", vec![], Type::named(number), initial),
+        method("toString", vec![], Type::named(string), initial),
+        method(
+            "indexOf",
+            vec![Type::Union(vec![Type::named(object), Type::Null])],
+            Type::named(number),
+            char_initial,
+        ),
+    ];
     classes.get_mut(string).unwrap().methods = vec![
+        method(
+            "toCharArray",
+            vec![],
+            Type::Array(Box::new(Type::named(char_type))),
+            char_initial,
+        ),
         method(
             "compareTo",
             vec![Type::named(object)],
@@ -573,6 +597,10 @@ mod tests {
         let api = core();
         fn check_type(api: &Catalogue, ty: &Type) {
             match ty {
+                Type::Array(element) => {
+                    assert!(api.class("Toybox.Lang.Array").is_some());
+                    check_type(api, element);
+                }
                 Type::Named(name) => assert!(api.class(name).is_some(), "unknown {name}"),
                 Type::Union(types) => types.iter().for_each(|ty| check_type(api, ty)),
                 Type::Null | Type::Void => {}

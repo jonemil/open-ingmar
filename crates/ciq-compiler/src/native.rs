@@ -41,10 +41,15 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
-    let api::Type::Named(class) = receiver else {
-        return Err("native calls require a supported class-valued receiver".into());
+    let class = match receiver {
+        api::Type::Named(class) => class.as_str(),
+        api::Type::Array(element) if **element == api::Type::named("Toybox.Lang.Char") => {
+            "Toybox.Lang.Array"
+        }
+        _ => return Err("native calls require a supported class-valued receiver".into()),
     };
     let resolved = if let Some(context) = context {
+        context.check_type(api::core(), receiver)?;
         context.method(api::core(), class, member)?
     } else {
         api::core()
@@ -74,11 +79,7 @@ pub(crate) fn value_call(
         }
     }
     let supported = matches!(
-        (
-            class.as_str(),
-            resolved.declaring_class.name.as_str(),
-            member
-        ),
+        (class, resolved.declaring_class.name.as_str(), member),
         (
             "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean",
             "Toybox.Lang.Object",
@@ -88,6 +89,11 @@ pub(crate) fn value_call(
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
+            | (
+                "Toybox.Lang.Array",
+                "Toybox.Lang.Array",
+                "size" | "toString" | "indexOf"
+            )
             | (
                 "Toybox.Lang.Number",
                 "Toybox.Lang.Number",
@@ -112,13 +118,14 @@ pub(crate) fn value_call(
                     | "equals"
                     | "hashCode"
                     | "toNumberWithBase"
+                    | "toCharArray"
             )
     );
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
     if matches!(
-        class.as_str(),
+        class,
         "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
     ) && member == "compareTo"
         && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"))
@@ -132,6 +139,12 @@ pub(crate) fn value_call(
         && arguments != [api::Type::named("Toybox.Lang.String")]
     {
         return Err("String.compareTo lowering currently requires String".into());
+    }
+    if class == "Toybox.Lang.Array"
+        && member == "indexOf"
+        && arguments != [api::Type::named("Toybox.Lang.Char")]
+    {
+        return Err("Array<Char>.indexOf requires a Char argument".into());
     }
     if member == "equals" && !scalar_or_null(&arguments[0]) {
         return Err(format!(
@@ -158,6 +171,7 @@ fn scalar_or_null(ty: &api::Type) -> bool {
 
 /// Check exact types, declared inheritance, or union membership without implicit
 /// conversions. Every alternative of an actual union must be accepted.
+/// Arrays may widen to their declared class/base, but element contracts are invariant.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual {
         return true;
@@ -168,7 +182,12 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
     }
-    if let (api::Type::Named(expected), api::Type::Named(actual)) = (expected, actual) {
+    if let api::Type::Named(expected) = expected {
+        let actual = match actual {
+            api::Type::Named(actual) => actual.as_str(),
+            api::Type::Array(_) => "Toybox.Lang.Array",
+            _ => return false,
+        };
         let mut class = api::core().class(actual);
         while let Some(current) = class {
             if current.name == *expected {
@@ -232,6 +251,12 @@ mod tests {
 
     #[test]
     fn assignability_rejects_unknown_classes_and_unrelated_or_nullable_types() {
+        let chars = api::Type::Array(Box::new(api::Type::named("Toybox.Lang.Char")));
+        let objects = api::Type::Array(Box::new(api::Type::named("Toybox.Lang.Object")));
+        assert!(accepts(&chars, &chars));
+        assert!(accepts(&api::Type::named("Toybox.Lang.Object"), &chars));
+        assert!(!accepts(&objects, &chars));
+        assert!(!accepts(&chars, &objects));
         let object = api::Type::named("Toybox.Lang.Object");
         let number = api::Type::named("Toybox.Lang.Number");
         let boolean = api::Type::named("Toybox.Lang.Boolean");

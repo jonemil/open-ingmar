@@ -206,7 +206,8 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `string`, `boolean`, `char`, `nullable-integer`, or
+The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
+`nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
 Void is invalid in a value call. Names use ASCII identifier rules and remain
@@ -564,7 +565,8 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:...`. Ordinary signatures also accept
+`parameter-types=integer:string:boolean:char:char-array:...`.
+Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
@@ -700,6 +702,19 @@ operators follow the contracts below. Native calls and ordinary value storage
 need no new VM allocation.
 See the
 [Char evidence](../investigations/compiler-char-methods.md).
+
+String `toCharArray` defines a non-null Char array. Array receivers support
+`size` returning Number, `toString` returning String, and `indexOf` taking one
+Char and returning Number. `char-array` is the parameter category and
+`result=char-array` is the user-call result category. Function result text is
+inferred from returns, so `.function result=char-array` is not accepted.
+Native results are recomputed from receiver/member contracts, not annotations.
+Matching arrays may use ordinary `.local`, `.read`, `.assign`, calls, and
+returns without a new allocation directive. Shared validation retains the Char
+element contract and rejects other/nullable array categories. Context requires
+API 1.3.0 for conversion and Char-array signatures, including calls to `size`.
+See the [source profile](compiler-subset.md#char-arrays) and
+[evidence](../investigations/compiler-char-arrays.md).
 
 `.add` on Number/Number defines Number, on Char/Number or Number/Char defines
 Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.

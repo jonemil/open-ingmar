@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Char arrays](compiler-char-arrays.md): element contracts, read-only methods,
+  API boundaries, and Unicode conversion.
 - [Logical values](compiler-logical-values.md): temporary storage, operand/call
   order across joins, and shared IR validation.
 - [Short-circuit conditions](compiler-short-circuit.md): conditional effects,

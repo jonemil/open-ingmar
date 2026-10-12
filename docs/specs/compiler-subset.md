@@ -30,6 +30,7 @@ parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+           | "Toybox.Lang.Array" "<" "Toybox.Lang.Char" ">"
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -742,6 +743,33 @@ a String contains a valid format pattern.
 [Native call IR](compiler-ir-text.md#native-value-calls) preserves receiver/member
 identity separately from executable IDs. Runtime evidence and reproduction are
 in the [native call experiment](../investigations/compiler-native-calls.md).
+
+## Char arrays
+
+String `toCharArray()` returns a non-null `Array<Char>` since API 1.3.0. The
+supported source annotation is `Toybox.Lang.Array<Toybox.Lang.Char>`, with ordinary
+token whitespace permitted. Array parameters and results retain the element
+contract; source array results require an explicit annotation. Locals may store,
+copy, and reassign matching Char-array values, and user calls may pass/return
+them. Raw Array annotations, other element types, and nullable arrays are
+unsupported. Element contracts are invariant; Char arrays are not widened to
+mutable arrays of Object.
+
+Char-array receivers support zero-argument `size()` returning Number and
+`toString()` returning String. `indexOf(Char)` returns Number: the first matching
+index or `-1` when absent. This Char argument requirement matches the SDK's
+element-specialized checking, despite the generic API's Object-or-Null argument.
+Array methods dispatch through the Array class; the element contract stays
+separate from the class/member identity. Explicit context checks both the Array
+class and its Char element, requiring at least API 1.3.0 for this profile.
+
+Convert arrays to String before printing. Arrays cannot feed arithmetic,
+concatenation, comparisons, Boolean conditions, scalar equality methods, or
+console entry results. Array literals, element indexing, construction, mutation,
+reverse/slice/sort, and ordinary object weak references remain unsupported.
+Guard nullable String receivers before conversion; that proof does not imply
+support for nullable Array results. See the
+[Char-array evidence](../investigations/compiler-char-arrays.md).
 
 ## Nullable results
 

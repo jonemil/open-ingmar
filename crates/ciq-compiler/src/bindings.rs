@@ -79,6 +79,12 @@ pub fn symbol_bindings(
                 "toNumber".to_string()
             } else if alias == "__ciq_native_toChar" {
                 "toChar".to_string()
+            } else if alias == "__ciq_native_toCharArray" {
+                "toCharArray".to_string()
+            } else if alias == "__ciq_native_size" {
+                "size".to_string()
+            } else if alias == "__ciq_native_indexOf" {
+                "indexOf".to_string()
             } else if alias == "__ciq_native_toNumberWithBase" {
                 "toNumberWithBase".to_string()
             } else if alias == "__ciq_native_toLower" {

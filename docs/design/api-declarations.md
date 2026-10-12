@@ -12,14 +12,15 @@ The catalogue owns names, signatures, and superclass paths; callers receive
 immutable declarations. A future definition-file reader should produce the same
 model. No declaration-file syntax or new crate is required initially.
 
-Current entries cover Lang's Object, Number, String, Boolean, Char, and
+Current entries cover Lang's Object, Number, String, Boolean, Char, Array, and
 Dictionary and WeakReference, plus Application.AppBase and the
 Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, AppBase initialization/startup/shutdown, and System
 printing/exit. Parameter/result subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Char, Null, nullable Number,
+Internal value categories map to Number, String, Boolean, Char, Char arrays, Null,
+nullable Number,
 nullable String, and nullable Dictionary; operator validation uses those
 semantic types. The
 bounded native call profile resolves Number's inherited `toString`, `equals`,
@@ -42,9 +43,9 @@ value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User functions accept Number, String, Boolean, Char, and nullable
-Number/String parameters and results; API declarations alone do not enable
-other types. String `find`, `toNumber`, and `toNumberWithBase` retain
+supported calls. User functions accept Number, String, Boolean, Char, Char arrays,
+and nullable Number/String parameters and results. API declarations alone do
+not enable other types. String `find`, `toNumber`, and `toNumberWithBase` retain
 Number-or-Null result contracts; `substring` retains
 String-or-Null. Flow validation permits non-null consumers for local or parameter
 reads proved non-null by a direct branch.
@@ -52,11 +53,24 @@ Other result unions need corresponding validation before executable support.
 
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, exact receiver-result overrides, an introduction API
-level, and a callback flag. Types represent named classes, Null, Void, and unions.
+level, and a callback flag. Types represent named classes, Null, Void, unions,
+and Arrays with explicit element contracts.
 Add fields, constants, explicit
-static member distinctions, and parameterized containers as needed. Declarations
+static member distinctions, and other parameterized containers as needed. Declarations
 describe runtime-provided APIs without compiling replacement method bodies.
 Keep compiler analysis state outside this model.
+
+`Type::Array(element)` preserves the element type independently of the Array
+class used for method lookup. Array element contracts are invariant; an Array
+may widen to its declared Object base, but cannot widen to a mutable Array of
+different elements. Introduction checks recurse into the element contract.
+The executable bridge currently admits only non-null Char arrays. String
+conversion produces that category, and size/string/search calls use ordinary
+native dispatch and local storage. The native profile specializes `indexOf` to
+a Char argument after checking the generic declaration, matching our SDK
+specimen. Broader element types and generic parameter substitution remain
+separate work; mutation cannot bypass element validation. See the
+[array evidence](../investigations/compiler-char-arrays.md).
 
 Semantic identities such as `Toybox.Lang.Number` are independent of VM symbol
 IDs, import indexes, section offsets, and implementation functions. Native

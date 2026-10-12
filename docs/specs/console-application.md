@@ -70,6 +70,9 @@ Fixed native symbol IDs in this profile:
 | compareTo | `0x00800e50` |
 | toNumber | `0x008000a7` |
 | toChar | `0x008004c6` |
+| toCharArray | `0x008004c4` |
+| size | `0x008000ae` |
+| indexOf | `0x008004bf` |
 | toNumberWithBase | `0x008004c3` |
 | toString | `0x008000af` |
 | length | `0x008000bb` |

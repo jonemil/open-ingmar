@@ -812,7 +812,7 @@ fn build_body(
                     .map(|span| span.start)
                 })
                 .unwrap_or(ast.body_span.start),
-            "return type does not match function contract; String/Boolean results require an explicit annotation",
+            "return type does not match function contract; non-Number value results require an explicit annotation",
         ));
     }
     Ok(function)

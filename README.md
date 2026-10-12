@@ -115,6 +115,9 @@ Boolean conditions, skipped calls, loops, and nullable guards.
 The [logical value example](examples/compiler-logical-values/README.md)
 exercises Boolean results and call order across expression joins.
 
+The [Char array example](examples/compiler-char-arrays/README.md) exercises
+String conversion, typed array calls, and read-only Array methods.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 
