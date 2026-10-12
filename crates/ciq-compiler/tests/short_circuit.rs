@@ -68,10 +68,6 @@ fn conditions_validate_every_operand_and_only_propagate_guaranteed_null_facts() 
         );
     }
     for source in [
-        "function f() as Toybox.Lang.Boolean { return true && false; }",
-        "function f() { var flag = true || false; return 0; }",
-        "function f() { System.println(true && false); return 0; }",
-        "function f() { if ((true && false).equals(true)) { return 1; } return 0; }",
         "function f(n as Toybox.Lang.Number or Null) { if (!(n == null) || true) { return n; } return 0; }",
         "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { if (n == null && b) { return 0; } return n; }",
         "function f(n as Toybox.Lang.Number or Null) { if (!(n == null) && true) { System.println(n); } return n; }",

@@ -75,6 +75,6 @@ claims.
 Non-Boolean operands, nullable Boolean contracts, and `!=` remain unsupported.
 Negated null-proof propagation and conditional logical effects are investigated
 in the [short-circuit follow-up](compiler-short-circuit.md). Boolean results
-across joins remain in [the plan](../plan.md).
+across joins have [separate evidence](compiler-logical-values.md).
 
 [reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

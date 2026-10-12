@@ -103,8 +103,16 @@ Short-circuit conditions build that graph directly: `&&` reaches the right
 operand on true, `||` on false, and `!` reverses destinations. No eager logical
 operation is serialized. Null proofs follow the same edges and intersect at
 joins, so guarded right operands and selected arms use fresh non-null reads.
-Boolean values across joins remain separate work; the current condition path
-needs neither temporary locals nor a shared-value scheduler.
+Value-producing logical expressions materialize a Boolean in a temporary local
+before the join. A parent whose children include control flow snapshots its
+receiver/operands in source order and uses fresh reads in the final block.
+Statement-call arguments follow the same rule. Thus earlier calls execute
+before later conditional operands, and no expression value crosses an edge.
+Temporary identities are separate from source scope and share the ordinary
+local validator and frame budget. A stored Boolean result carries no guard
+relation; a snapshot of a proved non-null value retains that value's scalar
+type. Slot reuse and snapshot reduction remain potential optimizations, not
+requirements for correctness.
 
 The source builder resolves lexical scopes and constructs the graph separately
 from parsing and instruction selection. Only paths that continue contribute

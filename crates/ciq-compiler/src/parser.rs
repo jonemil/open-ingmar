@@ -87,6 +87,8 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    // Builder-only read of an evaluated temporary; never parsed from source.
+    Temporary(crate::LocalId),
     Logical {
         and: bool,
         left: Box<Expression>,
@@ -120,6 +122,27 @@ pub(crate) enum ExpressionKind {
         left: Box<Expression>,
         right: Box<Expression>,
     },
+}
+
+impl Expression {
+    /// Report whether evaluating this tree requires short-circuit control flow.
+    pub(crate) fn has_logical(&self) -> bool {
+        match &self.kind {
+            ExpressionKind::Logical { .. } => true,
+            ExpressionKind::Not(operand) | ExpressionKind::Negate(operand) => operand.has_logical(),
+            ExpressionKind::Binary { left, right, .. }
+            | ExpressionKind::Compare { left, right, .. } => {
+                left.has_logical() || right.has_logical()
+            }
+            ExpressionKind::ValueCall {
+                receiver,
+                arguments,
+                ..
+            } => receiver.has_logical() || arguments.iter().any(Self::has_logical),
+            ExpressionKind::ModuleCall { arguments, .. } => arguments.iter().any(Self::has_logical),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

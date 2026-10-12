@@ -3,9 +3,10 @@
 SDK 9.2.0 and our generated Forerunner 265 application agree on all 23 console
 lines in the [example][example]. Boolean conditions skip the right operand when
 its result is unnecessary and preserve required call order. Guarded nullable
-reads run safely through these edges. The supported profile is condition-only;
-this does not establish logical operators for other types or values across
-joins. Experiment date: 2026-10-12.
+reads run safely through these edges. This specimen focuses on conditions;
+it does not establish logical operators for other types. Value results across
+joins have [separate evidence](compiler-logical-values.md).
+Experiment date: 2026-10-12.
 
 ## References and reproduction
 
@@ -77,15 +78,12 @@ writing the checked local before its branch prevents non-null use. Source tests
 also reject facts absent on one join path, invalidated by writes, or bypassed by
 loop breaks. Every logical operand is checked, including runtime-skipped operands.
 
-Logical value results remain deferred: assignments, call arguments, returns,
-and logical subexpressions consumed by comparison/postfix operations receive
-an explicit diagnostic. Other truth-value types, bitwise operators, and the
-`and`/`or` aliases remain unsupported. See [the plan][plan] for Boolean values
-across joins.
+Other truth-value types, bitwise operators, and the `and`/`or` aliases remain
+unsupported. [Logical value results](compiler-logical-values.md) cover assignments,
+arguments, returns, and comparison/postfix consumers separately.
 
 [example]: ../../examples/compiler-short-circuit/README.md
 [language]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 [functions]: https://developer.garmin.com/connect-iq/monkey-c/functions/
 [reading]: official-garmin-documentation.md
 [negation]: compiler-boolean-negation.md#reference-and-specimen
-[plan]: ../plan.md

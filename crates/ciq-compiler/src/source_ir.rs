@@ -13,11 +13,15 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Temporary(local) => Operation::LocalRead {
+            result: ValueId(operations.len() as u32),
+            local,
+        },
         parser::ExpressionKind::Logical { .. } => {
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
-                "short-circuit operators currently require an if or while condition",
+                "logical expression was not materialized before value emission",
             ));
         }
         parser::ExpressionKind::Not(operand) => {
@@ -207,6 +211,195 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
+    /// Allocate source and temporary locals under the shared frame-slot limit.
+    fn local_id(&mut self, span: Span) -> Result<LocalId, Diagnostic> {
+        if self.next_local as usize >= crate::MAX_LOCALS {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "function exceeds 255-local limit",
+            ));
+        }
+        if self.parameters.len() + self.next_local as usize >= crate::MAX_LOCALS {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "parameters plus locals exceed 255-slot limit",
+            ));
+        }
+        let id = LocalId(self.next_local);
+        self.next_local += 1;
+        Ok(id)
+    }
+
+    /// Evaluate an operand now and save its result before later operands branch.
+    /// The returned builder-only expression emits a fresh read at the use site.
+    fn snapshot(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let span = expression.span;
+        let value = self.value(expression, locals)?;
+        let local = self.local_id(span)?;
+        self.push(Operation::LocalInitialize { local, value }, Some(span));
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Temporary(local),
+            span,
+        })
+    }
+
+    /// Materialize a logical result with a Boolean local and empty-stack edges.
+    /// Both outcomes reach a join; this stored result carries no null proof.
+    fn logical_value(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let span = expression.span;
+        if !matches!(
+            self.operations.first().map(|op| &op.operation),
+            Some(Operation::Block { .. })
+        ) {
+            self.operations.insert(
+                0,
+                LocatedOperation {
+                    operation: Operation::Block { block: BlockId(0) },
+                    span: None,
+                },
+            );
+        }
+        let local = self.local_id(span)?;
+        let value = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::Boolean {
+                result: value,
+                value: false,
+            },
+            Some(span),
+        );
+        self.push(Operation::LocalInitialize { local, value }, Some(span));
+        let on_true = self.block_id();
+        let on_false = self.block_id();
+        let join = self.block_id();
+        self.condition(expression, locals, on_true, on_false)?;
+        self.push(Operation::Block { block: on_true }, None);
+        let value = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::Boolean {
+                result: value,
+                value: true,
+            },
+            Some(span),
+        );
+        self.push(Operation::LocalAssign { local, value }, Some(span));
+        self.push(Operation::Jump { target: join }, Some(span));
+        self.push(Operation::Block { block: on_false }, None);
+        self.push(Operation::Jump { target: join }, Some(span));
+        self.push(Operation::Block { block: join }, None);
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Temporary(local),
+            span,
+        })
+    }
+
+    /// Prepare flow-producing children in source order, snapshotting operands
+    /// before emitting their parent in the final block. Ordinary trees bypass it.
+    fn prepare(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        use parser::ExpressionKind as E;
+        let span = expression.span;
+        let kind = match expression.kind {
+            kind @ E::Logical { .. } => {
+                return self.logical_value(parser::Expression { kind, span }, locals);
+            }
+            E::Not(operand) => E::Not(Box::new(self.prepare(*operand, locals)?)),
+            E::Negate(operand) => E::Negate(Box::new(self.prepare(*operand, locals)?)),
+            E::Binary { kind, left, right } => E::Binary {
+                kind,
+                left: Box::new(self.snapshot(*left, locals)?),
+                right: Box::new(self.snapshot(*right, locals)?),
+            },
+            E::Compare { kind, left, right } => E::Compare {
+                kind,
+                left: Box::new(self.snapshot(*left, locals)?),
+                right: Box::new(self.snapshot(*right, locals)?),
+            },
+            E::ValueCall {
+                receiver,
+                member,
+                arguments,
+            } => E::ValueCall {
+                receiver: Box::new(self.snapshot(*receiver, locals)?),
+                member,
+                arguments: arguments
+                    .into_iter()
+                    .map(|arg| self.snapshot(arg, locals))
+                    .collect::<Result<_, _>>()?,
+            },
+            E::ModuleCall {
+                module,
+                member,
+                arguments,
+            } => {
+                let receiver =
+                    if locals.contains_key(&module) || self.parameters.contains_key(&module) {
+                        Some(Box::new(self.snapshot(
+                            parser::Expression {
+                                kind: E::Local(module.clone()),
+                                span,
+                            },
+                            locals,
+                        )?))
+                    } else {
+                        None
+                    };
+                let arguments = arguments
+                    .into_iter()
+                    .map(|arg| self.snapshot(arg, locals))
+                    .collect::<Result<_, _>>()?;
+                if let Some(receiver) = receiver {
+                    E::ValueCall {
+                        receiver,
+                        member,
+                        arguments,
+                    }
+                } else {
+                    E::ModuleCall {
+                        module,
+                        member,
+                        arguments,
+                    }
+                }
+            }
+            kind => kind,
+        };
+        Ok(parser::Expression { kind, span })
+    }
+
+    /// Evaluate statement arguments in source order. If any argument branches,
+    /// save all results and read them only after the final argument has completed.
+    fn arguments(
+        &mut self,
+        arguments: Vec<parser::Expression>,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<Vec<ValueId>, Diagnostic> {
+        let arguments = if arguments.iter().any(parser::Expression::has_logical) {
+            arguments
+                .into_iter()
+                .map(|arg| self.snapshot(arg, locals))
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            arguments
+        };
+        arguments
+            .into_iter()
+            .map(|arg| self.value(arg, locals))
+            .collect()
+    }
     /// Emit a Boolean condition as explicit edges. Evaluate logical operands
     /// left to right and enter the right operand only when the left requires it.
     /// Grouping and negation preserve this flow without cross-block value IDs.
@@ -259,6 +452,11 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<ValueId, Diagnostic> {
+        let expression = if expression.has_logical() {
+            self.prepare(expression, locals)?
+        } else {
+            expression
+        };
         emit(
             self.source,
             expression,
@@ -303,23 +501,8 @@ impl Builder<'_> {
                             "duplicate local declaration or shadowing an outer local",
                         ));
                     }
-                    if self.next_local as usize >= crate::MAX_LOCALS {
-                        return Err(Diagnostic::at(
-                            self.source,
-                            span.start,
-                            "function exceeds 255-local limit",
-                        ));
-                    }
-                    if self.parameters.len() + self.next_local as usize >= crate::MAX_LOCALS {
-                        return Err(Diagnostic::at(
-                            self.source,
-                            span.start,
-                            "parameters plus locals exceed 255-slot limit",
-                        ));
-                    }
                     let value = self.value(local.initializer, locals)?;
-                    let id = LocalId(self.next_local);
-                    self.next_local += 1;
+                    let id = self.local_id(span)?;
                     self.push(Operation::LocalInitialize { local: id, value }, Some(span));
                     locals.insert(local.name, id);
                 }
@@ -372,10 +555,7 @@ impl Builder<'_> {
                             "a local/parameter cannot be used as the System module receiver",
                         ));
                     }
-                    let arguments = arguments
-                        .into_iter()
-                        .map(|arg| self.value(arg, locals))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let arguments = self.arguments(arguments, locals)?;
                     self.push(
                         Operation::NativeModuleCallStatement {
                             module,
@@ -398,10 +578,7 @@ impl Builder<'_> {
                             "calls on local receivers are unsupported",
                         ));
                     }
-                    let arguments = arguments
-                        .into_iter()
-                        .map(|arg| self.value(arg, locals))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let arguments = self.arguments(arguments, locals)?;
                     let operation = if module == "self" {
                         Operation::SelfCallStatement { member, arguments }
                     } else {
@@ -544,7 +721,7 @@ fn build_body(
         next_block: 1,
         loops: Vec::new(),
     };
-    // Nested control flow necessarily occurs beneath a top-level if or while.
+    // Logical value expressions add an entry block when they first need flow.
     if ast.statements.iter().any(|s| {
         matches!(
             s,

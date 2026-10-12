@@ -7,10 +7,10 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Extend short-circuit Boolean
-   results to initializers, assignments, returns, and call arguments. Decide how
-   to materialize values across joins while preserving surrounding operand
-   effects and shared null-proof validation; keep native/text paths equivalent.
+1. **Extend core Lang contracts and value types.** Add array values through a
+   focused String `toCharArray` and Array-method specimen. Establish element,
+   argument/result, and native dispatch contracts before adding construction
+   or mutation. This also supplies a prerequisite for source `getInitialView`.
    Keep positive signs separate
    until their contracts are established. Investigate the SDK's
    [negative-literal postfix discrepancy][negation] before widening that syntax.
@@ -22,8 +22,6 @@ compiling a project.
    subsequent groups; revisit deferred [Number][number-methods],
    [String][string-methods], and [Boolean][boolean-methods] methods as their
    prerequisites become available.
-   Add array values when String's `toCharArray` or source `getInitialView` needs
-   them, rather than treating an array-returning declaration as executable support.
    Keep ordinary object weak references separate from the verified
    [immutable-value specialization][weak-results]; probe lifetime and nullable
    dereference contracts when object ownership requires them.

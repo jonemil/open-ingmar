@@ -112,6 +112,9 @@ exercises logical inversion, precedence, and operand effects.
 The [short-circuit example](examples/compiler-short-circuit/README.md) exercises
 Boolean conditions, skipped calls, loops, and nullable guards.
 
+The [logical value example](examples/compiler-logical-values/README.md)
+exercises Boolean results and call order across expression joins.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

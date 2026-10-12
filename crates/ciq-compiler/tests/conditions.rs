@@ -806,3 +806,33 @@ fn short_circuit_conditions_follow_boolean_truth_tables_and_precedence() {
         assert_eq!(execute(&f, n), n.min(3));
     }
 }
+
+#[test]
+fn logical_values_materialize_boolean_results_and_retest_assignments() {
+    for a in [false, true] {
+        for b in [false, true] {
+            for c in [false, true] {
+                for (expression, expected) in [
+                    (format!("{a} && {b}"), a && b),
+                    (format!("{a} || {b} && {c}"), a || b && c),
+                    (format!("!({a} || {b}) == {c}"), !(a || b) == c),
+                    (
+                        format!("({a} && {b}) == ({b} || {c})"),
+                        (a && b) == (b || c),
+                    ),
+                ] {
+                    let f = compile(&format!(
+                        "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
+                    ))
+                    .unwrap();
+                    assert_eq!(execute(&f, 0), i32::from(expected), "{expression}");
+                    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                }
+            }
+        }
+    }
+    let f = compile("function f(n) { var flag = n > 0 && true; var count = 0; while (flag) { count = count + 1; flag = n > count && 3 > count; } return count; }").unwrap();
+    for n in [0, 1, 2, 3, 4] {
+        assert_eq!(execute(&f, n), n.min(3));
+    }
+}

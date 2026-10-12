@@ -339,10 +339,10 @@ SDK calls, and using
 provide the SDK module. The native name profile below resolves its supported
 spellings; Jungle resolution remains unimplemented.
 
-## Short-circuit conditions
+## Short-circuit expressions
 
-`if` and `while` conditions accept Boolean `&&` and `||`, including grouping and
-negation of a logical condition. Comparison binds before `&&`, which binds
+Boolean `&&` and `||` support conditions and value-producing expressions,
+including grouping and negation. Comparison binds before `&&`, which binds
 before `||`; each binary level is left associative. Evaluate the left operand
 once. `&&` evaluates the right only when the left is true; `||` evaluates it
 only when the left is false. Every operand must be Boolean, even when a constant
@@ -350,7 +350,7 @@ left operand would skip it at runtime. No truth-value conversion, bitwise
 behavior, or `and`/`or` keyword aliases are supported.
 
 The builder emits explicit branches and intermediate blocks, with no eager
-binary operation or cross-block expression values. Negation swaps destinations.
+binary operation or cross-block expression values. Condition negation swaps destinations.
 Nullable facts follow the selected edges; joins retain only facts established
 on every incoming path. For example:
 
@@ -364,12 +364,22 @@ The right operand and true arm of the first condition know `value` is non-null.
 The false path of the second condition knows the same. In contrast,
 `!(value == null) || flag` does not prove non-null on its true path.
 
-Logical operators currently require the condition tree itself: they cannot
-produce a value for initialization, assignment, arguments, returns, arithmetic,
-comparison operands, or postfix receivers. These uses receive a diagnostic.
-Parentheses and `!` around the condition tree remain supported. Existing source
-nesting/operation limits apply to parsing and the generated blocks.
-See the [runtime evidence](../investigations/compiler-short-circuit.md).
+Logical results are Boolean and may initialize/assign locals, feed calls,
+returns, printing, comparisons, concatenation, and native receiver calls under
+those consumers' normal type contracts. Value results initialize a temporary
+Boolean local to false, assign true on the selected outcome, then read it at
+the join. Earlier operands and receivers are evaluated and stored before later
+operands branch; fresh temporary reads feed the final operation in source order.
+This applies to expression and statement-call arguments alike. Temporaries have
+distinct local identities and count toward the existing combined frame-slot
+and operation limits. Slots are not reused.
+
+Storing a logical result carries no null-proof relation to the checked source
+storage. Guarded right operands may use non-null reads, but a later branch on
+the result local does not narrow the original. Existing nesting/operation
+limits apply to parsing and generated blocks. See the
+[condition evidence](../investigations/compiler-short-circuit.md) and
+[value-result evidence](../investigations/compiler-logical-values.md).
 
 ## Native name declarations
 

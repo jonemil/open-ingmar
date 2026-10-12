@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Logical values](compiler-logical-values.md): temporary storage, operand/call
+  order across joins, and shared IR validation.
 - [Short-circuit conditions](compiler-short-circuit.md): conditional effects,
   precedence, loops, and negated null proofs.
 - [Boolean negation](compiler-boolean-negation.md): precedence, repeated prefixes,

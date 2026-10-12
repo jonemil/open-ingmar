@@ -48,9 +48,10 @@ loop
 8
 ```
 
-Logical operators currently support `if`/`while` condition trees, including
-parentheses and negation. They cannot yet produce values for assignments,
-arguments, or returns. See the [source contract][source] and [evidence][evidence].
+This example focuses on `if`/`while` condition trees, including parentheses and
+negation. The [logical value example](../compiler-logical-values/README.md)
+exercises assignments, arguments, and returns.
+See the [source contract][source] and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#short-circuit-conditions
+[source]: ../../docs/specs/compiler-subset.md#short-circuit-expressions
 [evidence]: ../../docs/investigations/compiler-short-circuit.md

@@ -101,13 +101,22 @@ emits `eq`; no new VM instruction or native binding is required. Negating a
 direct null comparison reverses its non-null proof edge when used by a branch.
 See the [runtime evidence](../investigations/compiler-boolean-negation.md).
 
-Short-circuit conditions use existing `.block`, `.branch`, and `.jump` forms,
+Short-circuit expressions use existing `.block`, `.branch`, and `.jump` forms,
 not `.and`/`.or` directives. Each operand ends its own block; the right operand
 is entered only on the required outcome. Negated source conditions may reverse
 destinations without a `.not`. Every branch still requires Boolean; ordinary
 block-local value, effect-order, and empty-stack edge rules apply. Text resumes
 the explicit graph rather than reconstructing source operators. See the
-[source profile](compiler-subset.md#short-circuit-conditions).
+[source profile](compiler-subset.md#short-circuit-expressions).
+
+Value-producing logical expressions also use `.boolean`, `.local`, `.assign`,
+and `.read`. A temporary Boolean local is initialized before branching,
+assigned true on the true outcome, and read after both outcomes join. Surrounding
+operands evaluated before a later branch are stored in distinct temporary locals
+and read in the final block. Temporary locals obey the same type, initialization,
+frame-budget, and null-proof rules as source locals; no producer-only metadata
+or new directive grants special treatment. Each CODE edge has an empty stack.
+See the [value-result evidence](../investigations/compiler-logical-values.md).
 
 ## Number negation
 
