@@ -2,6 +2,11 @@
 //! These rules do not enumerate every operator/type combination in Monkey C.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
+/// Resolve logical negation to Boolean; do not coerce other or nullable types.
+pub(crate) fn not_result(operand: &Type) -> Option<Type> {
+    (*operand == Type::named("Toybox.Lang.Boolean")).then(|| operand.clone())
+}
+
 /// Resolve Number negation to Number without widening other or nullable types.
 pub(crate) fn negate_result(operand: &Type) -> Option<Type> {
     (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())

@@ -219,6 +219,12 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Invert one non-null Boolean and produce Boolean, evaluating it once.
+    /// Other types are rejected rather than converted to truth values.
+    Not {
+        result: ValueId,
+        operand: ValueId,
+    },
     /// Negate one Number value, preserving the runtime's signed 32-bit behavior.
     /// Nullable values require a non-null proof before use.
     Negate {
@@ -746,6 +752,13 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::Not { result, operand } => {
+                    let result_type = operators::not_result(&type_of(operand).api_type())
+                        .and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail("logical negation requires a non-null Boolean"))?;
+                    types.insert(result, result_type);
+                    (Some(result), vec![operand])
+                }
                 Operation::Negate { result, operand } => {
                     let result_type = operators::negate_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
@@ -1064,7 +1077,8 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::Negate { operand, .. } => {
+                                Operation::Negate { operand, .. }
+                                | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
                                 }
                                 Operation::Binary { left, right, .. }
@@ -1222,6 +1236,9 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::Not { result, operand } => {
+                    format!(".not %{} %{}", result.0, operand.0)
+                }
                 Operation::Negate { result, operand } => {
                     format!(".negate %{} %{}", result.0, operand.0)
                 }

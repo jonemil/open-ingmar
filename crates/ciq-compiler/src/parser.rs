@@ -89,6 +89,7 @@ pub(crate) struct Expression {
 pub(crate) enum ExpressionKind {
     Char(u32),
     Negate(Box<Expression>),
+    Not(Box<Expression>),
     Null,
     Boolean(bool),
     Integer(i32),
@@ -313,7 +314,7 @@ impl<'a> Parser<'a> {
                 self.offset += 2;
                 Kind::EqualEqual
             }
-            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>')) => {
+            Some(c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>' | '!')) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
             }
@@ -427,6 +428,18 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
     fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? == Kind::Punctuation('!') {
+            let sign = self.token()?;
+            if depth >= 64 {
+                return Err(self.error(sign.span.start, "expression nesting exceeds 64 levels"));
+            }
+            let operand = self.unary(depth + 1)?;
+            let span = Span {
+                start: sign.span.start,
+                end: operand.span.end,
+            };
+            return self.node(ExpressionKind::Not(Box::new(operand)), span);
+        }
         if self.peek()? != Kind::Punctuation('-') {
             return self.primary(depth);
         }

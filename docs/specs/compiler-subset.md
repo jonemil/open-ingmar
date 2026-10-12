@@ -42,7 +42,7 @@ statement = "var" identifier "=" expression ";"
           | "break" ";" | "continue" ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = unary (("+" | "-") unary)*
-unary = primary | "-" primary
+unary = primary | "-" primary | "!" unary
 primary = atom ("." member "(" argument-list? ")")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
@@ -121,7 +121,9 @@ The source subset supports binary `+` and `-` with equal precedence and left
 associativity, and parentheses for grouping. Decimal literals cover the signed
 32-bit range. Unary minus binds more tightly than binary arithmetic and after
 postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
-`abs` on the negated value. Unary plus, other operators, and general
+`abs` on the negated value. Boolean `!` uses the same precedence, supports
+repeated prefixes (`!!value`), and binds before comparisons:
+`!a == b` means `(!a) == b`. Unary plus, other operators, and general
 object calls remain unsupported; the bounded native calls below are separate. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
@@ -134,6 +136,7 @@ Validation resolves operand API types to these result contracts:
 |---|---|---|
 | Number / Number | `+`, `-` | Number |
 | Number | unary `-` | Number |
+| Boolean | unary `!` | Boolean |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |
 | Exact String / supported scalar or null, either order | `+` | String |
@@ -170,6 +173,13 @@ null guard are accepted. It evaluates the operand once and lowers to
 not specified by that observation. Signed decimal literals remain constants;
 general negation uses a distinct IR operation and counts toward the nesting
 bound. See the [negation evidence](../investigations/compiler-number-negation.md).
+
+Logical negation requires a non-null Boolean and produces Boolean. It evaluates
+its operand once and lowers to the operand, `bfpush`, then `eq`. Other types
+are rejected without truth-value conversion. Postfix calls bind first:
+`!value.equals(1)` inverts the method result, while `(!value).equals(1)` calls
+the method on the inverted value. See the
+[Boolean negation evidence](../investigations/compiler-boolean-negation.md).
 
 Semantic IR contains typed add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
@@ -712,7 +722,8 @@ type, or the same union; their declared storage type stays nullable.
 
 Only direct parameter/local-read comparisons with literal null used by the
 branch establish facts. A stored Boolean condition, a null-valued local used
-as the comparison operand, or a check of a different storage identity does not narrow the target.
+as the comparison operand, a negated comparison (`!(value == null)`), or a check
+of a different storage identity does not narrow the target.
 Checking one local or parameter does not narrow aliases, copies, or later
 native-call results. Unchecked nullable values cannot be printed or used as non-null operands/receivers. They may be
 passed to matching nullable parameters and returned under matching nullable

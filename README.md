@@ -106,6 +106,9 @@ exercises signed 32-bit constants and immediate-width boundaries.
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 
+The [Boolean negation example](examples/compiler-boolean-negation/README.md)
+exercises logical inversion, precedence, and operand effects.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

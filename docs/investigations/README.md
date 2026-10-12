@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Boolean negation](compiler-boolean-negation.md): precedence, repeated prefixes,
+  and single operand evaluation in complete applications.
 - [Number negation](compiler-number-negation.md): unary lowering, minimum
   wraparound, and SDK literal postfix discrepancy.
 - [Number literals](compiler-number-literals.md): signed immediates, width

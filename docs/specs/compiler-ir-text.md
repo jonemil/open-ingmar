@@ -90,6 +90,17 @@ feed branches, compare for equality with another Boolean, or be printed. They
 cannot be integer operands; typed user calls and returns accept them. Lowering
 uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 
+## Boolean negation
+
+`.not %<result-id> %<operand-id> [span=<start>:<end>]` consumes one non-null
+Boolean and defines Boolean. Other types are rejected without coercion. The
+operand must be an earlier definition in the same block and obey ordinary
+one-use rules. Typed and text IR recompute the contract and include the operand
+in effect traversal. Lowering evaluates it once, pushes Boolean false, and
+emits `eq`; no new VM instruction or native binding is required. Negating a
+null comparison does not establish branch proofs in the current profile.
+See the [runtime evidence](../investigations/compiler-boolean-negation.md).
+
 ## Number negation
 
 `.negate %<result-id> %<operand-id> [span=<start>:<end>]` consumes one Number

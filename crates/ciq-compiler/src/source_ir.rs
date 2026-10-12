@@ -13,6 +13,13 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Not(operand) => {
+            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
+            Operation::Not {
+                result: ValueId(operations.len() as u32),
+                operand,
+            }
+        }
         parser::ExpressionKind::Negate(operand) => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             Operation::Negate {
