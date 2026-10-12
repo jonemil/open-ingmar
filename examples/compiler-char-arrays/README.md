@@ -44,7 +44,8 @@ true
 ```
 
 `indexOf` requires a Char argument. Convert an array to String before printing.
-Element indexing, construction, mutation, nullable arrays, and other element
+The [array-read example](../compiler-array-reads/README.md) covers indexing.
+Construction, mutation, nullable arrays, and other element
 contracts remain unsupported. See the [source contract][source] and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#char-arrays

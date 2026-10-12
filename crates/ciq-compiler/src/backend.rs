@@ -50,6 +50,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Binary { result, .. }
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
+            | Operation::ArrayRead { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -223,6 +224,7 @@ fn expression(
         Negate,
         False,
         Not,
+        ArrayRead,
         Compare(ComparisonOp),
         Invoke(usize),
         Context,
@@ -295,6 +297,10 @@ fn expression(
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
                 }
+                Operation::ArrayRead { array, index, .. } => {
+                    tasks.extend([Task::ArrayRead, Task::Value(*index), Task::Value(*array)]);
+                    continue;
+                }
                 Operation::Not { operand, .. } => {
                     tasks.extend([Task::Not, Task::False, Task::Value(*operand)]);
                     continue;
@@ -324,6 +330,7 @@ fn expression(
             Task::Negate => (Opcode::Subv, vec![]),
             Task::False => (Opcode::Bfpush, vec![]),
             Task::Not => (Opcode::Eq, vec![]),
+            Task::ArrayRead => (Opcode::Agetv, vec![]),
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),

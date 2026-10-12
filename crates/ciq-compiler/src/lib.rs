@@ -230,6 +230,14 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Read one Char from a non-null Char array using a non-null Number index.
+    /// Evaluate array before index, once each. Runtime bounds failures remain
+    /// observable; indexes are not clamped or adjusted by the compiler.
+    ArrayRead {
+        result: ValueId,
+        array: ValueId,
+        index: ValueId,
+    },
     /// Invert one non-null Boolean and produce Boolean, evaluating it once.
     /// Other types are rejected rather than converted to truth values.
     Not {
@@ -763,6 +771,21 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::ArrayRead {
+                    result,
+                    array,
+                    index,
+                } => {
+                    if type_of(array) != ValueType::CharArray
+                        || type_of(index) != ValueType::Integer
+                    {
+                        return Err(fail(
+                            "array reads require a Char array and a non-null Number index",
+                        ));
+                    }
+                    types.insert(result, ValueType::Char);
+                    (Some(result), vec![array, index])
+                }
                 Operation::Not { result, operand } => {
                     let result_type = operators::not_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
@@ -1045,6 +1068,7 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::ModuleCall { .. }
+                    | Operation::ArrayRead { .. }
                     | Operation::NativeCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
@@ -1093,7 +1117,12 @@ impl Function {
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
                                 }
-                                Operation::Binary { left, right, .. }
+                                Operation::ArrayRead {
+                                    array: left,
+                                    index: right,
+                                    ..
+                                }
+                                | Operation::Binary { left, right, .. }
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
@@ -1124,7 +1153,7 @@ impl Function {
                 return Err(IrError {
                     operation: Some(*actual),
                     message: format!(
-                        "functions with calls, prints, or assignments require expression evaluation order in IR (expected operation {expected})"
+                        "functions with calls, array reads, prints, or assignments require expression evaluation order in IR (expected operation {expected})"
                     ),
                 });
             }
@@ -1249,6 +1278,11 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::ArrayRead {
+                    result,
+                    array,
+                    index,
+                } => format!(".array-read %{} %{} %{}", result.0, array.0, index.0),
                 Operation::Not { result, operand } => {
                     format!(".not %{} %{}", result.0, operand.0)
                 }

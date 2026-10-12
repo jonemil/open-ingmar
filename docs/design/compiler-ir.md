@@ -20,7 +20,9 @@ Expression values have one use within their defining block. Repeated local
 reads produce fresh values from stored state, avoiding recomputation of
 initializers. This permits tree-based lowering without a general shared-value
 scheduler. Calls, prints, and assignments preserve statement and left-to-right
-expression order. Pure expressions may be scheduled by dependencies.
+expression order. Array reads also retain order because bounds failures are
+observable; shared validation traverses array before index. Pure expressions
+may be scheduled by dependencies.
 
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.

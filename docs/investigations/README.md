@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Array reads](compiler-array-reads.md): instruction encoding, operand order,
+  nullable index guards, and fatal bounds errors.
 - [Char arrays](compiler-char-arrays.md): element contracts, read-only methods,
   API boundaries, and Unicode conversion.
 - [Logical values](compiler-logical-values.md): temporary storage, operand/call

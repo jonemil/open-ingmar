@@ -47,7 +47,7 @@ logical-and = comparison ("&&" comparison)*
 comparison = arithmetic (("==" | ">") arithmetic)?
 arithmetic = unary (("+" | "-") unary)*
 unary = primary | "-" primary | "!" unary
-primary = atom ("." member "(" argument-list? ")")*
+primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
@@ -765,11 +765,27 @@ class and its Char element, requiring at least API 1.3.0 for this profile.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
-console entry results. Array literals, element indexing, construction, mutation,
+console entry results. Array literals, construction, mutation,
 reverse/slice/sort, and ordinary object weak references remain unsupported.
 Guard nullable String receivers before conversion; that proof does not imply
 support for nullable Array results. See the
 [Char-array evidence](../investigations/compiler-char-arrays.md).
+
+`array[index]` reads a Char from a non-null Char array. The index must be a
+non-null Number; a fresh nullable Number read under an existing null proof is
+accepted. Indexing and member calls share the postfix level and may interleave:
+`array[0].toUpper()` and `text.toCharArray()[0]` are supported. Array evaluates
+before index, once each. Logical subexpressions use the ordinary temporary
+snapshot path to preserve this order across joins. The combined postfix/index
+nesting limit is 64, and diagnostics retain the complete indexed-expression span.
+
+The compiler emits `agetv`, with no clamping, negative-index adjustment, or
+static bounds analysis. An index outside `0..array.size()` remains a runtime
+obligation; the tested VM reports a fatal bounds error. Reads are order-sensitive
+in IR validation even without other calls/writes, because failure order is
+observable. String/dictionary indexing, element writes, nullable arrays, and
+other element contracts remain unsupported. See the
+[array-read evidence](../investigations/compiler-array-reads.md).
 
 ## Nullable results
 

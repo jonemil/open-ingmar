@@ -87,6 +87,10 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    ArrayRead {
+        array: Box<Expression>,
+        index: Box<Expression>,
+    },
     // Builder-only read of an evaluated temporary; never parsed from source.
     Temporary(crate::LocalId),
     Logical {
@@ -139,6 +143,9 @@ impl Expression {
                 arguments,
                 ..
             } => receiver.has_logical() || arguments.iter().any(Self::has_logical),
+            ExpressionKind::ArrayRead { array, index } => {
+                array.has_logical() || index.has_logical()
+            }
             ExpressionKind::ModuleCall { arguments, .. } => arguments.iter().any(Self::has_logical),
             _ => false,
         }
@@ -364,7 +371,8 @@ impl<'a> Parser<'a> {
                 Kind::EqualEqual
             }
             Some(
-                c @ ('(' | ')' | '{' | '}' | ';' | '+' | '-' | '=' | '.' | ',' | '>' | '<' | '!'),
+                c @ ('(' | ')' | '{' | '}' | '[' | ']' | ';' | '+' | '-' | '=' | '.' | ',' | '>'
+                | '<' | '!'),
             ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
@@ -581,7 +589,28 @@ impl<'a> Parser<'a> {
             self.atom(depth)?
         };
         let mut call_depth = depth;
-        while self.peek()? == Kind::Punctuation('.') {
+        while matches!(
+            self.peek()?,
+            Kind::Punctuation('.') | Kind::Punctuation('[')
+        ) {
+            if self.peek()? == Kind::Punctuation('[') {
+                let open = self.token()?;
+                if call_depth >= 64 {
+                    return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
+                }
+                let index = self.expression(call_depth + 1)?;
+                let end = self.expect(Kind::Punctuation(']'), "']'")?.span.end;
+                let start = expression.span.start;
+                call_depth += 1;
+                expression = self.node(
+                    ExpressionKind::ArrayRead {
+                        array: Box::new(expression),
+                        index: Box::new(index),
+                    },
+                    Span { start, end },
+                )?;
+                continue;
+            }
             self.token()?;
             let token = self.identifier()?;
             let Kind::Word(member) = token.kind else {

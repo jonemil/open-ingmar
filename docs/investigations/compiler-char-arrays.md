@@ -106,7 +106,8 @@ change an array parameter to String and retain size dispatch. Wrong arguments,
 receiver types, scalar consumers, and insufficient API contexts are rejected.
 Console entry results remain scalar/Void; array entries are rejected.
 
-Element access and broader Array methods remain in [the plan][plan]. A native
+Element access has [separate evidence](compiler-array-reads.md); broader Array
+methods remain in [the plan][plan]. A native
 array result does not establish source array allocation, mutation, nullable
 arrays, or ordinary object/reference lifetime behavior.
 

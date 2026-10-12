@@ -141,6 +141,22 @@ Lowering emits `cpush` with the same bits, without a DATA string or native
 conversion call. Invalid widths and malformed operands are rejected. See the
 [literal evidence](../investigations/compiler-char-literals.md).
 
+## Char-array reads
+
+`.array-read %<result> %<array> %<index> [span=<start>:<end>]` consumes a
+non-null Char array and non-null Number index, and defines Char. Shared validation
+recomputes operand types, null proofs, block-local definitions, one-use rules,
+and evaluation order. No element/result type annotation is trusted. Array
+evaluates before index, once each; lowering emits those operands then `agetv`.
+Reads are order-sensitive because bounds failures are observable, even when
+the function has no calls, prints, or writes.
+
+Index values are not range-checked, clamped, or adjusted by the compiler.
+Negative and other out-of-range Numbers remain accepted IR inputs whose reads
+may fail at runtime. Other arrays, String/dictionary receivers, nullable arrays,
+and writes are unsupported. See the [source profile](compiler-subset.md#char-arrays)
+and [runtime evidence](../investigations/compiler-array-reads.md).
+
 ## API context inputs
 
 `--target-api <major.minor.patch>` and `--min-api <major.minor.patch>` enable

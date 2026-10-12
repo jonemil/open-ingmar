@@ -7,10 +7,9 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Add Char-array element reads
-   through source and saved IR. Probe index/bounds behavior and operand effects
-   before selecting VM instructions. Review element-preserving reverse/slice
-   results and generic parameter substitution before adding wider element types,
+1. **Extend core Lang contracts and value types.** Review element-preserving
+   Array reverse/slice results and generic parameter substitution before adding
+   wider element types,
    construction, or mutation. These supply prerequisites for source
    `getInitialView`; retain ordinary object values as a separate dependency.
    Keep positive signs separate

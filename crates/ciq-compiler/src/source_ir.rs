@@ -13,6 +13,9 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        kind @ parser::ExpressionKind::ArrayRead { .. } => {
+            emit_array_read(source, kind, locals, parameters, operations, calls)?
+        }
         parser::ExpressionKind::Temporary(local) => Operation::LocalRead {
             result: ValueId(operations.len() as u32),
             local,
@@ -114,6 +117,28 @@ fn emit(
         span: Some(expression.span),
     });
     Ok(result)
+}
+
+/// Emit array/index operands in order and return their read operation. Keep this
+/// frame separate so long arithmetic trees retain their existing stack budget.
+fn emit_array_read(
+    source: &str,
+    kind: parser::ExpressionKind,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+    calls: &CallResults,
+) -> Result<Operation, Diagnostic> {
+    let parser::ExpressionKind::ArrayRead { array, index } = kind else {
+        unreachable!()
+    };
+    let array = emit(source, *array, locals, parameters, operations, calls)?;
+    let index = emit(source, *index, locals, parameters, operations, calls)?;
+    Ok(Operation::ArrayRead {
+        result: ValueId(operations.len() as u32),
+        array,
+        index,
+    })
 }
 
 /// Resolve call ownership and emit receiver/arguments in source order. Keep call
@@ -318,6 +343,10 @@ impl Builder<'_> {
             }
             E::Not(operand) => E::Not(Box::new(self.prepare(*operand, locals)?)),
             E::Negate(operand) => E::Negate(Box::new(self.prepare(*operand, locals)?)),
+            E::ArrayRead { array, index } => E::ArrayRead {
+                array: Box::new(self.snapshot(*array, locals)?),
+                index: Box::new(self.snapshot(*index, locals)?),
+            },
             E::Binary { kind, left, right } => E::Binary {
                 kind,
                 left: Box::new(self.snapshot(*left, locals)?),

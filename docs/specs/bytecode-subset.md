@@ -24,6 +24,7 @@ resolution occur in assembly, without stack interpretation.
 | `08` | `orv` | none |
 | `0e` | `putv` | none |
 | `0f` | `invokem` | 1 |
+| `10` | `agetv` | none |
 | `11` | `aputv` | none |
 | `12` | `lgetv` | 1 |
 | `13` | `lputv` | 1 |

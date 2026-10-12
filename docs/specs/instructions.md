@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 43 opcodes currently encoded and decoded by
+This reference covers each of the 44 opcodes currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -192,6 +192,26 @@ Rez/<init>.
 **Limits:** The count is not simply the number of explicit source arguments:
 println has one but uses 2. Exact context/receiver binding, dispatch, variadic
 calls, and absent return values remain unresolved.
+
+## agetv
+
+**Read an array element.** Opcode `0x10`; length **1 byte**. Operands: none.
+
+Successful abstract stack: `[..., array, index] → [..., value]`.
+
+The array and Number index come from the stack, in that order. Char-array reads
+produce Char in our supported compiler profile. Observed bytes at CODE+`0x20c`
+in the SDK array-read specimen are `12 01 37 10 16`: load parameter slot 1,
+push index zero, read, return. The main function also has `10` at CODE+`0x49`.
+
+The [array-read experiment](../investigations/compiler-array-reads.md) verifies
+successful reads, operand order, and bounds failures. Negative, equal-to-length,
+and empty-array indices produce a fatal bounds error in the SDK probes, despite
+`try/catch`. Our generated negative-index program produces the same error.
+
+**Limits:** Other array element types, non-Number index conversion, and other
+VM/target versions remain unverified. Failure behavior is not a successful
+stack transition; do not treat the error as a recoverable exception.
 
 ## aputv
 

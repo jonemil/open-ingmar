@@ -34,6 +34,7 @@ opcodes! {
     Orv = 0x08, "orv", [];
     Putv = 0x0e, "putv", [];
     Invokem = 0x0f, "invokem", [1];
+    Agetv = 0x10, "agetv", [];
     Aputv = 0x11, "aputv", [];
     Lgetv = 0x12, "lgetv", [1];
     Lputv = 0x13, "lputv", [1];

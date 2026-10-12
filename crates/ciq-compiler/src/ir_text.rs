@@ -147,6 +147,7 @@ pub(crate) fn parse_ir_context(
             Some(".char") => (25, 3),
             Some(".negate") => (26, 3),
             Some(".not") => (27, 3),
+            Some(".array-read") => (28, 4),
             Some(".call-native-module-discard") => (24, call_width()),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
@@ -242,7 +243,13 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 27 {
+        let operation = if kind == 28 {
+            Operation::ArrayRead {
+                result: parse_value(&fields[1])?,
+                array: parse_value(&fields[2])?,
+                index: parse_value(&fields[3])?,
+            }
+        } else if kind == 27 {
             Operation::Not {
                 result: parse_value(&fields[1])?,
                 operand: parse_value(&fields[2])?,
