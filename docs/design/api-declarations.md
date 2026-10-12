@@ -157,11 +157,14 @@ checks the supported operator contract, and maps its result back to an executabl
 value category. Parameter/result mappings share that bridge. The internal enum
 remains a bounded profile, not a replacement for arbitrary API type expressions.
 
-Current rules accept Number/Number addition, subtraction, equality, and greater
-comparison; equality also accepts Null/Null and nullable
-Number/String/Dictionary with
-Null in either order; Boolean pairs support equality. Arithmetic produces Number and
-comparisons produce Boolean. Boolean literals and locals share that semantic
+Current rules accept Number/Number addition/subtraction returning Number;
+Char/Number addition in either order returns Char, and Char/Char addition
+returns String. Number/Char pairs support numeric equality and greater
+comparison; equality also accepts Null/Null and nullable Number/String/Dictionary
+with Null in either order. Boolean pairs support equality. Comparisons produce
+Boolean. Operator equality differs from Object.equals for Char/Number pairs.
+These contracts have [separate operator evidence][char-operators].
+Boolean literals and locals share that semantic
 identity and use ordinary conditions, assignments, and printing.
 These are our supported rules, not a complete Monkey C operator specification.
 String addition, mixed numeric conversions, and general equality need evidence
@@ -190,3 +193,5 @@ silently expand those contracts.
 [char-evidence]: ../investigations/compiler-char-methods.md
 
 [char-literal-evidence]: ../investigations/compiler-char-literals.md
+
+[char-operators]: ../investigations/compiler-char-operators.md

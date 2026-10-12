@@ -3,7 +3,8 @@
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve supported arithmetic operand types to their semantic result type.
-/// Only Number/Number addition and subtraction have established lowering here.
+/// Number pairs support addition/subtraction. Addition of Char/Number in either
+/// order returns Char; two Chars concatenate to String. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
     match kind {
         BinaryOp::Add | BinaryOp::Subtract
@@ -11,15 +12,27 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
         {
             Some(Type::named("Toybox.Lang.Number"))
         }
+        BinaryOp::Add if *left == Type::named("Toybox.Lang.Char") && left == right => {
+            Some(Type::named("Toybox.Lang.String"))
+        }
+        BinaryOp::Add
+            if (*left == Type::named("Toybox.Lang.Char")
+                && *right == Type::named("Toybox.Lang.Number"))
+                || (*left == Type::named("Toybox.Lang.Number")
+                    && *right == Type::named("Toybox.Lang.Char")) =>
+        {
+            Some(Type::named("Toybox.Lang.Char"))
+        }
         _ => None,
     }
 }
 
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality with Null; Boolean pairs support equality only.
-/// Other comparisons currently require Numbers.
+/// Number/Char pairs support equality and greater comparison through numeric values.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
-    let numbers = *left == Type::named("Toybox.Lang.Number") && left == right;
+    let numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
+    let numbers = numeric(left) && numeric(right);
     let booleans =
         kind == ComparisonOp::Equal && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
@@ -59,13 +72,24 @@ mod tests {
             for right in types {
                 let lhs = left.api_type();
                 let rhs = right.api_type();
-                let numbers = left == ValueType::Integer && right == ValueType::Integer;
                 for op in [BinaryOp::Add, BinaryOp::Subtract] {
                     let result = binary_result(op, &lhs, &rhs);
-                    assert_eq!(result.is_some(), numbers, "{op:?}: {left:?}, {right:?}");
-                    if let Some(result) = result {
-                        assert_eq!(result, ValueType::Integer.api_type());
-                    }
+                    let expected = match (op, left, right) {
+                        (_, ValueType::Integer, ValueType::Integer) => Some(ValueType::Integer),
+                        (BinaryOp::Add, ValueType::Char, ValueType::Char) => {
+                            Some(ValueType::String)
+                        }
+                        (BinaryOp::Add, ValueType::Integer, ValueType::Char)
+                        | (BinaryOp::Add, ValueType::Char, ValueType::Integer) => {
+                            Some(ValueType::Char)
+                        }
+                        _ => None,
+                    };
+                    assert_eq!(
+                        result,
+                        expected.map(ValueType::api_type),
+                        "{op:?}: {left:?}, {right:?}"
+                    );
                 }
                 for op in [ComparisonOp::Equal, ComparisonOp::Greater] {
                     let result = comparison_result(op, &lhs, &rhs);
@@ -87,7 +111,8 @@ mod tests {
                         );
                     assert_eq!(
                         result.is_some(),
-                        numbers
+                        (matches!(left, ValueType::Integer | ValueType::Char)
+                            && matches!(right, ValueType::Integer | ValueType::Char))
                             || null_check
                             || (op == ComparisonOp::Equal
                                 && left == ValueType::Boolean

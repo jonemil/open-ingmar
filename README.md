@@ -94,6 +94,9 @@ character conversion, comparison, equality, and hashing.
 The [Char literal example](examples/compiler-char-literals/README.md) exercises
 BMP literals and escapes through source, IR, and native calls.
 
+The [Char operator example](examples/compiler-char-operators/README.md) exercises
+numeric comparisons, mixed addition, and Char concatenation.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

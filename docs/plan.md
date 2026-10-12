@@ -7,9 +7,10 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Probe Char equality, ordering,
-   and mixed arithmetic next before widening operator rules. Keep operator
-   contracts separate from native comparison. Investigate the SDK's
+1. **Extend core Lang contracts and value types.** Probe String addition and
+   equality next with supported scalar operands. Derive result and conversion
+   rules from runnable specimens; keep operator contracts separate from native
+   methods. Investigate the SDK's
    [supplementary literal discrepancy][char-literals] before expanding BMP source
    literals. Follow the
    [class-focused strategy](#native-lang-strategy) for

@@ -116,13 +116,33 @@ object calls remain unsupported; the bounded native calls below are separate. Pa
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
 
-Arithmetic validation uses the semantic API type `Toybox.Lang.Number` for both
-operands and the result. Comparisons produce `Toybox.Lang.Boolean`; supported
-null checks are specified below. These contracts are independent of method
-lookup and VM instruction selection. API declarations do not broaden accepted
+### Operator contracts
+
+Validation resolves operand API types to these result contracts:
+
+| Operands | Operators | Result |
+|---|---|---|
+| Number / Number | `+`, `-` | Number |
+| Char / Number, Number / Char | `+` | Char |
+| Char / Char | `+` | String |
+| Number / Number, Char / Char, Number / Char, Char / Number | `==`, `>` | Boolean |
+| Boolean / Boolean | `==` | Boolean |
+
+Mixed Char/Number addition changes the numeric character value, including
+negative Number offsets. Char + Char concatenates the two characters.
+Comparison uses numeric values: `'A' == 65` is true on the validated profile,
+while `'A'.equals(65)` is false. Subtraction involving Char is unsupported, as
+are mixed Boolean/String operands outside the existing null-check rules.
+Unchecked nullable operands require a non-null proof before numeric use.
+Result contracts remain exact in assignments, calls, and returns. Overflow and
+invalid Unicode ranges are runtime responsibilities. See the
+[operator evidence](../investigations/compiler-char-operators.md).
+
+Supported null checks are specified below. These contracts are independent of
+method lookup and VM instruction selection. API declarations do not broaden accepted
 operator combinations or cause heap allocations to be emitted.
 
-Semantic IR contains pure integer add/subtract definitions with explicit
+Semantic IR contains typed add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
 definitions are unique, operands refer to earlier definitions, every defined
 value has exactly one use, and initialization statements, branches, prints, or
@@ -268,7 +288,8 @@ initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
 initializations and accept one Number, String, Boolean, or Char value. String types
 propagate through locals and annotated function parameters/results; incompatible
-uses are rejected. Arithmetic remains Number-only. Concatenation, arbitrary
+uses are rejected. Addition follows the operator table above, including Char
+concatenation. String-operand concatenation, arbitrary
 SDK calls, and using
 `System.println` as an expression remain unsupported. A local/parameter named
 `System` cannot be used as the print receiver. The function's scaffold must
@@ -335,7 +356,7 @@ return. Arms may also contain local declarations, print statements, and nested
 conditions, as
 described below. Loop syntax is specified separately below.
 
-`==` and `>` compare integer expressions and produce Booleans; `==` also accepts
+`==` and `>` compare Number/Char expressions and produce Booleans; `==` also accepts
 two Booleans. Dictionary/null equality follows the callback rules below.
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
 one comparison is accepted per expression level; parentheses retain their grouping
@@ -591,7 +612,8 @@ returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
 returns, local initialization/assignment, printing, and chained calls retain
-the exact Char type. Nullable Char and Char operators are unsupported.
+the exact Char type. Char operators follow the operand table above; nullable Char
+remains unsupported.
 Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).

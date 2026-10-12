@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Char operators](compiler-char-operators.md): operand/result contracts and
+  grouped simulator comparison.
 - [Char literals](compiler-char-literals.md): immediate encoding, source escapes,
   supplementary-character discrepancy, and raw IR bits.
 - [Char methods](compiler-char-methods.md): conversion boundaries, typed values,

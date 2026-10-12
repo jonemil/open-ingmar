@@ -292,8 +292,8 @@ consumes a Number, String, Boolean, or Char without defining a result. Both acce
 optional spans. Quotes preserve spaces, `#`, and text resembling a span. Escapes follow
 [assembly string syntax](symbol-assembly.md); commas outside quotes are rejected.
 The semantic string limit is 65535 UTF-8 bytes. String types propagate through
-locals, function parameters, user calls, and returns. Arithmetic requires
-integers. A function's value returns must all have the same supported type;
+locals, function parameters, user calls, and returns. Arithmetic follows the
+documented operand contracts. Value returns must have the same supported type;
 Number, String, Boolean, and Char results are inferred from uniform return values,
 unless a nullable result is declared as specified below.
 Void returns have no value. All existing use/dependency/
@@ -356,7 +356,7 @@ ciq-ir
 
 - `.block ^<id>` starts a block; IDs are decimal `u32`, distinct from `%` values
   and `$` locals. Block IDs must be unique; the first block is entry.
-- `.equal %<result> %<left> %<right>` and `.greater` compare integers and define
+- `.equal %<result> %<left> %<right>` and `.greater` compare Number/Char pairs and define
   a Boolean result. `.equal` also accepts two Booleans and the supported
   dictionary/null checks. Branches, Boolean locals, equality, and printing may
   consume Boolean results.
@@ -532,9 +532,9 @@ errors. For example:
 .function onStart parameters=1 receiver=instance parameter-types=nullable-dictionary
 ```
 
-`.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits integer
-pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
-`.greater` remains integer-only. Callback-state reads/locals preserve their
+`.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits
+Number/Char pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
+`.greater` permits Number/Char pairs. Callback-state reads/locals preserve their
 opaque nullable type.
 Printing and arithmetic reject Null and Dictionary values. Null may be used
 in nullable Number/String user contracts; Dictionary remains callback-only. A nullable Dictionary local may be assigned null; other
@@ -650,10 +650,21 @@ Parameter text uses `char`; value-producing user calls use `result=char`.
 Function result text is inferred as for other scalars, so `.function result=char`
 is not accepted. Char class/signature/value use and conversion require API 1.3.0
 with context; comparison additionally requires 5.0.0. Source and saved IR share
-these checks. `.char` defines constants; nullable Char and Char operators are
-unsupported. Native calls and ordinary value storage need no new VM allocation.
+these checks. `.char` defines constants; nullable Char is unsupported. Char
+operators follow the contracts below. Native calls and ordinary value storage
+need no new VM allocation.
 See the
 [Char evidence](../investigations/compiler-char-methods.md).
+
+`.add` on Number/Number defines Number, on Char/Number or Number/Char defines
+Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.
+`.equal`/`.greater` accept Number/Char in either order and Char/Char, defining
+Boolean. Other Boolean and null comparison rules remain as described above.
+Numeric mixed equality differs from Object.equals; no implicit conversion is
+added to user signatures. Every producer and resumed text recomputes these
+results from operand types. Lowering uses `addv`, `subv`, `eq`, or `gt`, without
+native conversion calls. Existing one-use, block, and effect-order rules apply.
+See [the operator evidence](../investigations/compiler-char-operators.md).
 
 Zero-argument `weak` accepts Number, String, or Boolean and defines that exact
 receiver type under the catalogue's specialized result contract. It requires

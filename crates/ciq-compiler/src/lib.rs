@@ -369,9 +369,9 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals retain supported value types; printing accepts Number, String, or
-/// Boolean. Arithmetic requires Numbers. User calls carry result contracts;
-/// unit validation checks arguments and results against callee signatures.
+/// Locals retain supported value types; printing accepts Number, String, Boolean,
+/// or Char. Operator contracts determine arithmetic result types. User calls carry
+/// result contracts; unit validation checks them against callee signatures.
 /// Native callback parameters may carry opaque nullable Dictionary state.
 /// Returns consistently produce one supported type or no value. Statement calls
 /// discard results; unit validation rejects using a void callee as a value.
@@ -660,7 +660,7 @@ impl Function {
                         kind, &checked_type(left).api_type(), &checked_type(right).api_type(),
                     ).and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail(
-                            "comparison requires integers, Boolean equality, or nullable/null equality",
+                            "comparison requires Number/Char operands, Boolean equality, or nullable/null equality",
                         ))?;
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
@@ -754,7 +754,9 @@ impl Function {
                         &type_of(right).api_type(),
                     )
                     .and_then(|ty| ValueType::from_api_type(&ty))
-                    .ok_or_else(|| fail("arithmetic requires integer values"))?;
+                    .ok_or_else(|| {
+                        fail("operand types do not match a supported arithmetic contract")
+                    })?;
                     types.insert(result, result_type);
                     (Some(result), vec![left, right])
                 }

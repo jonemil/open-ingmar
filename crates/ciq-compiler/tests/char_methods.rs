@@ -83,7 +83,7 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return 65.toChar().toNumber() + 1; }").unwrap();
+    let f = compile("function f() { return (65.toChar().toNumber() + 1).abs(); }").unwrap();
     assert!(parse_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
     let source = "module M { function identity(c as Toybox.Lang.Char) as Toybox.Lang.Char { return c; } function f() as Toybox.Lang.Char { return M.identity(65.toChar()); } }";
     let unit = compile_sources_with_api(&[source], context(ApiLevel(1, 3, 0))).unwrap();
