@@ -87,6 +87,11 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    Logical {
+        and: bool,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
     Char(u32),
     Negate(Box<Expression>),
     Not(Box<Expression>),
@@ -125,6 +130,8 @@ enum Kind<'a> {
     String(&'a str),
     Punctuation(char),
     EqualEqual,
+    AndAnd,
+    OrOr,
     End,
 }
 
@@ -310,6 +317,14 @@ impl<'a> Parser<'a> {
             Some('-') if rest.starts_with("--") => {
                 return Err(self.error(start, "decrement operators are unsupported"));
             }
+            Some('&') if rest.starts_with("&&") => {
+                self.offset += 2;
+                Kind::AndAnd
+            }
+            Some('|') if rest.starts_with("||") => {
+                self.offset += 2;
+                Kind::OrOr
+            }
             Some('=') if rest.starts_with("==") => {
                 self.offset += 2;
                 Kind::EqualEqual
@@ -381,6 +396,36 @@ impl<'a> Parser<'a> {
         }
     }
     fn expression(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        self.logical(depth, false)
+    }
+    fn logical(&mut self, depth: usize, and: bool) -> Result<Expression, Diagnostic> {
+        let operand = |parser: &mut Self| {
+            if and {
+                parser.comparison(depth)
+            } else {
+                parser.logical(depth, true)
+            }
+        };
+        let mut left = operand(self)?;
+        while self.peek()? == if and { Kind::AndAnd } else { Kind::OrOr } {
+            self.token()?;
+            let right = operand(self)?;
+            let span = Span {
+                start: left.span.start,
+                end: right.span.end,
+            };
+            left = self.node(
+                ExpressionKind::Logical {
+                    and,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+                span,
+            )?;
+        }
+        Ok(left)
+    }
+    fn comparison(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let left = self.arithmetic(depth)?;
         let kind = match self.peek()? {
             Kind::EqualEqual => crate::ComparisonOp::Equal,

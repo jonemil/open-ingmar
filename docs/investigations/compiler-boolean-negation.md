@@ -73,8 +73,8 @@ with otherwise valid definitions. Parser tests cover source spans and the
 claims.
 
 Non-Boolean operands, nullable Boolean contracts, and `!=` remain unsupported.
-Null-flow validation intentionally does not narrow through a negated null
-comparison. Proof propagation and short-circuit control flow remain in
-[the plan](../plan.md).
+Negated null-proof propagation and conditional logical effects are investigated
+in the [short-circuit follow-up](compiler-short-circuit.md). Boolean results
+across joins remain in [the plan](../plan.md).
 
 [reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

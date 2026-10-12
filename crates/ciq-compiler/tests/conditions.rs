@@ -778,3 +778,31 @@ fn loop_control_rejects_outside_targets_reserved_names_and_unreachable_code() {
     let source = "function f(x) { while (x > 0) { if (x == 1) { break; } else { continue; } return 1; } return 2; }";
     assert!(compile(source).unwrap_err().message.contains("unreachable"));
 }
+
+#[test]
+fn short_circuit_conditions_follow_boolean_truth_tables_and_precedence() {
+    for a in [false, true] {
+        for b in [false, true] {
+            for c in [false, true] {
+                for (expression, expected) in [
+                    (format!("{a} && {b}"), a && b),
+                    (format!("{a} || {b}"), a || b),
+                    (format!("{a} || {b} && {c}"), a || b && c),
+                    (format!("({a} || {b}) && {c}"), (a || b) && c),
+                    (format!("!({a} && {b} || {c})"), !(a && b || c)),
+                ] {
+                    let f = compile(&format!(
+                        "function f() {{ if ({expression}) {{ return 1; }} else {{ return 0; }} }}"
+                    ))
+                    .unwrap();
+                    assert_eq!(execute(&f, 0), i32::from(expected), "{expression}");
+                    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                }
+            }
+        }
+    }
+    let f = compile("function f(n) { var count = 0; while (n > count && 3 > count) { count = count + 1; } return count; }").unwrap();
+    for n in [0, 1, 2, 3, 4] {
+        assert_eq!(execute(&f, n), n.min(3));
+    }
+}

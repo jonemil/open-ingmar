@@ -40,7 +40,10 @@ statement = "var" identifier "=" expression ";"
           | "if" "(" expression ")" block ("else" block)?
           | "while" "(" expression ")" block
           | "break" ";" | "continue" ";"
-expression = arithmetic (("==" | ">") arithmetic)?
+expression = logical-or
+logical-or = logical-and ("||" logical-and)*
+logical-and = comparison ("&&" comparison)*
+comparison = arithmetic (("==" | ">") arithmetic)?
 arithmetic = unary (("+" | "-") unary)*
 unary = primary | "-" primary | "!" unary
 primary = atom ("." member "(" argument-list? ")")*
@@ -175,7 +178,8 @@ general negation uses a distinct IR operation and counts toward the nesting
 bound. See the [negation evidence](../investigations/compiler-number-negation.md).
 
 Logical negation requires a non-null Boolean and produces Boolean. It evaluates
-its operand once and lowers to the operand, `bfpush`, then `eq`. Other types
+its operand once. Value-producing negation lowers to the operand, `bfpush`,
+then `eq`; condition negation reverses the true/false destinations. Other types
 are rejected without truth-value conversion. Postfix calls bind first:
 `!value.equals(1)` inverts the method result, while `(!value).equals(1)` calls
 the method on the inverted value. See the
@@ -334,6 +338,38 @@ SDK calls, and using
 `System` cannot be used as the print receiver. The function's scaffold must
 provide the SDK module. The native name profile below resolves its supported
 spellings; Jungle resolution remains unimplemented.
+
+## Short-circuit conditions
+
+`if` and `while` conditions accept Boolean `&&` and `||`, including grouping and
+negation of a logical condition. Comparison binds before `&&`, which binds
+before `||`; each binary level is left associative. Evaluate the left operand
+once. `&&` evaluates the right only when the left is true; `||` evaluates it
+only when the left is false. Every operand must be Boolean, even when a constant
+left operand would skip it at runtime. No truth-value conversion, bitwise
+behavior, or `and`/`or` keyword aliases are supported.
+
+The builder emits explicit branches and intermediate blocks, with no eager
+binary operation or cross-block expression values. Negation swaps destinations.
+Nullable facts follow the selected edges; joins retain only facts established
+on every incoming path. For example:
+
+```monkeyc
+if (!(value == null) && value > 0) { System.println(value); }
+if (value == null || value > 0) { return 0; }
+return value;
+```
+
+The right operand and true arm of the first condition know `value` is non-null.
+The false path of the second condition knows the same. In contrast,
+`!(value == null) || flag` does not prove non-null on its true path.
+
+Logical operators currently require the condition tree itself: they cannot
+produce a value for initialization, assignment, arguments, returns, arithmetic,
+comparison operands, or postfix receivers. These uses receive a diagnostic.
+Parentheses and `!` around the condition tree remain supported. Existing source
+nesting/operation limits apply to parsing and the generated blocks.
+See the [runtime evidence](../investigations/compiler-short-circuit.md).
 
 ## Native name declarations
 
@@ -703,7 +739,9 @@ String `find(String)` and `toNumber()` are available since API 1.0.0 and return
 Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1. String `substring` and user calls may also return nullable
 values. Compare nullable parameters or stored results with null.
 A direct `if (value == null)` or `if (null == value)` proves that parameter or
-local non-null on the false path. Fresh reads there have the non-null Number or String type
+local non-null on the false path. Boolean negation reverses this proof edge;
+`if (!(value == null))` proves non-null on the true path. Fresh reads there have
+the non-null Number or String type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc
@@ -722,8 +760,9 @@ type, or the same union; their declared storage type stays nullable.
 
 Only direct parameter/local-read comparisons with literal null used by the
 branch establish facts. A stored Boolean condition, a null-valued local used
-as the comparison operand, a negated comparison (`!(value == null)`), or a check
-of a different storage identity does not narrow the target.
+as the comparison operand, or a check of a different storage identity does not
+narrow the target. Boolean negation chains around the direct comparison reverse
+its edge once per negation; storing the Boolean result loses the proof relation.
 Checking one local or parameter does not narrow aliases, copies, or later
 native-call results. Unchecked nullable values cannot be printed or used as non-null operands/receivers. They may be
 passed to matching nullable parameters and returned under matching nullable

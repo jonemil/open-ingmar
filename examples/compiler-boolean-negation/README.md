@@ -40,5 +40,5 @@ false
 
 Postfix calls bind before `!`: `!value.equals(1)` inverts the method result.
 Other types are not converted to Boolean. Negated null comparisons are accepted
-as Boolean expressions but currently do not prove their operand non-null.
+as Boolean expressions and prove non-null on the corresponding branch edge.
 See the [evidence and limits](../../docs/investigations/compiler-boolean-negation.md).

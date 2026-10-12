@@ -103,7 +103,8 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
     );
     assert!(parse_ir(&f.to_ir_text().replace(".parameter %0 0", ".integer %0 1")).is_err());
     assert!(parse_ir(&f.to_ir_text().replace(".not %1 %0", ".not %1 %99")).is_err());
-    assert!(compile("function f(n as Toybox.Lang.Number or Null) { if (!(n == null)) { return n + 1; } return 0; }").is_err());
+    let guarded = compile("function f(n as Toybox.Lang.Number or Null) { if (!(n == null)) { return n + 1; } return 0; }").unwrap();
+    assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
     let f = compile("function f() as Toybox.Lang.Boolean { System.println(!true.equals(false)); return true.equals(true); }").unwrap();
     let mut operations = f.operations().to_vec();
     let negation = operations

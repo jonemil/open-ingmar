@@ -7,10 +7,11 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Add short-circuit Boolean
-   operators through source and saved IR using explicit control flow; preserve
-   operand effects and null proofs at joins. Determine proof propagation for
-   negated null comparisons alongside this work. Keep positive signs separate
+1. **Extend core Lang contracts and value types.** Extend short-circuit Boolean
+   results to initializers, assignments, returns, and call arguments. Decide how
+   to materialize values across joins while preserving surrounding operand
+   effects and shared null-proof validation; keep native/text paths equivalent.
+   Keep positive signs separate
    until their contracts are established. Investigate the SDK's
    [negative-literal postfix discrepancy][negation] before widening that syntax.
    Revisit Long/Float/Double values through a useful runnable example.

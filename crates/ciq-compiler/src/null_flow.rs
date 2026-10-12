@@ -14,7 +14,8 @@ pub(crate) enum Place {
 
 /// Compute non-null locals and parameters at block entries. Facts intersect
 /// across incoming edges; local writes invalidate the corresponding fact.
-/// Direct read == null tests establish a fact on the false edge only.
+/// Read == null tests establish a fact on the false edge; each Boolean Not
+/// reverses that edge. Stored Boolean conditions do not carry such facts.
 /// Entry has no external guarantees.
 pub(crate) fn inputs(
     structure: &Structure,
@@ -37,6 +38,7 @@ pub(crate) fn inputs(
             Operation::Null { result }
             | Operation::LocalRead { result, .. }
             | Operation::ParameterRead { result, .. }
+            | Operation::Not { result, .. }
             | Operation::Compare { result, .. } => {
                 definitions.insert(result, at);
                 if let Some(place) = read_place(&located.operation) {
@@ -53,12 +55,15 @@ pub(crate) fn inputs(
                 on_false,
             } => {
                 let guard = guard_place(condition, at, structure, operations, &definitions);
-                edges.insert((block, on_true), None);
                 // Both outcomes reaching one block provide no non-null proof.
-                edges.insert(
-                    (block, on_false),
-                    if on_true != on_false { guard } else { None },
-                );
+                for (target, outcome) in [(on_true, true), (on_false, false)] {
+                    edges.insert(
+                        (block, target),
+                        guard.and_then(|(place, non_null)| {
+                            (on_true != on_false && outcome == non_null).then_some(place)
+                        }),
+                    );
+                }
             }
             Operation::Jump { target } => {
                 edges.insert((block, target), None);
@@ -118,8 +123,18 @@ fn guard_place(
     structure: &Structure,
     operations: &[LocatedOperation],
     definitions: &BTreeMap<ValueId, usize>,
-) -> Option<Place> {
-    let &comparison = definitions.get(&condition)?;
+) -> Option<(Place, bool)> {
+    let mut comparison = *definitions.get(&condition)?;
+    let mut non_null = false;
+    let mut consumer = branch;
+    while let Operation::Not { operand, .. } = operations[comparison].operation {
+        if comparison >= consumer || structure.blocks[comparison] != structure.blocks[branch] {
+            return None;
+        }
+        consumer = comparison;
+        comparison = *definitions.get(&operand)?;
+        non_null = !non_null;
+    }
     let Operation::Compare {
         kind: ComparisonOp::Equal,
         left,
@@ -136,12 +151,12 @@ fn guard_place(
         _ => return None,
     };
     let place = read_place(&operations[read].operation)?;
-    if read >= comparison || comparison >= branch
+    if read >= comparison || comparison >= consumer
         || structure.blocks[read] != structure.blocks[branch]
         || structure.blocks[comparison] != structure.blocks[branch]
         || operations[read + 1..branch].iter().any(|op| matches!(op.operation,
             Operation::LocalAssign { local: changed, .. } | Operation::LocalInitialize { local: changed, .. } if place == Place::Local(changed))) {
         return None;
     }
-    Some(place)
+    Some((place, non_null))
 }

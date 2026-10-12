@@ -109,6 +109,9 @@ exercises unary expressions, precedence, and guarded nullable operands.
 The [Boolean negation example](examples/compiler-boolean-negation/README.md)
 exercises logical inversion, precedence, and operand effects.
 
+The [short-circuit example](examples/compiler-short-circuit/README.md) exercises
+Boolean conditions, skipped calls, loops, and nullable guards.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

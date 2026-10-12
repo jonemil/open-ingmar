@@ -99,6 +99,13 @@ terminator sink, leaving an empty evaluation stack on every edge. Stored locals
 carry state across edges, with fixed slots across the function. This avoids phi
 values and general stack merging while supporting branches, joins, and loops.
 
+Short-circuit conditions build that graph directly: `&&` reaches the right
+operand on true, `||` on false, and `!` reverses destinations. No eager logical
+operation is serialized. Null proofs follow the same edges and intersect at
+joins, so guarded right operands and selected arms use fresh non-null reads.
+Boolean values across joins remain separate work; the current condition path
+needs neither temporary locals nor a shared-value scheduler.
+
 The source builder resolves lexical scopes and constructs the graph separately
 from parsing and instruction selection. Only paths that continue contribute
 join edges. Arm/body declarations disappear from the enclosing source scope;

@@ -13,6 +13,13 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Logical { .. } => {
+            return Err(Diagnostic::at(
+                source,
+                expression.span.start,
+                "short-circuit operators currently require an if or while condition",
+            ));
+        }
         parser::ExpressionKind::Not(operand) => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             Operation::Not {
@@ -200,6 +207,45 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
+    /// Emit a Boolean condition as explicit edges. Evaluate logical operands
+    /// left to right and enter the right operand only when the left requires it.
+    /// Grouping and negation preserve this flow without cross-block value IDs.
+    fn condition(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        on_true: BlockId,
+        on_false: BlockId,
+    ) -> Result<(), Diagnostic> {
+        let span = expression.span;
+        match expression.kind {
+            parser::ExpressionKind::Logical { and, left, right } => {
+                let next = self.block_id();
+                if and {
+                    self.condition(*left, locals, next, on_false)?;
+                } else {
+                    self.condition(*left, locals, on_true, next)?;
+                }
+                self.push(Operation::Block { block: next }, None);
+                self.condition(*right, locals, on_true, on_false)?;
+            }
+            parser::ExpressionKind::Not(operand) => {
+                self.condition(*operand, locals, on_false, on_true)?;
+            }
+            kind => {
+                let condition = self.value(parser::Expression { kind, span }, locals)?;
+                self.push(
+                    Operation::Branch {
+                        condition,
+                        on_true,
+                        on_false,
+                    },
+                    Some(span),
+                );
+            }
+        }
+        Ok(())
+    }
     fn push(&mut self, operation: Operation, span: Option<Span>) {
         self.operations.push(LocatedOperation { operation, span });
     }
@@ -402,15 +448,7 @@ impl Builder<'_> {
                     let exit = self.block_id();
                     self.push(Operation::Jump { target: test }, Some(span));
                     self.push(Operation::Block { block: test }, None);
-                    let condition = self.value(condition, locals)?;
-                    self.push(
-                        Operation::Branch {
-                            condition,
-                            on_true: body_block,
-                            on_false: exit,
-                        },
-                        Some(span),
-                    );
+                    self.condition(condition, locals, body_block, exit)?;
                     self.push(Operation::Block { block: body_block }, None);
                     self.loops.push((test, exit));
                     let body_terminates = self.sequence(body, &mut locals.clone())?;
@@ -427,18 +465,10 @@ impl Builder<'_> {
                     on_false,
                     ..
                 } => {
-                    let condition = self.value(condition, locals)?;
                     let true_block = self.block_id();
                     let false_block = self.block_id();
                     let join = self.block_id();
-                    self.push(
-                        Operation::Branch {
-                            condition,
-                            on_true: true_block,
-                            on_false: false_block,
-                        },
-                        Some(span),
-                    );
+                    self.condition(condition, locals, true_block, false_block)?;
                     self.push(Operation::Block { block: true_block }, None);
                     let true_terminates = self.sequence(on_true, &mut locals.clone())?;
                     if !true_terminates {

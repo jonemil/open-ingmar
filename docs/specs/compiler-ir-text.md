@@ -98,8 +98,16 @@ operand must be an earlier definition in the same block and obey ordinary
 one-use rules. Typed and text IR recompute the contract and include the operand
 in effect traversal. Lowering evaluates it once, pushes Boolean false, and
 emits `eq`; no new VM instruction or native binding is required. Negating a
-null comparison does not establish branch proofs in the current profile.
+direct null comparison reverses its non-null proof edge when used by a branch.
 See the [runtime evidence](../investigations/compiler-boolean-negation.md).
+
+Short-circuit conditions use existing `.block`, `.branch`, and `.jump` forms,
+not `.and`/`.or` directives. Each operand ends its own block; the right operand
+is entered only on the required outcome. Negated source conditions may reverse
+destinations without a `.not`. Every branch still requires Boolean; ordinary
+block-local value, effect-order, and empty-stack edge rules apply. Text resumes
+the explicit graph rather than reconstructing source operators. See the
+[source profile](compiler-subset.md#short-circuit-conditions).
 
 ## Number negation
 
@@ -743,7 +751,10 @@ is introduced. Equality with Null is accepted in either order.
 Shared IR validation computes non-null local and parameter facts from control
 flow. A branch whose condition is a direct `.equal` between `.read` or
 `.parameter` and `.null` establishes that storage identity's fact on its false
-edge. The checked read must be in the branch's block; a checked local must have
+edge. A chain of `.not` definitions around that comparison reverses the proof
+edge once per operation. Every definition in the guard chain must precede its
+consumer in the branch's block. The checked read must be in that block; a checked
+local must have
 no intervening write. Both outcomes reaching the
 same target provide no new proof. Entry has no external facts; joins intersect
 incoming facts and every initialization/assignment kills that local's proof.

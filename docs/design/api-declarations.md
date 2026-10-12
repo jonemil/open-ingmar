@@ -164,7 +164,9 @@ single evaluation and effect ordering. The tested i32 minimum wraps to itself;
 see the [negation evidence][negation-evidence]. Boolean logical negation requires
 Boolean and returns Boolean without coercion. Its separate semantic operation
 retains operand effects and lowers to comparison with Boolean false. Null
-proofs still require direct comparisons; negated guards are not recognized.
+proofs recognize direct comparisons and their Boolean negation chains, with
+polarity checked in shared IR validation. Source conditions may express that
+negation by reversing branch destinations.
 Char/Number addition in either order returns Char, and Char/Char addition
 returns String. Number/Char pairs support numeric equality and greater
 comparison; equality also accepts Null/Null and nullable Number/String/Dictionary
