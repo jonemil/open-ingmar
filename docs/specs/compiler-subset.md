@@ -43,7 +43,7 @@ statement = "var" identifier "=" expression ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = atom ("." member "(" argument-list? ")")*
-atom = decimal-integer | string-literal | char-literal | "true" | "false" | "null"
+atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
@@ -54,11 +54,15 @@ letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `using`, `import`, `as`, and `null`
 are reserved. `true` and `false` produce Boolean literals. Whitespace and
 `//` or non-nested `/* ... */` comments are supported. The integer literal domain
-is `0..=127`; computed results may be negative or exceed 127. Unary signs,
-larger literals, other literal forms, other types, unsupported
+is the signed 32-bit range `-2147483648..=2147483647`. A leading minus is accepted
+only before decimal digits, with ordinary token whitespace/comments permitted.
+General unary signs, hex/underscore/suffix forms, other numeric types, unsupported
 statements/additional functions in default mode, and other operators are
-rejected. This is a frontend limit, not a Monkey C language or VM integer limit.
-The domain deliberately avoids unresolved high-bit one-byte immediate behavior.
+rejected. A negative literal must be parenthesized before a member call:
+`(-1).abs()` is accepted, while `-1.abs()` is rejected until general unary
+precedence is implemented. Adjacent `--` is rejected as unsupported decrement.
+Literal overflow is diagnosed at the literal's source start. See the
+[Number literal evidence](../investigations/compiler-number-literals.md).
 
 Diagnostics identify the input byte offset and one-based line/column (columns
 count Unicode scalar values). The caller supplies the filename. Unsupported
@@ -82,7 +86,8 @@ comparisons, branches, and typed value returns using value IDs, with optional
 source spans. Source
 compilation supplies them; IR text may omit them. Without locals, lowering emits
 a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
-or `ipush1` for a positive supported literal, left/right operands followed by
+or the smallest signed `ipush1`/`ipush2`/`ipush3`/`ipush4` for another Number,
+left/right operands followed by
 `addv` or `subv` for binary definitions, then `return`. The frame count follows
 the observed hidden context slot; omitting SDK global-resolution instructions is
 limited to this context-independent body. It does not establish the frame layout
@@ -110,8 +115,9 @@ source. CODE output is a raw payload, not a PRG. See
 ## Arithmetic and lowering contract
 
 The source subset supports binary `+` and `-` with equal precedence and left
-associativity, and parentheses for grouping. Literals remain decimal `0..=127`;
-subtraction results may be negative. Unary signs, other operators, and general
+associativity, and parentheses for grouping. Decimal literals cover the signed
+32-bit range; a minus on a literal is supported without general unary negation.
+Other unary forms, other operators, and general
 object calls remain unsupported; the bounded native calls below are separate. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.

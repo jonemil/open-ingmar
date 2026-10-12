@@ -12,7 +12,7 @@ fn result(bytes: &[u8]) -> i32 {
         let instruction = &located.instruction;
         match instruction.opcode() {
             Opcode::Ipushz => stack.push(0),
-            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i32),
+            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i8 as i32),
             Opcode::Addv | Opcode::Subv => {
                 let right = stack.pop().unwrap();
                 let left = stack.pop().unwrap();
@@ -114,8 +114,8 @@ fn malformed_source_expressions_keep_precise_diagnostics() {
         "40 + )",
         "40 ** 2",
         "40 / 2",
-        "-1",
-        "40 + 128",
+        "-value",
+        "40 + 2147483648",
         "40 + value",
     ] {
         assert!(

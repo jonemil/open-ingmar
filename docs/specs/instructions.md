@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 40 opcodes currently encoded and decoded by
+This reference covers each of the 43 opcodes currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -13,6 +13,7 @@ Encodings below occur in SDK 9.2.0, `fr265`, `-O 0` debug builds,
 including the [control-flow specimen](../investigations/control-flow.md),
 except `bt`, tested through a controlled opcode replacement.
 `cpush` has separate [literal/runtime evidence][char-literals].
+Signed Number pushes have [width-boundary evidence][number-literals].
 Instruction presence and operand widths are **experimentally observed**.
 Most execution descriptions and abstract stack effects are **source-derived**, with
 compiled source/bytecode supporting their interpretation. We have not traced
@@ -60,6 +61,9 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`argc`](#argc): set up the function argument frame.
 - [`ipushz`](#ipushz): push integer zero.
 - [`ipush1`](#ipush1): push a one-byte integer constant.
+- [`ipush2`](#ipush2): push a signed two-byte integer constant.
+- [`ipush3`](#ipush3): push a signed three-byte integer constant.
+- [`ipush4`](#ipush4): push a signed four-byte integer constant.
 - [`cpush`](#cpush): push a Char from its raw 32-bit representation.
 - [`getselfv`](#getselfv): load a member of the current receiver.
 - [`getself`](#getself): load the current receiver/context.
@@ -433,16 +437,41 @@ Operands: `bits: u8` — integer immediate.
 
 Abstract stack: `[...] → [..., integer]`.
 
-Carries a one-byte immediate. The research decoder reads it as an unsigned u8.
-HelloWorldApp/probe uses ipush1 0x29 to produce the experimentally observed 41;
-getInitialView uses 0x01 for its array length.
+Sign-extends its two's-complement operand to Number. `ipush1 0xff` pushes -1;
+`ipush1 0x80` pushes -128. The compiler selects it for nonzero values in
+`-128..=127`; assembly retains the raw byte, including zero if explicitly used.
 
 Observed encoding: `38 01` at CODE+`0x00004d` in **minimal-console**,
 MinimalConsoleApp/getInitialView.
 
-**Limits:** The encoding is preserved as raw bits in our Rust model. Values at
-0x80 and 0xff, extension rules, and negative-number encodings have not been
-independently tested; do not silently interpret the byte as signed i8.
+The [boundary experiment][number-literals] establishes signed execution.
+Earlier runtime versions and other device profiles remain unverified.
+
+## ipush2
+
+Encoding: `39 <i16be bits>`, three bytes. Sign-extends a two's-complement
+16-bit immediate to Number: `... -> ... Number(value)`. `39 00 80` pushes 128;
+`39 ff 7f` pushes -129. Compiler selection covers `-32768..=32767` when a
+smaller push does not fit. Assembly preserves the original bits and width.
+See [the experiment][number-literals]; older VM availability is unverified.
+
+## ipush3
+
+Encoding: `3a <i24be bits>`, four bytes. Sign-extends a two's-complement
+24-bit immediate to Number: `... -> ... Number(value)`. `3a 00 80 00` pushes
+32768; `3a ff 7f ff` pushes -32769. Compiler selection covers
+`-8388608..=8388607` when smaller pushes do not fit. Assembly preserves bits
+and width. See [the experiment][number-literals]; older VMs remain unverified.
+
+## ipush4
+
+Encoding: `25 <i32be bits>`, five bytes. Pushes the signed 32-bit Number
+represented by the operand: `... -> ... Number(value)`. `25 7f ff ff ff`
+pushes 2147483647; `25 80 00 00 00` pushes -2147483648. It covers the complete
+Number domain; the compiler uses it when smaller signed immediates do not fit.
+This operand is not a symbol ID or CODE/DATA address. Assembly preserves its
+raw bits and width. See [the experiment][number-literals]; older VMs remain
+unverified.
 
 ## getselfv
 
@@ -679,3 +708,5 @@ Procedures and runtime results belong in the investigations:
 [ref-larger-string-offset]: ../investigations/string-address-boundary.md
 
 [char-literals]: ../investigations/compiler-char-literals.md
+
+[number-literals]: ../investigations/compiler-number-literals.md

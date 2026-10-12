@@ -5,6 +5,7 @@ Evidence and provenance:
 instruction encodings occur in Hello World, Minimal Console, and the
 [control-flow specimen](../investigations/control-flow.md).
 Char constants have [separate encoding evidence](../investigations/compiler-char-literals.md).
+Signed Number immediates have [boundary evidence](../investigations/compiler-number-literals.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -35,6 +36,7 @@ resolution occur in assembly, without stack interpretation.
 | `1a` | `eq` | none |
 | `1d` | `gt` | none |
 | `23` | `jsr` | 2 |
+| `25` | `ipush4` | 4 |
 | `27` | `spush` | 4 |
 | `28` | `bt` | 2 |
 | `29` | `bf` | 2 |
@@ -47,6 +49,8 @@ resolution occur in assembly, without stack interpretation.
 | `35` | `argc` | 1 |
 | `37` | `ipushz` | none |
 | `38` | `ipush1` | 1 |
+| `39` | `ipush2` | 2 |
+| `3a` | `ipush3` | 3 |
 | `3e` | `btpush` | none |
 | `3f` | `bfpush` | none |
 | `43` | `getselfv` | 4 |

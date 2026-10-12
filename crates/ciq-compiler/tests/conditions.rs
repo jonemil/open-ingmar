@@ -22,7 +22,7 @@ fn execute(function: &Function, argument: i32) -> i32 {
             Opcode::Ipushz => stack.push(0),
             Opcode::Btpush => stack.push(1),
             Opcode::Bfpush => stack.push(0),
-            Opcode::Ipush1 => stack.push(ins.operands()[0] as i32),
+            Opcode::Ipush1 => stack.push(ins.operands()[0] as i8 as i32),
             Opcode::Lgetv => stack.push(locals[ins.operands()[0] as usize]),
             Opcode::Lputv => locals[ins.operands()[0] as usize] = stack.pop().unwrap(),
             Opcode::Addv | Opcode::Subv | Opcode::Eq | Opcode::Gt => {

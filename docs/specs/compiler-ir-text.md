@@ -29,9 +29,13 @@ statements, calls, and expression trees, ending with `.return <value-id>` or
 Definitions are `.integer <result-id> <value>`, `.add <result-id>
 <left-id> <right-id>`, and `.subtract <result-id> <left-id> <right-id>`. Value
 IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
-values are nonnegative decimal `0..=127`, matching the backend's currently
-verified literal encoding subset; computed results are not restricted to that
-range.
+values are decimal i32 values in `-2147483648..=2147483647`, with an optional
+leading minus and no plus/hex/suffix/underscore syntax. Canonical output uses
+ordinary decimal spelling; negative zero becomes zero. Typed `Operation::Integer`
+already holds i32 and has the same value domain. Lowering uses `ipushz` for zero,
+then the smallest signed 8-, 16-, 24-, or 32-bit immediate otherwise. Assembly
+preserves encoded widths and raw operand bits independently of this compiler
+choice. See the [literal evidence](../investigations/compiler-number-literals.md).
 
 Each operation optionally has `span=<start>:<end>` with decimal `usize` byte
 offsets and `start <= end`. These offsets refer to the original source, not

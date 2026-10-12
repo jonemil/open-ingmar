@@ -19,7 +19,7 @@ fn evaluate(bytes: &[u8]) -> (i32, Vec<u32>) {
         match instruction.opcode() {
             Opcode::Argc | Opcode::Argcincsp => assert_eq!(instruction.operands()[0], 1),
             Opcode::Ipushz => stack.push(0),
-            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i32),
+            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i8 as i32),
             Opcode::Getmv => {
                 assert_eq!(
                     u32::from_be_bytes(instruction.operands()[..4].try_into().unwrap()),

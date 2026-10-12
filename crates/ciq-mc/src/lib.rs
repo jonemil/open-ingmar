@@ -46,6 +46,7 @@ opcodes! {
     Eq = 0x1a, "eq", [];
     Gt = 0x1d, "gt", [];
     Jsr = 0x23, "jsr", [2];
+    Ipush4 = 0x25, "ipush4", [4];
     Spush = 0x27, "spush", [4];
     Bt = 0x28, "bt", [2];
     Bf = 0x29, "bf", [2];
@@ -58,6 +59,8 @@ opcodes! {
     Argc = 0x35, "argc", [1];
     Ipushz = 0x37, "ipushz", [];
     Ipush1 = 0x38, "ipush1", [1];
+    Ipush2 = 0x39, "ipush2", [2];
+    Ipush3 = 0x3a, "ipush3", [3];
     Btpush = 0x3e, "btpush", [];
     Bfpush = 0x3f, "bfpush", [];
     Getselfv = 0x43, "getselfv", [4];

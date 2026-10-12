@@ -49,7 +49,6 @@ fn text_and_constructed_ir_share_semantic_validation() {
     for operations in [
         vec![],
         vec![integer(41)],
-        vec![integer(128), returned(0)],
         vec![integer(41), returned(1)],
         vec![returned(0), integer(41)],
         vec![integer(41), integer(42), returned(0)],
@@ -65,7 +64,7 @@ fn text_and_constructed_ir_share_semantic_validation() {
     }
     for text in [
         "ciq-ir unexpected\n.function probe\n.integer %0 41\n.return %0\n.end",
-        "ciq-ir\n.function probe\n.integer %0 128\n.return %0\n.end",
+        "ciq-ir\n.function probe\n.integer %0 2147483648\n.return %0\n.end",
         "ciq-ir\n.function probe\n.integer %0 41\n.integer %0 42\n.return %0\n.end",
         "ciq-ir\n.function probe\n.integer %0 41 span=7:3\n.return %0\n.end",
         "ciq-ir\n.function probe\n.integer %0 41\n.return %0",

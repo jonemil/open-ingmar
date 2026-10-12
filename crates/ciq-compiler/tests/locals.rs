@@ -15,7 +15,7 @@ fn evaluate(bytes: &[u8]) -> i32 {
         let instruction = &located.instruction;
         match instruction.opcode() {
             Opcode::Ipushz => stack.push(0),
-            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i32),
+            Opcode::Ipush1 => stack.push(instruction.operands()[0] as i8 as i32),
             Opcode::Addv | Opcode::Subv => {
                 let right = stack.pop().unwrap();
                 let left = stack.pop().unwrap();

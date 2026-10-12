@@ -7,10 +7,11 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Expand Number literals next
-   beyond the current 0..=127 subset. Probe wider immediate encodings and sign
-   extension before supporting the full signed 32-bit range in source/IR.
-   Keep unary operators and Long/Float/Double values separate from that change.
+1. **Extend core Lang contracts and value types.** Add unary Number negation next,
+   retaining postfix precedence and saved IR validation. Probe the i32 minimum
+   and overflow behavior before defining lowering; keep positive signs and
+   Boolean/logical operators separate until their contracts are established.
+   Revisit Long/Float/Double values through a useful runnable example.
    Investigate the SDK's
    [supplementary literal discrepancy][char-literals] before expanding BMP source
    literals. Follow the

@@ -43,7 +43,7 @@ fn every_supported_literal_assembles_and_returns_its_value() {
         for instruction in &instructions[1..] {
             match instruction.instruction.opcode() {
                 Opcode::Ipushz => result = Some(0),
-                Opcode::Ipush1 => result = Some(instruction.instruction.operands()[0] as i32),
+                Opcode::Ipush1 => result = Some(instruction.instruction.operands()[0] as i8 as i32),
                 Opcode::Return => {
                     assert_eq!(result, Some(expected));
                     returned = true;
@@ -64,9 +64,9 @@ fn unsupported_programs_are_rejected_completely() {
     for source in [
         "",
         "function probe(x as Number) { return 41; }",
-        "function probe() { return 128; }",
+        "function probe() { return 2147483648; }",
         "function probe() { return 999999999999999999999999; }",
-        "function probe() { return -1; }",
+        "function probe() { return -2147483649; }",
         "function probe() { return 0x29; }",
         "function probe() { return 40 * 1; }",
         "function probe() { return true; }",
@@ -91,10 +91,10 @@ fn comments_and_unicode_diagnostics_keep_correct_source_locations() {
     )
     .unwrap();
     assert_eq!(function.name(), "probe");
-    let source = "/* café */\nfunction probe() {\n  return 128;\n}";
+    let source = "/* café */\nfunction probe() {\n  return 2147483648;\n}";
     let error = compile(source).unwrap_err();
     assert_eq!((error.line, error.column), (3, 10));
-    assert_eq!(&source[error.offset..error.offset + 3], "128");
+    assert_eq!(&source[error.offset..error.offset + 10], "2147483648");
     let error = compile("/* é */ function probe() { return 💡; }").unwrap_err();
     assert_eq!((error.line, error.column), (1, 35));
     assert!(error.message.contains("unsupported character"));

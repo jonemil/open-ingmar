@@ -238,7 +238,16 @@ fn expression(
                 }
                 Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
                 Operation::Integer { value, .. } => {
-                    (Opcode::Ipush1, vec![Operand::Bits(*value as u64)])
+                    let (opcode, mask) = if i8::try_from(*value).is_ok() {
+                        (Opcode::Ipush1, 0xff)
+                    } else if i16::try_from(*value).is_ok() {
+                        (Opcode::Ipush2, 0xffff)
+                    } else if (-8_388_608..=8_388_607).contains(value) {
+                        (Opcode::Ipush3, 0xffffff)
+                    } else {
+                        (Opcode::Ipush4, 0xffffffff)
+                    };
+                    (opcode, vec![Operand::Bits(u64::from(*value as u32) & mask)])
                 }
                 Operation::NativeCall {
                     receiver,

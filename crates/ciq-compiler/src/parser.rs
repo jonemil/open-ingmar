@@ -305,6 +305,9 @@ impl<'a> Parser<'a> {
                 self.offset += length;
                 Kind::Integer(&rest[..length])
             }
+            Some('-') if rest.starts_with("--") => {
+                return Err(self.error(start, "decrement operators are unsupported"));
+            }
             Some('=') if rest.starts_with("==") => {
                 self.offset += 2;
                 Kind::EqualEqual
@@ -438,6 +441,14 @@ impl<'a> Parser<'a> {
         } else {
             self.atom(depth)?
         };
+        if self.peek()? == Kind::Punctuation('.')
+            && self.source.as_bytes()[expression.span.start] == b'-'
+        {
+            return Err(self.error(
+                expression.span.start,
+                "parenthesize a negative literal before a member call",
+            ));
+        }
         let mut call_depth = depth;
         while self.peek()? == Kind::Punctuation('.') {
             self.token()?;
@@ -500,17 +511,39 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::String(fields[0][1..].into()), token.span)
             }
             Kind::Integer(digits) => {
+                let value = digits.parse::<i32>().map_err(|_| {
+                    self.error(
+                        token.span.start,
+                        "Number literal exceeds signed 32-bit range",
+                    )
+                })?;
+                self.node(ExpressionKind::Integer(value), token.span)
+            }
+            Kind::Punctuation('-') => {
+                let magnitude = self.token()?;
+                let Kind::Integer(digits) = magnitude.kind else {
+                    return Err(self.error(
+                        token.span.start,
+                        "minus here requires a decimal Number literal",
+                    ));
+                };
                 let value = digits
-                    .parse::<i32>()
+                    .parse::<i64>()
                     .ok()
-                    .filter(|value| *value <= 127)
+                    .and_then(|value| i32::try_from(-value).ok())
                     .ok_or_else(|| {
                         self.error(
                             token.span.start,
-                            "supported integer literal range is 0..=127",
+                            "Number literal exceeds signed 32-bit range",
                         )
                     })?;
-                self.node(ExpressionKind::Integer(value), token.span)
+                self.node(
+                    ExpressionKind::Integer(value),
+                    Span {
+                        start: token.span.start,
+                        end: magnitude.span.end,
+                    },
+                )
             }
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),

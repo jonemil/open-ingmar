@@ -364,8 +364,12 @@ pub(crate) fn parse_ir_context(
             }
         } else if kind == 0 {
             let digits = &fields[2];
-            if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(fail(*at, "integer must be nonnegative decimal"));
+            let magnitude = digits.strip_prefix('-').unwrap_or(digits);
+            if magnitude.is_empty() || !magnitude.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(fail(
+                    *at,
+                    "integer requires decimal digits with optional leading minus",
+                ));
             }
             Operation::Integer {
                 result: parse_value(&fields[1])?,

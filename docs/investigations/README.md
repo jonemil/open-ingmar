@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number literals](compiler-number-literals.md): signed immediates, width
+  boundaries, and parsing limits.
 - [String operators](compiler-string-operators.md): concatenation conversions,
   reference identity, and grouped simulator comparison.
 - [Char operators](compiler-char-operators.md): operand/result contracts and

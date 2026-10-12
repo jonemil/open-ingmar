@@ -31,7 +31,7 @@ fn evaluate(bytes: &[u8], parameters: &[i32]) -> (i32, Vec<u32>) {
                 assert_eq!(instruction.operands()[0] as usize, parameters.len() + 1)
             }
             Opcode::Ipushz => stack.push(Stack::Integer(0)),
-            Opcode::Ipush1 => stack.push(Stack::Integer(instruction.operands()[0] as i32)),
+            Opcode::Ipush1 => stack.push(Stack::Integer(instruction.operands()[0] as i8 as i32)),
             Opcode::Lgetv => stack.push(Stack::Integer(slots[&instruction.operands()[0]])),
             Opcode::Lputv => {
                 slots.insert(instruction.operands()[0], integer(stack.pop().unwrap()));

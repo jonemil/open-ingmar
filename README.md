@@ -100,6 +100,9 @@ numeric comparisons, mixed addition, and Char concatenation.
 The [String operator example](examples/compiler-string-operators/README.md)
 exercises scalar concatenation, nullable inputs, and identity equality.
 
+The [Number literal example](examples/compiler-number-literals/README.md)
+exercises signed 32-bit constants and immediate-width boundaries.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

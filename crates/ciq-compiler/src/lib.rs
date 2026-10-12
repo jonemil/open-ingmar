@@ -683,12 +683,7 @@ impl Function {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
                 }
-                Operation::Integer { result, value } => {
-                    if !(0..=127).contains(&value) {
-                        return Err(fail("supported integer literal range is 0..=127"));
-                    }
-                    (Some(result), vec![])
-                }
+                Operation::Integer { result, .. } => (Some(result), vec![]),
                 Operation::Null { result } => {
                     types.insert(result, ValueType::Null);
                     (Some(result), vec![])
