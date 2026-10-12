@@ -13,6 +13,10 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Char(value) => Operation::Char {
+            result: ValueId(operations.len() as u32),
+            value,
+        },
         parser::ExpressionKind::Boolean(value) => Operation::Boolean {
             result: ValueId(operations.len() as u32),
             value,

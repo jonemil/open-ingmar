@@ -87,6 +87,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    Char(u32),
     Null,
     Boolean(bool),
     Integer(i32),
@@ -116,6 +117,7 @@ pub(crate) enum ExpressionKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind<'a> {
+    Char(u32),
     Word(&'a str),
     Integer(&'a str),
     String(&'a str),
@@ -229,6 +231,45 @@ impl<'a> Parser<'a> {
                     .count();
                 self.offset += length;
                 Kind::Word(&rest[..length])
+            }
+            Some('\'') => {
+                self.offset += 1;
+                let mut value = self.source[self.offset..]
+                    .chars()
+                    .next()
+                    .ok_or_else(|| self.error(start, "unterminated Char literal"))?;
+                self.offset += value.len_utf8();
+                if value == '\\' {
+                    let escape = self.source[self.offset..]
+                        .chars()
+                        .next()
+                        .ok_or_else(|| self.error(start, "unfinished Char escape"))?;
+                    self.offset += escape.len_utf8();
+                    value = match escape {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\'' => '\'',
+                        '\\' => '\\',
+                        _ => return Err(self.error(start, "unsupported source Char escape")),
+                    };
+                } else if matches!(value, '\'' | '\n' | '\r') {
+                    return Err(self.error(
+                        start,
+                        "Char literals require one character without raw newlines",
+                    ));
+                }
+                if u32::from(value) > 0xffff {
+                    return Err(self.error(
+                        start,
+                        "source Char literals currently require a BMP character",
+                    ));
+                }
+                if !self.source[self.offset..].starts_with('\'') {
+                    return Err(self.error(start, "Char literals require exactly one character"));
+                }
+                self.offset += 1;
+                Kind::Char(u32::from(value))
             }
             Some('"') => {
                 self.offset += 1;
@@ -452,6 +493,7 @@ impl<'a> Parser<'a> {
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
+            Kind::Char(value) => self.node(ExpressionKind::Char(value), token.span),
             Kind::String(literal) => {
                 let fields = ciq_prg::symbols::source::tokens(literal)
                     .map_err(|error| self.error(token.span.start, error.to_string()))?;

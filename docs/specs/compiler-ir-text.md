@@ -86,6 +86,17 @@ feed branches, compare for equality with another Boolean, or be printed. They
 cannot be integer operands; typed user calls and returns accept them. Lowering
 uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 
+## Char constants
+
+`.char %<result-id> 0x<eight-hex-digits> [span=<start>:<end>]` defines Char from
+raw u32 bits. Exactly eight digits follow lowercase `0x`; canonical output uses
+lowercase digits. This is independent of the narrower source literal syntax:
+surrogates and non-scalar bit patterns are preserved. Validation gives the value
+the distinct Char type and requires API 1.3.0 when a context is supplied.
+Lowering emits `cpush` with the same bits, without a DATA string or native
+conversion call. Invalid widths and malformed operands are rejected. See the
+[literal evidence](../investigations/compiler-char-literals.md).
+
 ## API context inputs
 
 `--target-api <major.minor.patch>` and `--min-api <major.minor.patch>` enable
@@ -100,7 +111,7 @@ later than the application's minimum API. Errors distinguish unknown members,
 target unavailability, an insufficient minimum, and unsupported lowering.
 For example, Number's `toChar` requires 1.3.0: target 1.0.0 reports unavailable;
 target 1.3.0 with minimum 1.0.0 reports an insufficient minimum; both at 1.3.0
-report unsupported lowering. The current subset has no guarded `has` calls.
+permit the conversion. The current subset has no guarded `has` calls.
 
 ```sh
 cargo run -p ciq-compiler -- --target-api 1.0.0 --min-api 1.0.0 \
@@ -639,8 +650,9 @@ Parameter text uses `char`; value-producing user calls use `result=char`.
 Function result text is inferred as for other scalars, so `.function result=char`
 is not accepted. Char class/signature/value use and conversion require API 1.3.0
 with context; comparison additionally requires 5.0.0. Source and saved IR share
-these checks. Char literals, nullable Char, and Char operators are unsupported.
-No new constant directive or VM allocation is introduced. See the
+these checks. `.char` defines constants; nullable Char and Char operators are
+unsupported. Native calls and ordinary value storage need no new VM allocation.
+See the
 [Char evidence](../investigations/compiler-char-methods.md).
 
 Zero-argument `weak` accepts Number, String, or Boolean and defines that exact

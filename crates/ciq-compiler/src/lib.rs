@@ -219,6 +219,12 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Define a Char from its raw 32-bit representation. This preserves VM bits,
+    /// including values outside Unicode scalar ranges; source literals are narrower.
+    Char {
+        result: ValueId,
+        value: u32,
+    },
     /// Invoke a catalogue-resolved native module function as a Void statement.
     /// Names are canonical API identities, independent of executable bindings.
     NativeModuleCallStatement {
@@ -666,6 +672,10 @@ impl Function {
                     (None, vec![condition])
                 }
                 Operation::Jump { .. } => (None, vec![]),
+                Operation::Char { result, .. } => {
+                    types.insert(result, ValueType::Char);
+                    (Some(result), vec![])
+                }
                 Operation::Boolean { result, .. } => {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
@@ -1189,6 +1199,7 @@ impl Function {
                     }
                     line
                 }
+                Operation::Char { result, value } => format!(".char %{} 0x{value:08x}", result.0),
                 Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {

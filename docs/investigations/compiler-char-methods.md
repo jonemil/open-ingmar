@@ -33,8 +33,8 @@ API 1.3.0; its page specifies no range restriction.
 
 An ignored SDK probe created Chars through `Number.toChar()`, printed them or
 their numeric representations, and exercised the supported methods. A literal
-`'A'` was included only in this SDK probe; source literals are not implemented
-in our compiler. Use an AppBase wrapper whose `onStart(state)` calls `start()`
+`'A'` was included in this SDK probe; the [literal follow-up][literals] establishes
+its encoding and our source support. Use an AppBase wrapper whose `onStart(state)` calls `start()`
 and whose initial View is `[new Toybox.WatchUi.View()]`, with local fr265
 manifest/resources:
 
@@ -49,8 +49,8 @@ sh scripts/run-simulator-container.sh \
 
 **Observed:** `toChar` binds to `0x008004c6`; other method names reuse existing
 native IDs. CODE export fell back to raw binary at unsupported opcode offset
-`0xaa`. This does not identify the literal encoding; use an isolated literal
-specimen before implementing it.
+`0xaa`. This does not identify the literal encoding; the isolated
+[follow-up][literals] establishes `cpush` separately.
 
 The probe's numeric round trips were:
 
@@ -93,12 +93,15 @@ receiver directions. Receiver and argument markers printed in that order.
 
 Source/resumed-IR PRGs and symbolic assembly round trips agree. Contract tests
 cover wrong arguments/consumers, exact user signatures, edited call results,
-unsupported literal/operator/nullable forms, and class/method API boundaries.
+unsupported operator/nullable forms, and class/method API boundaries.
 Char uses the existing generic value-call and slot machinery; it is distinct
-from Number in semantic validation. No constant encoding, boxing rule, or
-runtime value layout is specified by that implementation choice.
+from Number in semantic validation. The [literal follow-up][literals] establishes
+constant encoding separately; generic call storage establishes no boxing rule
+or runtime value layout.
 
 [char]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Char.html
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html#toChar-instance_function
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-char-methods/README.md
+
+[literals]: compiler-char-literals.md

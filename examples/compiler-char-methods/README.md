@@ -56,6 +56,7 @@ argument
 true
 ```
 
-Char literals, nullable Char, and Char operators remain unsupported. Numeric
+The [literal example](../compiler-char-literals/README.md) covers BMP constants.
+Nullable Char and Char operators remain unsupported. Numeric
 conversion ranges and Unicode behavior are runtime responsibilities; see the
 [method review and limits](../../docs/investigations/compiler-char-methods.md).

@@ -7,10 +7,11 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Add Char literals next using
-   isolated specimens to establish their encoding and escape syntax. Keep Char
-   operators separate from native comparison; probe equality, ordering, and
-   mixed arithmetic before widening operator rules. Follow the
+1. **Extend core Lang contracts and value types.** Probe Char equality, ordering,
+   and mixed arithmetic next before widening operator rules. Keep operator
+   contracts separate from native comparison. Investigate the SDK's
+   [supplementary literal discrepancy][char-literals] before expanding BMP source
+   literals. Follow the
    [class-focused strategy](#native-lang-strategy) for
    subsequent groups; revisit deferred [Number][number-methods],
    [String][string-methods], and [Boolean][boolean-methods] methods as their
@@ -237,3 +238,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [boolean-methods]: investigations/compiler-boolean-methods.md#method-inventory
 
 [weak-results]: investigations/compiler-immutable-weak.md
+
+[char-literals]: investigations/compiler-char-literals.md

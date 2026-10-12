@@ -127,8 +127,10 @@ remains the SDK 9.2.0 / fr265-tested profile.
 
 Signature and value types also receive introduction checks. Char's API 1.3.0
 class requirement applies to parameters/results and saved IR, even without a
-native member call. It uses ordinary value storage and dispatch; no Char literal
-or operator encoding is implied. See the [Char evidence][char-evidence].
+native member call. It uses ordinary value storage and dispatch. Char constants
+use `.char` in IR and the observed `cpush` instruction; source literals have a
+BMP restriction. Operator rules remain separate. See the
+[Char evidence][char-evidence] and [literal evidence][char-literal-evidence].
 
 Native module statements have canonical module/member identities and no result
 value. Catalogue lookup validates their contract and optional API context before
@@ -186,3 +188,5 @@ silently expand those contracts.
 [weak-evidence]: ../investigations/compiler-immutable-weak.md
 
 [char-evidence]: ../investigations/compiler-char-methods.md
+
+[char-literal-evidence]: ../investigations/compiler-char-literals.md

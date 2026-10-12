@@ -43,7 +43,7 @@ statement = "var" identifier "=" expression ";"
 expression = arithmetic (("==" | ">") arithmetic)?
 arithmetic = primary (("+" | "-") primary)*
 primary = atom ("." member "(" argument-list? ")")*
-atom = decimal-integer | string-literal | "true" | "false" | "null"
+atom = decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
 ```
@@ -67,7 +67,16 @@ covers parameters and earlier initialized locals in the current arm and its
 enclosing scopes. There is no general type inference, global/member resolver,
 whole-program analysis, or optimizer yet.
 
-The IR contains integer/string/Boolean constants, binary add/subtract definitions,
+Char literals use single quotes around exactly one BMP Unicode scalar or one
+of the escapes `\n`, `\r`, `\t`, `\'`, and `\\`. A double quote may appear
+unescaped inside single quotes. Raw single quotes, backslashes, and newlines are invalid;
+empty/multiple-character literals and supplementary characters are rejected.
+`\0`, `\u`, and `\x` escapes are outside this subset. Literals produce Char,
+retain source byte spans, and require API 1.3.0 with explicit context. See the
+[literal evidence](../investigations/compiler-char-literals.md).
+
+The IR contains integer/string/Boolean/Char constants, binary add/subtract
+definitions,
 parameter reads, local initialization/read, module calls, print statements, and
 comparisons, branches, and typed value returns using value IDs, with optional
 source spans. Source
@@ -574,7 +583,7 @@ since API 5.0.0. Unchecked nullable arguments are rejected. This native-call sup
 does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
 
-Char values originate from Number's zero-argument `toChar()` and are distinct
+Char values originate from literals or Number's zero-argument `toChar()` and are distinct
 from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
 returning Number, and `toString()` returning String. Char's direct `compareTo`
 returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
@@ -582,8 +591,8 @@ returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
 returns, local initialization/assignment, printing, and chained calls retain
-the exact Char type. Char literals, nullable Char, and Char operators are
-unsupported. Conversion ranges and case/String behavior are runtime obligations;
+the exact Char type. Nullable Char and Char operators are unsupported.
+Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).
 

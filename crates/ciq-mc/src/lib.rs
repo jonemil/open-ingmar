@@ -54,6 +54,7 @@ opcodes! {
     Dup = 0x2e, "dup", [1];
     Getm = 0x30, "getm", [];
     Throw = 0x33, "throw", [];
+    Cpush = 0x34, "cpush", [4];
     Argc = 0x35, "argc", [1];
     Ipushz = 0x37, "ipushz", [];
     Ipush1 = 0x38, "ipush1", [1];

@@ -91,6 +91,9 @@ receiver-specific results on Number, String, and Boolean.
 The [Char method example](examples/compiler-char-methods/README.md) groups
 character conversion, comparison, equality, and hashing.
 
+The [Char literal example](examples/compiler-char-literals/README.md) exercises
+BMP literals and escapes through source, IR, and native calls.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

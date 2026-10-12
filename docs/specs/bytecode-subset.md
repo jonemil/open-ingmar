@@ -4,6 +4,7 @@ Evidence and provenance:
 [initial Rust investigation](../investigations/rust-bootstrap.md). The following
 instruction encodings occur in Hello World, Minimal Console, and the
 [control-flow specimen](../investigations/control-flow.md).
+Char constants have [separate encoding evidence](../investigations/compiler-char-literals.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -42,6 +43,7 @@ resolution occur in assembly, without stack interpretation.
 | `2e` | `dup` | 1 |
 | `30` | `getm` | none |
 | `33` | `throw` | none |
+| `34` | `cpush` | 4 |
 | `35` | `argc` | 1 |
 | `37` | `ipushz` | none |
 | `38` | `ipush1` | 1 |

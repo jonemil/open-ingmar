@@ -143,6 +143,7 @@ pub(crate) fn parse_ir_context(
             ),
             Some(".integer") => (0, 3),
             Some(".boolean") => (23, 3),
+            Some(".char") => (25, 3),
             Some(".call-native-module-discard") => (24, call_width()),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
@@ -238,7 +239,19 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 24 {
+        let operation = if kind == 25 {
+            let digits = fields[2]
+                .strip_prefix("0x")
+                .filter(|digits| digits.len() == 8 && digits.bytes().all(|b| b.is_ascii_hexdigit()))
+                .ok_or_else(|| {
+                    fail(*at, "Char literal requires 0x followed by eight hex digits")
+                })?;
+            Operation::Char {
+                result: parse_value(&fields[1])?,
+                value: u32::from_str_radix(digits, 16)
+                    .map_err(|_| fail(*at, "invalid Char bits"))?,
+            }
+        } else if kind == 24 {
             Operation::NativeModuleCallStatement {
                 module: fields[1].clone(),
                 member: fields[2].clone(),

@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Char literals](compiler-char-literals.md): immediate encoding, source escapes,
+  supplementary-character discrepancy, and raw IR bits.
 - [Char methods](compiler-char-methods.md): conversion boundaries, typed values,
   and grouped simulator comparison.
 - [Immutable weak results](compiler-immutable-weak.md): receiver-specific

@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 39 opcodes currently encoded and decoded by
+This reference covers each of the 40 opcodes currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -12,8 +12,9 @@ reference.
 Encodings below occur in SDK 9.2.0, `fr265`, `-O 0` debug builds,
 including the [control-flow specimen](../investigations/control-flow.md),
 except `bt`, tested through a controlled opcode replacement.
+`cpush` has separate [literal/runtime evidence][char-literals].
 Instruction presence and operand widths are **experimentally observed**.
-Execution descriptions and abstract stack effects are **source-derived**, with
+Most execution descriptions and abstract stack effects are **source-derived**, with
 compiled source/bytecode supporting their interpretation. We have not traced
 individual instructions inside Garmin's VM. The original Hello World runs in the
 simulator; this does not validate every opcode's edge cases or every generated
@@ -59,6 +60,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`argc`](#argc): set up the function argument frame.
 - [`ipushz`](#ipushz): push integer zero.
 - [`ipush1`](#ipush1): push a one-byte integer constant.
+- [`cpush`](#cpush): push a Char from its raw 32-bit representation.
 - [`getselfv`](#getselfv): load a member of the current receiver.
 - [`getself`](#getself): load the current receiver/context.
 - [`getmv`](#getmv): load a member of a named module.
@@ -406,6 +408,24 @@ MinimalConsoleApp/getInitialView.
 **Limits:** This is an integer constant instruction; Boolean false and null are
 separate concepts. Exact runtime number representation is not established.
 
+## cpush
+
+Encoding: `34 <u32be>`, five bytes. Numeric assembly preserves the raw operand
+bits; it is not a DATA address or symbol reference. Successful execution pushes
+one Char value: `... -> ... Char(bits)`.
+
+```text
+cpush 0x00000041 # Char A
+cpush 0x0000732b # Char 猫
+```
+
+The [literal experiment][char-literals] observes SDK constant bytes and generated
+execution, including numeric consumers of `0x0001f600` and `0xffffffff`.
+The operand is not restricted to Unicode scalar values. String conversion,
+rendering, and invalid-value behavior beyond those numeric probes are unverified.
+Source literals have a narrower BMP contract. Char use requires API 1.3.0 in our
+compiler; instruction availability on earlier VM versions is unverified.
+
 ## ipush1
 
 **Push a one-byte integer constant.** Opcode `0x38`; length **2 bytes**.
@@ -657,3 +677,5 @@ Procedures and runtime results belong in the investigations:
 [arguments](../investigations/compiler-arguments.md).
 
 [ref-larger-string-offset]: ../investigations/string-address-boundary.md
+
+[char-literals]: ../investigations/compiler-char-literals.md
