@@ -90,6 +90,18 @@ feed branches, compare for equality with another Boolean, or be printed. They
 cannot be integer operands; typed user calls and returns accept them. Lowering
 uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 
+## Number negation
+
+`.negate %<result-id> %<operand-id> [span=<start>:<end>]` consumes one Number
+and defines Number. String, Char, Boolean, Null, and unchecked nullable values
+are rejected. Operands must be earlier definitions in the same block and obey
+ordinary one-use rules. Source and typed/text IR recompute the contract; fresh
+reads with a direct non-null proof may feed it. Effect traversal evaluates the
+operand once and retains call order. Lowering emits zero, the operand, then
+`subv`; it requires no native member or new opcode. Minimum Number negation
+wraps to the same i32 minimum in the tested runtime. See the
+[evidence](../investigations/compiler-number-negation.md).
+
 ## Char constants
 
 `.char %<result-id> 0x<eight-hex-digits> [span=<start>:<end>]` defines Char from

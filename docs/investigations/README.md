@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number negation](compiler-number-negation.md): unary lowering, minimum
+  wraparound, and SDK literal postfix discrepancy.
 - [Number literals](compiler-number-literals.md): signed immediates, width
   boundaries, and parsing limits.
 - [String operators](compiler-string-operators.md): concatenation conversions,

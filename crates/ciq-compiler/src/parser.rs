@@ -88,6 +88,7 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     Char(u32),
+    Negate(Box<Expression>),
     Null,
     Boolean(bool),
     Integer(i32),
@@ -401,7 +402,7 @@ impl<'a> Parser<'a> {
         )
     }
     fn arithmetic(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        let mut left = self.primary(depth)?;
+        let mut left = self.unary(depth)?;
         loop {
             let kind = match self.peek()? {
                 Kind::Punctuation('+') => crate::BinaryOp::Add,
@@ -409,7 +410,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.token()?;
-            let right = self.primary(depth)?;
+            let right = self.unary(depth)?;
             let span = Span {
                 start: left.span.start,
                 end: right.span.end,
@@ -424,6 +425,50 @@ impl<'a> Parser<'a> {
             )?;
         }
         Ok(left)
+    }
+    fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? != Kind::Punctuation('-') {
+            return self.primary(depth);
+        }
+        let sign = self.token()?;
+        if depth >= 64 {
+            return Err(self.error(sign.span.start, "expression nesting exceeds 64 levels"));
+        }
+        if let Kind::Integer(digits) = self.peek()? {
+            let magnitude = self.token()?;
+            let value = digits
+                .parse::<i64>()
+                .ok()
+                .and_then(|value| i32::try_from(-value).ok())
+                .ok_or_else(|| {
+                    self.error(
+                        sign.span.start,
+                        "Number literal exceeds signed 32-bit range",
+                    )
+                })?;
+            if self.peek()? == Kind::Punctuation('.') {
+                return Err(self.error(
+                    sign.span.start,
+                    "parenthesize a negative literal before a member call",
+                ));
+            }
+            return self.node(
+                ExpressionKind::Integer(value),
+                Span {
+                    start: sign.span.start,
+                    end: magnitude.span.end,
+                },
+            );
+        }
+        if self.peek()? == Kind::Punctuation('-') {
+            return Err(self.error(sign.span.start, "parenthesize repeated negation"));
+        }
+        let operand = self.primary(depth + 1)?;
+        let span = Span {
+            start: sign.span.start,
+            end: operand.span.end,
+        };
+        self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
     fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let mut expression = if self.peek()? == Kind::Punctuation('(') {
@@ -441,14 +486,6 @@ impl<'a> Parser<'a> {
         } else {
             self.atom(depth)?
         };
-        if self.peek()? == Kind::Punctuation('.')
-            && self.source.as_bytes()[expression.span.start] == b'-'
-        {
-            return Err(self.error(
-                expression.span.start,
-                "parenthesize a negative literal before a member call",
-            ));
-        }
         let mut call_depth = depth;
         while self.peek()? == Kind::Punctuation('.') {
             self.token()?;
@@ -518,32 +555,6 @@ impl<'a> Parser<'a> {
                     )
                 })?;
                 self.node(ExpressionKind::Integer(value), token.span)
-            }
-            Kind::Punctuation('-') => {
-                let magnitude = self.token()?;
-                let Kind::Integer(digits) = magnitude.kind else {
-                    return Err(self.error(
-                        token.span.start,
-                        "minus here requires a decimal Number literal",
-                    ));
-                };
-                let value = digits
-                    .parse::<i64>()
-                    .ok()
-                    .and_then(|value| i32::try_from(-value).ok())
-                    .ok_or_else(|| {
-                        self.error(
-                            token.span.start,
-                            "Number literal exceeds signed 32-bit range",
-                        )
-                    })?;
-                self.node(
-                    ExpressionKind::Integer(value),
-                    Span {
-                        start: token.span.start,
-                        end: magnitude.span.end,
-                    },
-                )
             }
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),

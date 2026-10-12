@@ -158,6 +158,10 @@ value category. Parameter/result mappings share that bridge. The internal enum
 remains a bounded profile, not a replacement for arbitrary API type expressions.
 
 Current rules accept Number/Number addition/subtraction returning Number;
+unary negation requires Number and returns Number, including proved non-null
+reads. Its semantic IR operation lowers through zero-minus-operand and preserves
+single evaluation and effect ordering. The tested i32 minimum wraps to itself;
+see the [negation evidence][negation-evidence].
 Char/Number addition in either order returns Char, and Char/Char addition
 returns String. Number/Char pairs support numeric equality and greater
 comparison; equality also accepts Null/Null and nullable Number/String/Dictionary
@@ -203,3 +207,5 @@ silently expand those contracts.
 [char-operators]: ../investigations/compiler-char-operators.md
 
 [string-operators]: ../investigations/compiler-string-operators.md
+
+[negation-evidence]: ../investigations/compiler-number-negation.md

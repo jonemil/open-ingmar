@@ -53,5 +53,6 @@ true
 ```
 
 Negative constants require parentheses before member calls, for example
-`(-128).abs()`. General unary operators remain outside the subset. See the
+`(-128).abs()`. The [negation example](../compiler-number-negation/README.md)
+covers parameters, calls, and grouped expressions. See the
 [encoding and parsing evidence](../../docs/investigations/compiler-number-literals.md).

@@ -117,8 +117,8 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         );
     }
     for source in [
-        "function f(n) { return -n; }",
-        "function f() { return -(1 + 2); }",
+        "function f(n) { return +n; }",
+        "function f() { return +(1 + 2); }",
         "function f() { return -1.abs(); }",
         "function f() { return 1--2; }",
     ] {

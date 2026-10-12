@@ -2,6 +2,11 @@
 //! These rules do not enumerate every operator/type combination in Monkey C.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
+/// Resolve Number negation to Number without widening other or nullable types.
+pub(crate) fn negate_result(operand: &Type) -> Option<Type> {
+    (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())
+}
+
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number pairs support addition/subtraction. Addition of Char/Number in either
 /// order returns Char; two Chars concatenate to String. An exact String operand

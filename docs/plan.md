@@ -7,10 +7,12 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Add unary Number negation next,
-   retaining postfix precedence and saved IR validation. Probe the i32 minimum
-   and overflow behavior before defining lowering; keep positive signs and
-   Boolean/logical operators separate until their contracts are established.
+1. **Extend core Lang contracts and value types.** Add Boolean logical negation
+   next through source and saved IR, using a focused runtime specimen. Follow
+   with short-circuit Boolean operators using explicit control flow; preserve
+   operand effects and null proofs at joins. Keep positive signs separate until
+   their contracts are established. Investigate the SDK's
+   [negative-literal postfix discrepancy][negation] before widening that syntax.
    Revisit Long/Float/Double values through a useful runnable example.
    Investigate the SDK's
    [supplementary literal discrepancy][char-literals] before expanding BMP source
@@ -244,3 +246,5 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 [weak-results]: investigations/compiler-immutable-weak.md
 
 [char-literals]: investigations/compiler-char-literals.md
+
+[negation]: investigations/compiler-number-negation.md

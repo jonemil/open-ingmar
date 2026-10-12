@@ -103,6 +103,9 @@ exercises scalar concatenation, nullable inputs, and identity equality.
 The [Number literal example](examples/compiler-number-literals/README.md)
 exercises signed 32-bit constants and immediate-width boundaries.
 
+The [Number negation example](examples/compiler-number-negation/README.md)
+exercises unary expressions, precedence, and guarded nullable operands.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

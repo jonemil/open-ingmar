@@ -48,6 +48,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::String { result, .. }
             | Operation::Integer { result, .. }
             | Operation::Binary { result, .. }
+            | Operation::Negate { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -218,6 +219,7 @@ fn expression(
     enum Task {
         Value(ValueId),
         Binary(BinaryOp),
+        Negate,
         Compare(ComparisonOp),
         Invoke(usize),
         Context,
@@ -290,6 +292,10 @@ fn expression(
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
                 }
+                Operation::Negate { operand, .. } => {
+                    tasks.extend([Task::Negate, Task::Value(*operand)]);
+                    (Opcode::Ipushz, vec![])
+                }
                 Operation::Binary {
                     kind, left, right, ..
                 } => {
@@ -308,6 +314,7 @@ fn expression(
                 }
                 _ => unreachable!("statement is not a value definition"),
             },
+            Task::Negate => (Opcode::Subv, vec![]),
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),

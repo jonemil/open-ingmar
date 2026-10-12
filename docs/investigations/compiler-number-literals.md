@@ -56,8 +56,9 @@ The SDK probe also printed -1 for `-1.abs()` and 1 for `(-1).abs()`.
 **Interpretation:** postfix calls bind before general unary negation.
 **Design decision:** support a minus only on decimal literal magnitudes for now,
 and require parentheses around a negative literal used as a call receiver.
-Reject `-n`, `-(expression)`, bare `-1.abs()`, and decrement syntax rather than
-giving them a different meaning. Unary syntax can grow as a separate change.
+The [negation follow-up][negation] adds general Number expression negation and
+reveals a deeper literal-postfix discrepancy; the explicit-parentheses
+restriction remains. Decrement syntax is unsupported.
 
 Source and IR accept decimal Numbers in `-2147483648..=2147483647`. IR stores
 i32 values; lowering emits zero specially and otherwise chooses the smallest
@@ -84,3 +85,5 @@ preserving its signed immediates and signing material.
 
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
 [example]: ../../examples/compiler-number-literals/README.md
+
+[negation]: compiler-number-negation.md

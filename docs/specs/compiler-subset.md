@@ -41,7 +41,8 @@ statement = "var" identifier "=" expression ";"
           | "while" "(" expression ")" block
           | "break" ";" | "continue" ";"
 expression = arithmetic (("==" | ">") arithmetic)?
-arithmetic = primary (("+" | "-") primary)*
+arithmetic = unary (("+" | "-") unary)*
+unary = primary | "-" primary
 primary = atom ("." member "(" argument-list? ")")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
@@ -54,13 +55,15 @@ letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `using`, `import`, `as`, and `null`
 are reserved. `true` and `false` produce Boolean literals. Whitespace and
 `//` or non-nested `/* ... */` comments are supported. The integer literal domain
-is the signed 32-bit range `-2147483648..=2147483647`. A leading minus is accepted
-only before decimal digits, with ordinary token whitespace/comments permitted.
-General unary signs, hex/underscore/suffix forms, other numeric types, unsupported
+is the signed 32-bit range `-2147483648..=2147483647`. Decimal negative literals
+are folded into that domain, with ordinary token whitespace/comments permitted.
+Unary Number negation also accepts parameters, locals, calls, and grouped
+expressions. Positive signs, hex/underscore/suffix forms, other numeric types, unsupported
 statements/additional functions in default mode, and other operators are
 rejected. A negative literal must be parenthesized before a member call:
-`(-1).abs()` is accepted, while `-1.abs()` is rejected until general unary
-precedence is implemented. Adjacent `--` is rejected as unsupported decrement.
+`(-1).abs()` is accepted, while `-1.abs()` remains rejected because of an SDK
+literal-postfix discrepancy. Repeated negation requires parentheses, as in
+`-(-value)`; adjacent `--` is rejected as unsupported decrement.
 Literal overflow is diagnosed at the literal's source start. See the
 [Number literal evidence](../investigations/compiler-number-literals.md).
 
@@ -116,8 +119,9 @@ source. CODE output is a raw payload, not a PRG. See
 
 The source subset supports binary `+` and `-` with equal precedence and left
 associativity, and parentheses for grouping. Decimal literals cover the signed
-32-bit range; a minus on a literal is supported without general unary negation.
-Other unary forms, other operators, and general
+32-bit range. Unary minus binds more tightly than binary arithmetic and after
+postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
+`abs` on the negated value. Unary plus, other operators, and general
 object calls remain unsupported; the bounded native calls below are separate. Parse nesting is
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
@@ -129,6 +133,7 @@ Validation resolves operand API types to these result contracts:
 | Operands | Operators | Result |
 |---|---|---|
 | Number / Number | `+`, `-` | Number |
+| Number | unary `-` | Number |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |
 | Exact String / supported scalar or null, either order | `+` | String |
@@ -157,6 +162,14 @@ invalid Unicode ranges are runtime responsibilities. See the
 Supported null checks are specified below. These contracts are independent of
 method lookup and VM instruction selection. API declarations do not broaden accepted
 operator combinations or cause heap allocations to be emitted.
+
+Unary negation requires a non-null Number; fresh reads under a validated direct
+null guard are accepted. It evaluates the operand once and lowers to
+`ipushz`, operand evaluation, then `subv`. Negating the i32 minimum retains
+`-2147483648` on the validated profile. Other arithmetic overflow behavior is
+not specified by that observation. Signed decimal literals remain constants;
+general negation uses a distinct IR operation and counts toward the nesting
+bound. See the [negation evidence](../investigations/compiler-number-negation.md).
 
 Semantic IR contains typed add/subtract definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:

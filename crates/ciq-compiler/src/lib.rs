@@ -219,6 +219,12 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Negate one Number value, preserving the runtime's signed 32-bit behavior.
+    /// Nullable values require a non-null proof before use.
+    Negate {
+        result: ValueId,
+        operand: ValueId,
+    },
     /// Define a Char from its raw 32-bit representation. This preserves VM bits,
     /// including values outside Unicode scalar ranges; source literals are narrower.
     Char {
@@ -740,6 +746,13 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::Negate { result, operand } => {
+                    let result_type = operators::negate_result(&type_of(operand).api_type())
+                        .and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail("negation requires a non-null Number"))?;
+                    types.insert(result, result_type);
+                    (Some(result), vec![operand])
+                }
                 Operation::Binary {
                     result,
                     left,
@@ -1051,6 +1064,9 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
+                                Operation::Negate { operand, .. } => {
+                                    tasks.push(Task::Value(*operand))
+                                }
                                 Operation::Binary { left, right, .. }
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
@@ -1206,6 +1222,9 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::Negate { result, operand } => {
+                    format!(".negate %{} %{}", result.0, operand.0)
+                }
                 Operation::Binary {
                     result,
                     kind,
