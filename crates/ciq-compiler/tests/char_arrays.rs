@@ -1,3 +1,4 @@
+use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel, Type},
@@ -37,14 +38,17 @@ fn char_arrays_preserve_element_contracts_and_complete_pipelines() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     let f = compile("function f(chars as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Array<Toybox.Lang.Char> { return chars; }").unwrap();
-    assert_eq!(f.parameter_types(), &[ParameterType::CharArray]);
-    assert_eq!(f.return_type(), ReturnType::CharArray);
+    assert_eq!(
+        f.parameter_types(),
+        &[ParameterType::Array(ArrayElement::Char)]
+    );
+    assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let f = compile(
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return \"abc\".toCharArray(); }",
     )
     .unwrap();
-    assert_eq!(f.return_type(), ReturnType::CharArray);
+    assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let f = compile("function f() { return M.text().toCharArray().size(); }");
     // Unknown standalone user call results default to Number; units resolve String.
@@ -73,7 +77,7 @@ fn char_arrays_preserve_element_contracts_and_complete_pipelines() {
 fn char_array_contracts_reject_wrong_elements_receivers_and_unsupported_consumers() {
     for source in [
         "function f(a as Toybox.Lang.Array) { return a.size(); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.String>) { return a.size(); }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Char> or Null) { return 0; }",
         "function f() { return 1.toCharArray(); }",
         "function f() { return \"A\".toCharArray(1); }",
@@ -138,7 +142,7 @@ fn saved_ir_and_api_context_recheck_array_element_types_and_introduction_levels(
         .is_err()
     );
     let array = Type::Array(Box::new(Type::named("Toybox.Lang.Char")));
-    assert_eq!(ReturnType::CharArray.api_type(), array);
+    assert_eq!(ReturnType::Array(ArrayElement::Char).api_type(), array);
     assert!(
         context(ApiLevel(1, 3, 0))
             .check_type(ciq_compiler::api::core(), &array)

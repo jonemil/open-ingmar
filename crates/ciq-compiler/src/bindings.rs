@@ -81,6 +81,8 @@ pub fn symbol_bindings(
                 "toChar".to_string()
             } else if alias == "__ciq_native_toCharArray" {
                 "toCharArray".to_string()
+            } else if alias == "__ciq_native_toUtf8Array" {
+                "toUtf8Array".to_string()
             } else if alias == "__ciq_native_size" {
                 "size".to_string()
             } else if alias == "__ciq_native_indexOf" {

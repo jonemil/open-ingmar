@@ -136,6 +136,9 @@ executes calls while discarding their results.
 The [array literal example](examples/compiler-array-literals/README.md) constructs
 Char arrays with ordered element effects and logical expressions.
 
+The [Number-array example](examples/compiler-number-arrays/README.md) exercises
+UTF-8 conversion, typed element reads, and generic Array methods.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

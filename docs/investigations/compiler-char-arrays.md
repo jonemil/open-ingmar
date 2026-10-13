@@ -95,8 +95,9 @@ Our current profile follows that checking rule without implicit conversions.
 
 ## Compiler boundaries
 
-Semantic API types preserve an Array element contract; executable values admit
-only non-null Char arrays. Introduction checks recurse into Char, so even a
+Semantic API types preserve an Array element contract. This record covers
+Char arrays; [Number arrays](compiler-number-arrays.md) have separate evidence.
+Introduction checks recurse into Char, so even a
 Char-array parameter calling API-1.0 `size` needs context 1.3.0. Array type
 invariance and assignability to Object are our checking policy; the read-only
 specimens do not establish broader SDK generic variance or mutation rules.

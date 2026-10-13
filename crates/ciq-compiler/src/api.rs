@@ -445,6 +445,12 @@ fn build_core() -> Catalogue {
     ];
     classes.get_mut(string).unwrap().methods = vec![
         method(
+            "toUtf8Array",
+            vec![],
+            Type::Array(Box::new(Type::named(number))),
+            char_initial,
+        ),
+        method(
             "toCharArray",
             vec![],
             Type::Array(Box::new(Type::named(char_type))),

@@ -94,6 +94,43 @@ pub enum BinaryOp {
     Subtract,
 }
 
+/// Supported invariant Array element contracts, independent of VM storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrayElement {
+    Number,
+    Char,
+}
+
+impl ArrayElement {
+    /// Return the native class type represented by this element contract.
+    pub fn api_type(self) -> api::Type {
+        api::Type::named(match self {
+            Self::Number => "Toybox.Lang.Number",
+            Self::Char => "Toybox.Lang.Char",
+        })
+    }
+
+    fn from_api_type(ty: &api::Type) -> Option<Self> {
+        [Self::Number, Self::Char]
+            .into_iter()
+            .find(|element| element.api_type() == *ty)
+    }
+
+    fn text(self) -> &'static str {
+        match self {
+            Self::Number => "number",
+            Self::Char => "char",
+        }
+    }
+
+    fn array_text(self) -> &'static str {
+        match self {
+            Self::Number => "number-array",
+            Self::Char => "char-array",
+        }
+    }
+}
+
 /// The supported function result contract, declared explicitly or inferred
 /// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
@@ -105,8 +142,8 @@ pub enum ReturnType {
     NullableString,
     Boolean,
     Char,
-    /// Non-null Array whose elements have the Char contract.
-    CharArray,
+    /// Non-null Array with an invariant supported element contract.
+    Array(ArrayElement),
     Void,
 }
 
@@ -119,8 +156,8 @@ pub enum ParameterType {
     NullableString,
     Boolean,
     Char,
-    /// Non-null Array whose elements have the Char contract.
-    CharArray,
+    /// Non-null Array with an invariant supported element contract.
+    Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
     NullableDictionary,
 }
@@ -135,7 +172,7 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
-            Self::CharArray => ValueType::CharArray.api_type(),
+            Self::Array(element) => ValueType::Array(element).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -151,7 +188,7 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
-            Self::CharArray => ValueType::CharArray.api_type(),
+            Self::Array(element) => ValueType::Array(element).api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -165,7 +202,7 @@ enum ValueType {
     NullableString,
     Boolean,
     Char,
-    CharArray,
+    Array(ArrayElement),
     Null,
     NullableDictionary,
 }
@@ -196,7 +233,7 @@ impl ValueType {
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
-            Self::CharArray => api::Type::Array(Box::new(api::Type::named("Toybox.Lang.Char"))),
+            Self::Array(element) => api::Type::Array(Box::new(element.api_type())),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Dictionary"),
@@ -209,9 +246,7 @@ impl ValueType {
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
-            api::Type::Array(element) if **element == api::Type::named("Toybox.Lang.Char") => {
-                Some(Self::CharArray)
-            }
+            api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.String" => Some(Self::String),
@@ -231,12 +266,12 @@ impl ValueType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     /// Allocate an empty array with the specified element contract.
-    /// Only Char elements are executable; allocation failures belong to the VM.
+    /// The element contract is explicit; allocation failures belong to the VM.
     ArrayNew {
         result: ValueId,
-        element_type: ParameterType,
+        element_type: ArrayElement,
     },
-    /// Read one Char from a non-null Char array using a non-null Number index.
+    /// Read one element from a non-null typed array using a non-null Number index.
     /// Evaluate array before index, once each. Runtime bounds failures remain
     /// observable; indexes are not clamped or adjusted by the compiler.
     ArrayRead {
@@ -786,15 +821,13 @@ impl Function {
                     result,
                     element_type,
                 } => {
-                    if element_type != ParameterType::Char {
-                        return Err(fail("array allocation currently requires Char elements"));
-                    }
+                    let ty = ValueType::Array(element_type);
                     if let Some(context) = context {
                         context
-                            .check_type(api::core(), &ValueType::CharArray.api_type())
+                            .check_type(api::core(), &ty.api_type())
                             .map_err(|message| fail(&message))?;
                     }
-                    types.insert(result, ValueType::CharArray);
+                    types.insert(result, ty);
                     (Some(result), vec![])
                 }
                 Operation::ArrayRead {
@@ -802,14 +835,16 @@ impl Function {
                     array,
                     index,
                 } => {
-                    if type_of(array) != ValueType::CharArray
-                        || type_of(index) != ValueType::Integer
-                    {
-                        return Err(fail(
-                            "array reads require a Char array and a non-null Number index",
-                        ));
+                    let ValueType::Array(element) = type_of(array) else {
+                        return Err(fail("array reads require a supported array receiver"));
+                    };
+                    if type_of(index) != ValueType::Integer {
+                        return Err(fail("array reads require a non-null Number index"));
                     }
-                    types.insert(result, ValueType::Char);
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&element.api_type()).unwrap(),
+                    );
                     (Some(result), vec![array, index])
                 }
                 Operation::Not { result, operand } => {
@@ -1017,7 +1052,7 @@ impl Function {
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
-                            ValueType::CharArray => ReturnType::CharArray,
+                            ValueType::Array(element) => ReturnType::Array(element),
                             _ => {
                                 return Err(fail(
                                     "nullable returns require an explicit result contract",
@@ -1248,7 +1283,7 @@ impl Function {
                         ParameterType::String => "string",
                         ParameterType::Boolean => "boolean",
                         ParameterType::Char => "char",
-                        ParameterType::CharArray => "char-array",
+                        ParameterType::Array(element) => element.array_text(),
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
                     .collect::<Vec<_>>()
@@ -1308,7 +1343,10 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
-                Operation::ArrayNew { result, .. } => format!(".array-new %{} char", result.0),
+                Operation::ArrayNew {
+                    result,
+                    element_type,
+                } => format!(".array-new %{} {}", result.0, element_type.text()),
                 Operation::ArrayRead {
                     result,
                     array,
@@ -1486,14 +1524,14 @@ fn validate_call_arguments(
                     | ValueType::String
                     | ValueType::Boolean
                     | ValueType::Char
-                    | ValueType::CharArray
+                    | ValueType::Array(_)
                     | ValueType::Null
                     | ValueType::NullableInteger
                     | ValueType::NullableString
             )
         })
     }) {
-        return Err("user calls require supported scalar, Char-array, or nullable arguments");
+        return Err("user calls require supported scalar, array, or nullable arguments");
     }
     if arguments.len() > MAX_PARAMETERS {
         return Err("call exceeds 254-argument limit");
@@ -1509,7 +1547,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
-        ReturnType::CharArray => Ok(ValueType::CharArray),
+        ReturnType::Array(element) => Ok(ValueType::Array(element)),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
 }
@@ -1522,7 +1560,8 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
-        ReturnType::CharArray => " result=char-array",
+        ReturnType::Array(ArrayElement::Char) => " result=char-array",
+        ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
 }

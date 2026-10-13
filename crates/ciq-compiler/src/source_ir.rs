@@ -350,7 +350,7 @@ impl Builder<'_> {
         self.push(
             Operation::ArrayNew {
                 result,
-                element_type: crate::ParameterType::Char,
+                element_type: crate::ArrayElement::Char,
             },
             Some(span),
         );

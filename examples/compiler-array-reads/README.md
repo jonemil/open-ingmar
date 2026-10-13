@@ -42,7 +42,8 @@ b
 Array and index evaluate once, in that order. The index must be Number and
 within array bounds at runtime; out-of-range reads produce a fatal VM error in
 the tested profile. Writes, String/dictionary indexing, nullable arrays, and
-other element types remain unsupported. See the [source contract][source] and
+other element types beyond [Number](../compiler-number-arrays/README.md) remain
+unsupported. See the [source contract][source] and
 [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#char-arrays

@@ -43,7 +43,7 @@ pub(crate) fn value_call(
 ) -> Result<api::Type, String> {
     let (class, generic_argument) = match receiver {
         api::Type::Named(class) => (class.as_str(), None),
-        api::Type::Array(element) if **element == api::Type::named("Toybox.Lang.Char") => {
+        api::Type::Array(element) if crate::ArrayElement::from_api_type(element).is_some() => {
             ("Toybox.Lang.Array", Some(element.as_ref()))
         }
         _ => return Err("native calls require a supported class-valued receiver".into()),
@@ -132,6 +132,7 @@ pub(crate) fn value_call(
                     | "hashCode"
                     | "toNumberWithBase"
                     | "toCharArray"
+                    | "toUtf8Array"
             )
     );
     if !supported {
@@ -162,7 +163,7 @@ pub(crate) fn value_call(
             .iter()
             .any(|argument| !accepts(&nullable_number, argument))
         {
-            return Err("Array<Char>.slice requires Number or Null bounds".into());
+            return Err("Array.slice requires Number or Null bounds".into());
         }
     }
     if member == "equals" && !scalar_or_null(&arguments[0]) {

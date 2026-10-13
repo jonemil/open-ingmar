@@ -1,3 +1,4 @@
+use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, LocatedOperation, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -36,7 +37,7 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
     );
     let source = "function f(c as Toybox.Lang.Char) as Toybox.Lang.Array<Toybox.Lang.Char> { return [c, 'b']; }";
     let f = compile(source).unwrap();
-    assert_eq!(f.return_type(), ReturnType::CharArray);
+    assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let ops = f.operations();
     let allocation = ops
@@ -98,21 +99,25 @@ fn array_literals_enforce_element_api_and_resource_limits() {
 fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements() {
     let text = "ciq-ir\n.function f\n.array-new %0 char\n.return %0\n.end\n";
     let f = parse_ir(text).unwrap();
-    assert_eq!(f.return_type(), ReturnType::CharArray);
+    assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     for bad in [
-        ".array-new %0 number",
+        ".array-new %0 boolean",
         ".array-new %0 char 1",
         ".array-new char",
     ] {
         assert!(parse_ir(&text.replace(".array-new %0 char", bad)).is_err());
     }
-    let mut ops = f.operations().to_vec();
-    if let Operation::ArrayNew { element_type, .. } = &mut ops[0].operation {
-        *element_type = ParameterType::Integer;
-    }
-    assert!(Function::with_signature("bad".into(), vec![], ReturnType::CharArray, ops).is_err());
+    let numbers = parse_ir(&text.replace("char", "number")).unwrap();
+    assert_eq!(
+        numbers.return_type(),
+        ReturnType::Array(ArrayElement::Number)
+    );
+    assert_eq!(
+        numbers.lower().encode().unwrap(),
+        f.lower().encode().unwrap()
+    );
 }
 
 #[test]

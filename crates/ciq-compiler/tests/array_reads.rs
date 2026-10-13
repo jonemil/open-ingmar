@@ -1,3 +1,4 @@
+use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -100,7 +101,10 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
     assert!(
         Function::with_signature(
             "bad".into(),
-            vec![ParameterType::CharArray, ParameterType::Integer],
+            vec![
+                ParameterType::Array(ArrayElement::Char),
+                ParameterType::Integer
+            ],
             ReturnType::Char,
             operations
         )
@@ -132,7 +136,7 @@ fn bounds_sensitive_reads_preserve_order_even_without_calls_or_writes() {
     operations.splice(reads[0]..reads[0], moved);
     let error = Function::with_signature(
         "bad".into(),
-        vec![ParameterType::CharArray; 2],
+        vec![ParameterType::Array(ArrayElement::Char); 2],
         ReturnType::String,
         operations,
     )

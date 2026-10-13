@@ -44,5 +44,5 @@ type inference and broader Array profiles. See the [source contract][source],
 [IR allocation][ir], and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#char-arrays
-[ir]: ../../docs/specs/compiler-ir-text.md#char-array-allocation
+[ir]: ../../docs/specs/compiler-ir-text.md#array-allocation
 [evidence]: ../../docs/investigations/compiler-array-literals.md

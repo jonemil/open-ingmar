@@ -20,9 +20,8 @@ Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, Array size/string/search/append/removal/reverse/slice,
 AppBase initialization/startup/shutdown, and System printing/exit.
 Parameter/result subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Char, Char arrays, Null,
-nullable Number,
-nullable String, and nullable Dictionary; operator validation uses those
+Internal value categories map to Number, String, Boolean, Char, Number/Char
+arrays, Null, nullable Number/String, and nullable Dictionary; operators use those
 semantic types. The
 bounded native call profile resolves Number's inherited `toString`, `equals`,
 and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
@@ -44,7 +43,7 @@ value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User functions accept Number, String, Boolean, Char, Char arrays,
+supported calls. User functions accept Number, String, Boolean, Char, Number/Char arrays,
 and nullable Number/String parameters and results. API declarations alone do
 not enable other types. String `find`, `toNumber`, and `toNumberWithBase` retain
 Number-or-Null result contracts; `substring` retains
@@ -65,18 +64,21 @@ Keep compiler analysis state outside this model.
 class used for method lookup. Array element contracts are invariant; an Array
 may widen to its declared Object base, but cannot widen to a mutable Array of
 different elements. Introduction checks recurse into the element contract.
-The executable bridge currently admits only non-null Char arrays. String
-conversion and nonempty literals produce that category; size/string/search use
+The executable bridge admits non-null Number/Char arrays. The shared model
+uses `Array(ArrayElement)` for values, parameters, and results. Element
+contracts affect checking, not VM Array identity. String conversions and Char
+literals produce these categories; size/string/search use
 ordinary native dispatch and local storage. The native profile substitutes
-receiver element types into generic Array signatures, matching our SDK specimens for
-search, transforms, and mutation. `add`/`addAll` return the same typed Array;
+receiver element types into generic Array signatures, matching SDK specimens
+for search, transforms, and mutation. `add`/`addAll` return the same typed Array;
 removals return Boolean. `addAll` checks the argument's invariant element type
 after recursive generic substitution. Native calls preserve mutation order
 without requiring static alias tracking. Broader element types remain separate
 work; mutation cannot bypass element validation. See the
 [array evidence](../investigations/compiler-char-arrays.md) and
 [transform evidence](../investigations/compiler-array-transforms.md) and
-[mutation evidence](../investigations/compiler-array-mutation.md).
+[mutation evidence](../investigations/compiler-array-mutation.md). Number
+elements have [separate evidence](../investigations/compiler-number-arrays.md).
 
 Semantic identities such as `Toybox.Lang.Number` are independent of VM symbol
 IDs, import indexes, section offsets, and implementation functions. Native

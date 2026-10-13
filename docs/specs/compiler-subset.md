@@ -30,7 +30,7 @@ parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
-           | "Toybox.Lang.Array" "<" "Toybox.Lang.Char" ">"
+           | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number") ">"
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -775,7 +775,8 @@ supported source annotation is `Toybox.Lang.Array<Toybox.Lang.Char>`, with ordin
 token whitespace permitted. Array parameters and results retain the element
 contract; source array results require an explicit annotation. Locals may store,
 copy, and reassign matching Char-array values, and user calls may pass/return
-them. Raw Array annotations, other element types, and nullable arrays are
+them. [Number elements](#number-arrays) have a separate supported profile.
+Raw Array annotations, other element types, and nullable arrays are
 unsupported. Element contracts are invariant; Char arrays are not widened to
 mutable arrays of Object.
 
@@ -829,7 +830,34 @@ observable. String/dictionary indexing, element writes, nullable arrays, and
 other element contracts remain unsupported. See the
 [array-read evidence](../investigations/compiler-array-reads.md).
 
+## Number arrays
+
+String `toUtf8Array()` returns a non-null `Array<Number>` since API 1.3.0.
+Its initial elements are UTF-8 bytes. The Array element contract is Number,
+so later appends need not stay within byte range. Source parameters/results use
+`Toybox.Lang.Array<Toybox.Lang.Number>`; non-Number results require explicit
+source annotations as usual.
+
+Number arrays use the same storage, native-method, and evaluation-order rules
+as Char arrays. `add`, `indexOf`, `remove`, and `removeAll` require Number;
+`addAll` requires `Array<Number>`. `reverse` and `slice` retain `Array<Number>`.
+Indexing produces Number, permitting ordinary arithmetic and native Number
+calls. Number and Char arrays are invariant and cannot substitute for each
+other; no implicit numeric/Char conversion is performed.
+
+The Array/Number classes require API 1.0.0; conversion and the mutation/search/
+transform methods above require 1.3.0. Context checking keeps signature-type
+availability separate from method availability. Nullable String receivers need
+proof before conversion. Nullable arrays and other element types are unsupported.
+
+Literal construction still accepts only nonempty Char lists. Numeric literals
+such as `[1, 2]` and contextual empty literals await inference; explicit saved IR
+can allocate an empty Number array. Arrays must be converted to String before
+printing, and cannot be console entry results. See the
+[Number-array evidence](../investigations/compiler-number-arrays.md).
+
 ## Nullable results
+
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
 Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1. String `substring` and user calls may also return nullable

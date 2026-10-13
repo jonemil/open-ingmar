@@ -1,3 +1,4 @@
+use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -130,7 +131,7 @@ fn saved_ir_cannot_move_size_before_a_mutation_consumed_first() {
     operations.splice(mutation..mutation, moved);
     let error = Function::with_signature(
         "bad".into(),
-        vec![ParameterType::CharArray],
+        vec![ParameterType::Array(ArrayElement::Char)],
         ReturnType::Integer,
         operations,
     )

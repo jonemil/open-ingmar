@@ -34,6 +34,7 @@ const FIND: u32 = 0x008000bc;
 const TO_NUMBER: u32 = 0x008000a7;
 const TO_CHAR: u32 = 0x008004c6;
 const TO_CHAR_ARRAY: u32 = 0x008004c4;
+const TO_UTF8_ARRAY: u32 = 0x008004c5;
 const SIZE: u32 = 0x008000ae;
 const INDEX_OF: u32 = 0x008004bf;
 const ARRAY_ADD: u32 = 0x0080014e;
@@ -256,7 +257,7 @@ pub fn build_console_application(
     };
     if matches!(
         entry.return_type(),
-        ReturnType::NullableInteger | ReturnType::NullableString | ReturnType::CharArray
+        ReturnType::NullableInteger | ReturnType::NullableString | ReturnType::Array(_)
     ) {
         return Err(error(
             "console entry requires a non-null scalar or Void result",
@@ -312,6 +313,7 @@ pub fn build_console_application(
         ("toNumber".into(), TO_NUMBER),
         ("toChar".into(), TO_CHAR),
         ("toCharArray".into(), TO_CHAR_ARRAY),
+        ("toUtf8Array".into(), TO_UTF8_ARRAY),
         ("size".into(), SIZE),
         ("indexOf".into(), INDEX_OF),
         ("add".into(), ARRAY_ADD),
@@ -380,6 +382,7 @@ pub fn build_console_application(
         ("__ciq_native_toNumber".into(), TO_NUMBER),
         ("__ciq_native_toChar".into(), TO_CHAR),
         ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),
+        ("__ciq_native_toUtf8Array".into(), TO_UTF8_ARRAY),
         ("__ciq_native_size".into(), SIZE),
         ("__ciq_native_indexOf".into(), INDEX_OF),
         ("__ciq_native_add".into(), ARRAY_ADD),

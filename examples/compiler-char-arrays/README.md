@@ -47,7 +47,8 @@ true
 The [array-read example](../compiler-array-reads/README.md) covers indexing.
 The [mutation example](../compiler-array-mutation/README.md) covers bulk append
 and removals. The [literal example](../compiler-array-literals/README.md) covers
-Char-array construction. Nullable arrays and other element contracts remain
+Char-array construction. [Number arrays](../compiler-number-arrays/README.md)
+have a separate example. Nullable arrays and other element contracts remain
 unsupported. See the [source contract][source] and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#char-arrays

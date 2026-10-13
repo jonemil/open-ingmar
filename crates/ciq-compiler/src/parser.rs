@@ -194,15 +194,17 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     /// Parse the supported Array element annotation after its canonical path.
-    /// Only explicit Char elements are accepted; raw and nullable arrays are not.
-    fn char_array_annotation(&mut self) -> Result<(), Diagnostic> {
+    /// Number/Char elements are accepted; raw and nullable arrays are not.
+    fn array_annotation(&mut self) -> Result<crate::ArrayElement, Diagnostic> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
-        if self.path()? != "Toybox.Lang.Char" {
-            return Err(self.error(at, "only Array<Toybox.Lang.Char> is supported"));
-        }
+        let element = match self.path()?.as_str() {
+            "Toybox.Lang.Char" => crate::ArrayElement::Char,
+            "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            _ => return Err(self.error(at, "unsupported Array element annotation")),
+        };
         self.expect(Kind::Punctuation('>'), "'>'")?;
-        Ok(())
+        Ok(element)
     }
     fn path(&mut self) -> Result<String, Diagnostic> {
         let token = self.identifier()?;
@@ -1053,8 +1055,7 @@ impl Parser<'_> {
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
                         "Toybox.Lang.Array" => {
-                            self.char_array_annotation()?;
-                            crate::ParameterType::CharArray
+                            crate::ParameterType::Array(self.array_annotation()?)
                         }
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
                     };
@@ -1087,10 +1088,7 @@ impl Parser<'_> {
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
-                "Toybox.Lang.Array" => {
-                    self.char_array_annotation()?;
-                    crate::ReturnType::CharArray
-                }
+                "Toybox.Lang.Array" => crate::ReturnType::Array(self.array_annotation()?),
                 "Void" => crate::ReturnType::Void,
                 _ => return Err(self.error(at, "unsupported result type annotation")),
             };

@@ -101,7 +101,8 @@ mod tests {
             ValueType::NullableString,
             ValueType::Boolean,
             ValueType::Char,
-            ValueType::CharArray,
+            ValueType::Array(crate::ArrayElement::Char),
+            ValueType::Array(crate::ArrayElement::Number),
             ValueType::Null,
             ValueType::NullableDictionary,
         ];
@@ -213,7 +214,8 @@ mod tests {
             ValueType::NullableString,
             ValueType::Boolean,
             ValueType::Char,
-            ValueType::CharArray,
+            ValueType::Array(crate::ArrayElement::Char),
+            ValueType::Array(crate::ArrayElement::Number),
             ValueType::Null,
             ValueType::NullableDictionary,
         ] {

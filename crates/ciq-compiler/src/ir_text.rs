@@ -100,7 +100,10 @@ pub(crate) fn parse_ir_context(
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
-                        "char-array" => Ok(crate::ParameterType::CharArray),
+                        "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "number-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Number))
+                        }
                         "nullable-dictionary" => Ok(crate::ParameterType::NullableDictionary),
                         _ => Err(fail(*name_at, "unsupported parameter type")),
                     })
@@ -246,15 +249,14 @@ pub(crate) fn parse_ir_context(
             None
         };
         let operation = if kind == 30 {
-            if fields[2] != "char" {
-                return Err(fail(
-                    *at,
-                    "array allocation currently requires char elements",
-                ));
-            }
+            let element_type = match fields[2].as_str() {
+                "char" => crate::ArrayElement::Char,
+                "number" => crate::ArrayElement::Number,
+                _ => return Err(fail(*at, "unsupported array element type")),
+            };
             Operation::ArrayNew {
                 result: parse_value(&fields[1])?,
-                element_type: crate::ParameterType::Char,
+                element_type,
             }
         } else if kind == 29 {
             Operation::Discard {
@@ -512,7 +514,8 @@ fn call_contract(
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
             "char" => crate::ReturnType::Char,
-            "char-array" => crate::ReturnType::CharArray,
+            "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
+            "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
         };
         Ok((result, at + 1))

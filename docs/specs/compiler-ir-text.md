@@ -141,14 +141,14 @@ Lowering emits `cpush` with the same bits, without a DATA string or native
 conversion call. Invalid widths and malformed operands are rejected. See the
 [literal evidence](../investigations/compiler-char-literals.md).
 
-## Char-array allocation
+## Array allocation
 
-`.array-new %<result> char [span=<start>:<end>]` allocates a fresh empty non-null
-`Array<Char>`. `char` is the only accepted element contract. Typed construction
-uses `Operation::ArrayNew { result, element_type: ParameterType::Char }`;
-other element contracts are rejected. Definition/use, block, and evaluation
+`.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
+non-null array. `element` is `char` or `number`; typed construction uses
+`Operation::ArrayNew` with `ArrayElement::Char` or `ArrayElement::Number`.
+Other element contracts are rejected. Definition/use, block, and evaluation
 order checks apply to allocation even if its result is consumed later.
-API context requires 1.3.0 for the Char element contract.
+API context requires 1.3.0 for Char, or 1.0.0 for Number and Array.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
 or uninitialized element contract is implied. Source literals fill this array
@@ -157,10 +157,11 @@ The explicit IR element type permits empty allocation even though source `[]`
 awaits contextual typing. See the
 [construction evidence](../investigations/compiler-array-literals.md).
 
-## Char-array reads
+## Array element reads
 
 `.array-read %<result> %<array> %<index> [span=<start>:<end>]` consumes a
-non-null Char array and non-null Number index, and defines Char. Shared validation
+non-null supported array and non-null Number index, and defines the element
+type: Char or Number. Shared validation
 recomputes operand types, null proofs, block-local definitions, one-use rules,
 and evaluation order. No element/result type annotation is trusted. Array
 evaluates before index, once each; lowering emits those operands then `agetv`.
@@ -169,7 +170,7 @@ the function has no calls, prints, or writes.
 
 Index values are not range-checked, clamped, or adjusted by the compiler.
 Negative and other out-of-range Numbers remain accepted IR inputs whose reads
-may fail at runtime. Other arrays, String/dictionary receivers, nullable arrays,
+may fail at runtime. Other element types, String/dictionary receivers, nullable arrays,
 and writes are unsupported. See the [source profile](compiler-subset.md#char-arrays)
 and [runtime evidence](../investigations/compiler-array-reads.md).
 
@@ -239,6 +240,7 @@ ciq-ir
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
+`number-array`,
 `nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -597,7 +599,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:char-array:...`.
+`parameter-types=integer:string:boolean:char:char-array:number-array:...`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -759,26 +761,29 @@ need no new VM allocation.
 See the
 [Char evidence](../investigations/compiler-char-methods.md).
 
-String `toCharArray` defines a non-null Char array. Array receivers support
-`size` returning Number, `toString` returning String, `indexOf` taking one
-Char and returning Number, `add` taking Char and returning `Array<Char>`,
-`addAll` taking `Array<Char>` and returning `Array<Char>`, `remove`/`removeAll`
-taking Char and returning Boolean,
-`reverse` returning `Array<Char>`, and `slice` taking two Number-or-Null bounds
-and returning `Array<Char>`. Generic API parameters and results are substituted
-from the receiver's element type. `char-array` is
-the parameter category and `result=char-array` is the user-call result category.
-Function result text is
-inferred from returns, so `.function result=char-array` is not accepted.
-Native results are recomputed from receiver/member contracts, not annotations.
-Mutation remains an ordered native call; text cannot change an argument's
-element contract or reorder a mutation relative to its consumers.
-Matching arrays may use ordinary `.local`, `.read`, `.assign`, calls, and
-returns without a new allocation directive. Shared validation retains the Char
-element contract and rejects other/nullable array categories. Context requires
-API 1.3.0 for conversion and Char-array signatures, including calls to `size`.
-See the [source profile](compiler-subset.md#char-arrays) and
-[evidence](../investigations/compiler-char-arrays.md).
+String `toCharArray` defines `Array<Char>` and `toUtf8Array` defines
+`Array<Number>`, both since API 1.3.0. Array receivers support `size` returning
+Number, `toString` returning String, and `indexOf` returning Number. Search,
+append, and removals require the receiver's element type; `addAll` requires an
+array with that same invariant type. `add`/`addAll`, `reverse`, and `slice`
+retain the receiver's array type; removals return Boolean. Slice accepts two
+Number-or-Null bounds. Generic signatures are substituted before checking.
+
+Parameter/user-call categories are `char-array` and `number-array`.
+Value-producing user calls use `result=char-array` or `result=number-array`.
+Function results are inferred from returns; neither array category is accepted
+as a `.function result=` field. Native results are recomputed from their
+receiver/member contracts. Text cannot misdeclare element types or reorder
+mutation relative to its consumers.
+
+Matching arrays use ordinary locals, reads, assignments, calls, and returns.
+Nullable arrays and other element types are unsupported. API context checks
+Array and element classes separately from methods: Number-array signatures
+need 1.0.0, Char-array signatures need 1.3.0, and the String conversions and
+mutation/search/transform methods above need 1.3.0. See the source
+[Char profile](compiler-subset.md#char-arrays),
+[Number profile](compiler-subset.md#number-arrays), and
+[Number-array evidence](../investigations/compiler-number-arrays.md).
 
 `.add` on Number/Number defines Number, on Char/Number or Number/Char defines
 Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.

@@ -28,7 +28,7 @@ documented. Prerequisites describe our executable subset.
 | `toNumberWithBase(Number)` | Number or Null | 1.4.1 | Supported |
 | `toString()` | String | 1.0.0 | Supported |
 | `toUpper()` | String | 1.0.0 | Supported |
-| `toUtf8Array()` | Array of Number | 1.3.0 | Needs arrays |
+| `toUtf8Array()` | Array of Number | 1.3.0 | [Number-array profile](compiler-number-arrays.md) |
 | inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbols and callable values |
 | inherited `weak()` | WeakReference; effective String | 1.2.0 | Supported; [separate probe][weak-results] |
 

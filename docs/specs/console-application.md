@@ -71,8 +71,15 @@ Fixed native symbol IDs in this profile:
 | toNumber | `0x008000a7` |
 | toChar | `0x008004c6` |
 | toCharArray | `0x008004c4` |
+| toUtf8Array | `0x008004c5` |
 | size | `0x008000ae` |
 | indexOf | `0x008004bf` |
+| add | `0x0080014e` |
+| addAll | `0x008004be` |
+| remove | `0x008000b7` |
+| removeAll | `0x008004c0` |
+| reverse | `0x008004c1` |
+| slice | `0x008004c2` |
 | toNumberWithBase | `0x008004c3` |
 | toString | `0x008000af` |
 | length | `0x008000bb` |

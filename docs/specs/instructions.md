@@ -199,8 +199,8 @@ calls, and absent return values remain unresolved.
 
 Successful abstract stack: `[..., array, index] → [..., value]`.
 
-The array and Number index come from the stack, in that order. Char-array reads
-produce Char in our supported compiler profile. Observed bytes at CODE+`0x20c`
+The array and Number index come from the stack, in that order. Char/Number arrays
+produce their corresponding element type in our compiler profile. Observed bytes at CODE+`0x20c`
 in the SDK array-read specimen are `12 01 37 10 16`: load parameter slot 1,
 push index zero, read, return. The main function also has `10` at CODE+`0x49`.
 
@@ -209,7 +209,10 @@ successful reads, operand order, and bounds failures. Negative, equal-to-length,
 and empty-array indices produce a fatal bounds error in the SDK probes, despite
 `try/catch`. Our generated negative-index program produces the same error.
 
-**Limits:** Other array element types, non-Number index conversion, and other
+The [Number-array experiment](../investigations/compiler-number-arrays.md) also
+verifies numeric reads and arithmetic through this opcode.
+
+**Limits:** Other element types, non-Number index conversion, and other
 VM/target versions remain unverified. Failure behavior is not a successful
 stack transition; do not treat the error as a recoverable exception.
 

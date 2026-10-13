@@ -7,8 +7,9 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Generalize Array values
-   beyond Char, infer contextual element types for empty literals, and support
+1. **Extend core Lang contracts and value types.** Extend Array elements to
+   native object values, infer literal elements beyond Char (including
+   contextual types for empty literals), and support
    ordinary object construction required by source `getInitialView`.
    Keep generic signatures and invariant element
    checking shared across source and saved IR. Comparator sorting and other

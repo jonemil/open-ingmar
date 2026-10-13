@@ -1,3 +1,4 @@
+use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -142,7 +143,7 @@ fn saved_ir_cannot_defer_a_discarded_mutation_past_a_later_read() {
     ops.splice(mutation..mutation, moved);
     let error = Function::with_signature(
         "bad".into(),
-        vec![ParameterType::CharArray],
+        vec![ParameterType::Array(ArrayElement::Char)],
         ReturnType::Void,
         ops,
     )

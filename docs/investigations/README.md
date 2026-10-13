@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number arrays](compiler-number-arrays.md): UTF-8 conversion, numeric element
+  contracts, invariant mutation, and API introduction boundaries.
 - [Array literals](compiler-array-literals.md): typed construction, element
   effects, allocation ordering, and append-based initialization.
 - [Native statements](compiler-native-statements.md): discarded call results,
