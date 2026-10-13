@@ -756,10 +756,11 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 
 ## Char arrays
 
-Nonempty array literals accept Char-valued expressions, for example
+Nonempty Char-array literals accept Char-valued expressions, for example
 `['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a
-fresh non-null `Array<Char>` and may receive postfix reads/calls. Other element
-types, mixed types, nested arrays, trailing commas, and empty source literals
+fresh non-null `Array<Char>` and may receive postfix reads/calls. Number literals
+follow the [Number-array contract](#number-arrays). Other element types, mixed
+types, nested arrays, trailing commas, and empty source literals
 are rejected. Even an annotated result does not yet supply contextual element
 typing for `[]`.
 
@@ -850,11 +851,21 @@ transform methods above require 1.3.0. Context checking keeps signature-type
 availability separate from method availability. Nullable String receivers need
 proof before conversion. Nullable arrays and other element types are unsupported.
 
-Literal construction still accepts only nonempty Char lists. Numeric literals
-such as `[1, 2]` and contextual empty literals await inference; explicit saved IR
-can allocate an empty Number array. Arrays must be converted to String before
+Nonempty literals such as `[1, 2]`, `[n, -n]`, and `[M.make(), 3]` produce a fresh
+`Array<Number>`. The first element selects Number or Char from its expression
+contract; every element must have that same non-null type. Parameters, locals,
+user/native calls, arithmetic, and element reads can supply the first element.
+Nullable values require the usual branch proof, including when used first.
+Allocation precedes element effects; evaluation and typed append proceed left
+to right as for Char literals. This lowering requires API 1.3.0 for `add`.
+Empty literals still lack contextual inference; explicit saved IR can allocate
+an empty Number array. See the [literal evidence][number-array-literals].
+
+Arrays must be converted to String before
 printing, and cannot be console entry results. See the
 [Number-array evidence](../investigations/compiler-number-arrays.md).
+
+[number-array-literals]: ../investigations/compiler-number-array-literals.md
 
 ## Nullable results
 

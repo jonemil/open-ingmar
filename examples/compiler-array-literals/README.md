@@ -39,10 +39,12 @@ z
 
 Element calls run left to right, once each. The logical element skips its
 right-hand helper, so `unexpected` must not appear. Source literals currently
-require at least one Char element; empty literals and other element types await
-type inference and broader Array profiles. See the [source contract][source],
+require homogeneous Char or [Number elements][numbers]; empty literals and
+other element types await broader Array profiles. See the [source contract][source],
 [IR allocation][ir], and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#char-arrays
 [ir]: ../../docs/specs/compiler-ir-text.md#array-allocation
 [evidence]: ../../docs/investigations/compiler-array-literals.md
+
+[numbers]: ../compiler-number-array-literals/README.md

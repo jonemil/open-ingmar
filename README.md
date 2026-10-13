@@ -103,6 +103,9 @@ exercises scalar concatenation, nullable inputs, and identity equality.
 The [Number literal example](examples/compiler-number-literals/README.md)
 exercises signed 32-bit constants and immediate-width boundaries.
 
+The [Number-array literal example](examples/compiler-number-array-literals/README.md)
+checks inferred elements, typed calls, and evaluation order.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

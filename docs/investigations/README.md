@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number-array literals](compiler-number-array-literals.md): inferred elements,
+  concrete saved-IR contracts, and call order.
 - [Number arrays](compiler-number-arrays.md): UTF-8 conversion, numeric element
   contracts, invariant mutation, and API introduction boundaries.
 - [Array literals](compiler-array-literals.md): typed construction, element

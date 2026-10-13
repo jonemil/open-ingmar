@@ -35,8 +35,8 @@ runtime identity imply interchangeable mutable element contracts.
 The executable model uses `Array(ArrayElement)` for values, parameters, and
 results. `ArrayElement` currently admits Number and Char. Native resolution
 substitutes that contract into arguments/results, and element reads derive
-their result type from the receiver. Source literals retain their bounded Char
-profile until inference is extended.
+their result type from the receiver. [Literal inference][literals] supplies
+Number arrays directly from source expressions.
 
 The SDK-produced SYMBOLS records bind `toUtf8Array` to `0x008004c5`; the
 independent application uses that binding with existing member invocation.
@@ -87,10 +87,11 @@ by `invalid.jungle`; `invalid-sdk.log` retains its diagnostics. Reproduce by
 substituting the rejected argument types above into methods on
 `"A".toUtf8Array()`.
 
-Other element types, contextual empty/numeric literals, native object values,
+Other element types, contextual empty literals, native object values,
 and array stores remain separate work in [the plan][plan].
 
 [example]: ../../examples/compiler-number-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
 [plan]: ../plan.md
+[literals]: compiler-number-array-literals.md

@@ -38,8 +38,17 @@ append maintains its invariant element contract. The builder keeps the array
 and current element in two temporary locals, so branch joins have empty stacks
 and no expression value crosses a block. The element slot is reused across the
 literal. This avoids exposing a partly filled Array with Null slots as
-`Array<Char>`. Direct allocation/fill needs initialized-element rules before
-replacing this strategy; the present lowering does not promise SDK memory use.
+the declared element type. Direct allocation/fill needs initialized-element
+rules before replacing this strategy; the present lowering does not promise SDK
+memory use.
+
+The source builder selects Number or Char from the first element's candidate
+type and records that concrete contract on `ArrayNew`. Candidate tracking uses
+shared operator/native contracts, parameter annotations, fixed local types,
+and user-call result declarations. It can select a nullable value's possible
+non-null class, but does not establish a branch proof. Whole-function validation
+checks every element and use, including null safety; saved IR carries no
+inference placeholder. Empty source literals still need contextual inference.
 
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.

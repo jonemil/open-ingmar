@@ -22,6 +22,7 @@ mod null_flow;
 mod operators;
 mod parser;
 mod source_ir;
+mod source_types;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{

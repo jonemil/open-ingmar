@@ -237,6 +237,7 @@ struct Builder<'a> {
     calls: &'a CallResults,
     parameters: BTreeMap<String, usize>,
     operations: Vec<LocatedOperation>,
+    types: crate::source_types::Types,
     next_local: u32,
     next_block: u32,
     loops: Vec<(BlockId, BlockId)>,
@@ -335,7 +336,7 @@ impl Builder<'_> {
         })
     }
 
-    /// Construct a Char-array literal before evaluating its elements in order.
+    /// Construct a typed array literal before evaluating its elements in order.
     /// Two temporary locals retain the array and current element across joins;
     /// native append preserves the element contract without uninitialized slots.
     fn array_literal(
@@ -364,6 +365,22 @@ impl Builder<'_> {
         for (index, expression) in elements.into_iter().enumerate() {
             let element_span = expression.span;
             let value = self.value(expression, locals)?;
+            if index == 0 {
+                let element_type = self
+                    .types
+                    .element(value)
+                    .unwrap_or(crate::ArrayElement::Char);
+                // Materializing a logical element can insert an entry block.
+                // Locate the provisional allocation by identity, not position.
+                let allocation = self.operations.iter_mut().find(|op| {
+                    matches!(op.operation, Operation::ArrayNew { result: id, .. } if id == result)
+                }).expect("literal allocation was emitted before its elements");
+                allocation.operation = Operation::ArrayNew {
+                    result,
+                    element_type,
+                };
+                self.types.set_array(result, array, element_type);
+            }
             let store = if index == 0 {
                 Operation::LocalInitialize {
                     local: element,
@@ -555,6 +572,7 @@ impl Builder<'_> {
         Ok(())
     }
     fn push(&mut self, operation: Operation, span: Option<Span>) {
+        self.types.observe(&operation);
         self.operations.push(LocatedOperation { operation, span });
     }
     fn block_id(&mut self) -> BlockId {
@@ -572,14 +590,19 @@ impl Builder<'_> {
         } else {
             expression
         };
-        emit(
+        let first = self.operations.len();
+        let result = emit(
             self.source,
             expression,
             locals,
             &self.parameters,
             &mut self.operations,
             self.calls,
-        )
+        )?;
+        for operation in &self.operations[first..] {
+            self.types.observe(&operation.operation);
+        }
+        Ok(result)
     }
 
     /// Emit a statement sequence and report whether all paths terminate the
@@ -834,6 +857,16 @@ fn build_body(
     let value_result = declared_result(&ast) != crate::ReturnType::Void;
     let result_type = ast.result_type;
     let annotations = ast.parameter_types;
+    let candidate_parameters = method
+        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
+        .flatten()
+        .map(|signature| signature.parameters)
+        .unwrap_or_else(|| {
+            annotations
+                .iter()
+                .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+                .collect()
+        });
     let mut builder = Builder {
         source,
         calls,
@@ -844,6 +877,7 @@ fn build_body(
             .map(|(i, n)| (n, i))
             .collect(),
         operations: Vec::new(),
+        types: crate::source_types::Types::new(candidate_parameters),
         next_local: 0,
         next_block: 1,
         loops: Vec::new(),

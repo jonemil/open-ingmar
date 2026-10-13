@@ -73,7 +73,6 @@ fn invariant_element_types_are_rechecked_in_source_and_saved_ir() {
         "function f() { 1.toUtf8Array(); }",
         "function f() { \"A\".toUtf8Array(1); }",
         "function f() { System.println(\"A\".toUtf8Array()); }",
-        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
