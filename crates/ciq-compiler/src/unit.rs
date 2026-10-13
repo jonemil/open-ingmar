@@ -111,6 +111,14 @@ impl ClassBase {
             Self::WatchUiView => "Toybox.WatchUi.View",
         }
     }
+    /// Return the native value type produced by supported source construction.
+    /// AppBase is created by application startup, not by a source expression.
+    pub fn constructed_class(self) -> Option<crate::NativeClass> {
+        match self {
+            Self::ApplicationAppBase => None,
+            Self::WatchUiView => Some(crate::NativeClass::View),
+        }
+    }
     pub(crate) fn text(self) -> &'static str {
         match self {
             Self::ApplicationAppBase => "Application.AppBase",
@@ -662,7 +670,7 @@ impl CompilationUnit {
                         _ => {}
                     }
                 }
-                if let Operation::SourceNew { class, .. } = &located.operation {
+                if let Operation::SourceNew { class, base, .. } = &located.operation {
                     let declaration = self
                         .classes
                         .iter()
@@ -674,11 +682,11 @@ impl CompilationUnit {
                                 format!("unresolved source construction class {class}"),
                             )
                         })?;
-                    if declaration.base != ClassBase::WatchUiView {
+                    if declaration.base != *base {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "only source View construction is supported".into(),
+                            "source construction base does not match the class declaration".into(),
                         ));
                     }
                     if !declaration
@@ -992,6 +1000,7 @@ fn compile_sources_context(
             );
         }
         for class in &parsed.classes {
+            calls.class_bases.insert(class.name.clone(), class.base);
             for ast in &class.methods {
                 calls.insert(
                     (class.name.clone(), ast.name.clone()),

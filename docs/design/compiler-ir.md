@@ -68,11 +68,15 @@ initializer. Dc references arrive through callback parameters and cannot be
 constructed or put in arrays. Scalar operators and object methods remain
 separately checked.
 
-`SourceNew` retains a source class name for unit resolution and application
-binding. Its value uses the native View base contract, with exact constructor
-identity retained as a local refinement for bounded instance dispatch. Unit
-validation requires a View subclass with a validated initializer and matching
-argument contracts.
+`SourceNew` retains a source class name and native base for unit resolution and
+application binding. Its value uses the base's supported native projection,
+currently View, with exact constructor identity retained as a local refinement
+for bounded instance dispatch. Source lowering resolves the base from collected
+class declarations, including declarations in later files; module methods do
+not establish a class. Function validation checks native construction support;
+unit validation checks the claimed base against the class declaration and
+requires a validated initializer with matching argument contracts. Saved IR
+carries both identities so future native bases need not be inferred as View.
 
 Exact source-class identity is reconstructed from IR by shared object tracking.
 It follows construction, explicit source parameters/results, local initialization,

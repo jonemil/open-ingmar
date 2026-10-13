@@ -376,6 +376,8 @@ pub enum Operation {
     SourceNew {
         result: ValueId,
         class: String,
+        /// Native base projection; unit validation checks the class declaration.
+        base: ClassBase,
         arguments: Vec<ValueId>,
     },
     /// Invoke a catalogue-resolved Void member on a value receiver for effects.
@@ -1064,13 +1066,16 @@ impl Function {
                 Operation::SourceNew {
                     result,
                     ref class,
+                    base,
                     ref arguments,
                 } => {
                     validate_call_names(None, class).map_err(fail)?;
-                    native::constructor(NativeClass::View, context)
-                        .map_err(|message| fail(&message))?;
+                    let native_class = base.constructed_class().ok_or_else(|| {
+                        fail("native base has no supported source construction profile")
+                    })?;
+                    native::constructor(native_class, context).map_err(|message| fail(&message))?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    types.insert(result, ValueType::Object(NativeClass::View));
+                    types.insert(result, ValueType::Object(native_class));
                     (Some(result), arguments.clone())
                 }
                 Operation::NativeCallStatement {
@@ -1732,13 +1737,14 @@ impl Function {
                 Operation::SourceNew {
                     result,
                     ref class,
+                    base,
                     ref arguments,
                 } => {
                     let args = arguments
                         .iter()
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
-                    format!(".new-source %{} {class}{args}", result.0)
+                    format!(".new-source %{} {class} {}{args}", result.0, base.text())
                 }
                 Operation::ObjectCall {
                     result,

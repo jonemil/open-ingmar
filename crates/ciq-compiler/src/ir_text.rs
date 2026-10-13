@@ -322,13 +322,21 @@ pub(crate) fn parse_ir_context(
                 value: parse_value(&fields[2])?,
             }
         } else if kind == 33 {
-            if width < 3 {
-                return Err(fail(*at, "expected .new-source result class [arguments]"));
+            if width < 4 {
+                return Err(fail(
+                    *at,
+                    "expected .new-source result class base [arguments]",
+                ));
             }
             Operation::SourceNew {
                 result: parse_value(&fields[1])?,
                 class: fields[2].clone(),
-                arguments: fields[3..width]
+                base: match fields[3].as_str() {
+                    "WatchUi.View" => crate::ClassBase::WatchUiView,
+                    "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
+                    _ => return Err(fail(*at, "unsupported source construction base")),
+                },
+                arguments: fields[4..width]
                     .iter()
                     .map(|field| parse_value(field))
                     .collect::<Result<_, _>>()?,

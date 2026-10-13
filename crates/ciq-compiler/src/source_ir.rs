@@ -31,13 +31,13 @@ fn emit(
             field,
         },
         parser::ExpressionKind::SourceNew { class, arguments } => {
-            if !calls.keys().any(|(owner, _)| owner == &class) {
-                return Err(Diagnostic::at(
+            let base = calls.class_bases.get(&class).copied().ok_or_else(|| {
+                Diagnostic::at(
                     source,
                     expression.span.start,
                     "source constructor requires a declared class",
-                ));
-            }
+                )
+            })?;
             if locals.contains_key(&class) || parameters.contains_key(&class) {
                 return Err(Diagnostic::at(
                     source,
@@ -52,6 +52,7 @@ fn emit(
             Operation::SourceNew {
                 result: ValueId(operations.len() as u32),
                 class,
+                base,
                 arguments,
             }
         }
@@ -1174,6 +1175,7 @@ pub(crate) struct CallSignature {
 #[derive(Clone, Default)]
 pub(crate) struct CallContext {
     signatures: BTreeMap<(String, String), CallSignature>,
+    pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     parameter_types: Vec<crate::ParameterType>,
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
 }
@@ -1186,9 +1188,6 @@ impl CallContext {
     }
     fn get(&self, key: &(String, String)) -> Option<&CallSignature> {
         self.signatures.get(key)
-    }
-    fn keys(&self) -> impl Iterator<Item = &(String, String)> {
-        self.signatures.keys()
     }
 }
 

@@ -38,9 +38,11 @@ impl Types {
                     .ok()
                     .map(|(ty, _)| ty),
             ),
-            Operation::SourceNew { result, .. } => {
-                (*result, Some(Type::named("Toybox.WatchUi.View")))
-            }
+            Operation::SourceNew { result, base, .. } => (
+                *result,
+                base.constructed_class()
+                    .map(|class| Type::named(class.name())),
+            ),
             Operation::TupleNew { result, .. } => {
                 (*result, Some(crate::TupleShape::OneView.api_type()))
             }

@@ -77,4 +77,15 @@ System.exit after drawText. Use sourcePath `.` and manifest/resource paths
 Retained shutdown logs are under `scratch/compiler-reference-fields/shutdown/`.
 The probe export inspects our SDK-compiled source PRG, not SDK implementation.
 
+## Input delegate follow-up
+
+Official documentation reviewed 2026-10-13: [BehaviorDelegate] extends
+InputDelegate. Its `onSelect()` callback takes no arguments, returns Boolean
+(`true` means handled), and is available since API 1.2.0. Start/Enter or a tap
+typically triggers selection. This makes it a useful first delegate probe
+without requiring KeyEvent handling. Target-specific input dispatch and native
+class metadata remain to be tested; this is a proposed experiment, not runtime
+evidence. See the [plan](../plan.md#next-work) for implementation sequencing.
+
 [example]: ../../examples/compiler-reference-fields/README.md
+[BehaviorDelegate]: https://developer.garmin.com/connect-iq/api-docs/Toybox/WatchUi/BehaviorDelegate.html

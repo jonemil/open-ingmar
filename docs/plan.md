@@ -64,7 +64,11 @@ compiling a project.
 3. **Add state and input to source Views.** Extend the
    [retained View example](../examples/compiler-reference-fields/README.md) with
    InputDelegate-derived source classes. Keep source identity and native base
-   projection distinct when extending the supported native bases. Keep
+   projection distinct when extending the supported native bases. Extend the
+   constructor projection and source signature/reference-field contracts
+   together; the latter currently require View subclasses. Start with a
+   BehaviorDelegate and its zero-argument Boolean `onSelect` callback, avoiding
+   an opaque event-object prerequisite. Keep
    initialization and assignability checked through saved IR; extend source
    inheritance when needed.
    Add a View/delegate pair whose input handler updates a counter and

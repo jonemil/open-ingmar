@@ -84,7 +84,7 @@ fn receiver_and_arguments_keep_order_and_contextual_array_contracts() {
     let method = VIEW.replace("function current() { return self.count; }", "function current() { return self.count; } function length(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }");
     let unit = compile_sources(&["function f() { var v = new HelloView(); System.println(v.length([])); System.println(v.length([v.current()])); }", &method]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
-    let bad = "ciq-ir\n.function f\n.new-source %0 HelloView\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.call-object %3 %1 HelloView add %2\n.read %4 $0\n.call-object %5 %4 HelloView add %3\n.return %5\n.end\n";
+    let bad = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.call-object %3 %1 HelloView add %2\n.read %4 $0\n.call-object %5 %4 HelloView add %3\n.return %5\n.end\n";
     assert!(
         parse_ir(bad)
             .unwrap_err()

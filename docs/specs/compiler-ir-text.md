@@ -801,14 +801,18 @@ Reference declarations, result claims, and initializer safety follow the
 [reference-field contract](compiler-classes.md#source-reference-fields).
 Standalone method parsing leaves that unit obligation unresolved.
 
-`.new-source %<result-id> <class-name> [%<argument-id> ...]` allocates and
-initializes a source View.
-It defines a non-null View value and is order-sensitive. Function validation
-checks the identifier and View initializer availability (API 2.1.0); unit
-validation requires a declared WatchUi.View subclass with a matching explicit
+`.new-source %<result-id> <class-name> <native-base> [%<argument-id> ...]`
+allocates and initializes a source object. The supported base is `WatchUi.View`;
+for example, `.new-source %0 HelloView WatchUi.View %1` passes one argument.
+The base is required and defines the native value projection, currently a
+non-null View. Construction is order-sensitive. Function validation checks the
+identifier, supported construction profile, and native initializer availability
+(View: API 2.1.0). Unit validation requires the named class's declared base to
+equal the operation's base, with a matching explicit
 initializer whose parameter contracts match the arguments. A standalone function
-retains this unresolved class
-obligation and cannot supply complete application metadata by itself.
+retains this unresolved declaration obligation and cannot supply complete
+application metadata by itself. AppBase construction is reserved for application
+startup; it is not accepted by this operation.
 
 `.constant %<result-id> Toybox.Graphics FONT_MEDIUM` defines a FontDefinition
 enum value. Validation checks the catalogue identity, type, and API level;
