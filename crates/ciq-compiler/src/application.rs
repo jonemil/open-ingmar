@@ -36,6 +36,7 @@ const TO_CHAR: u32 = 0x008004c6;
 const TO_CHAR_ARRAY: u32 = 0x008004c4;
 const SIZE: u32 = 0x008000ae;
 const INDEX_OF: u32 = 0x008004bf;
+const ARRAY_ADD: u32 = 0x0080014e;
 const REVERSE: u32 = 0x008004c1;
 const SLICE: u32 = 0x008004c2;
 const TO_NUMBER_WITH_BASE: u32 = 0x008004c3;
@@ -310,6 +311,7 @@ pub fn build_console_application(
         ("toCharArray".into(), TO_CHAR_ARRAY),
         ("size".into(), SIZE),
         ("indexOf".into(), INDEX_OF),
+        ("add".into(), ARRAY_ADD),
         ("reverse".into(), REVERSE),
         ("slice".into(), SLICE),
         ("toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
@@ -374,6 +376,7 @@ pub fn build_console_application(
         ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),
         ("__ciq_native_size".into(), SIZE),
         ("__ciq_native_indexOf".into(), INDEX_OF),
+        ("__ciq_native_add".into(), ARRAY_ADD),
         ("__ciq_native_reverse".into(), REVERSE),
         ("__ciq_native_slice".into(), SLICE),
         ("__ciq_native_toNumberWithBase".into(), TO_NUMBER_WITH_BASE),

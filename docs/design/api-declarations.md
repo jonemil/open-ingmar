@@ -17,8 +17,9 @@ Dictionary and WeakReference, plus Application.AppBase and the
 Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
-length/case/string methods, AppBase initialization/startup/shutdown, and System
-printing/exit. Parameter/result subset types expose `api_type()` mappings.
+length/case/string methods, Array size/string/search/append/reverse/slice,
+AppBase initialization/startup/shutdown, and System printing/exit.
+Parameter/result subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Char, Char arrays, Null,
 nullable Number,
 nullable String, and nullable Dictionary; operator validation uses those
@@ -68,8 +69,9 @@ The executable bridge currently admits only non-null Char arrays. String
 conversion produces that category, and size/string/search calls use ordinary
 native dispatch and local storage. The native profile substitutes the receiver
 element type into generic Array signatures, matching our SDK specimens for
-`indexOf`, `reverse`, and `slice`. Broader element types remain separate work;
-mutation cannot bypass element validation. See the
+`indexOf`, `reverse`, `slice`, and `add`. `add(Char)` mutates the referenced
+Array and returns the same typed Array. Broader element types remain separate
+work; other mutation cannot bypass element validation. See the
 [array evidence](../investigations/compiler-char-arrays.md) and
 [transform evidence](../investigations/compiler-array-transforms.md).
 

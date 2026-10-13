@@ -756,23 +756,27 @@ unsupported. Element contracts are invariant; Char arrays are not widened to
 mutable arrays of Object.
 
 Char-array receivers support `size()` returning Number, `toString()` returning
-String, `indexOf(Char)` returning Number, `reverse()` returning `Array<Char>`,
-and `slice(Number or Null, Number or Null)` returning `Array<Char>`. Search
-returns the first matching index or `-1` when absent. Generic API parameters
-and results substitute the receiver's element type; executable array values
-remain limited to Char elements. Array methods dispatch through the Array class.
-Explicit context checks both the Array class and Char element, requiring API
-1.3.0 for this profile.
+String, `indexOf(Char)` returning Number, `add(Char)` returning `Array<Char>`,
+`reverse()` returning `Array<Char>`, and `slice(Number or Null, Number or Null)`
+returning `Array<Char>`. Search returns the first matching index or `-1` when
+absent. Generic API parameters and results substitute the receiver's element
+type; executable array values remain limited to Char elements. Array methods
+dispatch through the Array class. Explicit context checks both the Array class
+and Char element, requiring API 1.3.0 for this profile.
 
-`reverse` returns the elements in reverse order and leaves the receiver's
-contents unchanged. `slice` uses a start-inclusive, end-exclusive range. Null
-start/end select the beginning/end; negative bounds offset from the end, and
-out-of-range bounds are clipped. A start after the end returns an empty array.
+`add` appends one element to the receiver and returns that same array. Aliases
+observe the mutation. `reverse` returns the elements in reverse order and leaves
+the receiver's contents unchanged. `slice` uses a start-inclusive, end-exclusive
+range. Null start/end select the beginning/end; negative bounds offset from the
+end, and out-of-range bounds are clipped. A start after the end returns an empty
+array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
-console entry results. Array literals, construction, mutation, `sort`, and
-ordinary object weak references remain unsupported.
+console entry results. Array literals and construction, `addAll`, removals,
+`sort`, and ordinary object weak references remain unsupported. Native Array
+calls are supported as values; direct native value-call expression statements
+are outside the source subset.
 Guard nullable String receivers before conversion; that proof does not imply
 support for nullable Array results. See the
 [Char-array evidence](../investigations/compiler-char-arrays.md).

@@ -721,9 +721,10 @@ See the
 
 String `toCharArray` defines a non-null Char array. Array receivers support
 `size` returning Number, `toString` returning String, `indexOf` taking one
-Char and returning Number, `reverse` returning `Array<Char>`, and `slice` taking
-two Number-or-Null bounds and returning `Array<Char>`. Generic API parameters
-and results are substituted from the receiver's element type. `char-array` is
+Char and returning Number, `add` taking Char and returning `Array<Char>`,
+`reverse` returning `Array<Char>`, and `slice` taking two Number-or-Null bounds
+and returning `Array<Char>`. Generic API parameters and results are substituted
+from the receiver's element type. `char-array` is
 the parameter category and `result=char-array` is the user-call result category.
 Function result text is
 inferred from returns, so `.function result=char-array` is not accepted.

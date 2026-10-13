@@ -2,10 +2,11 @@
 
 SDK 9.2.0 and our generated Forerunner 265 application agree on all 18 console
 lines in the [example][example]. `toCharArray` produces a typed collection passed
-through locals and user calls; size/string/search methods use native dispatch.
+through locals and user calls; selected Array methods use native dispatch.
 SDK checking requires Char search arguments. The supplementary String specimen
 converts to one full-code-point element. This does not establish construction,
-mutation, element indexing, or general Array contracts. Reviewed 2026-10-12.
+other mutation, element indexing, or general Array contracts. Reviewed
+2026-10-12.
 
 ## Public contracts and method inventory
 
@@ -20,7 +21,7 @@ methods; generic Array signatures use Object-or-Null element contracts:
 | `indexOf(element)` | Number | 1.3.0 | Supported for Char searches |
 | `reverse()` | Array | 1.3.0 | Char result verified; see transform evidence |
 | `slice(start, end)` | Array | 1.3.0 | Char result/bounds verified; see transform evidence |
-| `add(element)` | Array | 1.3.0 | Mutation and element checking |
+| `add(element)` | Array | 1.3.0 | Char mutation verified; see append evidence |
 | `addAll(array)` | Array | 1.3.0 | Mutation and compatible collection types |
 | `remove(element)` | Boolean | 1.3.0 | Mutation and equality behavior |
 | `removeAll(element)` | Boolean | 1.3.0 | Mutation and equality behavior |
@@ -98,7 +99,7 @@ Semantic API types preserve an Array element contract; executable values admit
 only non-null Char arrays. Introduction checks recurse into Char, so even a
 Char-array parameter calling API-1.0 `size` needs context 1.3.0. Array type
 invariance and assignability to Object are our checking policy; the read-only
-specimen does not establish broader SDK generic variance or mutation rules.
+specimens do not establish broader SDK generic variance or mutation rules.
 
 Pipeline tests compare source/resumed unit IR, unsigned PRGs, and assembly round
 trips. Edited IR cannot misdeclare a Char-array user-call result as String or
@@ -108,8 +109,8 @@ Console entry results remain scalar/Void; array entries are rejected.
 
 Element access has [separate evidence](compiler-array-reads.md); broader Array
 methods remain in [the plan][plan]. A native
-array result does not establish source array allocation, mutation, nullable
-arrays, or ordinary object/reference lifetime behavior.
+array result does not establish source array construction, mutation beyond
+`add`, nullable arrays, or ordinary object/reference lifetime behavior.
 
 [example]: ../../examples/compiler-char-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
@@ -118,3 +119,4 @@ arrays, or ordinary object/reference lifetime behavior.
 [char-literals]: compiler-char-literals.md
 [plan]: ../plan.md
 [transform evidence]: compiler-array-transforms.md
+[append evidence]: compiler-array-add.md

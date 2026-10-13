@@ -54,7 +54,7 @@ SDK script and run each program in the simulator using the documented helper.
 
 The API catalogue models generic element parameters and substitutes them from
 the concrete receiver. Executable array values remain restricted to non-null
-Char arrays. Mutation, other element types, comparator sorting, and all
+Char arrays. Other mutation, other element types, comparator sorting, and all
 non-Char generic runtime behavior remain unverified.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

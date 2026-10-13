@@ -97,7 +97,7 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.Array",
                 "Toybox.Lang.Array",
-                "size" | "toString" | "indexOf" | "reverse" | "slice"
+                "size" | "toString" | "indexOf" | "add" | "reverse" | "slice"
             )
             | (
                 "Toybox.Lang.Number",

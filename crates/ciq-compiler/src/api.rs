@@ -398,6 +398,12 @@ fn build_core() -> Catalogue {
         method("size", vec![], Type::named(number), initial),
         method("toString", vec![], Type::named(string), initial),
         method(
+            "add",
+            vec![Type::Parameter("Element".into())],
+            Type::Array(Box::new(Type::Parameter("Element".into()))),
+            char_initial,
+        ),
+        method(
             "indexOf",
             vec![Type::Parameter("Element".into())],
             Type::named(number),

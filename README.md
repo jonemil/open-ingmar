@@ -124,6 +124,9 @@ element access, postfix chains, and array/index evaluation order.
 The [Array transform example](examples/compiler-array-transforms/README.md)
 checks element-preserving reverse and slice results.
 
+The [Char-array append example](examples/compiler-array-add/README.md) checks
+mutation through shared references and the typed `add` result.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

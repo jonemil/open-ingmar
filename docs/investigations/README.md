@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Array append](compiler-array-add.md): mutation, typed self result, aliases,
+  and receiver/argument evaluation order.
 - [Array transforms](compiler-array-transforms.md): generic element
   substitution, reverse/slice bounds, and SDK/generated output comparison.
 - [Array reads](compiler-array-reads.md): instruction encoding, operand order,
