@@ -636,7 +636,8 @@ evidence][void-evidence].
 
 ## Native superclass initialization
 
-`.base-initialize Application.AppBase` invokes the supported native superclass
+`.base-initialize Application.AppBase` or `.base-initialize WatchUi.View` invokes
+the identified native superclass
 initializer on the current instance, with no explicit arguments or value result.
 It accepts the usual optional source span. Other base names or additional fields
 are rejected. Function validation requires an instance receiver and preserves
@@ -647,7 +648,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:view:char-array:number-array:view-array:...`.
+`parameter-types=integer:string:boolean:char:view:dc:char-array:number-array:view-array:...`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -753,6 +754,33 @@ The call retains its argument/result and API checks. A dropped nullable result
 does not prove its receiver non-null. User Void calls and native module Void
 statements keep their existing forms; no Void expression value is created.
 See [runtime evidence](../investigations/compiler-native-statements.md).
+
+For a Void native member, use
+`.call-native-discard %<receiver-id> <member> [%<argument-id> ...]`.
+It defines no value. Validation requires the resolved method result to be Void;
+receiver/argument types, API availability, and ordered evaluation still apply.
+The bounded Dc clear/setColor/drawText profile uses this form.
+
+## Source construction and native constants
+
+`.new-source %<result-id> <class-name>` allocates and initializes a source View.
+It defines a non-null View value and is order-sensitive. Function validation
+checks the identifier and View initializer availability (API 2.1.0); unit
+validation requires a declared WatchUi.View subclass with a matching explicit
+zero-argument initializer. A standalone function retains this unresolved class
+obligation and cannot supply complete application metadata by itself.
+
+`.constant %<result-id> Toybox.Graphics FONT_MEDIUM` defines a FontDefinition
+enum value. Validation checks the catalogue identity, type, and API level;
+lowering emits its numeric value 3. It is not an Integer operation and cannot
+be replaced by one when used as a font. No other constants are accepted.
+
+`dc` identifies a non-null Graphics.Dc reference in parameter/result contracts.
+It is not constructible and `dc-array` is rejected. View.onUpdate requires one
+Dc parameter and Void; onShow/onHide require zero parameters and Void. Callback
+ownership and constructor resolution follow the [class rules](compiler-classes.md).
+
+## Native value calls
 
 `.call-native %<result-id> %<receiver-id> <member> [%<argument-id> ...]` invokes a
 runtime-provided method and defines its semantic result. The receiver and

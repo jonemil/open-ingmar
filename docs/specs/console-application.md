@@ -88,6 +88,12 @@ Fixed native symbol IDs in this profile:
 | toLower | `0x008000be` |
 | toUpper | `0x008000bf` |
 | View | `0x0080019f` |
+| onShow | `0x00800203` |
+| onUpdate | `0x00800204` |
+| onHide | `0x00800205` |
+| setColor | `0x0080020b` |
+| clear | `0x00800239` |
+| drawText | `0x00800246` |
 | AppBase | `0x0080029c` |
 | onStart | `0x0080029f` |
 | getInitialView | `0x008002a0` |
@@ -95,7 +101,8 @@ Fixed native symbol IDs in this profile:
 | globals | `0x008002e6` |
 
 DATA contains [version-2 records][classes] in this order: statics, globals,
-synthesized app class, user modules in lexicographic order, then CODE literal
+synthesized app class, source Views in declaration order, user modules in
+lexicographic order, then CODE literal
 strings in assembly order. Positions are calculated from record lengths; no SDK
 DATA prefix or opaque spans are transplanted.
 
@@ -180,7 +187,8 @@ exported and reconstructed through the existing section-project tools.
 ## Source class startup
 
 A unit containing [source classes](compiler-classes.md) must contain exactly one
-AppBase class and select a zero-parameter startup method with `Class.method`,
+AppBase class, optionally with View subclasses, and select a zero-parameter
+startup method with `Class.method`,
 or select `Class.onStart` when the source supplies that native callback.
 The global application field and ENTRY_POINTS class identity remain symbol `1`,
 representing the named source class. Plain member names equal to the class
@@ -195,9 +203,14 @@ identity, and method ownership survive saved unit IR.
 Source `initialize` follows the
 [initializer contract](compiler-classes.md#source-initialization) and owns its
 single method record when supplied. Source onStart similarly follows its native
-callback contract and replaces the startup wrapper. `getInitialView` and `AppBase`
-source methods remain unsupported. Constructor, imports, and blank View
-generation are unchanged. This does not yet compile additional source lifecycle
-callbacks, fields, arbitrary object receivers, or View
-construction. [Runtime evidence](../investigations/compiler-class.md) verifies
-void/integer startup, nested self calls, and the source edit.
+callback contract and replaces the startup wrapper. Source getInitialView
+replaces the generated callback with its validated one-view result. Source
+onStop binds the shutdown callback; methods named AppBase remain unsupported.
+
+Source Views receive distinct symbols and DATA records with parent globals,
+native extends word `0x40000001` (WatchUi.View import index one), and a View base
+field with that same reference. Their native constructor wrappers invoke View's
+constructor; `initialize`, onShow, onUpdate, and onHide fields point to source
+CODE where supplied. Source construction selects the class through globals.
+Instance fields and general object-member dispatch remain unsupported. See
+[visible View evidence](../investigations/compiler-visible-view.md).

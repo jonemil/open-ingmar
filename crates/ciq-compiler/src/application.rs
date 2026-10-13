@@ -207,8 +207,9 @@ fn lifecycle(
 /// DATA records, fixed native symbol IDs, two native-class imports, generated
 /// lifecycle methods, and empty resources/permissions/exceptions. The entry must
 /// be a zero-parameter integer-return or void global function, or a method in
-/// the sole declared AppBase class. Class entries use Class.method names and
-/// current-receiver lookup. onStart invokes it once and prints only integer
+/// the sole declared AppBase class, alongside optional source View subclasses.
+/// Class entries use Class.method names and current-receiver lookup.
+/// onStart invokes it once and prints only integer
 /// results; getInitialView returns a blank native View unless a validated source
 /// callback supplies a one-view positional result. Source callbacks that
 /// collide with generated lifecycle/base fields are rejected, except a validated
@@ -231,6 +232,17 @@ pub fn build_console_application(
     unit: &CompilationUnit,
     app: &ConsoleApplication,
 ) -> Result<Prg, ApplicationError> {
+    let app_classes = unit
+        .classes()
+        .iter()
+        .filter(|class| class.base == crate::ClassBase::ApplicationAppBase)
+        .collect::<Vec<_>>();
+    if !unit.classes().is_empty() && app_classes.len() != 1 {
+        return Err(error(
+            "application profile requires exactly one AppBase class",
+        ));
+    }
+    let app_class = app_classes.first().copied();
     let (entry, instance) = if unit.classes().is_empty() {
         let Some(entry) = unit
             .declarations()
@@ -241,12 +253,7 @@ pub fn build_console_application(
         };
         (&entry.function, false)
     } else {
-        if unit.classes().len() != 1 {
-            return Err(error(
-                "console class profile requires exactly one AppBase class",
-            ));
-        }
-        let class = &unit.classes()[0];
+        let class = app_class.unwrap();
         let Some((owner, member)) = app.entry.split_once('.') else {
             return Err(error("class application entry must use Class.method"));
         };
@@ -278,7 +285,8 @@ pub fn build_console_application(
         ));
     }
     let source_start = instance
-        && unit.classes()[0]
+        && app_class
+            .unwrap()
             .methods
             .iter()
             .any(|f| f.name() == "onStart");
@@ -344,6 +352,12 @@ pub fn build_console_application(
         ("onStart".into(), ON_START),
         ("onStop".into(), ON_STOP),
         ("getInitialView".into(), GET_INITIAL_VIEW),
+        ("onShow".into(), 0x00800203),
+        ("onUpdate".into(), 0x00800204),
+        ("onHide".into(), 0x00800205),
+        ("setColor".into(), 0x0080020b),
+        ("clear".into(), 0x00800239),
+        ("drawText".into(), 0x00800246),
     ]);
     for class in unit.classes() {
         if ids.contains_key(&class.name) {
@@ -351,7 +365,9 @@ pub fn build_console_application(
                 "source class name collides with a pinned native symbol",
             ));
         }
-        ids.insert(class.name.clone(), 1);
+        if class.base == crate::ClassBase::ApplicationAppBase {
+            ids.insert(class.name.clone(), 1);
+        }
     }
     let names: BTreeSet<_> = unit
         .declarations()
@@ -363,6 +379,7 @@ pub fn build_console_application(
                 .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
         )
         .chain(modules.iter().cloned())
+        .chain(unit.classes().iter().map(|class| class.name.clone()))
         .collect();
     let mut next = 2; // Symbol 1 is the synthesized application class.
     for name in names {
@@ -381,6 +398,10 @@ pub fn build_console_application(
         ("__ciq_sdk_System".into(), SYSTEM),
         ("__ciq_sdk_WatchUi".into(), WATCH_UI),
         ("__ciq_native_View".into(), VIEW),
+        ("__ciq_source_globals".into(), GLOBALS),
+        ("__ciq_native_setColor".into(), 0x0080020b),
+        ("__ciq_native_clear".into(), 0x00800239),
+        ("__ciq_native_drawText".into(), 0x00800246),
         ("__ciq_native_AppBase".into(), APP_BASE),
         ("__ciq_native_initialize".into(), INITIALIZE),
         ("__ciq_member_println".into(), PRINTLN),
@@ -431,8 +452,12 @@ pub fn build_console_application(
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
     }
+    for class in unit.classes() {
+        bindings.insert(format!("__ciq_class_{}", class.name), ids[&class.name]);
+    }
     let source_initial_view = instance
-        && unit.classes()[0]
+        && app_class
+            .unwrap()
             .methods
             .iter()
             .any(|f| f.name() == "getInitialView");
@@ -443,6 +468,19 @@ pub fn build_console_application(
         source_start,
         source_initial_view,
     );
+    for source_class in unit
+        .classes()
+        .iter()
+        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+    {
+        items.extend([
+            Item::Label(format!("__ciq_ctor_{}", source_class.name)),
+            instruction(Opcode::Getselfv, vec![sym("__ciq_native_View")]),
+            instruction(Opcode::Getsv, vec![sym("__ciq_app_init")]),
+            instruction(Opcode::Invokemz, vec![]),
+            instruction(Opcode::Return, vec![]),
+        ]);
+    }
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
@@ -472,6 +510,18 @@ pub fn build_console_application(
             Reference::Raw(module_ids[module]),
         ));
     }
+    for source_class in unit
+        .classes()
+        .iter()
+        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+    {
+        global_fields.push(field(
+            ids[&source_class.name],
+            0x50,
+            7,
+            Reference::Class(format!("__ciq_data_class_{}", source_class.name)),
+        ));
+    }
     let globals = class(
         "__ciq_data_globals",
         [None, None, None, Some(Reference::Raw(GLOBALS))],
@@ -493,7 +543,7 @@ pub fn build_console_application(
             method(GET_INITIAL_VIEW, 0x10, "__ciq_initial_view"),
         ],
     );
-    for source_class in unit.classes() {
+    if let Some(source_class) = app_class {
         if source_class
             .methods
             .iter()
@@ -529,6 +579,37 @@ pub fn build_console_application(
         });
     }
     let mut classes = vec![statics, globals, application];
+    for source_class in unit
+        .classes()
+        .iter()
+        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+    {
+        let ctor_label = format!("__ciq_ctor_{}", source_class.name);
+        let mut fields = vec![
+            method(INIT, 0x30, &ctor_label),
+            field(VIEW, 0x70, 7, Reference::Raw(0x40000001)),
+        ];
+        fields.extend(
+            source_class
+                .methods
+                .iter()
+                .map(|f| method(ids[f.name()], 0x10, &source_class.code_label(f.name()))),
+        );
+        fields.sort_by_key(|field| match field.key {
+            Key::Raw(key) => key,
+            _ => unreachable!(),
+        });
+        classes.push(class(
+            &format!("__ciq_data_class_{}", source_class.name),
+            [
+                Some(Reference::Raw(0x40000001)),
+                None,
+                Some(Reference::Raw(GLOBALS)),
+                None,
+            ],
+            fields,
+        ));
+    }
     for module in &modules {
         let mut fields = vec![method(INIT, 0x30, "__ciq_noop")];
         for d in unit

@@ -115,6 +115,9 @@ object construction, typed references, and View-array operations.
 The [initial View example](examples/compiler-initial-view/README.md) supplies
 the source lifecycle callback with a validated one-view positional result.
 
+The [visible View example](examples/compiler-visible-view/README.md) constructs
+a source View and draws text through its typed onUpdate callback.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

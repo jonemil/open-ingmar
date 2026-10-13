@@ -99,6 +99,7 @@ pub enum BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeClass {
     View,
+    Dc,
 }
 
 impl NativeClass {
@@ -106,10 +107,13 @@ impl NativeClass {
     pub fn name(self) -> &'static str {
         match self {
             Self::View => "Toybox.WatchUi.View",
+            Self::Dc => "Toybox.Graphics.Dc",
         }
     }
     fn from_name(name: &str) -> Option<Self> {
-        [Self::View].into_iter().find(|class| class.name() == name)
+        [Self::View, Self::Dc]
+            .into_iter()
+            .find(|class| class.name() == name)
     }
 }
 
@@ -142,6 +146,7 @@ impl ArrayElement {
             Self::Number => "number",
             Self::Char => "char",
             Self::Object(NativeClass::View) => "view",
+            Self::Object(NativeClass::Dc) => "dc",
         }
     }
 
@@ -150,6 +155,7 @@ impl ArrayElement {
             Self::Number => "number-array",
             Self::Char => "char-array",
             Self::Object(NativeClass::View) => "view-array",
+            Self::Object(NativeClass::Dc) => "dc-array",
         }
     }
 }
@@ -248,6 +254,7 @@ enum ValueType {
     Char,
     Object(NativeClass),
     Tuple(TupleShape),
+    FontDefinition,
     Array(ArrayElement),
     Null,
     NullableDictionary,
@@ -281,6 +288,7 @@ impl ValueType {
             Self::Char => api::Type::named("Toybox.Lang.Char"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
+            Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
             Self::Array(element) => api::Type::Array(Box::new(element.api_type())),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
@@ -297,6 +305,7 @@ impl ValueType {
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
             api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
+                "Toybox.Graphics.FontDefinition" => Some(Self::FontDefinition),
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
@@ -314,6 +323,23 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Define a supported native constant with its declared enum/value contract.
+    NativeConstant {
+        result: ValueId,
+        module: String,
+        member: String,
+    },
+    /// Construct a zero-argument source class whose unit-validated base is View.
+    SourceNew {
+        result: ValueId,
+        class: String,
+    },
+    /// Invoke a catalogue-resolved Void member on a value receiver for effects.
+    NativeCallStatement {
+        receiver: ValueId,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Construct a fresh positional result with exactly one non-null View slot.
     /// Slots must be already evaluated local/parameter reads, so allocation
     /// cannot move before operand effects. The shape has no Array mutation profile.
@@ -694,6 +720,18 @@ impl Function {
         context: Option<api::ApiContext>,
         declared_result: Option<ReturnType>,
     ) -> Result<Self, IrError> {
+        if parameter_types.iter().any(|ty| {
+            matches!(
+                ty,
+                ParameterType::Array(ArrayElement::Object(NativeClass::Dc))
+            )
+        }) || declared_result == Some(ReturnType::Array(ArrayElement::Object(NativeClass::Dc)))
+        {
+            return Err(IrError {
+                operation: None,
+                message: "Dc array contracts are outside the supported profile".into(),
+            });
+        }
         if instance_method && native::callback(ClassBase::ApplicationAppBase, &name).is_some() {
             if let Some(context) = context {
                 context
@@ -835,10 +873,10 @@ impl Function {
                     types.insert(result, ValueType::String);
                     (Some(result), vec![])
                 }
-                Operation::NativeBaseInitialize { .. } => {
+                Operation::NativeBaseInitialize { base } => {
                     if let Some(context) = context {
                         context
-                            .method(api::core(), "Toybox.Application.AppBase", "initialize")
+                            .method(api::core(), base.api_name(), "initialize")
                             .map_err(|message| fail(&message))?;
                     }
                     if !instance_method {
@@ -880,6 +918,48 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::NativeConstant {
+                    result,
+                    ref module,
+                    ref member,
+                } => {
+                    native::constant(module, member, context).map_err(|message| fail(&message))?;
+                    types.insert(result, ValueType::FontDefinition);
+                    (Some(result), vec![])
+                }
+                Operation::SourceNew { result, ref class } => {
+                    validate_call_names(None, class).map_err(fail)?;
+                    native::constructor(NativeClass::View, context)
+                        .map_err(|message| fail(&message))?;
+                    types.insert(result, ValueType::Object(NativeClass::View));
+                    (Some(result), vec![])
+                }
+                Operation::NativeCallStatement {
+                    receiver,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments_types = arguments
+                        .iter()
+                        .map(|v| type_of(*v).api_type())
+                        .collect::<Vec<_>>();
+                    let result = native::value_call(
+                        &type_of(receiver).api_type(),
+                        member,
+                        &arguments_types,
+                        context,
+                    )
+                    .map_err(|message| fail(&message))?;
+                    if result != api::Type::Void {
+                        return Err(fail("native statement requires a Void result"));
+                    }
+                    (
+                        None,
+                        std::iter::once(receiver)
+                            .chain(arguments.iter().copied())
+                            .collect(),
+                    )
+                }
                 Operation::TupleNew {
                     result,
                     ref elements,
@@ -915,6 +995,9 @@ impl Function {
                     result,
                     element_type,
                 } => {
+                    if element_type == ArrayElement::Object(NativeClass::Dc) {
+                        return Err(fail("Dc array contracts are outside the supported profile"));
+                    }
                     let ty = ValueType::Array(element_type);
                     if let Some(context) = context {
                         context
@@ -1230,6 +1313,8 @@ impl Function {
                     | Operation::ArrayNew { .. }
                     | Operation::NativeNew { .. }
                     | Operation::TupleNew { .. }
+                    | Operation::SourceNew { .. }
+                    | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
@@ -1256,6 +1341,13 @@ impl Function {
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
                     Operation::Branch { condition, .. } => vec![*condition],
+                    Operation::NativeCallStatement {
+                        receiver,
+                        arguments,
+                        ..
+                    } => std::iter::once(*receiver)
+                        .chain(arguments.iter().copied())
+                        .collect(),
                     Operation::ModuleCallStatement { arguments, .. }
                     | Operation::NativeModuleCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
@@ -1386,6 +1478,7 @@ impl Function {
                         ParameterType::Boolean => "boolean",
                         ParameterType::Char => "char",
                         ParameterType::Object(NativeClass::View) => "view",
+                        ParameterType::Object(NativeClass::Dc) => "dc",
                         ParameterType::Array(element) => element.array_text(),
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
@@ -1446,6 +1539,26 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::NativeConstant {
+                    result,
+                    ref module,
+                    ref member,
+                } => format!(".constant %{} {module} {member}", result.0),
+                Operation::SourceNew { result, ref class } => {
+                    format!(".new-source %{} {class}", result.0)
+                }
+                Operation::NativeCallStatement {
+                    receiver,
+                    ref member,
+                    ref arguments,
+                } => format!(
+                    ".call-native-discard %{} {member}{}",
+                    receiver.0,
+                    arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>()
+                ),
                 Operation::TupleNew {
                     result,
                     ref elements,
@@ -1560,9 +1673,9 @@ impl Function {
                         .collect::<String>();
                     format!(".call-self-discard {member}{arguments}")
                 }
-                Operation::NativeBaseInitialize {
-                    base: ClassBase::ApplicationAppBase,
-                } => ".base-initialize Application.AppBase".into(),
+                Operation::NativeBaseInitialize { base } => {
+                    format!(".base-initialize {}", base.text())
+                }
                 Operation::ReturnVoid => ".return-void".into(),
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)
@@ -1681,10 +1794,12 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
         ReturnType::Object(NativeClass::View) => " result=view",
+        ReturnType::Object(NativeClass::Dc) => " result=dc",
         ReturnType::Tuple(TupleShape::OneView) => " result=one-view",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
+        ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
 }

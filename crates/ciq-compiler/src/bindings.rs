@@ -57,6 +57,15 @@ pub fn symbol_bindings(
                 "Toybox_WatchUi".to_string()
             } else if alias == "__ciq_native_View" {
                 "View".to_string()
+            } else if alias == "__ciq_source_globals" {
+                "globals".to_string()
+            } else if let Some(class) = alias.strip_prefix("__ciq_class_") {
+                class.to_string()
+            } else if matches!(
+                alias.as_str(),
+                "__ciq_native_clear" | "__ciq_native_setColor" | "__ciq_native_drawText"
+            ) {
+                alias.strip_prefix("__ciq_native_").unwrap().to_string()
             } else if alias == "__ciq_native_AppBase" {
                 "AppBase".to_string()
             } else if alias == "__ciq_native_toString" {

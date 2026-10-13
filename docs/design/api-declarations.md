@@ -13,15 +13,19 @@ immutable declarations. A future definition-file reader should produce the same
 model. No declaration-file syntax or new crate is required initially.
 
 Current entries cover Lang's Object, Number, String, Boolean, Char, Array, and
-Dictionary and WeakReference, plus Application.AppBase and WatchUi.View/InputDelegate,
-and the Lang/Application/System/WatchUi modules.
+Dictionary and WeakReference, plus Application.AppBase, WatchUi.View/InputDelegate,
+and Graphics.Dc, with their enclosing modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, Array size/string/search/append/removal/reverse/slice,
-AppBase initialization/startup/shutdown/initial-view, View initialization, and
-System printing/exit.
+AppBase initialization/startup/shutdown/initial-view, View initialization and
+show/update/hide callbacks, Dc clear/color/text drawing, and System printing/exit.
+The catalogue also records the FontDefinition enum and FONT_MEDIUM constant with
+their API levels. These are typed declarations; a numeric constant representation
+does not imply assignability from Number.
 Parameter/result subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Char, View,
+Internal value categories map to Number, String, Boolean, Char, View, Dc,
+FontDefinition,
 Number/Char/View arrays, one-view tuples, Null, nullable Number/String, and
 nullable Dictionary;
 operators use those semantic types. The bounded native call profile resolves

@@ -61,18 +61,16 @@ compiling a project.
    with focused specimens. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
-3. **Compile source-authored lifecycle and a visible View.** Add construction,
-   source/native inheritance, instance fields, ordinary object-member calls,
-   array literals, and object/positional returns as required by `getInitialView()`.
-   Resolve AppBase/View callback signatures, including inherited annotations,
-   rather than assigning every parameter our current integer contract. Replace
-   generated lifecycle methods only when the source supplies validated methods;
-   keep the console bootstrap available. Acceptance: a multi-file source app
-   constructs its own View, draws text through `onUpdate(dc)`, and observes
-   startup, view, and shutdown behavior in the simulator.
-   Follow with a View/delegate pair whose input handler updates a counter and
+3. **Add state and input to source Views.** Extend the
+   [visible View example](../examples/compiler-visible-view/README.md) with
+   instance fields and ordinary object-member calls. Model source object identity,
+   field initialization, and source inheritance as their semantics become needed.
+   Add a View/delegate pair whose input handler updates a counter and
    returns whether it handled the event. This exercises mutable fields and
    Boolean callback results; select an event supported by the target.
+   Probe View transitions to verify onHide dispatch; the existing exit-from-update
+   specimen only establishes onStop. Extend drawing methods/constants and
+   device-relative layout through focused examples rather than a fixed screen size.
 4. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a
    deterministic build description: selected sources/resources, application
    identity and class entry, device/API target, permissions, supported products

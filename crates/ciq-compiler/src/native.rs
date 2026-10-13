@@ -7,6 +7,9 @@ pub(crate) fn constructor(
     class: crate::NativeClass,
     context: Option<api::ApiContext>,
 ) -> Result<(), String> {
+    if class != crate::NativeClass::View {
+        return Err("native class has no supported constructor".into());
+    }
     let method = if let Some(context) = context {
         context.method(api::core(), class.name(), "initialize")?
     } else {
@@ -23,6 +26,23 @@ pub(crate) fn constructor(
 pub(crate) struct CallbackSignature {
     pub parameters: Vec<ParameterType>,
     pub result: ReturnType,
+}
+
+/// Resolve the bounded font constant with its enum type and published value.
+pub(crate) fn constant(
+    module: &str,
+    member: &str,
+    context: Option<api::ApiContext>,
+) -> Result<(api::Type, i32), String> {
+    let constant = api::core()
+        .constant(module, member)
+        .ok_or("unsupported native constant")?;
+    let ty = constant.ty.clone();
+    if let Some(context) = context {
+        context.check_type(api::core(), &ty)?;
+        context.require(&format!("{module}.{member}"), constant.since)?;
+    }
+    Ok((ty, constant.value))
 }
 
 /// Resolve declared argument types for contextual source construction.
@@ -51,9 +71,7 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
 /// Resolve a catalogue callback into supported IR contracts. Unknown members,
 /// ordinary methods, and signatures outside the current subset return None.
 pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignature> {
-    let class = match base {
-        ClassBase::ApplicationAppBase => "Toybox.Application.AppBase",
-    };
+    let class = base.api_name();
     let resolved = api::core().method(class, member)?;
     let method = resolved.method;
     if !method.callback {
@@ -63,9 +81,13 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
         .parameters
         .iter()
         .map(|ty| {
-            [ParameterType::Integer, ParameterType::NullableDictionary]
-                .into_iter()
-                .find(|candidate| candidate.api_type() == *ty)
+            [
+                ParameterType::Integer,
+                ParameterType::NullableDictionary,
+                ParameterType::Object(crate::NativeClass::Dc),
+            ]
+            .into_iter()
+            .find(|candidate| candidate.api_type() == *ty)
         })
         .collect::<Option<Vec<_>>>()?;
     let result = [
@@ -181,6 +203,8 @@ pub(crate) fn value_call(
                     | "toUtf8Array"
             )
     );
+    let supported = supported
+        || (class == "Toybox.Graphics.Dc" && matches!(member, "clear" | "setColor" | "drawText"));
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }

@@ -1,23 +1,24 @@
 # Restricted source classes and receiver calls
 
-This profile adds AppBase-derived classes to [compilation units][unit]. Existing
-function parameter and result rules still apply. The [console application builder][app]
-can use one declared class and invoke a selected method on its instance.
+This profile adds AppBase- and View-derived classes to [compilation units][unit].
+Existing function parameter and result rules still apply. The
+[application builder][app] selects one AppBase class and binds additional Views.
 See [receiver design][design] and [runtime evidence][evidence].
 
 ## Source and ownership
 
 ```text
-class = "class" identifier "extends" native-app-base
+class = "class" identifier "extends" native-base
         "{" native-declaration* function+ "}"
+native-base = recognized Application.AppBase or WatchUi.View identity
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
 Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
-It accepts canonical/qualified, aliased, and imported AppBase spellings, not
-general native classes. Fields, static methods, annotations, source superclass lookup,
-nested/empty classes, and `new` are unsupported. Class names must be unique;
+It accepts canonical/qualified, aliased, and imported AppBase/View spellings.
+Fields, static methods, annotations, source superclass lookup, and nested/empty
+classes are unsupported. Class names must be unique;
 classes cannot be reopened. Reject class/module/global-function name collisions.
 
 Reserved class names include language keywords, `self`, `System`, `Application`,
@@ -41,7 +42,7 @@ accepted but termination is not proven.
 
 ## Native and textual IR
 
-`ClassDeclaration` records a name, `ClassBase::ApplicationAppBase`, and ordered
+`ClassDeclaration` records a name, `ClassBase`, and ordered
 method bodies. Base identity does not contain a VM import index. `Function::method`
 constructs receiver-bearing IR; ordinary function constructors reject self-call
 operations. Unit validation requires instance bodies in classes and ordinary
@@ -75,8 +76,10 @@ ciq-ir
 .end-class
 ```
 
-`.class <name> Application.AppBase` contains complete function documents until
-`.end-class`. Global/module owner records remain valid alongside classes. The unit header is `ciq-unit` for both class-bearing and ordinary units.
+`.class <name> Application.AppBase` or `.class <name> WatchUi.View` contains
+complete function documents until `.end-class`. Global/module owner records
+remain valid alongside classes. The unit header is `ciq-unit` for both
+class-bearing and ordinary units.
 
 CODE layout places global/module bodies first, then class bodies. Each group
 retains file/declaration order; methods retain order within their class. Class
@@ -87,7 +90,8 @@ indexes follow this layout order; serialized spans remain provenance only.
 
 ## Application and VM binding
 
-Complete PRG generation permits exactly one declared AppBase class and requires
+Complete PRG generation permits exactly one declared AppBase class plus optional
+WatchUi.View subclasses and requires
 `--entry Class.method`. The selected method must have zero parameters, except
 source onStart follows the callback contract below. Value results are printed
 by generated onStart; void results are discarded. Class symbol `1` identifies
@@ -98,11 +102,11 @@ separate from globals/modules even when member names share one symbol ID.
 
 The `getInitialView` override follows the positional contract below. Methods
 named `AppBase` remain unsupported.
-The source initializer contract below permits `initialize`; otherwise its
-body, native imports, empty resources, and the blank View remain
-provided by the bootstrap. Unit/IR stages can represent multiple classes, but
-this PRG profile rejects them. Source callbacks and general object/native-call
-operations beyond the contracts below remain subsequent work.
+The source initializer contract below permits `initialize`; the bootstrap
+supplies missing AppBase lifecycle methods and a blank View when no source
+initial-view callback exists. Constructed source Views require an initializer.
+Native imports and empty resources retain the bounded application profile.
+General object/native-call operations beyond the contracts below are unsupported.
 
 ## Source initialization
 
@@ -112,7 +116,7 @@ first statement. These are subset restrictions, not general language rules.
 Subsequent supported statements may print or call source methods. Initialization
 cannot be selected as the generated onStart entry.
 
-Accepted base calls are `AppBase.initialize()`,
+AppBase base calls are `AppBase.initialize()`,
 `Application.AppBase.initialize()`, fully qualified
 `Toybox.Application.AppBase.initialize()`, and equivalent module aliases.
 Bare AppBase here identifies the inherited superclass even without an import;
@@ -121,14 +125,47 @@ Arguments, value uses, other base members, and base calls outside a class
 initializer are rejected. Conditional, late, duplicate, or absent base calls
 are also rejected by unit validation.
 
-`NativeBaseInitialize { base: ClassBase::ApplicationAppBase }` is an ordered
+View initializers use `View.initialize()`, `WatchUi.View.initialize()`, or the
+equivalent fully qualified/aliased identity. The called base must match the
+class's declared base, including in saved IR.
+
+`NativeBaseInitialize { base }` is an ordered
 effect with an implicit current instance and no explicit arguments/result.
 It identifies a native superclass, not a source callee or executable import
 index. Lowering selects `getselfv AppBase; getsv initialize; invokemz; popv`.
 The application builder binds native aliases and directs the initializer's
-single DATA method record to source CODE. It keeps the default initializer when
-the source omits one. Constructor, onStart, and blank View generation remain
-provided by the bootstrap unless source onStart is supplied.
+single DATA method record to source CODE. AppBase retains its default initializer
+when source omits one. Constructed source Views require an explicit initializer.
+Default lifecycle/View bodies are used only where source does not supply them.
+
+## Source Views and drawing
+
+`new ClassName()` constructs a declared WatchUi.View subclass with no arguments.
+Its initializer must satisfy the native-base contract above. Unit validation
+rejects unresolved names, modules, AppBase construction, and missing initializers.
+The result has the non-null native View contract; source identity is retained in
+the construction operation, not as a distinct value type. It may supply the slot
+in `getInitialView()`. Fields and calls on another source instance are unsupported.
+
+View callbacks inherit these contracts, including when annotations are omitted:
+
+| Callback | Parameters | Result |
+|---|---|---|
+| onShow | none | Void |
+| onUpdate | Toybox.Graphics.Dc | Void |
+| onHide | none | Void |
+
+All require API 1.0.0. Their signatures are checked against the enclosing native
+base; they cannot be invoked as ordinary source callees. Dc is an opaque native
+reference with the [bounded drawing profile](compiler-subset.md#drawing-context).
+It cannot be constructed or stored in an Array.
+
+The application builder creates a DATA class for each source View, using native
+import index one and binding callbacks to their source CODE. Constructor lowering
+looks up the source class through globals, allocates it, invokes `initialize`,
+and retains the instance while discarding the initializer result. See the
+[visible example](../../examples/compiler-visible-view/README.md) and
+[runtime evidence](../investigations/compiler-visible-view.md).
 
 ## Source initial View callback
 

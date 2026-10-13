@@ -17,6 +17,7 @@ pub(crate) enum Statement {
     },
     BaseInitialize {
         span: Span,
+        base: crate::ClassBase,
     },
     Assign {
         name: String,
@@ -76,7 +77,7 @@ impl Statement {
             | Self::Break { span }
             | Self::Continue { span }
             | Self::While { span, .. } => *span,
-            Self::BaseInitialize { span } => *span,
+            Self::BaseInitialize { span, .. } => *span,
         }
     }
 }
@@ -92,6 +93,12 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    SourceNew(String),
+    NativeConstant {
+        module: String,
+        member: String,
+        qualifier: String,
+    },
     NativeNew {
         class: crate::NativeClass,
         qualifier: String,
@@ -193,7 +200,7 @@ struct Parser<'a> {
     lookahead: Option<Token<'a>>,
     expressions: usize,
     names: crate::names::Names,
-    native_base: bool,
+    native_base: Option<crate::ClassBase>,
 }
 
 impl<'a> Parser<'a> {
@@ -257,7 +264,11 @@ impl<'a> Parser<'a> {
 
     fn reject_binding(&self, token: &Token<'_>) -> Result<(), Diagnostic> {
         if let Kind::Word(name) = token.kind {
-            if self.names.bound(name) || (self.native_base && name == "AppBase") {
+            if self.names.bound(name)
+                || (self.native_base == Some(crate::ClassBase::ApplicationAppBase)
+                    && name == "AppBase")
+                || (self.native_base == Some(crate::ClassBase::WatchUiView) && name == "View")
+            {
                 return Err(self.error(
                     token.span.start,
                     format!("declaration shadows native binding {name:?}"),
@@ -619,23 +630,25 @@ impl<'a> Parser<'a> {
         } else if self.peek()? == Kind::Word("new") {
             let open = self.token()?;
             let path = self.path()?;
-            if !self.names.view(&path) {
-                return Err(self.error(
-                    open.span.start,
-                    "only native WatchUi.View construction is supported",
-                ));
+            let native = self.names.view(&path);
+            if !native && path.contains('.') {
+                return Err(self.error(open.span.start, "unsupported qualified construction class"));
             }
             let (arguments, end) = self.call_arguments(open.span.start, depth)?;
             if !arguments.is_empty() {
                 return Err(self.error(
                     open.span.start,
-                    "native View construction requires zero arguments",
+                    "supported View construction requires zero arguments",
                 ));
             }
             self.node(
-                ExpressionKind::NativeNew {
-                    class: crate::NativeClass::View,
-                    qualifier: path.split('.').next().unwrap().into(),
+                if native {
+                    ExpressionKind::NativeNew {
+                        class: crate::NativeClass::View,
+                        qualifier: path.split('.').next().unwrap().into(),
+                    }
+                } else {
+                    ExpressionKind::SourceNew(path)
                 },
                 Span {
                     start: open.span.start,
@@ -790,12 +803,32 @@ impl<'a> Parser<'a> {
                         path.push_str(part);
                     }
                     let (module, member) = path.rsplit_once('.').unwrap();
+                    if self.names.module(module) == Some(crate::names::NativeModule::Graphics)
+                        && member == "FONT_MEDIUM"
+                        && self.peek()? != Kind::Punctuation('(')
+                    {
+                        return self.node(
+                            ExpressionKind::NativeConstant {
+                                module: "Toybox.Graphics".into(),
+                                member: member.into(),
+                                qualifier: path.split('.').next().unwrap().into(),
+                            },
+                            Span {
+                                start: token.span.start,
+                                end: self.offset,
+                            },
+                        );
+                    }
                     let module = if let Some(native) = self.names.module(module) {
                         native.name()
-                    } else if self.native_base
+                    } else if self.native_base.is_some()
                         && (module == "AppBase" || self.names.app_base(module))
                     {
                         "Application.AppBase"
+                    } else if self.native_base.is_some()
+                        && (module == "View" || self.names.view(module))
+                    {
+                        "WatchUi.View"
                     } else if module.contains('.') {
                         return Err(
                             self.error(token.span.start, "unsupported qualified module path")
@@ -973,7 +1006,7 @@ impl<'a> Parser<'a> {
                             else {
                                 return Err(self.error(start, "only assignment and calls are supported as expression statements"));
                             };
-                            if module == "Application.AppBase" {
+                            if matches!(module.as_str(), "Application.AppBase" | "WatchUi.View") {
                                 if member != "initialize" || !arguments.is_empty() {
                                     return Err(self.error(
                                         start,
@@ -982,6 +1015,11 @@ impl<'a> Parser<'a> {
                                 }
                                 Statement::BaseInitialize {
                                     span: Span { start, end },
+                                    base: if module == "Application.AppBase" {
+                                        crate::ClassBase::ApplicationAppBase
+                                    } else {
+                                        crate::ClassBase::WatchUiView
+                                    },
                                 }
                             } else if module == "System" {
                                 if member == "println" {
@@ -1037,7 +1075,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         lookahead: None,
         expressions: 0,
         names: crate::names::Names::default(),
-        native_base: false,
+        native_base: None,
     };
     parser.imports()?;
     let function = parser.function()?;
@@ -1086,6 +1124,9 @@ impl Parser<'_> {
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
                         "Toybox.WatchUi.View" => {
                             crate::ParameterType::Object(crate::NativeClass::View)
+                        }
+                        "Toybox.Graphics.Dc" => {
+                            crate::ParameterType::Object(crate::NativeClass::Dc)
                         }
                         "Toybox.Lang.Array" => {
                             crate::ParameterType::Array(self.array_annotation()?)
@@ -1158,6 +1199,7 @@ pub(crate) struct ParsedUnit {
 }
 pub(crate) struct ParsedClass {
     pub name: String,
+    pub base: crate::ClassBase,
     pub methods: Vec<ParsedFunction>,
 }
 
@@ -1170,7 +1212,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
         lookahead: None,
         expressions: 0,
         names: crate::names::Names::default(),
-        native_base: false,
+        native_base: None,
     };
     let mut unit = ParsedUnit {
         functions: Vec::new(),
@@ -1186,10 +1228,18 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             let Kind::Word(name) = token.kind else {
                 unreachable!()
             };
+            let mut class_base = None;
             if is_class {
                 parser.expect(Kind::Word("extends"), "'extends Application.AppBase'")?;
                 let base = parser.path()?;
-                if !parser.names.app_base(&base) {
+                class_base = if parser.names.app_base(&base) {
+                    Some(crate::ClassBase::ApplicationAppBase)
+                } else if parser.names.view(&base) {
+                    Some(crate::ClassBase::WatchUiView)
+                } else {
+                    None
+                };
+                if class_base.is_none() {
                     return Err(parser.error(
                         token.span.start,
                         format!("unsupported or unresolved native superclass {base:?}"),
@@ -1200,7 +1250,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
             let outer_names = parser.names.clone();
-            parser.native_base = is_class;
+            parser.native_base = class_base;
             parser.imports()?;
             let mut methods = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
@@ -1215,13 +1265,14 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.token()?;
             parser.names = outer_names;
-            parser.native_base = false;
+            parser.native_base = None;
             if methods.is_empty() {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
             if is_class {
                 unit.classes.push(ParsedClass {
                     name: name.into(),
+                    base: class_base.unwrap(),
                     methods,
                 });
             } else {

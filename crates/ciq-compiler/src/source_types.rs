@@ -25,6 +25,19 @@ impl Types {
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let (result, ty) = match operation {
+            Operation::NativeConstant {
+                result,
+                module,
+                member,
+            } => (
+                *result,
+                native::constant(module, member, None)
+                    .ok()
+                    .map(|(ty, _)| ty),
+            ),
+            Operation::SourceNew { result, .. } => {
+                (*result, Some(Type::named("Toybox.WatchUi.View")))
+            }
             Operation::TupleNew { result, .. } => {
                 (*result, Some(crate::TupleShape::OneView.api_type()))
             }
@@ -147,6 +160,9 @@ impl Types {
     /// Read a stored local's candidate type; final IR checking remains authoritative.
     pub(crate) fn local_type(&self, local: LocalId) -> Option<&Type> {
         self.locals.get(&local)
+    }
+    pub(crate) fn value_type(&self, value: ValueId) -> Option<&Type> {
+        self.values.get(&value)
     }
 
     /// Replace a provisional allocation contract before emitting any array reads.

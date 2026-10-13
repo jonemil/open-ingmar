@@ -53,6 +53,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
             | Operation::NativeNew { result, .. }
+            | Operation::SourceNew { result, .. }
+            | Operation::NativeConstant { result, .. }
             | Operation::TupleNew { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
@@ -128,13 +130,18 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }
             Operation::Return { value } => (value, Opcode::Return, vec![]),
             Operation::Discard { value } => (value, Opcode::Popv, vec![]),
-            Operation::NativeBaseInitialize {
-                base: crate::ClassBase::ApplicationAppBase,
-            } => {
+            Operation::NativeBaseInitialize { base } => {
                 items.extend([
                     instruction(
                         Opcode::Getselfv,
-                        vec![Operand::Symbol("__ciq_native_AppBase".into())],
+                        vec![Operand::Symbol(
+                            if base == crate::ClassBase::ApplicationAppBase {
+                                "__ciq_native_AppBase"
+                            } else {
+                                "__ciq_native_View"
+                            }
+                            .into(),
+                        )],
                     ),
                     instruction(
                         Opcode::Getsv,
@@ -143,6 +150,33 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     instruction(Opcode::Invokemz, vec![]),
                     instruction(Opcode::Popv, vec![]),
                 ]);
+                continue;
+            }
+            Operation::NativeCallStatement {
+                receiver,
+                ref member,
+                ref arguments,
+            } => {
+                expression(receiver, &definitions, &slots, &strings, &mut items);
+                items.push(instruction(
+                    Opcode::Getsv,
+                    vec![Operand::Symbol(format!("__ciq_native_{member}"))],
+                ));
+                if !arguments.is_empty() {
+                    items.push(instruction(Opcode::Frpush, vec![]));
+                    for value in arguments {
+                        expression(*value, &definitions, &slots, &strings, &mut items);
+                    }
+                }
+                items.push(if arguments.is_empty() {
+                    instruction(Opcode::Invokemz, vec![])
+                } else {
+                    instruction(
+                        Opcode::Invokem,
+                        vec![Operand::Bits(arguments.len() as u64 + 1)],
+                    )
+                });
+                items.push(instruction(Opcode::Popv, vec![]));
                 continue;
             }
             Operation::ReturnVoid => {
@@ -239,6 +273,35 @@ fn expression(
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::NativeConstant { module, member, .. } => {
+                    let (_, value) =
+                        crate::native::constant(module, member, None).expect("validated constant");
+                    (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
+                }
+                Operation::SourceNew { class, .. } => {
+                    items.extend([
+                        instruction(
+                            Opcode::Getmv,
+                            vec![
+                                Operand::Symbol("__ciq_source_globals".into()),
+                                Operand::Symbol(format!("__ciq_class_{class}")),
+                            ],
+                        ),
+                        instruction(Opcode::Newc, vec![]),
+                        instruction(Opcode::Dup, vec![Operand::Bits(0)]),
+                        instruction(
+                            Opcode::Getsv,
+                            vec![Operand::Symbol("__ciq_native_initialize".into())],
+                        ),
+                        instruction(Opcode::Dup, vec![Operand::Bits(1)]),
+                        instruction(Opcode::Invokem, vec![Operand::Bits(1)]),
+                    ]);
+                    (Opcode::Popv, vec![])
+                }
+                Operation::NativeNew {
+                    class: crate::NativeClass::Dc,
+                    ..
+                } => unreachable!("Dc construction is not admitted"),
                 Operation::TupleNew { elements, .. } => {
                     items.extend([
                         instruction(Opcode::Ipush1, vec![Operand::Bits(1)]),

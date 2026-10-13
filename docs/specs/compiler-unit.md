@@ -39,6 +39,12 @@ contract](compiler-classes.md#source-startup-callback).
 Their parameter types and void result must match the resolved callback signature;
 neither can be invoked as an ordinary source callee.
 
+View.onShow/onUpdate/onHide use the [View callback
+contracts](compiler-classes.md#source-views-and-drawing). The enclosing class's
+native base selects the callback signature. Source constructors must resolve to
+a declared View subclass with a validated initializer; modules and AppBase
+classes cannot be constructed by this profile.
+
 AppBase.getInitialView has a [one-view positional
 contract](compiler-classes.md#source-initial-view-callback). Its return shape and
 zero parameters are validated for source, typed, and saved IR. It also cannot

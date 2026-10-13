@@ -109,6 +109,9 @@ impl ApiContext {
                     .iter()
                     .try_for_each(|ty| self.check_type(catalogue, ty))
             }
+            Type::Named(name) if catalogue.enums.contains_key(name) => {
+                self.require(name, catalogue.enum_level(name).unwrap())
+            }
             Type::Named(name) => self.check_class(catalogue, name),
             Type::Parameter(name) => Err(format!(
                 "generic API parameter {name} requires a concrete receiver type"
@@ -243,9 +246,29 @@ impl ResolvedMethod<'_> {
 pub struct Catalogue {
     modules: BTreeMap<String, Module>,
     classes: BTreeMap<String, Class>,
+    enums: BTreeMap<String, ApiLevel>,
+    constants: BTreeMap<(String, String), Constant>,
+}
+
+/// A published native constant, retaining its semantic type and API level.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Constant {
+    pub ty: Type,
+    pub value: i32,
+    pub since: ApiLevel,
 }
 
 impl Catalogue {
+    /// Resolve a recorded native constant in its canonical module.
+    pub fn constant(&self, module: &str, member: &str) -> Option<&Constant> {
+        self.constants.get(&(module.into(), member.into()))
+    }
+    /// Resolve a bounded enum type without treating it as an object class.
+    pub fn enum_level(&self, name: &str) -> Option<ApiLevel> {
+        let level = *self.enums.get(name)?;
+        let module = name.rsplit_once('.')?.0;
+        Some(level.max(self.modules.get(module)?.since))
+    }
     fn class_level(&self, class: &Class) -> ApiLevel {
         let mut level = class.since;
         let mut path = class.name.as_str();
@@ -327,6 +350,7 @@ fn build_core() -> Catalogue {
         "Toybox.Application.AppBase",
         "Toybox.WatchUi.View",
         "Toybox.WatchUi.InputDelegate",
+        "Toybox.Graphics.Dc",
     ] {
         classes.insert(
             name.into(),
@@ -539,14 +563,45 @@ fn build_core() -> Catalogue {
         on_stop,
         initial_view,
     ];
-    classes.get_mut("Toybox.WatchUi.View").unwrap().methods =
-        vec![method("initialize", vec![], Type::Void, ApiLevel(2, 1, 0))];
+    let mut view_methods = vec![method("initialize", vec![], Type::Void, ApiLevel(2, 1, 0))];
+    for (name, parameters) in [
+        ("onShow", vec![]),
+        ("onHide", vec![]),
+        ("onUpdate", vec![Type::named("Toybox.Graphics.Dc")]),
+    ] {
+        let mut declaration = method(name, parameters, Type::Void, initial);
+        declaration.callback = true;
+        view_methods.push(declaration);
+    }
+    classes.get_mut("Toybox.WatchUi.View").unwrap().methods = view_methods;
+    classes.get_mut("Toybox.Graphics.Dc").unwrap().methods = vec![
+        method("clear", vec![], Type::Void, initial),
+        method(
+            "setColor",
+            vec![Type::named(number); 2],
+            Type::Void,
+            initial,
+        ),
+        method(
+            "drawText",
+            vec![
+                Type::named(number),
+                Type::named(number),
+                Type::named("Toybox.Graphics.FontDefinition"),
+                Type::named(string),
+                Type::named(number),
+            ],
+            Type::Void,
+            initial,
+        ),
+    ];
     let mut modules = BTreeMap::new();
     for name in [
         "Toybox.Lang",
         "Toybox.Application",
         "Toybox.System",
         "Toybox.WatchUi",
+        "Toybox.Graphics",
     ] {
         modules.insert(
             name.into(),
@@ -572,7 +627,19 @@ fn build_core() -> Catalogue {
         .unwrap()
         .functions
         .push(method("exit", vec![], Type::Void, initial));
-    Catalogue { modules, classes }
+    Catalogue {
+        modules,
+        classes,
+        enums: BTreeMap::from([("Toybox.Graphics.FontDefinition".into(), initial)]),
+        constants: BTreeMap::from([(
+            ("Toybox.Graphics".into(), "FONT_MEDIUM".into()),
+            Constant {
+                ty: Type::named("Toybox.Graphics.FontDefinition"),
+                value: 3,
+                since: initial,
+            },
+        )]),
+    }
 }
 
 #[cfg(test)]
@@ -682,7 +749,10 @@ mod tests {
                     assert!(api.class("Toybox.Lang.Array").is_some());
                     check_type(api, element);
                 }
-                Type::Named(name) => assert!(api.class(name).is_some(), "unknown {name}"),
+                Type::Named(name) => assert!(
+                    api.class(name).is_some() || api.enum_level(name).is_some(),
+                    "unknown {name}"
+                ),
                 Type::Parameter(_) => {}
                 Type::Union(types) | Type::Tuple(types) => {
                     types.iter().for_each(|ty| check_type(api, ty))

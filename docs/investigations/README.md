@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Visible source View](compiler-visible-view.md): native inheritance, typed
+  drawing callbacks, font constants, rendered output, and shutdown observations.
 - [Source initial View](compiler-initial-view.md): positional callback results,
   source DATA binding, and runtime startup.
 - [Native Views](compiler-native-views.md): object construction, typed references,

@@ -101,6 +101,7 @@ pub(crate) fn parse_ir_context(
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
+                        "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
                         "view-array" => Ok(crate::ParameterType::Array(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
@@ -177,6 +178,9 @@ pub(crate) fn parse_ir_context(
             Some(".array-new") => (30, 3),
             Some(".new-native") => (31, 3),
             Some(".tuple-new") => (32, 3),
+            Some(".new-source") => (33, 3),
+            Some(".constant") => (34, 4),
+            Some(".call-native-discard") => (35, call_width()),
             Some(".block") => (10, 2),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
@@ -254,7 +258,27 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 32 {
+        let operation = if kind == 33 {
+            Operation::SourceNew {
+                result: parse_value(&fields[1])?,
+                class: fields[2].clone(),
+            }
+        } else if kind == 34 {
+            Operation::NativeConstant {
+                result: parse_value(&fields[1])?,
+                module: fields[2].clone(),
+                member: fields[3].clone(),
+            }
+        } else if kind == 35 {
+            Operation::NativeCallStatement {
+                receiver: parse_value(&fields[1])?,
+                member: fields[2].clone(),
+                arguments: fields[3..width]
+                    .iter()
+                    .map(|v| parse_value(v))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 32 {
             Operation::TupleNew {
                 result: fields
                     .get(1)
@@ -349,11 +373,15 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
             }
         } else if kind == 20 {
-            if fields[1] != "Application.AppBase" {
+            if !matches!(fields[1].as_str(), "Application.AppBase" | "WatchUi.View") {
                 return Err(fail(*at, "unsupported native initializer base"));
             }
             Operation::NativeBaseInitialize {
-                base: crate::ClassBase::ApplicationAppBase,
+                base: if fields[1] == "Application.AppBase" {
+                    crate::ClassBase::ApplicationAppBase
+                } else {
+                    crate::ClassBase::WatchUiView
+                },
             }
         } else if kind == 18 {
             let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
@@ -543,6 +571,7 @@ fn call_contract(
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             "view" => crate::ReturnType::Object(crate::NativeClass::View),
+            "dc" => crate::ReturnType::Object(crate::NativeClass::Dc),
             "one-view" => crate::ReturnType::Tuple(crate::TupleShape::OneView),
             "view-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))

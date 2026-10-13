@@ -21,6 +21,44 @@ fn emit(
     calls: &CallSignatures,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::SourceNew(class) => {
+            if !calls.keys().any(|(owner, _)| owner == &class) {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "source constructor requires a declared class",
+                ));
+            }
+            if locals.contains_key(&class) || parameters.contains_key(&class) {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "source construction class is shadowed",
+                ));
+            }
+            Operation::SourceNew {
+                result: ValueId(operations.len() as u32),
+                class,
+            }
+        }
+        parser::ExpressionKind::NativeConstant {
+            module,
+            member,
+            qualifier,
+        } => {
+            if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "native constant qualifier is shadowed",
+                ));
+            }
+            Operation::NativeConstant {
+                result: ValueId(operations.len() as u32),
+                module,
+                member,
+            }
+        }
         parser::ExpressionKind::NativeNew { class, qualifier } => {
             if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
                 return Err(Diagnostic::at(
@@ -708,6 +746,38 @@ impl Builder<'_> {
         self.next_block += 1;
         id
     }
+    /// Emit a call statement, retaining Void as a statement-only native contract.
+    fn value_statement(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        let value = self.value(expression, locals)?;
+        if self.types.value_type(value) == Some(&crate::api::Type::Void) {
+            let last = self
+                .operations
+                .last_mut()
+                .expect("call emitted an operation");
+            if let Operation::NativeCall {
+                receiver,
+                member,
+                arguments,
+                ..
+            } = &last.operation
+            {
+                last.operation = Operation::NativeCallStatement {
+                    receiver: *receiver,
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
+        }
+        self.push(Operation::Discard { value }, Some(span));
+        Ok(())
+    }
+
     /// Build a return value under a callback's positional or ordinary contract.
     fn returned_value(
         &mut self,
@@ -872,13 +942,8 @@ impl Builder<'_> {
                     let value = self.value_with_context(value, locals, expected)?;
                     self.push(Operation::LocalAssign { local, value }, Some(span));
                 }
-                parser::Statement::BaseInitialize { span } => {
-                    self.push(
-                        Operation::NativeBaseInitialize {
-                            base: crate::ClassBase::ApplicationAppBase,
-                        },
-                        Some(span),
-                    );
+                parser::Statement::BaseInitialize { span, base } => {
+                    self.push(Operation::NativeBaseInitialize { base }, Some(span));
                 }
                 parser::Statement::NativeModuleCall {
                     module,
@@ -904,8 +969,7 @@ impl Builder<'_> {
                     );
                 }
                 parser::Statement::ValueCall { expression, .. } => {
-                    let value = self.value(expression, locals)?;
-                    self.push(Operation::Discard { value }, Some(span));
+                    self.value_statement(expression, locals, span)?;
                 }
                 parser::Statement::Call {
                     module,
@@ -914,7 +978,7 @@ impl Builder<'_> {
                     ..
                 } => {
                     if locals.contains_key(&module) || self.parameters.contains_key(&module) {
-                        let value = self.value(
+                        self.value_statement(
                             parser::Expression {
                                 kind: parser::ExpressionKind::ModuleCall {
                                     module,
@@ -924,8 +988,8 @@ impl Builder<'_> {
                                 span,
                             },
                             locals,
+                            span,
                         )?;
-                        self.push(Operation::Discard { value }, Some(span));
                     } else {
                         let expected = self.user_argument_context(&module, &member);
                         let arguments = self.arguments(arguments, locals, &expected)?;
@@ -1033,7 +1097,7 @@ pub(crate) fn build(
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, false, context, &CallSignatures::new())
+    build_body(source, ast, None, context, &CallSignatures::new())
 }
 
 #[derive(Clone)]
@@ -1048,7 +1112,7 @@ pub(crate) fn build_with_calls(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
-    method: bool,
+    method: Option<crate::ClassBase>,
     calls: &CallSignatures,
 ) -> Result<Function, Diagnostic> {
     build_body(source, ast, method, context, calls)
@@ -1057,13 +1121,11 @@ pub(crate) fn build_with_calls(
 fn build_body(
     source: &str,
     ast: parser::ParsedFunction,
-    method: bool,
+    method: Option<crate::ClassBase>,
     context: Option<crate::api::ApiContext>,
     calls: &CallSignatures,
 ) -> Result<Function, Diagnostic> {
-    let callback = method
-        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
-        .flatten();
+    let callback = method.and_then(|base| crate::native::callback(base, &ast.name));
     let effective_result = callback
         .as_ref()
         .map(|signature| signature.result)
@@ -1165,7 +1227,7 @@ fn build_body(
         ast.name,
         parameter_types,
         builder.operations,
-        method,
+        method.is_some(),
         context,
         callback
             .as_ref()

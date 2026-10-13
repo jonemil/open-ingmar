@@ -79,7 +79,7 @@ fn using_does_not_import_bare_native_classes() {
 fn unsupported_bindings_and_shadowing_have_source_diagnostics() {
     for (source, expected) in [
         (
-            "using Toybox.Graphics; function f() {}",
+            "using Toybox.Sensor; function f() {}",
             "unsupported native module",
         ),
         (
@@ -111,7 +111,7 @@ fn unsupported_bindings_and_shadowing_have_source_diagnostics() {
             "one argument",
         ),
         (
-            "function f() { Toybox.Graphics.foo(); }",
+            "function f() { Toybox.Sensor.foo(); }",
             "unsupported qualified module path",
         ),
     ] {

@@ -29,7 +29,8 @@ make
 
 The application remains running with a blank native View. The capture should
 show the watch with no runtime error dialog; active `monkeydo` alone is not
-execution evidence. Drawing and input handling remain subsequent work.
+execution evidence. The [visible View example](../compiler-visible-view/README.md)
+adds source inheritance and drawing; input handling remains subsequent work.
 The [callback contract][source] requires a direct one-slot return literal;
 an arbitrary mutable View array is insufficient. See [runtime evidence][evidence].
 

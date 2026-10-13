@@ -54,6 +54,22 @@ impl FunctionDeclaration {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassBase {
     ApplicationAppBase,
+    WatchUiView,
+}
+impl ClassBase {
+    /// Return the canonical native API identity of this superclass.
+    pub fn api_name(self) -> &'static str {
+        match self {
+            Self::ApplicationAppBase => "Toybox.Application.AppBase",
+            Self::WatchUiView => "Toybox.WatchUi.View",
+        }
+    }
+    pub(crate) fn text(self) -> &'static str {
+        match self {
+            Self::ApplicationAppBase => "Application.AppBase",
+            Self::WatchUiView => "WatchUi.View",
+        }
+    }
 }
 
 /// A named instance class and its declared method bodies in source order.
@@ -100,10 +116,10 @@ impl std::error::Error for UnitError {}
 
 /// Validated global/module functions and instance classes with checked calls.
 ///
-/// All qualified user calls resolve inside the unit. Parameters and arguments
-/// remain integers; results may be integers or void. Void calls are permitted
-/// only as statements. Self calls require a declared method in the enclosing
-/// class. System.println is the separate intrinsic.
+/// Qualified user calls and source constructors resolve inside the unit.
+/// Arguments and results must match the callee's supported value contracts.
+/// Void calls are permitted only as statements. Self calls require a declared
+/// method in the enclosing class; native callbacks cannot be called directly.
 /// CODE lowering leaves symbol/DATA bindings and application metadata external.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
@@ -117,16 +133,24 @@ impl CompilationUnit {
     /// to semantic IR; this does not validate a device or application profile.
     pub fn validate_api(&self, context: crate::api::ApiContext) -> Result<(), UnitError> {
         for class in &self.classes {
-            match class.base {
-                ClassBase::ApplicationAppBase => {
-                    context.check_class(crate::api::core(), "Toybox.Application.AppBase")
+            context
+                .check_class(crate::api::core(), class.base.api_name())
+                .map_err(|message| UnitError {
+                    declaration: None,
+                    operation: None,
+                    message,
+                })?;
+            for method in &class.methods {
+                if crate::native::callback(class.base, method.name()).is_some() {
+                    context
+                        .method(crate::api::core(), class.base.api_name(), method.name())
+                        .map_err(|message| UnitError {
+                            declaration: None,
+                            operation: None,
+                            message,
+                        })?;
                 }
             }
-            .map_err(|message| UnitError {
-                declaration: None,
-                operation: None,
-                message,
-            })?;
         }
         for (index, body) in self
             .declarations
@@ -284,7 +308,16 @@ impl CompilationUnit {
         let mut signatures = BTreeMap::new();
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let callback = matches!(owner, Owner::Class(_))
-                .then(|| crate::native::callback(ClassBase::ApplicationAppBase, function.name()))
+                .then(|| {
+                    crate::native::callback(
+                        self.classes
+                            .iter()
+                            .find(|c| owner == Owner::Class(c.name.as_str()))
+                            .unwrap()
+                            .base,
+                        function.name(),
+                    )
+                })
                 .flatten();
             if let Some(signature) = callback {
                 if function.parameter_types() != signature.parameters
@@ -319,6 +352,7 @@ impl CompilationUnit {
                 if function.parameter_count() != 0
                     || function.return_type() != crate::ReturnType::Void
                     || base_calls != 1
+                    || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == self.classes.iter().find(|c| owner == Owner::Class(c.name.as_str())).unwrap().base))
                     || !first.is_some_and(|op| {
                         matches!(op.operation, Operation::NativeBaseInitialize { .. })
                     })
@@ -364,6 +398,33 @@ impl CompilationUnit {
         }
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::SourceNew { class, .. } = &located.operation {
+                    let declaration = self
+                        .classes
+                        .iter()
+                        .find(|declaration| declaration.name == *class)
+                        .ok_or_else(|| {
+                            fail(
+                                Some(index),
+                                Some(operation),
+                                format!("unresolved source construction class {class}"),
+                            )
+                        })?;
+                    if declaration.base != ClassBase::WatchUiView {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "only source View construction is supported".into(),
+                        ));
+                    }
+                    if !declaration
+                        .methods
+                        .iter()
+                        .any(|method| method.name() == "initialize")
+                    {
+                        return Err(fail(Some(index), Some(operation), "source View construction requires a declared zero-argument initializer".into()));
+                    }
+                }
                 let (key, arguments, value_call) = match &located.operation {
                     Operation::ModuleCall {
                         module,
@@ -411,7 +472,15 @@ impl CompilationUnit {
                     ));
                 };
                 if matches!(key.0, Owner::Class(_))
-                    && crate::native::callback(ClassBase::ApplicationAppBase, key.1).is_some()
+                    && crate::native::callback(
+                        self.classes
+                            .iter()
+                            .find(|c| key.0 == Owner::Class(c.name.as_str()))
+                            .map(|c| c.base)
+                            .unwrap_or(ClassBase::ApplicationAppBase),
+                        key.1,
+                    )
+                    .is_some()
                 {
                     return Err(fail(
                         Some(index),
@@ -533,7 +602,7 @@ impl CompilationUnit {
             text.push_str(&d.function.to_ir_text());
         }
         for class in &self.classes {
-            text.push_str(&format!(".class {} Application.AppBase\n", class.name));
+            text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for method in &class.methods {
                 text.push_str(&method.to_ir_text());
             }
@@ -633,14 +702,14 @@ fn compile_sources_context(
             origins.push((source_index, ast.body_span.start));
             declarations.push(FunctionDeclaration {
                 module,
-                function: source_ir::build_with_calls(source, ast, context, false, &calls)
+                function: source_ir::build_with_calls(source, ast, context, None, &calls)
                     .map_err(diagnostic)?,
             });
         }
         for class in parsed.classes {
             if let Some(context) = context {
                 context
-                    .check_class(crate::api::core(), "Toybox.Application.AppBase")
+                    .check_class(crate::api::core(), class.base.api_name())
                     .map_err(|message| diagnostic(Diagnostic::at(source, 0, message)))?;
             }
             let mut methods = Vec::new();
@@ -661,13 +730,19 @@ fn compile_sources_context(
                 }
                 class_origins.push((source_index, ast.body_span.start));
                 methods.push(
-                    source_ir::build_with_calls(source, ast, context, true, &method_calls)
-                        .map_err(diagnostic)?,
+                    source_ir::build_with_calls(
+                        source,
+                        ast,
+                        context,
+                        Some(class.base),
+                        &method_calls,
+                    )
+                    .map_err(diagnostic)?,
                 );
             }
             classes.push(ClassDeclaration {
                 name: class.name,
-                base: ClassBase::ApplicationAppBase,
+                base: class.base,
                 methods,
             });
         }
@@ -788,10 +863,19 @@ fn parse_unit_ir_context(
                     function: function(text, &rows, &mut i, context)?,
                 });
             }
-            [".class", name, "Application.AppBase"] => {
+            [
+                ".class",
+                name,
+                base @ ("Application.AppBase" | "WatchUi.View"),
+            ] => {
+                let base = if *base == "Application.AppBase" {
+                    ClassBase::ApplicationAppBase
+                } else {
+                    ClassBase::WatchUiView
+                };
                 if let Some(context) = context {
                     context
-                        .check_class(crate::api::core(), "Toybox.Application.AppBase")
+                        .check_class(crate::api::core(), base.api_name())
                         .map_err(|message| Diagnostic::at(text, at, message))?;
                 }
                 let name = (*name).to_owned();
@@ -823,7 +907,7 @@ fn parse_unit_ir_context(
                 }
                 classes.push(ClassDeclaration {
                     name,
-                    base: ClassBase::ApplicationAppBase,
+                    base,
                     methods,
                 });
             }

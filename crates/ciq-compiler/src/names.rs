@@ -6,6 +6,7 @@ pub(crate) enum NativeModule {
     Application,
     System,
     WatchUi,
+    Graphics,
 }
 
 impl NativeModule {
@@ -15,6 +16,7 @@ impl NativeModule {
             Self::Application => "Application",
             Self::System => "System",
             Self::WatchUi => "WatchUi",
+            Self::Graphics => "Graphics",
         }
     }
 }
@@ -36,6 +38,7 @@ impl Names {
             "Toybox.Application" => NativeModule::Application,
             "Toybox.System" => NativeModule::System,
             "Toybox.WatchUi" => NativeModule::WatchUi,
+            "Toybox.Graphics" => NativeModule::Graphics,
             _ => return Err(format!("unsupported native module {path:?}")),
         };
         let declaration = crate::api::core()
@@ -47,6 +50,7 @@ impl Names {
             || (name == "Application" && module != NativeModule::Application)
             || (name == "System" && module != NativeModule::System)
             || (name == "WatchUi" && module != NativeModule::WatchUi)
+            || (name == "Graphics" && module != NativeModule::Graphics)
             || self.bindings.contains_key(name)
         {
             return Err(format!("conflicting native binding {name:?}"));
@@ -70,6 +74,7 @@ impl Names {
             "System" | "Toybox.System" => Some(NativeModule::System),
             "Application" | "Toybox.Application" => Some(NativeModule::Application),
             "WatchUi" | "Toybox.WatchUi" => Some(NativeModule::WatchUi),
+            "Graphics" | "Toybox.Graphics" => Some(NativeModule::Graphics),
             _ => None,
         })
     }

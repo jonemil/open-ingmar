@@ -396,6 +396,7 @@ class/module:
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
+              | "Toybox.Graphics"
 ```
 
 `using` introduces a module binding, optionally aliased. `import` introduces
@@ -620,7 +621,7 @@ continuation after discarded calls. Source class/receiver syntax follows the
 
 ## Instance class extension
 
-Unit mode also accepts [AppBase-derived class
+Unit mode also accepts [AppBase- and View-derived class
 declarations](compiler-classes.md). Their methods may call `self.<member>(...)`
 as typed value expressions or statements; class ownership and receiver contracts
 remain explicit in typed/saved IR. Default single-function source mode does not
@@ -904,9 +905,10 @@ Saved IR records the concrete allocation type and rechecks all uses. See the
 `new Toybox.WatchUi.View()` constructs a non-null native View with no arguments.
 `new WatchUi.View()` is also accepted; a `using Toybox.WatchUi as Ui` binding
 permits `new Ui.View()`, while `import Toybox.WatchUi` permits `new View()`.
-Constructor qualifiers cannot be shadowed by locals/parameters. Other classes,
-constructor arguments, source-class construction, and bare unimported `View`
-are unsupported. The initializer requires API 2.1.0, independently of the
+Constructor qualifiers cannot be shadowed by locals/parameters. Constructor
+arguments and bare unimported `View` are unsupported. Unit mode also permits
+[declared source View construction](compiler-classes.md#source-views-and-drawing).
+The initializer requires API 2.1.0, independently of the
 class's API 1.0.0 availability.
 
 Parameters/results use `Toybox.WatchUi.View`; matching non-null references may
@@ -929,13 +931,38 @@ requires the initializer's 2.1.0 API level.
 
 Source [getInitialView overrides][initial-view-callback] return a validated
 one-view positional result. A generic View array may contain zero or many Views
-and cannot replace that shape. Delegate pairs and source View inheritance
-remain planned. See the [complete example][native-views-example] and
+and cannot replace that shape. Delegate pairs remain planned.
+See the [complete example][native-views-example] and
 [constructor/runtime evidence][native-views-evidence].
 
 [native-views-example]: ../../examples/compiler-native-views/README.md
 [native-views-evidence]: ../investigations/compiler-native-views.md
 [initial-view-callback]: compiler-classes.md#source-initial-view-callback
+
+## Drawing context
+
+View.onUpdate inherits one non-null `Toybox.Graphics.Dc` parameter. Dc references
+may be copied into locals and passed through explicitly typed parameters. They
+cannot be constructed, printed, used in scalar operations, or stored in arrays.
+The accepted member statements return Void:
+
+```text
+dc.clear()
+dc.setColor(Number, Number)
+dc.drawText(Number, Number, FontDefinition, String, Number)
+```
+
+This bounded profile uses integer coordinates/colors/justification and a String
+text argument; it does not implement all Numeric, color, font, and null
+alternatives in Garmin's API. These methods require API 1.0.0. Void calls cannot
+produce expression values.
+
+`Graphics.FONT_MEDIUM` produces FontDefinition with catalogue value 3, since API
+1.0.0. The canonical Graphics module spelling, fully qualified
+`Toybox.Graphics.FONT_MEDIUM`, and explicit module aliases are accepted. Qualifiers
+cannot be shadowed by parameters/locals. A plain Number, including literal 3,
+does not satisfy the font argument. Other Graphics constants and general enum
+declarations are unsupported. See [evidence](../investigations/compiler-visible-view.md).
 
 ## Nullable results
 

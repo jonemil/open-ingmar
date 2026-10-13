@@ -63,8 +63,20 @@ Native object references retain an explicit `NativeClass` identity in values,
 parameters, results, and Array elements. `NativeNew` means allocation followed
 by initialization; it is order-sensitive even when its result is consumed later.
 The backend preserves the instance across the initializer call and discards
-only that call's result. The current class is View with a zero-argument
-initializer. Scalar operators and object methods remain separately checked.
+only that call's result. Native construction supports View with a zero-argument
+initializer. Dc references arrive through callback parameters and cannot be
+constructed or put in arrays. Scalar operators and object methods remain
+separately checked.
+
+`SourceNew` retains a source class name for unit resolution and application
+binding. Its value uses the native View base contract; exact source-instance
+types and general member dispatch are outside this profile. Unit validation
+requires a View subclass with a validated zero-argument initializer.
+
+Native constants retain module/member identity and catalogue type. FONT_MEDIUM
+is a FontDefinition enum value, even though lowering emits its numeric value.
+This prevents a plain Number from satisfying the drawing method's font contract.
+Native Void member calls are effect-only operations with no semantic result.
 
 Positional results use `TupleShape`, distinct from mutable Array element
 contracts. `TupleNew` validates an exact one-View slot and accepts only already
@@ -265,10 +277,11 @@ validation associates it with an owner and resolves explicit self calls within
 that class. The receiver is hidden context, not a first-class semantic value.
 
 Owner-qualified labels distinguish same-name bodies. Application generation
-binds methods to the source AppBase DATA record and resolves native identity to
-imports; IR never stores import indexes. Generated callbacks and View/base setup
-remain separate until source native calls and object/null/array values are
-supported. [Class rules](../specs/compiler-classes.md) define the supported profile;
+binds methods to their AppBase or View DATA record and resolves native identity
+to imports; IR never stores import indexes. Callback signatures are resolved
+against the owner's base, preserving Dc parameters and Void results through
+saved IR. Generated lifecycle bodies supply only missing source overrides.
+[Class rules](../specs/compiler-classes.md) define the supported profile;
 [application design](console-application.md) describes the intended extension.
 
 [source]: ../specs/compiler-subset.md
