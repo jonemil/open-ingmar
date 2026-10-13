@@ -404,6 +404,24 @@ fn build_core() -> Catalogue {
             char_initial,
         ),
         method(
+            "addAll",
+            vec![Type::Array(Box::new(Type::Parameter("Element".into())))],
+            Type::Array(Box::new(Type::Parameter("Element".into()))),
+            char_initial,
+        ),
+        method(
+            "remove",
+            vec![Type::Parameter("Element".into())],
+            Type::named("Toybox.Lang.Boolean"),
+            char_initial,
+        ),
+        method(
+            "removeAll",
+            vec![Type::Parameter("Element".into())],
+            Type::named("Toybox.Lang.Boolean"),
+            char_initial,
+        ),
+        method(
             "indexOf",
             vec![Type::Parameter("Element".into())],
             Type::named(number),

@@ -722,6 +722,8 @@ See the
 String `toCharArray` defines a non-null Char array. Array receivers support
 `size` returning Number, `toString` returning String, `indexOf` taking one
 Char and returning Number, `add` taking Char and returning `Array<Char>`,
+`addAll` taking `Array<Char>` and returning `Array<Char>`, `remove`/`removeAll`
+taking Char and returning Boolean,
 `reverse` returning `Array<Char>`, and `slice` taking two Number-or-Null bounds
 and returning `Array<Char>`. Generic API parameters and results are substituted
 from the receiver's element type. `char-array` is
@@ -729,6 +731,8 @@ the parameter category and `result=char-array` is the user-call result category.
 Function result text is
 inferred from returns, so `.function result=char-array` is not accepted.
 Native results are recomputed from receiver/member contracts, not annotations.
+Mutation remains an ordered native call; text cannot change an argument's
+element contract or reorder a mutation relative to its consumers.
 Matching arrays may use ordinary `.local`, `.read`, `.assign`, calls, and
 returns without a new allocation directive. Shared validation retains the Char
 element contract and rejects other/nullable array categories. Context requires

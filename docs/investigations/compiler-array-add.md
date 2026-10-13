@@ -45,7 +45,8 @@ contracts are not implied.
 
 Native value calls must appear in a value context supported by the source subset,
 such as an initializer, assignment, or another call. A direct native call as an
-expression statement is not currently parsed. `addAll`, removals, sort, Array
-construction, and element writes remain unsupported.
+expression statement is not currently parsed. Bulk append and removals have
+[separate evidence](compiler-array-mutation.md). Sort, Array construction, and
+element writes remain unsupported.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

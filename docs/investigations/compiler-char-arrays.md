@@ -22,9 +22,9 @@ methods; generic Array signatures use Object-or-Null element contracts:
 | `reverse()` | Array | 1.3.0 | Char result verified; see transform evidence |
 | `slice(start, end)` | Array | 1.3.0 | Char result/bounds verified; see transform evidence |
 | `add(element)` | Array | 1.3.0 | Char mutation verified; see append evidence |
-| `addAll(array)` | Array | 1.3.0 | Mutation and compatible collection types |
-| `remove(element)` | Boolean | 1.3.0 | Mutation and equality behavior |
-| `removeAll(element)` | Boolean | 1.3.0 | Mutation and equality behavior |
+| `addAll(array)` | Array | 1.3.0 | Char arrays; see mutation evidence |
+| `remove(element)` | Boolean | 1.3.0 | Char argument; see mutation evidence |
+| `removeAll(element)` | Boolean | 1.3.0 | Char argument; see mutation evidence |
 | `sort(comparator)` | Void | 5.0.0 | Mutation and comparator/callback contracts |
 
 Inherited Object equality/hash/weak-reference behavior needs array-specific
@@ -109,8 +109,8 @@ Console entry results remain scalar/Void; array entries are rejected.
 
 Element access has [separate evidence](compiler-array-reads.md); broader Array
 methods remain in [the plan][plan]. A native
-array result does not establish source array construction, mutation beyond
-`add`, nullable arrays, or ordinary object/reference lifetime behavior.
+array result does not establish source array construction, general object
+mutation, nullable arrays, or ordinary object/reference lifetime behavior.
 
 [example]: ../../examples/compiler-char-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
@@ -120,3 +120,4 @@ array result does not establish source array construction, mutation beyond
 [plan]: ../plan.md
 [transform evidence]: compiler-array-transforms.md
 [append evidence]: compiler-array-add.md
+[mutation evidence]: compiler-array-mutation.md

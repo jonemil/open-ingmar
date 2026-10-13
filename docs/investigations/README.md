@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Array mutation](compiler-array-mutation.md): bulk append, removals, generic
+  argument contracts, shared references, and self-appending.
 - [Array append](compiler-array-add.md): mutation, typed self result, aliases,
   and receiver/argument evaluation order.
 - [Array transforms](compiler-array-transforms.md): generic element

@@ -127,6 +127,9 @@ checks element-preserving reverse and slice results.
 The [Char-array append example](examples/compiler-array-add/README.md) checks
 mutation through shared references and the typed `add` result.
 
+The [Array mutation example](examples/compiler-array-mutation/README.md) covers
+bulk append, removals, aliases, and conditional effects.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

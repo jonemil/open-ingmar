@@ -111,8 +111,8 @@ and combined indexing/member-call nesting. The long-arithmetic boundary test
 continues to pass with ordinary thread stack limits; separate read emission
 keeps that existing recursion budget intact.
 
-The compiler does not statically prove bounds. Other element types, mutable
-arrays, String/dictionary indexing, and other VM/device versions need their own
+The compiler does not statically prove bounds. Other element types, element
+writes, String/dictionary indexing, and other VM/device versions need their own
 contracts. Array reverse/slice contracts are recorded in the
 [follow-up investigation](compiler-array-transforms.md).
 

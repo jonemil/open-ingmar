@@ -17,7 +17,7 @@ Dictionary and WeakReference, plus Application.AppBase and the
 Lang/Application/System modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
-length/case/string methods, Array size/string/search/append/reverse/slice,
+length/case/string methods, Array size/string/search/append/removal/reverse/slice,
 AppBase initialization/startup/shutdown, and System printing/exit.
 Parameter/result subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Char, Char arrays, Null,
@@ -69,11 +69,14 @@ The executable bridge currently admits only non-null Char arrays. String
 conversion produces that category, and size/string/search calls use ordinary
 native dispatch and local storage. The native profile substitutes the receiver
 element type into generic Array signatures, matching our SDK specimens for
-`indexOf`, `reverse`, `slice`, and `add`. `add(Char)` mutates the referenced
-Array and returns the same typed Array. Broader element types remain separate
-work; other mutation cannot bypass element validation. See the
+search, transforms, and mutation. `add`/`addAll` return the same typed Array;
+removals return Boolean. `addAll` checks the argument's invariant element type
+after recursive generic substitution. Native calls preserve mutation order
+without requiring static alias tracking. Broader element types remain separate
+work; mutation cannot bypass element validation. See the
 [array evidence](../investigations/compiler-char-arrays.md) and
-[transform evidence](../investigations/compiler-array-transforms.md).
+[transform evidence](../investigations/compiler-array-transforms.md) and
+[mutation evidence](../investigations/compiler-array-mutation.md).
 
 Semantic identities such as `Toybox.Lang.Number` are independent of VM symbol
 IDs, import indexes, section offsets, and implementation functions. Native
