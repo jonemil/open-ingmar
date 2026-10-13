@@ -7,6 +7,8 @@ and future Rust toolchain experiments.
 
 - [compiler-native-calls](compiler-native-calls/README.md): inherited Number
   conversion on local and parameter receivers.
+- [compiler-fields](compiler-fields/README.md): instance-owned Number state
+  initialized independently and rendered across View updates.
 - [compiler-probe](compiler-probe/README.md): a standalone function input to our
   Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a

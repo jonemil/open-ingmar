@@ -1,7 +1,10 @@
 //! Declaration collection, cross-function checks, and unit text serialization.
 use crate::{Diagnostic, Function, Operation, ReturnType, backend, parser, source_ir};
 use ciq_assembly::Program;
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 pub(crate) const MAX_FUNCTIONS: usize = 256;
 
@@ -72,14 +75,25 @@ impl ClassBase {
     }
 }
 
-/// A named instance class and its declared method bodies in source order.
-/// Fields, source inheritance, and native method bodies are not supported yet.
+/// A Number instance field initialized separately for each constructed object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstanceField {
+    /// Unqualified member name, unique within the class.
+    pub name: String,
+    /// Initial Number value stored in the class's instance-field metadata.
+    pub initial: i32,
+}
+
+/// A named native-derived class with Number fields and method bodies.
+/// Source inheritance and native method bodies are not supported yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassDeclaration {
     /// Unqualified class identity, distinct from module/global names.
     pub name: String,
     /// Native superclass identity resolved by application generation.
     pub base: ClassBase,
+    /// Number fields with constant initial values, in declaration order.
+    pub fields: Vec<InstanceField>,
     /// Instance-method IR bodies, checked together during unit construction.
     pub methods: Vec<Function>,
 }
@@ -284,6 +298,34 @@ impl CompilationUnit {
                     "duplicate class or class/module name collision".into(),
                 ));
             }
+            if class.fields.len() > 256 {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "class exceeds 256 instance fields".into(),
+                ));
+            }
+            let mut field_names = BTreeSet::new();
+            for field in &class.fields {
+                if !valid(&field.name)
+                    || reserved(&field.name)
+                    || matches!(field.name.as_str(), "View" | "AppBase" | "init")
+                    || crate::api::core()
+                        .method(class.base.api_name(), &field.name)
+                        .is_some()
+                    || class
+                        .methods
+                        .iter()
+                        .any(|method| method.name() == field.name)
+                    || !field_names.insert(&field.name)
+                {
+                    return Err(fail(
+                        Some(at),
+                        None,
+                        "invalid, duplicate, or conflicting instance field".into(),
+                    ));
+                }
+            }
             if class.methods.is_empty() {
                 return Err(fail(
                     None,
@@ -398,6 +440,27 @@ impl CompilationUnit {
         }
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::SelfFieldRead { field, .. }
+                | Operation::SelfFieldAssign { field, .. } = &located.operation
+                {
+                    let declared = self
+                        .classes
+                        .iter()
+                        .find(|class| owner == Owner::Class(class.name.as_str()))
+                        .is_some_and(|class| {
+                            class
+                                .fields
+                                .iter()
+                                .any(|declaration| declaration.name == *field)
+                        });
+                    if !declared {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!("unresolved instance field {field}"),
+                        ));
+                    }
+                }
                 if let Operation::SourceNew { class, .. } = &located.operation {
                     let declaration = self
                         .classes
@@ -603,6 +666,9 @@ impl CompilationUnit {
         }
         for class in &self.classes {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
+            for field in &class.fields {
+                text.push_str(&format!(".field-number {} {}\n", field.name, field.initial));
+            }
             for method in &class.methods {
                 text.push_str(&method.to_ir_text());
             }
@@ -743,6 +809,7 @@ fn compile_sources_context(
             classes.push(ClassDeclaration {
                 name: class.name,
                 base: class.base,
+                fields: class.fields,
                 methods,
             });
         }
@@ -880,6 +947,7 @@ fn parse_unit_ir_context(
                 }
                 let name = (*name).to_owned();
                 let mut methods = Vec::new();
+                let mut instance_fields = Vec::new();
                 let mut ended = false;
                 while let Some(&(method_at, line)) = rows.get(i) {
                     let parts = fields(line);
@@ -891,6 +959,24 @@ fn parse_unit_ir_context(
                         i += 1;
                         ended = true;
                         break;
+                    }
+                    if parts.first().is_some_and(|part| part == ".field-number") {
+                        if parts.len() != 3 || !methods.is_empty() || instance_fields.len() >= 256 {
+                            return Err(Diagnostic::at(
+                                text,
+                                method_at,
+                                "expected .field-number <name> <i32> before methods, at most 256 fields",
+                            ));
+                        }
+                        let initial = parts[2].parse::<i32>().map_err(|_| {
+                            Diagnostic::at(text, method_at, "invalid Number field initializer")
+                        })?;
+                        instance_fields.push(InstanceField {
+                            name: parts[1].clone(),
+                            initial,
+                        });
+                        i += 1;
+                        continue;
                     }
                     if locations.len() + class_locations.len() >= MAX_FUNCTIONS {
                         return Err(Diagnostic::at(
@@ -908,6 +994,7 @@ fn parse_unit_ir_context(
                 classes.push(ClassDeclaration {
                     name,
                     base,
+                    fields: instance_fields,
                     methods,
                 });
             }

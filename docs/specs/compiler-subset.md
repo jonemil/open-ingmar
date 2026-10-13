@@ -498,9 +498,11 @@ other loop forms and standalone blocks remain future work.
 ## Local reassignment
 
 `<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
-The target must be a bare identifier. Parameters, fields, unknown/forward names,
+The local target must be a bare identifier. Parameters, unknown/forward names,
 and arm locals used outside their scope are rejected. Assignment is a statement,
 not an expression; compound assignment and increment/decrement are unsupported.
+Class methods additionally support [explicit self field
+assignment](compiler-classes.md#number-instance-fields).
 
 The initializer fixes the local's supported type. Each assignment must preserve
 it, including Boolean locals; a nullable Dictionary local may receive null.

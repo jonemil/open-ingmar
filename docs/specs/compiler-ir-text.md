@@ -763,6 +763,14 @@ The bounded Dc clear/setColor/drawText profile uses this form.
 
 ## Source construction and native constants
 
+Instance field operations are `.read-self %<result-id> <field-name>` and
+`.assign-self <field-name> %<value-id>`, with optional source spans. Reads define
+Number; writes consume Number without a result. Both require an instance receiver
+and preserve observable order. Their symbolic field identities resolve through
+the enclosing unit class's
+[field declarations](compiler-classes.md#number-instance-fields).
+Standalone method parsing leaves that unit obligation unresolved.
+
 `.new-source %<result-id> <class-name>` allocates and initializes a source View.
 It defines a non-null View value and is order-sensitive. Function validation
 checks the identifier and View initializer availability (API 2.1.0); unit

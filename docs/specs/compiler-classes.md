@@ -9,16 +9,18 @@ See [receiver design][design] and [runtime evidence][evidence].
 
 ```text
 class = "class" identifier "extends" native-base
-        "{" native-declaration* function+ "}"
+        "{" native-declaration* (number-field | function)+ "}"
 native-base = recognized Application.AppBase or WatchUi.View identity
+number-field = "var" identifier "=" signed-number-literal ";"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
 Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
 It accepts canonical/qualified, aliased, and imported AppBase/View spellings.
-Fields, static methods, annotations, source superclass lookup, and nested/empty
-classes are unsupported. Class names must be unique;
+Number fields are supported below. Static methods, annotations, source
+superclass lookup, and nested/empty classes are unsupported. Classes require at
+least one method. Class names must be unique;
 classes cannot be reopened. Reject class/module/global-function name collisions.
 
 Reserved class names include language keywords, `self`, `System`, `Application`,
@@ -26,8 +28,8 @@ Reserved class names include language keywords, `self`, `System`, `Application`,
 `initialize`, `println`, `View`, `onStart`, `getInitialView`. These restrictions
 belong to this constrained profile, not the general Monkey C language.
 
-`self` is reserved and may appear only as this explicit call receiver. It cannot
-be rebound, passed as a value, or used for property access. Bare member calls,
+`self` is reserved and may appear as a call receiver or a declared field receiver.
+It cannot be rebound or passed as a value. Bare member calls,
 class-name calls, and calls on other objects remain unsupported. Module calls
 from methods retain their existing rules.
 
@@ -145,7 +147,53 @@ Its initializer must satisfy the native-base contract above. Unit validation
 rejects unresolved names, modules, AppBase construction, and missing initializers.
 The result has the non-null native View contract; source identity is retained in
 the construction operation, not as a distinct value type. It may supply the slot
-in `getInitialView()`. Fields and calls on another source instance are unsupported.
+in `getInitialView()`. Field access and calls on another source instance are
+unsupported; current-instance fields use the contract below.
+
+## Number instance fields
+
+AppBase and View classes may declare up to 256 fields with signed 32-bit decimal
+Number literal initializers. Fields have a fixed Number contract. Uninitialized
+declarations, annotations, non-Number literals, and computed initializers are
+unsupported. Parentheses around a literal are accepted. These restrictions and
+the field-count limit define our subset, not a device memory limit.
+
+Each field name must be a valid, non-reserved identifier, unique within its class.
+Reject names shared with source methods or catalogue-known inherited methods,
+and `View`, `AppBase`, or `init`, which collide with native-base/constructor
+metadata. Different classes may use the same field name.
+
+```text
+var count = 7;
+function bump() { self.count = self.count + 1; }
+```
+
+Methods read a field with `self.<name>` and replace it with
+`self.<name> = <expression>;`. The RHS must produce Number and is evaluated
+before the write. A local or parameter with the same name remains separate;
+bare names keep existing local/parameter lookup rules. Assignment is a statement,
+not a value expression. Compound assignments, arbitrary receiver properties,
+static fields, and source-inherited fields are unsupported.
+
+`ClassDeclaration.fields` holds names and initial Number values. Unit validation
+resolves every SelfFieldRead/SelfFieldAssign against its enclosing class; standalone
+method IR retains this ownership obligation. Function validation requires an
+instance receiver, Number assignments, and expression evaluation order.
+A read that must survive a subsequent write/call is stored in a local first.
+The same checks apply to typed and saved IR.
+
+Unit text emits `.field-number <name> <i32>` immediately after `.class` and before
+method documents. Declaration order is preserved; duplicate, misplaced, invalid,
+or excessive field records are rejected. Function text uses
+`.read-self %<result> <name>` and `.assign-self <name> %<value>` with optional spans.
+
+Application generation records each field with key bits zero, type `0x01`, and
+the initial Number's 32-bit pattern. Fields are sorted with other class members.
+The runtime supplies a separate field value for each constructed instance;
+constant initialization precedes its source initialize method. Reads lower to
+`getselfv`; writes to `getself`, `spush`, RHS instructions, then `putv`.
+See the [counter example](../../examples/compiler-fields/README.md) and
+[instance isolation evidence](../investigations/compiler-fields.md).
 
 View callbacks inherit these contracts, including when annotations are omitted:
 

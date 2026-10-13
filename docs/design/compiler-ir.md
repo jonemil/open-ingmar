@@ -276,6 +276,16 @@ global/module declarations. Function IR records its receiver requirement; unit
 validation associates it with an owner and resolves explicit self calls within
 that class. The receiver is hidden context, not a first-class semantic value.
 
+Number instance fields belong to class declarations with constant initial values.
+SelfFieldRead/Assign retain symbolic member names and an implicit current receiver;
+unit validation resolves them against the owning class, while function validation
+checks Number writes and effect order. Reads are observable across mutations and
+calls, so saved IR cannot defer an earlier read past a later write. A local captures
+the value when a source expression needs a snapshot. DATA field metadata supplies
+per-instance initialization; it is not a source initializer expression or a shared
+global value. Broader field types require explicit initialization and ownership
+contracts before extending this representation.
+
 Owner-qualified labels distinguish same-name bodies. Application generation
 binds methods to their AppBase or View DATA record and resolves native identity
 to imports; IR never stores import indexes. Callback signatures are resolved

@@ -212,5 +212,8 @@ native extends word `0x40000001` (WatchUi.View import index one), and a View bas
 field with that same reference. Their native constructor wrappers invoke View's
 constructor; `initialize`, onShow, onUpdate, and onHide fields point to source
 CODE where supplied. Source construction selects the class through globals.
-Instance fields and general object-member dispatch remain unsupported. See
+Number instance fields follow the
+[class field contract](compiler-classes.md#number-instance-fields),
+with type `0x01`, key bits zero, and literal initial values. General object-member
+dispatch remains unsupported. See
 [visible View evidence](../investigations/compiler-visible-view.md).

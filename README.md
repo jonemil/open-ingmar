@@ -118,6 +118,9 @@ the source lifecycle callback with a validated one-view positional result.
 The [visible View example](examples/compiler-visible-view/README.md) constructs
 a source View and draws text through its typed onUpdate callback.
 
+The [field counter example](examples/compiler-fields/README.md) checks Number
+field initialization, independent instances, and state across drawing callbacks.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

@@ -150,6 +150,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
             vec![ClassDeclaration {
                 name: "C".into(),
                 base: ClassBase::ApplicationAppBase,
+                fields: vec![],
                 methods: vec![free]
             }]
         )

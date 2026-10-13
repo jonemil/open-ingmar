@@ -10,6 +10,11 @@ pub(crate) struct ParsedFunction {
 }
 
 pub(crate) enum Statement {
+    FieldAssign {
+        name: String,
+        value: Expression,
+        span: Span,
+    },
     Local(LocalDeclaration),
     Println {
         argument: Expression,
@@ -67,6 +72,7 @@ impl Statement {
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
+            Self::FieldAssign { span, .. } => *span,
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
@@ -93,6 +99,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    SelfField(String),
     SourceNew(String),
     NativeConstant {
         module: String,
@@ -789,9 +796,19 @@ impl<'a> Parser<'a> {
                 if self.peek()? == Kind::Punctuation('.') {
                     self.token()?;
                     let member = self.identifier()?;
+                    let member_end = member.span.end;
                     let Kind::Word(member) = member.kind else {
                         unreachable!()
                     };
+                    if name == "self" && self.peek()? != Kind::Punctuation('(') {
+                        return self.node(
+                            ExpressionKind::SelfField(member.into()),
+                            Span {
+                                start: token.span.start,
+                                end: member_end,
+                            },
+                        );
+                    }
                     let mut path = format!("{name}.{member}");
                     while self.peek()? == Kind::Punctuation('.') {
                         self.token()?;
@@ -971,12 +988,18 @@ impl<'a> Parser<'a> {
                 _ => {
                     let expression = self.expression(0)?;
                     if self.peek()? == Kind::Punctuation('=') {
-                        let ExpressionKind::Local(name) = expression.kind else {
-                            return Err(
-                                self.error(start, "assignment target must be a local identifier")
-                            );
+                        let (name, field) = match expression.kind {
+                            ExpressionKind::Local(name) => (name, false),
+                            ExpressionKind::SelfField(name) => (name, true),
+                            _ => {
+                                return Err(self.error(
+                                    start,
+                                    "assignment target must be a local or self field",
+                                ));
+                            }
                         };
-                        if self.source[expression.span.start..expression.span.end] != name {
+                        if !field && self.source[expression.span.start..expression.span.end] != name
+                        {
                             return Err(self.error(
                                 start,
                                 "assignment target must be a bare local identifier",
@@ -985,10 +1008,18 @@ impl<'a> Parser<'a> {
                         self.token()?;
                         let value = self.expression(0)?;
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        Statement::Assign {
-                            name,
-                            value,
-                            span: Span { start, end },
+                        if field {
+                            Statement::FieldAssign {
+                                name,
+                                value,
+                                span: Span { start, end },
+                            }
+                        } else {
+                            Statement::Assign {
+                                name,
+                                value,
+                                span: Span { start, end },
+                            }
                         }
                     } else {
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
@@ -1200,10 +1231,11 @@ pub(crate) struct ParsedUnit {
 pub(crate) struct ParsedClass {
     pub name: String,
     pub base: crate::ClassBase,
+    pub fields: Vec<crate::InstanceField>,
     pub methods: Vec<ParsedFunction>,
 }
 
-/// Parse global/module functions and AppBase-derived class declarations.
+/// Parse global/module functions and native-derived class methods/Number fields.
 /// Collects source ownership without binding calls or selecting VM instructions.
 pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
     let mut parser = Parser {
@@ -1253,7 +1285,35 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             parser.native_base = class_base;
             parser.imports()?;
             let mut methods = Vec::new();
+            let mut fields = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
+                if is_class && parser.peek()? == Kind::Word("var") {
+                    parser.token()?;
+                    let token = parser.identifier()?;
+                    parser.reject_binding(&token)?;
+                    let Kind::Word(name) = token.kind else {
+                        unreachable!()
+                    };
+                    parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
+                    let value = parser.expression(0)?;
+                    let ExpressionKind::Integer(initial) = value.kind else {
+                        return Err(parser.error(
+                            value.span.start,
+                            "instance fields require a Number literal initializer",
+                        ));
+                    };
+                    parser.expect(Kind::Punctuation(';'), "';'")?;
+                    fields.push(crate::InstanceField {
+                        name: name.into(),
+                        initial,
+                    });
+                    if fields.len() > 256 {
+                        return Err(
+                            parser.error(token.span.start, "class exceeds 256 instance fields")
+                        );
+                    }
+                    continue;
+                }
                 methods.push(parser.function()?);
                 count += 1;
                 if count > crate::unit::MAX_FUNCTIONS {
@@ -1273,6 +1333,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                 unit.classes.push(ParsedClass {
                     name: name.into(),
                     base: class_base.unwrap(),
+                    fields,
                     methods,
                 });
             } else {

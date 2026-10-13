@@ -21,6 +21,10 @@ fn emit(
     calls: &CallSignatures,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
+            result: ValueId(operations.len() as u32),
+            field,
+        },
         parser::ExpressionKind::SourceNew(class) => {
             if !calls.keys().any(|(owner, _)| owner == &class) {
                 return Err(Diagnostic::at(
@@ -893,6 +897,13 @@ impl Builder<'_> {
                 ));
             }
             match statement {
+                parser::Statement::FieldAssign { name, value, .. } => {
+                    let value = self.value(value, locals)?;
+                    self.push(
+                        Operation::SelfFieldAssign { field: name, value },
+                        Some(span),
+                    );
+                }
                 parser::Statement::Local(local) => {
                     if self.parameters.contains_key(&local.name) {
                         return Err(Diagnostic::at(

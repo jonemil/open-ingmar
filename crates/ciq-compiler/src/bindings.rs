@@ -61,6 +61,8 @@ pub fn symbol_bindings(
                 "globals".to_string()
             } else if let Some(class) = alias.strip_prefix("__ciq_class_") {
                 class.to_string()
+            } else if let Some(field) = alias.strip_prefix("__ciq_field_") {
+                field.to_string()
             } else if matches!(
                 alias.as_str(),
                 "__ciq_native_clear" | "__ciq_native_setColor" | "__ciq_native_drawText"

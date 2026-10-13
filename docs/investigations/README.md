@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number instance fields](compiler-fields.md): field encoding, current-instance
+  mutation, independent defaults, and a displayed counter.
 - [Visible source View](compiler-visible-view.md): native inheritance, typed
   drawing callbacks, font constants, rendered output, and shutdown observations.
 - [Source initial View](compiler-initial-view.md): positional callback results,

@@ -47,6 +47,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Char { result, .. }
             | Operation::String { result, .. }
             | Operation::Integer { result, .. }
+            | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
@@ -150,6 +151,16 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     instruction(Opcode::Invokemz, vec![]),
                     instruction(Opcode::Popv, vec![]),
                 ]);
+                continue;
+            }
+            Operation::SelfFieldAssign { ref field, value } => {
+                items.push(instruction(Opcode::Getself, vec![]));
+                items.push(instruction(
+                    Opcode::Spush,
+                    vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                ));
+                expression(value, &definitions, &slots, &strings, &mut items);
+                items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
             Operation::NativeCallStatement {
@@ -349,6 +360,10 @@ fn expression(
                 Operation::String { value, .. } => {
                     (Opcode::News, vec![Operand::String(strings[value].clone())])
                 }
+                Operation::SelfFieldRead { field, .. } => (
+                    Opcode::Getselfv,
+                    vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                ),
                 Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
                 Operation::Integer { value, .. } => {
                     let (opcode, mask) = if i8::try_from(*value).is_ok() {

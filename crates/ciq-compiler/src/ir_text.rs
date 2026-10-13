@@ -151,6 +151,8 @@ pub(crate) fn parse_ir_context(
                 fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span="))),
             ),
             Some(".integer") => (0, 3),
+            Some(".read-self") => (38, 3),
+            Some(".assign-self") => (39, 3),
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
             Some(".negate") => (26, 3),
@@ -258,7 +260,17 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 33 {
+        let operation = if kind == 38 {
+            Operation::SelfFieldRead {
+                result: parse_value(&fields[1])?,
+                field: fields[2].clone(),
+            }
+        } else if kind == 39 {
+            Operation::SelfFieldAssign {
+                field: fields[1].clone(),
+                value: parse_value(&fields[2])?,
+            }
+        } else if kind == 33 {
             Operation::SourceNew {
                 result: parse_value(&fields[1])?,
                 class: fields[2].clone(),

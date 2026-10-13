@@ -26,8 +26,9 @@ mod source_types;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
-    ClassBase, ClassDeclaration, CompilationUnit, FunctionDeclaration, SourceDiagnostic, UnitError,
-    compile_sources, compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
+    ClassBase, ClassDeclaration, CompilationUnit, FunctionDeclaration, InstanceField,
+    SourceDiagnostic, UnitError, compile_sources, compile_sources_with_api, parse_unit_ir,
+    parse_unit_ir_with_api,
 };
 
 use std::fmt;
@@ -323,6 +324,17 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Read a declared Number field on the current instance.
+    /// Unit validation resolves the field name against the enclosing class.
+    SelfFieldRead {
+        result: ValueId,
+        field: String,
+    },
+    /// Replace a declared Number field on the current instance.
+    SelfFieldAssign {
+        field: String,
+        value: ValueId,
+    },
     /// Define a supported native constant with its declared enum/value contract.
     NativeConstant {
         result: ValueId,
@@ -861,6 +873,23 @@ impl Function {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
                 }
+                Operation::SelfFieldRead { result, ref field } => {
+                    if !instance_method {
+                        return Err(fail("self field reads require an instance receiver"));
+                    }
+                    validate_call_names(None, field).map_err(fail)?;
+                    (Some(result), vec![])
+                }
+                Operation::SelfFieldAssign { ref field, value } => {
+                    if !instance_method {
+                        return Err(fail("self field assignments require an instance receiver"));
+                    }
+                    validate_call_names(None, field).map_err(fail)?;
+                    if type_of(value) != ValueType::Integer {
+                        return Err(fail("instance fields require Number values"));
+                    }
+                    (None, vec![value])
+                }
                 Operation::Integer { result, .. } => (Some(result), vec![]),
                 Operation::Null { result } => {
                     types.insert(result, ValueType::Null);
@@ -1323,6 +1352,8 @@ impl Function {
                     | Operation::Println { .. }
                     | Operation::Discard { .. }
                     | Operation::LocalAssign { .. }
+                    | Operation::SelfFieldRead { .. }
+                    | Operation::SelfFieldAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
             )
         }) {
@@ -1337,6 +1368,7 @@ impl Function {
                 let roots = match &located.operation {
                     Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
+                    | Operation::SelfFieldAssign { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
@@ -1534,6 +1566,12 @@ impl Function {
                 }
                 Operation::Char { result, value } => format!(".char %{} 0x{value:08x}", result.0),
                 Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
+                Operation::SelfFieldRead { result, ref field } => {
+                    format!(".read-self %{} {field}", result.0)
+                }
+                Operation::SelfFieldAssign { ref field, value } => {
+                    format!(".assign-self {field} %{}", value.0)
+                }
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)

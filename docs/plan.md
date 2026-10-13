@@ -62,9 +62,10 @@ compiling a project.
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
 3. **Add state and input to source Views.** Extend the
-   [visible View example](../examples/compiler-visible-view/README.md) with
-   instance fields and ordinary object-member calls. Model source object identity,
-   field initialization, and source inheritance as their semantics become needed.
+   [field counter example](../examples/compiler-fields/README.md) with
+   source object identity, object-reference fields, and ordinary object-member
+   calls so a delegate can share the displayed View. Keep initialization and
+   assignability checked through saved IR; extend source inheritance when needed.
    Add a View/delegate pair whose input handler updates a counter and
    returns whether it handled the event. This exercises mutable fields and
    Boolean callback results; select an event supported by the target.

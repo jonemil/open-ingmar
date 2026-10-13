@@ -380,6 +380,11 @@ pub fn build_console_application(
         )
         .chain(modules.iter().cloned())
         .chain(unit.classes().iter().map(|class| class.name.clone()))
+        .chain(
+            unit.classes()
+                .iter()
+                .flat_map(|class| class.fields.iter().map(|field| field.name.clone())),
+        )
         .collect();
     let mut next = 2; // Symbol 1 is the synthesized application class.
     for name in names {
@@ -454,6 +459,9 @@ pub fn build_console_application(
     }
     for class in unit.classes() {
         bindings.insert(format!("__ciq_class_{}", class.name), ids[&class.name]);
+        for field in &class.fields {
+            bindings.insert(format!("__ciq_field_{}", field.name), ids[&field.name]);
+        }
     }
     let source_initial_view = instance
         && app_class
@@ -544,6 +552,16 @@ pub fn build_console_application(
         ],
     );
     if let Some(source_class) = app_class {
+        application
+            .fields
+            .extend(source_class.fields.iter().map(|declaration| {
+                field(
+                    ids[&declaration.name],
+                    0,
+                    1,
+                    Reference::Raw(declaration.initial as u32),
+                )
+            }));
         if source_class
             .methods
             .iter()
@@ -589,6 +607,14 @@ pub fn build_console_application(
             method(INIT, 0x30, &ctor_label),
             field(VIEW, 0x70, 7, Reference::Raw(0x40000001)),
         ];
+        fields.extend(source_class.fields.iter().map(|declaration| {
+            field(
+                ids[&declaration.name],
+                0,
+                1,
+                Reference::Raw(declaration.initial as u32),
+            )
+        }));
         fields.extend(
             source_class
                 .methods

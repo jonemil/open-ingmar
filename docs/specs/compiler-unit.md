@@ -45,6 +45,11 @@ native base selects the callback signature. Source constructors must resolve to
 a declared View subclass with a validated initializer; modules and AppBase
 classes cannot be constructed by this profile.
 
+Class containers may declare [Number instance
+fields](compiler-classes.md#number-instance-fields). The unit rejects duplicate
+or conflicting members and resolves every field operation against its class,
+independently of shared member symbol IDs and source-file order.
+
 AppBase.getInitialView has a [one-view positional
 contract](compiler-classes.md#source-initial-view-callback). Its return shape and
 zero parameters are validated for source, typed, and saved IR. It also cannot
