@@ -296,17 +296,32 @@ fn emit_call(
     let receiver = receiver
         .map(|value| emit(source, value, locals, parameters, operations, calls))
         .transpose()?;
+    let class = receiver.and_then(|value| crate::source_objects::class(operations, value));
     let arguments = arguments
         .into_iter()
         .map(|argument| emit(source, argument, locals, parameters, operations, calls))
         .collect::<Result<Vec<_>, _>>()?;
     let result = ValueId(operations.len() as u32);
     Ok(if let Some(receiver) = receiver {
-        Operation::NativeCall {
-            result,
-            receiver,
-            member,
-            arguments,
+        if let Some(class) = class {
+            Operation::ObjectCall {
+                result,
+                result_type: calls
+                    .get(&(class.clone(), member.clone()))
+                    .map(|signature| signature.result)
+                    .unwrap_or(crate::ReturnType::Integer),
+                receiver,
+                class,
+                member,
+                arguments,
+            }
+        } else {
+            Operation::NativeCall {
+                result,
+                receiver,
+                member,
+                arguments,
+            }
         }
     } else if module.as_deref() == Some("self") {
         Operation::SelfCall {
@@ -581,7 +596,7 @@ impl Builder<'_> {
                 arguments,
             } => {
                 let receiver = self.snapshot(*receiver, locals)?;
-                let expected = self.native_argument_context(&receiver, &member);
+                let expected = self.receiver_argument_context(&receiver, &member);
                 E::ValueCall {
                     receiver: Box::new(receiver),
                     member,
@@ -606,7 +621,7 @@ impl Builder<'_> {
                         None
                     };
                 let expected = if let Some(receiver) = &receiver {
-                    self.native_argument_context(receiver, &member)
+                    self.receiver_argument_context(receiver, &member)
                 } else {
                     self.user_argument_context(&module, &member)
                 };
@@ -685,9 +700,9 @@ impl Builder<'_> {
             .unwrap_or_default()
     }
 
-    /// Read array argument expectations from a snapshotted receiver's declaration.
+    /// Resolve Array argument expectations from a source or native receiver.
     /// This supplies construction context; final validation checks the call.
-    fn native_argument_context(
+    fn receiver_argument_context(
         &self,
         receiver: &parser::Expression,
         member: &str,
@@ -695,6 +710,9 @@ impl Builder<'_> {
         let parser::ExpressionKind::Temporary(local) = receiver.kind else {
             return Vec::new();
         };
+        if let Some(class) = self.types.local_class(local) {
+            return self.user_argument_context(class, member);
+        }
         self.types
             .local_type(local)
             .and_then(|ty| crate::native::value_parameters(ty, member))
@@ -763,6 +781,22 @@ impl Builder<'_> {
                 .operations
                 .last_mut()
                 .expect("call emitted an operation");
+            if let Operation::ObjectCall {
+                receiver,
+                class,
+                member,
+                arguments,
+                ..
+            } = &last.operation
+            {
+                last.operation = Operation::ObjectCallStatement {
+                    receiver: *receiver,
+                    class: class.clone(),
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
             if let Operation::NativeCall {
                 receiver,
                 member,

@@ -62,7 +62,7 @@ Void entries run once with their result discarded and no wrapper print;
 
 ## Extension boundary
 
-Non-Number fields, source superclass dispatch, and general source-object member calls
+Object-reference fields, source superclass dispatch, and broader object typing
 require a broader object model. Method records and imports should follow those
 identities rather than fixed wrapper choices. [The plan](../plan.md) defines
 the sequence and runnable acceptance examples. Preserve native/text equivalence

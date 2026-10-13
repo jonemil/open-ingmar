@@ -62,6 +62,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::LocalRead { result, .. }
             | Operation::ModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
+            | Operation::ObjectCall { result, .. }
             | Operation::NativeCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
@@ -163,7 +164,13 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
-            Operation::NativeCallStatement {
+            Operation::ObjectCallStatement {
+                receiver,
+                ref member,
+                ref arguments,
+                ..
+            }
+            | Operation::NativeCallStatement {
                 receiver,
                 ref member,
                 ref arguments,
@@ -171,7 +178,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 expression(receiver, &definitions, &slots, &strings, &mut items);
                 items.push(instruction(
                     Opcode::Getsv,
-                    vec![Operand::Symbol(format!("__ciq_native_{member}"))],
+                    vec![Operand::Symbol(format!(
+                        "{}{member}",
+                        if matches!(located.operation, Operation::ObjectCallStatement { .. }) {
+                            "__ciq_member_"
+                        } else {
+                            "__ciq_native_"
+                        }
+                    ))],
                 ));
                 if !arguments.is_empty() {
                     items.push(instruction(Opcode::Frpush, vec![]));
@@ -278,6 +292,7 @@ fn expression(
         Invoke(usize),
         Context,
         NativeMember(String),
+        SourceMember(String),
         TupleStore,
     }
     let mut tasks = vec![Task::Value(root)];
@@ -377,7 +392,13 @@ fn expression(
                     };
                     (opcode, vec![Operand::Bits(u64::from(*value as u32) & mask)])
                 }
-                Operation::NativeCall {
+                Operation::ObjectCall {
+                    receiver,
+                    member,
+                    arguments,
+                    ..
+                }
+                | Operation::NativeCall {
                     receiver,
                     member,
                     arguments,
@@ -388,7 +409,14 @@ fn expression(
                         tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
                         tasks.push(Task::Context);
                     }
-                    tasks.extend([Task::NativeMember(member.clone()), Task::Value(*receiver)]);
+                    tasks.extend([
+                        if matches!(definitions[&value], Operation::ObjectCall { .. }) {
+                            Task::SourceMember(member.clone())
+                        } else {
+                            Task::NativeMember(member.clone())
+                        },
+                        Task::Value(*receiver),
+                    ]);
                     continue;
                 }
                 Operation::ModuleCall {
@@ -455,6 +483,10 @@ fn expression(
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),
+            Task::SourceMember(member) => (
+                Opcode::Getsv,
+                vec![Operand::Symbol(format!("__ciq_member_{member}"))],
+            ),
             Task::NativeMember(member) => (
                 Opcode::Getsv,
                 vec![Operand::Symbol(format!("__ciq_native_{member}"))],

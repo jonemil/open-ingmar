@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Source object calls](compiler-object-calls.md): explicit receivers, aliases,
+  same-class reassignment, and source/SDK runtime comparison.
 - [Number instance fields](compiler-fields.md): field encoding, current-instance
   mutation, independent defaults, and a displayed counter.
 - [Visible source View](compiler-visible-view.md): native inheritance, typed

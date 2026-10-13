@@ -489,6 +489,26 @@ impl CompilationUnit {
                     }
                 }
                 let (key, arguments, value_call) = match &located.operation {
+                    Operation::ObjectCall {
+                        class,
+                        member,
+                        arguments,
+                        ..
+                    } => (
+                        (Owner::Class(class.as_str()), member.as_str()),
+                        arguments,
+                        true,
+                    ),
+                    Operation::ObjectCallStatement {
+                        class,
+                        member,
+                        arguments,
+                        ..
+                    } => (
+                        (Owner::Class(class.as_str()), member.as_str()),
+                        arguments,
+                        false,
+                    ),
                     Operation::ModuleCall {
                         module,
                         member,
@@ -596,6 +616,7 @@ impl CompilationUnit {
                 }
                 let expected_result = match located.operation {
                     Operation::ModuleCall { result_type, .. }
+                    | Operation::ObjectCall { result_type, .. }
                     | Operation::SelfCall { result_type, .. } => Some(result_type),
                     _ => None,
                 };

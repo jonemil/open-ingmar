@@ -763,6 +763,22 @@ The bounded Dc clear/setColor/drawText profile uses this form.
 
 ## Source construction and native constants
 
+Source instance calls use:
+
+```text
+.call-object %<result> %<receiver> <class> <member> [result=<type>] [%<arg> ...]
+.call-object-discard %<receiver> <class> <member> [%<arg> ...]
+```
+
+Optional spans follow the existing syntax; omitted result types mean Integer.
+The receiver's exact constructor class must be proven through SourceNew and local
+operations, independently of the class name written in the call. Unit validation
+checks the selected class method's arity, parameter/result types, and callback
+restrictions. Both forms preserve receiver-before-argument evaluation order.
+Statement calls define no semantic result. Standalone function parsing retains
+declaration-resolution obligations; it does not authorize arbitrary receiver
+casts. See the [source-call contract](compiler-classes.md#calls-on-constructed-source-objects).
+
 Instance field operations are `.read-self %<result-id> <field-name>` and
 `.assign-self <field-name> %<value-id>`, with optional source spans. Reads define
 Number; writes consume Number without a result. Both require an instance receiver

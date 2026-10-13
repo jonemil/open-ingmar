@@ -1,4 +1,4 @@
-//! Candidate source types used to select concrete array-literal contracts.
+//! Candidate value types and constructor classes for source call/Array lowering.
 //! These do not prove null safety or validity; whole-function IR validation does.
 use std::collections::BTreeMap;
 
@@ -10,6 +10,7 @@ pub(crate) struct Types {
     parameters: Vec<ParameterType>,
     values: BTreeMap<ValueId, Type>,
     locals: BTreeMap<LocalId, Type>,
+    origins: crate::source_objects::Origins,
 }
 
 impl Types {
@@ -18,12 +19,14 @@ impl Types {
             parameters,
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
+            origins: Default::default(),
         }
     }
 
     /// Record a candidate result using shared operator and native contracts.
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
+        let _ = self.origins.observe(operation);
         let (result, ty) = match operation {
             Operation::NativeConstant {
                 result,
@@ -74,6 +77,11 @@ impl Types {
                 ..
             }
             | Operation::SelfCall {
+                result,
+                result_type,
+                ..
+            }
+            | Operation::ObjectCall {
                 result,
                 result_type,
                 ..
@@ -162,6 +170,9 @@ impl Types {
     /// Read a stored local's candidate type; final IR checking remains authoritative.
     pub(crate) fn local_type(&self, local: LocalId) -> Option<&Type> {
         self.locals.get(&local)
+    }
+    pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
+        self.origins.local_class(local)
     }
     pub(crate) fn value_type(&self, value: ValueId) -> Option<&Type> {
         self.values.get(&value)

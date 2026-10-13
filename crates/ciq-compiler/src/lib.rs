@@ -22,6 +22,7 @@ mod null_flow;
 mod operators;
 mod parser;
 mod source_ir;
+mod source_objects;
 mod source_types;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
@@ -324,6 +325,23 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Invoke a source instance method on a receiver with proven constructor
+    /// class. Unit validation checks ownership and the declared call contract.
+    ObjectCall {
+        result: ValueId,
+        result_type: ReturnType,
+        receiver: ValueId,
+        class: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
+    /// Invoke a proven source instance method and discard its runtime result.
+    ObjectCallStatement {
+        receiver: ValueId,
+        class: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Read a declared Number field on the current instance.
     /// Unit validation resolves the field name against the enclosing class.
     SelfFieldRead {
@@ -800,6 +818,7 @@ impl Function {
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
         let mut local_types = std::collections::BTreeMap::new();
+        let mut origins = source_objects::Origins::default();
         for (index, located) in operations.iter().enumerate() {
             let fail = |message: &str| IrError {
                 operation: Some(index),
@@ -809,7 +828,45 @@ impl Function {
                 return Err(fail("source span ends before it starts"));
             }
             let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
+            origins.observe(&located.operation).map_err(fail)?;
             let (result, operands) = match located.operation {
+                Operation::ObjectCall {
+                    receiver,
+                    ref class,
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::ObjectCallStatement {
+                    receiver,
+                    ref class,
+                    ref member,
+                    ref arguments,
+                } => {
+                    validate_call_names(Some(class), member).map_err(fail)?;
+                    validate_call_arguments(arguments, &types).map_err(fail)?;
+                    if type_of(receiver) != ValueType::Object(NativeClass::View) {
+                        return Err(fail("source object calls require a non-null View receiver"));
+                    }
+                    let result = if let Operation::ObjectCall {
+                        result,
+                        result_type,
+                        ..
+                    } = located.operation
+                    {
+                        let ty = call_result_type(result_type).map_err(fail)?;
+                        types.insert(result, ty);
+                        Some(result)
+                    } else {
+                        None
+                    };
+                    (
+                        result,
+                        std::iter::once(receiver)
+                            .chain(arguments.iter().copied())
+                            .collect(),
+                    )
+                }
                 Operation::Block { block } => {
                     available_locals = local_inputs[&block].clone();
                     non_null = non_null_inputs[&block].clone();
@@ -1345,6 +1402,8 @@ impl Function {
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
+                    | Operation::ObjectCall { .. }
+                    | Operation::ObjectCallStatement { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
                     | Operation::SelfCall { .. }
@@ -1373,7 +1432,12 @@ impl Function {
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
                     Operation::Branch { condition, .. } => vec![*condition],
-                    Operation::NativeCallStatement {
+                    Operation::ObjectCallStatement {
+                        receiver,
+                        arguments,
+                        ..
+                    }
+                    | Operation::NativeCallStatement {
                         receiver,
                         arguments,
                         ..
@@ -1413,7 +1477,12 @@ impl Function {
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
-                                Operation::NativeCall {
+                                Operation::ObjectCall {
+                                    receiver,
+                                    arguments,
+                                    ..
+                                }
+                                | Operation::NativeCall {
                                     receiver,
                                     arguments,
                                     ..
@@ -1584,6 +1653,40 @@ impl Function {
                 } => format!(".constant %{} {module} {member}", result.0),
                 Operation::SourceNew { result, ref class } => {
                     format!(".new-source %{} {class}", result.0)
+                }
+                Operation::ObjectCall {
+                    result,
+                    result_type,
+                    receiver,
+                    ref class,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let args = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(
+                        ".call-object %{} %{} {class} {member}{}{args}",
+                        result.0,
+                        receiver.0,
+                        call_type_text(result_type)
+                    )
+                }
+                Operation::ObjectCallStatement {
+                    receiver,
+                    ref class,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let args = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(
+                        ".call-object-discard %{} {class} {member}{args}",
+                        receiver.0
+                    )
                 }
                 Operation::NativeCallStatement {
                     receiver,

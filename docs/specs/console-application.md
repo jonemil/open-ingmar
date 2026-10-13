@@ -215,5 +215,5 @@ CODE where supplied. Source construction selects the class through globals.
 Number instance fields follow the
 [class field contract](compiler-classes.md#number-instance-fields),
 with type `0x01`, key bits zero, and literal initial values. General object-member
-dispatch remains unsupported. See
+dispatch beyond constructor-proven source calls remains unsupported. See
 [visible View evidence](../investigations/compiler-visible-view.md).

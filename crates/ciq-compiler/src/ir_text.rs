@@ -150,6 +150,8 @@ pub(crate) fn parse_ir_context(
                 17,
                 fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span="))),
             ),
+            Some(".call-object") => (40, call_width()),
+            Some(".call-object-discard") => (41, call_width()),
             Some(".integer") => (0, 3),
             Some(".read-self") => (38, 3),
             Some(".assign-self") => (39, 3),
@@ -260,7 +262,42 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 38 {
+        let operation = if kind == 40 {
+            if width < 5 {
+                return Err(fail(
+                    *at,
+                    "expected .call-object result receiver class member [arguments]",
+                ));
+            }
+            let (result_type, arguments_at) = call_contract(fields, 5, *at, source)?;
+            Operation::ObjectCall {
+                result: parse_value(&fields[1])?,
+                receiver: parse_value(&fields[2])?,
+                class: fields[3].clone(),
+                member: fields[4].clone(),
+                result_type,
+                arguments: fields[arguments_at..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 41 {
+            if width < 4 {
+                return Err(fail(
+                    *at,
+                    "expected .call-object-discard receiver class member [arguments]",
+                ));
+            }
+            Operation::ObjectCallStatement {
+                receiver: parse_value(&fields[1])?,
+                class: fields[2].clone(),
+                member: fields[3].clone(),
+                arguments: fields[4..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 38 {
             Operation::SelfFieldRead {
                 result: parse_value(&fields[1])?,
                 field: fields[2].clone(),

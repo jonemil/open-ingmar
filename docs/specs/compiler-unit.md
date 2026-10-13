@@ -50,6 +50,12 @@ fields](compiler-classes.md#number-instance-fields). The unit rejects duplicate
 or conflicting members and resolves every field operation against its class,
 independently of shared member symbol IDs and source-file order.
 
+Calls on constructed source references resolve to their proven class's declared
+methods. Function validation preserves exact constructor identity through local
+copies and same-class assignment; unit validation checks ordinary method contracts
+and prohibits native callback invocation through any receiver. See the
+[instance-call profile](compiler-classes.md#calls-on-constructed-source-objects).
+
 AppBase.getInitialView has a [one-view positional
 contract](compiler-classes.md#source-initial-view-callback). Its return shape and
 zero parameters are validated for source, typed, and saved IR. It also cannot

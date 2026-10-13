@@ -29,8 +29,9 @@ Reserved class names include language keywords, `self`, `System`, `Application`,
 belong to this constrained profile, not the general Monkey C language.
 
 `self` is reserved and may appear as a call receiver or a declared field receiver.
-It cannot be rebound or passed as a value. Bare member calls,
-class-name calls, and calls on other objects remain unsupported. Module calls
+It cannot be rebound or passed as a value. Bare member calls and class-name
+calls remain unsupported. Calls on constructed source objects follow the
+profile below. Module calls
 from methods retain their existing rules.
 
 A self expression call requires a declared value-returning method in the same
@@ -41,6 +42,49 @@ counts must match exactly. Forward and recursive
 references are checked after collecting signatures. Self lookup never falls
 back to a global/module member or an inherited native method. Recursion is
 accepted but termination is not proven.
+
+## Calls on constructed source objects
+
+`new ViewSubclass()` establishes an exact constructor class alongside the native
+View value contract. Local initialization and copies preserve this identity.
+A local initialized from a source construction may subsequently receive only a
+reference with the same proven constructor class; assignments from another source
+class, a generic native View, a parameter, or an erased return are rejected.
+Different instances of the same class are permitted, including conditional and
+loop assignments. Local aliases refer to the same runtime instance; reassignment
+changes only the local reference.
+
+`receiver.method(arguments)` calls a declared method of that constructor class.
+The receiver may be a local/copy or a direct construction expression. Forward
+method declarations and multiple source files are supported. Value calls must
+match the declared result contract; statement calls discard any supported result,
+including Void. Arguments use the existing scalar/nullable/array contracts and
+limits. Receiver evaluation precedes argument evaluation, in source order.
+Empty Array arguments receive context from the selected source signature.
+
+Unit validation rejects missing methods, wrong argument/result contracts, and
+ordinary calls to native lifecycle callbacks, even through a different receiver.
+Lookup does not fall back to inherited native or source methods. Source inheritance,
+arbitrary receiver field access, source-class annotations, and general dynamic
+dispatch remain unsupported.
+
+Exact constructor identity is an invariant local refinement, not a new native API
+type. Generic View parameters, declared View returns, and Array<View> element
+reads expose only their base contract. They cannot authorize source-method calls.
+A generic View local does not gain constructor identity merely by assigning a
+source instance later. No runtime cast is emitted.
+
+`ObjectCall` and `ObjectCallStatement` record a receiver value, class name, member,
+and arguments; value calls also record the result contract. Function validation
+reconstructs receiver provenance from SourceNew and local operations and requires
+an exact match with the claimed class. Unit validation resolves the declaration.
+This prevents saved IR from forging a source class for a native reference.
+
+Lowering evaluates the receiver, selects its method with `getsv`, prepares the
+argument context when needed, invokes it, and discards statement results. Native
+and text paths use identical lowering and ordinary member-symbol binding. See
+the [object-call example](../../examples/compiler-object-calls/README.md) and
+[runtime evidence](../investigations/compiler-object-calls.md).
 
 ## Native and textual IR
 
@@ -147,8 +191,8 @@ Its initializer must satisfy the native-base contract above. Unit validation
 rejects unresolved names, modules, AppBase construction, and missing initializers.
 The result has the non-null native View contract; source identity is retained in
 the construction operation, not as a distinct value type. It may supply the slot
-in `getInitialView()`. Field access and calls on another source instance are
-unsupported; current-instance fields use the contract below.
+in `getInitialView()`. Calls on proven source instances follow the profile above;
+field access on another instance remains unsupported.
 
 ## Number instance fields
 

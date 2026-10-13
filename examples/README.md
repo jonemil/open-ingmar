@@ -9,6 +9,8 @@ and future Rust toolchain experiments.
   conversion on local and parameter receivers.
 - [compiler-fields](compiler-fields/README.md): instance-owned Number state
   initialized independently and rendered across View updates.
+- [compiler-object-calls](compiler-object-calls/README.md): calls through local
+  source View references, aliases, and same-class reassignment.
 - [compiler-probe](compiler-probe/README.md): a standalone function input to our
   Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a

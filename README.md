@@ -121,6 +121,9 @@ a source View and draws text through its typed onUpdate callback.
 The [field counter example](examples/compiler-fields/README.md) checks Number
 field initialization, independent instances, and state across drawing callbacks.
 
+The [object-call example](examples/compiler-object-calls/README.md) calls source
+methods through copied and reassigned references to constructed Views.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 
