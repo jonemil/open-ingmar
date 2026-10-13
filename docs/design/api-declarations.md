@@ -13,17 +13,18 @@ immutable declarations. A future definition-file reader should produce the same
 model. No declaration-file syntax or new crate is required initially.
 
 Current entries cover Lang's Object, Number, String, Boolean, Char, Array, and
-Dictionary and WeakReference, plus Application.AppBase and the
-Lang/Application/System modules.
+Dictionary and WeakReference, plus Application.AppBase and WatchUi.View, and the
+Lang/Application/System/WatchUi modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, Array size/string/search/append/removal/reverse/slice,
-AppBase initialization/startup/shutdown, and System printing/exit.
+AppBase initialization/startup/shutdown, View initialization, and System
+printing/exit.
 Parameter/result subset types expose `api_type()` mappings.
-Internal value categories map to Number, String, Boolean, Char, Number/Char
-arrays, Null, nullable Number/String, and nullable Dictionary; operators use those
-semantic types. The
-bounded native call profile resolves Number's inherited `toString`, `equals`,
+Internal value categories map to Number, String, Boolean, Char, View,
+Number/Char/View arrays, Null, nullable Number/String, and nullable Dictionary;
+operators use those semantic types. The bounded native call profile resolves
+Number's inherited `toString`, `equals`,
 and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
 and String's length, case, string, search, slicing, numeric conversion, equality,
 hash, and comparison contracts. Boolean uses direct comparison and inherited
@@ -43,8 +44,9 @@ value category, so arithmetic, call arguments, returns, and further Number calls
 need no new IR operation or type.
 
 String results use the existing String category and can receive further
-supported calls. User functions accept Number, String, Boolean, Char, Number/Char arrays,
-and nullable Number/String parameters and results. API declarations alone do
+supported calls. User functions accept Number, String, Boolean, Char, View,
+Number/Char/View arrays, and nullable Number/String parameters and results.
+API declarations alone do
 not enable other types. String `find`, `toNumber`, and `toNumberWithBase` retain
 Number-or-Null result contracts; `substring` retains
 String-or-Null. Flow validation permits non-null consumers for local or parameter
@@ -60,15 +62,24 @@ static member distinctions, and other parameterized containers as needed. Declar
 describe runtime-provided APIs without compiling replacement method bodies.
 Keep compiler analysis state outside this model.
 
+`NativeClass` identifies supported constructed objects, standalone values, and
+Array elements. Class availability and initializer availability are separate:
+View is declared since 1.0.0, while its zero-argument `initialize` requires 2.1.0.
+`NativeNew` validates that initializer and preserves the instance while
+discarding its Void result. Construction does not enable other View methods or
+object weak references. See the [View experiment][native-views].
+
+[native-views]: ../investigations/compiler-native-views.md
+
 `Type::Array(element)` preserves the element type independently of the Array
 class used for method lookup. Array element contracts are invariant; an Array
 may widen to its declared Object base, but cannot widen to a mutable Array of
 different elements. Introduction checks recurse into the element contract.
-The executable bridge admits non-null Number/Char arrays. The shared model
+The executable bridge admits non-null Number/Char/View arrays. The shared model
 uses `Array(ArrayElement)` for values, parameters, and results. Element
-contracts affect checking, not VM Array identity. String conversions and Char
-literals produce these categories; size/string/search use
-ordinary native dispatch and local storage. The native profile substitutes
+contracts affect checking, not VM Array identity. Conversions, literals, and
+native construction produce these categories; size/string/search use ordinary
+native dispatch and local storage. The native profile substitutes
 receiver element types into generic Array signatures, matching SDK specimens
 for search, transforms, and mutation. `add`/`addAll` return the same typed Array;
 removals return Boolean. `addAll` checks the argument's invariant element type

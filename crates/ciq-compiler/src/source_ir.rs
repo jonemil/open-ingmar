@@ -21,6 +21,19 @@ fn emit(
     calls: &CallSignatures,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::NativeNew { class, qualifier } => {
+            if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
+                return Err(Diagnostic::at(
+                    source,
+                    expression.span.start,
+                    "native constructor qualifier is shadowed by a local or parameter",
+                ));
+            }
+            Operation::NativeNew {
+                result: ValueId(operations.len() as u32),
+                class,
+            }
+        }
         parser::ExpressionKind::ArrayLiteral(_) => {
             return Err(Diagnostic::at(
                 source,

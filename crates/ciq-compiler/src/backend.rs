@@ -52,6 +52,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
+            | Operation::NativeNew { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -236,6 +237,29 @@ fn expression(
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::NativeNew {
+                    class: crate::NativeClass::View,
+                    ..
+                } => {
+                    items.extend([
+                        instruction(
+                            Opcode::Getmv,
+                            vec![
+                                Operand::Symbol("__ciq_sdk_WatchUi".into()),
+                                Operand::Symbol("__ciq_native_View".into()),
+                            ],
+                        ),
+                        instruction(Opcode::Newc, vec![]),
+                        instruction(Opcode::Dup, vec![Operand::Bits(0)]),
+                        instruction(
+                            Opcode::Getsv,
+                            vec![Operand::Symbol("__ciq_native_initialize".into())],
+                        ),
+                        instruction(Opcode::Dup, vec![Operand::Bits(1)]),
+                        instruction(Opcode::Invokem, vec![Operand::Bits(1)]),
+                    ]);
+                    (Opcode::Popv, vec![])
+                }
                 Operation::ArrayNew { .. } => {
                     items.push(instruction(Opcode::Ipushz, vec![]));
                     (Opcode::Newa, vec![])

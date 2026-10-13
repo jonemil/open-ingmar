@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 pub(crate) enum NativeModule {
     Application,
     System,
+    WatchUi,
 }
 
 impl NativeModule {
@@ -13,6 +14,7 @@ impl NativeModule {
         match self {
             Self::Application => "Application",
             Self::System => "System",
+            Self::WatchUi => "WatchUi",
         }
     }
 }
@@ -23,6 +25,7 @@ impl NativeModule {
 pub(crate) struct Names {
     bindings: BTreeMap<String, NativeModule>,
     app_base: bool,
+    view: bool,
 }
 
 impl Names {
@@ -32,6 +35,7 @@ impl Names {
         let module = match path {
             "Toybox.Application" => NativeModule::Application,
             "Toybox.System" => NativeModule::System,
+            "Toybox.WatchUi" => NativeModule::WatchUi,
             _ => return Err(format!("unsupported native module {path:?}")),
         };
         let declaration = crate::api::core()
@@ -39,21 +43,25 @@ impl Names {
             .expect("supported module must have a catalogue declaration");
         let canonical_name = declaration.name.rsplit('.').next().unwrap();
         let name = alias.unwrap_or(canonical_name);
-        if matches!(name, "self" | "Toybox" | "AppBase")
+        if matches!(name, "self" | "Toybox" | "AppBase" | "View")
             || (name == "Application" && module != NativeModule::Application)
             || (name == "System" && module != NativeModule::System)
+            || (name == "WatchUi" && module != NativeModule::WatchUi)
             || self.bindings.contains_key(name)
         {
             return Err(format!("conflicting native binding {name:?}"));
         }
         self.bindings.insert(name.into(), module);
         self.app_base |= import && module == NativeModule::Application;
+        self.view |= import && module == NativeModule::WatchUi;
         Ok(())
     }
 
     /// Check explicit module/class bindings before accepting a declaration name.
     pub fn bound(&self, name: &str) -> bool {
-        self.bindings.contains_key(name) || (self.app_base && name == "AppBase")
+        self.bindings.contains_key(name)
+            || (self.app_base && name == "AppBase")
+            || (self.view && name == "View")
     }
 
     /// Resolve an alias or supported canonical module path to a native identity.
@@ -61,6 +69,7 @@ impl Names {
         self.bindings.get(name).copied().or(match name {
             "System" | "Toybox.System" => Some(NativeModule::System),
             "Application" | "Toybox.Application" => Some(NativeModule::Application),
+            "WatchUi" | "Toybox.WatchUi" => Some(NativeModule::WatchUi),
             _ => None,
         })
     }
@@ -72,6 +81,16 @@ impl Names {
         }
         path.rsplit_once('.').is_some_and(|(module, member)| {
             member == "AppBase" && self.module(module) == Some(NativeModule::Application)
+        })
+    }
+
+    /// Resolve the bounded native View constructor, including imported bare names.
+    pub fn view(&self, path: &str) -> bool {
+        if path == "View" {
+            return self.view;
+        }
+        path.rsplit_once('.').is_some_and(|(module, member)| {
+            member == "View" && self.module(module) == Some(NativeModule::WatchUi)
         })
     }
 }

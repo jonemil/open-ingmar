@@ -59,6 +59,17 @@ resolved. Context selects an allocation contract; it does not authorize a call
 or coerce a nonempty literal. Unsupported or ambiguous context is diagnosed.
 Empty construction emits only `ArrayNew`, without append or element locals.
 
+Native object references retain an explicit `NativeClass` identity in values,
+parameters, results, and Array elements. `NativeNew` means allocation followed
+by initialization; it is order-sensitive even when its result is consumed later.
+The backend preserves the instance across the initializer call and discards
+only that call's result. The current class is View with a zero-argument
+initializer. Scalar operators and object methods remain separately checked.
+
+The application bootstrap still supplies `getInitialView`. Its positional
+view/delegate result needs shape/cardinality contracts beyond homogeneous Array
+element checking before source overrides can replace it.
+
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
 

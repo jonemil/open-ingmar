@@ -1,6 +1,25 @@
 //! Resolve catalogue contracts into supported callback and native-call profiles.
 use crate::{ClassBase, ParameterType, ReturnType, api};
 
+/// Validate the zero-argument construction profile and its initializer API level.
+/// Construction yields the class reference; the initializer's Void result is discarded.
+pub(crate) fn constructor(
+    class: crate::NativeClass,
+    context: Option<api::ApiContext>,
+) -> Result<(), String> {
+    let method = if let Some(context) = context {
+        context.method(api::core(), class.name(), "initialize")?
+    } else {
+        api::core()
+            .method(class.name(), "initialize")
+            .ok_or("native constructor is not declared")?
+    };
+    if !method.method.parameters.is_empty() || method.method.result != api::Type::Void {
+        return Err("native constructor requires a zero-argument Void initializer".into());
+    }
+    Ok(())
+}
+
 pub(crate) struct CallbackSignature {
     pub parameters: Vec<ParameterType>,
     pub result: ReturnType,

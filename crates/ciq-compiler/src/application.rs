@@ -257,7 +257,10 @@ pub fn build_console_application(
     };
     if matches!(
         entry.return_type(),
-        ReturnType::NullableInteger | ReturnType::NullableString | ReturnType::Array(_)
+        ReturnType::NullableInteger
+            | ReturnType::NullableString
+            | ReturnType::Array(_)
+            | ReturnType::Object(_)
     ) {
         return Err(error(
             "console entry requires a non-null scalar or Void result",
@@ -365,6 +368,8 @@ pub fn build_console_application(
     }
     let mut bindings = BTreeMap::from([
         ("__ciq_sdk_System".into(), SYSTEM),
+        ("__ciq_sdk_WatchUi".into(), WATCH_UI),
+        ("__ciq_native_View".into(), VIEW),
         ("__ciq_native_AppBase".into(), APP_BASE),
         ("__ciq_native_initialize".into(), INITIALIZE),
         ("__ciq_member_println".into(), PRINTLN),

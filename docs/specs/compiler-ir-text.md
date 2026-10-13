@@ -141,14 +141,35 @@ Lowering emits `cpush` with the same bits, without a DATA string or native
 conversion call. Invalid widths and malformed operands are rejected. See the
 [literal evidence](../investigations/compiler-char-literals.md).
 
+## Native object construction
+
+`.new-native %<result> Toybox.WatchUi.View [span=<start>:<end>]` allocates and
+initializes a non-null View with no arguments. Typed IR uses
+`NativeNew { result, class: NativeClass::View }`. Other class paths and extra
+arguments are rejected. View parameter text is `view`; user value calls use
+`result=view`. Function results are inferred from returns; `.function
+result=view` is unsupported.
+
+Construction requires API 2.1.0 for View.initialize, while passing an existing
+View needs only the class's 1.0.0 availability. It participates in single-use,
+same-block, and effect-order checking as an allocation/call. Discarding its
+result still executes allocation and initialization.
+
+Lowering emits `getmv @__ciq_sdk_WatchUi @__ciq_native_View; newc; dup 0;
+getsv @__ciq_native_initialize; dup 1; invokem 1; popv`. The instance remains
+on the stack after the initializer result is popped. Symbol sources bind those
+aliases to exactly one `Toybox_WatchUi`, `View`, and `initialize` declaration
+respectively. See [constructor evidence](../investigations/compiler-native-views.md).
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
-non-null array. `element` is `char` or `number`; typed construction uses
+non-null array. `element` is `char`, `number`, or `view`; typed construction uses
 `Operation::ArrayNew` with `ArrayElement::Char` or `ArrayElement::Number`.
-Other element contracts are rejected. Definition/use, block, and evaluation
-order checks apply to allocation even if its result is consumed later.
-API context requires 1.3.0 for Char, or 1.0.0 for Number and Array.
+View uses `ArrayElement::Object(NativeClass::View)`. Other element contracts are
+rejected. Definition/use, block, and evaluation order checks apply to allocation
+even if its result is consumed later.
+API context requires 1.3.0 for Char, or 1.0.0 for Number, View, and Array.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
 or uninitialized element contract is implied. Nonempty source literals fill it
@@ -158,6 +179,8 @@ typing. See [nonempty construction](../investigations/compiler-array-literals.md
 and [empty construction](../investigations/compiler-empty-arrays.md).
 
 ## Array element reads
+
+The read result follows the receiver's element type, including native View.
 
 `.array-read %<result> %<array> %<index> [span=<start>:<end>]` consumes a
 non-null supported array and non-null Number index, and defines the element
@@ -599,7 +622,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:char-array:number-array:...`.
+`parameter-types=integer:string:boolean:char:view:char-array:number-array:view-array:...`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -769,21 +792,22 @@ array with that same invariant type. `add`/`addAll`, `reverse`, and `slice`
 retain the receiver's array type; removals return Boolean. Slice accepts two
 Number-or-Null bounds. Generic signatures are substituted before checking.
 
-Parameter/user-call categories are `char-array` and `number-array`.
-Value-producing user calls use `result=char-array` or `result=number-array`.
-Function results are inferred from returns; neither array category is accepted
+Parameter/user-call categories are `char-array`, `number-array`, and `view-array`.
+Value-producing user calls use the corresponding `result=<category>`.
+Function results are inferred from returns; no array category is accepted
 as a `.function result=` field. Native results are recomputed from their
 receiver/member contracts. Text cannot misdeclare element types or reorder
 mutation relative to its consumers.
 
 Matching arrays use ordinary locals, reads, assignments, calls, and returns.
 Nullable arrays and other element types are unsupported. API context checks
-Array and element classes separately from methods: Number-array signatures
+Array and element classes separately from methods: Number/View-array signatures
 need 1.0.0, Char-array signatures need 1.3.0, and the String conversions and
 mutation/search/transform methods above need 1.3.0. See the source
 [Char profile](compiler-subset.md#char-arrays),
 [Number profile](compiler-subset.md#number-arrays), and
-[Number-array evidence](../investigations/compiler-number-arrays.md).
+[Number-array evidence](../investigations/compiler-number-arrays.md). The
+[View profile](compiler-subset.md#native-views) adds native object references.
 
 `.add` on Number/Number defines Number, on Char/Number or Number/Char defines
 Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.

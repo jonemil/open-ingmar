@@ -317,6 +317,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.Dictionary",
         "Toybox.Lang.WeakReference",
         "Toybox.Application.AppBase",
+        "Toybox.WatchUi.View",
     ] {
         classes.insert(
             name.into(),
@@ -515,8 +516,15 @@ fn build_core() -> Catalogue {
         on_start,
         on_stop,
     ];
+    classes.get_mut("Toybox.WatchUi.View").unwrap().methods =
+        vec![method("initialize", vec![], Type::Void, ApiLevel(2, 1, 0))];
     let mut modules = BTreeMap::new();
-    for name in ["Toybox.Lang", "Toybox.Application", "Toybox.System"] {
+    for name in [
+        "Toybox.Lang",
+        "Toybox.Application",
+        "Toybox.System",
+        "Toybox.WatchUi",
+    ] {
         modules.insert(
             name.into(),
             Module {

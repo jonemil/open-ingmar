@@ -95,11 +95,30 @@ pub enum BinaryOp {
     Subtract,
 }
 
+/// Native class identities supported as constructed object references.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeClass {
+    View,
+}
+
+impl NativeClass {
+    /// Return this class's canonical API identity, independent of symbol binding.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::View => "Toybox.WatchUi.View",
+        }
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        [Self::View].into_iter().find(|class| class.name() == name)
+    }
+}
+
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
     Number,
     Char,
+    Object(NativeClass),
 }
 
 impl ArrayElement {
@@ -108,11 +127,12 @@ impl ArrayElement {
         api::Type::named(match self {
             Self::Number => "Toybox.Lang.Number",
             Self::Char => "Toybox.Lang.Char",
+            Self::Object(class) => class.name(),
         })
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
-        [Self::Number, Self::Char]
+        [Self::Number, Self::Char, Self::Object(NativeClass::View)]
             .into_iter()
             .find(|element| element.api_type() == *ty)
     }
@@ -121,6 +141,7 @@ impl ArrayElement {
         match self {
             Self::Number => "number",
             Self::Char => "char",
+            Self::Object(NativeClass::View) => "view",
         }
     }
 
@@ -128,6 +149,7 @@ impl ArrayElement {
         match self {
             Self::Number => "number-array",
             Self::Char => "char-array",
+            Self::Object(NativeClass::View) => "view-array",
         }
     }
 }
@@ -143,6 +165,7 @@ pub enum ReturnType {
     NullableString,
     Boolean,
     Char,
+    Object(NativeClass),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     Void,
@@ -157,6 +180,7 @@ pub enum ParameterType {
     NullableString,
     Boolean,
     Char,
+    Object(NativeClass),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
@@ -173,6 +197,7 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::Object(class) => ValueType::Object(class).api_type(),
             Self::Array(element) => ValueType::Array(element).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
@@ -189,6 +214,7 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::Object(class) => ValueType::Object(class).api_type(),
             Self::Array(element) => ValueType::Array(element).api_type(),
             Self::Void => api::Type::Void,
         }
@@ -203,6 +229,7 @@ enum ValueType {
     NullableString,
     Boolean,
     Char,
+    Object(NativeClass),
     Array(ArrayElement),
     Null,
     NullableDictionary,
@@ -234,6 +261,7 @@ impl ValueType {
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
+            Self::Object(class) => api::Type::named(class.name()),
             Self::Array(element) => api::Type::Array(Box::new(element.api_type())),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
@@ -253,7 +281,7 @@ impl ValueType {
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
                 "Toybox.Lang.Char" => Some(Self::Char),
-                _ => None,
+                name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
@@ -266,6 +294,13 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Allocate and initialize one supported native object with no arguments.
+    /// Constructor availability is checked separately from class availability;
+    /// allocation and initialization failures belong to the runtime.
+    NativeNew {
+        result: ValueId,
+        class: NativeClass,
+    },
     /// Allocate an empty array with the specified element contract.
     /// The element contract is explicit; allocation failures belong to the VM.
     ArrayNew {
@@ -818,6 +853,11 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::NativeNew { result, class } => {
+                    native::constructor(class, context).map_err(|message| fail(&message))?;
+                    types.insert(result, ValueType::Object(class));
+                    (Some(result), vec![])
+                }
                 Operation::ArrayNew {
                     result,
                     element_type,
@@ -1053,6 +1093,7 @@ impl Function {
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
+                            ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Array(element) => ReturnType::Array(element),
                             _ => {
                                 return Err(fail(
@@ -1133,6 +1174,7 @@ impl Function {
                 Operation::ModuleCall { .. }
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayNew { .. }
+                    | Operation::NativeNew { .. }
                     | Operation::NativeCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
@@ -1284,6 +1326,7 @@ impl Function {
                         ParameterType::String => "string",
                         ParameterType::Boolean => "boolean",
                         ParameterType::Char => "char",
+                        ParameterType::Object(NativeClass::View) => "view",
                         ParameterType::Array(element) => element.array_text(),
                         ParameterType::NullableDictionary => "nullable-dictionary",
                     })
@@ -1344,6 +1387,9 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::NativeNew { result, class } => {
+                    format!(".new-native %{} {}", result.0, class.name())
+                }
                 Operation::ArrayNew {
                     result,
                     element_type,
@@ -1525,6 +1571,7 @@ fn validate_call_arguments(
                     | ValueType::String
                     | ValueType::Boolean
                     | ValueType::Char
+                    | ValueType::Object(_)
                     | ValueType::Array(_)
                     | ValueType::Null
                     | ValueType::NullableInteger
@@ -1548,6 +1595,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
+        ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::Array(element) => Ok(ValueType::Array(element)),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
@@ -1561,8 +1609,10 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
+        ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
+        ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
 }

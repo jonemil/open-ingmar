@@ -7,9 +7,8 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Extend Array elements to
-   native object values and support
-   ordinary object construction required by source `getInitialView`.
+1. **Extend core Lang contracts and value types.** Extend native objects,
+   constructors, and Array elements beyond the bounded View profile as needed.
    Keep generic signatures and invariant element
    checking shared across source and saved IR. Comparator sorting and other
    Array/Object methods need separate receiver and runtime evidence.
@@ -53,8 +52,11 @@ compiling a project.
    selection. A full Jungle driver and API definition parser are not
    prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View inherited members and callback contracts. Extend object-reference,
-   array, and nullable values as required,
+   AppBase/View inherited members and callback contracts. Model positional
+   callback results before accepting source `getInitialView`: its one-view or
+   view/delegate result is not an arbitrary homogeneous Array. Validate the
+   bounded one-view case, including cardinality, and replace the generated DATA
+   callback target. Extend object-reference, array, and nullable values as required,
    retaining `Void` as a result contract. Start the View path with one
    constructed native View in the array returned by source `getInitialView`.
    Compare new dispatch forms with focused specimens.

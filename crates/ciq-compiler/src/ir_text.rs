@@ -100,6 +100,10 @@ pub(crate) fn parse_ir_context(
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
+                        "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
+                        "view-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::Object(crate::NativeClass::View),
+                        )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
                         "number-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Number))
@@ -171,6 +175,7 @@ pub(crate) fn parse_ir_context(
             Some(".println") => (9, 2),
             Some(".discard") => (29, 2),
             Some(".array-new") => (30, 3),
+            Some(".new-native") => (31, 3),
             Some(".block") => (10, 2),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
@@ -248,10 +253,17 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 30 {
+        let operation = if kind == 31 {
+            Operation::NativeNew {
+                result: parse_value(&fields[1])?,
+                class: crate::NativeClass::from_name(&fields[2])
+                    .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+            }
+        } else if kind == 30 {
             let element_type = match fields[2].as_str() {
                 "char" => crate::ArrayElement::Char,
                 "number" => crate::ArrayElement::Number,
+                "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                 _ => return Err(fail(*at, "unsupported array element type")),
             };
             Operation::ArrayNew {
@@ -516,6 +528,10 @@ fn call_contract(
             "char" => crate::ReturnType::Char,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
+            "view" => crate::ReturnType::Object(crate::NativeClass::View),
+            "view-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))
+            }
             _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
         };
         Ok((result, at + 1))

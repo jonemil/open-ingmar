@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Native Views](compiler-native-views.md): object construction, typed references,
+  invariant arrays, and constructor API levels.
 - [Empty arrays](compiler-empty-arrays.md): contextual construction, aliases,
   typed calls, and allocation API requirements.
 - [Number-array literals](compiler-number-array-literals.md): inferred elements,

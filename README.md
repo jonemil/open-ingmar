@@ -109,6 +109,9 @@ checks inferred elements, typed calls, and evaluation order.
 The [empty-array example](examples/compiler-empty-arrays/README.md) checks
 contextual construction in returns, arguments, and local assignments.
 
+The [native View example](examples/compiler-native-views/README.md) checks
+object construction, typed references, and View-array operations.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

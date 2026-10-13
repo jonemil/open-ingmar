@@ -92,6 +92,10 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    NativeNew {
+        class: crate::NativeClass,
+        qualifier: String,
+    },
     ArrayLiteral(Vec<Expression>),
     ArrayRead {
         array: Box<Expression>,
@@ -201,6 +205,7 @@ impl<'a> Parser<'a> {
         let element = match self.path()?.as_str() {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),
             _ => return Err(self.error(at, "unsupported Array element annotation")),
         };
         self.expect(Kind::Punctuation('>'), "'>'")?;
@@ -447,6 +452,7 @@ impl<'a> Parser<'a> {
                         | "true"
                         | "false"
                         | "null"
+                        | "new"
                 ) =>
             {
                 Ok(token)
@@ -608,6 +614,32 @@ impl<'a> Parser<'a> {
                 Span {
                     start: open.span.start,
                     end: close.span.end,
+                },
+            )?
+        } else if self.peek()? == Kind::Word("new") {
+            let open = self.token()?;
+            let path = self.path()?;
+            if !self.names.view(&path) {
+                return Err(self.error(
+                    open.span.start,
+                    "only native WatchUi.View construction is supported",
+                ));
+            }
+            let (arguments, end) = self.call_arguments(open.span.start, depth)?;
+            if !arguments.is_empty() {
+                return Err(self.error(
+                    open.span.start,
+                    "native View construction requires zero arguments",
+                ));
+            }
+            self.node(
+                ExpressionKind::NativeNew {
+                    class: crate::NativeClass::View,
+                    qualifier: path.split('.').next().unwrap().into(),
+                },
+                Span {
+                    start: open.span.start,
+                    end,
                 },
             )?
         } else if self.peek()? == Kind::Punctuation('(') {
@@ -1052,6 +1084,9 @@ impl Parser<'_> {
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
+                        "Toybox.WatchUi.View" => {
+                            crate::ParameterType::Object(crate::NativeClass::View)
+                        }
                         "Toybox.Lang.Array" => {
                             crate::ParameterType::Array(self.array_annotation()?)
                         }
@@ -1086,6 +1121,7 @@ impl Parser<'_> {
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
+                "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
                 "Toybox.Lang.Array" => crate::ReturnType::Array(self.array_annotation()?),
                 "Void" => crate::ReturnType::Void,
                 _ => return Err(self.error(at, "unsupported result type annotation")),

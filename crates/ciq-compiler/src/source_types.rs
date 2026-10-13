@@ -25,6 +25,7 @@ impl Types {
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let (result, ty) = match operation {
+            Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
             Operation::Integer { result, .. } => (*result, Some(Type::named("Toybox.Lang.Number"))),
             Operation::Char { result, .. } => (*result, Some(Type::named("Toybox.Lang.Char"))),
             Operation::Boolean { result, .. } => {

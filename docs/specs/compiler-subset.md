@@ -30,7 +30,8 @@ parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
-           | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number") ">"
+           | "Toybox.WatchUi.View"
+           | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -52,12 +53,13 @@ atom = signed-decimal-integer | string-literal | char-literal | "true" | "false"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
      | "[" argument-list? "]"
+     | "new" native-class-path "(" ")"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `true`, `while`, `break`, `continue`, `class`, `extends`, `self`, `false`,
-`using`, `import`, `as`, and `null`
+`using`, `import`, `as`, `null`, and `new`
 are reserved. `true` and `false` produce Boolean literals. Whitespace and
 `//` or non-nested `/* ... */` comments are supported. The integer literal domain
 is the signed 32-bit range `-2147483648..=2147483647`. Decimal negative literals
@@ -244,9 +246,9 @@ parenthesized unions, and other type syntax remain unsupported. These
 declarations require no `using` statement.
 
 Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. String, Boolean, Char, and nullable source
-results require explicit annotations. Each return must be assignable to its
-contract:
+value returns have a Void contract. String, Boolean, Char, View, array, and
+nullable source results require explicit annotations. Each return must be
+assignable to its contract:
 a nullable result accepts its scalar type, Null, or the same union. Unrelated
 types, value/void mixtures, and missing returns are errors. Typed IR constructors
 infer uniform scalar/Void returns unless an explicit signature is supplied.
@@ -257,7 +259,8 @@ their independently resolved signatures; annotations cannot override them.
 
 The supported call form is `<module>.<member>(<arguments>?)` in expressions
 and initializers. The module is a top-level user module provided by the
-surrounding PRG scaffold. Value calls return supported scalar or nullable types.
+surrounding PRG scaffold. Value calls return supported scalar, object, array, or
+nullable types.
 Arguments must satisfy the declared types and positional arity: a nullable
 parameter accepts Null, its scalar type, or the same union; scalar parameters
 require exact types. Global unqualified
@@ -392,12 +395,12 @@ class/module:
 ```text
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
-native-module = "Toybox.Application" | "Toybox.System"
+native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
 ```
 
 `using` introduces a module binding, optionally aliased. `import` introduces
-the module name and its supported class names: currently only Application's
-`AppBase`. Therefore `import Toybox.Application;` permits `extends AppBase`,
+the module name and its supported class names: Application's `AppBase` and
+WatchUi's `View`. Therefore `import Toybox.Application;` permits `extends AppBase`,
 while `using Toybox.Application;` requires `extends Application.AppBase`.
 Aliased modules permit `extends App.AppBase` and `Sys.println(value)`.
 Fully qualified `Toybox.Application.AppBase` and `Toybox.System.println(value)`
@@ -759,7 +762,8 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 Nonempty Char-array literals accept Char-valued expressions, for example
 `['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a
 fresh non-null `Array<Char>` and may receive postfix reads/calls. Number literals
-follow the [Number-array contract](#number-arrays). Other element types, mixed
+follow the [Number-array contract](#number-arrays); View literals follow the
+[native object contract](#native-views). Other element types, mixed
 types, nested arrays, and trailing commas are rejected. Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
@@ -868,7 +872,8 @@ printing, and cannot be console entry results. See the
 
 ## Empty array literals
 
-A direct `[]` requires a concrete expected `Array<Number>` or `Array<Char>`.
+A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`, or
+`Array<View>`.
 Parentheses preserve direct context. Supported contexts are:
 
 - An explicitly annotated array return: `return [];`.
@@ -878,7 +883,7 @@ Parentheses preserve direct context. Supported contexts are:
 
 The literal allocates a fresh empty array at its position in evaluation order.
 Reassignment replaces the local reference; existing aliases retain the old
-array. No `add` call or element-storage temporary is emitted. Empty Number
+array. No `add` call or element-storage temporary is emitted. Empty Number/View
 allocation requires API 1.0.0; Char element availability requires 1.3.0.
 Enclosing calls retain their own API requirements.
 
@@ -893,6 +898,43 @@ Saved IR records the concrete allocation type and rechecks all uses. See the
 
 [empty-example]: ../../examples/compiler-empty-arrays/README.md
 [empty-evidence]: ../investigations/compiler-empty-arrays.md
+
+## Native Views
+
+`new Toybox.WatchUi.View()` constructs a non-null native View with no arguments.
+`new WatchUi.View()` is also accepted; a `using Toybox.WatchUi as Ui` binding
+permits `new Ui.View()`, while `import Toybox.WatchUi` permits `new View()`.
+Constructor qualifiers cannot be shadowed by locals/parameters. Other classes,
+constructor arguments, source-class construction, and bare unimported `View`
+are unsupported. The initializer requires API 2.1.0, independently of the
+class's API 1.0.0 availability.
+
+Parameters/results use `Toybox.WatchUi.View`; matching non-null references may
+be stored, copied, reassigned, passed, or returned. Source result annotations
+are required. Nullability, field access, scalar operators, printing, and native
+View/Object member calls remain unsupported for these references. A View or
+array result cannot serve as the console bootstrap entry result.
+
+`Toybox.Lang.Array<Toybox.WatchUi.View>` is invariant. Literals infer View
+elements from construction, typed calls, parameters, locals, or element reads;
+direct empty literals use the usual contextual rules. All elements and typed
+mutation/search arguments must be non-null Views. `addAll` takes another View
+array; `reverse`/`slice` preserve that array type, and indexing returns View.
+Array size/string/search/mutation/transform contracts use the shared generic
+profile. Search/removal evidence covers repeated references to the same View;
+it does not specify equality for arbitrary subclasses or distinct objects.
+Signature and empty-allocation availability is 1.0.0; append/search/transform
+methods require 1.3.0. Constructing a literal's View elements additionally
+requires the initializer's 2.1.0 API level.
+
+The bootstrap still generates `getInitialView()`. Source overrides need a
+positional callback result contract with cardinality validation; a generic View
+array may contain zero or many Views. Delegate pairs and source View inheritance
+remain planned. See the [complete example][native-views-example] and
+[constructor/runtime evidence][native-views-evidence].
+
+[native-views-example]: ../../examples/compiler-native-views/README.md
+[native-views-evidence]: ../investigations/compiler-native-views.md
 
 ## Nullable results
 

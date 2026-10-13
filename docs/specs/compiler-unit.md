@@ -26,8 +26,8 @@ as an intrinsic receiver and cannot be declared as a module.
 All function bodies use the existing grammar and limits. Qualified user calls
 must resolve to a module member in this unit, regardless of declaration order.
 Call argument counts must exactly match the callee's parameter count. All
-ordinary parameters accept Number, String, Boolean, Char, Char arrays, or
-nullable Number/String
+ordinary parameters accept Number, String, Boolean, Char, View,
+Number/Char/View arrays, or nullable Number/String
 contracts; functions return one of these or Void. Expression calls require a
 value result. Nullable arguments accept Null, the corresponding scalar, or the
 same union; scalar arguments require exact types. Source contract

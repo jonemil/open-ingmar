@@ -53,6 +53,10 @@ pub fn symbol_bindings(
             };
             let name = if alias == "__ciq_sdk_System" {
                 "Toybox_System".to_string()
+            } else if alias == "__ciq_sdk_WatchUi" {
+                "Toybox_WatchUi".to_string()
+            } else if alias == "__ciq_native_View" {
+                "View".to_string()
             } else if alias == "__ciq_native_AppBase" {
                 "AppBase".to_string()
             } else if alias == "__ciq_native_toString" {
