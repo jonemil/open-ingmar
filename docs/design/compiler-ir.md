@@ -32,6 +32,15 @@ Void calls have separate statement contracts and do not become expression
 values. The IR accepts discarded pure values even though the source subset
 restricts expression statements to calls and assignments.
 
+Array literals use staged construction alongside logical expressions.
+`ArrayNew` creates an empty typed array before element effects, and native
+append maintains its invariant element contract. The builder keeps the array
+and current element in two temporary locals, so branch joins have empty stacks
+and no expression value crosses a block. The element slot is reused across the
+literal. This avoids exposing a partly filled Array with Null slots as
+`Array<Char>`. Direct allocation/fill needs initialized-element rules before
+replacing this strategy; the present lowering does not promise SDK memory use.
+
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
 

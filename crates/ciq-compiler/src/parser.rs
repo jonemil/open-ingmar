@@ -92,6 +92,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    ArrayLiteral(Vec<Expression>),
     ArrayRead {
         array: Box<Expression>,
         index: Box<Expression>,
@@ -134,24 +135,31 @@ pub(crate) enum ExpressionKind {
 }
 
 impl Expression {
-    /// Report whether evaluating this tree requires short-circuit control flow.
-    pub(crate) fn has_logical(&self) -> bool {
+    /// Report whether this tree needs control flow or staged array construction.
+    pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
-            ExpressionKind::Logical { .. } => true,
-            ExpressionKind::Not(operand) | ExpressionKind::Negate(operand) => operand.has_logical(),
+            ExpressionKind::Logical { .. } | ExpressionKind::ArrayLiteral(_) => true,
+            ExpressionKind::Not(operand) | ExpressionKind::Negate(operand) => {
+                operand.needs_materialization()
+            }
             ExpressionKind::Binary { left, right, .. }
             | ExpressionKind::Compare { left, right, .. } => {
-                left.has_logical() || right.has_logical()
+                left.needs_materialization() || right.needs_materialization()
             }
             ExpressionKind::ValueCall {
                 receiver,
                 arguments,
                 ..
-            } => receiver.has_logical() || arguments.iter().any(Self::has_logical),
-            ExpressionKind::ArrayRead { array, index } => {
-                array.has_logical() || index.has_logical()
+            } => {
+                receiver.needs_materialization()
+                    || arguments.iter().any(Self::needs_materialization)
             }
-            ExpressionKind::ModuleCall { arguments, .. } => arguments.iter().any(Self::has_logical),
+            ExpressionKind::ArrayRead { array, index } => {
+                array.needs_materialization() || index.needs_materialization()
+            }
+            ExpressionKind::ModuleCall { arguments, .. } => {
+                arguments.iter().any(Self::needs_materialization)
+            }
             _ => false,
         }
     }
@@ -578,7 +586,31 @@ impl<'a> Parser<'a> {
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
     fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        let mut expression = if self.peek()? == Kind::Punctuation('(') {
+        let mut expression = if self.peek()? == Kind::Punctuation('[') {
+            let open = self.token()?;
+            if depth >= 64 {
+                return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
+            }
+            if self.peek()? == Kind::Punctuation(']') {
+                return Err(self.error(
+                    open.span.start,
+                    "empty array literals require element-type inference, which is not supported",
+                ));
+            }
+            let mut elements = vec![self.expression(depth + 1)?];
+            while self.peek()? == Kind::Punctuation(',') {
+                self.token()?;
+                elements.push(self.expression(depth + 1)?);
+            }
+            let close = self.expect(Kind::Punctuation(']'), "']'")?;
+            self.node(
+                ExpressionKind::ArrayLiteral(elements),
+                Span {
+                    start: open.span.start,
+                    end: close.span.end,
+                },
+            )?
+        } else if self.peek()? == Kind::Punctuation('(') {
             let open = self.token()?;
             if depth >= 64 {
                 return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));

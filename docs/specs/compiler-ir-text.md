@@ -141,6 +141,22 @@ Lowering emits `cpush` with the same bits, without a DATA string or native
 conversion call. Invalid widths and malformed operands are rejected. See the
 [literal evidence](../investigations/compiler-char-literals.md).
 
+## Char-array allocation
+
+`.array-new %<result> char [span=<start>:<end>]` allocates a fresh empty non-null
+`Array<Char>`. `char` is the only accepted element contract. Typed construction
+uses `Operation::ArrayNew { result, element_type: ParameterType::Char }`;
+other element contracts are rejected. Definition/use, block, and evaluation
+order checks apply to allocation even if its result is consumed later.
+API context requires 1.3.0 for the Char element contract.
+
+Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
+or uninitialized element contract is implied. Source literals fill this array
+using ordinary local storage, native `add`, and discarded call results.
+The explicit IR element type permits empty allocation even though source `[]`
+awaits contextual typing. See the
+[construction evidence](../investigations/compiler-array-literals.md).
+
 ## Char-array reads
 
 `.array-read %<result> %<array> %<index> [span=<start>:<end>]` consumes a

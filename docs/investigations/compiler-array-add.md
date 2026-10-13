@@ -45,7 +45,8 @@ contracts are not implied.
 
 Native value calls also have [statement evidence](compiler-native-statements.md)
 for discarding results. Bulk append and removals have
-[separate evidence](compiler-array-mutation.md). Sort, Array construction, and
-element writes remain unsupported.
+[separate evidence](compiler-array-mutation.md). Char literal construction has
+[its own evidence](compiler-array-literals.md). Sort, general Array construction,
+and element writes remain unsupported.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

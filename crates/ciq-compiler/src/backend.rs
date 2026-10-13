@@ -51,6 +51,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
+            | Operation::ArrayNew { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -235,6 +236,10 @@ fn expression(
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::ArrayNew { .. } => {
+                    items.push(instruction(Opcode::Ipushz, vec![]));
+                    (Opcode::Newa, vec![])
+                }
                 Operation::Null { .. } => (Opcode::Npush, vec![]),
                 Operation::Char { value, .. } => {
                     (Opcode::Cpush, vec![Operand::Bits(u64::from(*value))])

@@ -92,8 +92,9 @@ assembly bindings, and equivalent unsigned applications. Adversarial IR moving
 a size query ahead of a mutation consumed first is rejected. This uses existing
 call-order validation; it does not establish object alias analysis or general
 mutation optimization. Native value calls as statements have
-[separate evidence](compiler-native-statements.md). Sorting, construction, and
-element writes remain separate work in [the plan][plan].
+[separate evidence](compiler-native-statements.md), as does
+[Char literal construction](compiler-array-literals.md). Sorting, general
+construction, and element writes remain separate work in [the plan][plan].
 
 [example]: ../../examples/compiler-array-mutation/README.md
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

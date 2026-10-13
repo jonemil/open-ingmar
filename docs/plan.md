@@ -8,10 +8,13 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 1. **Extend core Lang contracts and value types.** Generalize Array values
-   beyond Char and support construction and ordinary object values required by
-   source `getInitialView`. Keep generic signatures and invariant element
+   beyond Char, infer contextual element types for empty literals, and support
+   ordinary object construction required by source `getInitialView`.
+   Keep generic signatures and invariant element
    checking shared across source and saved IR. Comparator sorting and other
    Array/Object methods need separate receiver and runtime evidence.
+   Revisit direct array filling once initialized-element contracts and memory
+   behavior are established; the current literal path uses typed append.
    Keep positive signs separate
    until their contracts are established. Investigate the SDK's
    [negative-literal postfix discrepancy][negation] before widening that syntax.

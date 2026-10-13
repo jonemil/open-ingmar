@@ -167,6 +167,7 @@ pub(crate) fn parse_ir_context(
             Some(".string") => (8, 3),
             Some(".println") => (9, 2),
             Some(".discard") => (29, 2),
+            Some(".array-new") => (30, 3),
             Some(".block") => (10, 2),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
@@ -244,7 +245,18 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 29 {
+        let operation = if kind == 30 {
+            if fields[2] != "char" {
+                return Err(fail(
+                    *at,
+                    "array allocation currently requires char elements",
+                ));
+            }
+            Operation::ArrayNew {
+                result: parse_value(&fields[1])?,
+                element_type: crate::ParameterType::Char,
+            }
+        } else if kind == 29 {
             Operation::Discard {
                 value: parse_value(&fields[1])?,
             }

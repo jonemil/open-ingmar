@@ -13,6 +13,13 @@ fn emit(
     calls: &CallResults,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::ArrayLiteral(_) => {
+            return Err(Diagnostic::at(
+                source,
+                expression.span.start,
+                "array literal was not materialized before value emission",
+            ));
+        }
         kind @ parser::ExpressionKind::ArrayRead { .. } => {
             emit_array_read(source, kind, locals, parameters, operations, calls)?
         }
@@ -328,8 +335,83 @@ impl Builder<'_> {
         })
     }
 
-    /// Prepare flow-producing children in source order, snapshotting operands
-    /// before emitting their parent in the final block. Ordinary trees bypass it.
+    /// Construct a Char-array literal before evaluating its elements in order.
+    /// Two temporary locals retain the array and current element across joins;
+    /// native append preserves the element contract without uninitialized slots.
+    fn array_literal(
+        &mut self,
+        elements: Vec<parser::Expression>,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let array = self.local_id(span)?;
+        let element = self.local_id(span)?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::ArrayNew {
+                result,
+                element_type: crate::ParameterType::Char,
+            },
+            Some(span),
+        );
+        self.push(
+            Operation::LocalInitialize {
+                local: array,
+                value: result,
+            },
+            Some(span),
+        );
+        for (index, expression) in elements.into_iter().enumerate() {
+            let element_span = expression.span;
+            let value = self.value(expression, locals)?;
+            let store = if index == 0 {
+                Operation::LocalInitialize {
+                    local: element,
+                    value,
+                }
+            } else {
+                Operation::LocalAssign {
+                    local: element,
+                    value,
+                }
+            };
+            self.push(store, Some(element_span));
+            let receiver = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::LocalRead {
+                    result: receiver,
+                    local: array,
+                },
+                Some(span),
+            );
+            let argument = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::LocalRead {
+                    result: argument,
+                    local: element,
+                },
+                Some(element_span),
+            );
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::NativeCall {
+                    result,
+                    receiver,
+                    member: "add".into(),
+                    arguments: vec![argument],
+                },
+                Some(element_span),
+            );
+            self.push(Operation::Discard { value: result }, Some(element_span));
+        }
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Temporary(array),
+            span,
+        })
+    }
+
+    /// Prepare children needing flow or construction in source order, snapshotting
+    /// operands before emitting their parent in the final block.
     fn prepare(
         &mut self,
         expression: parser::Expression,
@@ -338,6 +420,7 @@ impl Builder<'_> {
         use parser::ExpressionKind as E;
         let span = expression.span;
         let kind = match expression.kind {
+            E::ArrayLiteral(elements) => return self.array_literal(elements, span, locals),
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
             }
@@ -416,7 +499,10 @@ impl Builder<'_> {
         arguments: Vec<parser::Expression>,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<Vec<ValueId>, Diagnostic> {
-        let arguments = if arguments.iter().any(parser::Expression::has_logical) {
+        let arguments = if arguments
+            .iter()
+            .any(parser::Expression::needs_materialization)
+        {
             arguments
                 .into_iter()
                 .map(|arg| self.snapshot(arg, locals))
@@ -481,7 +567,7 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<ValueId, Diagnostic> {
-        let expression = if expression.has_logical() {
+        let expression = if expression.needs_materialization() {
             self.prepare(expression, locals)?
         } else {
             expression

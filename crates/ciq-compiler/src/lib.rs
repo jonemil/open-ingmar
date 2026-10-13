@@ -230,6 +230,12 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Allocate an empty array with the specified element contract.
+    /// Only Char elements are executable; allocation failures belong to the VM.
+    ArrayNew {
+        result: ValueId,
+        element_type: ParameterType,
+    },
     /// Read one Char from a non-null Char array using a non-null Number index.
     /// Evaluate array before index, once each. Runtime bounds failures remain
     /// observable; indexes are not clamped or adjusted by the compiler.
@@ -776,6 +782,21 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::ArrayNew {
+                    result,
+                    element_type,
+                } => {
+                    if element_type != ParameterType::Char {
+                        return Err(fail("array allocation currently requires Char elements"));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &ValueType::CharArray.api_type())
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ValueType::CharArray);
+                    (Some(result), vec![])
+                }
                 Operation::ArrayRead {
                     result,
                     array,
@@ -1075,6 +1096,7 @@ impl Function {
                 located.operation,
                 Operation::ModuleCall { .. }
                     | Operation::ArrayRead { .. }
+                    | Operation::ArrayNew { .. }
                     | Operation::NativeCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
@@ -1286,6 +1308,7 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::ArrayNew { result, .. } => format!(".array-new %{} char", result.0),
                 Operation::ArrayRead {
                     result,
                     array,

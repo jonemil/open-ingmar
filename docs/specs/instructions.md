@@ -269,6 +269,8 @@ Abstract stack: `[..., length] → [..., array]`.
 
 Consumes a length and produces an array reference. getInitialView pushes 1,
 allocates an array, fills index 0, and returns it.
+Empty Char-array construction also uses `ipushz; newa`; see the
+[literal experiment](../investigations/compiler-array-literals.md).
 
 Observed encoding: `14` at CODE+`0x00004f` in **minimal-console**,
 MinimalConsoleApp/getInitialView.

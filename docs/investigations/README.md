@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Array literals](compiler-array-literals.md): typed construction, element
+  effects, allocation ordering, and append-based initialization.
 - [Native statements](compiler-native-statements.md): discarded call results,
   stack cleanup, nullable results, and operand effects.
 - [Array mutation](compiler-array-mutation.md): bulk append, removals, generic

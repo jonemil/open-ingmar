@@ -66,9 +66,9 @@ class used for method lookup. Array element contracts are invariant; an Array
 may widen to its declared Object base, but cannot widen to a mutable Array of
 different elements. Introduction checks recurse into the element contract.
 The executable bridge currently admits only non-null Char arrays. String
-conversion produces that category, and size/string/search calls use ordinary
-native dispatch and local storage. The native profile substitutes the receiver
-element type into generic Array signatures, matching our SDK specimens for
+conversion and nonempty literals produce that category; size/string/search use
+ordinary native dispatch and local storage. The native profile substitutes
+receiver element types into generic Array signatures, matching our SDK specimens for
 search, transforms, and mutation. `add`/`addAll` return the same typed Array;
 removals return Boolean. `addAll` checks the argument's invariant element type
 after recursive generic substitution. Native calls preserve mutation order

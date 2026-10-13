@@ -51,6 +51,7 @@ primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
+     | "[" argument-list "]"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
@@ -755,6 +756,20 @@ in the [native call experiment](../investigations/compiler-native-calls.md).
 
 ## Char arrays
 
+Nonempty array literals accept Char-valued expressions, for example
+`['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a
+fresh non-null `Array<Char>` and may receive postfix reads/calls. Other element
+types, mixed types, nested arrays, trailing commas, and empty source literals
+are rejected. Even an annotated result does not yet supply contextual element
+typing for `[]`.
+
+Construction allocates an empty typed array before evaluating elements left to
+right, once each, and appends each result through `add(Char)`. Two hidden local
+slots retain the array and current element across logical-expression joins;
+they share the normal frame budget. The current operation/nesting limits also
+apply. An allocation or append failure remains a runtime obligation. See
+[literal evidence](../investigations/compiler-array-literals.md).
+
 String `toCharArray()` returns a non-null `Array<Char>` since API 1.3.0. The
 supported source annotation is `Toybox.Lang.Array<Toybox.Lang.Char>`, with ordinary
 token whitespace permitted. Array parameters and results retain the element
@@ -791,7 +806,7 @@ array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
-console entry results. Array literals and construction, `sort`, and ordinary
+console entry results. General Array construction, `sort`, and ordinary
 object weak references remain unsupported. Native Array calls may be values or
 statements that discard the result.
 Guard nullable String receivers before conversion; that proof does not imply

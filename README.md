@@ -133,6 +133,9 @@ bulk append, removals, aliases, and conditional effects.
 The [native statement example](examples/compiler-native-statements/README.md)
 executes calls while discarding their results.
 
+The [array literal example](examples/compiler-array-literals/README.md) constructs
+Char arrays with ordered element effects and logical expressions.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

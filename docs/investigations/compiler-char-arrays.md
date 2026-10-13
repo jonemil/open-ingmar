@@ -109,8 +109,9 @@ Console entry results remain scalar/Void; array entries are rejected.
 
 Element access has [separate evidence](compiler-array-reads.md); broader Array
 methods remain in [the plan][plan]. A native
-array result does not establish source array construction, general object
-mutation, nullable arrays, or ordinary object/reference lifetime behavior.
+array result does not establish general object mutation, nullable arrays, or
+ordinary object/reference lifetime behavior. Char-array literals have
+[separate construction evidence](compiler-array-literals.md).
 
 [example]: ../../examples/compiler-char-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html
