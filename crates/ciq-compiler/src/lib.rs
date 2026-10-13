@@ -303,6 +303,11 @@ pub enum Operation {
     Println {
         value: ValueId,
     },
+    /// Evaluate and consume a supported non-Void value without retaining it.
+    /// Calls and operand effects still execute once in their validated order.
+    Discard {
+        value: ValueId,
+    },
     /// Invoke the native superclass initializer on the current instance.
     /// The supported call has no explicit arguments and no semantic result.
     NativeBaseInitialize {
@@ -834,6 +839,7 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
+                Operation::Discard { value } => (None, vec![value]),
                 Operation::NativeCall {
                     result,
                     receiver,
@@ -1075,6 +1081,7 @@ impl Function {
                     | Operation::SelfCall { .. }
                     | Operation::SelfCallStatement { .. }
                     | Operation::Println { .. }
+                    | Operation::Discard { .. }
                     | Operation::LocalAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
             )
@@ -1091,7 +1098,8 @@ impl Function {
                     Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
                     | Operation::Return { value }
-                    | Operation::Println { value } => vec![*value],
+                    | Operation::Println { value }
+                    | Operation::Discard { value } => vec![*value],
                     Operation::Branch { condition, .. } => vec![*condition],
                     Operation::ModuleCallStatement { arguments, .. }
                     | Operation::NativeModuleCallStatement { arguments, .. }
@@ -1304,6 +1312,7 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::Discard { value } => format!(".discard %{}", value.0),
                 Operation::NativeCall {
                     result,
                     receiver,

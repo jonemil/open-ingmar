@@ -594,6 +594,10 @@ impl Builder<'_> {
                         Some(span),
                     );
                 }
+                parser::Statement::ValueCall { expression, .. } => {
+                    let value = self.value(expression, locals)?;
+                    self.push(Operation::Discard { value }, Some(span));
+                }
                 parser::Statement::Call {
                     module,
                     member,
@@ -601,23 +605,31 @@ impl Builder<'_> {
                     ..
                 } => {
                     if locals.contains_key(&module) || self.parameters.contains_key(&module) {
-                        return Err(Diagnostic::at(
-                            self.source,
-                            span.start,
-                            "calls on local receivers are unsupported",
-                        ));
-                    }
-                    let arguments = self.arguments(arguments, locals)?;
-                    let operation = if module == "self" {
-                        Operation::SelfCallStatement { member, arguments }
+                        let value = self.value(
+                            parser::Expression {
+                                kind: parser::ExpressionKind::ModuleCall {
+                                    module,
+                                    member,
+                                    arguments,
+                                },
+                                span,
+                            },
+                            locals,
+                        )?;
+                        self.push(Operation::Discard { value }, Some(span));
                     } else {
-                        Operation::ModuleCallStatement {
-                            module,
-                            member,
-                            arguments,
-                        }
-                    };
-                    self.push(operation, Some(span));
+                        let arguments = self.arguments(arguments, locals)?;
+                        let operation = if module == "self" {
+                            Operation::SelfCallStatement { member, arguments }
+                        } else {
+                            Operation::ModuleCallStatement {
+                                module,
+                                member,
+                                arguments,
+                            }
+                        };
+                        self.push(operation, Some(span));
+                    }
                 }
                 parser::Statement::Return { value, .. } => {
                     let operation = if let Some(value) = value {

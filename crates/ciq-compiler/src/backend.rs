@@ -124,6 +124,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
             Operation::Return { value } => (value, Opcode::Return, vec![]),
+            Operation::Discard { value } => (value, Opcode::Popv, vec![]),
             Operation::NativeBaseInitialize {
                 base: crate::ClassBase::ApplicationAppBase,
             } => {

@@ -29,6 +29,10 @@ pub(crate) enum Statement {
         arguments: Vec<Expression>,
         span: Span,
     },
+    ValueCall {
+        expression: Expression,
+        span: Span,
+    },
     NativeModuleCall {
         module: String,
         member: String,
@@ -66,6 +70,7 @@ impl Statement {
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
             | Self::Call { span, .. }
+            | Self::ValueCall { span, .. }
             | Self::NativeModuleCall { span, .. }
             | Self::If { span, .. }
             | Self::Break { span }
@@ -890,50 +895,57 @@ impl<'a> Parser<'a> {
                         }
                     } else {
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        let ExpressionKind::ModuleCall {
-                            module,
-                            member,
-                            mut arguments,
-                        } = expression.kind
-                        else {
-                            return Err(self.error(start, "only assignment and qualified calls are supported as expression statements"));
-                        };
-                        if module == "Application.AppBase" {
-                            if member != "initialize" || !arguments.is_empty() {
-                                return Err(self.error(
-                                    start,
-                                    "only a zero-argument native base initialize call is supported",
-                                ));
-                            }
-                            Statement::BaseInitialize {
+                        if matches!(expression.kind, ExpressionKind::ValueCall { .. }) {
+                            Statement::ValueCall {
+                                expression,
                                 span: Span { start, end },
                             }
-                        } else if module == "System" {
-                            if member == "println" {
-                                if arguments.len() != 1 {
+                        } else {
+                            let ExpressionKind::ModuleCall {
+                                module,
+                                member,
+                                mut arguments,
+                            } = expression.kind
+                            else {
+                                return Err(self.error(start, "only assignment and calls are supported as expression statements"));
+                            };
+                            if module == "Application.AppBase" {
+                                if member != "initialize" || !arguments.is_empty() {
                                     return Err(self.error(
                                         start,
-                                        "expected System.println with one argument",
+                                        "only a zero-argument native base initialize call is supported",
                                     ));
                                 }
-                                Statement::Println {
-                                    argument: arguments.remove(0),
+                                Statement::BaseInitialize {
                                     span: Span { start, end },
                                 }
+                            } else if module == "System" {
+                                if member == "println" {
+                                    if arguments.len() != 1 {
+                                        return Err(self.error(
+                                            start,
+                                            "expected System.println with one argument",
+                                        ));
+                                    }
+                                    Statement::Println {
+                                        argument: arguments.remove(0),
+                                        span: Span { start, end },
+                                    }
+                                } else {
+                                    Statement::NativeModuleCall {
+                                        module: "Toybox.System".into(),
+                                        member,
+                                        arguments,
+                                        span: Span { start, end },
+                                    }
+                                }
                             } else {
-                                Statement::NativeModuleCall {
-                                    module: "Toybox.System".into(),
+                                Statement::Call {
+                                    module,
                                     member,
                                     arguments,
                                     span: Span { start, end },
                                 }
-                            }
-                        } else {
-                            Statement::Call {
-                                module,
-                                member,
-                                arguments,
-                                span: Span { start, end },
                             }
                         }
                     }

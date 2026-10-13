@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Native statements](compiler-native-statements.md): discarded call results,
+  stack cleanup, nullable results, and operand effects.
 - [Array mutation](compiler-array-mutation.md): bulk append, removals, generic
   argument contracts, shared references, and self-appending.
 - [Array append](compiler-array-add.md): mutation, typed self result, aliases,

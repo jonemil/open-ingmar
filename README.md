@@ -130,6 +130,9 @@ mutation through shared references and the typed `add` result.
 The [Array mutation example](examples/compiler-array-mutation/README.md) covers
 bulk append, removals, aliases, and conditional effects.
 
+The [native statement example](examples/compiler-native-statements/README.md)
+executes calls while discarding their results.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

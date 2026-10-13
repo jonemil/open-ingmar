@@ -24,6 +24,14 @@ expression order. Array reads also retain order because bounds failures are
 observable; shared validation traverses array before index. Pure expressions
 may be scheduled by dependencies.
 
+`Discard` is an expression root that consumes a value for effects. Native source
+call statements use it with an ordinary native value call, keeping contract
+resolution, operand scheduling, and invocation in one path. The backend emits
+one final `popv`; intermediate results remain available for chained calls.
+Void calls have separate statement contracts and do not become expression
+values. The IR accepts discarded pure values even though the source subset
+restricts expression statements to calls and assignments.
+
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
 

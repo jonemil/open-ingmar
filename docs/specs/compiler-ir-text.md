@@ -664,6 +664,30 @@ unknown declarations, and unsupported native statement contracts are errors.
 
 ## Native value calls
 
+`.discard %<value-id> [span=<start>:<end>]` evaluates and consumes one earlier
+non-Void value without defining a result or changing the function return type.
+It accepts every supported value category, including Null, nullable values, and
+Char arrays. Definition/use, same-block, and evaluation-order rules apply.
+The backend evaluates the operand through the usual expression path and emits
+one `popv`; nested call results remain available to their consumers.
+
+Native source statements use an ordinary `.call-native` followed by `.discard`:
+
+```text
+ciq-ir
+.function f parameters=1
+.parameter %0 0
+.call-native %1 %0 abs
+.discard %1
+.return-void
+.end
+```
+
+The call retains its argument/result and API checks. A dropped nullable result
+does not prove its receiver non-null. User Void calls and native module Void
+statements keep their existing forms; no Void expression value is created.
+See [runtime evidence](../investigations/compiler-native-statements.md).
+
 `.call-native %<result-id> %<receiver-id> <member> [%<argument-id> ...]` invokes a
 runtime-provided method and defines its semantic result. The receiver and
 arguments must be earlier values with the usual single-use/block restrictions.

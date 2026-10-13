@@ -166,6 +166,7 @@ pub(crate) fn parse_ir_context(
             Some(".parameter") => (7, 3),
             Some(".string") => (8, 3),
             Some(".println") => (9, 2),
+            Some(".discard") => (29, 2),
             Some(".block") => (10, 2),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
@@ -243,7 +244,11 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 28 {
+        let operation = if kind == 29 {
+            Operation::Discard {
+                value: parse_value(&fields[1])?,
+            }
+        } else if kind == 28 {
             Operation::ArrayRead {
                 result: parse_value(&fields[1])?,
                 array: parse_value(&fields[2])?,

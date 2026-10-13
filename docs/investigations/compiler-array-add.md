@@ -43,9 +43,8 @@ element before checking arguments and deriving the result. The executable profil
 currently admits only non-null `Array<Char>` values, so other append element
 contracts are not implied.
 
-Native value calls must appear in a value context supported by the source subset,
-such as an initializer, assignment, or another call. A direct native call as an
-expression statement is not currently parsed. Bulk append and removals have
+Native value calls also have [statement evidence](compiler-native-statements.md)
+for discarding results. Bulk append and removals have
 [separate evidence](compiler-array-mutation.md). Sort, Array construction, and
 element writes remain unsupported.
 

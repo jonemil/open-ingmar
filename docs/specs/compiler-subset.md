@@ -725,8 +725,17 @@ are accepted. Evaluate the receiver first, then arguments left to right, then in
 the member.
 
 The frontend distinguishes visible local/parameter receivers from module calls.
-Only these value-producing native calls are supported. Null/Dictionary
-receivers and discarded method statements remain unsupported. Chained calls
+Supported native value calls may also be statements: `n.abs();`,
+`chars.remove('a');`, and `factory.make().add('x').size();` evaluate the call and
+discard its final result. Receiver/argument order, API checks, and nullable
+receiver proofs are the same as in value contexts. A discarded result does not
+contribute to function return inference. Nullable results need no guard when
+discarded. Bare arithmetic, literals, and element reads are not source expression
+statements. Native Void methods still require their own supported statement
+contract; discarding does not enable `Array.sort` or unknown members. See the
+[statement evidence](../investigations/compiler-native-statements.md).
+
+Null/Dictionary receivers remain unsupported. Chained calls
 must resolve each member against the preceding result's type, for example
 `41.toString().toUpper().length().format("%03d")`. String and Boolean user
 parameters/results require the function annotations defined above.
@@ -783,9 +792,8 @@ array.
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
 console entry results. Array literals and construction, `sort`, and ordinary
-object weak references remain unsupported. Native Array
-calls are supported as values; direct native value-call expression statements
-are outside the source subset.
+object weak references remain unsupported. Native Array calls may be values or
+statements that discard the result.
 Guard nullable String receivers before conversion; that proof does not imply
 support for nullable Array results. See the
 [Char-array evidence](../investigations/compiler-char-arrays.md).
