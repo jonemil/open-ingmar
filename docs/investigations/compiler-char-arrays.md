@@ -18,8 +18,8 @@ methods; generic Array signatures use Object-or-Null element contracts:
 | `size()` | Number | 1.0.0 | Supported on Char arrays |
 | `toString()` | String | 1.0.0 | Supported on Char arrays |
 | `indexOf(element)` | Number | 1.3.0 | Supported for Char searches |
-| `reverse()` | Array | 1.3.0 | Verify element-preserving result contract |
-| `slice(start, end)` | Array | 1.3.0 | Verify element/result and index contracts |
+| `reverse()` | Array | 1.3.0 | Char result verified; see transform evidence |
+| `slice(start, end)` | Array | 1.3.0 | Char result/bounds verified; see transform evidence |
 | `add(element)` | Array | 1.3.0 | Mutation and element checking |
 | `addAll(array)` | Array | 1.3.0 | Mutation and compatible collection types |
 | `remove(element)` | Boolean | 1.3.0 | Mutation and equality behavior |
@@ -117,3 +117,4 @@ arrays, or ordinary object/reference lifetime behavior.
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
 [char-literals]: compiler-char-literals.md
 [plan]: ../plan.md
+[transform evidence]: compiler-array-transforms.md

@@ -7,11 +7,12 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
-1. **Extend core Lang contracts and value types.** Review element-preserving
-   Array reverse/slice results and generic parameter substitution before adding
-   wider element types,
-   construction, or mutation. These supply prerequisites for source
-   `getInitialView`; retain ordinary object values as a separate dependency.
+1. **Extend core Lang contracts and value types.** Generalize Array values
+   beyond Char and implement construction or mutation as needed by a complete
+   app. Generic API signatures now substitute the receiver's element type for
+   the verified `reverse`, `slice`, and `indexOf` contracts. These supply
+   prerequisites for source `getInitialView`; retain ordinary object values as
+   a separate dependency.
    Keep positive signs separate
    until their contracts are established. Investigate the SDK's
    [negative-literal postfix discrepancy][negation] before widening that syntax.

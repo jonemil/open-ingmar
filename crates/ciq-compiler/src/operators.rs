@@ -83,7 +83,7 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
             ) || (boolean && name == "Toybox.Lang.Boolean")
         }
         Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
-        Type::Void | Type::Array(_) => false,
+        Type::Void | Type::Array(_) | Type::Parameter(_) => false,
     }
 }
 

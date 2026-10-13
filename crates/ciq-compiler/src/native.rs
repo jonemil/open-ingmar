@@ -41,10 +41,10 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
-    let class = match receiver {
-        api::Type::Named(class) => class.as_str(),
+    let (class, generic_argument) = match receiver {
+        api::Type::Named(class) => (class.as_str(), None),
         api::Type::Array(element) if **element == api::Type::named("Toybox.Lang.Char") => {
-            "Toybox.Lang.Array"
+            ("Toybox.Lang.Array", Some(element.as_ref()))
         }
         _ => return Err("native calls require a supported class-valued receiver".into()),
     };
@@ -64,7 +64,12 @@ pub(crate) fn value_call(
         .parameters
         .iter()
         .zip(arguments)
-        .all(|(expected, actual)| accepts(expected, actual))
+        .all(|(expected, actual)| {
+            let expected = generic_argument
+                .map(|argument| substitute_parameter(expected, "Element", argument))
+                .unwrap_or_else(|| expected.clone());
+            accepts(&expected, actual)
+        })
     {
         return Err("native call argument types do not match its API contract".into());
     }
@@ -92,7 +97,7 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.Array",
                 "Toybox.Lang.Array",
-                "size" | "toString" | "indexOf"
+                "size" | "toString" | "indexOf" | "reverse" | "slice"
             )
             | (
                 "Toybox.Lang.Number",
@@ -140,18 +145,42 @@ pub(crate) fn value_call(
     {
         return Err("String.compareTo lowering currently requires String".into());
     }
-    if class == "Toybox.Lang.Array"
-        && member == "indexOf"
-        && arguments != [api::Type::named("Toybox.Lang.Char")]
-    {
-        return Err("Array<Char>.indexOf requires a Char argument".into());
+    if class == "Toybox.Lang.Array" && member == "slice" {
+        let nullable_number = api::Type::Union(vec![
+            api::Type::named("Toybox.Lang.Number"),
+            api::Type::Null,
+        ]);
+        if arguments
+            .iter()
+            .any(|argument| !accepts(&nullable_number, argument))
+        {
+            return Err("Array<Char>.slice requires Number or Null bounds".into());
+        }
     }
     if member == "equals" && !scalar_or_null(&arguments[0]) {
         return Err(format!(
             "{class}.equals lowering currently requires scalar or nullable scalar arguments"
         ));
     }
-    Ok(resolved.result.clone())
+    Ok(generic_argument
+        .map(|argument| substitute_parameter(resolved.result, "Element", argument))
+        .unwrap_or_else(|| resolved.result.clone()))
+}
+
+fn substitute_parameter(ty: &api::Type, name: &str, argument: &api::Type) -> api::Type {
+    match ty {
+        api::Type::Parameter(parameter) if parameter == name => argument.clone(),
+        api::Type::Array(element) => {
+            api::Type::Array(Box::new(substitute_parameter(element, name, argument)))
+        }
+        api::Type::Union(types) => api::Type::Union(
+            types
+                .iter()
+                .map(|ty| substitute_parameter(ty, name, argument))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 fn scalar_or_null(ty: &api::Type) -> bool {

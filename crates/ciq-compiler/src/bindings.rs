@@ -85,6 +85,10 @@ pub fn symbol_bindings(
                 "size".to_string()
             } else if alias == "__ciq_native_indexOf" {
                 "indexOf".to_string()
+            } else if alias == "__ciq_native_reverse" {
+                "reverse".to_string()
+            } else if alias == "__ciq_native_slice" {
+                "slice".to_string()
             } else if alias == "__ciq_native_toNumberWithBase" {
                 "toNumberWithBase".to_string()
             } else if alias == "__ciq_native_toLower" {

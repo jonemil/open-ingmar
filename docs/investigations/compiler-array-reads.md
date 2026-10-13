@@ -113,8 +113,8 @@ keeps that existing recursion budget intact.
 
 The compiler does not statically prove bounds. Other element types, mutable
 arrays, String/dictionary indexing, and other VM/device versions need their own
-contracts. Array reverse/slice and generic parameter substitution remain in
-[the plan][plan].
+contracts. Array reverse/slice contracts are recorded in the
+[follow-up investigation](compiler-array-transforms.md).
 
 [example]: ../../examples/compiler-array-reads/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen

@@ -755,18 +755,24 @@ them. Raw Array annotations, other element types, and nullable arrays are
 unsupported. Element contracts are invariant; Char arrays are not widened to
 mutable arrays of Object.
 
-Char-array receivers support zero-argument `size()` returning Number and
-`toString()` returning String. `indexOf(Char)` returns Number: the first matching
-index or `-1` when absent. This Char argument requirement matches the SDK's
-element-specialized checking, despite the generic API's Object-or-Null argument.
-Array methods dispatch through the Array class; the element contract stays
-separate from the class/member identity. Explicit context checks both the Array
-class and its Char element, requiring at least API 1.3.0 for this profile.
+Char-array receivers support `size()` returning Number, `toString()` returning
+String, `indexOf(Char)` returning Number, `reverse()` returning `Array<Char>`,
+and `slice(Number or Null, Number or Null)` returning `Array<Char>`. Search
+returns the first matching index or `-1` when absent. Generic API parameters
+and results substitute the receiver's element type; executable array values
+remain limited to Char elements. Array methods dispatch through the Array class.
+Explicit context checks both the Array class and Char element, requiring API
+1.3.0 for this profile.
+
+`reverse` returns the elements in reverse order and leaves the receiver's
+contents unchanged. `slice` uses a start-inclusive, end-exclusive range. Null
+start/end select the beginning/end; negative bounds offset from the end, and
+out-of-range bounds are clipped. A start after the end returns an empty array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
-console entry results. Array literals, construction, mutation,
-reverse/slice/sort, and ordinary object weak references remain unsupported.
+console entry results. Array literals, construction, mutation, `sort`, and
+ordinary object weak references remain unsupported.
 Guard nullable String receivers before conversion; that proof does not imply
 support for nullable Array results. See the
 [Char-array evidence](../investigations/compiler-char-arrays.md).

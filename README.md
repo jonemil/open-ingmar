@@ -121,6 +121,9 @@ String conversion, typed array calls, and read-only Array methods.
 The [array-read example](examples/compiler-array-reads/README.md) exercises
 element access, postfix chains, and array/index evaluation order.
 
+The [Array transform example](examples/compiler-array-transforms/README.md)
+checks element-preserving reverse and slice results.
+
 The [nullable contract example](examples/compiler-nullable-contracts/README.md)
 passes nullable values through module and instance calls.
 

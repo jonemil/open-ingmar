@@ -720,9 +720,12 @@ See the
 [Char evidence](../investigations/compiler-char-methods.md).
 
 String `toCharArray` defines a non-null Char array. Array receivers support
-`size` returning Number, `toString` returning String, and `indexOf` taking one
-Char and returning Number. `char-array` is the parameter category and
-`result=char-array` is the user-call result category. Function result text is
+`size` returning Number, `toString` returning String, `indexOf` taking one
+Char and returning Number, `reverse` returning `Array<Char>`, and `slice` taking
+two Number-or-Null bounds and returning `Array<Char>`. Generic API parameters
+and results are substituted from the receiver's element type. `char-array` is
+the parameter category and `result=char-array` is the user-call result category.
+Function result text is
 inferred from returns, so `.function result=char-array` is not accepted.
 Native results are recomputed from receiver/member contracts, not annotations.
 Matching arrays may use ordinary `.local`, `.read`, `.assign`, calls, and

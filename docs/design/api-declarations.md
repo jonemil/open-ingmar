@@ -54,7 +54,7 @@ Other result unions need corresponding validation before executable support.
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, exact receiver-result overrides, an introduction API
 level, and a callback flag. Types represent named classes, Null, Void, unions,
-and Arrays with explicit element contracts.
+Arrays with explicit element contracts, and generic method parameters.
 Add fields, constants, explicit
 static member distinctions, and other parameterized containers as needed. Declarations
 describe runtime-provided APIs without compiling replacement method bodies.
@@ -66,11 +66,12 @@ may widen to its declared Object base, but cannot widen to a mutable Array of
 different elements. Introduction checks recurse into the element contract.
 The executable bridge currently admits only non-null Char arrays. String
 conversion produces that category, and size/string/search calls use ordinary
-native dispatch and local storage. The native profile specializes `indexOf` to
-a Char argument after checking the generic declaration, matching our SDK
-specimen. Broader element types and generic parameter substitution remain
-separate work; mutation cannot bypass element validation. See the
-[array evidence](../investigations/compiler-char-arrays.md).
+native dispatch and local storage. The native profile substitutes the receiver
+element type into generic Array signatures, matching our SDK specimens for
+`indexOf`, `reverse`, and `slice`. Broader element types remain separate work;
+mutation cannot bypass element validation. See the
+[array evidence](../investigations/compiler-char-arrays.md) and
+[transform evidence](../investigations/compiler-array-transforms.md).
 
 Semantic identities such as `Toybox.Lang.Number` are independent of VM symbol
 IDs, import indexes, section offsets, and implementation functions. Native

@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Array transforms](compiler-array-transforms.md): generic element
+  substitution, reverse/slice bounds, and SDK/generated output comparison.
 - [Array reads](compiler-array-reads.md): instruction encoding, operand order,
   nullable index guards, and fatal bounds errors.
 - [Char arrays](compiler-char-arrays.md): element contracts, read-only methods,

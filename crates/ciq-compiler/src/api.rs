@@ -104,6 +104,9 @@ impl ApiContext {
                 self.check_type(catalogue, element)
             }
             Type::Named(name) => self.check_class(catalogue, name),
+            Type::Parameter(name) => Err(format!(
+                "generic API parameter {name} requires a concrete receiver type"
+            )),
             Type::Union(types) => types
                 .iter()
                 .try_for_each(|ty| self.check_type(catalogue, ty)),
@@ -160,6 +163,8 @@ pub enum Type {
     /// are invariant; this does not imply executable support for every element.
     Array(Box<Type>),
     Named(String),
+    /// A generic class parameter substituted from a concrete receiver type.
+    Parameter(String),
     Null,
     Void,
     Union(Vec<Type>),
@@ -394,8 +399,23 @@ fn build_core() -> Catalogue {
         method("toString", vec![], Type::named(string), initial),
         method(
             "indexOf",
-            vec![Type::Union(vec![Type::named(object), Type::Null])],
+            vec![Type::Parameter("Element".into())],
             Type::named(number),
+            char_initial,
+        ),
+        method(
+            "reverse",
+            vec![],
+            Type::Array(Box::new(Type::Parameter("Element".into()))),
+            char_initial,
+        ),
+        method(
+            "slice",
+            vec![
+                Type::Union(vec![Type::named(number), Type::Null]),
+                Type::Union(vec![Type::named(number), Type::Null]),
+            ],
+            Type::Array(Box::new(Type::Parameter("Element".into()))),
             char_initial,
         ),
     ];
@@ -602,6 +622,7 @@ mod tests {
                     check_type(api, element);
                 }
                 Type::Named(name) => assert!(api.class(name).is_some(), "unknown {name}"),
+                Type::Parameter(_) => {}
                 Type::Union(types) => types.iter().for_each(|ty| check_type(api, ty)),
                 Type::Null | Type::Void => {}
             }
