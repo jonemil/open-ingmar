@@ -298,16 +298,9 @@ fn class_application_validates_entry_and_metadata_conflicts() {
             "{entry}"
         );
     }
-    let unsupported = compile_sources(&[
+    assert!(compile_sources(&[
         "class C extends Application.AppBase { function start() {} function getInitialView() {} }",
-    ])
-    .unwrap();
-    assert!(
-        build_console_application(&unsupported, &app("C.start"))
-            .unwrap_err()
-            .message
-            .contains("collide")
-    );
+    ]).is_err());
     let unit =
         compile_sources(&["class C extends Application.AppBase { function C() { return 41; } }"])
             .unwrap();

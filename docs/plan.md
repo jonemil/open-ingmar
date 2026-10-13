@@ -52,21 +52,18 @@ compiling a project.
    selection. A full Jungle driver and API definition parser are not
    prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View inherited members and callback contracts. Model positional
-   callback results before accepting source `getInitialView`: its one-view or
-   view/delegate result is not an arbitrary homogeneous Array. Validate the
-   bounded one-view case, including cardinality, and replace the generated DATA
-   callback target. Extend object-reference, array, and nullable values as required,
-   retaining `Void` as a result contract. Start the View path with one
-   constructed native View in the array returned by source `getInitialView`.
-   Compare new dispatch forms with focused specimens.
-   Acceptance: a source `getInitialView` returns a constructed View under its
-   resolved result contract. Exercise a non-null launch-state dictionary when
+   AppBase/View inherited members and callback contracts. Extend positional
+   result shapes to the View/delegate pair when input handling requires it;
+   retain slot-type and cardinality checks through saved IR. Broaden contextual
+   tuple construction beyond direct callback literals only when provenance and
+   shape remain provable. Extend object-reference, array, and nullable values as
+   required, retaining `Void` as a result contract. Compare new dispatch forms
+   with focused specimens. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
 3. **Compile source-authored lifecycle and a visible View.** Add construction,
    source/native inheritance, instance fields, ordinary object-member calls,
-   array literals, and object/array returns as required by `getInitialView()`.
+   array literals, and object/positional returns as required by `getInitialView()`.
    Resolve AppBase/View callback signatures, including inherited annotations,
    rather than assigning every parameter our current integer contract. Replace
    generated lifecycle methods only when the source supplies validated methods;

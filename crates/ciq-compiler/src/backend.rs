@@ -53,6 +53,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
             | Operation::NativeNew { result, .. }
+            | Operation::TupleNew { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -232,11 +233,23 @@ fn expression(
         Invoke(usize),
         Context,
         NativeMember(String),
+        TupleStore,
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::TupleNew { elements, .. } => {
+                    items.extend([
+                        instruction(Opcode::Ipush1, vec![Operand::Bits(1)]),
+                        instruction(Opcode::Newa, vec![]),
+                        instruction(Opcode::Dup, vec![Operand::Bits(0)]),
+                        instruction(Opcode::Ipushz, vec![]),
+                    ]);
+                    tasks.push(Task::TupleStore);
+                    tasks.push(Task::Value(elements[0]));
+                    continue;
+                }
                 Operation::NativeNew {
                     class: crate::NativeClass::View,
                     ..
@@ -375,6 +388,7 @@ fn expression(
                 },
                 vec![],
             ),
+            Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::Binary(kind) => (
                 match kind {
                     BinaryOp::Add => Opcode::Addv,

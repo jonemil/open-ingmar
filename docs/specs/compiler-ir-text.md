@@ -161,6 +161,31 @@ on the stack after the initializer result is popped. Symbol sources bind those
 aliases to exactly one `Toybox_WatchUi`, `View`, and `initialize` declaration
 respectively. See [constructor evidence](../investigations/compiler-native-views.md).
 
+## Positional result construction
+
+`.tuple-new %<result> %<view> [span=<start>:<end>]` constructs a fresh one-slot
+View result. Typed IR uses `TupleNew { result, elements: vec![view] }`, with
+`TupleShape::OneView` in value/result contracts. Programmatic construction also
+checks exactly one slot. Text rejects missing/extra slots, unsupported fields,
+and non-View slot values. The operand must be a local/parameter read whose
+non-null View was evaluated earlier; effectful expression operands require
+storage first. Single-use, same-block, initialization, and effect-order rules
+remain in force.
+
+The shape is distinct from a homogeneous `Array<View>`: generic Array reads,
+mutation, and parameters do not accept it. Locals may retain/copy the same shape.
+Function results are inferred from tuple returns; `.function result=one-view`
+is unsupported. Value-returning user-call metadata can use `result=one-view`;
+unit validation still requires the callee to declare that result and rejects
+ordinary calls to native callbacks.
+
+Lowering allocates length one with `ipush1 1; newa; dup 0; ipushz`, reads the
+stored View, and fills slot zero with `aputv`. The complete result is published
+only after filling its slot. This requires API 1.0.0 for Array/View; constructing
+the View separately requires its initializer's 2.1.0 level. No layout, failure
+timing, or memory equivalence with SDK lowering is implied. See
+[callback evidence](../investigations/compiler-initial-view.md).
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty

@@ -44,9 +44,9 @@ implementation in Rust. Equality evidence covers repeated references to the
 same native View, not arbitrary subclasses or distinct-object equality.
 
 The created Views are not supplied to the lifecycle callback; the generated
-bootstrap still provides its blank View. Source `getInitialView`, positional
-callback results, source View inheritance, fields, drawing, and delegates remain
-separate work in [the plan][plan].
+bootstrap still provides its blank View. The [callback experiment][callback]
+covers source `getInitialView` and positional results. Source View inheritance,
+fields, drawing, and delegates remain separate work in [the plan][plan].
 
 ## Reproduction
 
@@ -84,3 +84,4 @@ with the example output. Retained captures are under
 [bootstrap]: application-bootstrap.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
 [plan]: ../plan.md
+[callback]: compiler-initial-view.md

@@ -68,9 +68,13 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
                 .find(|candidate| candidate.api_type() == *ty)
         })
         .collect::<Option<Vec<_>>>()?;
-    let result = [ReturnType::Integer, ReturnType::Void]
-        .into_iter()
-        .find(|candidate| candidate.api_type() == method.result)?;
+    let result = [
+        ReturnType::Integer,
+        ReturnType::Void,
+        ReturnType::Tuple(crate::TupleShape::OneView),
+    ]
+    .into_iter()
+    .find(|candidate| accepts(&method.result, &candidate.api_type()))?;
     Some(CallbackSignature { parameters, result })
 }
 
@@ -224,6 +228,12 @@ fn substitute_parameter(ty: &api::Type, name: &str, argument: &api::Type) -> api
         api::Type::Array(element) => {
             api::Type::Array(Box::new(substitute_parameter(element, name, argument)))
         }
+        api::Type::Tuple(elements) => api::Type::Tuple(
+            elements
+                .iter()
+                .map(|ty| substitute_parameter(ty, name, argument))
+                .collect(),
+        ),
         api::Type::Union(types) => api::Type::Union(
             types
                 .iter()
@@ -262,10 +272,17 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
     }
+    if let (api::Type::Tuple(expected), api::Type::Tuple(actual)) = (expected, actual) {
+        return expected.len() == actual.len()
+            && expected
+                .iter()
+                .zip(actual)
+                .all(|(expected, actual)| accepts(expected, actual));
+    }
     if let api::Type::Named(expected) = expected {
         let actual = match actual {
             api::Type::Named(actual) => actual.as_str(),
-            api::Type::Array(_) => "Toybox.Lang.Array",
+            api::Type::Array(_) | api::Type::Tuple(_) => "Toybox.Lang.Array",
             _ => return false,
         };
         let mut class = api::core().class(actual);

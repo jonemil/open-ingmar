@@ -176,6 +176,7 @@ pub(crate) fn parse_ir_context(
             Some(".discard") => (29, 2),
             Some(".array-new") => (30, 3),
             Some(".new-native") => (31, 3),
+            Some(".tuple-new") => (32, 3),
             Some(".block") => (10, 2),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
@@ -253,7 +254,20 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 31 {
+        let operation = if kind == 32 {
+            Operation::TupleNew {
+                result: fields
+                    .get(1)
+                    .ok_or_else(|| fail(*at, "tuple allocation requires a result"))
+                    .and_then(|field| parse_value(field))?,
+                elements: fields
+                    .iter()
+                    .take(3)
+                    .skip(2)
+                    .map(|field| parse_value(field))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 31 {
             Operation::NativeNew {
                 result: parse_value(&fields[1])?,
                 class: crate::NativeClass::from_name(&fields[2])
@@ -529,6 +543,7 @@ fn call_contract(
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             "view" => crate::ReturnType::Object(crate::NativeClass::View),
+            "one-view" => crate::ReturnType::Tuple(crate::TupleShape::OneView),
             "view-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))
             }

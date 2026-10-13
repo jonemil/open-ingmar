@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Source initial View](compiler-initial-view.md): positional callback results,
+  source DATA binding, and runtime startup.
 - [Native Views](compiler-native-views.md): object construction, typed references,
   invariant arrays, and constructor API levels.
 - [Empty arrays](compiler-empty-arrays.md): contextual construction, aliases,

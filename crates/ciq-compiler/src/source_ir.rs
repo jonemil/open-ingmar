@@ -708,6 +708,47 @@ impl Builder<'_> {
         self.next_block += 1;
         id
     }
+    /// Build a return value under a callback's positional or ordinary contract.
+    fn returned_value(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<ValueId, Diagnostic> {
+        if self.result_type != crate::ReturnType::Tuple(crate::TupleShape::OneView) {
+            return self.value_with_context(
+                expression,
+                locals,
+                array_element(&self.result_type.api_type()),
+            );
+        }
+        let span = expression.span;
+        let parser::ExpressionKind::ArrayLiteral(mut elements) = expression.kind else {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "initial View result requires a direct one-slot View literal",
+            ));
+        };
+        if elements.len() != 1 {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "initial View result requires exactly one View slot",
+            ));
+        }
+        let view = self.snapshot(elements.remove(0), locals)?;
+        let view = self.value(view, locals)?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::TupleNew {
+                result,
+                elements: vec![view],
+            },
+            Some(span),
+        );
+        Ok(result)
+    }
+
     fn value(
         &mut self,
         expression: parser::Expression,
@@ -903,11 +944,7 @@ impl Builder<'_> {
                 parser::Statement::Return { value, .. } => {
                     let operation = if let Some(value) = value {
                         Operation::Return {
-                            value: self.value_with_context(
-                                value,
-                                locals,
-                                array_element(&self.result_type.api_type()),
-                            )?,
+                            value: self.returned_value(value, locals)?,
                         }
                     } else {
                         Operation::ReturnVoid
@@ -1024,13 +1061,29 @@ fn build_body(
     context: Option<crate::api::ApiContext>,
     calls: &CallSignatures,
 ) -> Result<Function, Diagnostic> {
-    let value_result = declared_result(&ast) != crate::ReturnType::Void;
+    let callback = method
+        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
+        .flatten();
+    let effective_result = callback
+        .as_ref()
+        .map(|signature| signature.result)
+        .unwrap_or_else(|| declared_result(&ast));
+    if callback
+        .as_ref()
+        .is_some_and(|signature| ast.result_type.is_some_and(|ty| ty != signature.result))
+    {
+        return Err(Diagnostic::at(
+            source,
+            ast.body_span.start,
+            "result annotation conflicts with native callback contract",
+        ));
+    }
+    let value_result = effective_result != crate::ReturnType::Void;
     let result_type = ast.result_type;
     let annotations = ast.parameter_types;
-    let candidate_parameters = method
-        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
-        .flatten()
-        .map(|signature| signature.parameters)
+    let candidate_parameters = callback
+        .as_ref()
+        .map(|signature| signature.parameters.clone())
         .unwrap_or_else(|| {
             annotations
                 .iter()
@@ -1040,11 +1093,7 @@ fn build_body(
     let mut builder = Builder {
         source,
         calls,
-        result_type: result_type.unwrap_or(if value_result {
-            crate::ReturnType::Integer
-        } else {
-            crate::ReturnType::Void
-        }),
+        result_type: effective_result,
         parameters: ast
             .parameters
             .into_iter()
@@ -1083,15 +1132,15 @@ fn build_body(
         );
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
-    let parameter_types = if let Some(signature) = method
-        .then(|| crate::native::callback(crate::ClassBase::ApplicationAppBase, &ast.name))
-        .flatten()
-    {
+    let parameter_types = if let Some(signature) = &callback {
         if builder.parameters.len() != signature.parameters.len() {
             return Err(Diagnostic::at(
                 source,
                 ast.body_span.start,
-                format!("{} requires one nullable-dictionary parameter", ast.name),
+                format!(
+                    "{} parameter count does not match its native callback contract",
+                    ast.name
+                ),
             ));
         }
         if annotations
@@ -1105,7 +1154,7 @@ fn build_body(
                 "parameter annotation conflicts with native callback contract",
             ));
         }
-        signature.parameters
+        signature.parameters.clone()
     } else {
         annotations
             .into_iter()
@@ -1118,7 +1167,10 @@ fn build_body(
         builder.operations,
         method,
         context,
-        result_type,
+        callback
+            .as_ref()
+            .map(|signature| signature.result)
+            .or(result_type),
     );
     let function = result.map_err(|error| {
         let offset = error
@@ -1127,11 +1179,7 @@ fn build_body(
             .map_or(0, |span| span.start);
         Diagnostic::at(source, offset, error.message)
     })?;
-    let expected = result_type.unwrap_or(if value_result {
-        crate::ReturnType::Integer
-    } else {
-        crate::ReturnType::Void
-    });
+    let expected = effective_result;
     if function.return_type() != expected {
         return Err(Diagnostic::at(
             source,

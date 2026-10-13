@@ -1,7 +1,7 @@
 # API declarations and core types
 
 `ciq-compiler::api::core()` supplies a bounded shared catalogue. Native callback
-validation reads its `onStart`/`onStop` contracts; supported imports obtain module
+validation reads its lifecycle contracts; supported imports obtain module
 name from its declarations. Native lowering and application bindings remain
 restricted profiles. [The plan](../plan.md) owns migration and expansion.
 
@@ -13,16 +13,17 @@ immutable declarations. A future definition-file reader should produce the same
 model. No declaration-file syntax or new crate is required initially.
 
 Current entries cover Lang's Object, Number, String, Boolean, Char, Array, and
-Dictionary and WeakReference, plus Application.AppBase and WatchUi.View, and the
-Lang/Application/System/WatchUi modules.
+Dictionary and WeakReference, plus Application.AppBase and WatchUi.View/InputDelegate,
+and the Lang/Application/System/WatchUi modules.
 Only selected methods are recorded: Object equality/string/hash contracts,
 Number arithmetic-related and comparison methods, Boolean comparison, String
 length/case/string methods, Array size/string/search/append/removal/reverse/slice,
-AppBase initialization/startup/shutdown, View initialization, and System
-printing/exit.
+AppBase initialization/startup/shutdown/initial-view, View initialization, and
+System printing/exit.
 Parameter/result subset types expose `api_type()` mappings.
 Internal value categories map to Number, String, Boolean, Char, View,
-Number/Char/View arrays, Null, nullable Number/String, and nullable Dictionary;
+Number/Char/View arrays, one-view tuples, Null, nullable Number/String, and
+nullable Dictionary;
 operators use those semantic types. The bounded native call profile resolves
 Number's inherited `toString`, `equals`,
 and `hashCode`, and direct `format`, `abs`, `toNumber`, and `compareTo`,
@@ -56,11 +57,21 @@ Other result unions need corresponding validation before executable support.
 Classes hold instance methods; modules hold module functions. Methods carry
 parameter/result types, exact receiver-result overrides, an introduction API
 level, and a callback flag. Types represent named classes, Null, Void, unions,
-Arrays with explicit element contracts, and generic method parameters.
+Arrays with explicit element contracts, exact positional tuples, and generic
+method parameters.
 Add fields, constants, explicit
 static member distinctions, and other parameterized containers as needed. Declarations
 describe runtime-provided APIs without compiling replacement method bodies.
 Keep compiler analysis state outside this model.
+
+The bounded `getInitialView` declaration records one View slot or View/delegate
+slots using base-class identities. The executable adapter admits only the
+one-view alternative as `TupleShape::OneView`. It preserves the native callback
+result requirement rather than substituting a homogeneous `Array<View>`.
+Tuple assignability checks exact arity and each slot; executable construction
+and mutation support remain separate. InputDelegate is declared for that API
+result, without enabling construction or input callbacks. Full SDK typedef
+alternatives are not enumerated by this catalogue.
 
 `NativeClass` identifies supported constructed objects, standalone values, and
 Array elements. Class availability and initializer availability are separate:

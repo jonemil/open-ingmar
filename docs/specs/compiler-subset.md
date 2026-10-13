@@ -927,14 +927,15 @@ Signature and empty-allocation availability is 1.0.0; append/search/transform
 methods require 1.3.0. Constructing a literal's View elements additionally
 requires the initializer's 2.1.0 API level.
 
-The bootstrap still generates `getInitialView()`. Source overrides need a
-positional callback result contract with cardinality validation; a generic View
-array may contain zero or many Views. Delegate pairs and source View inheritance
+Source [getInitialView overrides][initial-view-callback] return a validated
+one-view positional result. A generic View array may contain zero or many Views
+and cannot replace that shape. Delegate pairs and source View inheritance
 remain planned. See the [complete example][native-views-example] and
 [constructor/runtime evidence][native-views-evidence].
 
 [native-views-example]: ../../examples/compiler-native-views/README.md
 [native-views-evidence]: ../investigations/compiler-native-views.md
+[initial-view-callback]: compiler-classes.md#source-initial-view-callback
 
 ## Nullable results
 

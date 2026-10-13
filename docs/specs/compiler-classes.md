@@ -96,7 +96,8 @@ matching the class reuse that identity; other names retain deterministic
 allocation. Class methods are sorted DATA fields bound to their CODE labels,
 separate from globals/modules even when member names share one symbol ID.
 
-Methods named `getInitialView` or `AppBase` remain unsupported.
+The `getInitialView` override follows the positional contract below. Methods
+named `AppBase` remain unsupported.
 The source initializer contract below permits `initialize`; otherwise its
 body, native imports, empty resources, and the blank View remain
 provided by the bootstrap. Unit/IR stages can represent multiple classes, but
@@ -129,6 +130,33 @@ single DATA method record to source CODE. It keeps the default initializer when
 the source omits one. Constructor, onStart, and blank View generation remain
 provided by the bootstrap unless source onStart is supplied.
 
+## Source initial View callback
+
+An AppBase class may define `function getInitialView()` with zero parameters.
+The inherited contract supplies `TupleShape::OneView` without a source result
+annotation. Every return must be a direct one-slot literal, such as
+`return [new WatchUi.View()];` or `return [self.makeView()];`. Parentheses around
+the literal are permitted. Its element must produce a non-null native View;
+factories, locals, and element reads can supply it. All paths must return.
+
+The compiler evaluates and stores the slot expression before packing a fresh
+one-slot result; its hidden local shares the normal frame budget. Ordinary
+mutable Array values cannot supply this contract, even if their current size is
+one. Empty/multiple slots, Null, non-View values, incompatible annotations, and
+ordinary user calls to the callback are rejected. Delegate pairs, tuple source
+annotations, and general tuple-expression inference remain unsupported.
+
+Saved IR retains the shape through [positional
+construction](compiler-ir-text.md#positional-result-construction); unit validation
+checks the callback's zero parameters and one-view result. Application generation
+binds native symbol `0x008002a0` directly to its source CODE and omits the default
+blank-view body. The existing bootstrap is used when no source callback exists.
+`getInitialView` cannot be selected as the startup entry. See the
+[complete example][initial-view-example] and [evidence][initial-view-evidence].
+
+[initial-view-example]: ../../examples/compiler-initial-view/README.md
+[initial-view-evidence]: ../investigations/compiler-initial-view.md
+
 ## Source startup callback
 
 An AppBase class may define `function onStart(state)` with one parameter and a
@@ -146,8 +174,8 @@ can be requested with [System.exit](compiler-subset.md#native-module-statements)
 
 Complete application generation requires `--entry Class.onStart` when that
 callback exists. Its DATA method record binds directly to source CODE; the
-generated startup wrapper is omitted. Constructor and blank View remain
-generated, and a source initializer is optional. Without source onStart, the
+generated startup wrapper is omitted. Constructor and default blank View remain
+generated unless their source overrides are supplied. Without source onStart, the
 existing zero-parameter startup-entry workflow remains available.
 
 The state parameter can be read, copied into locals, and compared with null

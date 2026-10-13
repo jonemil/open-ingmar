@@ -103,6 +103,12 @@ impl ApiContext {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
                 self.check_type(catalogue, element)
             }
+            Type::Tuple(elements) => {
+                self.check_class(catalogue, "Toybox.Lang.Array")?;
+                elements
+                    .iter()
+                    .try_for_each(|ty| self.check_type(catalogue, ty))
+            }
             Type::Named(name) => self.check_class(catalogue, name),
             Type::Parameter(name) => Err(format!(
                 "generic API parameter {name} requires a concrete receiver type"
@@ -162,6 +168,8 @@ pub enum Type {
     /// Mutable Array with an explicit element contract. Array element contracts
     /// are invariant; this does not imply executable support for every element.
     Array(Box<Type>),
+    /// Positional Array shape with an exact number of typed slots.
+    Tuple(Vec<Type>),
     Named(String),
     /// A generic class parameter substituted from a concrete receiver type.
     Parameter(String),
@@ -318,6 +326,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.WeakReference",
         "Toybox.Application.AppBase",
         "Toybox.WatchUi.View",
+        "Toybox.WatchUi.InputDelegate",
     ] {
         classes.insert(
             name.into(),
@@ -508,6 +517,19 @@ fn build_core() -> Catalogue {
     on_start.callback = true;
     let mut on_stop = method("onStop", vec![nullable_dictionary], Type::Void, initial);
     on_stop.callback = true;
+    let mut initial_view = method(
+        "getInitialView",
+        vec![],
+        Type::Union(vec![
+            Type::Tuple(vec![Type::named("Toybox.WatchUi.View")]),
+            Type::Tuple(vec![
+                Type::named("Toybox.WatchUi.View"),
+                Type::named("Toybox.WatchUi.InputDelegate"),
+            ]),
+        ]),
+        initial,
+    );
+    initial_view.callback = true;
     classes
         .get_mut("Toybox.Application.AppBase")
         .unwrap()
@@ -515,6 +537,7 @@ fn build_core() -> Catalogue {
         method("initialize", vec![], Type::Void, initial),
         on_start,
         on_stop,
+        initial_view,
     ];
     classes.get_mut("Toybox.WatchUi.View").unwrap().methods =
         vec![method("initialize", vec![], Type::Void, ApiLevel(2, 1, 0))];
@@ -661,7 +684,9 @@ mod tests {
                 }
                 Type::Named(name) => assert!(api.class(name).is_some(), "unknown {name}"),
                 Type::Parameter(_) => {}
-                Type::Union(types) => types.iter().for_each(|ty| check_type(api, ty)),
+                Type::Union(types) | Type::Tuple(types) => {
+                    types.iter().for_each(|ty| check_type(api, ty))
+                }
                 Type::Null | Type::Void => {}
             }
         }

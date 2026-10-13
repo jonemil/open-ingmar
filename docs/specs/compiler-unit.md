@@ -39,6 +39,11 @@ contract](compiler-classes.md#source-startup-callback).
 Their parameter types and void result must match the resolved callback signature;
 neither can be invoked as an ordinary source callee.
 
+AppBase.getInitialView has a [one-view positional
+contract](compiler-classes.md#source-initial-view-callback). Its return shape and
+zero parameters are validated for source, typed, and saved IR. It also cannot
+be invoked as an ordinary source callee.
+
 The [native name profile](compiler-subset.md#native-name-declarations) defines
 supported `using`/`import` declarations and lexical boundaries. Native bindings
 are resolved before unit call validation; user declarations still collect

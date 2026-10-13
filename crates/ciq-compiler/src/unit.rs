@@ -294,7 +294,7 @@ impl CompilationUnit {
                         Some(index),
                         None,
                         format!(
-                            "{} requires one nullable-dictionary parameter and a void result",
+                            "{} parameter/result types do not match its native callback contract",
                             function.name()
                         ),
                     ));

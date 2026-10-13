@@ -124,7 +124,13 @@ fn class(
     }
 }
 
-fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool) -> Vec<Item> {
+fn lifecycle(
+    entry: &str,
+    result: ReturnType,
+    instance: bool,
+    source_start: bool,
+    source_initial_view: bool,
+) -> Vec<Item> {
     use Opcode::*;
     let mut items = vec![
         Item::Label("__ciq_bootstrap".into()),
@@ -161,25 +167,29 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool
         items.push(instruction(Popv, vec![]));
         items.push(instruction(Return, vec![]));
     }
+    if !source_initial_view {
+        items.extend([
+            Item::Label("__ciq_initial_view".into()),
+            instruction(Argc, vec![bits(1)]),
+            instruction(Ipush1, vec![bits(1)]),
+            instruction(Newa, vec![]),
+            instruction(Dup, vec![bits(0)]),
+            instruction(Ipushz, vec![]),
+            instruction(
+                Getmv,
+                vec![sym("__ciq_app_watch_ui"), sym("__ciq_app_view")],
+            ),
+            instruction(Newc, vec![]),
+            instruction(Dup, vec![bits(0)]),
+            instruction(Getsv, vec![sym("__ciq_app_initialize")]),
+            instruction(Dup, vec![bits(1)]),
+            instruction(Invokem, vec![bits(1)]),
+            instruction(Popv, vec![]),
+            instruction(Aputv, vec![]),
+            instruction(Return, vec![]),
+        ]);
+    }
     items.extend([
-        Item::Label("__ciq_initial_view".into()),
-        instruction(Argc, vec![bits(1)]),
-        instruction(Ipush1, vec![bits(1)]),
-        instruction(Newa, vec![]),
-        instruction(Dup, vec![bits(0)]),
-        instruction(Ipushz, vec![]),
-        instruction(
-            Getmv,
-            vec![sym("__ciq_app_watch_ui"), sym("__ciq_app_view")],
-        ),
-        instruction(Newc, vec![]),
-        instruction(Dup, vec![bits(0)]),
-        instruction(Getsv, vec![sym("__ciq_app_initialize")]),
-        instruction(Dup, vec![bits(1)]),
-        instruction(Invokem, vec![bits(1)]),
-        instruction(Popv, vec![]),
-        instruction(Aputv, vec![]),
-        instruction(Return, vec![]),
         Item::Label("__ciq_initialize".into()),
         instruction(Argc, vec![bits(1)]),
         instruction(Getselfv, vec![sym("__ciq_app_base")]),
@@ -199,13 +209,17 @@ fn lifecycle(entry: &str, result: ReturnType, instance: bool, source_start: bool
 /// be a zero-parameter integer-return or void global function, or a method in
 /// the sole declared AppBase class. Class entries use Class.method names and
 /// current-receiver lookup. onStart invokes it once and prints only integer
-/// results; getInitialView returns a blank native View. Source callbacks that
+/// results; getInitialView returns a blank native View unless a validated source
+/// callback supplies a one-view positional result. Source callbacks that
 /// collide with generated lifecycle/base fields are rejected, except a validated
 /// source initialize method, which replaces the default initializer's DATA target.
 /// A validated source onStart also replaces its wrapper and requires selecting
 /// Class.onStart; the runtime supplies its nullable Dictionary argument directly.
 /// A source onStop is bound as the native shutdown callback with the same
 /// Dictionary-or-null parameter and Void result; it is not a bootstrap entry.
+/// Source getInitialView has no parameters, returns the OneView tuple shape,
+/// and replaces the generated callback's DATA field and CODE body. Callback
+/// shape validation happens in unit IR, including for resumed text input.
 ///
 /// Allocates user symbols and all CODE/DATA positions deterministically. Global,
 /// module, and class methods bind to unit CODE labels; literals use shared DATA layout.
@@ -244,11 +258,7 @@ pub fn build_console_application(
         let Some(entry) = class.methods.iter().find(|f| f.name() == member) else {
             return Err(error("application entry method is not declared"));
         };
-        if class
-            .methods
-            .iter()
-            .any(|f| matches!(f.name(), "getInitialView" | "AppBase"))
-        {
+        if class.methods.iter().any(|f| f.name() == "AppBase") {
             return Err(error(
                 "source methods collide with generated lifecycle or base fields",
             ));
@@ -261,6 +271,7 @@ pub fn build_console_application(
             | ReturnType::NullableString
             | ReturnType::Array(_)
             | ReturnType::Object(_)
+            | ReturnType::Tuple(_)
     ) {
         return Err(error(
             "console entry requires a non-null scalar or Void result",
@@ -420,7 +431,18 @@ pub fn build_console_application(
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
     }
-    let mut items = lifecycle(entry.name(), entry.return_type(), instance, source_start);
+    let source_initial_view = instance
+        && unit.classes()[0]
+            .methods
+            .iter()
+            .any(|f| f.name() == "getInitialView");
+    let mut items = lifecycle(
+        entry.name(),
+        entry.return_type(),
+        instance,
+        source_start,
+        source_initial_view,
+    );
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
@@ -472,6 +494,15 @@ pub fn build_console_application(
         ],
     );
     for source_class in unit.classes() {
+        if source_class
+            .methods
+            .iter()
+            .any(|f| f.name() == "getInitialView")
+        {
+            application
+                .fields
+                .retain(|f| f.key != Key::Raw((GET_INITIAL_VIEW << 8) | 0x10));
+        }
         if source_class.methods.iter().any(|f| f.name() == "onStart") {
             application
                 .fields

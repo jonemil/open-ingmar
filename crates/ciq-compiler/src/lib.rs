@@ -154,6 +154,21 @@ impl ArrayElement {
     }
 }
 
+/// Supported positional native callback results, independent of runtime storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TupleShape {
+    OneView,
+}
+
+impl TupleShape {
+    /// Return the exact API slot types represented by this shape.
+    pub fn api_type(self) -> api::Type {
+        match self {
+            Self::OneView => api::Type::Tuple(vec![api::Type::named(NativeClass::View.name())]),
+        }
+    }
+}
+
 /// The supported function result contract, declared explicitly or inferred
 /// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
@@ -166,6 +181,7 @@ pub enum ReturnType {
     Boolean,
     Char,
     Object(NativeClass),
+    Tuple(TupleShape),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     Void,
@@ -215,6 +231,7 @@ impl ReturnType {
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
             Self::Object(class) => ValueType::Object(class).api_type(),
+            Self::Tuple(shape) => shape.api_type(),
             Self::Array(element) => ValueType::Array(element).api_type(),
             Self::Void => api::Type::Void,
         }
@@ -230,6 +247,7 @@ enum ValueType {
     Boolean,
     Char,
     Object(NativeClass),
+    Tuple(TupleShape),
     Array(ArrayElement),
     Null,
     NullableDictionary,
@@ -262,6 +280,7 @@ impl ValueType {
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
             Self::Object(class) => api::Type::named(class.name()),
+            Self::Tuple(shape) => shape.api_type(),
             Self::Array(element) => api::Type::Array(Box::new(element.api_type())),
             Self::Null => api::Type::Null,
             Self::NullableDictionary => api::Type::Union(vec![
@@ -275,6 +294,7 @@ impl ValueType {
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
+            ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
             api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
                 "Toybox.Lang.Number" => Some(Self::Integer),
@@ -294,6 +314,13 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Construct a fresh positional result with exactly one non-null View slot.
+    /// Slots must be already evaluated local/parameter reads, so allocation
+    /// cannot move before operand effects. The shape has no Array mutation profile.
+    TupleNew {
+        result: ValueId,
+        elements: Vec<ValueId>,
+    },
     /// Allocate and initialize one supported native object with no arguments.
     /// Constructor availability is checked separately from class availability;
     /// allocation and initialization failures belong to the runtime.
@@ -853,6 +880,32 @@ impl Function {
                         .map_err(|message| fail(&message))?;
                     (None, arguments.clone())
                 }
+                Operation::TupleNew {
+                    result,
+                    ref elements,
+                } => {
+                    if elements.len() != 1
+                        || type_of(elements[0]) != ValueType::Object(NativeClass::View)
+                    {
+                        return Err(fail(
+                            "one-view tuple requires exactly one non-null View slot",
+                        ));
+                    }
+                    if !elements.iter().all(|value| {
+                        definitions.get(value).is_some_and(|at| {
+                            matches!(
+                                operations[*at].operation,
+                                Operation::LocalRead { .. } | Operation::ParameterRead { .. }
+                            )
+                        })
+                    }) {
+                        return Err(fail(
+                            "tuple slots require already evaluated local or parameter reads",
+                        ));
+                    }
+                    types.insert(result, ValueType::Tuple(TupleShape::OneView));
+                    (Some(result), elements.clone())
+                }
                 Operation::NativeNew { result, class } => {
                     native::constructor(class, context).map_err(|message| fail(&message))?;
                     types.insert(result, ValueType::Object(class));
@@ -1094,6 +1147,7 @@ impl Function {
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
                             ValueType::Object(class) => ReturnType::Object(class),
+                            ValueType::Tuple(shape) => ReturnType::Tuple(shape),
                             ValueType::Array(element) => ReturnType::Array(element),
                             _ => {
                                 return Err(fail(
@@ -1175,6 +1229,7 @@ impl Function {
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayNew { .. }
                     | Operation::NativeNew { .. }
+                    | Operation::TupleNew { .. }
                     | Operation::NativeCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
@@ -1242,7 +1297,11 @@ impl Function {
                                     tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
                                     tasks.push(Task::Value(*receiver));
                                 }
-                                Operation::ModuleCall { arguments, .. }
+                                Operation::TupleNew {
+                                    elements: arguments,
+                                    ..
+                                }
+                                | Operation::ModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
                                     arguments.iter().rev().map(|value| Task::Value(*value)),
                                 ),
@@ -1387,6 +1446,17 @@ impl Function {
                     format!(".string %{} {value:?}", result.0)
                 }
                 Operation::Println { value } => format!(".println %{}", value.0),
+                Operation::TupleNew {
+                    result,
+                    ref elements,
+                } => format!(
+                    ".tuple-new %{}{}",
+                    result.0,
+                    elements
+                        .iter()
+                        .map(|value| format!(" %{}", value.0))
+                        .collect::<String>()
+                ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
                 }
@@ -1596,6 +1666,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
+        ReturnType::Tuple(shape) => Ok(ValueType::Tuple(shape)),
         ReturnType::Array(element) => Ok(ValueType::Array(element)),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
@@ -1610,6 +1681,7 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
         ReturnType::Object(NativeClass::View) => " result=view",
+        ReturnType::Tuple(TupleShape::OneView) => " result=one-view",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",

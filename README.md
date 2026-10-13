@@ -112,6 +112,9 @@ contextual construction in returns, arguments, and local assignments.
 The [native View example](examples/compiler-native-views/README.md) checks
 object construction, typed references, and View-array operations.
 
+The [initial View example](examples/compiler-initial-view/README.md) supplies
+the source lifecycle callback with a validated one-view positional result.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

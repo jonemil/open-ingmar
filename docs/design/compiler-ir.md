@@ -66,9 +66,20 @@ The backend preserves the instance across the initializer call and discards
 only that call's result. The current class is View with a zero-argument
 initializer. Scalar operators and object methods remain separately checked.
 
-The application bootstrap still supplies `getInitialView`. Its positional
-view/delegate result needs shape/cardinality contracts beyond homogeneous Array
-element checking before source overrides can replace it.
+Positional results use `TupleShape`, distinct from mutable Array element
+contracts. `TupleNew` validates an exact one-View slot and accepts only already
+evaluated local/parameter reads. The source callback snapshots its slot
+expression first, preserving its effects before allocating and filling the
+fixed-size runtime array. The temporary shares the normal frame budget. This
+sealed shape has no generic Array mutation/read profile; stored copies preserve
+the same shape. Saved IR cannot relabel an arbitrary Array as a tuple.
+
+An AppBase `getInitialView` receives the native one-view result contract without
+a source annotation. Every return must construct that shape. Application
+generation binds its DATA field directly to the source CODE target and omits
+the generated blank-view body. The bootstrap supplies its default only when
+there is no source override. Delegate pairs and richer construction contexts
+remain separate work.
 
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
