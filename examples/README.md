@@ -11,6 +11,8 @@ and future Rust toolchain experiments.
   initialized independently and rendered across View updates.
 - [compiler-object-calls](compiler-object-calls/README.md): calls through local
   source View references, aliases, and same-class reassignment.
+- [compiler-source-signatures](compiler-source-signatures/README.md): source View
+  parameter/result contracts, factories, and cross-file reference forwarding.
 - [compiler-probe](compiler-probe/README.md): a standalone function input to our
   Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a

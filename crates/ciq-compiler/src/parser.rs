@@ -1162,6 +1162,22 @@ impl Parser<'_> {
                         "Toybox.Lang.Array" => {
                             crate::ParameterType::Array(self.array_annotation()?)
                         }
+                        name if !name.contains('.')
+                            && !matches!(
+                                name,
+                                "Number"
+                                    | "String"
+                                    | "Boolean"
+                                    | "Char"
+                                    | "Array"
+                                    | "Object"
+                                    | "View"
+                                    | "Dc"
+                                    | "Void"
+                            ) =>
+                        {
+                            crate::ParameterType::SourceObject(name.into())
+                        }
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
                     };
                     Some(if self.peek()? == Kind::Word("or") {
@@ -1196,6 +1212,21 @@ impl Parser<'_> {
                 "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
                 "Toybox.Lang.Array" => crate::ReturnType::Array(self.array_annotation()?),
                 "Void" => crate::ReturnType::Void,
+                name if !name.contains('.')
+                    && !matches!(
+                        name,
+                        "Number"
+                            | "String"
+                            | "Boolean"
+                            | "Char"
+                            | "Array"
+                            | "Object"
+                            | "View"
+                            | "Dc"
+                    ) =>
+                {
+                    crate::ReturnType::SourceObject(name.into())
+                }
                 _ => return Err(self.error(at, "unsupported result type annotation")),
             };
             Some(if self.peek()? == Kind::Word("or") {

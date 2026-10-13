@@ -31,6 +31,7 @@ parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
            | "Toybox.WatchUi.View"
+           | source-view-class-name
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
@@ -238,8 +239,9 @@ IDs need not be contiguous; their numeric values never select physical slots.
 Ordinary source parameters default to Number. `as` annotations accept the fully
 qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`,
 `Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
-`Void`. Short names, module aliases in annotations, and general unions are
-outside this subset.
+`Void`. Native short names, module aliases in annotations, and general unions
+are outside this subset. Unqualified declared source View names additionally
+provide [exact source contracts](compiler-classes.md#source-class-signatures).
 Number and String annotations additionally accept the exact suffix `or Null`
 for both parameters and results. Nullable Boolean/Char, reversed alternatives,
 parenthesized unions, and other type syntax remain unsupported. These

@@ -124,6 +124,9 @@ field initialization, independent instances, and state across drawing callbacks.
 The [object-call example](examples/compiler-object-calls/README.md) calls source
 methods through copied and reassigned references to constructed Views.
 
+The [source signature example](examples/compiler-source-signatures/README.md)
+preserves exact View class contracts through parameters, factories, and returns.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

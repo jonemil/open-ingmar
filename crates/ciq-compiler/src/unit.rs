@@ -349,6 +349,36 @@ impl CompilationUnit {
         }
         let mut signatures = BTreeMap::new();
         for (index, &(owner, function)) in bodies.iter().enumerate() {
+            let source_result = match function.return_type() {
+                ReturnType::SourceObject(class) => Some(class),
+                _ => None,
+            };
+            let source_classes = function
+                .parameter_types()
+                .iter()
+                .filter_map(|ty| {
+                    if let crate::ParameterType::SourceObject(class) = ty {
+                        Some(class.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .chain(source_result.as_deref());
+            for name in source_classes {
+                if !self
+                    .classes
+                    .iter()
+                    .any(|class| class.name == name && class.base == ClassBase::WatchUiView)
+                {
+                    return Err(fail(
+                        Some(index),
+                        None,
+                        format!(
+                            "source signature class {name} must resolve to a declared View subclass"
+                        ),
+                    ));
+                }
+            }
             let callback = matches!(owner, Owner::Class(_))
                 .then(|| {
                     crate::native::callback(
@@ -439,6 +469,13 @@ impl CompilationUnit {
             }
         }
         for (index, &(owner, function)) in bodies.iter().enumerate() {
+            let mut origins =
+                crate::source_objects::Origins::new(function.parameter_types().to_vec());
+            for located in function.operations() {
+                origins
+                    .observe(&located.operation)
+                    .map_err(|message| fail(Some(index), None, message.into()))?;
+            }
             for (operation, located) in function.operations().iter().enumerate() {
                 if let Operation::SelfFieldRead { field, .. }
                 | Operation::SelfFieldAssign { field, .. } = &located.operation
@@ -599,6 +636,15 @@ impl CompilationUnit {
                     ));
                 }
                 for (argument, parameter) in arguments.iter().zip(*parameters) {
+                    if let crate::ParameterType::SourceObject(class) = parameter {
+                        if origins.class(*argument) != Some(class.as_str()) {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "argument does not preserve the declared source class".into(),
+                            ));
+                        }
+                    }
                     if !crate::native::accepts(
                         &parameter.api_type(),
                         &function.value_types[argument].api_type(),
@@ -614,13 +660,13 @@ impl CompilationUnit {
                         ));
                     }
                 }
-                let expected_result = match located.operation {
+                let expected_result = match &located.operation {
                     Operation::ModuleCall { result_type, .. }
                     | Operation::ObjectCall { result_type, .. }
                     | Operation::SelfCall { result_type, .. } => Some(result_type),
                     _ => None,
                 };
-                if expected_result.is_some_and(|expected| expected != *result) {
+                if expected_result.is_some_and(|expected| expected != result) {
                     return Err(fail(
                         Some(index),
                         Some(operation),
@@ -755,7 +801,7 @@ fn compile_sources_context(
             parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let mut calls = source_ir::CallSignatures::new();
+    let mut calls = source_ir::CallContext::new();
     for parsed in &parsed_sources {
         for (module, ast) in &parsed.functions {
             calls.insert(

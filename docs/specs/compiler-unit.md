@@ -56,6 +56,12 @@ copies and same-class assignment; unit validation checks ordinary method contrac
 and prohibits native callback invocation through any receiver. See the
 [instance-call profile](compiler-classes.md#calls-on-constructed-source-objects).
 
+Exact source-class signatures resolve across the whole unit before call checking.
+Every source parameter/result name must designate a declared View subclass;
+arguments and returned references retain that exact identity. Generic native
+View signatures erase it. Function and call text preserve these contracts with
+`source(ClassName)` tags; see the [source signature profile](compiler-classes.md#source-class-signatures).
+
 AppBase.getInitialView has a [one-view positional
 contract](compiler-classes.md#source-initial-view-callback). Its return shape and
 zero parameters are validated for source, typed, and saved IR. It also cannot

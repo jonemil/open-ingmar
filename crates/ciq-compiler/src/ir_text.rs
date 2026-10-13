@@ -80,6 +80,9 @@ pub(crate) fn parse_ir_context(
                 return Err(fail(*name_at, "duplicate result contract"));
             }
             result_type = Some(match result {
+                tag if tag.starts_with("source(") && tag.ends_with(')') => {
+                    crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
+                }
                 "nullable-integer" => crate::ReturnType::NullableInteger,
                 "nullable-string" => crate::ReturnType::NullableString,
                 _ => return Err(fail(*name_at, "unsupported function result contract")),
@@ -94,6 +97,9 @@ pub(crate) fn parse_ir_context(
                 types
                     .split(':')
                     .map(|t| match t {
+                        tag if tag.starts_with("source(") && tag.ends_with(')') => Ok(
+                            crate::ParameterType::SourceObject(tag[7..tag.len() - 1].into()),
+                        ),
                         "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "integer" => Ok(crate::ParameterType::Integer),
@@ -624,6 +630,9 @@ fn call_contract(
             "one-view" => crate::ReturnType::Tuple(crate::TupleShape::OneView),
             "view-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))
+            }
+            tag if tag.starts_with("source(") && tag.ends_with(')') => {
+                crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
             }
             _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
         };

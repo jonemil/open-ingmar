@@ -16,10 +16,10 @@ pub(crate) struct Types {
 impl Types {
     pub(crate) fn new(parameters: Vec<ParameterType>) -> Self {
         Self {
-            parameters,
+            parameters: parameters.clone(),
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
-            origins: Default::default(),
+            origins: crate::source_objects::Origins::new(parameters),
         }
     }
 

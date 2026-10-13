@@ -49,13 +49,14 @@ accepted but termination is not proven.
 View value contract. Local initialization and copies preserve this identity.
 A local initialized from a source construction may subsequently receive only a
 reference with the same proven constructor class; assignments from another source
-class, a generic native View, a parameter, or an erased return are rejected.
+class, a generic native View parameter, or an erased return are rejected.
 Different instances of the same class are permitted, including conditional and
 loop assignments. Local aliases refer to the same runtime instance; reassignment
 changes only the local reference.
 
-`receiver.method(arguments)` calls a declared method of that constructor class.
-The receiver may be a local/copy or a direct construction expression. Forward
+`receiver.method(arguments)` calls a declared method of the proven source class.
+The receiver may be a construction, local/copy, or typed source parameter/result.
+Forward
 method declarations and multiple source files are supported. Value calls must
 match the declared result contract; statement calls discard any supported result,
 including Void. Arguments use the existing scalar/nullable/array contracts and
@@ -65,7 +66,7 @@ Empty Array arguments receive context from the selected source signature.
 Unit validation rejects missing methods, wrong argument/result contracts, and
 ordinary calls to native lifecycle callbacks, even through a different receiver.
 Lookup does not fall back to inherited native or source methods. Source inheritance,
-arbitrary receiver field access, source-class annotations, and general dynamic
+arbitrary receiver field access, and general dynamic
 dispatch remain unsupported.
 
 Exact constructor identity is an invariant local refinement, not a new native API
@@ -76,8 +77,9 @@ source instance later. No runtime cast is emitted.
 
 `ObjectCall` and `ObjectCallStatement` record a receiver value, class name, member,
 and arguments; value calls also record the result contract. Function validation
-reconstructs receiver provenance from SourceNew and local operations and requires
-an exact match with the claimed class. Unit validation resolves the declaration.
+reconstructs source identity from construction, source signatures, and local
+operations and requires an exact match with the claimed class. Unit validation
+resolves the declaration.
 This prevents saved IR from forging a source class for a native reference.
 
 Lowering evaluates the receiver, selects its method with `getsv`, prepares the
@@ -85,6 +87,43 @@ argument context when needed, invokes it, and discards statement results. Native
 and text paths use identical lowering and ordinary member-symbol binding. See
 the [object-call example](../../examples/compiler-object-calls/README.md) and
 [runtime evidence](../investigations/compiler-object-calls.md).
+
+## Source-class signatures
+
+Ordinary functions and instance methods may annotate parameters and results with
+an unqualified source View class name:
+
+```text
+function pass(view as HelloView) as HelloView { return view; }
+```
+
+The name must resolve to a declared WatchUi.View subclass in the unit, including
+forward or cross-file declarations. AppBase references, arbitrary native classes,
+nullable source references, Array<ClassName>, aliases, and qualified source-class
+names are unsupported. Bare native type names such as Number remain unsupported;
+native annotations use their established canonical names.
+
+Source contracts are exact and non-null. Arguments and every value return must
+preserve the declared source class through construction, typed parameters,
+declared call results, or local copies. A different source View class, Null, or
+generic native View cannot satisfy the contract. The existing native View
+contract may accept a source instance while erasing its exact class identity.
+
+Module, self, and explicit object calls retain a declared source result, permitting
+subsequent source dispatch and same-class local assignment. Parameter reads also
+retain their declared class. Native callbacks keep their inherited signatures;
+source annotations cannot replace those contracts. No runtime cast is emitted.
+
+`ParameterType::SourceObject(String)` and `ReturnType::SourceObject(String)` carry
+the source name. Their native API projection is View; exact assignability is
+checked separately. Function validation checks names and return provenance, while
+unit validation checks class declarations, call arguments, and result claims.
+Standalone typed/function IR retains its class/callee resolution obligations.
+
+Saved parameter tags and function/call result tags use `source(ClassName)`.
+Result contracts must be explicit in saved function text to retain the source
+identity. See the [signature example](../../examples/compiler-source-signatures/README.md)
+and [runtime evidence](../investigations/compiler-source-signatures.md).
 
 ## Native and textual IR
 
@@ -190,7 +229,7 @@ Default lifecycle/View bodies are used only where source does not supply them.
 Its initializer must satisfy the native-base contract above. Unit validation
 rejects unresolved names, modules, AppBase construction, and missing initializers.
 The result has the non-null native View contract; source identity is retained in
-the construction operation, not as a distinct value type. It may supply the slot
+construction and source contracts, independently of VM storage. It may supply the slot
 in `getInitialView()`. Calls on proven source instances follow the profile above;
 field access on another instance remains unsupported.
 

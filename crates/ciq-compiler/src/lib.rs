@@ -180,7 +180,7 @@ impl TupleShape {
 /// The supported function result contract, declared explicitly or inferred
 /// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
     Integer,
     NullableInteger,
@@ -189,6 +189,8 @@ pub enum ReturnType {
     Boolean,
     Char,
     Object(NativeClass),
+    /// Exact non-null source View subclass, resolved within a compilation unit.
+    SourceObject(String),
     Tuple(TupleShape),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
@@ -196,7 +198,7 @@ pub enum ReturnType {
 }
 
 /// Supported explicit parameter contracts, independent of VM slot allocation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
     Integer,
     NullableInteger,
@@ -205,6 +207,8 @@ pub enum ParameterType {
     Boolean,
     Char,
     Object(NativeClass),
+    /// Exact non-null source View subclass, resolved within a compilation unit.
+    SourceObject(String),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
@@ -213,7 +217,9 @@ pub enum ParameterType {
 
 impl ParameterType {
     /// Return the API type represented by this supported parameter contract.
-    pub fn api_type(self) -> api::Type {
+    /// Source objects map to their native View base for API checks; exact source
+    /// assignability is checked separately against unit declarations.
+    pub fn api_type(&self) -> api::Type {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
@@ -221,8 +227,9 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
-            Self::Object(class) => ValueType::Object(class).api_type(),
-            Self::Array(element) => ValueType::Array(element).api_type(),
+            Self::Object(class) => ValueType::Object(*class).api_type(),
+            Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
+            Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -230,7 +237,9 @@ impl ParameterType {
 
 impl ReturnType {
     /// Return the API type represented by this supported result contract.
-    pub fn api_type(self) -> api::Type {
+    /// Source objects map to their native View base without erasing their
+    /// separate source-class return requirement.
+    pub fn api_type(&self) -> api::Type {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
@@ -238,9 +247,10 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
-            Self::Object(class) => ValueType::Object(class).api_type(),
+            Self::Object(class) => ValueType::Object(*class).api_type(),
+            Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Tuple(shape) => shape.api_type(),
-            Self::Array(element) => ValueType::Array(element).api_type(),
+            Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -595,7 +605,7 @@ impl Function {
 
     /// Return the validated result contract shared by all return terminators.
     pub fn return_type(&self) -> ReturnType {
-        self.return_type
+        self.return_type.clone()
     }
 
     /// Whether this body requires an instance receiver in its hidden context slot.
@@ -617,7 +627,7 @@ impl Function {
             self.operations.clone(),
             self.instance_method,
             Some(context),
-            Some(self.return_type),
+            Some(self.return_type.clone()),
         )
         .map(|_| ())
     }
@@ -750,6 +760,26 @@ impl Function {
         context: Option<api::ApiContext>,
         declared_result: Option<ReturnType>,
     ) -> Result<Self, IrError> {
+        let source_parameters = parameter_types.iter().filter_map(|ty| {
+            if let ParameterType::SourceObject(class) = ty {
+                Some(class.as_str())
+            } else {
+                None
+            }
+        });
+        let source_result = declared_result.as_ref().and_then(|ty| {
+            if let ReturnType::SourceObject(class) = ty {
+                Some(class.as_str())
+            } else {
+                None
+            }
+        });
+        for class in source_parameters.chain(source_result) {
+            validate_call_names(None, class).map_err(|message| IrError {
+                operation: None,
+                message: message.into(),
+            })?;
+        }
         if parameter_types.iter().any(|ty| {
             matches!(
                 ty,
@@ -818,7 +848,7 @@ impl Function {
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
         let mut local_types = std::collections::BTreeMap::new();
-        let mut origins = source_objects::Origins::default();
+        let mut origins = source_objects::Origins::new(parameter_types.clone());
         for (index, located) in operations.iter().enumerate() {
             let fail = |message: &str| IrError {
                 operation: Some(index),
@@ -850,11 +880,11 @@ impl Function {
                     }
                     let result = if let Operation::ObjectCall {
                         result,
-                        result_type,
+                        ref result_type,
                         ..
                     } = located.operation
                     {
-                        let ty = call_result_type(result_type).map_err(fail)?;
+                        let ty = call_result_type(result_type.clone()).map_err(fail)?;
                         types.insert(result, ty);
                         Some(result)
                     } else {
@@ -1198,11 +1228,11 @@ impl Function {
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::ModuleCall {
                         result,
-                        result_type,
+                        ref result_type,
                         ..
                     } = located.operation
                     {
-                        types.insert(result, call_result_type(result_type).map_err(fail)?);
+                        types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
                         Some(result)
                     } else {
                         None
@@ -1225,11 +1255,11 @@ impl Function {
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     let result = if let Operation::SelfCall {
                         result,
-                        result_type,
+                        ref result_type,
                         ..
                     } = located.operation
                     {
-                        types.insert(result, call_result_type(result_type).map_err(fail)?);
+                        types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
                         Some(result)
                     } else {
                         None
@@ -1289,7 +1319,10 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {
-                    if declared_result.is_some_and(|ty| ty != ReturnType::Void) {
+                    if declared_result
+                        .as_ref()
+                        .is_some_and(|ty| *ty != ReturnType::Void)
+                    {
                         return Err(fail("void return does not match function result contract"));
                     }
                     if return_type
@@ -1304,11 +1337,18 @@ impl Function {
                     (None, vec![])
                 }
                 Operation::Return { value } => {
-                    let result = if let Some(contract) = declared_result {
+                    let result = if let Some(contract) = &declared_result {
+                        if let ReturnType::SourceObject(class) = contract {
+                            if origins.class(value) != Some(class.as_str()) {
+                                return Err(fail(
+                                    "return does not preserve its declared source class",
+                                ));
+                            }
+                        }
                         if !native::accepts(&contract.api_type(), &type_of(value).api_type()) {
                             return Err(fail("return type does not match function contract"));
                         }
-                        contract
+                        contract.clone()
                     } else {
                         match type_of(value) {
                             ValueType::Integer => ReturnType::Integer,
@@ -1326,7 +1366,7 @@ impl Function {
                         }
                     };
                     if return_type
-                        .replace(result)
+                        .replace(result.clone())
                         .is_some_and(|previous| previous != result)
                     {
                         return Err(fail("function cannot mix different return types"));
@@ -1571,27 +1611,33 @@ impl Function {
                 " parameter-types={}",
                 self.parameter_types
                     .iter()
-                    .map(|t| match t {
-                        ParameterType::NullableInteger => "nullable-integer",
-                        ParameterType::NullableString => "nullable-string",
-                        ParameterType::Integer => "integer",
-                        ParameterType::String => "string",
-                        ParameterType::Boolean => "boolean",
-                        ParameterType::Char => "char",
-                        ParameterType::Object(NativeClass::View) => "view",
-                        ParameterType::Object(NativeClass::Dc) => "dc",
-                        ParameterType::Array(element) => element.array_text(),
-                        ParameterType::NullableDictionary => "nullable-dictionary",
+                    .map(|t| {
+                        match t {
+                            ParameterType::SourceObject(class) => {
+                                return format!("source({class})");
+                            }
+                            ParameterType::NullableInteger => "nullable-integer",
+                            ParameterType::NullableString => "nullable-string",
+                            ParameterType::Integer => "integer",
+                            ParameterType::String => "string",
+                            ParameterType::Boolean => "boolean",
+                            ParameterType::Char => "char",
+                            ParameterType::Object(NativeClass::View) => "view",
+                            ParameterType::Object(NativeClass::Dc) => "dc",
+                            ParameterType::Array(element) => element.array_text(),
+                            ParameterType::NullableDictionary => "nullable-dictionary",
+                        }
+                        .to_owned()
                     })
                     .collect::<Vec<_>>()
                     .join(":")
             )
         };
         let result = match self.return_type {
-            ReturnType::NullableInteger | ReturnType::NullableString => {
-                call_type_text(self.return_type)
-            }
-            _ => "",
+            ReturnType::NullableInteger
+            | ReturnType::NullableString
+            | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
+            _ => String::new(),
         };
         let mut text = format!(
             "ciq-ir\n.function {}{parameters}{receiver}{parameter_types}{result}\n",
@@ -1656,7 +1702,7 @@ impl Function {
                 }
                 Operation::ObjectCall {
                     result,
-                    result_type,
+                    ref result_type,
                     receiver,
                     ref class,
                     ref member,
@@ -1762,7 +1808,7 @@ impl Function {
                 }
                 Operation::ModuleCall {
                     result,
-                    result_type,
+                    ref result_type,
                     ref module,
                     ref member,
                     ref arguments,
@@ -1790,7 +1836,7 @@ impl Function {
                 }
                 Operation::SelfCall {
                     result,
-                    result_type,
+                    ref result_type,
                     ref member,
                     ref arguments,
                 } => {
@@ -1920,14 +1966,19 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
+        ReturnType::SourceObject(class) => {
+            validate_call_names(None, &class)?;
+            Ok(ValueType::Object(NativeClass::View))
+        }
         ReturnType::Tuple(shape) => Ok(ValueType::Tuple(shape)),
         ReturnType::Array(element) => Ok(ValueType::Array(element)),
         ReturnType::Void => Err("void function cannot be used as a value"),
     }
 }
 
-fn call_type_text(result: ReturnType) -> &'static str {
+fn call_type_text(result: &ReturnType) -> String {
     match result {
+        ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::NullableInteger => " result=nullable-integer",
         ReturnType::NullableString => " result=nullable-string",
         ReturnType::Integer => "",
@@ -1943,4 +1994,5 @@ fn call_type_text(result: ReturnType) -> &'static str {
         ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
+    .to_owned()
 }

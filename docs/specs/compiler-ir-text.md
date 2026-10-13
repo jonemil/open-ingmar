@@ -771,13 +771,23 @@ Source instance calls use:
 ```
 
 Optional spans follow the existing syntax; omitted result types mean Integer.
-The receiver's exact constructor class must be proven through SourceNew and local
-operations, independently of the class name written in the call. Unit validation
+The receiver's exact source class must be proven through construction, typed source
+parameters/results, or local operations, independently of the class written in
+the call. Unit validation
 checks the selected class method's arity, parameter/result types, and callback
 restrictions. Both forms preserve receiver-before-argument evaluation order.
 Statement calls define no semantic result. Standalone function parsing retains
 declaration-resolution obligations; it does not authorize arbitrary receiver
 casts. See the [source-call contract](compiler-classes.md#calls-on-constructed-source-objects).
+
+`source(ClassName)` is an exact non-null source View contract in
+`parameter-types=...` and function/call `result=...` fields. It occupies one
+parameter-list entry without a colon inside the tag. Source function results
+always serialize this tag; omission erases the exact class at the return boundary.
+Class names must be valid identifiers and resolve to source View declarations
+during unit validation. Return provenance and call arguments/results are checked
+through the [source signature rules](compiler-classes.md#source-class-signatures);
+the tag does not cast an arbitrary native View.
 
 Instance field operations are `.read-self %<result-id> <field-name>` and
 `.assign-self <field-name> %<value-id>`, with optional source spans. Reads define

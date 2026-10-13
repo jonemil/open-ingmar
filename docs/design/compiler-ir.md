@@ -73,14 +73,15 @@ binding. Its value uses the native View base contract, with exact constructor
 identity retained as a local refinement for bounded instance dispatch. Unit
 validation requires a View subclass with a validated zero-argument initializer.
 
-Constructor provenance is reconstructed from IR by shared source-object tracking.
-It follows local initialization, copies, and same-class reassignment. Function
-validation checks an ObjectCall's claimed class against that provenance; unit
-validation resolves the class method and its argument/result contracts. Generic
-native references, parameters, returns, and array reads do not preserve exact
-constructor identity. This keeps source dispatch sound without claiming complete
-source-class types or dynamic inheritance. Object-reference fields and explicit
-source-class signatures need their own initialization/assignability model.
+Exact source-class identity is reconstructed from IR by shared object tracking.
+It follows construction, explicit source parameters/results, local initialization,
+copies, and same-class reassignment. Function validation checks returns and an
+ObjectCall's claimed class; unit validation resolves source declarations and
+checks call arguments/results. Generic native references, native View parameters/
+returns, and array reads erase exact identity. SourceObject contracts carry an
+owned class name while their native API projection remains View. This separates
+exact source assignability from native compatibility without a runtime cast.
+Object-reference fields still need their own initialization model.
 
 Native constants retain module/member identity and catalogue type. FONT_MEDIUM
 is a FontDefinition enum value, even though lowering emits its numeric value.

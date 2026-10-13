@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Source-class signatures](compiler-source-signatures.md): exact reference
+  contracts through module/self calls and saved IR.
 - [Source object calls](compiler-object-calls.md): explicit receivers, aliases,
   same-class reassignment, and source/SDK runtime comparison.
 - [Number instance fields](compiler-fields.md): field encoding, current-instance

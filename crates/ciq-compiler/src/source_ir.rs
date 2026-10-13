@@ -18,7 +18,7 @@ fn emit(
     locals: &std::collections::BTreeMap<String, LocalId>,
     parameters: &std::collections::BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
         parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
@@ -203,7 +203,7 @@ fn emit_binary_chain(
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
     let mut chain = Vec::new();
     while let parser::ExpressionKind::Binary { kind, left, right } = expression.kind {
@@ -234,7 +234,7 @@ fn emit_array_read(
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<Operation, Diagnostic> {
     let parser::ExpressionKind::ArrayRead { array, index } = kind else {
         unreachable!()
@@ -257,7 +257,7 @@ fn emit_call(
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<Operation, Diagnostic> {
     let (receiver, module, member, arguments) = match kind {
         parser::ExpressionKind::ValueCall {
@@ -296,7 +296,9 @@ fn emit_call(
     let receiver = receiver
         .map(|value| emit(source, value, locals, parameters, operations, calls))
         .transpose()?;
-    let class = receiver.and_then(|value| crate::source_objects::class(operations, value));
+    let class = receiver.and_then(|value| {
+        crate::source_objects::class(operations, value, calls.parameter_types.clone())
+    });
     let arguments = arguments
         .into_iter()
         .map(|argument| emit(source, argument, locals, parameters, operations, calls))
@@ -308,7 +310,7 @@ fn emit_call(
                 result,
                 result_type: calls
                     .get(&(class.clone(), member.clone()))
-                    .map(|signature| signature.result)
+                    .map(|signature| signature.result.clone())
                     .unwrap_or(crate::ReturnType::Integer),
                 receiver,
                 class,
@@ -328,7 +330,7 @@ fn emit_call(
             result,
             result_type: calls
                 .get(&("self".into(), member.clone()))
-                .map(|signature| signature.result)
+                .map(|signature| signature.result.clone())
                 .unwrap_or(crate::ReturnType::Integer),
             member,
             arguments,
@@ -338,7 +340,7 @@ fn emit_call(
             result,
             result_type: calls
                 .get(&(module.clone().unwrap(), member.clone()))
-                .map(|signature| signature.result)
+                .map(|signature| signature.result.clone())
                 .unwrap_or(crate::ReturnType::Integer),
             module: module.unwrap(),
             member,
@@ -349,7 +351,7 @@ fn emit_call(
 
 struct Builder<'a> {
     source: &'a str,
-    calls: &'a CallSignatures,
+    calls: &'a CallContext,
     result_type: crate::ReturnType,
     parameters: BTreeMap<String, usize>,
     operations: Vec<LocatedOperation>,
@@ -1142,7 +1144,7 @@ pub(crate) fn build(
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, None, context, &CallSignatures::new())
+    build_body(source, ast, None, context, &CallContext::new())
 }
 
 #[derive(Clone)]
@@ -1151,14 +1153,33 @@ pub(crate) struct CallSignature {
     pub parameters: Vec<crate::ParameterType>,
 }
 
-pub(crate) type CallSignatures = BTreeMap<(String, String), CallSignature>;
+/// Collected callee contracts and the current body's parameter contracts.
+#[derive(Clone, Default)]
+pub(crate) struct CallContext {
+    signatures: BTreeMap<(String, String), CallSignature>,
+    parameter_types: Vec<crate::ParameterType>,
+}
+impl CallContext {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+    pub(crate) fn insert(&mut self, key: (String, String), signature: CallSignature) {
+        self.signatures.insert(key, signature);
+    }
+    fn get(&self, key: &(String, String)) -> Option<&CallSignature> {
+        self.signatures.get(key)
+    }
+    fn keys(&self) -> impl Iterator<Item = &(String, String)> {
+        self.signatures.keys()
+    }
+}
 
 pub(crate) fn build_with_calls(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
     method: Option<crate::ClassBase>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<Function, Diagnostic> {
     build_body(source, ast, method, context, calls)
 }
@@ -1168,17 +1189,18 @@ fn build_body(
     ast: parser::ParsedFunction,
     method: Option<crate::ClassBase>,
     context: Option<crate::api::ApiContext>,
-    calls: &CallSignatures,
+    calls: &CallContext,
 ) -> Result<Function, Diagnostic> {
     let callback = method.and_then(|base| crate::native::callback(base, &ast.name));
     let effective_result = callback
         .as_ref()
-        .map(|signature| signature.result)
+        .map(|signature| signature.result.clone())
         .unwrap_or_else(|| declared_result(&ast));
-    if callback
-        .as_ref()
-        .is_some_and(|signature| ast.result_type.is_some_and(|ty| ty != signature.result))
-    {
+    if callback.as_ref().is_some_and(|signature| {
+        ast.result_type
+            .as_ref()
+            .is_some_and(|ty| *ty != signature.result)
+    }) {
         return Err(Diagnostic::at(
             source,
             ast.body_span.start,
@@ -1194,13 +1216,15 @@ fn build_body(
         .unwrap_or_else(|| {
             annotations
                 .iter()
-                .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+                .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
                 .collect()
         });
+    let mut body_calls = calls.clone();
+    body_calls.parameter_types = candidate_parameters.clone();
     let mut builder = Builder {
         source,
-        calls,
-        result_type: effective_result,
+        calls: &body_calls,
+        result_type: effective_result.clone(),
         parameters: ast
             .parameters
             .into_iter()
@@ -1253,7 +1277,7 @@ fn build_body(
         if annotations
             .iter()
             .zip(&signature.parameters)
-            .any(|(annotation, expected)| annotation.is_some_and(|ty| ty != *expected))
+            .any(|(annotation, expected)| annotation.as_ref().is_some_and(|ty| ty != expected))
         {
             return Err(Diagnostic::at(
                 source,
@@ -1265,7 +1289,7 @@ fn build_body(
     } else {
         annotations
             .into_iter()
-            .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
             .collect()
     };
     let result = Function::construct_for_api(
@@ -1276,7 +1300,7 @@ fn build_body(
         context,
         callback
             .as_ref()
-            .map(|signature| signature.result)
+            .map(|signature| signature.result.clone())
             .or(result_type),
     );
     let function = result.map_err(|error| {
@@ -1311,6 +1335,7 @@ fn build_body(
 
 pub(crate) fn declared_result(ast: &parser::ParsedFunction) -> crate::ReturnType {
     ast.result_type
+        .clone()
         .unwrap_or(if has_value_return(&ast.statements) {
             crate::ReturnType::Integer
         } else {
@@ -1325,7 +1350,7 @@ pub(crate) fn declared_signature(ast: &parser::ParsedFunction) -> CallSignature 
         parameters: ast
             .parameter_types
             .iter()
-            .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
             .collect(),
     }
 }
