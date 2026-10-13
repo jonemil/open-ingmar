@@ -45,9 +45,7 @@ impl Types {
                 (*result, Some(crate::TupleShape::OneView.api_type()))
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
-            Operation::SelfFieldRead { result, .. } | Operation::Integer { result, .. } => {
-                (*result, Some(Type::named("Toybox.Lang.Number")))
-            }
+            Operation::Integer { result, .. } => (*result, Some(Type::named("Toybox.Lang.Number"))),
             Operation::Char { result, .. } => (*result, Some(Type::named("Toybox.Lang.Char"))),
             Operation::Boolean { result, .. } => {
                 (*result, Some(Type::named("Toybox.Lang.Boolean")))
@@ -71,7 +69,12 @@ impl Types {
                 }
                 return;
             }
-            Operation::ModuleCall {
+            Operation::SelfFieldRead {
+                result,
+                result_type,
+                ..
+            }
+            | Operation::ModuleCall {
                 result,
                 result_type,
                 ..

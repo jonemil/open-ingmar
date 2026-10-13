@@ -38,7 +38,12 @@ impl Origins {
                     self.values.insert(*result, class.clone());
                 }
             }
-            Operation::ModuleCall {
+            Operation::SelfFieldRead {
+                result,
+                result_type: crate::ReturnType::SourceObject(class),
+                ..
+            }
+            | Operation::ModuleCall {
                 result,
                 result_type: crate::ReturnType::SourceObject(class),
                 ..
@@ -55,7 +60,7 @@ impl Origins {
             } => {
                 self.values.insert(*result, class.clone());
             }
-            Operation::SourceNew { result, class } => {
+            Operation::SourceNew { result, class, .. } => {
                 self.values.insert(*result, class.clone());
             }
             Operation::LocalInitialize { local, value } => {

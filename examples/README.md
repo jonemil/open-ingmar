@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   source View references, aliases, and same-class reassignment.
 - [compiler-source-signatures](compiler-source-signatures/README.md): source View
   parameter/result contracts, factories, and cross-file reference forwarding.
+- [compiler-reference-fields](compiler-reference-fields/README.md): constructor
+  arguments and retained View references across lifecycle callbacks.
 - [compiler-probe](compiler-probe/README.md): a standalone function input to our
   Rust frontend, using Hello World scaffolding for execution.
 - [hello-world](hello-world/README.md): minimal watch application showing a

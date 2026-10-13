@@ -23,9 +23,14 @@ fn emit(
     let operation = match expression.kind {
         parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
             result: ValueId(operations.len() as u32),
+            result_type: calls
+                .field_types
+                .get(&field)
+                .cloned()
+                .unwrap_or(crate::ReturnType::Integer),
             field,
         },
-        parser::ExpressionKind::SourceNew(class) => {
+        parser::ExpressionKind::SourceNew { class, arguments } => {
             if !calls.keys().any(|(owner, _)| owner == &class) {
                 return Err(Diagnostic::at(
                     source,
@@ -40,9 +45,14 @@ fn emit(
                     "source construction class is shadowed",
                 ));
             }
+            let arguments = arguments
+                .into_iter()
+                .map(|argument| emit(source, argument, locals, parameters, operations, calls))
+                .collect::<Result<Vec<_>, _>>()?;
             Operation::SourceNew {
                 result: ValueId(operations.len() as u32),
                 class,
+                arguments,
             }
         }
         parser::ExpressionKind::NativeConstant {
@@ -592,6 +602,13 @@ impl Builder<'_> {
                 left: Box::new(self.snapshot(*left, locals)?),
                 right: Box::new(self.snapshot(*right, locals)?),
             },
+            E::SourceNew { class, arguments } => {
+                let expected = self.user_argument_context(&class, "initialize");
+                E::SourceNew {
+                    class,
+                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
+                }
+            }
             E::ValueCall {
                 receiver,
                 member,
@@ -1158,6 +1175,7 @@ pub(crate) struct CallSignature {
 pub(crate) struct CallContext {
     signatures: BTreeMap<(String, String), CallSignature>,
     parameter_types: Vec<crate::ParameterType>,
+    pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
 }
 impl CallContext {
     pub(crate) fn new() -> Self {

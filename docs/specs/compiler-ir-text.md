@@ -791,17 +791,23 @@ the tag does not cast an arbitrary native View.
 
 Instance field operations are `.read-self %<result-id> <field-name>` and
 `.assign-self <field-name> %<value-id>`, with optional source spans. Reads define
-Number; writes consume Number without a result. Both require an instance receiver
+Number by default; `result=source(ClassName)` selects a source-reference read.
+Writes consume Number or a source reference without a result. Both require an
+instance receiver
 and preserve observable order. Their symbolic field identities resolve through
 the enclosing unit class's
 [field declarations](compiler-classes.md#number-instance-fields).
+Reference declarations, result claims, and initializer safety follow the
+[reference-field contract](compiler-classes.md#source-reference-fields).
 Standalone method parsing leaves that unit obligation unresolved.
 
-`.new-source %<result-id> <class-name>` allocates and initializes a source View.
+`.new-source %<result-id> <class-name> [%<argument-id> ...]` allocates and
+initializes a source View.
 It defines a non-null View value and is order-sensitive. Function validation
 checks the identifier and View initializer availability (API 2.1.0); unit
 validation requires a declared WatchUi.View subclass with a matching explicit
-zero-argument initializer. A standalone function retains this unresolved class
+initializer whose parameter contracts match the arguments. A standalone function
+retains this unresolved class
 obligation and cannot supply complete application metadata by itself.
 
 `.constant %<result-id> Toybox.Graphics FONT_MEDIUM` defines a FontDefinition

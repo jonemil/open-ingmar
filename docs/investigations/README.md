@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Source-reference fields](compiler-reference-fields.md): constructor arguments,
+  initialized reference slots, and retained state through shutdown.
 - [Source-class signatures](compiler-source-signatures.md): exact reference
   contracts through module/self calls and saved IR.
 - [Source object calls](compiler-object-calls.md): explicit receivers, aliases,

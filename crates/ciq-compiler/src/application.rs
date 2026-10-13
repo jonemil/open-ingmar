@@ -558,8 +558,15 @@ pub fn build_console_application(
                 field(
                     ids[&declaration.name],
                     0,
-                    1,
-                    Reference::Raw(declaration.initial as u32),
+                    if matches!(declaration.kind, crate::FieldKind::Number(_)) {
+                        1
+                    } else {
+                        0
+                    },
+                    Reference::Raw(match declaration.kind {
+                        crate::FieldKind::Number(initial) => initial as u32,
+                        crate::FieldKind::SourceObject(_) => 0,
+                    }),
                 )
             }));
         if source_class
@@ -611,8 +618,15 @@ pub fn build_console_application(
             field(
                 ids[&declaration.name],
                 0,
-                1,
-                Reference::Raw(declaration.initial as u32),
+                if matches!(declaration.kind, crate::FieldKind::Number(_)) {
+                    1
+                } else {
+                    0
+                },
+                Reference::Raw(match declaration.kind {
+                    crate::FieldKind::Number(initial) => initial as u32,
+                    crate::FieldKind::SourceObject(_) => 0,
+                }),
             )
         }));
         fields.extend(

@@ -45,10 +45,17 @@ native base selects the callback signature. Source constructors must resolve to
 a declared View subclass with a validated initializer; modules and AppBase
 classes cannot be constructed by this profile.
 
-Class containers may declare [Number instance
-fields](compiler-classes.md#number-instance-fields). The unit rejects duplicate
+Class containers may declare [Number](compiler-classes.md#number-instance-fields)
+and [source-reference fields](compiler-classes.md#source-reference-fields).
+The unit rejects duplicate
 or conflicting members and resolves every field operation against its class,
 independently of shared member symbol IDs and source-file order.
+
+Constructor calls resolve initialize as a source callee and check all arguments.
+Reference fields must be assigned in an initializer prefix before reads, self
+calls, control flow, or return. Field read/result claims and assignments must
+match the owning declaration; generic native references cannot forge a source
+field contract.
 
 Calls on constructed source references resolve to their proven class's declared
 methods. Function validation preserves exact constructor identity through local

@@ -127,6 +127,9 @@ methods through copied and reassigned references to constructed Views.
 The [source signature example](examples/compiler-source-signatures/README.md)
 preserves exact View class contracts through parameters, factories, and returns.
 
+The [retained View example](examples/compiler-reference-fields/README.md) uses
+constructor arguments and reference fields across lifecycle callbacks.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

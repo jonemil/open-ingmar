@@ -217,3 +217,8 @@ Number instance fields follow the
 with type `0x01`, key bits zero, and literal initial values. General object-member
 dispatch beyond constructor-proven source calls remains unsupported. See
 [visible View evidence](../investigations/compiler-visible-view.md).
+
+Source-reference fields use null defaults (type `0x00`, key bits zero, value zero)
+and mandatory source initialization. Parameterized source View initialize methods
+receive validated constructor arguments; the native base constructor still takes
+none. See the [reference-field profile](compiler-classes.md#source-reference-fields).

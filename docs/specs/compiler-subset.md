@@ -909,8 +909,8 @@ Saved IR records the concrete allocation type and rechecks all uses. See the
 `new Toybox.WatchUi.View()` constructs a non-null native View with no arguments.
 `new WatchUi.View()` is also accepted; a `using Toybox.WatchUi as Ui` binding
 permits `new Ui.View()`, while `import Toybox.WatchUi` permits `new View()`.
-Constructor qualifiers cannot be shadowed by locals/parameters. Constructor
-arguments and bare unimported `View` are unsupported. Unit mode also permits
+Constructor qualifiers cannot be shadowed by locals/parameters. Native View
+constructor arguments and bare unimported `View` are unsupported. Unit mode permits
 [declared source View construction](compiler-classes.md#source-views-and-drawing).
 The initializer requires API 2.1.0, independently of the
 class's API 1.0.0 availability.

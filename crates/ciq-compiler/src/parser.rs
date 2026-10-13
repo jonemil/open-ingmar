@@ -100,7 +100,10 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     SelfField(String),
-    SourceNew(String),
+    SourceNew {
+        class: String,
+        arguments: Vec<Expression>,
+    },
     NativeConstant {
         module: String,
         member: String,
@@ -175,7 +178,8 @@ impl Expression {
             ExpressionKind::ArrayRead { array, index } => {
                 array.needs_materialization() || index.needs_materialization()
             }
-            ExpressionKind::ModuleCall { arguments, .. } => {
+            ExpressionKind::ModuleCall { arguments, .. }
+            | ExpressionKind::SourceNew { arguments, .. } => {
                 arguments.iter().any(Self::needs_materialization)
             }
             _ => false,
@@ -642,7 +646,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(open.span.start, "unsupported qualified construction class"));
             }
             let (arguments, end) = self.call_arguments(open.span.start, depth)?;
-            if !arguments.is_empty() {
+            if native && !arguments.is_empty() {
                 return Err(self.error(
                     open.span.start,
                     "supported View construction requires zero arguments",
@@ -655,7 +659,10 @@ impl<'a> Parser<'a> {
                         qualifier: path.split('.').next().unwrap().into(),
                     }
                 } else {
-                    ExpressionKind::SourceNew(path)
+                    ExpressionKind::SourceNew {
+                        class: path,
+                        arguments,
+                    }
                 },
                 Span {
                     start: open.span.start,
@@ -1325,18 +1332,35 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     let Kind::Word(name) = token.kind else {
                         unreachable!()
                     };
-                    parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
-                    let value = parser.expression(0)?;
-                    let ExpressionKind::Integer(initial) = value.kind else {
-                        return Err(parser.error(
-                            value.span.start,
-                            "instance fields require a Number literal initializer",
-                        ));
+                    let kind = if parser.peek()? == Kind::Word("as") {
+                        parser.token()?;
+                        let class = parser.path()?;
+                        if class.contains('.') {
+                            return Err(parser.error(
+                                token.span.start,
+                                "reference field requires a source View class name",
+                            ));
+                        }
+                        parser.expect(
+                            Kind::Punctuation(';'),
+                            "';' after reference field declaration",
+                        )?;
+                        crate::FieldKind::SourceObject(class)
+                    } else {
+                        parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
+                        let value = parser.expression(0)?;
+                        let ExpressionKind::Integer(initial) = value.kind else {
+                            return Err(parser.error(
+                                value.span.start,
+                                "instance fields require a Number literal initializer",
+                            ));
+                        };
+                        parser.expect(Kind::Punctuation(';'), "';'")?;
+                        crate::FieldKind::Number(initial)
                     };
-                    parser.expect(Kind::Punctuation(';'), "';'")?;
                     fields.push(crate::InstanceField {
                         name: name.into(),
-                        initial,
+                        kind,
                     });
                     if fields.len() > 256 {
                         return Err(

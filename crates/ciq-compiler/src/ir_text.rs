@@ -159,7 +159,7 @@ pub(crate) fn parse_ir_context(
             Some(".call-object") => (40, call_width()),
             Some(".call-object-discard") => (41, call_width()),
             Some(".integer") => (0, 3),
-            Some(".read-self") => (38, 3),
+            Some(".read-self") => (38, call_width()),
             Some(".assign-self") => (39, 3),
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
@@ -188,7 +188,7 @@ pub(crate) fn parse_ir_context(
             Some(".array-new") => (30, 3),
             Some(".new-native") => (31, 3),
             Some(".tuple-new") => (32, 3),
-            Some(".new-source") => (33, 3),
+            Some(".new-source") => (33, call_width()),
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
             Some(".block") => (10, 2),
@@ -304,9 +304,17 @@ pub(crate) fn parse_ir_context(
                     .collect::<Result<_, _>>()?,
             }
         } else if kind == 38 {
+            if width < 3 {
+                return Err(fail(*at, "expected .read-self result field [result=type]"));
+            }
+            let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
+            if arguments_at != width {
+                return Err(fail(*at, "unexpected field read operands"));
+            }
             Operation::SelfFieldRead {
                 result: parse_value(&fields[1])?,
                 field: fields[2].clone(),
+                result_type,
             }
         } else if kind == 39 {
             Operation::SelfFieldAssign {
@@ -314,9 +322,16 @@ pub(crate) fn parse_ir_context(
                 value: parse_value(&fields[2])?,
             }
         } else if kind == 33 {
+            if width < 3 {
+                return Err(fail(*at, "expected .new-source result class [arguments]"));
+            }
             Operation::SourceNew {
                 result: parse_value(&fields[1])?,
                 class: fields[2].clone(),
+                arguments: fields[3..width]
+                    .iter()
+                    .map(|field| parse_value(field))
+                    .collect::<Result<_, _>>()?,
             }
         } else if kind == 34 {
             Operation::NativeConstant {

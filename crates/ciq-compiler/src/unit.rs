@@ -23,6 +23,50 @@ impl<'a> Owner<'a> {
     }
 }
 
+fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owner<'a>, &'a str)> {
+    match operation {
+        Operation::ModuleCall { module, member, .. }
+        | Operation::ModuleCallStatement { module, member, .. } => {
+            Some((Owner::Module(module), member))
+        }
+        Operation::SelfCall { member, .. } | Operation::SelfCallStatement { member, .. } => {
+            Some((owner, member))
+        }
+        Operation::ObjectCall { class, member, .. }
+        | Operation::ObjectCallStatement { class, member, .. } => {
+            Some((Owner::Class(class), member))
+        }
+        Operation::SourceNew { class, .. } => Some((Owner::Class(class), "initialize")),
+        _ => None,
+    }
+}
+
+fn requests_exit(operation: &Operation) -> bool {
+    matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
+}
+
+/// Find bodies that can request shutdown, including through recursive source
+/// calls. Conservatively include conditional calls; this does not prove safety
+/// against runtime failures or unknown native callback effects.
+fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>, &'a str)> {
+    let mut exits = BTreeSet::new();
+    loop {
+        let mut changed = false;
+        for &(owner, function) in bodies {
+            if function.operations().iter().any(|located| {
+                requests_exit(&located.operation)
+                    || source_callee(owner, &located.operation)
+                        .is_some_and(|key| exits.contains(&key))
+            }) {
+                changed |= exits.insert((owner, function.name()));
+            }
+        }
+        if !changed {
+            return exits;
+        }
+    }
+}
+
 /// A global function or a member of a flat source module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionDeclaration {
@@ -75,16 +119,34 @@ impl ClassBase {
     }
 }
 
-/// A Number instance field initialized separately for each constructed object.
+/// A supported field's default and initialization requirement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldKind {
+    /// A Number copied from class metadata into each new instance.
+    Number(i32),
+    /// A null reference slot that source initialize must fill with this exact
+    /// non-null source View class before reads, self calls, or return.
+    SourceObject(String),
+}
+
+/// An instance field declaration with a checked initialization contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceField {
     /// Unqualified member name, unique within the class.
     pub name: String,
-    /// Initial Number value stored in the class's instance-field metadata.
-    pub initial: i32,
+    /// Default storage and required non-null source contract, where applicable.
+    pub kind: FieldKind,
+}
+impl InstanceField {
+    pub(crate) fn result_type(&self) -> ReturnType {
+        match &self.kind {
+            FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::SourceObject(class) => ReturnType::SourceObject(class.clone()),
+        }
+    }
 }
 
-/// A named native-derived class with Number fields and method bodies.
+/// A named native-derived class with checked instance fields and method bodies.
 /// Source inheritance and native method bodies are not supported yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassDeclaration {
@@ -92,7 +154,7 @@ pub struct ClassDeclaration {
     pub name: String,
     /// Native superclass identity resolved by application generation.
     pub base: ClassBase,
-    /// Number fields with constant initial values, in declaration order.
+    /// Number/reference fields in declaration order.
     pub fields: Vec<InstanceField>,
     /// Instance-method IR bodies, checked together during unit construction.
     pub methods: Vec<Function>,
@@ -326,6 +388,40 @@ impl CompilationUnit {
                     ));
                 }
             }
+            let references = class
+                .fields
+                .iter()
+                .filter_map(|field| {
+                    if let FieldKind::SourceObject(target) = &field.kind {
+                        Some(target)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            for target in &references {
+                if !self.classes.iter().any(|declaration| {
+                    declaration.name == **target && declaration.base == ClassBase::WatchUiView
+                }) {
+                    return Err(fail(
+                        Some(at),
+                        None,
+                        "reference field class must resolve to a declared View subclass".into(),
+                    ));
+                }
+            }
+            if !references.is_empty()
+                && !class
+                    .methods
+                    .iter()
+                    .any(|method| method.name() == "initialize")
+            {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "reference fields require a source initializer".into(),
+                ));
+            }
             if class.methods.is_empty() {
                 return Err(fail(
                     None,
@@ -348,6 +444,7 @@ impl CompilationUnit {
             ));
         }
         let mut signatures = BTreeMap::new();
+        let exit_callers = exit_callers(&bodies);
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let source_result = match function.return_type() {
                 ReturnType::SourceObject(class) => Some(class),
@@ -421,16 +518,49 @@ impl CompilationUnit {
                     .operations()
                     .iter()
                     .find(|op| !matches!(op.operation, Operation::Block { .. }));
-                if function.parameter_count() != 0
+                let declaration = self
+                    .classes
+                    .iter()
+                    .find(|class| owner == Owner::Class(class.name.as_str()))
+                    .unwrap();
+                if (declaration.base == ClassBase::ApplicationAppBase && function.parameter_count() != 0)
                     || function.return_type() != crate::ReturnType::Void
                     || base_calls != 1
-                    || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == self.classes.iter().find(|c| owner == Owner::Class(c.name.as_str())).unwrap().base))
-                    || !first.is_some_and(|op| {
-                        matches!(op.operation, Operation::NativeBaseInitialize { .. })
-                    })
+                    || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == declaration.base))
                 {
                     return Err(fail(Some(index), None,
-                        "source initialize requires zero parameters, a void result, and one native base call as its first statement".into()));
+                        "source initialize requires a void result and one native base call first; AppBase initialize takes no parameters".into()));
+                }
+                let mut pending = declaration
+                    .fields
+                    .iter()
+                    .filter_map(|field| {
+                        if matches!(field.kind, FieldKind::SourceObject(_)) {
+                            Some(field.name.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<BTreeSet<_>>();
+                for (operation, located) in function.operations().iter().enumerate() {
+                    if !pending.is_empty()
+                        && (requests_exit(&located.operation)
+                            || source_callee(owner, &located.operation)
+                                .is_some_and(|key| exit_callers.contains(&key)))
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "initialize reference fields before calls that may request shutdown"
+                                .into(),
+                        ));
+                    }
+                    match &located.operation {
+                        Operation::SelfFieldRead { field, .. } if pending.contains(field.as_str()) => return Err(fail(Some(index), Some(operation), "reference field read before initialization".into())),
+                        Operation::SelfFieldAssign { field, .. } => { pending.remove(field.as_str()); }
+                        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } | Operation::Branch { .. } | Operation::Jump { .. } | Operation::ReturnVoid if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all reference fields before self calls, control flow, or return".into())),
+                        _ => {}
+                    }
                 }
             } else if base_calls != 0 {
                 return Err(fail(
@@ -480,22 +610,56 @@ impl CompilationUnit {
                 if let Operation::SelfFieldRead { field, .. }
                 | Operation::SelfFieldAssign { field, .. } = &located.operation
                 {
-                    let declared = self
+                    let declaration = self
                         .classes
                         .iter()
                         .find(|class| owner == Owner::Class(class.name.as_str()))
-                        .is_some_and(|class| {
+                        .and_then(|class| {
                             class
                                 .fields
                                 .iter()
-                                .any(|declaration| declaration.name == *field)
-                        });
-                    if !declared {
-                        return Err(fail(
-                            Some(index),
-                            Some(operation),
-                            format!("unresolved instance field {field}"),
-                        ));
+                                .find(|declaration| declaration.name == *field)
+                        })
+                        .ok_or_else(|| {
+                            fail(
+                                Some(index),
+                                Some(operation),
+                                format!("unresolved instance field {field}"),
+                            )
+                        })?;
+                    match &located.operation {
+                        Operation::SelfFieldRead { result_type, .. }
+                            if *result_type != declaration.result_type() =>
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "field read type does not match its declaration".into(),
+                            ));
+                        }
+                        Operation::SelfFieldAssign { value, .. } => {
+                            if let FieldKind::SourceObject(class) = &declaration.kind {
+                                if origins.class(*value) != Some(class.as_str()) {
+                                    return Err(fail(
+                                        Some(index),
+                                        Some(operation),
+                                        "field assignment must preserve the declared source class"
+                                            .into(),
+                                    ));
+                                }
+                            }
+                            if !crate::native::accepts(
+                                &declaration.result_type().api_type(),
+                                &function.value_types[value].api_type(),
+                            ) {
+                                return Err(fail(
+                                    Some(index),
+                                    Some(operation),
+                                    "field assignment type does not match its declaration".into(),
+                                ));
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 if let Operation::SourceNew { class, .. } = &located.operation {
@@ -522,10 +686,21 @@ impl CompilationUnit {
                         .iter()
                         .any(|method| method.name() == "initialize")
                     {
-                        return Err(fail(Some(index), Some(operation), "source View construction requires a declared zero-argument initializer".into()));
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "source View construction requires a declared initializer".into(),
+                        ));
                     }
                 }
                 let (key, arguments, value_call) = match &located.operation {
+                    Operation::SourceNew {
+                        class, arguments, ..
+                    } => (
+                        (Owner::Class(class.as_str()), "initialize"),
+                        arguments,
+                        false,
+                    ),
                     Operation::ObjectCall {
                         class,
                         member,
@@ -734,7 +909,14 @@ impl CompilationUnit {
         for class in &self.classes {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for field in &class.fields {
-                text.push_str(&format!(".field-number {} {}\n", field.name, field.initial));
+                text.push_str(&match &field.kind {
+                    FieldKind::Number(initial) => {
+                        format!(".field-number {} {initial}\n", field.name)
+                    }
+                    FieldKind::SourceObject(class) => {
+                        format!(".field-reference {} {class}\n", field.name)
+                    }
+                });
             }
             for method in &class.methods {
                 text.push_str(&method.to_ir_text());
@@ -847,6 +1029,11 @@ fn compile_sources_context(
             }
             let mut methods = Vec::new();
             let mut method_calls = calls.clone();
+            method_calls.field_types = class
+                .fields
+                .iter()
+                .map(|field| (field.name.clone(), field.result_type()))
+                .collect();
             for ast in &class.methods {
                 method_calls.insert(
                     ("self".into(), ast.name.clone()),
@@ -1027,7 +1214,9 @@ fn parse_unit_ir_context(
                         ended = true;
                         break;
                     }
-                    if parts.first().is_some_and(|part| part == ".field-number") {
+                    if parts.first().is_some_and(|part| {
+                        matches!(part.as_str(), ".field-number" | ".field-reference")
+                    }) {
                         if parts.len() != 3 || !methods.is_empty() || instance_fields.len() >= 256 {
                             return Err(Diagnostic::at(
                                 text,
@@ -1035,12 +1224,16 @@ fn parse_unit_ir_context(
                                 "expected .field-number <name> <i32> before methods, at most 256 fields",
                             ));
                         }
-                        let initial = parts[2].parse::<i32>().map_err(|_| {
-                            Diagnostic::at(text, method_at, "invalid Number field initializer")
-                        })?;
+                        let kind = if parts[0] == ".field-number" {
+                            FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
+                                Diagnostic::at(text, method_at, "invalid Number field initializer")
+                            })?)
+                        } else {
+                            FieldKind::SourceObject(parts[2].clone())
+                        };
                         instance_fields.push(InstanceField {
                             name: parts[1].clone(),
-                            initial,
+                            kind,
                         });
                         i += 1;
                         continue;

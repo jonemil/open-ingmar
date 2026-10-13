@@ -9,16 +9,17 @@ See [receiver design][design] and [runtime evidence][evidence].
 
 ```text
 class = "class" identifier "extends" native-base
-        "{" native-declaration* (number-field | function)+ "}"
+        "{" native-declaration* (number-field | reference-field | function)+ "}"
 native-base = recognized Application.AppBase or WatchUi.View identity
 number-field = "var" identifier "=" signed-number-literal ";"
+reference-field = "var" identifier "as" source-view-class-name ";"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
 Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
 It accepts canonical/qualified, aliased, and imported AppBase/View spellings.
-Number fields are supported below. Static methods, annotations, source
+Number/reference fields are supported below. Static methods, annotations, source
 superclass lookup, and nested/empty classes are unsupported. Classes require at
 least one method. Class names must be unique;
 classes cannot be reopened. Reject class/module/global-function name collisions.
@@ -195,9 +196,11 @@ General object/native-call operations beyond the contracts below are unsupported
 
 ## Source initialization
 
-A declared class may supply `function initialize()`. It must return void,
-accept no parameters, and call the native base initializer exactly once as its
-first statement. These are subset restrictions, not general language rules.
+A declared class may supply `function initialize(...)`. It must return void and
+call the native base initializer exactly once as its first statement. AppBase
+initializers take no parameters; View initializers accept the ordinary supported
+parameter contracts and limit. These are subset restrictions, not general
+language rules.
 Subsequent supported statements may print or call source methods. Initialization
 cannot be selected as the generated onStart entry.
 
@@ -225,7 +228,12 @@ Default lifecycle/View bodies are used only where source does not supply them.
 
 ## Source Views and drawing
 
-`new ClassName()` constructs a declared WatchUi.View subclass with no arguments.
+`new ClassName(arguments)` constructs a declared WatchUi.View subclass. Arguments
+must match its source initialize method's arity and types, including exact source
+reference contracts. Argument expressions run in order before the initializer;
+contextual empty Array arguments use its declared parameter types. The existing
+254-argument/frame limit applies. Native `new WatchUi.View()` still takes no
+arguments.
 Its initializer must satisfy the native-base contract above. Unit validation
 rejects unresolved names, modules, AppBase construction, and missing initializers.
 The result has the non-null native View contract; source identity is retained in
@@ -237,7 +245,7 @@ field access on another instance remains unsupported.
 
 AppBase and View classes may declare up to 256 fields with signed 32-bit decimal
 Number literal initializers. Fields have a fixed Number contract. Uninitialized
-declarations, annotations, non-Number literals, and computed initializers are
+Number declarations, Number annotations, non-Number literals, and computed initializers are
 unsupported. Parentheses around a literal are accepted. These restrictions and
 the field-count limit define our subset, not a device memory limit.
 
@@ -258,7 +266,7 @@ bare names keep existing local/parameter lookup rules. Assignment is a statement
 not a value expression. Compound assignments, arbitrary receiver properties,
 static fields, and source-inherited fields are unsupported.
 
-`ClassDeclaration.fields` holds names and initial Number values. Unit validation
+`ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit validation
 resolves every SelfFieldRead/SelfFieldAssign against its enclosing class; standalone
 method IR retains this ownership obligation. Function validation requires an
 instance receiver, Number assignments, and expression evaluation order.
@@ -277,6 +285,39 @@ constant initialization precedes its source initialize method. Reads lower to
 `getselfv`; writes to `getself`, `spush`, RHS instructions, then `putv`.
 See the [counter example](../../examples/compiler-fields/README.md) and
 [instance isolation evidence](../investigations/compiler-fields.md).
+
+## Source-reference fields
+
+`var target as HelloView;` declares an exact source View reference field.
+The class must resolve across the unit, including forward declarations. The
+256-field limit and name/conflict rules above cover Number and reference fields
+together. Declaration initializers, Null unions, native reference fields, and
+other field kinds are unsupported.
+
+Metadata creates a null slot (key bits zero, type `0x00`, value zero). A source
+initialize method is required to establish the non-null field contract. It must
+assign every reference field before a self call, branch, jump, or return. A
+reference read before that field's assignment is rejected. Assignment must use
+the exact declared source class; native View erasure, another class, and Null
+cannot satisfy it. Requiring this straight-line initialization prefix is our
+bounded checking policy, not Garmin's complete definite-initialization rules.
+Calls that may request System.exit, including transitive source calls and
+constructors, are also rejected until all reference fields are established.
+This conservative call-graph check includes conditional exits; runtime failures
+and additional native callback effects are not proven safe by it.
+
+After initialization, methods may read or replace the field with the same exact
+source class. Field reads retain identity for ordinary instance calls and source
+returns. Access remains limited to `self.<field>`; a getter can forward the
+reference to another caller. Reads/writes preserve the existing evaluation-order
+rules. These contracts apply to typed and saved IR as well as source.
+
+Unit text uses `.field-reference <name> <class>` before method documents.
+Function text reads it with `.read-self %<result> <name> result=source(<class>)`;
+the result claim must match the owning field declaration. Writes use the existing
+`.assign-self <name> %<value>` form. See the
+[retained View example](../../examples/compiler-reference-fields/README.md) and
+[constructor/lifecycle evidence](../investigations/compiler-reference-fields.md).
 
 View callbacks inherit these contracts, including when annotations are omitted:
 

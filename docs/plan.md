@@ -62,11 +62,9 @@ compiling a project.
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
 3. **Add state and input to source Views.** Extend the
-   [source signature example](../examples/compiler-source-signatures/README.md)
-   with object-reference fields and constructor arguments so a delegate can
-   retain the displayed View. Require reference-field initialization before
-   reads or exposure through self calls; keep source identity and native base
-   projection distinct when adding InputDelegate-derived source classes. Keep
+   [retained View example](../examples/compiler-reference-fields/README.md) with
+   InputDelegate-derived source classes. Keep source identity and native base
+   projection distinct when extending the supported native bases. Keep
    initialization and assignability checked through saved IR; extend source
    inheritance when needed.
    Add a View/delegate pair whose input handler updates a counter and

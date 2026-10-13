@@ -27,7 +27,7 @@ mod source_types;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
-    ClassBase, ClassDeclaration, CompilationUnit, FunctionDeclaration, InstanceField,
+    ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
     SourceDiagnostic, UnitError, compile_sources, compile_sources_with_api, parse_unit_ir,
     parse_unit_ir_with_api,
 };
@@ -352,13 +352,15 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Read a declared Number field on the current instance.
-    /// Unit validation resolves the field name against the enclosing class.
+    /// Read a Number or non-null source reference on the current instance.
+    /// Unit validation checks the claimed result against the field declaration
+    /// and prevents reference reads before constructor initialization.
     SelfFieldRead {
         result: ValueId,
         field: String,
+        result_type: ReturnType,
     },
-    /// Replace a declared Number field on the current instance.
+    /// Replace a declared field on the current instance, preserving its type.
     SelfFieldAssign {
         field: String,
         value: ValueId,
@@ -369,10 +371,12 @@ pub enum Operation {
         module: String,
         member: String,
     },
-    /// Construct a zero-argument source class whose unit-validated base is View.
+    /// Allocate a source View and invoke its initializer with ordered arguments.
+    /// Unit validation resolves the class and checks its initializer contract.
     SourceNew {
         result: ValueId,
         class: String,
+        arguments: Vec<ValueId>,
     },
     /// Invoke a catalogue-resolved Void member on a value receiver for effects.
     NativeCallStatement {
@@ -960,11 +964,22 @@ impl Function {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
                 }
-                Operation::SelfFieldRead { result, ref field } => {
+                Operation::SelfFieldRead {
+                    result,
+                    ref field,
+                    ref result_type,
+                } => {
                     if !instance_method {
                         return Err(fail("self field reads require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
+                    if !matches!(
+                        result_type,
+                        ReturnType::Integer | ReturnType::SourceObject(_)
+                    ) {
+                        return Err(fail("unsupported instance field result contract"));
+                    }
+                    types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
                     (Some(result), vec![])
                 }
                 Operation::SelfFieldAssign { ref field, value } => {
@@ -972,8 +987,11 @@ impl Function {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if type_of(value) != ValueType::Integer {
-                        return Err(fail("instance fields require Number values"));
+                    if !matches!(
+                        type_of(value),
+                        ValueType::Integer | ValueType::Object(NativeClass::View)
+                    ) {
+                        return Err(fail("instance fields require Number or source View values"));
                     }
                     (None, vec![value])
                 }
@@ -1043,12 +1061,17 @@ impl Function {
                     types.insert(result, ValueType::FontDefinition);
                     (Some(result), vec![])
                 }
-                Operation::SourceNew { result, ref class } => {
+                Operation::SourceNew {
+                    result,
+                    ref class,
+                    ref arguments,
+                } => {
                     validate_call_names(None, class).map_err(fail)?;
                     native::constructor(NativeClass::View, context)
                         .map_err(|message| fail(&message))?;
+                    validate_call_arguments(arguments, &types).map_err(fail)?;
                     types.insert(result, ValueType::Object(NativeClass::View));
-                    (Some(result), vec![])
+                    (Some(result), arguments.clone())
                 }
                 Operation::NativeCallStatement {
                     receiver,
@@ -1534,6 +1557,7 @@ impl Function {
                                     elements: arguments,
                                     ..
                                 }
+                                | Operation::SourceNew { arguments, .. }
                                 | Operation::ModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
                                     arguments.iter().rev().map(|value| Task::Value(*value)),
@@ -1681,8 +1705,16 @@ impl Function {
                 }
                 Operation::Char { result, value } => format!(".char %{} 0x{value:08x}", result.0),
                 Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
-                Operation::SelfFieldRead { result, ref field } => {
-                    format!(".read-self %{} {field}", result.0)
+                Operation::SelfFieldRead {
+                    result,
+                    ref field,
+                    ref result_type,
+                } => {
+                    format!(
+                        ".read-self %{} {field}{}",
+                        result.0,
+                        call_type_text(result_type)
+                    )
                 }
                 Operation::SelfFieldAssign { ref field, value } => {
                     format!(".assign-self {field} %{}", value.0)
@@ -1697,8 +1729,16 @@ impl Function {
                     ref module,
                     ref member,
                 } => format!(".constant %{} {module} {member}", result.0),
-                Operation::SourceNew { result, ref class } => {
-                    format!(".new-source %{} {class}", result.0)
+                Operation::SourceNew {
+                    result,
+                    ref class,
+                    ref arguments,
+                } => {
+                    let args = arguments
+                        .iter()
+                        .map(|value| format!(" %{}", value.0))
+                        .collect::<String>();
+                    format!(".new-source %{} {class}{args}", result.0)
                 }
                 Operation::ObjectCall {
                     result,

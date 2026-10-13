@@ -71,7 +71,8 @@ separately checked.
 `SourceNew` retains a source class name for unit resolution and application
 binding. Its value uses the native View base contract, with exact constructor
 identity retained as a local refinement for bounded instance dispatch. Unit
-validation requires a View subclass with a validated zero-argument initializer.
+validation requires a View subclass with a validated initializer and matching
+argument contracts.
 
 Exact source-class identity is reconstructed from IR by shared object tracking.
 It follows construction, explicit source parameters/results, local initialization,
@@ -81,7 +82,10 @@ checks call arguments/results. Generic native references, native View parameters
 returns, and array reads erase exact identity. SourceObject contracts carry an
 owned class name while their native API projection remains View. This separates
 exact source assignability from native compatibility without a runtime cast.
-Object-reference fields still need their own initialization model.
+Source-reference fields retain the same exact contract through checked field
+reads and writes. Their null metadata default is hidden behind mandatory source
+initializer assignments; the initialization prefix prevents reads or self calls
+before all reference fields are established.
 
 Native constants retain module/member identity and catalogue type. FONT_MEDIUM
 is a FontDefinition enum value, even though lowering emits its numeric value.
@@ -286,15 +290,16 @@ global/module declarations. Function IR records its receiver requirement; unit
 validation associates it with an owner and resolves explicit self calls within
 that class. The receiver is hidden context, not a first-class semantic value.
 
-Number instance fields belong to class declarations with constant initial values.
-SelfFieldRead/Assign retain symbolic member names and an implicit current receiver;
-unit validation resolves them against the owning class, while function validation
-checks Number writes and effect order. Reads are observable across mutations and
-calls, so saved IR cannot defer an earlier read past a later write. A local captures
-the value when a source expression needs a snapshot. DATA field metadata supplies
-per-instance initialization; it is not a source initializer expression or a shared
-global value. Broader field types require explicit initialization and ownership
-contracts before extending this representation.
+FieldKind separates Number metadata defaults from null source-reference slots
+requiring initializer assignments. SelfFieldRead/Assign retain symbolic names
+and an implicit current receiver. Unit validation checks the owning declaration,
+read/result claims, and exact reference writes; function validation checks effect
+order. Reads are observable across mutations and calls, so saved IR cannot defer
+an earlier read past a later write. A local captures a needed snapshot.
+Reference initialization precedes control flow, self calls, and known shutdown
+effects; exit effects propagate through source call graphs. This bounded prefix
+establishes normal initializer postconditions without interprocedural field-write
+inference or claims about runtime failures and unknown native effects.
 
 Owner-qualified labels distinguish same-name bodies. Application generation
 binds methods to their AppBase or View DATA record and resolves native identity

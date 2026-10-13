@@ -294,6 +294,7 @@ fn expression(
         NativeMember(String),
         SourceMember(String),
         TupleStore,
+        FinishConstructor(usize),
     }
     let mut tasks = vec![Task::Value(root)];
     while let Some(task) = tasks.pop() {
@@ -304,7 +305,9 @@ fn expression(
                         crate::native::constant(module, member, None).expect("validated constant");
                     (Opcode::Ipush1, vec![Operand::Bits(value as u64)])
                 }
-                Operation::SourceNew { class, .. } => {
+                Operation::SourceNew {
+                    class, arguments, ..
+                } => {
                     items.extend([
                         instruction(
                             Opcode::Getmv,
@@ -320,9 +323,10 @@ fn expression(
                             vec![Operand::Symbol("__ciq_native_initialize".into())],
                         ),
                         instruction(Opcode::Dup, vec![Operand::Bits(1)]),
-                        instruction(Opcode::Invokem, vec![Operand::Bits(1)]),
                     ]);
-                    (Opcode::Popv, vec![])
+                    tasks.push(Task::FinishConstructor(arguments.len()));
+                    tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
+                    continue;
                 }
                 Operation::NativeNew {
                     class: crate::NativeClass::Dc,
@@ -498,6 +502,13 @@ fn expression(
                 },
                 vec![],
             ),
+            Task::FinishConstructor(count) => {
+                items.push(instruction(
+                    Opcode::Invokem,
+                    vec![Operand::Bits(count as u64 + 1)],
+                ));
+                (Opcode::Popv, vec![])
+            }
             Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::Binary(kind) => (
                 match kind {
