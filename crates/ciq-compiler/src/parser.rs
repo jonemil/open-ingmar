@@ -593,13 +593,11 @@ impl<'a> Parser<'a> {
             if depth >= 64 {
                 return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
             }
-            if self.peek()? == Kind::Punctuation(']') {
-                return Err(self.error(
-                    open.span.start,
-                    "empty array literals require element-type inference, which is not supported",
-                ));
-            }
-            let mut elements = vec![self.expression(depth + 1)?];
+            let mut elements = if self.peek()? == Kind::Punctuation(']') {
+                Vec::new()
+            } else {
+                vec![self.expression(depth + 1)?]
+            };
             while self.peek()? == Kind::Punctuation(',') {
                 self.token()?;
                 elements.push(self.expression(depth + 1)?);

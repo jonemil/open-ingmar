@@ -6,6 +6,29 @@ pub(crate) struct CallbackSignature {
     pub result: ReturnType,
 }
 
+/// Resolve declared argument types for contextual source construction.
+/// This substitutes Array's element contract without authorizing the call;
+/// executable support, API availability, and actual arguments are checked later.
+pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    let (class, element) = match receiver {
+        api::Type::Named(name) => (name.as_str(), None),
+        api::Type::Array(element) => ("Toybox.Lang.Array", Some(element.as_ref())),
+        _ => return None,
+    };
+    let method = api::core().method(class, member)?.method;
+    Some(
+        method
+            .parameters
+            .iter()
+            .map(|ty| {
+                element
+                    .map(|element| substitute_parameter(ty, "Element", element))
+                    .unwrap_or_else(|| ty.clone())
+            })
+            .collect(),
+    )
+}
+
 /// Resolve a catalogue callback into supported IR contracts. Unknown members,
 /// ordinary methods, and signatures outside the current subset return None.
 pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignature> {

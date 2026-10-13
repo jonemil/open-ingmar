@@ -106,6 +106,9 @@ exercises signed 32-bit constants and immediate-width boundaries.
 The [Number-array literal example](examples/compiler-number-array-literals/README.md)
 checks inferred elements, typed calls, and evaluation order.
 
+The [empty-array example](examples/compiler-empty-arrays/README.md) checks
+contextual construction in returns, arguments, and local assignments.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

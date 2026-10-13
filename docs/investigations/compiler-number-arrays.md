@@ -87,7 +87,7 @@ by `invalid.jungle`; `invalid-sdk.log` retains its diagnostics. Reproduce by
 substituting the rejected argument types above into methods on
 `"A".toUtf8Array()`.
 
-Other element types, contextual empty literals, native object values,
+Other element types, native object values,
 and array stores remain separate work in [the plan][plan].
 
 [example]: ../../examples/compiler-number-arrays/README.md

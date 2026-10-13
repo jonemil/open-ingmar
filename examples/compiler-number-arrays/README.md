@@ -45,10 +45,11 @@ effect
 Conversion produces UTF-8 byte values, but the element contract is Number:
 appending 300 is permitted. Number and Char arrays cannot substitute for each
 other. [Number literals](../compiler-number-array-literals/README.md) use the
-same element contract; empty source literals still await contextual inference.
+same element contract; [empty literals][empty] require a concrete context.
 See the
 [source profile][source], [IR profile][ir], and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#number-arrays
 [ir]: ../../docs/specs/compiler-ir-text.md#array-allocation
 [evidence]: ../../docs/investigations/compiler-number-arrays.md
+[empty]: ../compiler-empty-arrays/README.md

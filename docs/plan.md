@@ -8,7 +8,7 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 1. **Extend core Lang contracts and value types.** Extend Array elements to
-   native object values, infer contextual types for empty literals, and support
+   native object values and support
    ordinary object construction required by source `getInitialView`.
    Keep generic signatures and invariant element
    checking shared across source and saved IR. Comparator sorting and other

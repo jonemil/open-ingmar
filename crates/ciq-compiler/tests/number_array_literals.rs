@@ -55,7 +55,6 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
         "function f() { var a = [null]; }",
         "function f() { var a = [[1]]; }",
         "function f() { var a = [1, null]; }",
-        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return []; }",
         "function f(n as Toybox.Lang.Number or Null) { var a = [n, 1]; }",
         "function f(n as Toybox.Lang.Number or Null) { var a = [n + 1]; }",
         "function f(s as Toybox.Lang.String or Null) { var a = [s.length()]; }",

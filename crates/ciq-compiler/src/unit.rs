@@ -599,19 +599,19 @@ fn compile_sources_context(
             parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let mut calls = source_ir::CallResults::new();
+    let mut calls = source_ir::CallSignatures::new();
     for parsed in &parsed_sources {
         for (module, ast) in &parsed.functions {
             calls.insert(
                 (module.clone().unwrap_or_default(), ast.name.clone()),
-                source_ir::declared_result(ast),
+                source_ir::declared_signature(ast),
             );
         }
         for class in &parsed.classes {
             for ast in &class.methods {
                 calls.insert(
                     (class.name.clone(), ast.name.clone()),
-                    source_ir::declared_result(ast),
+                    source_ir::declared_signature(ast),
                 );
             }
         }
@@ -648,7 +648,7 @@ fn compile_sources_context(
             for ast in &class.methods {
                 method_calls.insert(
                     ("self".into(), ast.name.clone()),
-                    source_ir::declared_result(ast),
+                    source_ir::declared_signature(ast),
                 );
             }
             for ast in class.methods {

@@ -140,6 +140,11 @@ impl Types {
             .and_then(|ty| ArrayElement::from_api_type(candidate(ty)))
     }
 
+    /// Read a stored local's candidate type; final IR checking remains authoritative.
+    pub(crate) fn local_type(&self, local: LocalId) -> Option<&Type> {
+        self.locals.get(&local)
+    }
+
     /// Replace a provisional allocation contract before emitting any array reads.
     pub(crate) fn set_array(&mut self, value: ValueId, local: LocalId, element: ArrayElement) {
         let ty = Type::Array(Box::new(element.api_type()));

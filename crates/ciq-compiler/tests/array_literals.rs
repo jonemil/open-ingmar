@@ -63,7 +63,7 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
 
 #[test]
 fn array_literals_enforce_element_api_and_resource_limits() {
-    for elements in ["", "1", "null", "true", "'a', 1", "['a']", "'a',"] {
+    for elements in ["1", "null", "true", "'a', 1", "['a']", "'a',"] {
         let source = format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Char> {{ return [{elements}]; }}"
         );

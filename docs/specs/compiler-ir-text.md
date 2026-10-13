@@ -151,11 +151,11 @@ order checks apply to allocation even if its result is consumed later.
 API context requires 1.3.0 for Char, or 1.0.0 for Number and Array.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
-or uninitialized element contract is implied. Source literals fill this array
+or uninitialized element contract is implied. Nonempty source literals fill it
 using ordinary local storage, native `add`, and discarded call results.
-The explicit IR element type permits empty allocation even though source `[]`
-awaits contextual typing. See the
-[construction evidence](../investigations/compiler-array-literals.md).
+The explicit IR element type preserves empty allocation after source contextual
+typing. See [nonempty construction](../investigations/compiler-array-literals.md)
+and [empty construction](../investigations/compiler-empty-arrays.md).
 
 ## Array element reads
 

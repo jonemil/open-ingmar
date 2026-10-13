@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Empty arrays](compiler-empty-arrays.md): contextual construction, aliases,
+  typed calls, and allocation API requirements.
 - [Number-array literals](compiler-number-array-literals.md): inferred elements,
   concrete saved-IR contracts, and call order.
 - [Number arrays](compiler-number-arrays.md): UTF-8 conversion, numeric element

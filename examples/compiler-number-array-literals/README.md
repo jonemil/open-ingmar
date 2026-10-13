@@ -35,8 +35,9 @@ Expected output:
 ```
 
 The first element selects Number or Char; mixed elements are rejected without
-coercion. Empty literals remain unsupported. See the [source contract][source]
-and [runtime evidence][evidence].
+coercion. [Empty literals][empty] require a concrete context. See the
+[source contract][source] and [runtime evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#number-arrays
 [evidence]: ../../docs/investigations/compiler-number-array-literals.md
+[empty]: ../compiler-empty-arrays/README.md

@@ -4,13 +4,21 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+/// Extract a supported concrete Array element contract from an expected type.
+fn array_element(ty: &crate::api::Type) -> Option<crate::ArrayElement> {
+    match ty {
+        crate::api::Type::Array(element) => crate::ArrayElement::from_api_type(element),
+        _ => None,
+    }
+}
+
 fn emit(
     source: &str,
     expression: parser::Expression,
     locals: &std::collections::BTreeMap<String, LocalId>,
     parameters: &std::collections::BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallResults,
+    calls: &CallSignatures,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
         parser::ExpressionKind::ArrayLiteral(_) => {
@@ -97,15 +105,18 @@ fn emit(
             operations,
             calls,
         )?,
-        parser::ExpressionKind::Binary { kind, left, right } => {
-            let left = emit(source, *left, locals, parameters, operations, calls)?;
-            let right = emit(source, *right, locals, parameters, operations, calls)?;
-            Operation::Binary {
-                result: ValueId(operations.len() as u32),
-                kind,
-                left,
-                right,
-            }
+        kind @ parser::ExpressionKind::Binary { .. } => {
+            return emit_binary_chain(
+                source,
+                parser::Expression {
+                    kind,
+                    span: expression.span,
+                },
+                locals,
+                parameters,
+                operations,
+                calls,
+            );
         }
         parser::ExpressionKind::Compare { kind, left, right } => {
             let left = emit(source, *left, locals, parameters, operations, calls)?;
@@ -128,13 +139,47 @@ fn emit(
 
 /// Emit array/index operands in order and return their read operation. Keep this
 /// frame separate so long arithmetic trees retain their existing stack budget.
+/// Emit a left-associated arithmetic chain without one Rust frame per term.
+/// Preserve operand order and each operation's original source span; grouped
+/// right operands use the parser's bounded nesting depth.
+fn emit_binary_chain(
+    source: &str,
+    mut expression: parser::Expression,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+    calls: &CallSignatures,
+) -> Result<ValueId, Diagnostic> {
+    let mut chain = Vec::new();
+    while let parser::ExpressionKind::Binary { kind, left, right } = expression.kind {
+        chain.push((kind, *right, expression.span));
+        expression = *left;
+    }
+    let mut left = emit(source, expression, locals, parameters, operations, calls)?;
+    for (kind, right, span) in chain.into_iter().rev() {
+        let right = emit(source, right, locals, parameters, operations, calls)?;
+        let result = ValueId(operations.len() as u32);
+        operations.push(LocatedOperation {
+            operation: Operation::Binary {
+                result,
+                kind,
+                left,
+                right,
+            },
+            span: Some(span),
+        });
+        left = result;
+    }
+    Ok(left)
+}
+
 fn emit_array_read(
     source: &str,
     kind: parser::ExpressionKind,
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallResults,
+    calls: &CallSignatures,
 ) -> Result<Operation, Diagnostic> {
     let parser::ExpressionKind::ArrayRead { array, index } = kind else {
         unreachable!()
@@ -157,7 +202,7 @@ fn emit_call(
     locals: &BTreeMap<String, LocalId>,
     parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
-    calls: &CallResults,
+    calls: &CallSignatures,
 ) -> Result<Operation, Diagnostic> {
     let (receiver, module, member, arguments) = match kind {
         parser::ExpressionKind::ValueCall {
@@ -213,7 +258,7 @@ fn emit_call(
             result,
             result_type: calls
                 .get(&("self".into(), member.clone()))
-                .copied()
+                .map(|signature| signature.result)
                 .unwrap_or(crate::ReturnType::Integer),
             member,
             arguments,
@@ -223,7 +268,7 @@ fn emit_call(
             result,
             result_type: calls
                 .get(&(module.clone().unwrap(), member.clone()))
-                .copied()
+                .map(|signature| signature.result)
                 .unwrap_or(crate::ReturnType::Integer),
             module: module.unwrap(),
             member,
@@ -234,7 +279,8 @@ fn emit_call(
 
 struct Builder<'a> {
     source: &'a str,
-    calls: &'a CallResults,
+    calls: &'a CallSignatures,
+    result_type: crate::ReturnType,
     parameters: BTreeMap<String, usize>,
     operations: Vec<LocatedOperation>,
     types: crate::source_types::Types,
@@ -272,8 +318,18 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        self.snapshot_with_context(expression, locals, None)
+    }
+
+    /// Save an operand, passing an expected array contract to a direct empty literal.
+    fn snapshot_with_context(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        element: Option<crate::ArrayElement>,
+    ) -> Result<parser::Expression, Diagnostic> {
         let span = expression.span;
-        let value = self.value(expression, locals)?;
+        let value = self.value_with_context(expression, locals, element)?;
         let local = self.local_id(span)?;
         self.push(Operation::LocalInitialize { local, value }, Some(span));
         Ok(parser::Expression {
@@ -345,6 +401,13 @@ impl Builder<'_> {
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        if elements.is_empty() {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "empty array literal requires a concrete expected Array element type",
+            ));
+        }
         let array = self.local_id(span)?;
         let element = self.local_id(span)?;
         let result = ValueId(self.operations.len() as u32);
@@ -461,14 +524,15 @@ impl Builder<'_> {
                 receiver,
                 member,
                 arguments,
-            } => E::ValueCall {
-                receiver: Box::new(self.snapshot(*receiver, locals)?),
-                member,
-                arguments: arguments
-                    .into_iter()
-                    .map(|arg| self.snapshot(arg, locals))
-                    .collect::<Result<_, _>>()?,
-            },
+            } => {
+                let receiver = self.snapshot(*receiver, locals)?;
+                let expected = self.native_argument_context(&receiver, &member);
+                E::ValueCall {
+                    receiver: Box::new(receiver),
+                    member,
+                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
+                }
+            }
             E::ModuleCall {
                 module,
                 member,
@@ -486,10 +550,12 @@ impl Builder<'_> {
                     } else {
                         None
                     };
-                let arguments = arguments
-                    .into_iter()
-                    .map(|arg| self.snapshot(arg, locals))
-                    .collect::<Result<_, _>>()?;
+                let expected = if let Some(receiver) = &receiver {
+                    self.native_argument_context(receiver, &member)
+                } else {
+                    self.user_argument_context(&module, &member)
+                };
+                let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
                 if let Some(receiver) = receiver {
                     E::ValueCall {
                         receiver,
@@ -515,15 +581,13 @@ impl Builder<'_> {
         &mut self,
         arguments: Vec<parser::Expression>,
         locals: &BTreeMap<String, LocalId>,
+        expected: &[Option<crate::ArrayElement>],
     ) -> Result<Vec<ValueId>, Diagnostic> {
         let arguments = if arguments
             .iter()
             .any(parser::Expression::needs_materialization)
         {
-            arguments
-                .into_iter()
-                .map(|arg| self.snapshot(arg, locals))
-                .collect::<Result<Vec<_>, _>>()?
+            self.snapshot_arguments(arguments, locals, expected)?
         } else {
             arguments
         };
@@ -532,6 +596,57 @@ impl Builder<'_> {
             .map(|arg| self.value(arg, locals))
             .collect()
     }
+    /// Snapshot call operands in order, supplying declared array argument types.
+    fn snapshot_arguments(
+        &mut self,
+        arguments: Vec<parser::Expression>,
+        locals: &BTreeMap<String, LocalId>,
+        expected: &[Option<crate::ArrayElement>],
+    ) -> Result<Vec<parser::Expression>, Diagnostic> {
+        arguments
+            .into_iter()
+            .enumerate()
+            .map(|(index, argument)| {
+                self.snapshot_with_context(argument, locals, expected.get(index).copied().flatten())
+            })
+            .collect()
+    }
+
+    /// Read array argument expectations from predeclared user call signatures.
+    fn user_argument_context(
+        &self,
+        module: &str,
+        member: &str,
+    ) -> Vec<Option<crate::ArrayElement>> {
+        self.calls
+            .get(&(module.into(), member.into()))
+            .map(|signature| {
+                signature
+                    .parameters
+                    .iter()
+                    .map(|ty| array_element(&ty.api_type()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Read array argument expectations from a snapshotted receiver's declaration.
+    /// This supplies construction context; final validation checks the call.
+    fn native_argument_context(
+        &self,
+        receiver: &parser::Expression,
+        member: &str,
+    ) -> Vec<Option<crate::ArrayElement>> {
+        let parser::ExpressionKind::Temporary(local) = receiver.kind else {
+            return Vec::new();
+        };
+        self.types
+            .local_type(local)
+            .and_then(|ty| crate::native::value_parameters(ty, member))
+            .map(|parameters| parameters.iter().map(array_element).collect())
+            .unwrap_or_default()
+    }
+
     /// Emit a Boolean condition as explicit edges. Evaluate logical operands
     /// left to right and enter the right operand only when the left requires it.
     /// Grouping and negation preserve this flow without cross-block value IDs.
@@ -585,6 +700,36 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<ValueId, Diagnostic> {
+        self.value_with_context(expression, locals, None)
+    }
+
+    /// Build a value, using an expected element contract only for direct `[]`.
+    /// Nonempty literals keep their inferred contract and undergo IR validation.
+    fn value_with_context(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        expected: Option<crate::ArrayElement>,
+    ) -> Result<ValueId, Diagnostic> {
+        if matches!(&expression.kind, parser::ExpressionKind::ArrayLiteral(elements) if elements.is_empty())
+        {
+            let element_type = expected.ok_or_else(|| {
+                Diagnostic::at(
+                    self.source,
+                    expression.span.start,
+                    "empty array literal requires a concrete expected Array element type",
+                )
+            })?;
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::ArrayNew {
+                    result,
+                    element_type,
+                },
+                Some(expression.span),
+            );
+            return Ok(result);
+        }
         let expression = if expression.needs_materialization() {
             self.prepare(expression, locals)?
         } else {
@@ -669,7 +814,8 @@ impl Builder<'_> {
                             },
                         )
                     })?;
-                    let value = self.value(value, locals)?;
+                    let expected = self.types.local_type(local).and_then(array_element);
+                    let value = self.value_with_context(value, locals, expected)?;
                     self.push(Operation::LocalAssign { local, value }, Some(span));
                 }
                 parser::Statement::BaseInitialize { span } => {
@@ -693,7 +839,7 @@ impl Builder<'_> {
                             "a local/parameter cannot be used as the System module receiver",
                         ));
                     }
-                    let arguments = self.arguments(arguments, locals)?;
+                    let arguments = self.arguments(arguments, locals, &[])?;
                     self.push(
                         Operation::NativeModuleCallStatement {
                             module,
@@ -727,7 +873,8 @@ impl Builder<'_> {
                         )?;
                         self.push(Operation::Discard { value }, Some(span));
                     } else {
-                        let arguments = self.arguments(arguments, locals)?;
+                        let expected = self.user_argument_context(&module, &member);
+                        let arguments = self.arguments(arguments, locals, &expected)?;
                         let operation = if module == "self" {
                             Operation::SelfCallStatement { member, arguments }
                         } else {
@@ -743,7 +890,11 @@ impl Builder<'_> {
                 parser::Statement::Return { value, .. } => {
                     let operation = if let Some(value) = value {
                         Operation::Return {
-                            value: self.value(value, locals)?,
+                            value: self.value_with_context(
+                                value,
+                                locals,
+                                array_element(&self.result_type.api_type()),
+                            )?,
                         }
                     } else {
                         Operation::ReturnVoid
@@ -832,17 +983,23 @@ pub(crate) fn build(
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    build_body(source, ast, false, context, &CallResults::new())
+    build_body(source, ast, false, context, &CallSignatures::new())
 }
 
-pub(crate) type CallResults = BTreeMap<(String, String), crate::ReturnType>;
+#[derive(Clone)]
+pub(crate) struct CallSignature {
+    pub result: crate::ReturnType,
+    pub parameters: Vec<crate::ParameterType>,
+}
+
+pub(crate) type CallSignatures = BTreeMap<(String, String), CallSignature>;
 
 pub(crate) fn build_with_calls(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
     method: bool,
-    calls: &CallResults,
+    calls: &CallSignatures,
 ) -> Result<Function, Diagnostic> {
     build_body(source, ast, method, context, calls)
 }
@@ -852,7 +1009,7 @@ fn build_body(
     ast: parser::ParsedFunction,
     method: bool,
     context: Option<crate::api::ApiContext>,
-    calls: &CallResults,
+    calls: &CallSignatures,
 ) -> Result<Function, Diagnostic> {
     let value_result = declared_result(&ast) != crate::ReturnType::Void;
     let result_type = ast.result_type;
@@ -870,6 +1027,11 @@ fn build_body(
     let mut builder = Builder {
         source,
         calls,
+        result_type: result_type.unwrap_or(if value_result {
+            crate::ReturnType::Integer
+        } else {
+            crate::ReturnType::Void
+        }),
         parameters: ast
             .parameters
             .into_iter()
@@ -986,6 +1148,18 @@ pub(crate) fn declared_result(ast: &parser::ParsedFunction) -> crate::ReturnType
         } else {
             crate::ReturnType::Void
         })
+}
+
+/// Read user-declared call contracts before constructing any function body.
+pub(crate) fn declared_signature(ast: &parser::ParsedFunction) -> CallSignature {
+    CallSignature {
+        result: declared_result(ast),
+        parameters: ast
+            .parameter_types
+            .iter()
+            .map(|ty| ty.unwrap_or(crate::ParameterType::Integer))
+            .collect(),
+    }
 }
 
 fn has_value_return(statements: &[parser::Statement]) -> bool {

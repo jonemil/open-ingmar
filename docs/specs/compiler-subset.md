@@ -51,7 +51,7 @@ primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
-     | "[" argument-list "]"
+     | "[" argument-list? "]"
 ```
 
 Identifiers use ASCII letters/underscore followed by ASCII
@@ -760,12 +760,11 @@ Nonempty Char-array literals accept Char-valued expressions, for example
 `['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a
 fresh non-null `Array<Char>` and may receive postfix reads/calls. Number literals
 follow the [Number-array contract](#number-arrays). Other element types, mixed
-types, nested arrays, trailing commas, and empty source literals
-are rejected. Even an annotated result does not yet supply contextual element
-typing for `[]`.
+types, nested arrays, and trailing commas are rejected. Empty literals follow
+the [contextual construction rules](#empty-array-literals).
 
-Construction allocates an empty typed array before evaluating elements left to
-right, once each, and appends each result through `add(Char)`. Two hidden local
+Nonempty construction allocates an empty typed array before evaluating elements
+left to right, once each, and appends each result through `add(Char)`. Two hidden local
 slots retain the array and current element across logical-expression joins;
 they share the normal frame budget. The current operation/nesting limits also
 apply. An allocation or append failure remains a runtime obligation. See
@@ -858,14 +857,42 @@ user/native calls, arithmetic, and element reads can supply the first element.
 Nullable values require the usual branch proof, including when used first.
 Allocation precedes element effects; evaluation and typed append proceed left
 to right as for Char literals. This lowering requires API 1.3.0 for `add`.
-Empty literals still lack contextual inference; explicit saved IR can allocate
-an empty Number array. See the [literal evidence][number-array-literals].
+Empty construction uses [contextual types](#empty-array-literals). See the
+[literal evidence][number-array-literals].
 
 Arrays must be converted to String before
 printing, and cannot be console entry results. See the
 [Number-array evidence](../investigations/compiler-number-arrays.md).
 
 [number-array-literals]: ../investigations/compiler-number-array-literals.md
+
+## Empty array literals
+
+A direct `[]` requires a concrete expected `Array<Number>` or `Array<Char>`.
+Parentheses preserve direct context. Supported contexts are:
+
+- An explicitly annotated array return: `return [];`.
+- A typed user-call argument, including module, cross-file, and self calls.
+- Assignment to an initialized array local: `var a = [1]; a = [];`.
+- A native argument whose resolved contract is an array, such as `a.addAll([])`.
+
+The literal allocates a fresh empty array at its position in evaluation order.
+Reassignment replaces the local reference; existing aliases retain the old
+array. No `add` call or element-storage temporary is emitted. Empty Number
+allocation requires API 1.0.0; Char element availability requires 1.3.0.
+Enclosing calls retain their own API requirements.
+
+Context applies only to the direct empty literal, not through arbitrary
+operators or calls. `var a = []`, `[].size()`, and `return [].reverse()` are
+rejected, including the last case under an array return annotation. Local type
+annotations, nested arrays, and inference from later mutations are unsupported.
+Nonempty literals keep their independently inferred contract; argument/return
+context cannot coerce mixed elements or substitute Number and Char arrays.
+Saved IR records the concrete allocation type and rechecks all uses. See the
+[complete example][empty-example] and [evidence][empty-evidence].
+
+[empty-example]: ../../examples/compiler-empty-arrays/README.md
+[empty-evidence]: ../investigations/compiler-empty-arrays.md
 
 ## Nullable results
 

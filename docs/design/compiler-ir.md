@@ -48,7 +48,16 @@ shared operator/native contracts, parameter annotations, fixed local types,
 and user-call result declarations. It can select a nullable value's possible
 non-null class, but does not establish a branch proof. Whole-function validation
 checks every element and use, including null safety; saved IR carries no
-inference placeholder. Empty source literals still need contextual inference.
+inference placeholder.
+
+Direct empty literals receive an element contract from a declared return,
+user-call parameter, established array local assignment, or catalogue-resolved
+native argument. The declaration pass collects user parameter/result contracts
+before body construction, including cross-file and self calls. A native
+receiver is evaluated and snapshotted before its generic argument types are
+resolved. Context selects an allocation contract; it does not authorize a call
+or coerce a nonempty literal. Unsupported or ambiguous context is diagnosed.
+Empty construction emits only `ArrayNew`, without append or element locals.
 
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.
