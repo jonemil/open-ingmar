@@ -28,6 +28,7 @@ pub(crate) struct Names {
     bindings: BTreeMap<String, NativeModule>,
     app_base: bool,
     view: bool,
+    behavior_delegate: bool,
 }
 
 impl Names {
@@ -46,8 +47,10 @@ impl Names {
             .expect("supported module must have a catalogue declaration");
         let canonical_name = declaration.name.rsplit('.').next().unwrap();
         let name = alias.unwrap_or(canonical_name);
-        if matches!(name, "self" | "Toybox" | "AppBase" | "View")
-            || (name == "Application" && module != NativeModule::Application)
+        if matches!(
+            name,
+            "self" | "Toybox" | "AppBase" | "View" | "BehaviorDelegate"
+        ) || (name == "Application" && module != NativeModule::Application)
             || (name == "System" && module != NativeModule::System)
             || (name == "WatchUi" && module != NativeModule::WatchUi)
             || (name == "Graphics" && module != NativeModule::Graphics)
@@ -58,6 +61,7 @@ impl Names {
         self.bindings.insert(name.into(), module);
         self.app_base |= import && module == NativeModule::Application;
         self.view |= import && module == NativeModule::WatchUi;
+        self.behavior_delegate |= import && module == NativeModule::WatchUi;
         Ok(())
     }
 
@@ -66,6 +70,7 @@ impl Names {
         self.bindings.contains_key(name)
             || (self.app_base && name == "AppBase")
             || (self.view && name == "View")
+            || (self.behavior_delegate && name == "BehaviorDelegate")
     }
 
     /// Resolve an alias or supported canonical module path to a native identity.
@@ -96,6 +101,15 @@ impl Names {
         }
         path.rsplit_once('.').is_some_and(|(module, member)| {
             member == "View" && self.module(module) == Some(NativeModule::WatchUi)
+        })
+    }
+    /// Resolve the supported behavior delegate base through WatchUi bindings.
+    pub fn behavior_delegate(&self, path: &str) -> bool {
+        if path == "BehaviorDelegate" {
+            return self.behavior_delegate;
+        }
+        path.rsplit_once('.').is_some_and(|(module, member)| {
+            member == "BehaviorDelegate" && self.module(module) == Some(NativeModule::WatchUi)
         })
     }
 }

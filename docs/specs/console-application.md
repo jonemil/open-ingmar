@@ -88,6 +88,9 @@ Fixed native symbol IDs in this profile:
 | toLower | `0x008000be` |
 | toUpper | `0x008000bf` |
 | View | `0x0080019f` |
+| BehaviorDelegate | `0x00800064` |
+| requestUpdate | `0x008001a2` |
+| onSelect | `0x008003f3` |
 | onShow | `0x00800203` |
 | onUpdate | `0x00800204` |
 | onHide | `0x00800205` |
@@ -140,6 +143,8 @@ Eight unsigned sections, in order:
 4. CODE: generated lifecycle followed by unit bodies in declaration order.
 5. IMPORTS (`0xc1a557b1`): u16 count `2` and two `(module-ID, member-ID)`
    u32 pairs, `Toybox_Application/AppBase` then `Toybox_WatchUi/View`.
+   Source BehaviorDelegate subclasses add a third pair,
+   `Toybox_WatchUi/BehaviorDelegate`, with count `3`.
 6. RESOURCES: u16 count zero and deterministic trailing zero padding.
 7. PERMISSIONS (`0x6000db01`): u16 count zero.
 8. EXCEPTIONS: u16 count zero.
@@ -187,7 +192,7 @@ exported and reconstructed through the existing section-project tools.
 ## Source class startup
 
 A unit containing [source classes](compiler-classes.md) must contain exactly one
-AppBase class, optionally with View subclasses, and select a zero-parameter
+AppBase class, optionally with View/BehaviorDelegate subclasses, and select a zero-parameter
 startup method with `Class.method`,
 or select `Class.onStart` when the source supplies that native callback.
 The global application field and ENTRY_POINTS class identity remain symbol `1`,
@@ -204,7 +209,7 @@ Source `initialize` follows the
 [initializer contract](compiler-classes.md#source-initialization) and owns its
 single method record when supplied. Source onStart similarly follows its native
 callback contract and replaces the startup wrapper. Source getInitialView
-replaces the generated callback with its validated one-view result. Source
+replaces the generated callback with its validated View or View/delegate result. Source
 onStop binds the shutdown callback; methods named AppBase remain unsupported.
 
 Source Views receive distinct symbols and DATA records with parent globals,
@@ -212,6 +217,11 @@ native extends word `0x40000001` (WatchUi.View import index one), and a View bas
 field with that same reference. Their native constructor wrappers invoke View's
 constructor; `initialize`, onShow, onUpdate, and onHide fields point to source
 CODE where supplied. Source construction selects the class through globals.
+Source BehaviorDelegate subclasses use the same record/wrapper structure with
+extends/base-field reference `0x40000002` (import index two), base symbol
+`0x00800064`, and an onSelect method record bound to `0x008003f3` when supplied.
+Their reference fields hold initialized View targets. See
+[input evidence](../investigations/compiler-input-counter.md).
 Number instance fields follow the
 [class field contract](compiler-classes.md#number-instance-fields),
 with type `0x01`, key bits zero, and literal initial values. General object-member

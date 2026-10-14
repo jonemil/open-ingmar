@@ -7,7 +7,10 @@ pub(crate) fn constructor(
     class: crate::NativeClass,
     context: Option<api::ApiContext>,
 ) -> Result<(), String> {
-    if class != crate::NativeClass::View {
+    if !matches!(
+        class,
+        crate::NativeClass::View | crate::NativeClass::BehaviorDelegate
+    ) {
         return Err("native class has no supported constructor".into());
     }
     let method = if let Some(context) = context {
@@ -26,6 +29,12 @@ pub(crate) fn constructor(
 pub(crate) struct CallbackSignature {
     pub parameters: Vec<ParameterType>,
     pub result: ReturnType,
+    alternative: Option<ReturnType>,
+}
+impl CallbackSignature {
+    pub(crate) fn accepts_result(&self, result: &ReturnType) -> bool {
+        &self.result == result || self.alternative.as_ref() == Some(result)
+    }
 }
 
 /// Resolve the bounded font constant with its enum type and published value.
@@ -92,12 +101,19 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
         .collect::<Option<Vec<_>>>()?;
     let result = [
         ReturnType::Integer,
+        ReturnType::Boolean,
         ReturnType::Void,
         ReturnType::Tuple(crate::TupleShape::OneView),
     ]
     .into_iter()
     .find(|candidate| accepts(&method.result, &candidate.api_type()))?;
-    Some(CallbackSignature { parameters, result })
+    let alternative = accepts(&method.result, &crate::TupleShape::ViewDelegate.api_type())
+        .then_some(ReturnType::Tuple(crate::TupleShape::ViewDelegate));
+    Some(CallbackSignature {
+        parameters,
+        result,
+        alternative,
+    })
 }
 
 /// Resolve a value-call contract through the catalogue, then require its bounded
@@ -348,7 +364,12 @@ pub(crate) fn module_statement(
     if method.parameters != arguments {
         return Err("native call argument types do not match its API contract".into());
     }
-    if method.result != api::Type::Void || (module, member) != ("Toybox.System", "exit") {
+    if method.result != api::Type::Void
+        || !matches!(
+            (module, member),
+            ("Toybox.System", "exit") | ("Toybox.WatchUi", "requestUpdate")
+        )
+    {
         return Err("native module member has no supported statement lowering".into());
     }
     Ok(())

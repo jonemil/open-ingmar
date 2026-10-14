@@ -65,7 +65,11 @@ pub fn symbol_bindings(
                 field.to_string()
             } else if matches!(
                 alias.as_str(),
-                "__ciq_native_clear" | "__ciq_native_setColor" | "__ciq_native_drawText"
+                "__ciq_native_clear"
+                    | "__ciq_native_setColor"
+                    | "__ciq_native_drawText"
+                    | "__ciq_native_BehaviorDelegate"
+                    | "__ciq_native_requestUpdate"
             ) {
                 alias.strip_prefix("__ciq_native_").unwrap().to_string()
             } else if alias == "__ciq_native_AppBase" {

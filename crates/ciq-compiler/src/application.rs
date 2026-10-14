@@ -49,6 +49,9 @@ const TO_UPPER: u32 = 0x008000bf;
 const PRINTLN: u32 = 0x00800067;
 const EXIT: u32 = 0x0080006d;
 const VIEW: u32 = 0x0080019f;
+const BEHAVIOR_DELEGATE: u32 = 0x00800064;
+const ON_SELECT: u32 = 0x008003f3;
+const REQUEST_UPDATE: u32 = 0x008001a2;
 const APP_BASE: u32 = 0x0080029c;
 const ON_START: u32 = 0x0080029f;
 const ON_STOP: u32 = 0x008002a1;
@@ -204,21 +207,22 @@ fn lifecycle(
 /// Generate an unsigned, template-free console watch application from unit IR.
 ///
 /// Uses the bootstrap profile tested with SDK 9.2.0 and Forerunner 265: version-2
-/// DATA records, fixed native symbol IDs, two native-class imports, generated
+/// DATA records, fixed native symbol IDs, native-class imports, generated
 /// lifecycle methods, and empty resources/permissions/exceptions. The entry must
 /// be a zero-parameter integer-return or void global function, or a method in
-/// the sole declared AppBase class, alongside optional source View subclasses.
+/// the sole declared AppBase class, alongside optional source View and
+/// BehaviorDelegate subclasses.
 /// Class entries use Class.method names and current-receiver lookup.
 /// onStart invokes it once and prints only integer
 /// results; getInitialView returns a blank native View unless a validated source
-/// callback supplies a one-view positional result. Source callbacks that
+/// callback supplies a View or View/delegate positional result. Source callbacks that
 /// collide with generated lifecycle/base fields are rejected, except a validated
 /// source initialize method, which replaces the default initializer's DATA target.
 /// A validated source onStart also replaces its wrapper and requires selecting
 /// Class.onStart; the runtime supplies its nullable Dictionary argument directly.
 /// A source onStop is bound as the native shutdown callback with the same
 /// Dictionary-or-null parameter and Void result; it is not a bootstrap entry.
-/// Source getInitialView has no parameters, returns the OneView tuple shape,
+/// Source getInitialView has no parameters, returns a supported View tuple shape,
 /// and replaces the generated callback's DATA field and CODE body. Callback
 /// shape validation happens in unit IR, including for resumed text input.
 ///
@@ -348,6 +352,9 @@ pub fn build_console_application(
         ("toLower".into(), TO_LOWER),
         ("toUpper".into(), TO_UPPER),
         ("View".into(), VIEW),
+        ("BehaviorDelegate".into(), BEHAVIOR_DELEGATE),
+        ("onSelect".into(), ON_SELECT),
+        ("requestUpdate".into(), REQUEST_UPDATE),
         ("AppBase".into(), APP_BASE),
         ("onStart".into(), ON_START),
         ("onStop".into(), ON_STOP),
@@ -403,6 +410,8 @@ pub fn build_console_application(
         ("__ciq_sdk_System".into(), SYSTEM),
         ("__ciq_sdk_WatchUi".into(), WATCH_UI),
         ("__ciq_native_View".into(), VIEW),
+        ("__ciq_native_BehaviorDelegate".into(), BEHAVIOR_DELEGATE),
+        ("__ciq_native_requestUpdate".into(), REQUEST_UPDATE),
         ("__ciq_source_globals".into(), GLOBALS),
         ("__ciq_native_setColor".into(), 0x0080020b),
         ("__ciq_native_clear".into(), 0x00800239),
@@ -479,11 +488,17 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+        .filter(|class| class.base.constructed_class().is_some())
     {
         items.extend([
             Item::Label(format!("__ciq_ctor_{}", source_class.name)),
-            instruction(Opcode::Getselfv, vec![sym("__ciq_native_View")]),
+            instruction(
+                Opcode::Getselfv,
+                vec![sym(&format!(
+                    "__ciq_native_{}",
+                    source_class.base.api_name().rsplit('.').next().unwrap()
+                ))],
+            ),
             instruction(Opcode::Getsv, vec![sym("__ciq_app_init")]),
             instruction(Opcode::Invokemz, vec![]),
             instruction(Opcode::Return, vec![]),
@@ -521,7 +536,7 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+        .filter(|class| class.base.constructed_class().is_some())
     {
         global_fields.push(field(
             ids[&source_class.name],
@@ -607,12 +622,17 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base == crate::ClassBase::WatchUiView)
+        .filter(|class| class.base.constructed_class().is_some())
     {
         let ctor_label = format!("__ciq_ctor_{}", source_class.name);
+        let (base_symbol, import_word) = match source_class.base {
+            crate::ClassBase::WatchUiView => (VIEW, 0x40000001),
+            crate::ClassBase::WatchUiBehaviorDelegate => (BEHAVIOR_DELEGATE, 0x40000002),
+            crate::ClassBase::ApplicationAppBase => unreachable!("AppBase emitted separately"),
+        };
         let mut fields = vec![
             method(INIT, 0x30, &ctor_label),
-            field(VIEW, 0x70, 7, Reference::Raw(0x40000001)),
+            field(base_symbol, 0x70, 7, Reference::Raw(import_word)),
         ];
         fields.extend(source_class.fields.iter().map(|declaration| {
             field(
@@ -642,7 +662,7 @@ pub fn build_console_application(
         classes.push(class(
             &format!("__ciq_data_class_{}", source_class.name),
             [
-                Some(Reference::Raw(0x40000001)),
+                Some(Reference::Raw(import_word)),
                 None,
                 Some(Reference::Raw(GLOBALS)),
                 None,
@@ -714,9 +734,19 @@ pub fn build_console_application(
     for word in [GLOBALS, 1, 0x82, 0x26, 1] {
         entry_points.extend(word.to_be_bytes());
     }
-    let mut imports = 2u16.to_be_bytes().to_vec();
+    let has_delegate = unit
+        .classes()
+        .iter()
+        .any(|class| class.base == crate::ClassBase::WatchUiBehaviorDelegate);
+    let mut imports = (if has_delegate { 3u16 } else { 2u16 })
+        .to_be_bytes()
+        .to_vec();
     for word in [APPLICATION, APP_BASE, WATCH_UI, VIEW] {
         imports.extend(word.to_be_bytes());
+    }
+    if has_delegate {
+        imports.extend(WATCH_UI.to_be_bytes());
+        imports.extend(BEHAVIOR_DELEGATE.to_be_bytes());
     }
     let mut sections = vec![
         (0xd000d00d, header),

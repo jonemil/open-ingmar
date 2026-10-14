@@ -55,7 +55,10 @@ same builder. A linker or new crate is unnecessary for the current profile.
 
 Debug tables, launcher assets, named views, and resource-language tables are
 omitted in this profile. The default native View stays blank; a source
-getInitialView can instead construct a source View with drawing callbacks.
+getInitialView can supply a source View with drawing callbacks and an input
+delegate retaining that View. Import and native-base references distinguish
+View from BehaviorDelegate; Boolean onSelect callbacks update the retained
+state and request drawing.
 Entry prints and, for integer entries, its result provide console observations.
 Void entries run once with their result discarded and no wrapper print;
 [the void-call experiment](../investigations/compiler-void.md) verifies this path.

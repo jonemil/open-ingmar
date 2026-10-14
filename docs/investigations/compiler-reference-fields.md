@@ -84,8 +84,8 @@ InputDelegate. Its `onSelect()` callback takes no arguments, returns Boolean
 (`true` means handled), and is available since API 1.2.0. Start/Enter or a tap
 typically triggers selection. This makes it a useful first delegate probe
 without requiring KeyEvent handling. Target-specific input dispatch and native
-class metadata remain to be tested; this is a proposed experiment, not runtime
-evidence. See the [plan](../plan.md#next-work) for implementation sequencing.
+class metadata are examined in the [input counter follow-up](compiler-input-counter.md);
+this section records the public contract used to choose that experiment.
 
 [example]: ../../examples/compiler-reference-fields/README.md
 [BehaviorDelegate]: https://developer.garmin.com/connect-iq/api-docs/Toybox/WatchUi/BehaviorDelegate.html

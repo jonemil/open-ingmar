@@ -1,5 +1,16 @@
 # SDK support scripts
 
+## Input counter check
+
+`check-input-counter.py` runs the independently authored
+[input counter](../examples/compiler-input-counter/README.md) on Forerunner 265,
+sends three taps using XTest, and checks selection/redraw values. Run it under
+a fresh `xvfb-run -a -s '-screen 0 1280x1024x24'` display without a window manager:
+`python3 scripts/check-input-counter.py --prg <program.prg> --output-dir <new-dir>`.
+It retains console/session/simulator logs and a screenshot; review the visible
+counter separately. This is a specimen-specific check, not general GUI automation.
+The simulator's default skin/window placement and X11/Xtst libraries are required.
+
 ## Preview repository documentation
 
 ```sh

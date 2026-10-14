@@ -102,6 +102,7 @@ impl FunctionDeclaration {
 pub enum ClassBase {
     ApplicationAppBase,
     WatchUiView,
+    WatchUiBehaviorDelegate,
 }
 impl ClassBase {
     /// Return the canonical native API identity of this superclass.
@@ -109,6 +110,7 @@ impl ClassBase {
         match self {
             Self::ApplicationAppBase => "Toybox.Application.AppBase",
             Self::WatchUiView => "Toybox.WatchUi.View",
+            Self::WatchUiBehaviorDelegate => "Toybox.WatchUi.BehaviorDelegate",
         }
     }
     /// Return the native value type produced by supported source construction.
@@ -117,12 +119,14 @@ impl ClassBase {
         match self {
             Self::ApplicationAppBase => None,
             Self::WatchUiView => Some(crate::NativeClass::View),
+            Self::WatchUiBehaviorDelegate => Some(crate::NativeClass::BehaviorDelegate),
         }
     }
     pub(crate) fn text(self) -> &'static str {
         match self {
             Self::ApplicationAppBase => "Application.AppBase",
             Self::WatchUiView => "WatchUi.View",
+            Self::WatchUiBehaviorDelegate => "WatchUi.BehaviorDelegate",
         }
     }
 }
@@ -379,7 +383,10 @@ impl CompilationUnit {
             for field in &class.fields {
                 if !valid(&field.name)
                     || reserved(&field.name)
-                    || matches!(field.name.as_str(), "View" | "AppBase" | "init")
+                    || matches!(
+                        field.name.as_str(),
+                        "View" | "AppBase" | "BehaviorDelegate" | "init"
+                    )
                     || crate::api::core()
                         .method(class.base.api_name(), &field.name)
                         .is_some()
@@ -498,7 +505,7 @@ impl CompilationUnit {
                 .flatten();
             if let Some(signature) = callback {
                 if function.parameter_types() != signature.parameters
-                    || function.return_type() != signature.result
+                    || !signature.accepts_result(&function.return_type())
                 {
                     return Err(fail(
                         Some(index),
@@ -697,7 +704,7 @@ impl CompilationUnit {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "source View construction requires a declared initializer".into(),
+                            "source construction requires a declared initializer".into(),
                         ));
                     }
                 }
@@ -1196,12 +1203,14 @@ fn parse_unit_ir_context(
             [
                 ".class",
                 name,
-                base @ ("Application.AppBase" | "WatchUi.View"),
+                base @ ("Application.AppBase" | "WatchUi.View" | "WatchUi.BehaviorDelegate"),
             ] => {
                 let base = if *base == "Application.AppBase" {
                     ClassBase::ApplicationAppBase
-                } else {
+                } else if *base == "WatchUi.View" {
                     ClassBase::WatchUiView
+                } else {
+                    ClassBase::WatchUiBehaviorDelegate
                 };
                 if let Some(context) = context {
                     context

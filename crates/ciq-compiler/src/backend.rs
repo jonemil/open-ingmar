@@ -137,10 +137,12 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     instruction(
                         Opcode::Getselfv,
                         vec![Operand::Symbol(
-                            if base == crate::ClassBase::ApplicationAppBase {
-                                "__ciq_native_AppBase"
-                            } else {
-                                "__ciq_native_View"
+                            match base {
+                                crate::ClassBase::ApplicationAppBase => "__ciq_native_AppBase",
+                                crate::ClassBase::WatchUiView => "__ciq_native_View",
+                                crate::ClassBase::WatchUiBehaviorDelegate => {
+                                    "__ciq_native_BehaviorDelegate"
+                                }
                             }
                             .into(),
                         )],
@@ -253,12 +255,19 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 items.push(instruction(Opcode::Popv, vec![]));
                 continue;
             }
-            Operation::NativeModuleCallStatement { ref member, .. } => {
-                // Validation currently admits only zero-argument System.exit.
+            Operation::NativeModuleCallStatement {
+                ref module,
+                ref member,
+                ..
+            } => {
+                // Validation admits only the supported zero-argument native functions.
                 items.push(instruction(
                     Opcode::Getmv,
                     vec![
-                        Operand::Symbol("__ciq_sdk_System".into()),
+                        Operand::Symbol(format!(
+                            "__ciq_sdk_{}",
+                            module.rsplit('.').next().unwrap()
+                        )),
                         Operand::Symbol(format!("__ciq_native_{member}")),
                     ],
                 ));
@@ -294,6 +303,7 @@ fn expression(
         NativeMember(String),
         SourceMember(String),
         TupleStore,
+        TupleElement(ValueId, usize),
         FinishConstructor(usize),
     }
     let mut tasks = vec![Task::Value(root)];
@@ -334,17 +344,20 @@ fn expression(
                 } => unreachable!("Dc construction is not admitted"),
                 Operation::TupleNew { elements, .. } => {
                     items.extend([
-                        instruction(Opcode::Ipush1, vec![Operand::Bits(1)]),
+                        instruction(Opcode::Ipush1, vec![Operand::Bits(elements.len() as u64)]),
                         instruction(Opcode::Newa, vec![]),
-                        instruction(Opcode::Dup, vec![Operand::Bits(0)]),
-                        instruction(Opcode::Ipushz, vec![]),
                     ]);
-                    tasks.push(Task::TupleStore);
-                    tasks.push(Task::Value(elements[0]));
+                    tasks.extend(
+                        elements
+                            .iter()
+                            .enumerate()
+                            .rev()
+                            .map(|(index, value)| Task::TupleElement(*value, index)),
+                    );
                     continue;
                 }
                 Operation::NativeNew {
-                    class: crate::NativeClass::View,
+                    class: class @ (crate::NativeClass::View | crate::NativeClass::BehaviorDelegate),
                     ..
                 } => {
                     items.extend([
@@ -352,7 +365,10 @@ fn expression(
                             Opcode::Getmv,
                             vec![
                                 Operand::Symbol("__ciq_sdk_WatchUi".into()),
-                                Operand::Symbol("__ciq_native_View".into()),
+                                Operand::Symbol(format!(
+                                    "__ciq_native_{}",
+                                    class.name().rsplit('.').next().unwrap()
+                                )),
                             ],
                         ),
                         instruction(Opcode::Newc, vec![]),
@@ -508,6 +524,16 @@ fn expression(
                     vec![Operand::Bits(count as u64 + 1)],
                 ));
                 (Opcode::Popv, vec![])
+            }
+            Task::TupleElement(value, index) => {
+                items.push(instruction(Opcode::Dup, vec![Operand::Bits(0)]));
+                items.push(instruction(
+                    Opcode::Ipush1,
+                    vec![Operand::Bits(index as u64)],
+                ));
+                tasks.push(Task::TupleStore);
+                tasks.push(Task::Value(value));
+                continue;
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::Binary(kind) => (

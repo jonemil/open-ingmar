@@ -279,6 +279,8 @@ impl<'a> Parser<'a> {
                 || (self.native_base == Some(crate::ClassBase::ApplicationAppBase)
                     && name == "AppBase")
                 || (self.native_base == Some(crate::ClassBase::WatchUiView) && name == "View")
+                || (self.native_base == Some(crate::ClassBase::WatchUiBehaviorDelegate)
+                    && name == "BehaviorDelegate")
             {
                 return Err(self.error(
                     token.span.start,
@@ -641,21 +643,29 @@ impl<'a> Parser<'a> {
         } else if self.peek()? == Kind::Word("new") {
             let open = self.token()?;
             let path = self.path()?;
-            let native = self.names.view(&path);
-            if !native && path.contains('.') {
+            let native = self
+                .names
+                .view(&path)
+                .then_some(crate::NativeClass::View)
+                .or_else(|| {
+                    self.names
+                        .behavior_delegate(&path)
+                        .then_some(crate::NativeClass::BehaviorDelegate)
+                });
+            if native.is_none() && path.contains('.') {
                 return Err(self.error(open.span.start, "unsupported qualified construction class"));
             }
             let (arguments, end) = self.call_arguments(open.span.start, depth)?;
-            if native && !arguments.is_empty() {
+            if native.is_some() && !arguments.is_empty() {
                 return Err(self.error(
                     open.span.start,
-                    "supported View construction requires zero arguments",
+                    "supported native construction requires zero arguments",
                 ));
             }
             self.node(
-                if native {
+                if let Some(class) = native {
                     ExpressionKind::NativeNew {
-                        class: crate::NativeClass::View,
+                        class,
                         qualifier: path.split('.').next().unwrap().into(),
                     }
                 } else {
@@ -853,6 +863,10 @@ impl<'a> Parser<'a> {
                         && (module == "View" || self.names.view(module))
                     {
                         "WatchUi.View"
+                    } else if self.native_base.is_some()
+                        && (module == "BehaviorDelegate" || self.names.behavior_delegate(module))
+                    {
+                        "WatchUi.BehaviorDelegate"
                     } else if module.contains('.') {
                         return Err(
                             self.error(token.span.start, "unsupported qualified module path")
@@ -1044,7 +1058,10 @@ impl<'a> Parser<'a> {
                             else {
                                 return Err(self.error(start, "only assignment and calls are supported as expression statements"));
                             };
-                            if matches!(module.as_str(), "Application.AppBase" | "WatchUi.View") {
+                            if matches!(
+                                module.as_str(),
+                                "Application.AppBase" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
+                            ) {
                                 if member != "initialize" || !arguments.is_empty() {
                                     return Err(self.error(
                                         start,
@@ -1055,8 +1072,10 @@ impl<'a> Parser<'a> {
                                     span: Span { start, end },
                                     base: if module == "Application.AppBase" {
                                         crate::ClassBase::ApplicationAppBase
-                                    } else {
+                                    } else if module == "WatchUi.View" {
                                         crate::ClassBase::WatchUiView
+                                    } else {
+                                        crate::ClassBase::WatchUiBehaviorDelegate
                                     },
                                 }
                             } else if module == "System" {
@@ -1078,6 +1097,13 @@ impl<'a> Parser<'a> {
                                         arguments,
                                         span: Span { start, end },
                                     }
+                                }
+                            } else if module == "WatchUi" {
+                                Statement::NativeModuleCall {
+                                    module: "Toybox.WatchUi".into(),
+                                    member,
+                                    arguments,
+                                    span: Span { start, end },
                                 }
                             } else {
                                 Statement::Call {
@@ -1163,6 +1189,9 @@ impl Parser<'_> {
                         "Toybox.WatchUi.View" => {
                             crate::ParameterType::Object(crate::NativeClass::View)
                         }
+                        "Toybox.WatchUi.BehaviorDelegate" => {
+                            crate::ParameterType::Object(crate::NativeClass::BehaviorDelegate)
+                        }
                         "Toybox.Graphics.Dc" => {
                             crate::ParameterType::Object(crate::NativeClass::Dc)
                         }
@@ -1217,6 +1246,9 @@ impl Parser<'_> {
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
                 "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
+                "Toybox.WatchUi.BehaviorDelegate" => {
+                    crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate)
+                }
                 "Toybox.Lang.Array" => crate::ReturnType::Array(self.array_annotation()?),
                 "Void" => crate::ReturnType::Void,
                 name if !name.contains('.')
@@ -1306,6 +1338,8 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     Some(crate::ClassBase::ApplicationAppBase)
                 } else if parser.names.view(&base) {
                     Some(crate::ClassBase::WatchUiView)
+                } else if parser.names.behavior_delegate(&base) {
+                    Some(crate::ClassBase::WatchUiBehaviorDelegate)
                 } else {
                     None
                 };

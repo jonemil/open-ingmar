@@ -1,8 +1,9 @@
 # Restricted source classes and receiver calls
 
-This profile adds AppBase- and View-derived classes to [compilation units][unit].
+This profile adds AppBase-, View-, and BehaviorDelegate-derived classes to
+[compilation units][unit].
 Existing function parameter and result rules still apply. The
-[application builder][app] selects one AppBase class and binds additional Views.
+[application builder][app] selects one AppBase class and binds additional Views/delegates.
 See [receiver design][design] and [runtime evidence][evidence].
 
 ## Source and ownership
@@ -10,7 +11,8 @@ See [receiver design][design] and [runtime evidence][evidence].
 ```text
 class = "class" identifier "extends" native-base
         "{" native-declaration* (number-field | reference-field | function)+ "}"
-native-base = recognized Application.AppBase or WatchUi.View identity
+native-base = recognized Application.AppBase, WatchUi.View, or
+              WatchUi.BehaviorDelegate identity
 number-field = "var" identifier "=" signed-number-literal ";"
 reference-field = "var" identifier "as" source-view-class-name ";"
 receiver-call = "self" "." member "(" argument-list? ")"
@@ -18,7 +20,7 @@ receiver-call = "self" "." member "(" argument-list? ")"
 
 Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
-It accepts canonical/qualified, aliased, and imported AppBase/View spellings.
+It accepts canonical/qualified, aliased, and imported AppBase/View/BehaviorDelegate spellings.
 Number/reference fields are supported below. Static methods, annotations, source
 superclass lookup, and nested/empty classes are unsupported. Classes require at
 least one method. Class names must be unique;
@@ -46,8 +48,9 @@ accepted but termination is not proven.
 
 ## Calls on constructed source objects
 
-`new ViewSubclass()` establishes an exact constructor class alongside the native
-View value contract. Local initialization and copies preserve this identity.
+`new ClassName(arguments)` establishes an exact constructor class alongside its
+native View or BehaviorDelegate value contract. Local initialization and copies
+preserve this identity.
 A local initialized from a source construction may subsequently receive only a
 reference with the same proven constructor class; assignments from another source
 class, a generic native View parameter, or an erased return are rejected.
@@ -162,7 +165,8 @@ ciq-ir
 .end-class
 ```
 
-`.class <name> Application.AppBase` or `.class <name> WatchUi.View` contains
+`.class <name> <native-base>` uses `Application.AppBase`, `WatchUi.View`, or
+`WatchUi.BehaviorDelegate` and contains
 complete function documents until `.end-class`. Global/module owner records
 remain valid alongside classes. The unit header is `ciq-unit` for both
 class-bearing and ordinary units.
@@ -177,7 +181,7 @@ indexes follow this layout order; serialized spans remain provenance only.
 ## Application and VM binding
 
 Complete PRG generation permits exactly one declared AppBase class plus optional
-WatchUi.View subclasses and requires
+WatchUi.View/BehaviorDelegate subclasses and requires
 `--entry Class.method`. The selected method must have zero parameters, except
 source onStart follows the callback contract below. Value results are printed
 by generated onStart; void results are discarded. Class symbol `1` identifies
@@ -198,8 +202,8 @@ General object/native-call operations beyond the contracts below are unsupported
 
 A declared class may supply `function initialize(...)`. It must return void and
 call the native base initializer exactly once as its first statement. AppBase
-initializers take no parameters; View initializers accept the ordinary supported
-parameter contracts and limit. These are subset restrictions, not general
+initializers take no parameters; View/delegate initializers accept the ordinary
+supported parameter contracts and limit. These are subset restrictions, not general
 language rules.
 Subsequent supported statements may print or call source methods. Initialization
 cannot be selected as the generated onStart entry.
@@ -225,6 +229,9 @@ The application builder binds native aliases and directs the initializer's
 single DATA method record to source CODE. AppBase retains its default initializer
 when source omits one. Constructed source Views require an explicit initializer.
 Default lifecycle/View bodies are used only where source does not supply them.
+
+BehaviorDelegate initializers use `BehaviorDelegate.initialize()` or a recognized
+qualified/aliased spelling, following the same native-base-first rule.
 
 ## Source Views and drawing
 
@@ -342,26 +349,43 @@ and retains the instance while discarding the initializer result. See the
 ## Source initial View callback
 
 An AppBase class may define `function getInitialView()` with zero parameters.
-The inherited contract supplies `TupleShape::OneView` without a source result
-annotation. Every return must be a direct one-slot literal, such as
-`return [new WatchUi.View()];` or `return [self.makeView()];`. Parentheses around
-the literal are permitted. Its element must produce a non-null native View;
-factories, locals, and element reads can supply it. All paths must return.
+Every return must be a direct literal with either one non-null View or a View
+followed by a non-null BehaviorDelegate. Examples: `return [self.makeView()];`
+or `return [view, new CounterDelegate(view)];`. Parentheses are permitted.
+All paths must return the same shape: `TupleShape::OneView` or
+`TupleShape::ViewDelegate`. The pair's second API slot is InputDelegate;
+BehaviorDelegate satisfies it through native inheritance.
 
-The compiler evaluates and stores the slot expression before packing a fresh
-one-slot result; its hidden local shares the normal frame budget. Ordinary
-mutable Array values cannot supply this contract, even if their current size is
-one. Empty/multiple slots, Null, non-View values, incompatible annotations, and
-ordinary user calls to the callback are rejected. Delegate pairs, tuple source
-annotations, and general tuple-expression inference remain unsupported.
+The compiler evaluates and stores slot expressions left to right before packing
+a fresh positional result. Hidden locals share the normal frame budget.
+Ordinary mutable Arrays cannot supply this contract. Wrong cardinality/order,
+Null, incompatible slot types/annotations, and ordinary user calls to the
+callback are rejected. Tuple source annotations and general tuple-expression
+inference remain unsupported.
 
 Saved IR retains the shape through [positional
-construction](compiler-ir-text.md#positional-result-construction); unit validation
-checks the callback's zero parameters and one-view result. Application generation
-binds native symbol `0x008002a0` directly to its source CODE and omits the default
-blank-view body. The existing bootstrap is used when no source callback exists.
-`getInitialView` cannot be selected as the startup entry. See the
-[complete example][initial-view-example] and [evidence][initial-view-evidence].
+construction](compiler-ir-text.md#positional-result-construction). Unit validation
+checks callback parameters and result alternatives. Application generation binds
+native symbol `0x008002a0` to source CODE and omits the default blank-view body.
+The existing bootstrap is used when no source callback exists. `getInitialView`
+cannot be selected as the startup entry. See the [single-View example][initial-view-example]
+and [input counter](../../examples/compiler-input-counter/README.md).
+
+## Source behavior delegate
+
+A BehaviorDelegate subclass may supply `function onSelect()` with zero
+parameters and a Boolean result on every path, available since API 1.2.0.
+The callback may mutate its retained View and call `WatchUi.requestUpdate()`.
+It cannot be invoked as an ordinary source call. Other input callbacks and
+event-object contracts are outside this profile.
+
+Construction and local copies preserve exact delegate identity for ordinary
+source-method dispatch. Canonical `Toybox.WatchUi.BehaviorDelegate` parameters
+and results expose only the native base, erasing exact source identity.
+Named source-class parameter/result annotations and reference-field targets
+still require View subclasses; a delegate class name cannot be treated as a
+View. Delegate arrays, nullable delegates, and source inheritance are unsupported.
+See [input evidence](../investigations/compiler-input-counter.md).
 
 [initial-view-example]: ../../examples/compiler-initial-view/README.md
 [initial-view-evidence]: ../investigations/compiler-initial-view.md

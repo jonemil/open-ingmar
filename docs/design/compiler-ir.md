@@ -70,7 +70,8 @@ separately checked.
 
 `SourceNew` retains a source class name and native base for unit resolution and
 application binding. Its value uses the base's supported native projection,
-currently View, with exact constructor identity retained as a local refinement
+currently View or BehaviorDelegate, with exact constructor identity retained
+as a local refinement
 for bounded instance dispatch. Source lowering resolves the base from collected
 class declarations, including declarations in later files; module methods do
 not establish a class. Function validation checks native construction support;
@@ -83,8 +84,11 @@ It follows construction, explicit source parameters/results, local initializatio
 copies, and same-class reassignment. Function validation checks returns and an
 ObjectCall's claimed class; unit validation resolves source declarations and
 checks call arguments/results. Generic native references, native View parameters/
-returns, and array reads erase exact identity. SourceObject contracts carry an
-owned class name while their native API projection remains View. This separates
+returns, and array reads erase exact identity. Named SourceObject contracts
+remain restricted to View subclasses and carry an
+owned class name while their native API projection remains View. Constructed
+delegates retain their distinct base type and local identity; native delegate
+signatures erase the exact source identity. This separates
 exact source assignability from native compatibility without a runtime cast.
 Source-reference fields retain the same exact contract through checked field
 reads and writes. Their null metadata default is hidden behind mandatory source
@@ -97,19 +101,18 @@ This prevents a plain Number from satisfying the drawing method's font contract.
 Native Void member calls are effect-only operations with no semantic result.
 
 Positional results use `TupleShape`, distinct from mutable Array element
-contracts. `TupleNew` validates an exact one-View slot and accepts only already
-evaluated local/parameter reads. The source callback snapshots its slot
-expression first, preserving its effects before allocating and filling the
-fixed-size runtime array. The temporary shares the normal frame budget. This
+contracts. `TupleNew` validates one View or a View/delegate pair and accepts only
+already evaluated local/parameter reads. The source callback snapshots its slots
+expressions first, preserving their effects before allocating and filling the
+fixed-size runtime array. Temporaries share the normal frame budget. This
 sealed shape has no generic Array mutation/read profile; stored copies preserve
 the same shape. Saved IR cannot relabel an arbitrary Array as a tuple.
 
-An AppBase `getInitialView` receives the native one-view result contract without
-a source annotation. Every return must construct that shape. Application
+An AppBase `getInitialView` accepts the native View or View/delegate result
+contract without a source annotation. Every return must construct that shape. Application
 generation binds its DATA field directly to the source CODE target and omits
 the generated blank-view body. The bootstrap supplies its default only when
-there is no source override. Delegate pairs and richer construction contexts
-remain separate work.
+there is no source override. Richer construction contexts remain separate work.
 
 Validated IR is immutable. Parsing source, constructing typed IR, and reading
 IR text share validation so no producer can bypass backend assumptions.

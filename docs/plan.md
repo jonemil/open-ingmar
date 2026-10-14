@@ -7,6 +7,15 @@ language and build layers in small steps. Language completeness is not a
 prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
+Prioritize core Lang types and operators next, using the class-focused strategy
+below. Start with Number multiplication/division/remainder and their precedence,
+evaluation, and error rules, then broader comparisons, container access/mutation,
+and numeric types needed by deferred Lang methods. Keep the
+[input counter](../examples/compiler-input-counter/README.md) as a validation
+harness for constructors, retained references, positional results, and Boolean
+callbacks. Broader View transitions, controls, drawing, and event classes wait
+until these language foundations advance.
+
 1. **Extend core Lang contracts and value types.** Extend native objects,
    constructors, and Array elements beyond the bounded View profile as needed.
    Keep generic signatures and invariant element
@@ -52,29 +61,21 @@ compiling a project.
    selection. A full Jungle driver and API definition parser are not
    prerequisites for extending the bounded native profile.
 2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View inherited members and callback contracts. Extend positional
-   result shapes to the View/delegate pair when input handling requires it;
-   retain slot-type and cardinality checks through saved IR. Broaden contextual
+   AppBase/View/delegate inherited members and callback contracts. Retain
+   slot-type and cardinality checks for View and View/delegate results through
+   saved IR. Broaden contextual
    tuple construction beyond direct callback literals only when provenance and
    shape remain provable. Extend object-reference, array, and nullable values as
    required, retaining `Void` as a result contract. Compare new dispatch forms
    with focused specimens. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
-3. **Add state and input to source Views.** Extend the
-   [retained View example](../examples/compiler-reference-fields/README.md) with
-   InputDelegate-derived source classes. Keep source identity and native base
-   projection distinct when extending the supported native bases. Extend the
-   constructor projection and source signature/reference-field contracts
-   together; the latter currently require View subclasses. Start with a
-   BehaviorDelegate and its zero-argument Boolean `onSelect` callback, avoiding
-   an opaque event-object prerequisite. Keep
-   initialization and assignability checked through saved IR; extend source
-   inheritance when needed.
-   Add a View/delegate pair whose input handler updates a counter and
-   returns whether it handled the event. This exercises mutable fields and
-   Boolean callback results; select an event supported by the target.
-   Probe View transitions to verify onHide dispatch; the existing exit-from-update
+3. **Revisit UI profiles when language work needs them.** Keep the input counter
+   bounded while expanding core Lang support. Widen named source signatures and
+   reference-field targets beyond View only with checked native-base projection
+   and assignability through saved IR. Source inheritance and other input
+   callbacks/event objects need separate contracts and runtime evidence.
+   Later, probe View transitions to verify onHide dispatch; the exit-from-update
    specimen only establishes onStop. Extend drawing methods/constants and
    device-relative layout through focused examples rather than a fixed screen size.
 4. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a

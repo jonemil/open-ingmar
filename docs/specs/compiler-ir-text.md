@@ -145,8 +145,11 @@ conversion call. Invalid widths and malformed operands are rejected. See the
 
 `.new-native %<result> Toybox.WatchUi.View [span=<start>:<end>]` allocates and
 initializes a non-null View with no arguments. Typed IR uses
-`NativeNew { result, class: NativeClass::View }`. Other class paths and extra
-arguments are rejected. View parameter text is `view`; user value calls use
+`NativeNew { result, class: NativeClass::View }`.
+`Toybox.WatchUi.BehaviorDelegate` is also accepted, using the corresponding
+NativeClass, `behavior-delegate` parameter/result tag, and initializer API 1.0.0.
+Other class paths and extra arguments are rejected. View parameter text is
+`view`; user value calls use
 `result=view`. Function results are inferred from returns; `.function
 result=view` is unsupported.
 
@@ -158,33 +161,34 @@ result still executes allocation and initialization.
 Lowering emits `getmv @__ciq_sdk_WatchUi @__ciq_native_View; newc; dup 0;
 getsv @__ciq_native_initialize; dup 1; invokem 1; popv`. The instance remains
 on the stack after the initializer result is popped. Symbol sources bind those
-aliases to exactly one `Toybox_WatchUi`, `View`, and `initialize` declaration
-respectively. See [constructor evidence](../investigations/compiler-native-views.md).
+aliases to exactly one `Toybox_WatchUi`, class, and `initialize` declaration
+respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
+construction. See [constructor evidence](../investigations/compiler-native-views.md).
 
 ## Positional result construction
 
-`.tuple-new %<result> %<view> [span=<start>:<end>]` constructs a fresh one-slot
-View result. Typed IR uses `TupleNew { result, elements: vec![view] }`, with
-`TupleShape::OneView` in value/result contracts. Programmatic construction also
-checks exactly one slot. Text rejects missing/extra slots, unsupported fields,
-and non-View slot values. The operand must be a local/parameter read whose
-non-null View was evaluated earlier; effectful expression operands require
-storage first. Single-use, same-block, initialization, and effect-order rules
-remain in force.
+`.tuple-new %<result> %<view> [%<delegate>] [span=<start>:<end>]`
+constructs a fresh positional result. One slot has `TupleShape::OneView`; two
+have `TupleShape::ViewDelegate`, with View then InputDelegate API contracts.
+The supported second-slot value is a non-null BehaviorDelegate. Wrong slot
+count, ordering, types, or unsupported fields are rejected. Typed IR uses
+`TupleNew { result, elements }` with the same checks.
 
-The shape is distinct from a homogeneous `Array<View>`: generic Array reads,
-mutation, and parameters do not accept it. Locals may retain/copy the same shape.
-Function results are inferred from tuple returns; `.function result=one-view`
-is unsupported. Value-returning user-call metadata can use `result=one-view`;
-unit validation still requires the callee to declare that result and rejects
-ordinary calls to native callbacks.
+Every operand must be a local/parameter read evaluated earlier. Store effectful
+slot expressions left to right before constructing the tuple. Single-use,
+same-block, initialization, and effect-order rules remain in force. Tuple shapes
+are distinct from homogeneous Arrays and have no Array mutation/call profile.
+Locals may retain/copy a shape. Function results are inferred from tuple returns;
+explicit tuple function headers are unsupported. User-call metadata may use
+`result=one-view` or `result=view-delegate`; unit validation checks the actual
+callee result and rejects ordinary calls to native callbacks.
 
-Lowering allocates length one with `ipush1 1; newa; dup 0; ipushz`, reads the
-stored View, and fills slot zero with `aputv`. The complete result is published
-only after filling its slot. This requires API 1.0.0 for Array/View; constructing
-the View separately requires its initializer's 2.1.0 level. No layout, failure
-timing, or memory equivalence with SDK lowering is implied. See
-[callback evidence](../investigations/compiler-initial-view.md).
+Lowering allocates length one or two with `ipush1 <length>; newa`, then emits
+`dup 0; ipush1 <index>; <stored slot read>; aputv` for each slot. The result is
+published after all slots are filled. Array/View/InputDelegate exist at API
+1.0.0; View construction requires its initializer's 2.1.0 level. No allocation
+failure timing or memory equivalence with SDK lowering is implied. See
+[input evidence](../investigations/compiler-input-counter.md).
 
 ## Array allocation
 
@@ -636,7 +640,8 @@ evidence][void-evidence].
 
 ## Native superclass initialization
 
-`.base-initialize Application.AppBase` or `.base-initialize WatchUi.View` invokes
+`.base-initialize <native-base>` accepts `Application.AppBase`, `WatchUi.View`,
+or `WatchUi.BehaviorDelegate` and invokes
 the identified native superclass
 initializer on the current instance, with no explicit arguments or value result.
 It accepts the usual optional source span. Other base names or additional fields
@@ -718,13 +723,13 @@ source inheritance are unsupported.
 runtime-provided module function without defining a value. Module names are
 canonical API paths, distinct from user module owners; arguments follow the
 ordinary definition/use and effect-order rules. Optional spans use the usual
-syntax. The current profile accepts only
-`.call-native-module-discard Toybox.System exit`, with no arguments and a Void
-catalogue result. API context checks are the same as for source compilation.
+syntax. The profile accepts `Toybox.System exit` and `Toybox.WatchUi
+requestUpdate`, each with no arguments and a catalogue Void result. Both require
+API 1.0.0. API context checks match source compilation.
 
-Lowering selects `getmv @__ciq_sdk_System @__ciq_native_exit`, `invokemz`, and
-`popv`. Explicit symbol sources must contain exactly one stored `Toybox_System`
-and `exit`; console application generation provides the observed native IDs.
+Lowering selects `getmv @__ciq_sdk_<module> @__ciq_native_<member>`, `invokemz`,
+and `popv`. Explicit symbol sources must contain one matching module/member
+identity; application generation supplies the observed native IDs.
 The operation is an ordered statement, not a CFG terminator. IR still requires
 its ordinary returns and branches; exit has no expression value. Wrong arity,
 unknown declarations, and unsupported native statement contracts are errors.
@@ -802,12 +807,14 @@ Reference declarations, result claims, and initializer safety follow the
 Standalone method parsing leaves that unit obligation unresolved.
 
 `.new-source %<result-id> <class-name> <native-base> [%<argument-id> ...]`
-allocates and initializes a source object. The supported base is `WatchUi.View`;
+allocates and initializes a source object. Supported bases are `WatchUi.View` and
+`WatchUi.BehaviorDelegate`;
 for example, `.new-source %0 HelloView WatchUi.View %1` passes one argument.
 The base is required and defines the native value projection, currently a
-non-null View. Construction is order-sensitive. Function validation checks the
+non-null View or BehaviorDelegate. Construction is order-sensitive. Function validation checks the
 identifier, supported construction profile, and native initializer availability
-(View: API 2.1.0). Unit validation requires the named class's declared base to
+(View: API 2.1.0; BehaviorDelegate: API 1.0.0). Unit validation requires the named
+class's declared base to
 equal the operation's base, with a matching explicit
 initializer whose parameter contracts match the arguments. A standalone function
 retains this unresolved declaration obligation and cannot supply complete

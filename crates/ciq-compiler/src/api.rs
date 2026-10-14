@@ -350,6 +350,7 @@ fn build_core() -> Catalogue {
         "Toybox.Application.AppBase",
         "Toybox.WatchUi.View",
         "Toybox.WatchUi.InputDelegate",
+        "Toybox.WatchUi.BehaviorDelegate",
         "Toybox.Graphics.Dc",
     ] {
         classes.insert(
@@ -574,6 +575,17 @@ fn build_core() -> Catalogue {
         view_methods.push(declaration);
     }
     classes.get_mut("Toybox.WatchUi.View").unwrap().methods = view_methods;
+    let behavior = classes.get_mut("Toybox.WatchUi.BehaviorDelegate").unwrap();
+    behavior.superclass = Some("Toybox.WatchUi.InputDelegate".into());
+    let mut on_select = method(
+        "onSelect",
+        vec![],
+        Type::named("Toybox.Lang.Boolean"),
+        ApiLevel(1, 2, 0),
+    );
+    on_select.callback = true;
+    behavior.methods = vec![method("initialize", vec![], Type::Void, initial), on_select];
+
     classes.get_mut("Toybox.Graphics.Dc").unwrap().methods = vec![
         method("clear", vec![], Type::Void, initial),
         method(
@@ -627,6 +639,11 @@ fn build_core() -> Catalogue {
         .unwrap()
         .functions
         .push(method("exit", vec![], Type::Void, initial));
+    modules
+        .get_mut("Toybox.WatchUi")
+        .unwrap()
+        .functions
+        .push(method("requestUpdate", vec![], Type::Void, initial));
     Catalogue {
         modules,
         classes,

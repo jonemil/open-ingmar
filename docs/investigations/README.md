@@ -51,6 +51,9 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Input counter](compiler-input-counter.md): native delegate metadata,
+  View/delegate results, and matching SDK/generated touchscreen behavior.
+
 - [Source-reference fields](compiler-reference-fields.md): constructor arguments,
   initialized reference slots, and retained state through shutdown.
 - [Source-class signatures](compiler-source-signatures.md): exact reference

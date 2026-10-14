@@ -108,6 +108,9 @@ pub(crate) fn parse_ir_context(
                         "char" => Ok(crate::ParameterType::Char),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
                         "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
+                        "behavior-delegate" => Ok(crate::ParameterType::Object(
+                            crate::NativeClass::BehaviorDelegate,
+                        )),
                         "view-array" => Ok(crate::ParameterType::Array(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
@@ -187,7 +190,7 @@ pub(crate) fn parse_ir_context(
             Some(".discard") => (29, 2),
             Some(".array-new") => (30, 3),
             Some(".new-native") => (31, 3),
-            Some(".tuple-new") => (32, 3),
+            Some(".tuple-new") => (32, call_width()),
             Some(".new-source") => (33, call_width()),
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
@@ -333,6 +336,7 @@ pub(crate) fn parse_ir_context(
                 class: fields[2].clone(),
                 base: match fields[3].as_str() {
                     "WatchUi.View" => crate::ClassBase::WatchUiView,
+                    "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
                     "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
                     _ => return Err(fail(*at, "unsupported source construction base")),
                 },
@@ -357,6 +361,9 @@ pub(crate) fn parse_ir_context(
                     .collect::<Result<_, _>>()?,
             }
         } else if kind == 32 {
+            if !(3..=4).contains(&width) {
+                return Err(fail(*at, "tuple allocation requires one or two slots"));
+            }
             Operation::TupleNew {
                 result: fields
                     .get(1)
@@ -364,7 +371,7 @@ pub(crate) fn parse_ir_context(
                     .and_then(|field| parse_value(field))?,
                 elements: fields
                     .iter()
-                    .take(3)
+                    .take(width)
                     .skip(2)
                     .map(|field| parse_value(field))
                     .collect::<Result<_, _>>()?,
@@ -451,14 +458,12 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
             }
         } else if kind == 20 {
-            if !matches!(fields[1].as_str(), "Application.AppBase" | "WatchUi.View") {
-                return Err(fail(*at, "unsupported native initializer base"));
-            }
             Operation::NativeBaseInitialize {
-                base: if fields[1] == "Application.AppBase" {
-                    crate::ClassBase::ApplicationAppBase
-                } else {
-                    crate::ClassBase::WatchUiView
+                base: match fields[1].as_str() {
+                    "Application.AppBase" => crate::ClassBase::ApplicationAppBase,
+                    "WatchUi.View" => crate::ClassBase::WatchUiView,
+                    "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
+                    _ => return Err(fail(*at, "unsupported native initializer base")),
                 },
             }
         } else if kind == 18 {
@@ -650,6 +655,8 @@ fn call_contract(
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             "view" => crate::ReturnType::Object(crate::NativeClass::View),
             "dc" => crate::ReturnType::Object(crate::NativeClass::Dc),
+            "behavior-delegate" => crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate),
+            "view-delegate" => crate::ReturnType::Tuple(crate::TupleShape::ViewDelegate),
             "one-view" => crate::ReturnType::Tuple(crate::TupleShape::OneView),
             "view-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))

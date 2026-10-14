@@ -30,7 +30,7 @@ parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
-           | "Toybox.WatchUi.View"
+           | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
 result-type = value-type | "Void"
@@ -403,7 +403,8 @@ native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
 
 `using` introduces a module binding, optionally aliased. `import` introduces
 the module name and its supported class names: Application's `AppBase` and
-WatchUi's `View`. Therefore `import Toybox.Application;` permits `extends AppBase`,
+WatchUi's `View` and `BehaviorDelegate`. Therefore `import Toybox.Application;`
+permits `extends AppBase`,
 while `using Toybox.Application;` requires `extends Application.AppBase`.
 Aliased modules permit `extends App.AppBase` and `Sys.println(value)`.
 Fully qualified `Toybox.Application.AppBase` and `Toybox.System.println(value)`
@@ -646,8 +647,10 @@ wrong arity, and known members lacking supported lowering are rejected.
 
 Source and saved IR retain this as an ordered native module statement; it is
 not an IR return or branch. User module calls and dedicated `System.println`
-operations retain their own forms. No other native module statement is enabled
-by this profile. Runtime exit invokes a supplied source `onStop` callback in the
+operations retain their own forms. `WatchUi.requestUpdate()` is the other
+supported native module statement: zero arguments, Void, API 1.0.0. It requests
+a redraw of the current View and follows the same alias/validation rules.
+Runtime exit invokes a supplied source `onStop` callback in the
 validated console app; its Dictionary-or-null state is not a user-call argument.
 
 ## Native value calls
@@ -903,6 +906,15 @@ Saved IR records the concrete allocation type and rechecks all uses. See the
 
 [empty-example]: ../../examples/compiler-empty-arrays/README.md
 [empty-evidence]: ../investigations/compiler-empty-arrays.md
+
+## Native delegates
+
+`new Toybox.WatchUi.BehaviorDelegate()` constructs a non-null delegate with no
+arguments (API 1.0.0). Recognized WatchUi aliases and imported bare names work
+as for View construction. Canonical BehaviorDelegate parameter/result types
+are supported; delegate arrays and nullable delegates are not. Source subclasses
+and the View/delegate callback result follow the
+[class profile](compiler-classes.md#source-behavior-delegate).
 
 ## Native Views
 

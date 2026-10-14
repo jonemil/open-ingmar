@@ -97,10 +97,11 @@ pub enum BinaryOp {
     Subtract,
 }
 
-/// Native class identities supported as constructed object references.
+/// Native class identities supported as non-null object references.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeClass {
     View,
+    BehaviorDelegate,
     Dc,
 }
 
@@ -109,11 +110,12 @@ impl NativeClass {
     pub fn name(self) -> &'static str {
         match self {
             Self::View => "Toybox.WatchUi.View",
+            Self::BehaviorDelegate => "Toybox.WatchUi.BehaviorDelegate",
             Self::Dc => "Toybox.Graphics.Dc",
         }
     }
     fn from_name(name: &str) -> Option<Self> {
-        [Self::View, Self::Dc]
+        [Self::View, Self::BehaviorDelegate, Self::Dc]
             .into_iter()
             .find(|class| class.name() == name)
     }
@@ -149,6 +151,7 @@ impl ArrayElement {
             Self::Char => "char",
             Self::Object(NativeClass::View) => "view",
             Self::Object(NativeClass::Dc) => "dc",
+            Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
         }
     }
 
@@ -158,6 +161,7 @@ impl ArrayElement {
             Self::Char => "char-array",
             Self::Object(NativeClass::View) => "view-array",
             Self::Object(NativeClass::Dc) => "dc-array",
+            Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate-array",
         }
     }
 }
@@ -166,6 +170,7 @@ impl ArrayElement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TupleShape {
     OneView,
+    ViewDelegate,
 }
 
 impl TupleShape {
@@ -173,6 +178,10 @@ impl TupleShape {
     pub fn api_type(self) -> api::Type {
         match self {
             Self::OneView => api::Type::Tuple(vec![api::Type::named(NativeClass::View.name())]),
+            Self::ViewDelegate => api::Type::Tuple(vec![
+                api::Type::named(NativeClass::View.name()),
+                api::Type::named("Toybox.WatchUi.InputDelegate"),
+            ]),
         }
     }
 }
@@ -315,6 +324,9 @@ impl ValueType {
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
+            ty if *ty == TupleShape::ViewDelegate.api_type() => {
+                Some(Self::Tuple(TupleShape::ViewDelegate))
+            }
             api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
                 "Toybox.Graphics.FontDefinition" => Some(Self::FontDefinition),
@@ -371,7 +383,7 @@ pub enum Operation {
         module: String,
         member: String,
     },
-    /// Allocate a source View and invoke its initializer with ordered arguments.
+    /// Allocate a supported source object and invoke its initializer with ordered arguments.
     /// Unit validation resolves the class and checks its initializer contract.
     SourceNew {
         result: ValueId,
@@ -386,7 +398,7 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Construct a fresh positional result with exactly one non-null View slot.
+    /// Construct a fresh View result, optionally followed by a non-null delegate.
     /// Slots must be already evaluated local/parameter reads, so allocation
     /// cannot move before operand effects. The shape has no Array mutation profile.
     TupleNew {
@@ -789,13 +801,13 @@ impl Function {
         if parameter_types.iter().any(|ty| {
             matches!(
                 ty,
-                ParameterType::Array(ArrayElement::Object(NativeClass::Dc))
+                ParameterType::Array(ArrayElement::Object(class)) if *class != NativeClass::View
             )
-        }) || declared_result == Some(ReturnType::Array(ArrayElement::Object(NativeClass::Dc)))
+        }) || matches!(declared_result, Some(ReturnType::Array(ArrayElement::Object(class))) if class != NativeClass::View)
         {
             return Err(IrError {
                 operation: None,
-                message: "Dc array contracts are outside the supported profile".into(),
+                message: "object arrays support only the View element contract".into(),
             });
         }
         if instance_method && native::callback(ClassBase::ApplicationAppBase, &name).is_some() {
@@ -881,8 +893,13 @@ impl Function {
                 } => {
                     validate_call_names(Some(class), member).map_err(fail)?;
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    if type_of(receiver) != ValueType::Object(NativeClass::View) {
-                        return Err(fail("source object calls require a non-null View receiver"));
+                    if !matches!(
+                        type_of(receiver),
+                        ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
+                    ) {
+                        return Err(fail(
+                            "source object calls require a supported non-null object receiver",
+                        ));
                     }
                     let result = if let Operation::ObjectCall {
                         result,
@@ -1108,12 +1125,18 @@ impl Function {
                     result,
                     ref elements,
                 } => {
-                    if elements.len() != 1
-                        || type_of(elements[0]) != ValueType::Object(NativeClass::View)
-                    {
-                        return Err(fail(
-                            "one-view tuple requires exactly one non-null View slot",
-                        ));
+                    let shape = match elements.len() {
+                        1 => TupleShape::OneView,
+                        2 => TupleShape::ViewDelegate,
+                        _ => return Err(fail("initial View tuple requires one or two slots")),
+                    };
+                    let api::Type::Tuple(expected) = shape.api_type() else {
+                        unreachable!()
+                    };
+                    if !expected.iter().zip(elements).all(|(expected, value)| {
+                        native::accepts(expected, &type_of(*value).api_type())
+                    }) {
+                        return Err(fail("initial View tuple slot types do not match its shape"));
                     }
                     if !elements.iter().all(|value| {
                         definitions.get(value).is_some_and(|at| {
@@ -1127,7 +1150,7 @@ impl Function {
                             "tuple slots require already evaluated local or parameter reads",
                         ));
                     }
-                    types.insert(result, ValueType::Tuple(TupleShape::OneView));
+                    types.insert(result, ValueType::Tuple(shape));
                     (Some(result), elements.clone())
                 }
                 Operation::NativeNew { result, class } => {
@@ -1139,8 +1162,9 @@ impl Function {
                     result,
                     element_type,
                 } => {
-                    if element_type == ArrayElement::Object(NativeClass::Dc) {
-                        return Err(fail("Dc array contracts are outside the supported profile"));
+                    if matches!(element_type, ArrayElement::Object(class) if class != NativeClass::View)
+                    {
+                        return Err(fail("object arrays support only the View element contract"));
                     }
                     let ty = ValueType::Array(element_type);
                     if let Some(context) = context {
@@ -1653,6 +1677,9 @@ impl Function {
                             ParameterType::Char => "char",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
+                            ParameterType::Object(NativeClass::BehaviorDelegate) => {
+                                "behavior-delegate"
+                            }
                             ParameterType::Array(element) => element.array_text(),
                             ParameterType::NullableDictionary => "nullable-dictionary",
                         }
@@ -2033,11 +2060,16 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Char => " result=char",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",
+        ReturnType::Object(NativeClass::BehaviorDelegate) => " result=behavior-delegate",
         ReturnType::Tuple(TupleShape::OneView) => " result=one-view",
+        ReturnType::Tuple(TupleShape::ViewDelegate) => " result=view-delegate",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
+        ReturnType::Array(ArrayElement::Object(NativeClass::BehaviorDelegate)) => {
+            " result=behavior-delegate-array"
+        }
         ReturnType::Void => unreachable!("validated value calls cannot be void"),
     }
     .to_owned()

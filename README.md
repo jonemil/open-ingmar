@@ -130,6 +130,9 @@ preserves exact View class contracts through parameters, factories, and returns.
 The [retained View example](examples/compiler-reference-fields/README.md) uses
 constructor arguments and reference fields across lifecycle callbacks.
 
+The [input counter](examples/compiler-input-counter/README.md) returns a
+View/delegate pair and redraws retained state after selection callbacks.
+
 The [Number negation example](examples/compiler-number-negation/README.md)
 exercises unary expressions, precedence, and guarded nullable operands.
 

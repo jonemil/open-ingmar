@@ -43,8 +43,13 @@ impl Types {
                 base.constructed_class()
                     .map(|class| Type::named(class.name())),
             ),
-            Operation::TupleNew { result, .. } => {
-                (*result, Some(crate::TupleShape::OneView.api_type()))
+            Operation::TupleNew { result, elements } => {
+                let shape = if elements.len() == 2 {
+                    crate::TupleShape::ViewDelegate
+                } else {
+                    crate::TupleShape::OneView
+                };
+                (*result, Some(shape.api_type()))
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
             Operation::Integer { result, .. } => (*result, Some(Type::named("Toybox.Lang.Number"))),

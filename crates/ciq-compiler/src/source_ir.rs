@@ -850,30 +850,30 @@ impl Builder<'_> {
             );
         }
         let span = expression.span;
-        let parser::ExpressionKind::ArrayLiteral(mut elements) = expression.kind else {
+        let parser::ExpressionKind::ArrayLiteral(elements) = expression.kind else {
             return Err(Diagnostic::at(
                 self.source,
                 span.start,
-                "initial View result requires a direct one-slot View literal",
+                "initial View result requires a direct View or View/delegate literal",
             ));
         };
-        if elements.len() != 1 {
+        if !(1..=2).contains(&elements.len()) {
             return Err(Diagnostic::at(
                 self.source,
                 span.start,
-                "initial View result requires exactly one View slot",
+                "initial View result requires one or two slots",
             ));
         }
-        let view = self.snapshot(elements.remove(0), locals)?;
-        let view = self.value(view, locals)?;
+        let snapshots = elements
+            .into_iter()
+            .map(|element| self.snapshot(element, locals))
+            .collect::<Result<Vec<_>, _>>()?;
+        let elements = snapshots
+            .into_iter()
+            .map(|snapshot| self.value(snapshot, locals))
+            .collect::<Result<Vec<_>, _>>()?;
         let result = ValueId(self.operations.len() as u32);
-        self.push(
-            Operation::TupleNew {
-                result,
-                elements: vec![view],
-            },
-            Some(span),
-        );
+        self.push(Operation::TupleNew { result, elements }, Some(span));
         Ok(result)
     }
 
@@ -1317,6 +1317,7 @@ fn build_body(
         context,
         callback
             .as_ref()
+            .filter(|signature| !matches!(signature.result, crate::ReturnType::Tuple(_)))
             .map(|signature| signature.result.clone())
             .or(result_type),
     );
@@ -1328,7 +1329,10 @@ fn build_body(
         Diagnostic::at(source, offset, error.message)
     })?;
     let expected = effective_result;
-    if function.return_type() != expected {
+    if !callback.as_ref().map_or_else(
+        || function.return_type() == expected,
+        |signature| signature.accepts_result(&function.return_type()),
+    ) {
         return Err(Diagnostic::at(
             source,
             function
