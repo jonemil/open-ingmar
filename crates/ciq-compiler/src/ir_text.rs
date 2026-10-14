@@ -166,6 +166,7 @@ pub(crate) fn parse_ir_context(
             Some(".assign-self") => (39, 3),
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
+            Some(".positive") => (55, 3),
             Some(".negate") => (26, 3),
             Some(".not") => (27, 3),
             Some(".array-read") => (28, 4),
@@ -424,6 +425,11 @@ pub(crate) fn parse_ir_context(
             }
         } else if kind == 27 {
             Operation::Not {
+                result: parse_value(&fields[1])?,
+                operand: parse_value(&fields[2])?,
+            }
+        } else if kind == 55 {
+            Operation::Positive {
                 result: parse_value(&fields[1])?,
                 operand: parse_value(&fields[2])?,
             }

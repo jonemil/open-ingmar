@@ -7,8 +7,8 @@ pub(crate) fn not_result(operand: &Type) -> Option<Type> {
     (*operand == Type::named("Toybox.Lang.Boolean")).then(|| operand.clone())
 }
 
-/// Resolve Number negation to Number without widening other or nullable types.
-pub(crate) fn negate_result(operand: &Type) -> Option<Type> {
+/// Resolve unary Number signs to Number without widening other or nullable types.
+pub(crate) fn number_unary_result(operand: &Type) -> Option<Type> {
     (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())
 }
 

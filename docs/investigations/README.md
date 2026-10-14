@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Number unary plus](compiler-number-plus.md): identity lowering, bounded
+  type contracts, SDK prefix syntax, and simulator comparison.
 - [Number bit operations](compiler-number-bits.md): instruction bytes,
   unusual precedence, signed shifts, and count-boundary probes.
 - [Char/View writes](compiler-typed-array-writes.md): invariant element

@@ -65,7 +65,7 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
         "function f() { return -null; }",
         "function f(n as Toybox.Lang.Number or Null) { return -n; }",
         "function f() { return -1.toNumber(); }",
-        "function f() { return +1; }",
+        "function f() { return +true; }",
         "function f(n) { return --n; }",
         "function f(n) { return - -n; }",
     ] {

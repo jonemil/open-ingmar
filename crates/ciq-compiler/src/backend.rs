@@ -49,6 +49,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Integer { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
+            | Operation::Positive { result, .. }
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
@@ -483,6 +484,10 @@ fn expression(
                 }
                 Operation::Not { operand, .. } => {
                     tasks.extend([Task::Not, Task::False, Task::Value(*operand)]);
+                    continue;
+                }
+                Operation::Positive { operand, .. } => {
+                    tasks.push(Task::Value(*operand));
                     continue;
                 }
                 Operation::Negate { operand, .. } => {

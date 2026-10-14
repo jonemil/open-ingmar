@@ -50,7 +50,7 @@ logical-and = comparison ("&&" comparison)*
 comparison = arithmetic (("==" | "!=" | "<" | "<=" | ">" | ">=") arithmetic)?
 arithmetic = product (("+" | "-" | "|" | "^") product)*
 product = unary (("*" | "/" | "%" | "&" | "<<" | ">>") unary)*
-unary = primary | "-" primary | ("!" | "~") unary
+unary = primary | ("-" | "+") primary | ("!" | "~") unary
 primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
@@ -68,7 +68,8 @@ are reserved. `true` and `false` produce Boolean literals. Whitespace and
 is the signed 32-bit range `-2147483648..=2147483647`. Decimal negative literals
 are folded into that domain, with ordinary token whitespace/comments permitted.
 Unary Number negation also accepts parameters, locals, calls, and grouped
-expressions. Positive signs, hex/underscore/suffix forms, other numeric types, unsupported
+expressions. Unary plus accepts non-null Number expressions as specified below.
+Hex/underscore/suffix forms, other numeric types, unsupported
 statements/additional functions in default mode, and other operators are
 rejected. A negative literal must be parenthesized before a member call:
 `(-1).abs()` is accepted, while `-1.abs()` remains rejected because of an SDK
@@ -138,7 +139,12 @@ postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
 `abs` on the negated value. Boolean `!` uses the same precedence, supports
 repeated prefixes (`!!value`), and binds before comparisons:
 `!a == b` means `(!a) == b`. Number complement `~` shares that unary
-precedence and allows repeated prefixes. Unary plus, compound assignment,
+precedence and allows repeated prefixes. Unary plus binds after postfix calls
+and before binary operators; it returns a non-null Number operand unchanged
+after evaluating it once. It accepts literals, parameters, locals, calls, and
+grouped expressions. Repeated or mixed prefixes require grouping, as in
+`+(+n)`, `+(-n)`, and `+(~n)`; `+ +n`, `+-n`, and `+~n` are rejected.
+Contiguous `++` remains unsupported increment syntax. Compound assignment,
 unsigned `>>>`, and general object calls remain unsupported; the bounded
 native calls below are separate. Parse nesting is bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
@@ -164,6 +170,13 @@ not a portable guarantee for other runtimes. See [bitwise evidence][bits].
 
 [bits]: ../investigations/compiler-number-bits.md
 
+Unary plus is retained as a checked identity operation in IR and emits no VM
+instruction. It does not parse text, convert types, or relax null proofs. The
+SDK probe passes other value types through too; those are deliberately outside
+our current Number-only profile. See [unary-plus evidence][positive].
+
+[positive]: ../investigations/compiler-number-plus.md
+
 ### Operator contracts
 
 Validation resolves operand API types to these result contracts:
@@ -171,7 +184,7 @@ Validation resolves operand API types to these result contracts:
 | Operands | Operators | Result |
 |---|---|---|
 | Number / Number | `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>` | Number |
-| Number | unary `-`, `~` | Number |
+| Number | unary `+`, `-`, `~` | Number |
 | Boolean | unary `!` | Boolean |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |

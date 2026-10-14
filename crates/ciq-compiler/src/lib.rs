@@ -458,6 +458,12 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
     },
+    /// Return a non-null Number operand unchanged after evaluating it once.
+    /// Other operand types require a separate contract and are rejected.
+    Positive {
+        result: ValueId,
+        operand: ValueId,
+    },
     /// Negate one Number value, preserving the runtime's signed 32-bit behavior.
     /// Nullable values require a non-null proof before use.
     Negate {
@@ -1243,8 +1249,15 @@ impl Function {
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
+                Operation::Positive { result, operand } => {
+                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                        .and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail("unary plus requires a non-null Number"))?;
+                    types.insert(result, result_type);
+                    (Some(result), vec![operand])
+                }
                 Operation::Negate { result, operand } => {
-                    let result_type = operators::negate_result(&type_of(operand).api_type())
+                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail("negation requires a non-null Number"))?;
                     types.insert(result, result_type);
@@ -1610,7 +1623,8 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::Negate { operand, .. }
+                                Operation::Positive { operand, .. }
+                                | Operation::Negate { operand, .. }
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
                                 }
@@ -1907,6 +1921,9 @@ impl Function {
                 } => format!(".array-write %{} %{} %{}", array.0, index.0, value.0),
                 Operation::Not { result, operand } => {
                     format!(".not %{} %{}", result.0, operand.0)
+                }
+                Operation::Positive { result, operand } => {
+                    format!(".positive %{} %{}", result.0, operand.0)
                 }
                 Operation::Negate { result, operand } => {
                     format!(".negate %{} %{}", result.0, operand.0)

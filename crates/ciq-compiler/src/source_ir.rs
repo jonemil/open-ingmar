@@ -115,6 +115,13 @@ fn emit(
                 operand,
             }
         }
+        parser::ExpressionKind::Positive(operand) => {
+            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
+            Operation::Positive {
+                result: ValueId(operations.len() as u32),
+                operand,
+            }
+        }
         parser::ExpressionKind::Negate(operand) => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             Operation::Negate {
@@ -588,6 +595,7 @@ impl Builder<'_> {
                 return self.logical_value(parser::Expression { kind, span }, locals);
             }
             E::Not(operand) => E::Not(Box::new(self.prepare(*operand, locals)?)),
+            E::Positive(operand) => E::Positive(Box::new(self.prepare(*operand, locals)?)),
             E::Negate(operand) => E::Negate(Box::new(self.prepare(*operand, locals)?)),
             E::ArrayRead { array, index } => E::ArrayRead {
                 array: Box::new(self.snapshot(*array, locals)?),

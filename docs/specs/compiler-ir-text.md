@@ -141,6 +141,16 @@ See the [value-result evidence](../investigations/compiler-logical-values.md).
 
 ## Number negation
 
+`.positive %<result-id> %<operand-id> [span=<start>:<end>]` consumes one
+non-null Number and defines an unchanged Number result. Nullable operands
+require a checked fresh read under a non-null proof; other types are rejected.
+Definitions, single-use rules, block boundaries, spans, and effect order apply
+as for other unary operations. Lowering emits the operand exactly once and no
+additional VM instruction. This preserves type checking through saved IR even
+though executable code is identity. `.integer` spelling still rejects a
+leading plus; source `+1` uses `.integer 1` followed by `.positive`.
+See [unary-plus evidence](../investigations/compiler-number-plus.md).
+
 `.negate %<result-id> %<operand-id> [span=<start>:<end>]` consumes one Number
 and defines Number. String, Char, Boolean, Null, and unchecked nullable values
 are rejected. Operands must be earlier definitions in the same block and obey

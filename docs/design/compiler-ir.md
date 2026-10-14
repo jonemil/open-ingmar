@@ -31,6 +31,12 @@ parser keeps both arithmetic/bitwise precedence groups in its iterative
 operator stack, preserving the existing nested-expression budget. VM selection
 uses direct instructions; shift counts remain runtime operands.
 
+`Positive` preserves unary plus as a checked Number identity in semantic IR.
+Dropping it during parsing would skip operand/type/null-proof validation on
+resumed IR. The backend emits only its operand after shared validation, with
+no conversion or arithmetic instruction. Source candidate tracking carries its
+Number result through ordinary local and logical-expression staging.
+
 `Discard` is an expression root that consumes a value for effects. Native source
 call statements use it with an ordinary native value call, keeping contract
 resolution, operand scheduling, and invocation in one path. The backend emits

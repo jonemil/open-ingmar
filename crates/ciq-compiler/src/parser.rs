@@ -132,6 +132,7 @@ pub(crate) enum ExpressionKind {
         right: Box<Expression>,
     },
     Char(u32),
+    Positive(Box<Expression>),
     Negate(Box<Expression>),
     Not(Box<Expression>),
     Null,
@@ -166,9 +167,9 @@ impl Expression {
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
             ExpressionKind::Logical { .. } | ExpressionKind::ArrayLiteral(_) => true,
-            ExpressionKind::Not(operand) | ExpressionKind::Negate(operand) => {
-                operand.needs_materialization()
-            }
+            ExpressionKind::Not(operand)
+            | ExpressionKind::Positive(operand)
+            | ExpressionKind::Negate(operand) => operand.needs_materialization(),
             ExpressionKind::Binary { left, right, .. }
             | ExpressionKind::Compare { left, right, .. } => {
                 left.needs_materialization() || right.needs_materialization()
@@ -413,6 +414,9 @@ impl<'a> Parser<'a> {
             Some('-') if rest.starts_with("--") => {
                 return Err(self.error(start, "decrement operators are unsupported"));
             }
+            Some('+') if rest.starts_with("++") => {
+                return Err(self.error(start, "increment operators are unsupported"));
+            }
             Some('&') if rest.starts_with("&&") => {
                 self.offset += 2;
                 Kind::AndAnd
@@ -654,7 +658,24 @@ impl<'a> Parser<'a> {
             span,
         )
     }
+    /// Parse unary plus with its operand span and the ordinary nesting limit.
+    /// Keep construction outside unary parsing to preserve its stack budget.
+    fn positive(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let sign = self.token()?;
+        if depth >= 64 {
+            return Err(self.error(sign.span.start, "expression nesting exceeds 64 levels"));
+        }
+        let operand = self.primary(depth + 1)?;
+        let span = Span {
+            start: sign.span.start,
+            end: operand.span.end,
+        };
+        self.node(ExpressionKind::Positive(Box::new(operand)), span)
+    }
     fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? == Kind::Punctuation('+') {
+            return self.positive(depth);
+        }
         if self.peek()? == Kind::Punctuation('~') {
             return self.complement(depth);
         }
