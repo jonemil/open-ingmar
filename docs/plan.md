@@ -16,9 +16,8 @@ Choose increments by dependency, following the
    → semantic IR and IR → VM assembly against SDK `-O 0` output from our examples.
    Keep source operations explicit enough in IR to select their corresponding
    VM instructions; replace workaround sequences with direct instructions where
-   their semantics and target availability are established. Next, preserve
-   Number complement as a unary IR operation and select `invv`, then review
-   array construction (`aputvdup`/`apush`). Use the
+   their semantics and target availability are established. Next, review array
+   construction (`aputvdup`/`apush`). Use the
    [constant-array coverage baseline](investigations/constant-arrays.md).
    Follow the [lowering review](investigations/natural-lowering.md) for remaining
    representation questions; keep direct Boolean/null selection intact.

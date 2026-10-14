@@ -85,10 +85,17 @@ consume two non-null Numbers and produce Number. Shared validation rejects
 other types and missing null proofs. Lowering selects `andv`, `orv`, `xorv`,
 `shlv`, or `shrv` after emitting left and right operands once in that order.
 Shift counts pass unchanged to the VM; no range check, masking, or constant
-folding is emitted. Source `~value` becomes `.bit-xor` with a separate Number
--1 definition. There is no `.complement` directive. All ordinary block,
+folding is emitted. All ordinary block,
 single-use, staging, and effect-order rules apply. See
 [bitwise evidence](../investigations/compiler-number-bits.md).
+
+`.complement %<result-id> %<operand-id> [span=<start>:<end>]` consumes one
+non-null Number and produces its 32-bit complement as Number. Nullable operands
+require a non-null proof; other types are rejected. It retains source `~` as a
+unary operation and selects `invv`, evaluating the operand once. Single-use,
+block, staging, and effect-order rules apply. Repeated complements remain
+separate operations; ordinary `.bit-xor` still selects `xorv`. See the
+[lowering evidence](../investigations/natural-lowering.md#number-complement).
 
 Arithmetic directives use expression value IDs. For example:
 
@@ -117,8 +124,8 @@ uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 Boolean and defines Boolean. Other types are rejected without coercion. The
 operand must be an earlier definition in the same block and obey ordinary
 one-use rules. Typed and text IR recompute the contract and include the operand
-in effect traversal. Lowering evaluates it once, pushes Boolean false, and
-emits `eq`; no new VM instruction or native binding is required. Negating a
+in effect traversal. Lowering evaluates it once and emits `invv`, without a
+native binding. Negating a
 direct null comparison reverses its non-null proof edge when used by a branch.
 See the [runtime evidence](../investigations/compiler-boolean-negation.md).
 

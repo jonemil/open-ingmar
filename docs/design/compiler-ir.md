@@ -24,9 +24,10 @@ expression order. Array reads also retain order because bounds failures are
 observable; shared validation traverses array before index. Pure expressions
 may be scheduled by dependencies.
 
-Number bitwise operations reuse `Binary` and its operand contracts. Source
-complement becomes XOR with Number -1, so typed and saved IR share its
-validation and control-flow staging without a separate unary operation. The
+Number binary bitwise operations reuse `Binary` and its operand contracts.
+`Complement` preserves source `~` as a unary Number operation through parsing,
+type checking, staging, and saved IR; lowering selects `invv` after its operand.
+It does not manufacture an XOR operation or a mask constant. The
 parser keeps both arithmetic/bitwise precedence groups in its iterative
 operator stack, preserving the existing nested-expression budget. VM selection
 uses direct instructions; shift counts remain runtime operands.

@@ -163,9 +163,8 @@ or a catchable Monkey C exception. See [product evidence][products].
 
 Bitwise operators require non-null Numbers, treating values as signed 32-bit
 bit patterns. Char, Boolean, String, and nullable operands without a proof are
-rejected. `>>` is an arithmetic right shift in the tested VM. Complement lowers
-to XOR with Number -1, sharing binary validation and operand staging rather
-than adding a separate IR instruction. It evaluates its operand once.
+rejected. `>>` is an arithmetic right shift in the tested VM. Complement retains
+a unary IR operation and lowers to `invv`, evaluating its operand once.
 
 Shift counts must be non-null Numbers. The compiler passes counts unchanged,
 without range checks or masking. SDK/generated probes for -1, 32, and 33 agree

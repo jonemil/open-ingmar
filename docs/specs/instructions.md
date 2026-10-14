@@ -130,8 +130,8 @@ and `0x10`, respectively.
 SDK/reconstructed simulator results confirm 32-bit Number complement for zero,
 -1, 42, and both signed boundaries, and logical negation for true/false.
 Behavior for other value types, invalid operands, and other SDK/device versions
-is unverified. Instruction selection remains independent: our compiler uses
-XOR with -1 for Number complement and comparison with false for Boolean negation.
+is unverified. Our compiler selects `invv` for typed Number complement and
+Boolean negation; its IR retains their distinct contracts.
 
 ## popv
 
@@ -252,9 +252,8 @@ conversion, or other numeric-width behavior.
 Successful stack: `[..., a, b] → [..., a ^ b]`.
 
 The [Number-bit specimen][bits] has `12 01 12 02 0c 16` at CODE+`0x3ce`.
-SDK/generated `12 ^ 10` produces Number 6. XOR with Number -1 implements the
-compiler's 32-bit complement; zero and minimum-Number probes agree with SDK
-source `~`. Other types and VM/device versions remain unverified.
+SDK/generated `12 ^ 10` produces Number 6. Source `~` uses the separate `invv`
+instruction. Other types and VM/device versions remain unverified.
 
 ## shlv
 

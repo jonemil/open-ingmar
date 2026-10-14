@@ -143,6 +143,7 @@ pub(crate) enum ExpressionKind {
     Positive(Box<Expression>),
     Negate(Box<Expression>),
     Not(Box<Expression>),
+    Complement(Box<Expression>),
     Null,
     Boolean(bool),
     Integer(i32),
@@ -176,6 +177,7 @@ impl Expression {
         match &self.kind {
             ExpressionKind::Logical { .. } | ExpressionKind::ArrayLiteral(_) => true,
             ExpressionKind::Not(operand)
+            | ExpressionKind::Complement(operand)
             | ExpressionKind::Positive(operand)
             | ExpressionKind::Negate(operand) => operand.needs_materialization(),
             ExpressionKind::Binary { left, right, .. }
@@ -667,7 +669,7 @@ impl<'a> Parser<'a> {
         )?);
         Ok(())
     }
-    /// Parse Number complement as a spanned XOR with the all-bits-set mask.
+    /// Parse Number complement as a spanned unary expression.
     /// Isolate construction so ordinary unary parsing keeps its stack budget.
     fn complement(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         if depth >= 64 {
@@ -679,17 +681,7 @@ impl<'a> Parser<'a> {
             start: sign.span.start,
             end: operand.span.end,
         };
-        // Number complement is XOR with all 32 bits set. Keeping this in
-        // Binary shares its type checking, staging, and saved IR contract.
-        let mask = self.node(ExpressionKind::Integer(-1), sign.span)?;
-        self.node(
-            ExpressionKind::Binary {
-                kind: crate::BinaryOp::BitXor,
-                left: Box::new(operand),
-                right: Box::new(mask),
-            },
-            span,
-        )
+        self.node(ExpressionKind::Complement(Box::new(operand)), span)
     }
     /// Parse unary plus with its operand span and the ordinary nesting limit.
     /// Keep construction outside unary parsing to preserve its stack budget.

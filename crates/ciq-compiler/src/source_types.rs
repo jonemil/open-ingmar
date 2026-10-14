@@ -158,7 +158,9 @@ impl Types {
                     .get(operand)
                     .and_then(|ty| operators::not_result(candidate(ty))),
             ),
-            Operation::Negate { result, operand } | Operation::Positive { result, operand } => (
+            Operation::Negate { result, operand }
+            | Operation::Positive { result, operand }
+            | Operation::Complement { result, operand } => (
                 *result,
                 self.values
                     .get(operand)

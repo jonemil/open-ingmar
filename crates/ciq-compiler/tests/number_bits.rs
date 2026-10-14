@@ -71,10 +71,7 @@ fn binary_bit_opcodes_and_saved_ir_are_symmetric() {
         );
     }
     let f = compile("function f(a) { return ~a; }").unwrap();
-    assert_eq!(
-        f.lower().encode().unwrap(),
-        [0x35, 2, 0x12, 1, 0x38, 0xff, 0x0c, 0x16]
-    );
+    assert_eq!(f.lower().encode().unwrap(), [0x35, 2, 0x12, 1, 0x2d, 0x16]);
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
 }
 

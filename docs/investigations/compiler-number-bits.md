@@ -5,7 +5,8 @@ simulator: SDK and independently generated [apps][example] match all 25 lines
 of [expected output][output]. Number AND/OR/XOR operate on 32-bit values.
 `1 << 31` yields minimum Number; `-8 >> 1` yields -4 and minimum Number
 shifted right by 31 yields -1. Source complement of zero and minimum Number
-agrees with our XOR-with-minus-one lowering.
+agrees with the tested VM's 32-bit behavior. The
+[lowering follow-up](natural-lowering.md#number-complement) selects `invv`.
 
 ## Public reference and precedence probes
 
@@ -107,9 +108,9 @@ all count boundaries or behavior on other VM/device versions.
 Shared binary contracts require non-null Numbers. Tests cover exact parameter
 instruction sequences, source/resumed IR and unsigned PRG equivalence, assembly
 text, wrong operand types, guarded nullable reads, malformed saved operands,
-unusual precedence, left associativity, and parser limits. Complement becomes
-ordinary typed XOR with a separate -1 constant; no extra saved IR directive or
-VM complement opcode is needed. Its operand executes once.
+unusual precedence, left associativity, and parser limits. Complement now stays
+a unary `.complement` operation and selects `invv`; see the lowering follow-up
+above. Its operand executes once.
 
 Complement construction uses a separate parser helper to retain the ordinary
 nested-call stack budget. The existing nested-call boundary and long binary

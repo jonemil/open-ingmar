@@ -458,6 +458,12 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
     },
+    /// Complement one non-null Number's 32 bits, evaluating the operand once.
+    /// Nullable values require a non-null proof; other value types are rejected.
+    Complement {
+        result: ValueId,
+        operand: ValueId,
+    },
     /// Return a non-null Number operand unchanged after evaluating it once.
     /// Other operand types require a separate contract and are rejected.
     Positive {
@@ -1256,6 +1262,13 @@ impl Function {
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
+                Operation::Complement { result, operand } => {
+                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                        .and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail("complement requires a non-null Number"))?;
+                    types.insert(result, result_type);
+                    (Some(result), vec![operand])
+                }
                 Operation::Negate { result, operand } => {
                     let result_type = operators::number_unary_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
@@ -1624,6 +1637,7 @@ impl Function {
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
                                 Operation::Positive { operand, .. }
+                                | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
@@ -1924,6 +1938,9 @@ impl Function {
                 }
                 Operation::Positive { result, operand } => {
                     format!(".positive %{} %{}", result.0, operand.0)
+                }
+                Operation::Complement { result, operand } => {
+                    format!(".complement %{} %{}", result.0, operand.0)
                 }
                 Operation::Negate { result, operand } => {
                     format!(".negate %{} %{}", result.0, operand.0)

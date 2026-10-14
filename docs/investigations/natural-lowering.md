@@ -10,7 +10,7 @@ sequences for established VM instructions?
 |---|---|---|
 | Boolean `!value` | Typed `Not` / `.not` | Direct `invv` |
 | Equality/inequality with literal null | `Compare` and a `Null` definition | Direct `isnull`/`isnotnull` on the other operand |
-| Number `~value` | Parser expands to XOR with -1 | Needs explicit unary representation before direct `invv` |
+| Number `~value` | Typed `Complement` / `.complement` | Direct `invv` |
 | Array literal | Empty typed `ArrayNew`, staged values, native `add` calls | Needs construction representation before direct fill/load selection |
 | Numeric binary operations/comparisons | Typed `Binary` / `Compare` | Corresponding VM arithmetic/comparison instructions |
 
@@ -22,9 +22,9 @@ selection, without constant folding or an optimization pass. Comparison with a
 stored null-valued operand remains binary because its definition is a read,
 not a null literal. Existing type checking and flow proofs still apply.
 
-Number complement loses its unary form during parsing. Array literals lose
-construction identity when expanded into native append calls. Those source/IR
-boundaries need review before the backend can choose their natural encodings.
+Array literals lose construction identity when expanded into native append
+calls. That source/IR boundary needs review before the backend can choose its
+natural encodings.
 Do not recognize arbitrary XOR/native-call sequences as substitutes for the
 missing semantic representation. See [the plan](../plan.md#next-work).
 
@@ -70,6 +70,56 @@ The repeated audit is saved at
 generated PRGs retain fully structured CODE/DATA, exact reconstruction, and
 identical repeat exports. All 62 documented source/resumed-IR commands and both
 barrel member checks pass; the audit exposes no new decoding gaps.
+
+## Number complement
+
+Source `~value` now retains a unary parser node, `Operation::Complement`, and
+`.complement` in saved IR. Both paths require a non-null Number and preserve
+operand spans, single-use dependencies, effect scheduling, and nullable proofs.
+Lowering emits the operand once followed by `invv`. Ordinary XOR stays binary;
+`~~value` retains two unary operations rather than folding them away.
+
+**Experimentally observed:** regenerating the
+[Number-bit example](../../examples/compiler-number-bits/README.md) into
+`scratch/natural-complement/generated.prg` matches all 25 expected lines and
+the retained SDK console output, including zero/minimum-Number complements and
+a guarded nullable operand. Unsigned artifact SHA-256:
+`9b515079851cefedb8c11638598ca831ec5667cb1a13f8f1c22d81cf971b7d69`.
+
+A focused module checks call effects and staging:
+
+```monkeyc
+using Toybox.System;
+module Probe {
+    function operand() { System.println("once"); return 42; }
+    function flag() as Toybox.Lang.Boolean {
+        System.println("flag"); return true;
+    }
+    function run() {
+        System.println(~Probe.operand());
+        System.println(~(false || Probe.flag()).hashCode());
+        System.println(~~Probe.operand());
+        System.exit();
+    }
+}
+```
+
+Reuse the Number-bit app wrapper, changing its call to `Probe.run()`. Compile
+with the same API/application options and sign with our key. For the SDK,
+select these two independently authored files in a local Jungle using the
+Minimal Console manifest/resources. The generated and SDK PRGs both print
+`once`, `-43`, `flag`, `-2`, `once`, `42`, one per line. Native and resumed unit IR
+produce identical unsigned PRGs. Artifacts and logs are under
+`scratch/natural-complement/`; the SDK project is `effects-sdk/`.
+
+Shared tests reject Boolean/Char/null and unguarded nullable operands, malformed
+saved operands, and missing definitions. Source/text round trips and the
+64-prefix and nested-call parser limits pass. Array construction remains the
+next representation question; no native-call sequence recognition is added.
+
+The repeated audit at `scratch/example-audit/natural-complement/report.json`
+retains all 115 structured PRG round trips, all documented source/resumed-IR
+comparisons, and both barrel member checks, with no new decoding gaps.
 
 [boolean]: ../../examples/compiler-boolean-negation/README.md
 [nullable]: ../../examples/compiler-nullable-contracts/README.md

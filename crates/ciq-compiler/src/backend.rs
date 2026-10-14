@@ -50,6 +50,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Positive { result, .. }
+            | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
@@ -306,7 +307,7 @@ fn expression(
         Value(ValueId),
         Binary(BinaryOp),
         Negate,
-        Not,
+        Invert,
         NullCheck(bool),
         ArrayRead,
         Compare(ComparisonOp),
@@ -482,8 +483,8 @@ fn expression(
                     tasks.extend([Task::ArrayRead, Task::Value(*index), Task::Value(*array)]);
                     continue;
                 }
-                Operation::Not { operand, .. } => {
-                    tasks.extend([Task::Not, Task::Value(*operand)]);
+                Operation::Not { operand, .. } | Operation::Complement { operand, .. } => {
+                    tasks.extend([Task::Invert, Task::Value(*operand)]);
                     continue;
                 }
                 Operation::Positive { operand, .. } => {
@@ -531,7 +532,7 @@ fn expression(
                 _ => unreachable!("statement is not a value definition"),
             },
             Task::Negate => (Opcode::Subv, vec![]),
-            Task::Not => (Opcode::Invv, vec![]),
+            Task::Invert => (Opcode::Invv, vec![]),
             Task::NullCheck(false) => (Opcode::Isnull, vec![]),
             Task::NullCheck(true) => (Opcode::Isnotnull, vec![]),
             Task::ArrayRead => (Opcode::Agetv, vec![]),
