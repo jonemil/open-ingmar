@@ -45,16 +45,16 @@ xvfb-run -a -s '-screen 0 1280x1024x24' \
 Run SDK/generated PRGs separately, preserving `scratch/simulator/monkeydo.log`
 and `screen.png` after each session. Both complete logs match the fixture; the
 generated display returns to idle after `System.exit()`.
-Section export through `ciq-dis all` falls back to raw SDK CODE at
-unsupported offset `0x5b`; no new instruction encoding is inferred here.
+The [member-get follow-up](member-get-opcode.md) establishes the stacked field
+read used at CODE+`0x5b`. Full structured export still needs the gaps below.
 
 ### Outstanding toolchain coverage
 
 The compiler and simulator comparisons above do not establish complete
 assembler/disassembler coverage. Export reports two unresolved gaps:
 
-- Opcode `0x0d` at CODE+`0x5b` is unsupported, so the entire CODE payload is
-  preserved as raw binary.
+- Opcode `0x40` at CODE+`0x1d8` is unsupported, so the entire CODE payload is
+  preserved as raw binary. The instruction-boundary audit also finds it at `0x26e`.
 - The DATA record at offset `0x3397` starts with `0x03`, which the complete
   record walker does not recognize. Export attempts its supported string
   reference fallback and preserves the raw DATA payload.

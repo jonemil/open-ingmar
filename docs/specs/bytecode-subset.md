@@ -7,6 +7,7 @@ instruction encodings occur in Hello World, Minimal Console, and the
 Char constants have [separate encoding evidence](../investigations/compiler-char-literals.md).
 Signed Number immediates have [boundary evidence](../investigations/compiler-number-literals.md).
 Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
+Stacked member reads have [field-update evidence](../investigations/member-get-opcode.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -29,6 +30,7 @@ resolution occur in assembly, without stack interpretation.
 | `0a` | `shlv` | none |
 | `0b` | `shrv` | none |
 | `0c` | `xorv` | none |
+| `0d` | `getv` | none |
 | `0e` | `putv` | none |
 | `0f` | `invokem` | 1 |
 | `10` | `agetv` | none |

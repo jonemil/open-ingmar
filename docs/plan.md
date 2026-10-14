@@ -13,14 +13,13 @@ Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
 1. **Close the audited toolchain gaps.** The
-   [example audit](investigations/example-toolchain-audit.md) identifies opcodes
-   remaining opcode groups `0x0d`, `0x2d`, `0x40`, and `0x49`, plus DATA record
-   `0x03`; use [the null-check follow-up](investigations/null-check-opcodes.md)
-   for updated coverage after `0x20`/`0x4b` support.
+   [example audit](investigations/example-toolchain-audit.md) and
+   [member-get follow-up](investigations/member-get-opcode.md) leave opcode groups
+   `0x2d`, `0x40`, and `0x49`, plus DATA record `0x03`.
    Investigate their semantics and widths with focused source specimens, then
    add encoding/decoding, assembly/disassembly, and DATA read/write support.
-   Prioritize the compound-target `0x0d`, then the other
-   opcode groups and the shared DATA record. Repeat the audit after each group:
+   Prioritize `0x2d`, then the array-related opcode groups and shared DATA
+   record. Repeat the audit after each group:
    current unknowns can hide additional gaps. Require structured reconstruction
    checks before resuming new language features.
 2. **Remaining operators and assignment forms.** Add increment/decrement with

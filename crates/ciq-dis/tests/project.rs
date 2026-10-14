@@ -11,6 +11,38 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn stacked_member_get_exports_as_assembly_and_reconstructs_stably() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("first");
+    let second = temporary.0.join("second");
+    let original = Prg::from_sections(vec![
+        Section::new(
+            CODE,
+            vec![
+                0x44, 0x27, 0, 0x80, 4, 0xda, 0x2e, 1, 0x2e, 1, 0x0d, 0x43, 0, 0x80, 1, 0x53, 0x48,
+                0x03, 0x0e, 0x16,
+            ],
+        )
+        .unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Assembly);
+    let text = fs::read_to_string(first.join(&manifest.entries[0].file)).unwrap();
+    assert!(
+        text.lines()
+            .any(|line| line.trim_start().starts_with("getv"))
+    );
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    let repeated = ciq_dis::export_project(&rebuilt, &second).unwrap();
+    assert_eq!(repeated.to_text(), manifest.to_text());
+    assert_eq!(
+        fs::read_to_string(second.join(&repeated.entries[0].file)).unwrap(),
+        text
+    );
+}
+
+#[test]
 fn null_checks_export_as_assembly_and_reconstruct_with_stable_disassembly() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("first");

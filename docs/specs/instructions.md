@@ -52,6 +52,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`xorv`](#xorv): bitwise XOR.
 - [`shlv`](#shlv): left shift.
 - [`shrv`](#shrv): arithmetic right shift.
+- [`getv`](#getv): load a member using a stacked receiver and symbol.
 - [`putv`](#putv): store an object member.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
 - [`aputv`](#aputv): store an array element.
@@ -257,6 +258,26 @@ SDK/generated `-8 >> 1` produces -4, and minimum Number shifted by 31 produces
 This does not establish an unsigned-right-shift operation.
 
 [bits]: ../investigations/compiler-number-bits.md
+
+## getv
+
+**Load an object member.** Opcode `0x0d`; length **1 byte**. Operands: none.
+Successful abstract stack: `[..., object, symbol] → [..., value]`.
+
+Consumes a receiver and a Symbol value from the stack and pushes the selected
+member value. The instruction has no immediate symbol field; a preceding
+`spush` can supply the member ID and accepts a named assembly symbol.
+
+The [field-update probe](../investigations/member-get-opcode.md) emits
+`44 27 00 80 04 da 2e 01 2e 01 0d` at CODE+`0x38`: push `self`, push the
+`count` symbol, duplicate the receiver/symbol pair, and read the old field.
+The preserved pair supplies the eventual `putv` after the RHS call and addition.
+With old count 10, an RHS that sets count to 20 and returns 3 produces 13.
+
+Encoding and field-update behavior are experimentally observed with SDK 9.2.0
+and `fr265`; the general stack interpretation is cross-checked against the
+pinned research sources. Inheritance, invalid receivers, missing/read-only
+members, and other SDK/device versions are unverified.
 
 ## putv
 

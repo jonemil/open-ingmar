@@ -39,6 +39,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Instruction semantics](instruction-semantics.md): stack effects and unknowns.
 - [Null-check opcodes](null-check-opcodes.md): null equality/inequality,
   structured reconstruction, and simulator results.
+- [Stacked member get](member-get-opcode.md): compound field updates, stacked
+  symbols, and structured reconstruction.
 - [Symbol assembly](symbol-assembly.md): identity and optional placement.
 - [DATA and resources](data-and-resources.md): string records and resource indexes.
 - [DATA classes](data-classes.md): fields and method references.

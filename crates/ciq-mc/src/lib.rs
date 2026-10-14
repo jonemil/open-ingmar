@@ -38,6 +38,7 @@ opcodes! {
     Shlv = 0x0a, "shlv", [];
     Shrv = 0x0b, "shrv", [];
     Xorv = 0x0c, "xorv", [];
+    Getv = 0x0d, "getv", [];
     Putv = 0x0e, "putv", [];
     Invokem = 0x0f, "invokem", [1];
     Agetv = 0x10, "agetv", [];
@@ -206,6 +207,28 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn member_get_decodes_between_captured_location_and_rhs_call() {
+        // SDK compound-update sequence: capture self/count, read, call, add, store.
+        let bytes = [
+            0x44, 0x27, 0, 0x80, 4, 0xda, 0x2e, 1, 0x2e, 1, 0x0d, 0x43, 0, 0x80, 1, 0x53, 0x48,
+            0x03, 0x0e,
+        ];
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(
+            decoded.iter().map(|i| i.offset).collect::<Vec<_>>(),
+            [0, 1, 6, 8, 10, 11, 16, 17, 18]
+        );
+        assert_eq!(decoded[4].instruction.opcode(), Opcode::Getv);
+        assert!(Opcode::Getv.symbol_operands().is_empty());
+        let mut emitted = Vec::new();
+        for entry in decoded {
+            entry.instruction.encode_into(&mut emitted);
+        }
+        assert_eq!(emitted, bytes);
+        assert!(Instruction::new(Opcode::Getv, vec![0]).is_err());
+    }
 
     #[test]
     fn null_checks_have_no_operands_and_preserve_following_boundaries() {
