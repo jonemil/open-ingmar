@@ -254,8 +254,16 @@ uses it to fill the one-element array containing the new view.
 Observed encoding: `11` at CODE+`0x000069` in **minimal-console**,
 MinimalConsoleApp/getInitialView.
 
-**Limits:** Bounds checks, index conversion, array kinds, and error behavior
-remain unverified.
+The [Number-array write experiment][writes] also verifies replacement through
+shared references. Its SDK `Writes.fill` sequence at CODE+`0x1c7` is
+`12 01 12 02 12 02 38 0a 05 11`: load array, index, index, Number 10, multiply,
+then store. No result remains. Negative and length-equal Number indices report
+fatal `Array Out Of Bounds Error` after receiver/index/value effects.
+
+**Limits:** Other index types, Char writes, and other VM/device profiles are
+unverified. View filling does not establish general View-array replacement.
+
+[writes]: ../investigations/compiler-array-writes.md
 
 ## lgetv
 

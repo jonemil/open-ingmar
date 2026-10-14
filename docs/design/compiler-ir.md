@@ -32,6 +32,15 @@ Void calls have separate statement contracts and do not become expression
 values. The IR accepts discarded pure values even though the source subset
 restricts expression statements to calls and assignments.
 
+`ArrayWrite` is a resultless statement with receiver, index, and value operands.
+It preserves the receiver's invariant Number element contract and existing
+alias identity. The backend emits each operand once, left to right, then
+`aputv`; shared effect validation rejects reordered definitions. When source
+operands need control-flow staging, the builder snapshots all three into
+ordinary typed locals in that order. This retains the earlier receiver/index
+across later branches while leaving plain writes free of temporary slots.
+Bounds checks remain with the runtime, after operand effects.
+
 Array literals use staged construction alongside logical expressions.
 `ArrayNew` creates an empty typed array before element effects, and native
 append maintains its invariant element contract. The builder keeps the array

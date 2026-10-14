@@ -1,0 +1,14 @@
+writes
+receiver
+index
+value
+[20, 99]
+receiver
+index
+flag
+selected
+[20, 7]
+[0, 10]
+41
+2
+done

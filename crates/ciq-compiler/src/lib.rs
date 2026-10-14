@@ -438,6 +438,14 @@ pub enum Operation {
         array: ValueId,
         index: ValueId,
     },
+    /// Replace a Number-array element without producing a value or resizing.
+    /// Evaluate receiver, Number index, and Number value once in that order;
+    /// runtime bounds checks occur at the write, after operand effects.
+    ArrayWrite {
+        array: ValueId,
+        index: ValueId,
+        value: ValueId,
+    },
     /// Invert one non-null Boolean and produce Boolean, evaluating it once.
     /// Other types are rejected rather than converted to truth values.
     Not {
@@ -1204,6 +1212,20 @@ impl Function {
                     );
                     (Some(result), vec![array, index])
                 }
+                Operation::ArrayWrite {
+                    array,
+                    index,
+                    value,
+                } => {
+                    if type_of(array) != ValueType::Array(ArrayElement::Number) {
+                        return Err(fail("array writes require a Number-array receiver"));
+                    }
+                    if type_of(index) != ValueType::Integer || type_of(value) != ValueType::Integer
+                    {
+                        return Err(fail("array writes require non-null Number index and value"));
+                    }
+                    (None, vec![array, index, value])
+                }
                 Operation::Not { result, operand } => {
                     let result_type = operators::not_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
@@ -1504,6 +1526,7 @@ impl Function {
                         ..
                     }
                     | Operation::ArrayRead { .. }
+                    | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
                     | Operation::NativeNew { .. }
                     | Operation::TupleNew { .. }
@@ -1533,6 +1556,11 @@ impl Function {
             let mut schedule = Vec::new();
             for (index, located) in operations.iter().enumerate() {
                 let roots = match &located.operation {
+                    Operation::ArrayWrite {
+                        array,
+                        index,
+                        value,
+                    } => vec![*array, *index, *value],
                     Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
                     | Operation::SelfFieldAssign { value, .. }
@@ -1862,6 +1890,11 @@ impl Function {
                     array,
                     index,
                 } => format!(".array-read %{} %{} %{}", result.0, array.0, index.0),
+                Operation::ArrayWrite {
+                    array,
+                    index,
+                    value,
+                } => format!(".array-write %{} %{} %{}", array.0, index.0, value.0),
                 Operation::Not { result, operand } => {
                     format!(".not %{} %{}", result.0, operand.0)
                 }

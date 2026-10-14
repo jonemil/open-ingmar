@@ -156,6 +156,17 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ]);
                 continue;
             }
+            Operation::ArrayWrite {
+                array,
+                index,
+                value,
+            } => {
+                expression(array, &definitions, &slots, &strings, &mut items);
+                expression(index, &definitions, &slots, &strings, &mut items);
+                expression(value, &definitions, &slots, &strings, &mut items);
+                items.push(instruction(Opcode::Aputv, vec![]));
+                continue;
+            }
             Operation::SelfFieldAssign { ref field, value } => {
                 items.push(instruction(Opcode::Getself, vec![]));
                 items.push(instruction(

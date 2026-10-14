@@ -5,6 +5,9 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Number-array writes](compiler-array-writes.md): operand order, alias
+  mutation, saved IR validation, and bounds failures.
+
 ## Reference environment
 
 - [Official Garmin documentation](official-garmin-documentation.md): language,

@@ -10,6 +10,12 @@ pub(crate) struct ParsedFunction {
 }
 
 pub(crate) enum Statement {
+    ArrayAssign {
+        array: Expression,
+        index: Expression,
+        value: Expression,
+        span: Span,
+    },
     FieldAssign {
         name: String,
         value: Expression,
@@ -72,7 +78,7 @@ impl Statement {
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
-            Self::FieldAssign { span, .. } => *span,
+            Self::FieldAssign { span, .. } | Self::ArrayAssign { span, .. } => *span,
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
@@ -1057,38 +1063,41 @@ impl<'a> Parser<'a> {
                 _ => {
                     let expression = self.expression(0)?;
                     if self.peek()? == Kind::Punctuation('=') {
-                        let (name, field) = match expression.kind {
-                            ExpressionKind::Local(name) => (name, false),
-                            ExpressionKind::SelfField(name) => (name, true),
-                            _ => {
+                        if let ExpressionKind::Local(name) = &expression.kind {
+                            if self.source[expression.span.start..expression.span.end] != *name {
                                 return Err(self.error(
                                     start,
-                                    "assignment target must be a local or self field",
+                                    "assignment target must be a bare local identifier",
                                 ));
                             }
-                        };
-                        if !field && self.source[expression.span.start..expression.span.end] != name
-                        {
+                        }
+                        if !matches!(
+                            expression.kind,
+                            ExpressionKind::Local(_)
+                                | ExpressionKind::SelfField(_)
+                                | ExpressionKind::ArrayRead { .. }
+                        ) {
                             return Err(self.error(
                                 start,
-                                "assignment target must be a bare local identifier",
+                                "assignment target must be a local, self field, or array element",
                             ));
                         }
                         self.token()?;
                         let value = self.expression(0)?;
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        if field {
-                            Statement::FieldAssign {
-                                name,
+                        let span = Span { start, end };
+                        match expression.kind {
+                            ExpressionKind::ArrayRead { array, index } => Statement::ArrayAssign {
+                                array: *array,
+                                index: *index,
                                 value,
-                                span: Span { start, end },
+                                span,
+                            },
+                            ExpressionKind::SelfField(name) => {
+                                Statement::FieldAssign { name, value, span }
                             }
-                        } else {
-                            Statement::Assign {
-                                name,
-                                value,
-                                span: Span { start, end },
-                            }
+                            ExpressionKind::Local(name) => Statement::Assign { name, value, span },
+                            _ => unreachable!("checked assignment target"),
                         }
                     } else {
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;

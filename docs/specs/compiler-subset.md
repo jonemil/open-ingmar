@@ -37,6 +37,7 @@ result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
+          | primary "[" expression "]" "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | module "." member "(" argument-list? ")" ";"
           | "return" expression? ";"
@@ -857,9 +858,30 @@ The compiler emits `agetv`, with no clamping, negative-index adjustment, or
 static bounds analysis. An index outside `0..array.size()` remains a runtime
 obligation; the tested VM reports a fatal bounds error. Reads are order-sensitive
 in IR validation even without other calls/writes, because failure order is
-observable. String/dictionary indexing, element writes, nullable arrays, and
-other element contracts remain unsupported. See the
+observable. String/dictionary indexing, Char/View element writes, nullable
+arrays, and other element contracts remain unsupported. See the
 [array-read evidence](../investigations/compiler-array-reads.md).
+
+## Number-array element writes
+
+`array[index] = value;` replaces an element of a non-null `Array<Number>`.
+Index and value must each be non-null Number; guarded fresh nullable Number
+reads are accepted. Receiver, index, and value evaluate once, in that order.
+The assignment produces no value and does not change the array's length.
+Aliases observe the changed element. Calls in the value expression may mutate
+array contents or length before the write checks its index.
+
+Lowering evaluates the three operands and emits `aputv`. Logical expressions
+or array construction in any operand stage all three operands through hidden
+locals in order; these locals use the ordinary frame budget. Plain operands
+need no hidden slots. Bounds are a runtime obligation, with no clamping or
+static range rejection. The tested VM reports a fatal bounds error after all
+operand effects, including for an index equal to the length.
+
+Char/View writes, nested arrays, compound assignments, and assignments used as
+expressions remain unsupported. See [write evidence][array-writes].
+
+[array-writes]: ../investigations/compiler-array-writes.md
 
 ## Number arrays
 

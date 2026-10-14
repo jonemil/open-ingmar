@@ -12,9 +12,9 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Array access and mutation.** Start with Number-array indexed writes and
-   receiver/index/value evaluation order. Extend the shared element contract to
-   other supported arrays through evidence. Review remaining Array methods;
+1. **Array access and mutation.** Extend verified Number-array indexed writes
+   to Char/View arrays through evidence, preserving the shared element contract
+   and receiver/index/value evaluation order. Review remaining Array methods;
    sorting needs callable/comparator support.
 2. **Remaining operators and assignment forms.** Add Number bitwise operators
    and shifts, unary plus, then compound assignments and increment/decrement

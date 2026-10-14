@@ -951,6 +951,38 @@ impl Builder<'_> {
                 ));
             }
             match statement {
+                parser::Statement::ArrayAssign {
+                    array,
+                    index,
+                    value,
+                    ..
+                } => {
+                    // Keep earlier operands stable across control-flow staging
+                    // in any later expression; plain operands need no temporaries.
+                    let (array, index, value) = if array.needs_materialization()
+                        || index.needs_materialization()
+                        || value.needs_materialization()
+                    {
+                        (
+                            self.snapshot(array, locals)?,
+                            self.snapshot(index, locals)?,
+                            self.snapshot(value, locals)?,
+                        )
+                    } else {
+                        (array, index, value)
+                    };
+                    let array = self.value(array, locals)?;
+                    let index = self.value(index, locals)?;
+                    let value = self.value(value, locals)?;
+                    self.push(
+                        Operation::ArrayWrite {
+                            array,
+                            index,
+                            value,
+                        },
+                        Some(span),
+                    );
+                }
                 parser::Statement::FieldAssign { name, value, .. } => {
                     let value = self.value(value, locals)?;
                     self.push(

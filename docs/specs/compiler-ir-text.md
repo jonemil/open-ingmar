@@ -233,8 +233,27 @@ the function has no calls, prints, or writes.
 Index values are not range-checked, clamped, or adjusted by the compiler.
 Negative and other out-of-range Numbers remain accepted IR inputs whose reads
 may fail at runtime. Other element types, String/dictionary receivers, nullable arrays,
-and writes are unsupported. See the [source profile](compiler-subset.md#char-arrays)
-and [runtime evidence](../investigations/compiler-array-reads.md).
+and Char/View writes are unsupported. See the
+[source profile](compiler-subset.md#char-arrays) and
+[runtime evidence](../investigations/compiler-array-reads.md).
+
+## Array element writes
+
+`.array-write %<array> %<index> %<value> [span=<start>:<end>]` is a statement
+with no result. It consumes a non-null Number array, non-null Number index,
+and non-null Number value. Shared validation recomputes these types and null
+proofs, checks defined block-local single-use operands, and preserves their
+left-to-right evaluation order. Writes activate the effect-order check even
+without calls or printing; reads cannot move across a write.
+
+Lowering emits receiver, index, value, then `aputv`, without a discarded result.
+Negative and out-of-range indices remain accepted inputs with runtime bounds
+obligations. The operation does not resize the array. API availability follows
+Array and Number (1.0.0); source literal construction or native operand calls
+may require a later API independently. Source staging across joins appears as
+ordinary typed locals in saved IR and uses the existing frame budget.
+See [source rules](compiler-subset.md#number-array-element-writes) and
+[write evidence](../investigations/compiler-array-writes.md).
 
 ## API context inputs
 
