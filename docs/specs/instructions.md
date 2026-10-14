@@ -260,8 +260,14 @@ shared references. Its SDK `Writes.fill` sequence at CODE+`0x1c7` is
 then store. No result remains. Negative and length-equal Number indices report
 fatal `Array Out Of Bounds Error` after receiver/index/value effects.
 
-**Limits:** Other index types, Char writes, and other VM/device profiles are
-unverified. View filling does not establish general View-array replacement.
+The [Char/View replacement experiment][typed-writes] verifies the same stack
+contract for both element kinds, including alias visibility and source View
+references. Char length-equal and View negative-index probes report the same
+fatal bounds error after operand effects in SDK and generated apps.
+
+**Limits:** Other index types and other VM/device profiles are unverified.
+
+[typed-writes]: ../investigations/compiler-typed-array-writes.md
 
 [writes]: ../investigations/compiler-array-writes.md
 

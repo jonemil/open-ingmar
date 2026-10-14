@@ -95,8 +95,9 @@ Focused checks cover source/resumed IR and unsigned PRG equivalence, assembly
 text, exact primitive bytes/spans, API 1.0.0 parameter writes, malformed saved
 operands, wrong types, missing/invalidated null proofs, and read/write effect
 order. Plain writes work at the existing frame limit; staged hidden locals
-consume that budget and diagnose overflow. Char/View writes and broader Array
-contracts remain separate follow-up work.
+consume that budget and diagnose overflow. The
+[Char/View extension](compiler-typed-array-writes.md) records the shared
+element contract and its separate runtime evidence.
 
 [example]: ../../examples/compiler-array-writes/README.md
 [output]: ../../examples/compiler-array-writes/expected.txt

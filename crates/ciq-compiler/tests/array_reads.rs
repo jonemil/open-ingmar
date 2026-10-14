@@ -60,7 +60,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()[null]; }",
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()['A']; }",
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()[0][0]; }",
-        "function f() { var a = \"abc\".toCharArray(); a[0] = 'X'; return 0; }",
+        "function f() { var a = \"abc\".toCharArray(); a[0] = 2; return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return \"abc\".toCharArray()[n]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");

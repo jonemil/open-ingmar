@@ -20,7 +20,9 @@ index still run before the second write's logical expression and selected-value
 call. Loop writes retain the shortened length, and the guarded conversion
 writes Number 41.
 
-Only Number-array writes are supported. Bounds checks remain with the runtime;
+Char/View writes use the same contract; see the
+[typed-array example](../compiler-typed-array-writes/README.md). Bounds checks
+remain with the runtime;
 an index equal to the length does not append. See the
-[source contract](../../docs/specs/compiler-subset.md#number-array-element-writes)
+[source contract](../../docs/specs/compiler-subset.md#array-element-writes)
 and [investigation](../../docs/investigations/compiler-array-writes.md).

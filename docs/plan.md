@@ -12,25 +12,26 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Array access and mutation.** Extend verified Number-array indexed writes
-   to Char/View arrays through evidence, preserving the shared element contract
-   and receiver/index/value evaluation order. Review remaining Array methods;
-   sorting needs callable/comparator support.
-2. **Remaining operators and assignment forms.** Add Number bitwise operators
+1. **Remaining operators and assignment forms.** Add Number bitwise operators
    and shifts, unary plus, then compound assignments and increment/decrement
    with checked assignment targets and evaluation order. Investigate conditional
    expressions and their result-type joins separately.
-3. **Dictionary.** Establish construction, key/value contracts, literals,
+2. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.
-4. **Numeric types and deferred methods.** Add Long/Float/Double values,
+3. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-5. **Object and callable/reference facilities.** Grow shared Object contracts,
+4. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+
+Array sorting remains deferred until comparator/callable support. Inherited
+Array equality, hashing, and ordinary weak references need array-specific
+evidence in the Object-contract phase; the immutable weak specialization does
+not establish them.
 
 A blocked method should lead to its core type/operator/callable prerequisite or
 another core class group. Retain explicit deferred-method inventories; declaring

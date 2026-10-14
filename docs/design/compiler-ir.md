@@ -33,8 +33,9 @@ values. The IR accepts discarded pure values even though the source subset
 restricts expression statements to calls and assignments.
 
 `ArrayWrite` is a resultless statement with receiver, index, and value operands.
-It preserves the receiver's invariant Number element contract and existing
-alias identity. The backend emits each operand once, left to right, then
+It preserves the receiver's invariant Number/Char/View element contract and
+existing alias identity. Source View instances project to the native element
+type; array slots do not retain exact source-class identity. The backend emits each operand once, left to right, then
 `aputv`; shared effect validation rejects reordered definitions. When source
 operands need control-flow staging, the builder snapshots all three into
 ordinary typed locals in that order. This retains the earlier receiver/index

@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-typed-array-writes](compiler-typed-array-writes/README.md): Char
+  replacement and shared native/source View references.
 - [compiler-array-writes](compiler-array-writes/README.md): Number element
   replacement, alias visibility, and operand order.
 - [compiler-native-calls](compiler-native-calls/README.md): inherited Number

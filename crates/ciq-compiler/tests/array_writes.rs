@@ -75,8 +75,8 @@ fn writes_reject_wrong_types_unproven_nulls_and_nonassignment_targets() {
         "function f() { var a = [1]; (a) = [2]; return 0; }",
         "function f() { 1[0] = 2; return 0; }",
         "function f() { \"ab\"[0] = 2; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a[0] = 'X'; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) { a[0] = v; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a[0] = 2; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) { a[0] = null; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { a[n] = 2; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { a[0] = n; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { if (n != null) { n = null; a[0] = n; } return 0; }",
@@ -166,4 +166,80 @@ fn staged_write_temporaries_use_the_existing_frame_budget() {
         "{}",
         error.message
     );
+}
+
+#[test]
+fn char_and_view_writes_preserve_unit_and_complete_application_pipelines() {
+    let ctx = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(2, 1, 0)).unwrap();
+    let unit = compile_sources_with_api(
+        &[
+            include_str!("../../../examples/compiler-typed-array-writes/app.mc"),
+            include_str!("../../../examples/compiler-typed-array-writes/writes.mc"),
+        ],
+        ctx,
+    )
+    .unwrap();
+    let resumed = parse_unit_ir_with_api(&unit.to_ir_text(), ctx).unwrap();
+    assert_eq!(unit, resumed);
+    let options = ConsoleApplication {
+        id: [54; 16],
+        entry: "MinimalConsoleApp.onStart".into(),
+    };
+    assert_eq!(
+        build_console_application(&unit, &options).unwrap(),
+        build_console_application(&resumed, &options).unwrap()
+    );
+    let assembly = unit.lower();
+    assert_eq!(
+        assembly,
+        ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+    );
+}
+
+#[test]
+fn element_writes_share_encoding_but_recheck_invariant_types_and_api_levels() {
+    for element in ["Toybox.Lang.Char", "Toybox.WatchUi.View"] {
+        let f = compile(&format!("function f(a as Toybox.Lang.Array<{element}>, i, v as {element}) as Void {{ a[i] = v; }}")).unwrap();
+        assert_eq!(
+            f.lower().encode().unwrap(),
+            [0x35, 4, 0x12, 1, 0x12, 2, 0x12, 3, 0x11, 0x16]
+        );
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let introduction = if element.ends_with("Char") {
+            ApiLevel(1, 3, 0)
+        } else {
+            ApiLevel(1, 0, 0)
+        };
+        let ctx = ApiContext::new(introduction, introduction).unwrap();
+        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), ctx).unwrap());
+        if element.ends_with("Char") {
+            let older = ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap();
+            assert!(parse_ir_with_api(&f.to_ir_text(), older).is_err());
+        }
+    }
+    for source in [
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a[0] = null; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a[0] = \"x\"; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a['a'] = 'b'; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, d as Toybox.WatchUi.BehaviorDelegate) as Void { a[0] = d; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, d as Toybox.Graphics.Dc) as Void { a[0] = d; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a[0] = 1; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a[0] = ['a']; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) as Void { a[0] = v; }").unwrap();
+    for (from, to) in [
+        ("view-array", "char-array"),
+        ("view-array", "number-array"),
+        ("view-array", "tuple-view"),
+        (
+            "types=view-array:view",
+            "types=view-array:behavior-delegate",
+        ),
+    ] {
+        let text = f.to_ir_text();
+        assert!(text.contains(from), "fixture: {from}\n{text}");
+        assert!(parse_ir(&text.replace(from, to)).is_err(), "{to}");
+    }
 }

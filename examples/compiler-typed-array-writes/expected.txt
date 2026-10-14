@@ -1,0 +1,19 @@
+char receiver
+index
+char value
+Ω
+2
+ω
+t
+view receiver
+index
+flag
+view value
+0
+1
+2
+-1
+0
+0
+2
+done

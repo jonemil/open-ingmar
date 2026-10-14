@@ -858,15 +858,18 @@ The compiler emits `agetv`, with no clamping, negative-index adjustment, or
 static bounds analysis. An index outside `0..array.size()` remains a runtime
 obligation; the tested VM reports a fatal bounds error. Reads are order-sensitive
 in IR validation even without other calls/writes, because failure order is
-observable. String/dictionary indexing, Char/View element writes, nullable
-arrays, and other element contracts remain unsupported. See the
+observable. String/dictionary indexing, nullable arrays, and other element
+contracts remain unsupported. See the
 [array-read evidence](../investigations/compiler-array-reads.md).
 
-## Number-array element writes
+## Array element writes
 
-`array[index] = value;` replaces an element of a non-null `Array<Number>`.
-Index and value must each be non-null Number; guarded fresh nullable Number
-reads are accepted. Receiver, index, and value evaluate once, in that order.
+`array[index] = value;` replaces an element of a non-null supported array.
+The index must be non-null Number; the value must match the invariant Number,
+Char, or native View element contract. Guarded fresh nullable Number reads are
+accepted for Number indices/values. View values may be native or source View
+instances; storing/reading through a View array erases exact source identity.
+Null values, delegates, and drawing contexts cannot fill View slots. Receiver, index, and value evaluate once, in that order.
 The assignment produces no value and does not change the array's length.
 Aliases observe the changed element. Calls in the value expression may mutate
 array contents or length before the write checks its index.
@@ -878,8 +881,9 @@ need no hidden slots. Bounds are a runtime obligation, with no clamping or
 static range rejection. The tested VM reports a fatal bounds error after all
 operand effects, including for an index equal to the length.
 
-Char/View writes, nested arrays, compound assignments, and assignments used as
-expressions remain unsupported. See [write evidence][array-writes].
+Nested arrays, compound assignments, and assignments used as expressions
+remain unsupported. See [Number write evidence][array-writes] and
+[Char/View write evidence](../investigations/compiler-typed-array-writes.md).
 
 [array-writes]: ../investigations/compiler-array-writes.md
 

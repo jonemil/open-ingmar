@@ -154,6 +154,9 @@ exercises Boolean results and call order across expression joins.
 The [Char array example](examples/compiler-char-arrays/README.md) exercises
 String conversion, typed array calls, and read-only Array methods.
 
+The [typed-array write example](examples/compiler-typed-array-writes/README.md)
+checks Char replacement and shared native/source View references.
+
 The [array-write example](examples/compiler-array-writes/README.md) checks
 Number element replacement, aliases, and operand order.
 

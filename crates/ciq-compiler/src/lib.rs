@@ -438,8 +438,9 @@ pub enum Operation {
         array: ValueId,
         index: ValueId,
     },
-    /// Replace a Number-array element without producing a value or resizing.
-    /// Evaluate receiver, Number index, and Number value once in that order;
+    /// Replace a supported array element without producing a value or resizing.
+    /// Require a non-null Number index and a value matching the element type.
+    /// Evaluate receiver, index, and value once in that order;
     /// runtime bounds checks occur at the write, after operand effects.
     ArrayWrite {
         array: ValueId,
@@ -1217,12 +1218,16 @@ impl Function {
                     index,
                     value,
                 } => {
-                    if type_of(array) != ValueType::Array(ArrayElement::Number) {
-                        return Err(fail("array writes require a Number-array receiver"));
+                    let ValueType::Array(element) = type_of(array) else {
+                        return Err(fail("array writes require a supported array receiver"));
+                    };
+                    if type_of(index) != ValueType::Integer {
+                        return Err(fail("array writes require a non-null Number index"));
                     }
-                    if type_of(index) != ValueType::Integer || type_of(value) != ValueType::Integer
-                    {
-                        return Err(fail("array writes require non-null Number index and value"));
+                    if Some(type_of(value)) != ValueType::from_api_type(&element.api_type()) {
+                        return Err(fail(
+                            "array write value must match the receiver's element type",
+                        ));
                     }
                     (None, vec![array, index, value])
                 }
