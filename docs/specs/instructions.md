@@ -127,6 +127,17 @@ HelloWorldView/onUpdate.
 **Limits:** Operand order matters. Numeric promotion and overflow behavior
 remain unverified.
 
+## mulv
+
+**Multiply two values.** Opcode `0x05`; length **1 byte**. Operands: none.
+
+Abstract stack: `[..., a, b] → [..., a * b]`.
+
+Observed at CODE+`0x76` in the SDK-built Number-products specimen. Generated
+Number multiplication matches the SDK's signed results and representative
+32-bit overflow behavior. Other numeric types/promotions remain unverified.
+See [product evidence](../investigations/compiler-number-products.md).
+
 ## divv
 
 **Divide two values.** Opcode `0x06`; length **1 byte**. Operands: none.
@@ -139,8 +150,23 @@ while calculating display coordinates.
 Observed encoding: `06` at CODE+`0x00007c` in **hello-world**,
 HelloWorldView/onUpdate.
 
-**Limits:** Integer rounding, mixed numeric types, division by zero, and
-exceptional values need controlled experiments.
+Number-product probes establish signed truncation toward zero and an
+`Invalid Value` app failure for zero divisors. The minimum Number divided by -1
+exits the SDK simulator process; portable behavior and exception recovery remain
+unestablished. Mixed numeric types remain unverified. See
+[product evidence](../investigations/compiler-number-products.md).
+
+## modv
+
+**Compute the remainder of two values.** Opcode `0x09`; length **1 byte**.
+Operands: none. Abstract stack: `[..., a, b] → [..., a % b]`.
+
+Observed at CODE+`0x9a` in the SDK-built Number-products specimen. For signed
+Number pairs, the remainder has the dividend's sign. A zero divisor fails the
+app with `Invalid Value`; the minimum Number with divisor -1 exits the SDK
+simulator with status -8. This is process-failure evidence, not a portable
+Number result or Monkey C exception contract. Other types remain unverified.
+See [product evidence](../investigations/compiler-number-products.md).
 
 ## orv
 

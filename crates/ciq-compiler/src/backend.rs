@@ -540,6 +540,9 @@ fn expression(
                 match kind {
                     BinaryOp::Add => Opcode::Addv,
                     BinaryOp::Subtract => Opcode::Subv,
+                    BinaryOp::Multiply => Opcode::Mulv,
+                    BinaryOp::Divide => Opcode::Divv,
+                    BinaryOp::Remainder => Opcode::Modv,
                 },
                 vec![],
             ),

@@ -105,6 +105,11 @@ Podman and a desktop display are unavailable in the agent container.
 
 ## Run the simulator with a virtual display
 
+The simulator session helper clears its console log before startup and captures
+the display after a runtime process exit, reporting the native exit code. A
+startup failure does not establish that a PRG ran; do not interpret an older
+screen capture as a new runtime result.
+
 After building Hello World, run from the host where Podman is installed:
 
 ```sh

@@ -95,6 +95,9 @@ pub(crate) const MAX_OPERATIONS: usize = 1024;
 pub enum BinaryOp {
     Add,
     Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
 /// Native class identities supported as non-null object references.
@@ -1487,6 +1490,10 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::ModuleCall { .. }
+                    | Operation::Binary {
+                        kind: BinaryOp::Divide | BinaryOp::Remainder,
+                        ..
+                    }
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayNew { .. }
                     | Operation::NativeNew { .. }
@@ -1606,7 +1613,7 @@ impl Function {
                 return Err(IrError {
                     operation: Some(*actual),
                     message: format!(
-                        "functions with calls, array reads, prints, or assignments require expression evaluation order in IR (expected operation {expected})"
+                        "functions with calls, division/remainder, array reads, prints, or assignments require expression evaluation order in IR (expected operation {expected})"
                     ),
                 });
             }
@@ -1858,6 +1865,9 @@ impl Function {
                     match kind {
                         BinaryOp::Add => "add",
                         BinaryOp::Subtract => "subtract",
+                        BinaryOp::Multiply => "multiply",
+                        BinaryOp::Divide => "divide",
+                        BinaryOp::Remainder => "remainder",
                     },
                     result.0,
                     left.0,

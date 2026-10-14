@@ -30,8 +30,10 @@ opcodes! {
     Popv = 0x02, "popv", [];
     Addv = 0x03, "addv", [];
     Subv = 0x04, "subv", [];
+    Mulv = 0x05, "mulv", [];
     Divv = 0x06, "divv", [];
     Orv = 0x08, "orv", [];
+    Modv = 0x09, "modv", [];
     Putv = 0x0e, "putv", [];
     Invokem = 0x0f, "invokem", [1];
     Agetv = 0x10, "agetv", [];

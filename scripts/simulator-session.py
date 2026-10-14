@@ -60,6 +60,8 @@ def main():
 
     output = repo / "scratch" / ("simulator-interactive" if args.interactive else "simulator")
     output.mkdir(parents=True, exist_ok=True)
+    console_log = output / "monkeydo.log"
+    console_log.write_text("")
     with (output / "simulator.log").open("w") as log:
         print("Launching Garmin simulator; waiting up to 30 seconds for its shell...", flush=True)
         simulator = subprocess.Popen([str(sdk / "bin/simulator")], cwd=sdk / "bin", stdout=log,
@@ -78,7 +80,6 @@ def main():
                         raise RuntimeError("Simulator shell did not become ready on port 1234 within 30 seconds.")
                     time.sleep(0.25)
             print("Simulator shell ready. Loading PRG...", flush=True)
-            console_log = output / "monkeydo.log"
             with console_log.open("w") as client_log:
                 console = subprocess.Popen([str(sdk / "bin/monkeydo"), str(prg), args.device],
                                            cwd=repo, stdout=client_log, stderr=subprocess.STDOUT,
@@ -111,14 +112,14 @@ def main():
                             break
                         time.sleep(0.25)
                     print(reader.read(), end="", flush=True)
-            if simulator.poll() is not None:
-                raise RuntimeError("Simulator exited; inspect scratch/simulator/simulator.log and monkeydo.log.")
             if console.poll() is None:
                 print("monkeydo is still active. Capturing the display before ending the session...", flush=True)
             else:
                 print(f"monkeydo exited with code {console.returncode}. Capturing the display...", flush=True)
             subprocess.run(["import", "-window", "root", str(output / "screen.png")], check=True, timeout=15)
             print("Session captured in scratch/simulator/: screen.png, simulator.log, monkeydo.log.", flush=True)
+            if simulator.poll() is not None:
+                raise RuntimeError(f"Simulator exited with code {simulator.returncode}; inspect the capture and logs.")
             if console.poll() is not None and console.returncode:
                 raise RuntimeError(f"monkeydo exited with code {console.returncode}; inspect the capture and logs.")
             print("Inspect the capture and logs against the chosen example's expected output; an active console alone does not confirm execution.")

@@ -173,6 +173,9 @@ pub(crate) fn parse_ir_context(
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
             Some(".subtract") => (3, 4),
+            Some(".multiply") => (42, 4),
+            Some(".divide") => (43, 4),
+            Some(".remainder") => (44, 4),
             Some(".local") => (4, 3),
             Some(".read") => (5, 3),
             Some(".call") => (
@@ -593,10 +596,13 @@ pub(crate) fn parse_ir_context(
         } else {
             Operation::Binary {
                 result: parse_value(&fields[1])?,
-                kind: if kind == 2 {
-                    BinaryOp::Add
-                } else {
-                    BinaryOp::Subtract
+                kind: match kind {
+                    2 => BinaryOp::Add,
+                    3 => BinaryOp::Subtract,
+                    42 => BinaryOp::Multiply,
+                    43 => BinaryOp::Divide,
+                    44 => BinaryOp::Remainder,
+                    _ => unreachable!("all non-binary directives parsed above"),
                 },
                 left: parse_value(&fields[2])?,
                 right: parse_value(&fields[3])?,

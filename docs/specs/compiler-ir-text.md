@@ -26,8 +26,9 @@ rejected. Identifiers use the assembly label identifier rules. An implicit
 single-block body contains ordered local initializations, print
 statements, calls, and expression trees, ending with `.return <value-id>` or
 `.return-void`. Explicit blocks support branches and loops as specified below.
-Definitions are `.integer <result-id> <value>`, `.add <result-id>
-<left-id> <right-id>`, and `.subtract <result-id> <left-id> <right-id>`. Value
+Definitions are `.integer <result-id> <value>` and binary directives
+`.add`, `.subtract`, `.multiply`, `.divide`, and `.remainder`, each with
+`<result-id> <left-id> <right-id>`. Value
 IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
 values are decimal i32 values in `-2147483648..=2147483647`, with an optional
 leading minus and no plus/hex/suffix/underscore syntax. Canonical output uses
@@ -68,6 +69,15 @@ exposed through `Function::lower()`) creates the shared assembly `Program`
 directly; it does not print/reparse text. `Function::assembly()` is convenience
 lowering plus assembly printing. This gives a native source → IR → assembly
 model → CODE encoder path and text stop/resume points at both IR and assembly.
+
+`.multiply`, `.divide`, and `.remainder` require two non-null Number operands
+and produce Number. Other types, including nullable Number without a proof,
+are rejected. Lowering selects `mulv`, `divv`, and `modv`; no constant folding
+or guard is emitted. Division/remainder may fail at runtime and therefore
+require expression evaluation order in IR, even without calls or assignments.
+A saved graph that would reorder them is rejected. Literal zero divisors remain
+runtime operations. Rounding, signs, overflow evidence, and the simulator's
+minimum-Number/-1 failure follow the [source arithmetic contract][products].
 
 Arithmetic directives use expression value IDs. For example:
 
@@ -1030,3 +1040,5 @@ parameter is narrowed by the original's proof. Parameters have no write
 operation, so unrelated local writes preserve parameter facts.
 No casts or new VM instructions are introduced. See the
 [complete example](../../examples/compiler-nullable-contracts/README.md).
+
+[products]: compiler-subset.md#arithmetic-and-lowering-contract

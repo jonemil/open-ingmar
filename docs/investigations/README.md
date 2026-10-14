@@ -51,6 +51,9 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number products](compiler-number-products.md): multiplication/division/remainder,
+  signs, precedence, operand effects, and runtime/process failures.
+
 - [Input counter](compiler-input-counter.md): native delegate metadata,
   View/delegate results, and matching SDK/generated touchscreen behavior.
 

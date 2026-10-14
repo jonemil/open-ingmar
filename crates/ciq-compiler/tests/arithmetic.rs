@@ -113,7 +113,7 @@ fn malformed_source_expressions_keep_precise_diagnostics() {
         "(40 + 2",
         "40 + )",
         "40 ** 2",
-        "40 / 2",
+        "40 /",
         "-value",
         "40 + 2147483648",
         "40 + value",

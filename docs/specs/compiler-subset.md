@@ -47,7 +47,8 @@ expression = logical-or
 logical-or = logical-and ("||" logical-and)*
 logical-and = comparison ("&&" comparison)*
 comparison = arithmetic (("==" | ">") arithmetic)?
-arithmetic = unary (("+" | "-") unary)*
+arithmetic = product (("+" | "-") product)*
+product = unary (("*" | "/" | "%") unary)*
 unary = primary | "-" primary | "!" unary
 primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
@@ -90,7 +91,7 @@ empty/multiple-character literals and supplementary characters are rejected.
 retain source byte spans, and require API 1.3.0 with explicit context. See the
 [literal evidence](../investigations/compiler-char-literals.md).
 
-The IR contains integer/string/Boolean/Char constants, binary add/subtract
+The IR contains integer/string/Boolean/Char constants, binary arithmetic
 definitions,
 parameter reads, local initialization/read, module calls, print statements, and
 comparisons, branches, and typed value returns using value IDs, with optional
@@ -99,7 +100,8 @@ compilation supplies them; IR text may omit them. Without locals, lowering emits
 a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
 or the smallest signed `ipush1`/`ipush2`/`ipush3`/`ipush4` for another Number,
 left/right operands followed by
-`addv` or `subv` for binary definitions, then `return`. The frame count follows
+`addv`, `subv`, `mulv`, `divv`, or `modv` for binary definitions, then `return`.
+The frame count follows
 the observed hidden context slot; omitting SDK global-resolution instructions is
 limited to this context-independent body. It does not establish the frame layout
 or valid setup for arbitrary functions.
@@ -125,8 +127,10 @@ source. CODE output is a raw payload, not a PRG. See
 
 ## Arithmetic and lowering contract
 
-The source subset supports binary `+` and `-` with equal precedence and left
-associativity, and parentheses for grouping. Decimal literals cover the signed
+The source subset supports binary `+`, `-`, `*`, `/`, and `%`. Multiplication,
+division, and remainder share a precedence above addition/subtraction. Each
+group associates left to right; parentheses override grouping. Decimal literals
+cover the signed
 32-bit range. Unary minus binds more tightly than binary arithmetic and after
 postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
 `abs` on the negated value. Boolean `!` uses the same precedence, supports
@@ -136,13 +140,21 @@ object calls remain unsupported; the bounded native calls below are separate. Pa
 bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
 
+Number division truncates toward zero; remainder has the dividend's sign.
+Multiplication uses the Number VM instruction; representative overflow probes
+wrap to signed 32-bit values. Zero divisors are runtime failures, including
+literal zero; the compiler does not fold arithmetic or insert exception guards.
+The SDK 9.2.0 simulator exits when the minimum Number is divided by, or has
+remainder taken against, -1. This boundary does not establish a portable result
+or a catchable Monkey C exception. See [product evidence][products].
+
 ### Operator contracts
 
 Validation resolves operand API types to these result contracts:
 
 | Operands | Operators | Result |
 |---|---|---|
-| Number / Number | `+`, `-` | Number |
+| Number / Number | `+`, `-`, `*`, `/`, `%` | Number |
 | Number | unary `-` | Number |
 | Boolean | unary `!` | Boolean |
 | Char / Number, Number / Char | `+` | Char |
@@ -190,7 +202,7 @@ are rejected without truth-value conversion. Postfix calls bind first:
 the method on the inverted value. See the
 [Boolean negation evidence](../investigations/compiler-boolean-negation.md).
 
-Semantic IR contains typed add/subtract definitions with explicit
+Semantic IR contains typed arithmetic definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
 definitions are unique, operands refer to earlier definitions, every defined
 value has exactly one use, and initialization statements, branches, prints, or
@@ -199,7 +211,9 @@ graphs and unused definitions remain rejected until their scheduling policy is
 implemented. For pure-only functions, definition order need not be VM stack
 order: the backend traverses each initializer/return expression and emits left
 operand, right operand, then
-`addv`/`subv`, preserving subtraction order. No constant folding is performed.
+`addv`/`subv`/`mulv`/`divv`/`modv`, preserving operand order. Division and
+remainder activate strict evaluation-order checks because they may fail.
+No constant folding is performed.
 VM selection lives in `ciq_compiler::backend::lower`; `Function::lower()`
 delegates to it. Source parsing, IR validation/text I/O, and assembly encoding
 share the existing stage boundaries.
@@ -1035,3 +1049,5 @@ a runtime obligation; the declared result remains nullable.
 [string-group]: ../investigations/compiler-string-methods.md
 
 [weak-evidence]: ../investigations/compiler-immutable-weak.md
+
+[products]: ../investigations/compiler-number-products.md

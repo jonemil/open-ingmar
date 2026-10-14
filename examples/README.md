@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   source View references, aliases, and same-class reassignment.
 - [compiler-source-signatures](compiler-source-signatures/README.md): source View
   parameter/result contracts, factories, and cross-file reference forwarding.
+- [compiler-number-products](compiler-number-products/README.md): signed Number
+  multiplication/division/remainder, precedence, and operand order.
 - [compiler-input-counter](compiler-input-counter/README.md): View/delegate
   results, retained state, and Boolean selection callbacks.
 - [compiler-reference-fields](compiler-reference-fields/README.md): constructor

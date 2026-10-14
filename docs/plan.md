@@ -8,9 +8,11 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 Prioritize core Lang types and operators next, using the class-focused strategy
-below. Start with Number multiplication/division/remainder and their precedence,
-evaluation, and error rules, then broader comparisons, container access/mutation,
-and numeric types needed by deferred Lang methods. Keep the
+below. Next, extend Number comparisons and their operand/refinement rules,
+then container access/mutation and numeric types needed by deferred Lang methods.
+Investigate the simulator process failure for minimum Number / -1 and % -1
+separately before claiming portable boundary behavior or exception recovery.
+Keep the
 [input counter](../examples/compiler-input-counter/README.md) as a validation
 harness for constructors, retained references, positional results, and Boolean
 callbacks. Broader View transitions, controls, drawing, and event classes wait

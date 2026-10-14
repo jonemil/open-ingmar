@@ -416,7 +416,7 @@ impl<'a> Parser<'a> {
             }
             Some(
                 c @ ('(' | ')' | '{' | '}' | '[' | ']' | ';' | '+' | '-' | '=' | '.' | ',' | '>'
-                | '<' | '!'),
+                | '<' | '!' | '*' | '/' | '%'),
             ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
@@ -537,29 +537,58 @@ impl<'a> Parser<'a> {
         )
     }
     fn arithmetic(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        let mut left = self.unary(depth)?;
+        // Keep precedence handling iterative: another parser frame on every
+        // operand would reduce the supported nested-call/parenthesis budget.
+        let mut values = vec![self.unary(depth)?];
+        let mut operators = Vec::<(crate::BinaryOp, u8)>::new();
         loop {
-            let kind = match self.peek()? {
-                Kind::Punctuation('+') => crate::BinaryOp::Add,
-                Kind::Punctuation('-') => crate::BinaryOp::Subtract,
+            let (kind, precedence) = match self.peek()? {
+                Kind::Punctuation('+') => (crate::BinaryOp::Add, 1),
+                Kind::Punctuation('-') => (crate::BinaryOp::Subtract, 1),
+                Kind::Punctuation('*') => (crate::BinaryOp::Multiply, 2),
+                Kind::Punctuation('/') => (crate::BinaryOp::Divide, 2),
+                Kind::Punctuation('%') => (crate::BinaryOp::Remainder, 2),
                 _ => break,
             };
+            while operators
+                .last()
+                .is_some_and(|(_, previous)| *previous >= precedence)
+            {
+                let (previous, _) = operators.pop().unwrap();
+                self.reduce_arithmetic(&mut values, previous)?;
+            }
             self.token()?;
-            let right = self.unary(depth)?;
-            let span = Span {
-                start: left.span.start,
-                end: right.span.end,
-            };
-            left = self.node(
-                ExpressionKind::Binary {
-                    kind,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                },
-                span,
-            )?;
+            operators.push((kind, precedence));
+            values.push(self.unary(depth)?);
         }
-        Ok(left)
+        while let Some((kind, _)) = operators.pop() {
+            self.reduce_arithmetic(&mut values, kind)?;
+        }
+        Ok(values.pop().unwrap())
+    }
+
+    /// Combine the last two parsed operands into a spanned binary expression.
+    /// The operator stack only requests reduction after both operands exist.
+    fn reduce_arithmetic(
+        &mut self,
+        values: &mut Vec<Expression>,
+        kind: crate::BinaryOp,
+    ) -> Result<(), Diagnostic> {
+        let right = values.pop().unwrap();
+        let left = values.pop().unwrap();
+        let span = Span {
+            start: left.span.start,
+            end: right.span.end,
+        };
+        values.push(self.node(
+            ExpressionKind::Binary {
+                kind,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            span,
+        )?);
+        Ok(())
     }
     fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         if self.peek()? == Kind::Punctuation('!') {

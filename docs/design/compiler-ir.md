@@ -124,6 +124,14 @@ requires call result metadata to equal the callee's result; callers cannot hide
 a nullable result behind scalar metadata. Inferred scalar/Void contracts remain
 available for functions without an explicit result declaration.
 
+Division and remainder remain Number operations selected as VM instructions.
+Their runtime failures make evaluation order observable, so they activate the
+same strict definition/effect schedule as calls and reads. Saved IR cannot move
+a potentially failing computation ahead of an earlier computation merely by
+changing its consumer order. Multiplication retains ordinary dependency-based
+lowering when no ordered effects are present. No arithmetic folding or
+exception-handling policy is introduced.
+
 ## Null-check facts
 
 Nullable Number/String values preserve their union until control flow proves
@@ -140,6 +148,8 @@ the supported guard forms and their limits.
 ## Layer responsibilities and naming
 
 The frontend resolves source syntax, names, and scopes into semantic IR.
+Arithmetic precedence uses an iterative operator stack so nested calls and
+parentheses do not require an extra parser frame for each precedence level.
 `ciq-compiler::backend` selects VM instructions and frame/local storage;
 `Function::lower()` delegates to `backend::lower()`. Assembly owns selected
 instructions, symbolic operands, layout, binding, and encoding through
