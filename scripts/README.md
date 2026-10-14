@@ -1,5 +1,28 @@
 # SDK support scripts
 
+## Example toolchain audit
+
+From the repository root, build the tools and choose a fresh ignored output
+directory:
+
+```sh
+cargo build -p ciq-compiler -p ciq-dis -p ciq-asm -p ciq-package
+python3 scripts/audit-examples.py --output scratch/example-audit/new-run
+```
+
+The helper checks documented compiler source/IR/assembly/PRG paths, retained SDK
+PRG export/reconstruction, and barrel member round trips. It saves full reports
+and logs, and returns nonzero for incomplete coverage, including raw CODE/DATA
+fallback or missing SDK specimens. It does not run simulator sessions or rebuild
+SDK inputs. Use `--bin-dir` for another tool build and `--sdk-index <file.json>`
+to select SDK PRGs explicitly. The index maps example directory names to one
+path or a list of paths for multiple specimens.
+
+Unknown opcode discovery uses decoder walks from CODE start and recorded
+source-line PCs, never guessed widths or arbitrary-byte resynchronization.
+The inventory can grow after earlier unknowns are implemented. See the
+[audit findings and limits](../docs/investigations/example-toolchain-audit.md).
+
 ## Input counter check
 
 `check-input-counter.py` runs the independently authored

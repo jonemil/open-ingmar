@@ -12,12 +12,15 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Close current toolchain gaps.** Investigate opcode `0x0d` at CODE+`0x5b`
-   and the DATA record starting with `0x03` at DATA+`0x3397` in the
-   [compound-target specimen](investigations/compiler-compound-targets.md).
-   Add the required decoding/encoding, structured assembly/disassembly, and
-   record reading/writing support, with evidence and reconstruction checks.
-   Recheck related core-language specimens for remaining fallback diagnostics.
+1. **Close the audited toolchain gaps.** The
+   [example audit](investigations/example-toolchain-audit.md) identifies opcodes
+   `0x0d`, `0x20`, `0x2d`, `0x40`, `0x49`, and `0x4b`, plus DATA record `0x03`.
+   Investigate their semantics and widths with focused source specimens, then
+   add encoding/decoding, assembly/disassembly, and DATA read/write support.
+   Prioritize widespread `0x20` and the compound-target `0x0d`, then the other
+   opcode groups and the shared DATA record. Repeat the audit after each group:
+   current unknowns can hide additional gaps. Require structured reconstruction
+   checks before resuming new language features.
 2. **Remaining operators and assignment forms.** Add increment/decrement with
    checked local/field/indexed targets and prefix/postfix results, preserving
    captured locations and read/effect order. Investigate conditional
@@ -128,7 +131,9 @@ all their encodings or runtime behavior are understood:
   and immediate encodings with focused specimens.
 - **Declarations and lookup:** global/module variables and initialization,
   the complete reserved-keyword set (including `alias` and `typedef`),
-  constants/enums, lexical/member lookup, bare calls, qualified names,
+  constants/enums, lexical/member lookup, bare calls (including the
+  [audited SDK examples](investigations/example-toolchain-audit.md#frontendproject-limits)),
+  qualified names,
   `using` aliases and `import` type visibility. Add field/static initialization,
   access modifiers, overriding, and source superclass dispatch as the object
   model grows.
