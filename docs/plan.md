@@ -95,6 +95,19 @@ lossless payload reconstruction where applicable, source/text pipeline
 equivalence, and simulator behavior. These checks establish separate guarantees;
 a zero exit status or successful compiler-generated app alone is insufficient.
 
+For our SDK-compiled specimens, require SDK PRG → structured section project →
+our assembler → rebuilt PRG → structured section project. Unchanged unsigned
+payloads must reconstruct byte-for-byte, and the two exported projects must
+match. Required CODE/DATA support cannot pass through raw fallback. Apply the
+same reconstruction checks to our compiler-generated PRGs. Preserve signatures
+for exact reconstruction tests; test own-key signing separately.
+
+This baseline validates the assembler/disassembler independently of instruction
+selection. Our compiler need not emit the SDK's instruction sequence or an
+identical PRG, including before optimization work. Compare SDK/generated runtime
+behavior separately; future lowering and optimizations may change assembly
+while preserving that behavior and our own reconstruction guarantees.
+
 ## Native Lang strategy
 
 Organize native Lang work around one class at a time. The compiler implements

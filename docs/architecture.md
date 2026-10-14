@@ -74,6 +74,11 @@ output an update signed by the original publisher. See
 
 - **Opaque preservation**: unchanged reading/writing must retain every byte,
   including signatures, without requiring an original private key.
+- **Structured reconstruction**: SDK-compiled specimens and our generated PRGs
+  must disassemble into assembler input for the required CODE/DATA profile,
+  reassemble unchanged, and produce the same structured export on disassembly.
+  Raw fallback does not establish this guarantee. Without re-signing, require
+  byte equality with each input PRG; compiler output need not equal SDK output.
 - **Reassembly with signing**: accept expected signature/public-key changes,
   verify the new identity and integrity, check intended code/data changes, and
   independently compare unrelated sections.
