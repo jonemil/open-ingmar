@@ -22,18 +22,29 @@ Choose increments by dependency, following the
    where their references require it. Repeat the audit after each group:
    current unknowns can hide additional gaps. Require structured reconstruction
    checks before resuming new language features.
-2. **Remaining operators and assignment forms.** Add increment/decrement with
+2. **Review natural lowering.** Before adding language features, review source
+   → semantic IR and IR → VM assembly against SDK `-O 0` output from our examples.
+   Keep source operations explicit enough in IR to select their corresponding
+   VM instructions; replace workaround sequences with direct instructions where
+   their semantics and target availability are established. Start with Number
+   complement/Boolean negation (`invv`), null checks (`isnull`/`isnotnull`), and
+   array construction after its decoding gaps are closed. Preserve types,
+   evaluation order, captured locations, and failure behavior. Validate native
+   and text paths, structured reconstruction, and SDK/generated simulator
+   behavior. This is baseline instruction selection, not optimization; matching
+   SDK binary layout or every instruction sequence is not required.
+3. **Remaining operators and assignment forms.** Add increment/decrement with
    checked local/field/indexed targets and prefix/postfix results, preserving
    captured locations and read/effect order. Investigate conditional
    expressions and their result-type joins separately.
-3. **Dictionary.** Establish construction, key/value contracts, literals,
+4. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.
-4. **Numeric types and deferred methods.** Add Long/Float/Double values,
+5. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-5. **Object and callable/reference facilities.** Grow shared Object contracts,
+6. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
