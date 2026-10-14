@@ -57,6 +57,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`putv`](#putv): store an object member.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
 - [`aputv`](#aputv): store an array element.
+- [`aputvdup`](#aputvdup): store an array element and retain the array.
 - [`lgetv`](#lgetv): load a local-frame slot.
 - [`lputv`](#lputv): store a local-frame slot.
 - [`newa`](#newa): create an array.
@@ -383,6 +384,27 @@ fatal bounds error after operand effects in SDK and generated apps.
 [typed-writes]: ../investigations/compiler-typed-array-writes.md
 
 [writes]: ../investigations/compiler-array-writes.md
+
+## aputvdup
+
+**Store an array element and retain the array.** Opcode `0x49`; length
+**1 byte**. Operands: none. Successful abstract stack:
+`[..., array, index, value] → [..., array]`.
+
+Unlike `aputv`, this store leaves the array on the stack for subsequent stores.
+The SDK uses it for non-final elements in the
+[effectful literal probe](../investigations/array-fill-opcode.md), at CODE+`0x53`
+and `0x60`. A final `aputv` consumes the last store's operands. An earlier
+`dup 0x00` retains a separate array reference for the completed literal result.
+
+SDK/reconstructed execution preserves element effects and values in source
+order. Changing the second index from 1 to 3 in a length-three array triggers
+an out-of-bounds error after its RHS prints 20, before the third RHS executes.
+This confirms write-time bounds checking for that specimen.
+
+The general stack effect is source-derived and cross-checked with the compiled
+sequence. Other element types, invalid receivers/index types, exception
+recovery, and other SDK/device versions remain unverified by this probe.
 
 ## lgetv
 

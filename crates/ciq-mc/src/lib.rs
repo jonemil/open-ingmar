@@ -83,6 +83,7 @@ opcodes! {
     Getlocalv = 0x46, "getlocalv", [1, 4];
     Getsv = 0x47, "getsv", [4];
     Invokemz = 0x48, "invokemz", [];
+    Aputvdup = 0x49, "aputvdup", [];
     Argcincsp = 0x4a, "argcincsp", [1, 1];
     Isnotnull = 0x4b, "isnotnull", [];
 }
@@ -208,6 +209,23 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retaining_array_store_has_no_operands_and_preserves_next_index() {
+        let bytes = [0x14, 0x37, 0x38, 10, 0x49, 0x38, 1, 0x38, 20, 0x11];
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(
+            decoded.iter().map(|i| i.offset).collect::<Vec<_>>(),
+            [0, 1, 2, 4, 5, 7, 9]
+        );
+        assert_eq!(decoded[3].instruction.opcode(), Opcode::Aputvdup);
+        let mut emitted = Vec::new();
+        for entry in decoded {
+            entry.instruction.encode_into(&mut emitted);
+        }
+        assert_eq!(emitted, bytes);
+        assert!(Instruction::new(Opcode::Aputvdup, vec![0]).is_err());
+    }
 
     #[test]
     fn inversion_has_no_operands_and_preserves_following_branch_boundaries() {

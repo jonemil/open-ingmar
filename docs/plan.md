@@ -14,11 +14,11 @@ Choose increments by dependency, following the
 
 1. **Close the audited toolchain gaps.** The
    [example audit](investigations/example-toolchain-audit.md) and
-   [inversion follow-up](investigations/invert-opcode.md) leave opcode groups
-   `0x40` and `0x49`, plus DATA record `0x03`.
+   [array-fill follow-up](investigations/array-fill-opcode.md) leave opcode
+   `0x40` and DATA record `0x03`.
    Investigate their semantics and widths with focused source specimens, then
    add encoding/decoding, assembly/disassembly, and DATA read/write support.
-   Investigate the array-literal opcode groups and shared DATA record together
+   Investigate the constant-array opcode and shared DATA record together
    where their references require it. Repeat the audit after each group:
    current unknowns can hide additional gaps. Require structured reconstruction
    checks before resuming new language features.

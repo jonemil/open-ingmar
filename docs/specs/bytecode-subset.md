@@ -9,6 +9,7 @@ Signed Number immediates have [boundary evidence](../investigations/compiler-num
 Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
 Stacked member reads have [field-update evidence](../investigations/member-get-opcode.md).
 Inversion has [Number/Boolean evidence](../investigations/invert-opcode.md).
+Retaining array stores have [literal-fill evidence](../investigations/array-fill-opcode.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -76,6 +77,7 @@ resolution occur in assembly, without stack interpretation.
 | `46` | `getlocalv` | 1, 4 |
 | `47` | `getsv` | 4 |
 | `48` | `invokemz` | none |
+| `49` | `aputvdup` | none |
 | `4a` | `argcincsp` | 1, 1 |
 | `4b` | `isnotnull` | none |
 

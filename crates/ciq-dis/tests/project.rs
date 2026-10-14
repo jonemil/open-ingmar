@@ -11,6 +11,34 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn retaining_array_stores_export_and_reconstruct_as_structured_assembly() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("first");
+    let second = temporary.0.join("second");
+    let original = Prg::from_sections(vec![
+        Section::new(
+            CODE,
+            vec![
+                0x38, 2, 0x14, 0x2e, 0, 0x37, 0x38, 10, 0x49, 0x38, 1, 0x38, 20, 0x11, 0x16,
+            ],
+        )
+        .unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Assembly);
+    let text = fs::read_to_string(first.join(&manifest.entries[0].file)).unwrap();
+    assert!(text.contains("aputvdup"));
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    let repeated = ciq_dis::export_project(&rebuilt, &second).unwrap();
+    assert_eq!(repeated.to_text(), manifest.to_text());
+    assert_eq!(
+        fs::read_to_string(second.join(&repeated.entries[0].file)).unwrap(),
+        text
+    );
+}
+
+#[test]
 fn inversion_and_following_branch_export_as_structured_assembly() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("first");

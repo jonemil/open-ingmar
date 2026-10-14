@@ -25,6 +25,8 @@ toolchain gaps at this audit. The
 the [member-get follow-up](member-get-opcode.md) establishes `0x0d`, and the
 [inversion follow-up](invert-opcode.md) establishes `0x2d`. Each records subsequent
 reconstruction checks. The table below records the initial inventory.
+The [array-fill follow-up](array-fill-opcode.md) establishes `0x49` and its
+write-time bounds behavior.
 
 | Unsupported opcode | Example groups | Representative |
 |---|---|---|
