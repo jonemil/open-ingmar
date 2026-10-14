@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+description = "Restricted Monkey C compiler and semantic IR for Connect IQ"
 
 [dependencies]
 ciq-assembly.workspace = true

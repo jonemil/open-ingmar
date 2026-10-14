@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+description = "Connect IQ VM instruction encoding and decoding"
 
 [lints]
 workspace = true

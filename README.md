@@ -4,6 +4,8 @@ An independent Rust toolchain for Garmin Connect IQ: PRG containers, VM
 instructions, assembly/disassembly, signing, barrel/IQ packaging, and a
 restricted Monkey C compiler.
 
+This is an independent project, unaffiliated with Garmin.
+
 The compiler uses semantic IR and symbolic assembly to generate complete console
 applications. Source classes, module/self calls, integer arithmetic, string
 literals/printing, locals, conditions, and loops are supported within the
@@ -278,3 +280,13 @@ recipe, and independently created example resources. Documentation retains
 reproduction details without requiring local artifacts to exist. Review
 `git status --short --untracked-files=all` and `git diff --cached` before
 committing; ignore rules do not remove files already tracked by Git.
+
+## License and contributions
+
+Copyright 2026 Jon Emil Jahren and contributors. Our source, documentation, and
+examples are licensed under either [MIT](LICENSE-MIT) or
+[Apache-2.0](LICENSE-APACHE), at your option. Third-party dependencies and external
+reference materials retain their own licenses.
+
+See [contributing](CONTRIBUTING.md) for development checks, investigation
+boundaries, and contribution licensing.
