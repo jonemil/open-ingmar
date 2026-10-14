@@ -136,7 +136,9 @@ exception-handling policy is introduced.
 
 Nullable Number/String values preserve their union until control flow proves
 a local or parameter non-null. `null_flow` tracks those storage identities
-separately, sharing facts between typed construction and text resumption. Fresh
+separately, sharing facts between typed construction and text resumption.
+Direct null equality establishes a false-edge fact; null inequality establishes
+a true-edge fact. Boolean negation reverses the edge for either comparison. Fresh
 reads use the facts while declared types remain nullable. Joins retain only
 facts provided by every path. Local writes invalidate that local's fact;
 parameter slots are immutable in the supported IR. Copies are separate

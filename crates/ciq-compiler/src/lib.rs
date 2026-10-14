@@ -85,6 +85,15 @@ pub struct BlockId(pub u32);
 pub enum ComparisonOp {
     Equal,
     Greater,
+    Less,
+    LessEqual,
+    GreaterEqual,
+    NotEqual,
+}
+impl ComparisonOp {
+    pub(crate) fn is_equality(self) -> bool {
+        matches!(self, Self::Equal | Self::NotEqual)
+    }
 }
 
 pub(crate) const MAX_PARAMETERS: usize = 254;
@@ -935,7 +944,7 @@ impl Function {
                     kind,
                 } => {
                     let checked_type = |value| {
-                        if kind == ComparisonOp::Equal
+                        if kind.is_equality()
                             && (type_of(left) == ValueType::Null
                                 || type_of(right) == ValueType::Null)
                         {
@@ -1725,6 +1734,10 @@ impl Function {
                     match kind {
                         ComparisonOp::Equal => "equal",
                         ComparisonOp::Greater => "greater",
+                        ComparisonOp::Less => "less",
+                        ComparisonOp::LessEqual => "less-equal",
+                        ComparisonOp::GreaterEqual => "greater-equal",
+                        ComparisonOp::NotEqual => "not-equal",
                     },
                     result.0,
                     left.0,

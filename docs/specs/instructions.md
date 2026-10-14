@@ -684,8 +684,25 @@ otherwise execution falls through. General truth conversion is unverified.
 **Compare equality.** Opcode `0x1a`; length **1 byte**; no operands.
 Source-derived stack effect: `[..., left, right] → [..., Boolean(left ==
 right)]`. Observed at CODE+`0xb4`, after an integer parameter and zero are
-loaded. Both comparison outcomes execute in the simulator. Object/string
-equality and mixed-type behavior remain unverified.
+loaded. Both comparison outcomes execute in the simulator. The bounded scalar,
+String-identity, and null-check profiles follow
+[comparison evidence](../investigations/compiler-number-comparisons.md); general
+object/mixed numeric behavior remains unverified.
+
+## lt / lte / gte / ne
+
+**Compare two values.** Each instruction is one byte with no operands:
+`lt` = `0x1b`, `lte` = `0x1c`, `gte` = `0x1e`, `ne` = `0x1f`.
+
+Abstract stack: `[..., a, b] → [..., Boolean]`, using `a < b`, `a <= b`,
+`a >= b`, or `a != b`. Operand order is preserved.
+
+SDK-built comparison specimens confirm the encodings at CODE+`0xd1`, `0xf5`,
+`0x119`, and `0x14f` respectively. Number/Char ordering, Boolean inequality,
+String alias identity, and supported null checks match our generated code.
+Inequality follows the equality profile; it does not establish String content
+comparison. Other object/numeric profiles remain unverified. See
+[comparison evidence](../investigations/compiler-number-comparisons.md).
 
 ## gt
 

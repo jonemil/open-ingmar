@@ -8,8 +8,10 @@ prerequisite for project resolution; package writing is not a substitute for
 compiling a project.
 
 Prioritize core Lang types and operators next, using the class-focused strategy
-below. Next, extend Number comparisons and their operand/refinement rules,
-then container access/mutation and numeric types needed by deferred Lang methods.
+below. Next, extend container access/mutation and numeric types needed by
+deferred Lang methods. Start with Number-array element writes, using loops
+and the checked comparison/operator profile, before introducing Dictionary
+construction and lookup contracts.
 Investigate the simulator process failure for minimum Number / -1 and % -1
 separately before claiming portable boundary behavior or exception recovery.
 Keep the

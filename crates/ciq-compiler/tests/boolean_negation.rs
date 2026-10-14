@@ -68,7 +68,7 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
         "!null",
         "!-1",
         "!true + 1",
-        "1 != 2",
+        "1 !== 2",
     ] {
         assert!(
             compile(&format!(

@@ -133,6 +133,9 @@ constructor arguments and reference fields across lifecycle callbacks.
 The [input counter](examples/compiler-input-counter/README.md) returns a
 View/delegate pair and redraws retained state after selection callbacks.
 
+The [Number comparison example](examples/compiler-number-comparisons/README.md)
+checks ordering, inequality, operand order, and null guards.
+
 The [Number products example](examples/compiler-number-products/README.md) checks
 multiplication, division, remainder, precedence, and operand effects.
 

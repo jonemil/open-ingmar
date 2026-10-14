@@ -515,6 +515,10 @@ fn expression(
                 match kind {
                     ComparisonOp::Equal => Opcode::Eq,
                     ComparisonOp::Greater => Opcode::Gt,
+                    ComparisonOp::Less => Opcode::Lt,
+                    ComparisonOp::LessEqual => Opcode::Lte,
+                    ComparisonOp::GreaterEqual => Opcode::Gte,
+                    ComparisonOp::NotEqual => Opcode::Ne,
                 },
                 vec![],
             ),

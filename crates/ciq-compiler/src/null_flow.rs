@@ -14,7 +14,8 @@ pub(crate) enum Place {
 
 /// Compute non-null locals and parameters at block entries. Facts intersect
 /// across incoming edges; local writes invalidate the corresponding fact.
-/// Read == null tests establish a fact on the false edge; each Boolean Not
+/// Read == null tests establish a fact on the false edge; != null on the true
+/// edge. Each Boolean Not
 /// reverses that edge. Stored Boolean conditions do not carry such facts.
 /// Entry has no external guarantees.
 pub(crate) fn inputs(
@@ -136,14 +137,17 @@ fn guard_place(
         non_null = !non_null;
     }
     let Operation::Compare {
-        kind: ComparisonOp::Equal,
-        left,
-        right,
-        ..
+        kind, left, right, ..
     } = operations[comparison].operation
     else {
         return None;
     };
+    if !kind.is_equality() {
+        return None;
+    }
+    if kind == ComparisonOp::NotEqual {
+        non_null = !non_null;
+    }
     let (&left, &right) = (definitions.get(&left)?, definitions.get(&right)?);
     let read = match (&operations[left].operation, &operations[right].operation) {
         (read, Operation::Null { .. }) if read_place(read).is_some() => left,

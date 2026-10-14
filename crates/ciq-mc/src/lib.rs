@@ -47,7 +47,11 @@ opcodes! {
     News = 0x18, "news", [4];
     Goto = 0x19, "goto", [2];
     Eq = 0x1a, "eq", [];
+    Lt = 0x1b, "lt", [];
+    Lte = 0x1c, "lte", [];
     Gt = 0x1d, "gt", [];
+    Gte = 0x1e, "gte", [];
+    Ne = 0x1f, "ne", [];
     Jsr = 0x23, "jsr", [2];
     Ipush4 = 0x25, "ipush4", [4];
     Spush = 0x27, "spush", [4];

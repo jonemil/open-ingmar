@@ -497,10 +497,13 @@ ciq-ir
 
 - `.block ^<id>` starts a block; IDs are decimal `u32`, distinct from `%` values
   and `$` locals. Block IDs must be unique; the first block is entry.
-- `.equal %<result> %<left> %<right>` and `.greater` compare Number/Char pairs and define
-  a Boolean result. `.equal` also accepts the String identity profile, two Booleans, and the supported
-  dictionary/null checks. Branches, Boolean locals, equality, and printing may
-  consume Boolean results.
+- `.equal`, `.not-equal`, `.less`, `.less-equal`, `.greater`, and `.greater-equal`
+  each take `%<result> %<left> %<right>`. They compare Number/Char pairs and
+  define Boolean. Equality/inequality also accept the String identity profile,
+  Boolean pairs, and supported dictionary/null checks. Ordering rejects String,
+  Boolean, null, and unproved nullable operands. Lowering selects `eq`, `ne`,
+  `lt`, `lte`, `gt`, and `gte` respectively; operand evaluation remains left to
+  right. See [comparison evidence](../investigations/compiler-number-comparisons.md).
 - `.branch %<condition> ^<true-target> ^<false-target>` consumes a Boolean and
   terminates the block. The two targets may be the same block.
 - `.jump ^<target>` terminates the block unconditionally.
@@ -676,10 +679,10 @@ errors. For example:
 .function onStart parameters=1 receiver=instance parameter-types=nullable-dictionary
 ```
 
-`.null %<result-id> [span=<start>:<end>]` defines null. `.equal` permits
+`.null %<result-id> [span=<start>:<end>]` defines null. `.equal`/`.not-equal` permit
 Number/Char pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
 it also accepts the String identity profile below.
-`.greater` permits Number/Char pairs. Callback-state reads/locals preserve their
+Ordering directives permit Number/Char pairs. Callback-state reads/locals preserve their
 opaque nullable type.
 Printing and arithmetic reject Null and Dictionary values. Null may be used
 in nullable Number/String user contracts; Dictionary remains callback-only. A nullable Dictionary local may be assigned null; other
@@ -925,10 +928,12 @@ mutation/search/transform methods above need 1.3.0. See the source
 
 `.add` on Number/Number defines Number, on Char/Number or Number/Char defines
 Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.
-`.equal`/`.greater` accept Number/Char in either order and Char/Char, defining
+All six comparison directives accept Number/Char in either order and Char/Char,
+defining
 Boolean. An exact String on either side of `.add` accepts Number/String/Boolean/
 Char/Null and supported nullable Number/String alternatives, defining String.
-The corresponding `.equal` profile excludes Boolean and compares String
+The corresponding `.equal`/`.not-equal` profiles exclude Boolean mixing and
+compare String
 identity, not content. String ordering and subtraction are unsupported. These
 operations provide no non-null proof for the other operand; two unchecked
 nullable operands do not satisfy the exact String requirement. Other Boolean
@@ -936,8 +941,8 @@ and null comparison rules remain as described above. See the
 [String evidence](../investigations/compiler-string-operators.md).
 Numeric mixed equality differs from Object.equals; no implicit conversion is
 added to user signatures. Every producer and resumed text recomputes these
-results from operand types. Lowering uses `addv`, `subv`, `eq`, or `gt`, without
-native conversion calls. Existing one-use, block, and effect-order rules apply.
+results from operand types. Lowering selects arithmetic/comparison instructions directly, without native
+conversion calls. Existing one-use, block, and effect-order rules apply.
 See [the operator evidence](../investigations/compiler-char-operators.md).
 
 Zero-argument `weak` accepts Number, String, or Boolean and defines that exact
@@ -975,14 +980,15 @@ ciq-ir
 Number-or-Null according to its API contract; String `substring` defines
 String-or-Null. Index API
 requirements are the same as the [source contract][nullable-source]. The existing
-`.local`, `.read`, `.null`, `.equal`, and
+`.local`, `.read`, `.null`, `.equal`, `.not-equal`, and
 `.branch` forms carry this behavior; no assertion or unchecked cast operation
 is introduced. Equality with Null is accepted in either order.
 
 Shared IR validation computes non-null local and parameter facts from control
 flow. A branch whose condition is a direct `.equal` between `.read` or
 `.parameter` and `.null` establishes that storage identity's fact on its false
-edge. A chain of `.not` definitions around that comparison reverses the proof
+edge. A direct `.not-equal` check establishes it on the true edge instead.
+A chain of `.not` definitions around either comparison reverses the proof
 edge once per operation. Every definition in the guard chain must precede its
 consumer in the branch's block. The checked read must be in that block; a checked
 local must have

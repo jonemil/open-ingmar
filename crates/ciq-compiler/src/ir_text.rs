@@ -202,6 +202,10 @@ pub(crate) fn parse_ir_context(
             Some(".jump") => (12, 2),
             Some(".equal") => (13, 4),
             Some(".greater") => (14, 4),
+            Some(".less") => (45, 4),
+            Some(".less-equal") => (46, 4),
+            Some(".greater-equal") => (47, 4),
+            Some(".not-equal") => (48, 4),
             Some(".null") => (21, 2),
             Some(".call-native") => (22, call_width()),
             Some(".assign") => (15, 3),
@@ -518,13 +522,17 @@ pub(crate) fn parse_ir_context(
             Operation::Jump {
                 target: parse_block(&fields[1])?,
             }
-        } else if kind == 13 || kind == 14 {
+        } else if matches!(kind, 13 | 14 | 45..=48) {
             Operation::Compare {
                 result: parse_value(&fields[1])?,
-                kind: if kind == 13 {
-                    ComparisonOp::Equal
-                } else {
-                    ComparisonOp::Greater
+                kind: match kind {
+                    13 => ComparisonOp::Equal,
+                    14 => ComparisonOp::Greater,
+                    45 => ComparisonOp::Less,
+                    46 => ComparisonOp::LessEqual,
+                    47 => ComparisonOp::GreaterEqual,
+                    48 => ComparisonOp::NotEqual,
+                    _ => unreachable!(),
                 },
                 left: parse_value(&fields[2])?,
                 right: parse_value(&fields[3])?,

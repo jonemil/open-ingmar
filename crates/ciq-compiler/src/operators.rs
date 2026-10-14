@@ -50,19 +50,19 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 }
 
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
-/// support equality with Null; Boolean pairs support equality only.
-/// Number/Char pairs support equality and greater comparison through numeric values.
+/// support equality/inequality with Null; Boolean pairs support these two operators.
+/// Number/Char pairs support all six comparisons through numeric values.
 /// String equality uses object identity with supported String/Number/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     let numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
     let numbers = numeric(left) && numeric(right);
     let booleans =
-        kind == ComparisonOp::Equal && *left == Type::named("Toybox.Lang.Boolean") && left == right;
+        kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
     let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
-    let null_check = kind == ComparisonOp::Equal
+    let null_check = kind.is_equality()
         && ((left == &Type::Null
             && (right == &Type::Null
                 || right == &nullable_dictionary
@@ -72,7 +72,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || left == &nullable_number
                 || left == &nullable_string)
                 && right == &Type::Null));
-    let strings = kind == ComparisonOp::Equal
+    let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
             || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));
     (numbers || booleans || null_check || strings).then(|| Type::named("Toybox.Lang.Boolean"))
@@ -155,9 +155,16 @@ mod tests {
                         "{op:?}: {left:?}, {right:?}"
                     );
                 }
-                for op in [ComparisonOp::Equal, ComparisonOp::Greater] {
+                for op in [
+                    ComparisonOp::Equal,
+                    ComparisonOp::Greater,
+                    ComparisonOp::Less,
+                    ComparisonOp::LessEqual,
+                    ComparisonOp::GreaterEqual,
+                    ComparisonOp::NotEqual,
+                ] {
                     let result = comparison_result(op, &lhs, &rhs);
-                    let null_check = op == ComparisonOp::Equal
+                    let null_check = op.is_equality()
                         && matches!(
                             (left, right),
                             (
@@ -173,7 +180,7 @@ mod tests {
                                 ValueType::Null
                             )
                         );
-                    let strings = op == ComparisonOp::Equal
+                    let strings = op.is_equality()
                         && matches!(
                             (left, right),
                             (
@@ -199,7 +206,7 @@ mod tests {
                             && matches!(right, ValueType::Integer | ValueType::Char))
                             || null_check
                             || strings
-                            || (op == ComparisonOp::Equal
+                            || (op.is_equality()
                                 && left == ValueType::Boolean
                                 && right == ValueType::Boolean),
                         "{op:?}: {left:?}, {right:?}"

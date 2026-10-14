@@ -195,6 +195,9 @@ enum Kind<'a> {
     String(&'a str),
     Punctuation(char),
     EqualEqual,
+    NotEqual,
+    LessEqual,
+    GreaterEqual,
     AndAnd,
     OrOr,
     End,
@@ -410,6 +413,18 @@ impl<'a> Parser<'a> {
                 self.offset += 2;
                 Kind::OrOr
             }
+            Some('!') if rest.starts_with("!=") => {
+                self.offset += 2;
+                Kind::NotEqual
+            }
+            Some('<') if rest.starts_with("<=") => {
+                self.offset += 2;
+                Kind::LessEqual
+            }
+            Some('>') if rest.starts_with(">=") => {
+                self.offset += 2;
+                Kind::GreaterEqual
+            }
             Some('=') if rest.starts_with("==") => {
                 self.offset += 2;
                 Kind::EqualEqual
@@ -518,6 +533,10 @@ impl<'a> Parser<'a> {
         let left = self.arithmetic(depth)?;
         let kind = match self.peek()? {
             Kind::EqualEqual => crate::ComparisonOp::Equal,
+            Kind::NotEqual => crate::ComparisonOp::NotEqual,
+            Kind::LessEqual => crate::ComparisonOp::LessEqual,
+            Kind::GreaterEqual => crate::ComparisonOp::GreaterEqual,
+            Kind::Punctuation('<') => crate::ComparisonOp::Less,
             Kind::Punctuation('>') => crate::ComparisonOp::Greater,
             _ => return Ok(left),
         };

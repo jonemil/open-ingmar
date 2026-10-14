@@ -51,6 +51,9 @@ SDK/version and scope; they are not current feature inventories. Use
 
 ## Compiler
 
+- [Number comparisons](compiler-number-comparisons.md): ordering/inequality
+  instructions, operand order, and non-null proofs.
+
 - [Number products](compiler-number-products.md): multiplication/division/remainder,
   signs, precedence, operand effects, and runtime/process failures.
 

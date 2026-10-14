@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   source View references, aliases, and same-class reassignment.
 - [compiler-source-signatures](compiler-source-signatures/README.md): source View
   parameter/result contracts, factories, and cross-file reference forwarding.
+- [compiler-number-comparisons](compiler-number-comparisons/README.md): ordering,
+  inequality, and direct non-null branch proofs.
 - [compiler-number-products](compiler-number-products/README.md): signed Number
   multiplication/division/remainder, precedence, and operand order.
 - [compiler-input-counter](compiler-input-counter/README.md): View/delegate

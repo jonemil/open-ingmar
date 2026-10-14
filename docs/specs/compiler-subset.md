@@ -46,7 +46,7 @@ statement = "var" identifier "=" expression ";"
 expression = logical-or
 logical-or = logical-and ("||" logical-and)*
 logical-and = comparison ("&&" comparison)*
-comparison = arithmetic (("==" | ">") arithmetic)?
+comparison = arithmetic (("==" | "!=" | "<" | "<=" | ">" | ">=") arithmetic)?
 arithmetic = product (("+" | "-") product)*
 product = unary (("*" | "/" | "%") unary)*
 unary = primary | "-" primary | "!" unary
@@ -160,9 +160,9 @@ Validation resolves operand API types to these result contracts:
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |
 | Exact String / supported scalar or null, either order | `+` | String |
-| Number / Number, Char / Char, Number / Char, Char / Number | `==`, `>` | Boolean |
-| Boolean / Boolean | `==` | Boolean |
-| Exact String / String, Number, Char, or Null, either order | `==` | Boolean |
+| Number / Number, Char / Char, Number / Char, Char / Number | `==`, `!=`, `<`, `<=`, `>`, `>=` | Boolean |
+| Boolean / Boolean | `==`, `!=` | Boolean |
+| Exact String / String, Number, Char, or Null, either order | `==`, `!=` | Boolean |
 
 Mixed Char/Number addition changes the numeric character value, including
 negative Number offsets. Char + Char concatenates the two characters.
@@ -457,6 +457,8 @@ DATA allocation and method metadata remain explicit scaffold work.
 
 ## Terminal conditions
 
+Runtime comparisons follow the [Number-comparison evidence][comparisons].
+
 A function may end with `if (<condition>) { return <integer-expression>; } else
 { return <integer-expression>; }`. Braces are required; `else` is optional.
 An omitted false arm continues to the next statement, which must eventually
@@ -464,16 +466,19 @@ return. Arms may also contain local declarations, print statements, and nested
 conditions, as
 described below. Loop syntax is specified separately below.
 
-`==` and `>` compare Number/Char expressions and produce Booleans; `==` also
-accepts Boolean pairs and the String identity profile above. Dictionary/null
-equality follows the callback rules below.
+All six comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) accept Number/Char
+expressions and produce Booleans. Equality/inequality also accept Boolean pairs
+and the String identity profile above; `!=` negates the existing equality
+contract, not String content equality. Dictionary/null checks follow the
+callback rules below.
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
 one comparison is accepted per expression level; parentheses retain their grouping
 behavior. The condition must produce a Boolean: a literal, typed parameter or
 local read, supported call, or comparison. Boolean locals, assignments, and print arguments are
 accepted. Annotated Boolean parameters/results and user-call arguments use
 these same rules. Boolean arithmetic, integer truthiness, mixed Boolean/Number
-equality, Boolean ordering, other comparison operators, and short-circuit operators are unsupported.
+equality and Boolean/String ordering are unsupported. Short-circuit operators
+follow their separate rules above.
 
 Lowering emits an entry block, condition evaluation, and branch, then separate
 arm blocks. Both arms may read parameters and enclosing locals. The
@@ -1001,7 +1006,8 @@ String `find(String)` and `toNumber()` are available since API 1.0.0 and return
 Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1. String `substring` and user calls may also return nullable
 values. Compare nullable parameters or stored results with null.
 A direct `if (value == null)` or `if (null == value)` proves that parameter or
-local non-null on the false path. Boolean negation reverses this proof edge;
+local non-null on the false path. Direct `value != null` or `null != value`
+proves non-null on the true path. Boolean negation reverses this proof edge;
 `if (!(value == null))` proves non-null on the true path. Fresh reads there have
 the non-null Number or String type
 and support its consumers, including ordinary user arguments/returns. For example:
@@ -1051,3 +1057,5 @@ a runtime obligation; the declared result remains nullable.
 [weak-evidence]: ../investigations/compiler-immutable-weak.md
 
 [products]: ../investigations/compiler-number-products.md
+
+[comparisons]: ../investigations/compiler-number-comparisons.md
