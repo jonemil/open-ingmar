@@ -154,6 +154,9 @@ exercises Boolean results and call order across expression joins.
 The [Char array example](examples/compiler-char-arrays/README.md) exercises
 String conversion, typed array calls, and read-only Array methods.
 
+The [local-compound example](examples/compiler-compound-locals/README.md) checks
+scalar updates, typed results, loops, and staged operands.
+
 The [unary-plus example](examples/compiler-number-plus/README.md) checks
 Number identity, precedence, guarded operands, and single evaluation.
 

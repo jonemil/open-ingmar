@@ -446,7 +446,7 @@ fn source_assignments_reject_type_changes_parameters_and_escaping_names() {
         "function f() { var n = 1; return n = 2; }",
         "function f() { var n = 1; (n) = 2; return n; }",
         "function f() { var n = 1; n + 1 = 2; return n; }",
-        "function f() { var n = 1; n += 1; return n; }",
+        "function f() { var n = 1; n += \"string\"; return n; }",
         "function f() { var n = 1; n++; return n; }",
     ] {
         assert!(compile(source).is_err(), "{source}");

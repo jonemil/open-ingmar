@@ -37,6 +37,13 @@ resumed IR. The backend emits only its operand after shared validation, with
 no conversion or arithmetic instruction. Source candidate tracking carries its
 Number result through ordinary local and logical-expression staging.
 
+Local compound statements desugar to ordinary local read, binary operation,
+and local assignment. This reuses operand/result contracts and slot identity
+rather than defining a parallel IR mutation operation. Source preparation
+snapshots the old read before a branching RHS. Field/indexed targets need their
+own location and failure-order evidence before this desugaring can grow beyond
+bare locals.
+
 `Discard` is an expression root that consumes a value for effects. Native source
 call statements use it with an ordinary native value call, keeping contract
 resolution, operand scheduling, and invocation in one path. The backend emits

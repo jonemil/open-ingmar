@@ -135,8 +135,8 @@ fn bitwise_operators_require_nonnull_numbers_and_do_not_clamp_counts() {
     }
     for source in [
         "function f() { return 1 >>> 2; }",
-        "function f() { var n = 1; n <<= 2; return n; }",
-        "function f() { var n = 1; n |= 2; return n; }",
+        "function f() { var n = 1; n <<= true; return n; }",
+        "function f() { var n = 1; n |= \"x\"; return n; }",
     ] {
         assert!(compile(source).is_err());
     }

@@ -12,9 +12,10 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Implement compound assignments
-   and increment/decrement with checked assignment targets and
-   evaluation order. Investigate conditional
+1. **Remaining operators and assignment forms.** Extend compound assignments
+   from bare locals to Number fields and Number/Char indexed targets, checking
+   location/read/RHS evaluation and failure order. Then add increment/decrement
+   with checked targets and prefix/postfix results. Investigate conditional
    expressions and their result-type joins separately.
 2. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep

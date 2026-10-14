@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-compound-locals](compiler-compound-locals/README.md): local compound
+  updates, scalar contracts, loops, and staged operands.
 - [compiler-number-plus](compiler-number-plus/README.md): checked Number
   identity, postfix precedence, guarded operands, and single evaluation.
 - [compiler-number-bits](compiler-number-bits/README.md): Number bit operations,

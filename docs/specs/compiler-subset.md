@@ -37,6 +37,7 @@ result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
+          | identifier compound-operator expression ";"
           | primary "[" expression "]" "=" expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | module "." member "(" argument-list? ")" ";"
@@ -44,6 +45,7 @@ statement = "var" identifier "=" expression ";"
           | "if" "(" expression ")" block ("else" block)?
           | "while" "(" expression ")" block
           | "break" ";" | "continue" ";"
+compound-operator = "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
 expression = logical-or
 logical-or = logical-and ("||" logical-and)*
 logical-and = comparison ("&&" comparison)*
@@ -144,10 +146,11 @@ and before binary operators; it returns a non-null Number operand unchanged
 after evaluating it once. It accepts literals, parameters, locals, calls, and
 grouped expressions. Repeated or mixed prefixes require grouping, as in
 `+(+n)`, `+(-n)`, and `+(~n)`; `+ +n`, `+-n`, and `+~n` are rejected.
-Contiguous `++` remains unsupported increment syntax. Compound assignment,
-unsigned `>>>`, and general object calls remain unsupported; the bounded
-native calls below are separate. Parse nesting is bounded at 64; the semantic function is limited to 1024 operations including
-return. These are implementation limits.
+Contiguous `++` remains unsupported increment syntax. Compound assignments
+support bare locals as specified below. Unsigned `>>>` and general object
+calls remain unsupported; the bounded native calls below are separate. Parse
+nesting is bounded at 64; the semantic function is limited to 1024 operations
+including return. These are implementation limits.
 
 Number division truncates toward zero; remainder has the dividend's sign.
 Multiplication uses the Number VM instruction; representative overflow probes
@@ -551,7 +554,8 @@ other loop forms and standalone blocks remain future work.
 `<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
 The local target must be a bare identifier. Parameters, unknown/forward names,
 and arm locals used outside their scope are rejected. Assignment is a statement,
-not an expression; compound assignment and increment/decrement are unsupported.
+not an expression. Local compound statements are specified below;
+increment/decrement remain unsupported.
 Class methods additionally support [explicit self field
 assignment](compiler-classes.md#number-instance-fields).
 
@@ -575,6 +579,32 @@ Assignment-containing IR uses the conservative schedule specified in
 [integer/string simulator evidence][assignments].
 
 [assignments]: ../investigations/compiler-assignments.md
+
+## Local compound assignment
+
+A bare in-scope initialized local supports `+=`, `-=`, `*=`, `/=`, `%=`,
+`&=`, `|=`, `^=`, `<<=`, and `>>=` as statements. Operator characters must be
+contiguous. Parameters, grouped targets, fields, indexed targets, and unknown
+or out-of-scope names are rejected. Assignment expressions, increment/decrement,
+logical compounds, and unsigned-right-shift compounds remain unsupported.
+
+`n op= rhs;` reads the existing local once, evaluates `rhs` once, applies the
+corresponding supported binary operator, then writes the result to the existing
+slot. The whole RHS is parsed before applying the implicit operator:
+`n *= 1 + 2` means `n = n * (1 + 2)`. Existing binary contracts and fixed local
+types apply: all ten operators accept non-null Number pairs; String `+=`
+uses supported scalar concatenation, and Char `+=` accepts Number. Number
+`+= Char` and Char `+= Char` fail because their results change the local type.
+No new coercion, folding, or runtime guard is introduced.
+
+The read/binary/write sequence uses ordinary IR operations and source spans.
+A RHS needing control-flow staging snapshots the old local before RHS effects;
+hidden locals share the existing frame budget. Plain compounds need no hidden
+slots. A nullable local requires an existing non-null proof for its old read,
+and the write invalidates that proof as ordinary reassignment does. A later
+non-null read needs a fresh check. See [compound evidence][compound-locals].
+
+[compound-locals]: ../investigations/compiler-compound-locals.md
 
 ## While loops
 
@@ -909,8 +939,8 @@ need no hidden slots. Bounds are a runtime obligation, with no clamping or
 static range rejection. The tested VM reports a fatal bounds error after all
 operand effects, including for an index equal to the length.
 
-Nested arrays, compound assignments, and assignments used as expressions
-remain unsupported. See [Number write evidence][array-writes] and
+Nested arrays, indexed compound assignments, and assignments used as
+expressions remain unsupported. See [Number write evidence][array-writes] and
 [Char/View write evidence](../investigations/compiler-typed-array-writes.md).
 
 [array-writes]: ../investigations/compiler-array-writes.md

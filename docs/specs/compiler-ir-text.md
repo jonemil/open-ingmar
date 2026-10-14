@@ -581,6 +581,13 @@ unique local identities. See [the source subset](compiler-subset.md).
 
 ## Local assignment
 
+Source local compounds use ordinary `.read`, a binary directive, and `.assign`.
+There is no compound IR directive. Shared validation checks operand contracts,
+result assignability, null proofs, and read-before-RHS/write ordering. Staged
+RHS expressions use the existing typed local/snapshot representation. See
+[source rules](compiler-subset.md#local-compound-assignment) and
+[evidence](../investigations/compiler-compound-locals.md).
+
 `.assign $<local-id> %<value-id> [span=<start>:<end>]` consumes an earlier value
 and replaces an initialized local. It is accepted with `ciq-ir` or `3`; no
 explicit blocks are required for a straight-line assignment body.

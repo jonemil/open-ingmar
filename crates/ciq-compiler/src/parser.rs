@@ -207,6 +207,7 @@ enum Kind<'a> {
     GreaterEqual,
     ShiftLeft,
     ShiftRight,
+    Compound(crate::BinaryOp),
     AndAnd,
     OrOr,
     End,
@@ -410,6 +411,30 @@ impl<'a> Parser<'a> {
                 let length = rest.bytes().take_while(u8::is_ascii_digit).count();
                 self.offset += length;
                 Kind::Integer(&rest[..length])
+            }
+            Some('<' | '>') if rest.starts_with("<<=") || rest.starts_with(">>=") => {
+                self.offset += 3;
+                Kind::Compound(if rest.starts_with("<<=") {
+                    crate::BinaryOp::ShiftLeft
+                } else {
+                    crate::BinaryOp::ShiftRight
+                })
+            }
+            Some(c @ ('+' | '-' | '*' | '/' | '%' | '&' | '|' | '^'))
+                if rest.as_bytes().get(1) == Some(&b'=') =>
+            {
+                self.offset += 2;
+                Kind::Compound(match c {
+                    '+' => crate::BinaryOp::Add,
+                    '-' => crate::BinaryOp::Subtract,
+                    '*' => crate::BinaryOp::Multiply,
+                    '/' => crate::BinaryOp::Divide,
+                    '%' => crate::BinaryOp::Remainder,
+                    '&' => crate::BinaryOp::BitAnd,
+                    '|' => crate::BinaryOp::BitOr,
+                    '^' => crate::BinaryOp::BitXor,
+                    _ => unreachable!("recognized compound operator"),
+                })
             }
             Some('-') if rest.starts_with("--") => {
                 return Err(self.error(start, "decrement operators are unsupported"));
@@ -1016,6 +1041,97 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Check a parsed assignment target without entering RHS parsing.
+    /// Local targets must be bare; compound field/array targets are unsupported.
+    fn assignment_target(
+        &self,
+        expression: &Expression,
+        assignment: Kind<'_>,
+        start: usize,
+    ) -> Result<(), Diagnostic> {
+        if let ExpressionKind::Local(name) = &expression.kind {
+            if self.source[expression.span.start..expression.span.end] != *name {
+                return Err(self.error(start, "assignment target must be a bare local identifier"));
+            }
+        }
+        if !matches!(
+            expression.kind,
+            ExpressionKind::Local(_)
+                | ExpressionKind::SelfField(_)
+                | ExpressionKind::ArrayRead { .. }
+        ) {
+            return Err(self.error(
+                start,
+                "assignment target must be a local, self field, or array element",
+            ));
+        }
+        if matches!(assignment, Kind::Compound(_))
+            && !matches!(expression.kind, ExpressionKind::Local(_))
+        {
+            return Err(self.error(
+                start,
+                "compound assignment requires a bare local identifier",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Construct the checked assignment after its RHS and terminator are parsed.
+    /// Keep statement construction outside the expression parser's stack budget.
+    fn assignment_statement(
+        &mut self,
+        expression: Expression,
+        assignment: Kind<'_>,
+        value: Expression,
+        span: Span,
+    ) -> Result<Statement, Diagnostic> {
+        let statement = if let Kind::Compound(kind) = assignment {
+            self.compound_local(expression, kind, value, span)?
+        } else {
+            match expression.kind {
+                ExpressionKind::ArrayRead { array, index } => Statement::ArrayAssign {
+                    array: *array,
+                    index: *index,
+                    value,
+                    span,
+                },
+                ExpressionKind::SelfField(name) => Statement::FieldAssign { name, value, span },
+                ExpressionKind::Local(name) => Statement::Assign { name, value, span },
+                _ => unreachable!("checked assignment target"),
+            }
+        };
+        Ok(statement)
+    }
+
+    /// Desugar a local compound statement to a read, binary expression, and write.
+    /// The caller validates a bare local target; source lowering checks scope,
+    /// result assignability, and left-to-right operand evaluation.
+    fn compound_local(
+        &mut self,
+        target: Expression,
+        kind: crate::BinaryOp,
+        value: Expression,
+        span: Span,
+    ) -> Result<Statement, Diagnostic> {
+        let ExpressionKind::Local(name) = &target.kind else {
+            unreachable!("checked local target")
+        };
+        let name = name.clone();
+        let value_span = Span {
+            start: target.span.start,
+            end: value.span.end,
+        };
+        let value = self.node(
+            ExpressionKind::Binary {
+                kind,
+                left: Box::new(target),
+                right: Box::new(value),
+            },
+            value_span,
+        )?;
+        Ok(Statement::Assign { name, value, span })
+    }
+
     /// Parse a braced statement sequence, bounding control-flow nesting and total
     /// source operations before semantic construction.
     fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), Diagnostic> {
@@ -1125,43 +1241,17 @@ impl<'a> Parser<'a> {
                 Kind::End => return Err(self.error(start, "expected '}' before end of input")),
                 _ => {
                     let expression = self.expression(0)?;
-                    if self.peek()? == Kind::Punctuation('=') {
-                        if let ExpressionKind::Local(name) = &expression.kind {
-                            if self.source[expression.span.start..expression.span.end] != *name {
-                                return Err(self.error(
-                                    start,
-                                    "assignment target must be a bare local identifier",
-                                ));
-                            }
-                        }
-                        if !matches!(
-                            expression.kind,
-                            ExpressionKind::Local(_)
-                                | ExpressionKind::SelfField(_)
-                                | ExpressionKind::ArrayRead { .. }
-                        ) {
-                            return Err(self.error(
-                                start,
-                                "assignment target must be a local, self field, or array element",
-                            ));
-                        }
-                        self.token()?;
+                    if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
+                        let assignment = self.token()?.kind;
+                        self.assignment_target(&expression, assignment, start)?;
                         let value = self.expression(0)?;
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        let span = Span { start, end };
-                        match expression.kind {
-                            ExpressionKind::ArrayRead { array, index } => Statement::ArrayAssign {
-                                array: *array,
-                                index: *index,
-                                value,
-                                span,
-                            },
-                            ExpressionKind::SelfField(name) => {
-                                Statement::FieldAssign { name, value, span }
-                            }
-                            ExpressionKind::Local(name) => Statement::Assign { name, value, span },
-                            _ => unreachable!("checked assignment target"),
-                        }
+                        self.assignment_statement(
+                            expression,
+                            assignment,
+                            value,
+                            Span { start, end },
+                        )?
                     } else {
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
                         if matches!(expression.kind, ExpressionKind::ValueCall { .. }) {
