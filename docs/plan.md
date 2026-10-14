@@ -2,119 +2,67 @@
 
 ## Next work
 
-Keep complete runnable applications as the validation path, while expanding the
-language and build layers in small steps. Language completeness is not a
-prerequisite for project resolution; package writing is not a substitute for
-compiling a project.
+Keep implementation focused on operators and `Toybox.Lang` objects and their
+methods before returning to broader SDK classes. Reuse the existing console
+apps and [input counter](../examples/compiler-input-counter/README.md) to validate
+core changes. New UI classes, event objects, drawing APIs, and broader SDK
+modules belong to a later phase. Project/resource/package work stays in the
+backlog while these language foundations are the priority.
 
-Prioritize core Lang types and operators next, using the class-focused strategy
-below. Next, extend container access/mutation and numeric types needed by
-deferred Lang methods. Start with Number-array element writes, using loops
-and the checked comparison/operator profile, before introducing Dictionary
-construction and lookup contracts.
+Choose increments by dependency, following the
+[class-focused strategy](#native-lang-strategy):
+
+1. **Array access and mutation.** Start with Number-array indexed writes and
+   receiver/index/value evaluation order. Extend the shared element contract to
+   other supported arrays through evidence. Review remaining Array methods;
+   sorting needs callable/comparator support.
+2. **Remaining operators and assignment forms.** Add Number bitwise operators
+   and shifts, unary plus, then compound assignments and increment/decrement
+   with checked assignment targets and evaluation order. Investigate conditional
+   expressions and their result-type joins separately.
+3. **Dictionary.** Establish construction, key/value contracts, literals,
+   lookup/write behavior, then implement its supported method group. Keep
+   heterogeneous values and nullable lookup results explicit.
+4. **Numeric types and deferred methods.** Add Long/Float/Double values,
+   literals, conversions, arithmetic/promotion, and comparisons in bounded
+   groups. Revisit Number/String/Boolean/Char methods as their required value
+   types become available.
+5. **Object and callable/reference facilities.** Grow shared Object contracts,
+   Symbol and Method values/invocation, and ordinary WeakReference consumers.
+   Use these prerequisites to revisit deferred core methods, including Array
+   comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+
+A blocked method should lead to its core type/operator/callable prerequisite or
+another core class group. Retain explicit deferred-method inventories; declaring
+an API member does not establish executable support. Reassess remaining core
+gaps before changing focus to the later SDK/project work below.
+
 Investigate the simulator process failure for minimum Number / -1 and % -1
 separately before claiming portable boundary behavior or exception recovery.
-Keep the
-[input counter](../examples/compiler-input-counter/README.md) as a validation
-harness for constructors, retained references, positional results, and Boolean
-callbacks. Broader View transitions, controls, drawing, and event classes wait
-until these language foundations advance.
 
-1. **Extend core Lang contracts and value types.** Extend native objects,
-   constructors, and Array elements beyond the bounded View profile as needed.
-   Keep generic signatures and invariant element
-   checking shared across source and saved IR. Comparator sorting and other
-   Array/Object methods need separate receiver and runtime evidence.
-   Revisit direct array filling once initialized-element contracts and memory
-   behavior are established; the current literal path uses typed append.
-   Keep positive signs separate
-   until their contracts are established. Investigate the SDK's
-   [negative-literal postfix discrepancy][negation] before widening that syntax.
-   Revisit Long/Float/Double values through a useful runnable example.
-   Investigate the SDK's
-   [supplementary literal discrepancy][char-literals] before expanding BMP source
-   literals. Follow the
-   [class-focused strategy](#native-lang-strategy) for
-   subsequent groups; revisit deferred [Number][number-methods],
-   [String][string-methods], and [Boolean][boolean-methods] methods as their
-   prerequisites become available.
-   Keep ordinary object weak references separate from the verified
-   [immutable-value specialization][weak-results]; probe lifetime and nullable
-   dereference contracts when object ownership requires them.
-   Retain branch-proof validation through saved IR, joins, loops, and writes.
-   Extend supported comparisons without trusting frontend-only assumptions;
-   support nullable Boolean when a runnable case requires it.
-   Grow Object equality and other core methods through documented assignability
-   rules rather than weakening argument validation to accept any value.
+### Core contracts and evidence
 
-   Connect the explicit API context to verified device/app inputs as project
-   resolution develops. Add app type, permission, scope, and VM constraints
-   when supported calls need
-   them; keep unknown constraints explicit. Plan `has`-guarded optional APIs
-   before claiming portable references newer than the app minimum. Migrate
-   remaining Application/System special cases as they acquire supported call
-   forms. See [API declaration design][api-design].
+Keep generic signatures, invariant container elements, assignability, and
+nullable branch proofs shared across source and saved IR. Extend constructor
+and object-reference contracts as core classes need them. Comparator calls and
+ordinary object weak references need their own dispatch/lifetime evidence;
+keep them distinct from the verified [immutable weak specialization][weak-results].
+Revisit direct array filling after initialized-element and memory contracts are
+established; literal construction currently uses typed append.
 
-   Read the language reference alongside `Lang` contracts when extending
-   operator rules. Grow numeric conversions, mixed arithmetic, string addition,
-   and equality through focused specimens; do not attempt all core operators in
-   one increment. Preserve native/text pipeline equivalence and complete-app
-   simulator validation as new call contracts and operators are added.
+Revisit deferred [Number][number-methods], [String][string-methods], and
+[Boolean][boolean-methods] methods as their prerequisites become available.
+Read the language reference alongside each Lang contract. Probe sign syntax,
+conversion ranges, overflow, promotion, and evaluation order independently;
+resolve the [negative-literal postfix][negation] and
+[supplementary Char literal][char-literals] discrepancies before widening them.
 
-   Keep the app's minimum API and VM capabilities distinct from device/API
-   selection. A full Jungle driver and API definition parser are not
-   prerequisites for extending the bounded native profile.
-2. **Extend native calls and callback values.** Use the declaration model for
-   AppBase/View/delegate inherited members and callback contracts. Retain
-   slot-type and cardinality checks for View and View/delegate results through
-   saved IR. Broaden contextual
-   tuple construction beyond direct callback literals only when provenance and
-   shape remain provable. Extend object-reference, array, and nullable values as
-   required, retaining `Void` as a result contract. Compare new dispatch forms
-   with focused specimens. Exercise a non-null launch-state dictionary when
-   an intent example is available; null-state startup does not establish it.
-   Keep the console bootstrap's selected method distinct from manifest entry.
-3. **Revisit UI profiles when language work needs them.** Keep the input counter
-   bounded while expanding core Lang support. Widen named source signatures and
-   reference-field targets beyond View only with checked native-base projection
-   and assignability through saved IR. Source inheritance and other input
-   callbacks/event objects need separate contracts and runtime evidence.
-   Later, probe View transitions to verify onHide dispatch; the exit-from-update
-   specimen only establishes onStop. Extend drawing methods/constants and
-   device-relative layout through focused examples rather than a fixed screen size.
-4. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a
-   deterministic build description: selected sources/resources, application
-   identity and class entry, device/API target, permissions, supported products
-   and languages, exclusions, and barrel dependencies with namespace/version
-   requirements. Start with a source-only app and explicit target;
-   unsupported resource/build features must be diagnosed. Test path bases,
-   defaults, precedence, multiple Jungle files, and working-directory changes.
-   This resolver work can proceed alongside language work after the target and
-   declaration interfaces are clear. See [project-build design][builds].
-5. **Generate resources and extend the PRG profile.** Start with resource strings
-   and their `Rez` identities, then application name/icon resources and a small
-   drawable/layout example. Keep DATA literals separate from compiled resources.
-   Derive imports, method/class records, entry points, permissions, and resource
-   references from resolved inputs; investigate opaque container fields as
-   concrete profiles require them. Acceptance: an independently generated app
-   loads a resource and displays it, with consistent manifest/resource bindings.
-   Add source-linked debug/line information for diagnosing generated code.
-   Extend resource resolution with properties/settings and localization;
-   validate resource-to-property/string references. Add Monkey Style personality
-   selection and generated `Rez.Styles` bindings when a layout example needs
-   them. Keep runtime `Application.Storage` calls separate from compiled
-   property defaults and settings metadata.
-6. **Connect project builds to barrels and IQ export.** Reuse `ciq-package` and
-   `ciq-sign`. Export a barrel from resolved source/resources and generate its
-   packaged configuration; consume both archive and direct-project dependencies.
-   Build selected device PRGs before creating IQ products/signatures. Acceptance:
-   a code/resource barrel consumed by an app, SDK consumption of our exported
-   barrel, and extraction/verification of our own-key IQ output. Broader package
-   variants remain evidence-driven.
-
-After each dependency is established, take the next language feature from the
-backlog below that a representative application needs. Do not wait for complete
-language coverage before advancing a working project example.
+Preserve native/text pipeline equivalence and complete-app simulator validation
+for each group. Keep API minimum, selected target API, VM capabilities, and
+device capacity distinct. Grow the [API declaration model][api-design] through
+core contracts; broader device/app/permission inputs and Application/System
+integration belong to the later project/SDK phase. A Jungle driver or complete
+API definition parser is not a prerequisite for this core work.
 
 ## Native Lang strategy
 
@@ -136,8 +84,8 @@ Completing every method of a class is not a prerequisite for moving on.
   Run shared checks after the group rather than repeating them for every method;
   isolate probes whose runtime failures would hide later results.
 - Move to the next useful class or prerequisite after validating the group.
-  Revisit deferred methods when their dependencies exist. Keep application and
-  project work moving without waiting for complete Lang coverage.
+  Revisit deferred methods when their core dependencies exist. Keep validation
+  applications small and reusable while advancing the operator/Lang sequence.
 
 ## Language and API backlog
 
@@ -180,6 +128,62 @@ all their encodings or runtime behavior are understood:
 Validate the documented method-argument limit, hidden-receiver accounting, and
 SDK/target applicability before widening call/frame limits. Existing opcode
 support does not establish source-level semantics or acceptance at a boundary.
+
+## Later SDK and project work
+
+Resume these areas after the operator/core-Lang phase; they are not the current
+implementation sequence. Existing application scaffolding remains available
+for core-language validation throughout.
+
+1. **Extend native calls and callback values.** Use the declaration model for
+   AppBase/View/delegate inherited members and callback contracts. Retain
+   slot-type and cardinality checks for View and View/delegate results through
+   saved IR. Broaden contextual
+   tuple construction beyond direct callback literals only when provenance and
+   shape remain provable. Extend object-reference, array, and nullable values as
+   required, retaining `Void` as a result contract. Compare new dispatch forms
+   with focused specimens. Exercise a non-null launch-state dictionary when
+   an intent example is available; null-state startup does not establish it.
+   Keep the console bootstrap's selected method distinct from manifest entry.
+2. **Resume UI profiles after the core language phase.** Keep the input counter
+   bounded while expanding core Lang support. Widen named source signatures and
+   reference-field targets beyond View only with checked native-base projection
+   and assignability through saved IR. Source inheritance and other input
+   callbacks/event objects need separate contracts and runtime evidence.
+   Later, probe View transitions to verify onHide dispatch; the exit-from-update
+   specimen only establishes onStop. Extend drawing methods/constants and
+   device-relative layout through focused examples rather than a fixed screen size.
+3. **Resolve real projects.** Implement a bounded manifest/Jungle subset into a
+   deterministic build description: selected sources/resources, application
+   identity and class entry, device/API target, permissions, supported products
+   and languages, exclusions, and barrel dependencies with namespace/version
+   requirements. Start with a source-only app and explicit target;
+   unsupported resource/build features must be diagnosed. Test path bases,
+   defaults, precedence, multiple Jungle files, and working-directory changes.
+   Take up this resolver in the later project-build phase, using the target and
+   declaration interfaces established by core language work. See
+   [project-build design][builds].
+4. **Generate resources and extend the PRG profile.** Start with resource strings
+   and their `Rez` identities, then application name/icon resources and a small
+   drawable/layout example. Keep DATA literals separate from compiled resources.
+   Derive imports, method/class records, entry points, permissions, and resource
+   references from resolved inputs; investigate opaque container fields as
+   concrete profiles require them. Acceptance: an independently generated app
+   loads a resource and displays it, with consistent manifest/resource bindings.
+   Add source-linked debug/line information for diagnosing generated code.
+   Extend resource resolution with properties/settings and localization;
+   validate resource-to-property/string references. Add Monkey Style personality
+   selection and generated `Rez.Styles` bindings when a layout example needs
+   them. Keep runtime `Application.Storage` calls separate from compiled
+   property defaults and settings metadata.
+5. **Connect project builds to barrels and IQ export.** Reuse `ciq-package` and
+   `ciq-sign`. Export a barrel from resolved source/resources and generate its
+   packaged configuration; consume both archive and direct-project dependencies.
+   Build selected device PRGs before creating IQ products/signatures. Acceptance:
+   a code/resource barrel consumed by an app, SDK consumption of our exported
+   barrel, and extraction/verification of our own-key IQ output. Broader package
+   variants remain evidence-driven.
+
 
 ## Build scopes and validation
 
