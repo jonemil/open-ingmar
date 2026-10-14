@@ -53,10 +53,7 @@ fn boolean_negation_preserves_complete_pipelines_and_precedence() {
     assert!(ir.find(".call-native").unwrap() < ir.find(".not").unwrap());
     assert_eq!(f.lower().to_text().matches("getsv").count(), 1);
     let f = compile("function f() as Toybox.Lang.Boolean { return !true; }").unwrap();
-    assert_eq!(
-        f.lower().encode().unwrap(),
-        [0x35, 1, 0x3e, 0x3f, 0x1a, 0x16]
-    );
+    assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x3e, 0x2d, 0x16]);
 }
 
 #[test]

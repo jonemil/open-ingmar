@@ -31,6 +31,14 @@ parser keeps both arithmetic/bitwise precedence groups in its iterative
 operator stack, preserving the existing nested-expression budget. VM selection
 uses direct instructions; shift counts remain runtime operands.
 
+`Not` retains Boolean negation through source and saved IR; lowering selects
+`invv` after its operand. Equality/inequality against an IR literal `Null` stays
+a semantic comparison, but the backend selects `isnull`/`isnotnull` on the other
+operand. The omitted null push has no effects. Other comparisons retain binary
+instructions, including comparisons against stored values whose runtime value
+may be null. Shared validation and branch proofs are unchanged. See the
+[lowering review](../investigations/natural-lowering.md).
+
 `Positive` preserves unary plus as a checked Number identity in semantic IR.
 Dropping it during parsing would skip operand/type/null-proof validation on
 resumed IR. The backend emits only its operand after shared validation, with

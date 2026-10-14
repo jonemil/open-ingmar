@@ -61,9 +61,10 @@ Experimentally observed in both applications:
   `!(n == null)` also runs as a Boolean condition.
 - The effectful Boolean helper prints once before its result is inverted.
 
-Our lowering uses operand evaluation followed by `bfpush; eq`. Generated
-simulator behavior verifies this sequence for the specimen; we did not infer
-or inspect the SDK compiler's implementation or require matching SDK CODE.
+The original generated specimen used operand evaluation followed by `bfpush; eq`.
+The [lowering review](natural-lowering.md) replaces that sequence with `invv`
+and verifies matching simulator behavior. We did not inspect the SDK compiler's
+implementation or require matching SDK CODE.
 The [inversion-opcode follow-up](invert-opcode.md) establishes the SDK's `invv`
 encoding and its structured assembly/disassembly support.
 

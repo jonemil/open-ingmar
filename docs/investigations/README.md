@@ -47,6 +47,8 @@ SDK/version and scope; they are not current feature inventories. Use
   evaluation order, and write-time bounds checks.
 - [Constant arrays](constant-arrays.md): DATA framing, scalar elements, array
   copy behavior, and editable load references.
+- [Natural lowering](natural-lowering.md): source/IR representation review and
+  direct Boolean/null instruction selection.
 - [Symbol assembly](symbol-assembly.md): identity and optional placement.
 - [DATA and resources](data-and-resources.md): string records and resource indexes.
 - [DATA classes](data-classes.md): fields and method references.

@@ -306,8 +306,8 @@ fn expression(
         Value(ValueId),
         Binary(BinaryOp),
         Negate,
-        False,
         Not,
+        NullCheck(bool),
         ArrayRead,
         Compare(ComparisonOp),
         Invoke(usize),
@@ -483,7 +483,7 @@ fn expression(
                     continue;
                 }
                 Operation::Not { operand, .. } => {
-                    tasks.extend([Task::Not, Task::False, Task::Value(*operand)]);
+                    tasks.extend([Task::Not, Task::Value(*operand)]);
                     continue;
                 }
                 Operation::Positive { operand, .. } => {
@@ -503,6 +503,24 @@ fn expression(
                 Operation::Compare {
                     kind, left, right, ..
                 } => {
+                    // A literal null has no effects. Keep the semantic comparison
+                    // in IR, selecting the VM's unary check for its other operand.
+                    if kind.is_equality() {
+                        let operand = if matches!(definitions[left], Operation::Null { .. }) {
+                            Some(*right)
+                        } else if matches!(definitions[right], Operation::Null { .. }) {
+                            Some(*left)
+                        } else {
+                            None
+                        };
+                        if let Some(operand) = operand {
+                            tasks.extend([
+                                Task::NullCheck(*kind == ComparisonOp::NotEqual),
+                                Task::Value(operand),
+                            ]);
+                            continue;
+                        }
+                    }
                     tasks.extend([
                         Task::Compare(*kind),
                         Task::Value(*right),
@@ -513,8 +531,9 @@ fn expression(
                 _ => unreachable!("statement is not a value definition"),
             },
             Task::Negate => (Opcode::Subv, vec![]),
-            Task::False => (Opcode::Bfpush, vec![]),
-            Task::Not => (Opcode::Eq, vec![]),
+            Task::Not => (Opcode::Invv, vec![]),
+            Task::NullCheck(false) => (Opcode::Isnull, vec![]),
+            Task::NullCheck(true) => (Opcode::Isnotnull, vec![]),
             Task::ArrayRead => (Opcode::Agetv, vec![]),
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
