@@ -1,0 +1,15 @@
+field rhs
+13
+field flag
+11
+11
+receiver
+index
+array rhs
+[20, 23]
+[40, 23]
+array flag
+[23, 24]
+C
+A
+done

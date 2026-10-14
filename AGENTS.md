@@ -22,6 +22,10 @@
   necessary visual/semantic review with a successful process exit.
 - Run checks appropriate to the change and required final checks. Repeat passed
   checks only after relevant changes or when unresolved concerns justify it.
+- Language/API feature work includes required support across the compiler, IR,
+  VM encoding/decoding, assembler/disassembler, and affected PRG formats. Follow
+  [toolchain completion](docs/plan.md#toolchain-completion); raw export fallback
+  does not establish complete feature support.
 - Do not commit changes. The user manages Git and commits.
 - Refresh `scratch/commit_msg` after repository changes so the user can load it
   as a commit message for the current uncommitted work. Use a precise one-line

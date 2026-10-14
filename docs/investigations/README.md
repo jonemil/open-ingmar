@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Compound targets](compiler-compound-targets.md): field/indexed reads,
+  captured locations, RHS mutations, and read/write bounds failures.
 - [Local compounds](compiler-compound-locals.md): read/binary/write lowering,
   evaluation order, type preservation, and simulator comparison.
 - [Number unary plus](compiler-number-plus.md): identity lowering, bounded

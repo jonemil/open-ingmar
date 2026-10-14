@@ -40,9 +40,17 @@ Number result through ordinary local and logical-expression staging.
 Local compound statements desugar to ordinary local read, binary operation,
 and local assignment. This reuses operand/result contracts and slot identity
 rather than defining a parallel IR mutation operation. Source preparation
-snapshots the old read before a branching RHS. Field/indexed targets need their
-own location and failure-order evidence before this desugaring can grow beyond
-bare locals.
+snapshots the old read before a branching RHS. Number-field compounds reuse
+self-field read and assignment with the same old-value ordering.
+
+Indexed compounds capture array and index in typed locals so target effects
+execute once and the final write uses the original location. Their old read
+precedes RHS effects, with runtime bounds checks at both read and write. Plain
+RHS expressions inline the old read into the binary tree. Branching RHS
+expressions stage the old read and result before creating final write operands,
+so no expression IDs cross blocks. This uses the existing Array operations and
+single-use discipline without a second mutation IR. Captured/staged locals
+consume the ordinary frame budget and reuse their static slots in loops.
 
 `Discard` is an expression root that consumes a value for effects. Native source
 call statements use it with an ordinary native value call, keeping contract

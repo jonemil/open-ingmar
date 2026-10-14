@@ -940,6 +940,69 @@ impl Builder<'_> {
         Ok(result)
     }
 
+    /// Evaluate an indexed compound target once, then read, combine, and write.
+    /// Keep captured array/index in typed locals; stage a branching RHS before
+    /// defining the final write operands so their IDs remain block-local.
+    fn array_compound(
+        &mut self,
+        target: parser::Expression,
+        kind: crate::BinaryOp,
+        value: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        use parser::{Expression, ExpressionKind as E};
+        let target_span = target.span;
+        let E::ArrayRead { array, index } = target.kind else {
+            unreachable!("parsed indexed compound target")
+        };
+        let array = self.snapshot(*array, locals)?;
+        let index = self.snapshot(*index, locals)?;
+        let temporary = |expression: &Expression| {
+            let E::Temporary(local) = expression.kind else {
+                unreachable!("captured target operand")
+            };
+            Expression {
+                kind: E::Temporary(local),
+                span: expression.span,
+            }
+        };
+        let old = Expression {
+            kind: E::ArrayRead {
+                array: Box::new(temporary(&array)),
+                index: Box::new(temporary(&index)),
+            },
+            span: target_span,
+        };
+        let value_span = Span {
+            start: target_span.start,
+            end: value.span.end,
+        };
+        let mut value = Expression {
+            kind: E::Binary {
+                kind,
+                left: Box::new(old),
+                right: Box::new(value),
+            },
+            span: value_span,
+        };
+        if value.needs_materialization() {
+            value = self.snapshot(value, locals)?;
+        }
+        let array = self.value(array, locals)?;
+        let index = self.value(index, locals)?;
+        let value = self.value(value, locals)?;
+        self.push(
+            Operation::ArrayWrite {
+                array,
+                index,
+                value,
+            },
+            Some(span),
+        );
+        Ok(())
+    }
+
     /// Emit a statement sequence and report whether all paths terminate the
     /// current block with return, break, or continue. Declarations stay scoped
     /// to the sequence; loop jumps select the innermost test or exit.
@@ -959,6 +1022,14 @@ impl Builder<'_> {
                 ));
             }
             match statement {
+                parser::Statement::ArrayCompound {
+                    target,
+                    kind,
+                    value,
+                    ..
+                } => {
+                    self.array_compound(target, kind, value, span, locals)?;
+                }
                 parser::Statement::ArrayAssign {
                     array,
                     index,

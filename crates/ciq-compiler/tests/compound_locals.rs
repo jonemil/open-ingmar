@@ -109,7 +109,7 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         "function f() { var n = true; n |= true; return 0; }",
         "function f() { var n = \"41\".toNumber(); n += 1; return 0; }",
         "function f() { var n = \"41\".toNumber(); if (n != null) { n += 1; return n; } return 0; }",
-        "function f() { var a = [1]; a[0] += 1; return 0; }",
+        "function f() { var a = [1]; a[0] += true; return 0; }",
         "function f() { var a = [1]; a += [2]; return 0; }",
         "function f() { var n = 1; n + = 2; return n; }",
         "function f() { var n = 1; n &&= true; return n; }",

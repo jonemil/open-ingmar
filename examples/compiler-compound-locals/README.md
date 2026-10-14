@@ -19,8 +19,9 @@ binary result in the same slot. Existing binary contracts and fixed local
 types apply. A nullable local needs a proof before the read and a fresh check
 after the write for later non-null use.
 
-Only bare initialized locals are compound targets. Parameters, fields, array
-elements, and grouped targets remain unsupported. Saved IR uses ordinary
+This example uses bare initialized locals. The
+[field/indexed example](../compiler-compound-targets/README.md) covers those
+additional targets. Parameters and grouped local targets remain unsupported. Saved IR uses ordinary
 read/binary/assign operations. See the [source contract][source] and
 [investigation][evidence].
 

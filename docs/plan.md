@@ -12,19 +12,24 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Extend compound assignments
-   from bare locals to Number fields and Number/Char indexed targets, checking
-   location/read/RHS evaluation and failure order. Then add increment/decrement
-   with checked targets and prefix/postfix results. Investigate conditional
+1. **Close current toolchain gaps.** Investigate opcode `0x0d` at CODE+`0x5b`
+   and the DATA record starting with `0x03` at DATA+`0x3397` in the
+   [compound-target specimen](investigations/compiler-compound-targets.md).
+   Add the required decoding/encoding, structured assembly/disassembly, and
+   record reading/writing support, with evidence and reconstruction checks.
+   Recheck related core-language specimens for remaining fallback diagnostics.
+2. **Remaining operators and assignment forms.** Add increment/decrement with
+   checked local/field/indexed targets and prefix/postfix results, preserving
+   captured locations and read/effect order. Investigate conditional
    expressions and their result-type joins separately.
-2. **Dictionary.** Establish construction, key/value contracts, literals,
+3. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.
-3. **Numeric types and deferred methods.** Add Long/Float/Double values,
+4. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-4. **Object and callable/reference facilities.** Grow shared Object contracts,
+5. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
@@ -65,6 +70,27 @@ device capacity distinct. Grow the [API declaration model][api-design] through
 core contracts; broader device/app/permission inputs and Application/System
 integration belong to the later project/SDK phase. A Jungle driver or complete
 API definition parser is not a prerequisite for this core work.
+
+## Toolchain completion
+
+Requests to implement language operators or Lang/API objects include required
+support through every affected toolchain stage: source/API checking, typed and
+saved IR, lowering, VM encoding/decoding, assembly text, disassembly, PRG record
+reading/writing, and section export/reconstruction. Packaging and signing need
+changes when the feature affects their existing contracts.
+
+Inspect diagnostics from feature specimens, including successful commands that
+fall back to raw CODE or DATA. Investigate unknown opcodes/records encountered
+there and implement their required representations and round trips. Generating
+equivalent behavior with already-supported instructions does not close a
+decoder/format gap in the reference specimen. Preserve raw fallback for unknown
+content, but report unresolved gaps and keep the feature's toolchain coverage
+incomplete until the required support is verified.
+
+Validate structured export/reassembly for the affected instructions/records,
+lossless payload reconstruction where applicable, source/text pipeline
+equivalence, and simulator behavior. These checks establish separate guarantees;
+a zero exit status or successful compiler-generated app alone is insufficient.
 
 ## Native Lang strategy
 

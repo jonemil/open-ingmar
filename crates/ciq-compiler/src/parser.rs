@@ -10,6 +10,12 @@ pub(crate) struct ParsedFunction {
 }
 
 pub(crate) enum Statement {
+    ArrayCompound {
+        target: Expression,
+        kind: crate::BinaryOp,
+        value: Expression,
+        span: Span,
+    },
     ArrayAssign {
         array: Expression,
         index: Expression,
@@ -78,7 +84,9 @@ impl Statement {
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
-            Self::FieldAssign { span, .. } | Self::ArrayAssign { span, .. } => *span,
+            Self::FieldAssign { span, .. }
+            | Self::ArrayAssign { span, .. }
+            | Self::ArrayCompound { span, .. } => *span,
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
@@ -1042,13 +1050,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Check a parsed assignment target without entering RHS parsing.
-    /// Local targets must be bare; compound field/array targets are unsupported.
-    fn assignment_target(
-        &self,
-        expression: &Expression,
-        assignment: Kind<'_>,
-        start: usize,
-    ) -> Result<(), Diagnostic> {
+    /// Local targets must be bare; explicit self fields and array elements are accepted.
+    fn assignment_target(&self, expression: &Expression, start: usize) -> Result<(), Diagnostic> {
         if let ExpressionKind::Local(name) = &expression.kind {
             if self.source[expression.span.start..expression.span.end] != *name {
                 return Err(self.error(start, "assignment target must be a bare local identifier"));
@@ -1065,14 +1068,6 @@ impl<'a> Parser<'a> {
                 "assignment target must be a local, self field, or array element",
             ));
         }
-        if matches!(assignment, Kind::Compound(_))
-            && !matches!(expression.kind, ExpressionKind::Local(_))
-        {
-            return Err(self.error(
-                start,
-                "compound assignment requires a bare local identifier",
-            ));
-        }
         Ok(())
     }
 
@@ -1086,7 +1081,7 @@ impl<'a> Parser<'a> {
         span: Span,
     ) -> Result<Statement, Diagnostic> {
         let statement = if let Kind::Compound(kind) = assignment {
-            self.compound_local(expression, kind, value, span)?
+            self.compound_statement(expression, kind, value, span)?
         } else {
             match expression.kind {
                 ExpressionKind::ArrayRead { array, index } => Statement::ArrayAssign {
@@ -1103,20 +1098,28 @@ impl<'a> Parser<'a> {
         Ok(statement)
     }
 
-    /// Desugar a local compound statement to a read, binary expression, and write.
-    /// The caller validates a bare local target; source lowering checks scope,
-    /// result assignability, and left-to-right operand evaluation.
-    fn compound_local(
+    /// Construct a compound local/field read and write, or defer an indexed target.
+    /// Source lowering captures array locations and checks operand/result contracts.
+    fn compound_statement(
         &mut self,
         target: Expression,
         kind: crate::BinaryOp,
         value: Expression,
         span: Span,
     ) -> Result<Statement, Diagnostic> {
-        let ExpressionKind::Local(name) = &target.kind else {
-            unreachable!("checked local target")
+        let (name, field) = match &target.kind {
+            ExpressionKind::ArrayRead { .. } => {
+                return Ok(Statement::ArrayCompound {
+                    target,
+                    kind,
+                    value,
+                    span,
+                });
+            }
+            ExpressionKind::Local(name) => (name.clone(), false),
+            ExpressionKind::SelfField(name) => (name.clone(), true),
+            _ => unreachable!("checked compound target"),
         };
-        let name = name.clone();
         let value_span = Span {
             start: target.span.start,
             end: value.span.end,
@@ -1129,7 +1132,11 @@ impl<'a> Parser<'a> {
             },
             value_span,
         )?;
-        Ok(Statement::Assign { name, value, span })
+        Ok(if field {
+            Statement::FieldAssign { name, value, span }
+        } else {
+            Statement::Assign { name, value, span }
+        })
     }
 
     /// Parse a braced statement sequence, bounding control-flow nesting and total
@@ -1243,7 +1250,7 @@ impl<'a> Parser<'a> {
                     let expression = self.expression(0)?;
                     if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
                         let assignment = self.token()?.kind;
-                        self.assignment_target(&expression, assignment, start)?;
+                        self.assignment_target(&expression, start)?;
                         let value = self.expression(0)?;
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
                         self.assignment_statement(

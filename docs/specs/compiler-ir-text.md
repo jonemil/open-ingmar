@@ -279,6 +279,15 @@ See [source rules](compiler-subset.md#array-element-writes),
 [Number evidence](../investigations/compiler-array-writes.md) and
 [Char/View evidence](../investigations/compiler-typed-array-writes.md).
 
+Source indexed compounds capture array/index with ordinary typed locals,
+perform `.array-read` before RHS effects, apply the binary directive, and finish
+with `.array-write`. Plain RHS expressions inline the old read into the binary
+value. A branching RHS stores that old read and the computed result before
+creating the final write operands, preserving block-local IDs and effect order.
+No indexed-compound directive or result-type annotation is introduced. See
+[source rules](compiler-subset.md#indexed-compound-assignment) and
+[evidence](../investigations/compiler-compound-targets.md).
+
 ## API context inputs
 
 `--target-api <major.minor.patch>` and `--min-api <major.minor.patch>` enable

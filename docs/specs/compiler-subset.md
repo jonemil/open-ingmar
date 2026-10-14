@@ -39,6 +39,7 @@ statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
           | identifier compound-operator expression ";"
           | primary "[" expression "]" "=" expression ";"
+          | primary "[" expression "]" compound-operator expression ";"
           | "System" "." "println" "(" expression ")" ";"
           | module "." member "(" argument-list? ")" ";"
           | "return" expression? ";"
@@ -584,8 +585,8 @@ Assignment-containing IR uses the conservative schedule specified in
 
 A bare in-scope initialized local supports `+=`, `-=`, `*=`, `/=`, `%=`,
 `&=`, `|=`, `^=`, `<<=`, and `>>=` as statements. Operator characters must be
-contiguous. Parameters, grouped targets, fields, indexed targets, and unknown
-or out-of-scope names are rejected. Assignment expressions, increment/decrement,
+contiguous. Parameters, grouped local targets, and unknown or out-of-scope
+names are rejected. Field/indexed compound targets are specified below. Assignment expressions, increment/decrement,
 logical compounds, and unsigned-right-shift compounds remain unsupported.
 
 `n op= rhs;` reads the existing local once, evaluates `rhs` once, applies the
@@ -939,11 +940,38 @@ need no hidden slots. Bounds are a runtime obligation, with no clamping or
 static range rejection. The tested VM reports a fatal bounds error after all
 operand effects, including for an index equal to the length.
 
-Nested arrays, indexed compound assignments, and assignments used as
-expressions remain unsupported. See [Number write evidence][array-writes] and
+Nested arrays and assignments used as expressions remain unsupported.
+Indexed compound targets follow the contract below. See [Number write evidence][array-writes] and
 [Char/View write evidence](../investigations/compiler-typed-array-writes.md).
 
 [array-writes]: ../investigations/compiler-array-writes.md
+
+## Indexed compound assignment
+
+`array[index] op= rhs;` supports Number elements with all ten compound operators
+and Char elements with `+= Number`. Existing binary contracts and invariant
+array element types apply; View elements have no supported compound operator.
+The index must be non-null Number, including a fresh guarded nullable read.
+String/dictionary receivers, nested arrays, and assignment expressions remain
+unsupported.
+
+Evaluate array and index once, in that order, then read the old element before
+RHS effects. Evaluate RHS once, apply the binary operation, and write through
+the captured array/index. Changes to contents or length during RHS evaluation
+do not change the old value used by the operation. An invalid initial index
+fails at the read before RHS effects; a RHS that shrinks the array can make the
+final write fail after those effects. Both accesses retain runtime bounds
+checks, without clamping or static range rejection.
+
+Array and index are captured in two typed hidden locals. Plain RHS expressions
+need no additional old-value/result slots. A branching RHS stages the old read
+and result before defining fresh final write operands, keeping expression IDs
+block-local. These temporaries share the ordinary frame budget; loop iterations
+reuse their static slots. Saved IR uses existing locals, `.array-read`, binary
+operations, and `.array-write`, with no compound directive.
+See [target evidence][compound-targets].
+
+[compound-targets]: ../investigations/compiler-compound-targets.md
 
 ## Number arrays
 

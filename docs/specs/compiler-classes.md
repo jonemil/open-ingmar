@@ -270,8 +270,14 @@ Methods read a field with `self.<name>` and replace it with
 `self.<name> = <expression>;`. The RHS must produce Number and is evaluated
 before the write. A local or parameter with the same name remains separate;
 bare names keep existing local/parameter lookup rules. Assignment is a statement,
-not a value expression. Compound assignments, arbitrary receiver properties,
-static fields, and source-inherited fields are unsupported.
+not a value expression. Number fields also support all ten arithmetic/bitwise
+compound operators: `self.count += rhs;` reads the old field once before RHS
+effects, applies the corresponding Number binary operation, then stores the
+result. A RHS that changes the field does not change the captured old value.
+Branching RHS expressions stage the old read through ordinary typed locals.
+Non-Number results are rejected. Arbitrary receiver properties, static fields,
+and source-inherited fields remain unsupported. See
+[target evidence](../investigations/compiler-compound-targets.md).
 
 `ClassDeclaration.fields` holds names and FieldKind defaults/contracts. Unit validation
 resolves every SelfFieldRead/SelfFieldAssign against its enclosing class; standalone
