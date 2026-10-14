@@ -26,7 +26,7 @@ wrapper. Ordinary code is exported as assembly when the full payload is
 supported by the decoder; otherwise it falls back to raw binary with a
 diagnostic. A losslessly representable unique symbol table is exported as
 `symbols` source. DATA with a complete supported record walk is exported as
-`data` source with pinned class and string declarations. Partial
+`data` source with pinned class, string, and scalar-array declarations. Partial
 referenced-string exports combine pinned strings and opaque byte spans.
 Supported unique DEBUG and LINE_NUMBERS sections use `debug` and `lines` source.
 Supported unique EXCEPTIONS uses `exceptions` source.
@@ -79,13 +79,14 @@ section 0xc0debabe 556 assembly 003-code-c0debabe.mcasm
 section 0x5717b015 95991 symbols 010-symbols-5717b015.mcasm
 ```
 
-Structured DATA requires a unique DATA section. Its strings, class declarations,
-and opaque spans reproduce the section bytes; class/string layout and references
+Structured DATA requires a unique DATA section. Its strings, classes, scalar
+arrays, and opaque spans reproduce the section bytes; layout and references
 resolve against SYMBOLS before code assembly. Named class fields share the same
 aliases as code; method fields may reference CODE labels with
 `value=code:label`. Labels are resolved before DATA, independently of manifest
 order. Numeric source remains supported. Code uses `news &alias` for supported
-string references. Project code files cannot contain inline `.string`
+string references and `apush &alias` for [scalar arrays](data-arrays.md), with
+separate binding namespaces. Project code files cannot contain inline `.string`
 declarations: content belongs in the authoritative DATA source. Unsupported DATA
 remains raw. RESOURCES remains raw regardless of read-only string inspection.
 See [DATA strings](data-strings.md) and [RESOURCES](resources.md).

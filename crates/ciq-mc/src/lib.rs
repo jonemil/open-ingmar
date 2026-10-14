@@ -77,6 +77,7 @@ opcodes! {
     Ipush3 = 0x3a, "ipush3", [3];
     Btpush = 0x3e, "btpush", [];
     Bfpush = 0x3f, "bfpush", [];
+    Apush = 0x40, "apush", [4];
     Getselfv = 0x43, "getselfv", [4];
     Getself = 0x44, "getself", [];
     Getmv = 0x45, "getmv", [4, 4];

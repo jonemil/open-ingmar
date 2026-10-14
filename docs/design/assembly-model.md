@@ -9,9 +9,9 @@ or signing.
 `Program` is an ordered sequence of immutable items: labels, instructions,
 inline symbol declarations, and inline string declarations with optional
 placement. An instruction has an `Opcode` and typed operand fields: `Bits(u64)`,
-`Symbol(alias)`, `String(alias)`, or `Code(alias)`. Semantic value IDs from
-compiler IR are absent here. Symbol/string references await declarations or
-external bindings; CODE references resolve locally to signed relative operands
+`Symbol(alias)`, `String(alias)`, `Array(alias)`, or `Code(alias)`. Semantic value
+IDs from compiler IR are absent here. Symbol/literal references await
+declarations or external bindings; CODE references resolve locally to signed relative operands
 after layout. See
 [branch-label rules](../specs/code-labels.md#relative-instruction-operands).
 
@@ -28,8 +28,11 @@ content and constraints are retained. `items()` exposes a read-only slice; build
 a new program to edit it and reapply validation.
 
 `Program::labels()` computes instruction-aligned CODE offsets. `encode()` /
-`encode_with_references(symbols, strings)` share binding resolution, duplicate
-symbol/string checks, operand-width checks, and `ciq-mc` byte encoding.
+`encode_with_references(symbols, strings)` and
+`encode_with_literals(symbols, strings, arrays)` share binding resolution,
+duplicate symbol/string checks, operand-width checks, and `ciq-mc` byte encoding.
+Array aliases resolve only through the separate array map; project declarations
+belong in [DATA array source](../specs/data-arrays.md).
 Unresolved or conflicting bindings are errors. Symbol declaration placement
 metadata is preserved, but CODE encoding does not write a SYMBOLS section;
 project reconstruction does that separately. Inline strings likewise provide

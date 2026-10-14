@@ -38,6 +38,7 @@ pub struct Class<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Record<'a> {
     String { offset: usize, value: &'a str },
+    Array(super::arrays::Declaration),
     Class(Class<'a>),
 }
 
@@ -55,6 +56,13 @@ pub fn records(payload: &[u8]) -> Result<Vec<Record<'_>>, Error> {
     let mut at = 0;
     while at < payload.len() {
         let start = at;
+        if payload[at] == 3 {
+            let offset = u32::try_from(at).map_err(|_| Error("DATA offset exceeds u32".into()))?;
+            let (array, end) = super::arrays::array_at(payload, offset)?;
+            records.push(Record::Array(array));
+            at = end;
+            continue;
+        }
         if payload[at] == 1 {
             let offset = u32::try_from(at).map_err(|_| Error("DATA offset exceeds u32".into()))?;
             let (value, end) = super::string_at(payload, offset)?;

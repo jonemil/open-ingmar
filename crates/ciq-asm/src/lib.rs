@@ -101,6 +101,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         .transpose()?
         .unwrap_or_default();
     let (data_payload, strings) = data_source.encode_with_references(&bindings, &labels)?;
+    let arrays = data_source.array_bindings()?;
     let (debug_payload, debug_strings) = debug_source.encode()?;
     let mut line_targets = Vec::new();
     let mut exception_targets = Vec::new();
@@ -118,7 +119,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
                         );
                     }
                 }
-                assemble_with_references(text, &bindings, &strings)?
+                Program::parse(text)?.encode_with_literals(&bindings, &strings, &arrays)?
             }
             Encoding::Symbols => symbol_source.encode()?,
             Encoding::Data => data_payload.clone(),

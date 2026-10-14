@@ -45,6 +45,8 @@ SDK/version and scope; they are not current feature inventories. Use
   structured reconstruction.
 - [Array-fill opcode](array-fill-opcode.md): retaining element stores,
   evaluation order, and write-time bounds checks.
+- [Constant arrays](constant-arrays.md): DATA framing, scalar elements, array
+  copy behavior, and editable load references.
 - [Symbol assembly](symbol-assembly.md): identity and optional placement.
 - [DATA and resources](data-and-resources.md): string records and resource indexes.
 - [DATA classes](data-classes.md): fields and method references.

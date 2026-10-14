@@ -27,6 +27,8 @@ the [member-get follow-up](member-get-opcode.md) establishes `0x0d`, and the
 reconstruction checks. The table below records the initial inventory.
 The [array-fill follow-up](array-fill-opcode.md) establishes `0x49` and its
 write-time bounds behavior.
+The [constant-array follow-up](constant-arrays.md) closes the `0x40`/DATA `0x03`
+gaps for these specimens and records the complete structured coverage baseline.
 
 | Unsupported opcode | Example groups | Representative |
 |---|---|---|

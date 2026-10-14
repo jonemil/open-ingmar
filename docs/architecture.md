@@ -44,7 +44,7 @@ unit using a constrained, simulator-tested bootstrap profile.
 
 The [assembly language](design/assembly-source.md) serves handwritten code,
 compiler output, and disassembly. Its [shared model](design/assembly-model.md)
-keeps labels and symbol/string references until layout and encoding. Identity
+keeps labels and symbol/string/array references until layout and encoding. Identity
 and placement are distinct; optional constraints pin layout, while unconstrained
 allocation must be deterministic.
 

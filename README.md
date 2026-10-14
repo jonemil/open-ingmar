@@ -257,6 +257,7 @@ The reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
 - [DEBUG strings and line mappings](docs/specs/line-numbers-and-debug.md)
 - [DATA class/module inspection](docs/specs/data-classes.md)
 - [DATA string assembly](docs/specs/data-strings.md)
+- [DATA scalar arrays](docs/specs/data-arrays.md)
 - [Resource string inspection](docs/specs/resources.md)
 - [Barrel package profile](docs/specs/barrel-package.md)
 - [IQ package/signing profile](docs/specs/iq-package.md)

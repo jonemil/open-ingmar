@@ -3,6 +3,51 @@ use ciq_mc::Opcode;
 use std::collections::BTreeMap;
 
 #[test]
+fn array_operands_bind_separately_from_strings_and_follow_data_layout() {
+    let source = ciq_prg::data::Source::parse(
+        ".string s \"abc\"\n.array values\n.element number=0x2a\n.endarray\n",
+    )
+    .unwrap();
+    let arrays = source.array_bindings().unwrap();
+    let strings = source.string_bindings().unwrap();
+    let program = Program::parse("apush &values\nnews &s\nreturn").unwrap();
+    assert_eq!(
+        program
+            .encode_with_literals(&BTreeMap::new(), &strings, &arrays)
+            .unwrap(),
+        [0x40, 0, 0, 0, 7, 0x18, 0, 0, 0, 0, 0x16]
+    );
+    assert_eq!(program, Program::parse(&program.to_text()).unwrap());
+    assert!(
+        program
+            .encode_with_references(&BTreeMap::new(), &arrays)
+            .is_err()
+    );
+    for text in ["apush &s", "news &values"] {
+        assert!(
+            Program::parse(text)
+                .unwrap()
+                .encode_with_literals(&BTreeMap::new(), &strings, &arrays)
+                .is_err()
+        );
+    }
+    let moved =
+        ciq_prg::data::Source::parse(".string s \"longer\"\n.array values\n.endarray\n").unwrap();
+    assert_eq!(
+        Program::parse("apush &values")
+            .unwrap()
+            .encode_with_literals(
+                &BTreeMap::new(),
+                &BTreeMap::new(),
+                &moved.array_bindings().unwrap()
+            )
+            .unwrap(),
+        [0x40, 0, 0, 0, 10]
+    );
+    assert!(ciq_mc::decode(&[0x40, 0, 0, 0]).is_err());
+}
+
+#[test]
 fn branch_labels_bind_in_memory_and_text_and_follow_layout_edits() {
     let source = "start:\nbtpush\nbf code:done\njsr code:helper\ngoto code:start\nhelper:\nret\ndone:\nipush1 0x2b\nreturn\n";
     let program = Program::parse(source).unwrap();

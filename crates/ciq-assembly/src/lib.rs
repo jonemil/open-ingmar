@@ -29,6 +29,8 @@ pub enum Operand {
     Bits(u64),
     Symbol(String),
     String(String),
+    /// A constant-array DATA alias used by `apush`.
+    Array(String),
     /// A local CODE label resolved to a signed relative instruction operand.
     Code(String),
 }
@@ -124,7 +126,11 @@ impl Program {
                             return Ok(Operand::Symbol(alias.into()));
                         }
                         if let Some(alias) = value.strip_prefix('&') {
-                            return Ok(Operand::String(alias.into()));
+                            return Ok(if opcode == Opcode::Apush {
+                                Operand::Array(alias.into())
+                            } else {
+                                Operand::String(alias.into())
+                            });
                         }
                         if let Some(alias) = value.strip_prefix("code:") {
                             return Ok(Operand::Code(alias.into()));
@@ -200,6 +206,13 @@ impl Program {
                             {
                                 return Err(fail("invalid string reference or non-string operand"));
                             }
+                            Operand::Array(alias)
+                                if *opcode != Opcode::Apush
+                                    || field != 0
+                                    || !valid_alias(alias) =>
+                            {
+                                return Err(fail("invalid array reference or non-array operand"));
+                            }
                             Operand::Code(alias)
                                 if !opcode.has_relative_target()
                                     || field != 0
@@ -267,6 +280,7 @@ impl Program {
                             }
                             Operand::Symbol(alias) => text.push_str(&format!("@{alias}")),
                             Operand::String(alias) => text.push_str(&format!("&{alias}")),
+                            Operand::Array(alias) => text.push_str(&format!("&{alias}")),
                             Operand::Code(alias) => text.push_str(&format!("code:{alias}")),
                         }
                     }
@@ -298,6 +312,17 @@ impl Program {
         &self,
         external: &BTreeMap<String, u32>,
         external_strings: &BTreeMap<String, u32>,
+    ) -> Result<Vec<u8>, Error> {
+        self.encode_with_literals(external, external_strings, &BTreeMap::new())
+    }
+
+    /// Encode CODE with separately typed symbol, string, and constant-array bindings.
+    /// Literal aliases must resolve to the supported zero-prefix DATA address space.
+    pub fn encode_with_literals(
+        &self,
+        external: &BTreeMap<String, u32>,
+        external_strings: &BTreeMap<String, u32>,
+        external_arrays: &BTreeMap<String, u32>,
     ) -> Result<Vec<u8>, Error> {
         let labels = self.labels()?;
         let code_length: usize = self
@@ -372,6 +397,18 @@ impl Program {
                             return Err(
                                 self.error(index, "resolved string placement exceeds 24 bits")
                             );
+                        }
+                        at as u64
+                    }
+                    Operand::Array(alias) => {
+                        let at = *external_arrays.get(alias).ok_or_else(|| {
+                            self.error(index, format!("undefined array alias {alias}"))
+                        })?;
+                        if at >= ciq_prg::data::ADDRESS_LIMIT as u32 {
+                            return Err(self.error(
+                                index,
+                                "resolved array placement exceeds supported DATA range",
+                            ));
                         }
                         at as u64
                     }

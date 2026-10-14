@@ -10,6 +10,7 @@ Null checks have [focused encoding/runtime evidence](../investigations/null-chec
 Stacked member reads have [field-update evidence](../investigations/member-get-opcode.md).
 Inversion has [Number/Boolean evidence](../investigations/invert-opcode.md).
 Retaining array stores have [literal-fill evidence](../investigations/array-fill-opcode.md).
+Constant arrays have [record/load evidence](../investigations/constant-arrays.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -71,6 +72,7 @@ resolution occur in assembly, without stack interpretation.
 | `3a` | `ipush3` | 3 |
 | `3e` | `btpush` | none |
 | `3f` | `bfpush` | none |
+| `40` | `apush` | 4 |
 | `43` | `getselfv` | 4 |
 | `44` | `getself` | none |
 | `45` | `getmv` | 4, 4 |
@@ -112,8 +114,10 @@ contains a supported symbol table, comments also annotate symbol operands using
 escaped names; assembly ignores those comments and reproduces the original
 operand bits. [Symbol declarations](symbol-assembly.md) resolve named operands.
 Optional commas separate fields. [String declarations](data-strings.md) resolve
-DATA addresses; [shared CODE labels](code-labels.md) identify instruction
-boundaries and resolve signed 16-bit branch fixups. Includes and expressions
+DATA addresses; `apush &alias` resolves a separately typed
+[DATA constant-array declaration](data-arrays.md).
+[Shared CODE labels](code-labels.md) identify instruction boundaries and resolve
+signed 16-bit branch fixups. Includes and expressions
 are not implemented.
 `ciq-asm` can replace an entire ordinary code payload in a PRG template or
 reconstruct a [complete section project](section-project.md); it is not a Monkey

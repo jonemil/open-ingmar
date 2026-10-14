@@ -1,9 +1,10 @@
-//! Referenced DATA strings and opaque spans.
+//! Supported DATA strings, classes, scalar arrays, and opaque spans.
 
 use crate::symbols::source::{Error, tokens, valid_alias};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
+pub mod arrays;
 pub mod classes;
 
 pub const ADDRESS_LIMIT: usize = 0x0100_0000;
@@ -21,6 +22,7 @@ pub enum Fragment {
     Bytes { at: u32, bytes: Vec<u8> },
     String(StringDeclaration),
     Class(classes::source::Declaration),
+    Array(arrays::Declaration),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -75,7 +77,7 @@ pub fn record_string_offsets(payload: &[u8]) -> Result<Vec<u32>, Error> {
             classes::Record::String { offset, .. } => {
                 Some(u32::try_from(offset).map_err(|_| Error("DATA offset exceeds u32".into())))
             }
-            classes::Record::Class(_) => None,
+            classes::Record::Class(_) | classes::Record::Array(_) => None,
         })
         .collect()
 }
@@ -143,12 +145,13 @@ impl Source {
 
     /// Parse DATA assembly and validate layout, retaining unresolved field aliases.
     ///
-    /// Produces a source whose string offsets can be bound before CODE encoding.
+    /// Produces a source whose string/array offsets can be bound before CODE encoding.
     /// Does not validate referenced symbols or methods; final encoding must
     /// resolve them through [`Self::encode_with_references`].
     pub fn parse_layout(text: &str) -> Result<Self, Error> {
         let mut source = Self::default();
         let mut class: Option<classes::source::Declaration> = None;
+        let mut array: Option<arrays::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
             let mut parse = || -> Result<Option<Fragment>, Error> {
                 let fields = tokens(line)?;
@@ -162,8 +165,19 @@ impl Source {
                     declaration.push_field(&fields)?;
                     return Ok(None);
                 }
+                if let Some(declaration) = array.as_mut() {
+                    if fields == [".endarray"] {
+                        return Ok(Some(Fragment::Array(array.take().unwrap())));
+                    }
+                    declaration.push_element(&fields)?;
+                    return Ok(None);
+                }
                 if fields[0] == ".class" {
                     class = Some(classes::source::Declaration::parse_header(&fields)?);
+                    return Ok(None);
+                }
+                if fields[0] == ".array" {
+                    array = Some(arrays::Declaration::parse_header(&fields)?);
                     return Ok(None);
                 }
                 if fields[0] == ".string" {
@@ -171,7 +185,7 @@ impl Source {
                 }
                 if fields.len() != 3 || fields[0] != ".bytes" {
                     return Err(Error(
-                        "expected .class, .string, or .bytes at=0x... <hex-bytes>".into(),
+                        "expected .class, .array, .string, or .bytes at=0x... <hex-bytes>".into(),
                     ));
                 }
                 let at = address(
@@ -203,11 +217,15 @@ impl Source {
         if class.is_some() {
             return Err(Error("unterminated .class declaration".into()));
         }
+        if array.is_some() {
+            return Err(Error("unterminated .array declaration".into()));
+        }
         source.layout()?;
         Ok(source)
     }
 
-    /// Serialize a complete supported DATA walk, retaining all class keys and references.
+    /// Decode a complete supported DATA walk into lossless editable declarations.
+    /// Retains class keys/references and scalar array types and value bits.
     pub fn from_records(payload: &[u8]) -> Result<Self, Error> {
         let mut source = Self::default();
         for record in classes::records(payload)? {
@@ -223,6 +241,7 @@ impl Source {
                 classes::Record::Class(class) => {
                     Fragment::Class(classes::source::Declaration::from_record(&class)?)
                 }
+                classes::Record::Array(array) => Fragment::Array(array),
             });
         }
         if source.encode()?.0 != payload {
@@ -398,6 +417,7 @@ impl Source {
         for fragment in &self.fragments {
             match fragment {
                 Fragment::Bytes { bytes, .. } => payload.extend(bytes),
+                Fragment::Array(a) => payload.extend(a.encode()?),
                 Fragment::Class(c) => {
                     payload.extend(c.encode_with_code(symbols, &classes, &strings, code)?)
                 }
@@ -420,13 +440,43 @@ impl Source {
         self.layout().map(|(strings, _)| strings)
     }
 
+    /// Resolve constant-array aliases to DATA offsets after validating layout.
+    /// String and array bindings stay separate so CODE cannot confuse their kinds.
+    pub fn array_bindings(&self) -> Result<Bindings, Error> {
+        self.layout()?;
+        let mut offset = 0usize;
+        let mut arrays = Bindings::new();
+        for fragment in &self.fragments {
+            offset += match fragment {
+                Fragment::Array(a) => {
+                    arrays.insert(a.alias.clone(), offset as u32);
+                    a.encoded_length()?
+                }
+                Fragment::String(s) => s.value.len() + 4,
+                Fragment::Class(c) => c.encoded_length()?,
+                Fragment::Bytes { bytes, .. } => bytes.len(),
+            };
+        }
+        Ok(arrays)
+    }
+
     fn layout(&self) -> Result<(Bindings, Bindings), Error> {
         let mut offset = 0usize;
         let mut strings = BTreeMap::new();
         let mut classes = BTreeMap::new();
+        let mut arrays = BTreeSet::new();
         for fragment in &self.fragments {
             let (at, size) = match fragment {
                 Fragment::Bytes { at, bytes } => (Some(*at), bytes.len()),
+                Fragment::Array(a) => {
+                    if !valid_alias(&a.alias) || !arrays.insert(a.alias.clone()) {
+                        return Err(Error(format!(
+                            "invalid or duplicate array alias {}",
+                            a.alias
+                        )));
+                    }
+                    (a.at, a.encoded_length()?)
+                }
                 Fragment::Class(c) => {
                     if let Some(alias) = &c.alias {
                         if !valid_alias(alias)
@@ -471,6 +521,7 @@ impl Source {
             match fragment {
                 Fragment::String(s) => text.push_str(&s.to_text()),
                 Fragment::Class(c) => text.push_str(&c.to_text()),
+                Fragment::Array(a) => text.push_str(&a.to_text()),
                 Fragment::Bytes { at, bytes } => {
                     for (index, chunk) in bytes.chunks(32).enumerate() {
                         write!(text, ".bytes at=0x{:08x} ", *at as usize + index * 32).unwrap();

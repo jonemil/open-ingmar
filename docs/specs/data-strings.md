@@ -34,9 +34,9 @@ Minimal Console's literal record is at DATA+`0x3279`:
 
 ## Discovering record boundaries
 
-The complete record walk recognizes string records and the framing of
-class/module records. Class fields have a lossless decoder and constrained
-serializer; see [class assembly](data-classes.md). Record walking does not
+The complete record walk recognizes strings, [scalar arrays](data-arrays.md),
+and the framing of class/module records. Class fields have a lossless decoder
+and constrained serializer; see [class assembly](data-classes.md). Record walking does not
 implement relocation.
 
 - **Class form:** `c1 a5 5d ef`. **Boundary encoding:** Four u32 relationship
@@ -47,8 +47,9 @@ implement relocation.
   then count × 9-byte fields.
 
 Unknown high presence bits, unknown tags, malformed headers, or fields extending
-past DATA stop the complete walk. JSON/container records are not supported by
-this walk. The c2 framing and complete walk are validated in both current SDK
+past DATA stop the complete walk. Container forms outside the scalar-array
+profile remain unsupported. The c2 framing and complete walk are validated in
+current SDK
 9.2.0 `fr265` specimens; c1 framing is source-derived and covered by an
 independent synthetic fixture, not observed in these SDK specimens.
 

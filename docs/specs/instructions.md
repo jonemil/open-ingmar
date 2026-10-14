@@ -58,6 +58,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
 - [`aputv`](#aputv): store an array element.
 - [`aputvdup`](#aputvdup): store an array element and retain the array.
+- [`apush`](#apush): load a serialized constant array.
 - [`lgetv`](#lgetv): load a local-frame slot.
 - [`lputv`](#lputv): store a local-frame slot.
 - [`newa`](#newa): create an array.
@@ -384,6 +385,23 @@ fatal bounds error after operand effects in SDK and generated apps.
 [typed-writes]: ../investigations/compiler-typed-array-writes.md
 
 [writes]: ../investigations/compiler-array-writes.md
+
+## apush
+
+**Load a serialized constant array.** Opcode `0x40`; length **5 bytes**.
+Operand: big-endian u32 DATA address. Successful abstract stack:
+`[...] → [..., array]`.
+
+The operand points at the outer `0x03` record tag in
+[the supported scalar-array profile](data-arrays.md). Named assembly uses
+`apush &alias`, with a separate array binding namespace. Numeric operands retain
+all bits; the codec does not establish runtime validity of arbitrary addresses.
+
+The [focused specimen](../investigations/constant-arrays.md) emits
+`40 00 00 32 d0` at CODE+`0x2e` for `[10, 20, 30]`. Two calls through that same
+load yield independently mutable arrays: changing the first does not change the
+second. Nested containers, unsupported scalar types, invalid addresses, and
+other SDK/device versions remain unverified.
 
 ## aputvdup
 

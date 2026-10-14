@@ -11,6 +11,55 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn constant_arrays_export_with_typed_aliases_and_support_scalar_edits() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("first");
+    let second = temporary.0.join("second");
+    let data = ciq_prg::data::Source::parse(
+        ".string s \"hi\"\n.array values\n.element number=0x2a\n.element null\n.endarray\n",
+    )
+    .unwrap()
+    .encode()
+    .unwrap()
+    .0;
+    let original = Prg::from_sections(vec![
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x40, 0, 0, 0, 6, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Data);
+    assert_eq!(manifest.entries[1].encoding, Encoding::Assembly);
+    let text = fs::read_to_string(first.join(&manifest.entries[1].file)).unwrap();
+    assert!(text.contains("apush &array_00000006"));
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    let repeated = ciq_dis::export_project(&rebuilt, &second).unwrap();
+    assert_eq!(repeated.to_text(), manifest.to_text());
+    for entry in &manifest.entries {
+        assert_eq!(
+            fs::read(first.join(&entry.file)).unwrap(),
+            fs::read(second.join(&entry.file)).unwrap()
+        );
+    }
+    let path = first.join(&manifest.entries[0].file);
+    fs::write(
+        &path,
+        fs::read_to_string(&path)
+            .unwrap()
+            .replace("number=0x0000002a", "number=0x0000002b"),
+    )
+    .unwrap();
+    let edited = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(
+        edited.unique_section(CODE).unwrap(),
+        original.unique_section(CODE).unwrap()
+    );
+    let (array, _) =
+        ciq_prg::data::arrays::array_at(edited.unique_section(DATA).unwrap().payload(), 6).unwrap();
+    assert_eq!(array.values[0], ciq_prg::data::arrays::Value::Number(43));
+}
+
+#[test]
 fn retaining_array_stores_export_and_reconstruct_as_structured_assembly() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("first");

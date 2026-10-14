@@ -15,7 +15,8 @@ PRG export/reconstruction with identical repeat exports, and barrel member round
 trips. It saves full reports
 and logs, and returns nonzero for incomplete coverage, including raw CODE/DATA
 fallback or missing SDK specimens. It does not run simulator sessions or rebuild
-SDK inputs. Use `--bin-dir` for another tool build and `--sdk-index <file.json>`
+SDK inputs. Partial DATA sources containing opaque `.bytes` spans also fail the
+coverage check. Use `--bin-dir` for another tool build and `--sdk-index <file.json>`
 to select SDK PRGs explicitly. The index maps example directory names to one
 path or a list of paths for multiple specimens.
 
