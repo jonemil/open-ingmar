@@ -44,7 +44,11 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`addv`](#addv): add two values.
 - [`subv`](#subv): subtract two values.
 - [`divv`](#divv): divide two values.
-- [`orv`](#orv): combine values with bitwise or.
+- [`andv`](#andv): bitwise AND.
+- [`orv`](#orv): bitwise OR.
+- [`xorv`](#xorv): bitwise XOR.
+- [`shlv`](#shlv): left shift.
+- [`shrv`](#shrv): arithmetic right shift.
 - [`putv`](#putv): store an object member.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
 - [`aputv`](#aputv): store an array element.
@@ -168,6 +172,15 @@ simulator with status -8. This is process-failure evidence, not a portable
 Number result or Monkey C exception contract. Other types remain unverified.
 See [product evidence](../investigations/compiler-number-products.md).
 
+## andv
+
+**Bitwise AND two Numbers.** Opcode `0x07`; length **1 byte**; no operands.
+Successful stack: `[..., a, b] → [..., a & b]`.
+
+The [Number-bit specimen][bits] has `12 01 12 02 07 16` at CODE+`0x33a`:
+load two parameters, AND, return. SDK/generated `12 & 10` produces Number 8.
+Other types and VM/device versions remain unverified.
+
 ## orv
 
 **Combine values with bitwise OR.** Opcode `0x08`; length **1 byte**. Operands:
@@ -181,8 +194,44 @@ initialization combines values before a field assignment.
 Observed encoding: `08` at CODE+`0x000092` in **minimal-console**,
 prompt_font__title/<init>.
 
-**Limits:** Do not infer short-circuit Boolean behavior. Supported types and
-conversion rules remain unverified.
+The [Number-bit experiment][bits] verifies Number OR at CODE+`0x370`:
+`12 01 12 02 08 16`, loading two parameters, combining them, and returning.
+
+**Limits:** This does not establish Boolean short-circuiting, non-Number
+conversion, or other numeric-width behavior.
+
+## xorv
+
+**Bitwise XOR two Numbers.** Opcode `0x0c`; length **1 byte**; no operands.
+Successful stack: `[..., a, b] → [..., a ^ b]`.
+
+The [Number-bit specimen][bits] has `12 01 12 02 0c 16` at CODE+`0x3ce`.
+SDK/generated `12 ^ 10` produces Number 6. XOR with Number -1 implements the
+compiler's 32-bit complement; zero and minimum-Number probes agree with SDK
+source `~`. Other types and VM/device versions remain unverified.
+
+## shlv
+
+**Left-shift a Number.** Opcode `0x0a`; length **1 byte**; no operands.
+Successful stack: `[..., value, count] → [..., value << count]`.
+
+The [Number-bit specimen][bits] has `12 01 12 02 0a 16` at CODE+`0x39f`.
+SDK/generated `1 << 31` produces Number -2147483648. Counts -1, 32, and 33
+are accepted and agree with low-five-bit count selection in the tested VM.
+No compiler masking or range check is emitted. Other count boundaries, numeric
+types, and VM/device versions remain unverified.
+
+## shrv
+
+**Arithmetic-right-shift a Number.** Opcode `0x0b`; length **1 byte**;
+no operands. Successful stack: `[..., value, count] → [..., value >> count]`.
+
+The [Number-bit specimen][bits] has `12 01 12 02 0b 16` at CODE+`0x32a`.
+SDK/generated `-8 >> 1` produces -4, and minimum Number shifted by 31 produces
+-1, preserving sign. Count-boundary probes share the `shlv` evidence limits.
+This does not establish an unsigned-right-shift operation.
+
+[bits]: ../investigations/compiler-number-bits.md
 
 ## putv
 

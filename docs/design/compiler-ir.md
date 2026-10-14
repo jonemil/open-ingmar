@@ -24,6 +24,13 @@ expression order. Array reads also retain order because bounds failures are
 observable; shared validation traverses array before index. Pure expressions
 may be scheduled by dependencies.
 
+Number bitwise operations reuse `Binary` and its operand contracts. Source
+complement becomes XOR with Number -1, so typed and saved IR share its
+validation and control-flow staging without a separate unary operation. The
+parser keeps both arithmetic/bitwise precedence groups in its iterative
+operator stack, preserving the existing nested-expression budget. VM selection
+uses direct instructions; shift counts remain runtime operands.
+
 `Discard` is an expression root that consumes a value for effects. Native source
 call statements use it with an ordinary native value call, keeping contract
 resolution, operand scheduling, and invocation in one path. The backend emits

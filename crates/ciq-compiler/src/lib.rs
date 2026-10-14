@@ -107,6 +107,11 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
 }
 
 /// Native class identities supported as non-null object references.
@@ -1919,6 +1924,11 @@ impl Function {
                         BinaryOp::Multiply => "multiply",
                         BinaryOp::Divide => "divide",
                         BinaryOp::Remainder => "remainder",
+                        BinaryOp::BitAnd => "bit-and",
+                        BinaryOp::BitOr => "bit-or",
+                        BinaryOp::BitXor => "bit-xor",
+                        BinaryOp::ShiftLeft => "shift-left",
+                        BinaryOp::ShiftRight => "shift-right",
                     },
                     result.0,
                     left.0,

@@ -27,7 +27,8 @@ single-block body contains ordered local initializations, print
 statements, calls, and expression trees, ending with `.return <value-id>` or
 `.return-void`. Explicit blocks support branches and loops as specified below.
 Definitions are `.integer <result-id> <value>` and binary directives
-`.add`, `.subtract`, `.multiply`, `.divide`, and `.remainder`, each with
+`.add`, `.subtract`, `.multiply`, `.divide`, `.remainder`, `.bit-and`,
+`.bit-or`, `.bit-xor`, `.shift-left`, and `.shift-right`, each with
 `<result-id> <left-id> <right-id>`. Value
 IDs are `%` plus decimal `u32`; any such ID is supported, not just `%0`. Integer
 values are decimal i32 values in `-2147483648..=2147483647`, with an optional
@@ -78,6 +79,16 @@ require expression evaluation order in IR, even without calls or assignments.
 A saved graph that would reorder them is rejected. Literal zero divisors remain
 runtime operations. Rounding, signs, overflow evidence, and the simulator's
 minimum-Number/-1 failure follow the [source arithmetic contract][products].
+
+`.bit-and`, `.bit-or`, `.bit-xor`, `.shift-left`, and `.shift-right` each
+consume two non-null Numbers and produce Number. Shared validation rejects
+other types and missing null proofs. Lowering selects `andv`, `orv`, `xorv`,
+`shlv`, or `shrv` after emitting left and right operands once in that order.
+Shift counts pass unchanged to the VM; no range check, masking, or constant
+folding is emitted. Source `~value` becomes `.bit-xor` with a separate Number
+-1 definition. There is no `.complement` directive. All ordinary block,
+single-use, staging, and effect-order rules apply. See
+[bitwise evidence](../investigations/compiler-number-bits.md).
 
 Arithmetic directives use expression value IDs. For example:
 

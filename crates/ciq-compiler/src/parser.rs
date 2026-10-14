@@ -204,6 +204,8 @@ enum Kind<'a> {
     NotEqual,
     LessEqual,
     GreaterEqual,
+    ShiftLeft,
+    ShiftRight,
     AndAnd,
     OrOr,
     End,
@@ -431,13 +433,21 @@ impl<'a> Parser<'a> {
                 self.offset += 2;
                 Kind::GreaterEqual
             }
+            Some('<') if rest.starts_with("<<") => {
+                self.offset += 2;
+                Kind::ShiftLeft
+            }
+            Some('>') if rest.starts_with(">>") => {
+                self.offset += 2;
+                Kind::ShiftRight
+            }
             Some('=') if rest.starts_with("==") => {
                 self.offset += 2;
                 Kind::EqualEqual
             }
             Some(
                 c @ ('(' | ')' | '{' | '}' | '[' | ']' | ';' | '+' | '-' | '=' | '.' | ',' | '>'
-                | '<' | '!' | '*' | '/' | '%'),
+                | '<' | '!' | '*' | '/' | '%' | '&' | '|' | '^' | '~'),
             ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
@@ -573,6 +583,11 @@ impl<'a> Parser<'a> {
                 Kind::Punctuation('*') => (crate::BinaryOp::Multiply, 2),
                 Kind::Punctuation('/') => (crate::BinaryOp::Divide, 2),
                 Kind::Punctuation('%') => (crate::BinaryOp::Remainder, 2),
+                Kind::Punctuation('&') => (crate::BinaryOp::BitAnd, 2),
+                Kind::Punctuation('|') => (crate::BinaryOp::BitOr, 1),
+                Kind::Punctuation('^') => (crate::BinaryOp::BitXor, 1),
+                Kind::ShiftLeft => (crate::BinaryOp::ShiftLeft, 2),
+                Kind::ShiftRight => (crate::BinaryOp::ShiftRight, 2),
                 _ => break,
             };
             while operators
@@ -615,7 +630,34 @@ impl<'a> Parser<'a> {
         )?);
         Ok(())
     }
+    /// Parse Number complement as a spanned XOR with the all-bits-set mask.
+    /// Isolate construction so ordinary unary parsing keeps its stack budget.
+    fn complement(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if depth >= 64 {
+            return Err(self.error(self.offset, "expression nesting exceeds 64"));
+        }
+        let sign = self.token()?;
+        let operand = self.unary(depth + 1)?;
+        let span = Span {
+            start: sign.span.start,
+            end: operand.span.end,
+        };
+        // Number complement is XOR with all 32 bits set. Keeping this in
+        // Binary shares its type checking, staging, and saved IR contract.
+        let mask = self.node(ExpressionKind::Integer(-1), sign.span)?;
+        self.node(
+            ExpressionKind::Binary {
+                kind: crate::BinaryOp::BitXor,
+                left: Box::new(operand),
+                right: Box::new(mask),
+            },
+            span,
+        )
+    }
     fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? == Kind::Punctuation('~') {
+            return self.complement(depth);
+        }
         if self.peek()? == Kind::Punctuation('!') {
             let sign = self.token()?;
             if depth >= 64 {

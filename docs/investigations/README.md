@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Number bit operations](compiler-number-bits.md): instruction bytes,
+  unusual precedence, signed shifts, and count-boundary probes.
 - [Char/View writes](compiler-typed-array-writes.md): invariant element
   contracts, shared references, and bounds failures.
 - [Number-array writes](compiler-array-writes.md): operand order, alias

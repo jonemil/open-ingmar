@@ -48,9 +48,9 @@ expression = logical-or
 logical-or = logical-and ("||" logical-and)*
 logical-and = comparison ("&&" comparison)*
 comparison = arithmetic (("==" | "!=" | "<" | "<=" | ">" | ">=") arithmetic)?
-arithmetic = product (("+" | "-") product)*
-product = unary (("*" | "/" | "%") unary)*
-unary = primary | "-" primary | "!" unary
+arithmetic = product (("+" | "-" | "|" | "^") product)*
+product = unary (("*" | "/" | "%" | "&" | "<<" | ">>") unary)*
+unary = primary | "-" primary | ("!" | "~") unary
 primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
 atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
@@ -101,7 +101,8 @@ compilation supplies them; IR text may omit them. Without locals, lowering emits
 a label from the function name, `argc <parameter-count + 1>`, `ipushz` for zero
 or the smallest signed `ipush1`/`ipush2`/`ipush3`/`ipush4` for another Number,
 left/right operands followed by
-`addv`, `subv`, `mulv`, `divv`, or `modv` for binary definitions, then `return`.
+`addv`, `subv`, `mulv`, `divv`, `modv`, `andv`, `orv`, `xorv`, `shlv`, or
+`shrv` for binary definitions, then `return`.
 The frame count follows
 the observed hidden context slot; omitting SDK global-resolution instructions is
 limited to this context-independent body. It does not establish the frame layout
@@ -128,17 +129,18 @@ source. CODE output is a raw payload, not a PRG. See
 
 ## Arithmetic and lowering contract
 
-The source subset supports binary `+`, `-`, `*`, `/`, and `%`. Multiplication,
-division, and remainder share a precedence above addition/subtraction. Each
-group associates left to right; parentheses override grouping. Decimal literals
-cover the signed
-32-bit range. Unary minus binds more tightly than binary arithmetic and after
+The higher binary group is `*`, `/`, `%`, `&`, `<<`, and `>>`. The lower
+group is `+`, `-`, `|`, and `^`. Each group associates left to right;
+parentheses override grouping. Both groups bind before comparisons. This is
+Monkey C precedence: `1 + 2 << 2` means `1 + (2 << 2)`, while `2 << 1 * 3`
+means `(2 << 1) * 3`. Decimal literals cover the signed 32-bit range. Unary minus binds more tightly than binary arithmetic and after
 postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
 `abs` on the negated value. Boolean `!` uses the same precedence, supports
 repeated prefixes (`!!value`), and binds before comparisons:
-`!a == b` means `(!a) == b`. Unary plus, other operators, and general
-object calls remain unsupported; the bounded native calls below are separate. Parse nesting is
-bounded at 64; the semantic function is limited to 1024 operations including
+`!a == b` means `(!a) == b`. Number complement `~` shares that unary
+precedence and allows repeated prefixes. Unary plus, compound assignment,
+unsigned `>>>`, and general object calls remain unsupported; the bounded
+native calls below are separate. Parse nesting is bounded at 64; the semantic function is limited to 1024 operations including
 return. These are implementation limits.
 
 Number division truncates toward zero; remainder has the dividend's sign.
@@ -149,14 +151,27 @@ The SDK 9.2.0 simulator exits when the minimum Number is divided by, or has
 remainder taken against, -1. This boundary does not establish a portable result
 or a catchable Monkey C exception. See [product evidence][products].
 
+Bitwise operators require non-null Numbers, treating values as signed 32-bit
+bit patterns. Char, Boolean, String, and nullable operands without a proof are
+rejected. `>>` is an arithmetic right shift in the tested VM. Complement lowers
+to XOR with Number -1, sharing binary validation and operand staging rather
+than adding a separate IR instruction. It evaluates its operand once.
+
+Shift counts must be non-null Numbers. The compiler passes counts unchanged,
+without range checks or masking. SDK/generated probes for -1, 32, and 33 agree
+with selecting the low five count bits; this is evidence for the tested VM,
+not a portable guarantee for other runtimes. See [bitwise evidence][bits].
+
+[bits]: ../investigations/compiler-number-bits.md
+
 ### Operator contracts
 
 Validation resolves operand API types to these result contracts:
 
 | Operands | Operators | Result |
 |---|---|---|
-| Number / Number | `+`, `-`, `*`, `/`, `%` | Number |
-| Number | unary `-` | Number |
+| Number / Number | `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>` | Number |
+| Number | unary `-`, `~` | Number |
 | Boolean | unary `!` | Boolean |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |

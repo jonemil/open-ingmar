@@ -14,7 +14,7 @@ pub(crate) fn negate_result(operand: &Type) -> Option<Type> {
 
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number pairs support addition, subtraction, multiplication, division, and
-/// remainder. Addition of Char/Number in either
+/// remainder, bitwise AND/OR/XOR, and left/arithmetic-right shifts. Addition of Char/Number in either
 /// order returns Char; two Chars concatenate to String. An exact String operand
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
@@ -30,6 +30,11 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
         | BinaryOp::Multiply
         | BinaryOp::Divide
         | BinaryOp::Remainder
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
             if *left == Type::named("Toybox.Lang.Number") && left == right =>
         {
             Some(Type::named("Toybox.Lang.Number"))
@@ -121,6 +126,11 @@ mod tests {
                     BinaryOp::Multiply,
                     BinaryOp::Divide,
                     BinaryOp::Remainder,
+                    BinaryOp::BitAnd,
+                    BinaryOp::BitOr,
+                    BinaryOp::BitXor,
+                    BinaryOp::ShiftLeft,
+                    BinaryOp::ShiftRight,
                 ] {
                     let result = binary_result(op, &lhs, &rhs);
                     let expected = match (op, left, right) {

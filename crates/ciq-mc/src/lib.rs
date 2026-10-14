@@ -32,8 +32,12 @@ opcodes! {
     Subv = 0x04, "subv", [];
     Mulv = 0x05, "mulv", [];
     Divv = 0x06, "divv", [];
+    Andv = 0x07, "andv", [];
     Orv = 0x08, "orv", [];
     Modv = 0x09, "modv", [];
+    Shlv = 0x0a, "shlv", [];
+    Shrv = 0x0b, "shrv", [];
+    Xorv = 0x0c, "xorv", [];
     Putv = 0x0e, "putv", [];
     Invokem = 0x0f, "invokem", [1];
     Agetv = 0x10, "agetv", [];
