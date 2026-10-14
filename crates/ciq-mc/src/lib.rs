@@ -65,6 +65,7 @@ opcodes! {
     Bf = 0x29, "bf", [2];
     Frpush = 0x2a, "frpush", [];
     Npush = 0x2c, "npush", [];
+    Invv = 0x2d, "invv", [];
     Dup = 0x2e, "dup", [1];
     Getm = 0x30, "getm", [];
     Throw = 0x33, "throw", [];
@@ -207,6 +208,24 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inversion_has_no_operands_and_preserves_following_branch_boundaries() {
+        let bytes = [0x3e, 0x2d, 0x29, 0, 1, 0x16, 0x3f, 0x2d, 0x16];
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(
+            decoded.iter().map(|i| i.offset).collect::<Vec<_>>(),
+            [0, 1, 2, 5, 6, 7, 8]
+        );
+        assert_eq!(decoded[1].instruction.opcode(), Opcode::Invv);
+        assert_eq!(decoded[2].relative_target(), Some(6));
+        let mut emitted = Vec::new();
+        for entry in decoded {
+            entry.instruction.encode_into(&mut emitted);
+        }
+        assert_eq!(emitted, bytes);
+        assert!(Instruction::new(Opcode::Invv, vec![0]).is_err());
+    }
 
     #[test]
     fn member_get_decodes_between_captured_location_and_rhs_call() {

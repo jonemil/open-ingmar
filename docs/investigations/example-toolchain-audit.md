@@ -22,8 +22,9 @@ unrelated scratch experiments are excluded.
 The five opcode bytes beyond the previously identified `0x0d` were additional
 toolchain gaps at this audit. The
 [null-check follow-up](null-check-opcodes.md) establishes `0x20`/`0x4b` and
-the [member-get follow-up](member-get-opcode.md) establishes `0x0d`; each records
-subsequent reconstruction checks. The table below records the initial inventory.
+the [member-get follow-up](member-get-opcode.md) establishes `0x0d`, and the
+[inversion follow-up](invert-opcode.md) establishes `0x2d`. Each records subsequent
+reconstruction checks. The table below records the initial inventory.
 
 | Unsupported opcode | Example groups | Representative |
 |---|---|---|

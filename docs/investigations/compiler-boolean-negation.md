@@ -64,6 +64,8 @@ Experimentally observed in both applications:
 Our lowering uses operand evaluation followed by `bfpush; eq`. Generated
 simulator behavior verifies this sequence for the specimen; we did not infer
 or inspect the SDK compiler's implementation or require matching SDK CODE.
+The [inversion-opcode follow-up](invert-opcode.md) establishes the SDK's `invv`
+encoding and its structured assembly/disassembly support.
 
 Saved IR preserves a typed `.not` operation. Pipeline tests compare source and
 resumed unit IR, generated unsigned PRGs, and assembly round trips. Adversarial

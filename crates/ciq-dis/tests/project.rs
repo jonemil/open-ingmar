@@ -11,6 +11,29 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn inversion_and_following_branch_export_as_structured_assembly() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("first");
+    let second = temporary.0.join("second");
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, vec![0x3e, 0x2d, 0x29, 0, 1, 0x16, 0x3f, 0x2d, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Assembly);
+    let text = fs::read_to_string(first.join(&manifest.entries[0].file)).unwrap();
+    assert!(text.contains("invv"));
+    assert!(text.contains("bf code:code_00000006"));
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    let repeated = ciq_dis::export_project(&rebuilt, &second).unwrap();
+    assert_eq!(repeated.to_text(), manifest.to_text());
+    assert_eq!(
+        fs::read_to_string(second.join(&repeated.entries[0].file)).unwrap(),
+        text
+    );
+}
+
+#[test]
 fn stacked_member_get_exports_as_assembly_and_reconstructs_stably() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("first");

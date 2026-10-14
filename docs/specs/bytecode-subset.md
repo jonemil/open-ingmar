@@ -8,6 +8,7 @@ Char constants have [separate encoding evidence](../investigations/compiler-char
 Signed Number immediates have [boundary evidence](../investigations/compiler-number-literals.md).
 Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
 Stacked member reads have [field-update evidence](../investigations/member-get-opcode.md).
+Inversion has [Number/Boolean evidence](../investigations/invert-opcode.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -57,6 +58,7 @@ resolution occur in assembly, without stack interpretation.
 | `29` | `bf` | 2 |
 | `2a` | `frpush` | none |
 | `2c` | `npush` | none |
+| `2d` | `invv` | none |
 | `2e` | `dup` | 1 |
 | `30` | `getm` | none |
 | `33` | `throw` | none |

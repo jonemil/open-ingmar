@@ -44,6 +44,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`npush`](#npush): push null.
 - [`isnull`](#isnull): test whether a value is null.
 - [`isnotnull`](#isnotnull): test whether a value is non-null.
+- [`invv`](#invv): complement a Number or negate a Boolean.
 - [`addv`](#addv): add two values.
 - [`subv`](#subv): subtract two values.
 - [`divv`](#divv): divide two values.
@@ -112,6 +113,23 @@ for the tested values. Observed tail at CODE+`0x3c`: `12 01 4b 16`
 Both encodings and the tested results are experimentally observed in
 [the null-check probe](../investigations/null-check-opcodes.md). Physical stack
 representation and compatibility with other SDK/device versions are unverified.
+
+## invv
+
+**Invert a value.** Opcode `0x2d`; length **1 byte**. Operands: none.
+For Number, successful abstract stack: `[..., value] → [..., ~value]`.
+For Boolean: `[..., value] → [..., !value]`.
+
+The [focused probe](../investigations/invert-opcode.md) compiles typed
+`return ~value` and `return !value` to the same tail `12 01 2d 16`
+(`lgetv 0x01`, `invv`, `return`). The inversion bytes occur at CODE+`0x3e`
+and `0x10`, respectively.
+
+SDK/reconstructed simulator results confirm 32-bit Number complement for zero,
+-1, 42, and both signed boundaries, and logical negation for true/false.
+Behavior for other value types, invalid operands, and other SDK/device versions
+is unverified. Instruction selection remains independent: our compiler uses
+XOR with -1 for Number complement and comparison with false for Boolean negation.
 
 ## popv
 

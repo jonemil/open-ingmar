@@ -14,12 +14,12 @@ Choose increments by dependency, following the
 
 1. **Close the audited toolchain gaps.** The
    [example audit](investigations/example-toolchain-audit.md) and
-   [member-get follow-up](investigations/member-get-opcode.md) leave opcode groups
-   `0x2d`, `0x40`, and `0x49`, plus DATA record `0x03`.
+   [inversion follow-up](investigations/invert-opcode.md) leave opcode groups
+   `0x40` and `0x49`, plus DATA record `0x03`.
    Investigate their semantics and widths with focused source specimens, then
    add encoding/decoding, assembly/disassembly, and DATA read/write support.
-   Prioritize `0x2d`, then the array-related opcode groups and shared DATA
-   record. Repeat the audit after each group:
+   Investigate the array-literal opcode groups and shared DATA record together
+   where their references require it. Repeat the audit after each group:
    current unknowns can hide additional gaps. Require structured reconstruction
    checks before resuming new language features.
 2. **Remaining operators and assignment forms.** Add increment/decrement with
