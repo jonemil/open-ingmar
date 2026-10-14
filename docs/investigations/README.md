@@ -37,6 +37,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Section projects](section-project.md): complete export/import and raw fallback.
 - [Symbols](symbols.md): records and resolved instruction annotations.
 - [Instruction semantics](instruction-semantics.md): stack effects and unknowns.
+- [Null-check opcodes](null-check-opcodes.md): null equality/inequality,
+  structured reconstruction, and simulator results.
 - [Symbol assembly](symbol-assembly.md): identity and optional placement.
 - [DATA and resources](data-and-resources.md): string records and resource indexes.
 - [DATA classes](data-classes.md): fields and method references.

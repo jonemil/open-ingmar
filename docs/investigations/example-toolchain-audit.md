@@ -19,8 +19,11 @@ unrelated scratch experiments are excluded.
 - Every reviewed PRG exports DEBUG, LINE_NUMBERS, EXCEPTIONS, and SYMBOLS
   structurally. No additional parsing/reconstruction failures were observed.
 
-The five opcode bytes beyond the previously identified `0x0d` are additional
-toolchain gaps. Their meanings and operand widths remain unverified.
+The five opcode bytes beyond the previously identified `0x0d` were additional
+toolchain gaps at this audit. The
+[null-check follow-up](null-check-opcodes.md) establishes `0x20`/`0x4b` and
+records the subsequent reconstruction checks; the table below records the
+initial inventory.
 
 | Unsupported opcode | Example groups | Representative |
 |---|---|---|

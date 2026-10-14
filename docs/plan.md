@@ -14,10 +14,12 @@ Choose increments by dependency, following the
 
 1. **Close the audited toolchain gaps.** The
    [example audit](investigations/example-toolchain-audit.md) identifies opcodes
-   `0x0d`, `0x20`, `0x2d`, `0x40`, `0x49`, and `0x4b`, plus DATA record `0x03`.
+   remaining opcode groups `0x0d`, `0x2d`, `0x40`, and `0x49`, plus DATA record
+   `0x03`; use [the null-check follow-up](investigations/null-check-opcodes.md)
+   for updated coverage after `0x20`/`0x4b` support.
    Investigate their semantics and widths with focused source specimens, then
    add encoding/decoding, assembly/disassembly, and DATA read/write support.
-   Prioritize widespread `0x20` and the compound-target `0x0d`, then the other
+   Prioritize the compound-target `0x0d`, then the other
    opcode groups and the shared DATA record. Repeat the audit after each group:
    current unknowns can hide additional gaps. Require structured reconstruction
    checks before resuming new language features.

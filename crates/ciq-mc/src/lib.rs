@@ -56,6 +56,7 @@ opcodes! {
     Gt = 0x1d, "gt", [];
     Gte = 0x1e, "gte", [];
     Ne = 0x1f, "ne", [];
+    Isnull = 0x20, "isnull", [];
     Jsr = 0x23, "jsr", [2];
     Ipush4 = 0x25, "ipush4", [4];
     Spush = 0x27, "spush", [4];
@@ -81,6 +82,7 @@ opcodes! {
     Getsv = 0x47, "getsv", [4];
     Invokemz = 0x48, "invokemz", [];
     Argcincsp = 0x4a, "argcincsp", [1, 1];
+    Isnotnull = 0x4b, "isnotnull", [];
 }
 
 impl Opcode {
@@ -204,6 +206,26 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn null_checks_have_no_operands_and_preserve_following_boundaries() {
+        // Local-load/check/return tails observed in our SDK-compiled probe.
+        let bytes = [0x12, 1, 0x20, 0x16, 0x12, 1, 0x4b, 0x16];
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(
+            decoded.iter().map(|i| i.offset).collect::<Vec<_>>(),
+            [0, 2, 3, 4, 6, 7]
+        );
+        assert_eq!(decoded[1].instruction.opcode(), Opcode::Isnull);
+        assert_eq!(decoded[4].instruction.opcode(), Opcode::Isnotnull);
+        let mut emitted = Vec::new();
+        for entry in decoded {
+            entry.instruction.encode_into(&mut emitted);
+        }
+        assert_eq!(emitted, bytes);
+        assert!(Instruction::new(Opcode::Isnull, vec![0]).is_err());
+        assert!(Instruction::new(Opcode::Isnotnull, vec![0]).is_err());
+    }
 
     #[test]
     fn relative_targets_use_signed_displacements_from_instruction_end() {

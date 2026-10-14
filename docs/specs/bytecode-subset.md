@@ -6,6 +6,7 @@ instruction encodings occur in Hello World, Minimal Console, and the
 [control-flow specimen](../investigations/control-flow.md).
 Char constants have [separate encoding evidence](../investigations/compiler-char-literals.md).
 Signed Number immediates have [boundary evidence](../investigations/compiler-number-literals.md).
+Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
 Widths were cross-checked with the pinned
 research implementations. Execution semantics remain only partly understood.
 
@@ -20,8 +21,14 @@ resolution occur in assembly, without stack interpretation.
 | `02` | `popv` | none |
 | `03` | `addv` | none |
 | `04` | `subv` | none |
+| `05` | `mulv` | none |
 | `06` | `divv` | none |
+| `07` | `andv` | none |
 | `08` | `orv` | none |
+| `09` | `modv` | none |
+| `0a` | `shlv` | none |
+| `0b` | `shrv` | none |
+| `0c` | `xorv` | none |
 | `0e` | `putv` | none |
 | `0f` | `invokem` | 1 |
 | `10` | `agetv` | none |
@@ -35,7 +42,12 @@ resolution occur in assembly, without stack interpretation.
 | `18` | `news` | 4 |
 | `19` | `goto` | 2 |
 | `1a` | `eq` | none |
+| `1b` | `lt` | none |
+| `1c` | `lte` | none |
 | `1d` | `gt` | none |
+| `1e` | `gte` | none |
+| `1f` | `ne` | none |
+| `20` | `isnull` | none |
 | `23` | `jsr` | 2 |
 | `25` | `ipush4` | 4 |
 | `27` | `spush` | 4 |
@@ -61,6 +73,7 @@ resolution occur in assembly, without stack interpretation.
 | `47` | `getsv` | 4 |
 | `48` | `invokemz` | none |
 | `4a` | `argcincsp` | 1, 1 |
+| `4b` | `isnotnull` | none |
 
 Unsupported opcode bytes cause an error at their code offset. They are never
 guessed to be one-byte instructions. A truncated operand also causes an error.

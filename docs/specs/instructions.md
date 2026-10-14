@@ -1,6 +1,6 @@
 # Supported instruction reference
 
-This reference covers each of the 44 opcodes currently encoded and decoded by
+This reference covers instructions currently encoded and decoded by
 `ciq-mc`. It describes behavior in our own words, with the
 [instruction investigation](../investigations/instruction-semantics.md)
 recording source revisions, observed bytes, and limitations. The
@@ -14,6 +14,7 @@ including the [control-flow specimen](../investigations/control-flow.md),
 except `bt`, tested through a controlled opcode replacement.
 `cpush` has separate [literal/runtime evidence][char-literals].
 Signed Number pushes have [width-boundary evidence][number-literals].
+Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
 Instruction presence and operand widths are **experimentally observed**.
 Most execution descriptions and abstract stack effects are **source-derived**, with
 compiled source/bytecode supporting their interpretation. We have not traced
@@ -41,6 +42,8 @@ CODE instruction targets, independently of symbols and DATA addresses.
 
 - [`popv`](#popv): discard the top value.
 - [`npush`](#npush): push null.
+- [`isnull`](#isnull): test whether a value is null.
+- [`isnotnull`](#isnotnull): test whether a value is non-null.
 - [`addv`](#addv): add two values.
 - [`subv`](#subv): subtract two values.
 - [`divv`](#divv): divide two values.
@@ -86,6 +89,28 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`throw`](#throw): raise an exception.
 - [`btpush`](#btpush): push Boolean true.
 - [`bfpush`](#bfpush): push Boolean false.
+
+## isnull
+
+**Test whether a value is null.** Opcode `0x20`; length **1 byte**.
+Operands: none. Abstract stack: `[..., value] → [..., value == null]`.
+
+Consumes one value and pushes a Boolean. Zero, false, and the empty String are
+non-null in the focused SDK 9.2.0 / `fr265` probe. Observed tail at CODE+`0x2e`:
+`12 01 20 16` (`lgetv 0x01`, `isnull`, `return`).
+
+## isnotnull
+
+**Test whether a value is non-null.** Opcode `0x4b`; length **1 byte**.
+Operands: none. Abstract stack: `[..., value] → [..., value != null]`.
+
+Consumes one value and pushes a Boolean. This is the complement of `isnull`
+for the tested values. Observed tail at CODE+`0x3c`: `12 01 4b 16`
+(`lgetv 0x01`, `isnotnull`, `return`).
+
+Both encodings and the tested results are experimentally observed in
+[the null-check probe](../investigations/null-check-opcodes.md). Physical stack
+representation and compatibility with other SDK/device versions are unverified.
 
 ## popv
 

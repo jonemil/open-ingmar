@@ -11,6 +11,29 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn null_checks_export_as_assembly_and_reconstruct_with_stable_disassembly() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("first");
+    let second = temporary.0.join("second");
+    let original = Prg::from_sections(vec![
+        Section::new(CODE, vec![0x12, 1, 0x20, 0x16, 0x12, 1, 0x4b, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Assembly);
+    let text = fs::read_to_string(first.join(&manifest.entries[0].file)).unwrap();
+    assert!(text.contains("isnull"));
+    assert!(text.contains("isnotnull"));
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    let repeated = ciq_dis::export_project(&rebuilt, &second).unwrap();
+    assert_eq!(repeated.to_text(), manifest.to_text());
+    assert_eq!(
+        fs::read_to_string(second.join(&repeated.entries[0].file)).unwrap(),
+        text
+    );
+}
+
+#[test]
 fn exception_labels_include_code_end_and_resolve_independently_of_section_order() {
     let temporary = TemporaryDirectory::new();
     let directory = temporary.0.join("exceptions");

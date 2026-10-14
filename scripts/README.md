@@ -11,7 +11,8 @@ python3 scripts/audit-examples.py --output scratch/example-audit/new-run
 ```
 
 The helper checks documented compiler source/IR/assembly/PRG paths, retained SDK
-PRG export/reconstruction, and barrel member round trips. It saves full reports
+PRG export/reconstruction with identical repeat exports, and barrel member round
+trips. It saves full reports
 and logs, and returns nonzero for incomplete coverage, including raw CODE/DATA
 fallback or missing SDK specimens. It does not run simulator sessions or rebuild
 SDK inputs. Use `--bin-dir` for another tool build and `--sdk-index <file.json>`

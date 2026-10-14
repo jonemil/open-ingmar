@@ -20,6 +20,11 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def tree(root):
+    return {str(p.relative_to(root)): digest(p)
+            for p in root.rglob("*") if p.is_file()}
+
+
 def sections(path):
     data = path.read_bytes()
     at = 0
@@ -93,6 +98,13 @@ def main():
                         destination / "rebuild.log")
         result["rebuild"] = assembled
         result["byte_identical"] = assembled["exit"] == 0 and digest(path) == digest(rebuilt)
+        result["export_identical"] = False
+        if assembled["exit"] == 0:
+            repeated = run("ciq-dis", ["all", rebuilt, destination / "reexport"],
+                           destination / "reexport.log")
+            result["reexport"] = repeated
+            result["export_identical"] = (repeated["exit"] == 0 and
+                                          tree(manifest.parent) == tree(destination / "reexport"))
         payloads = sections(path)
         data = payloads.get(0xda7ababe, b"")
         result["unknown_data_records"] = []
@@ -185,7 +197,6 @@ def main():
                 report["pack"] = run("ciq-package", ["pack-barrel", pkg / "original", pkg / "repacked.barrel"], pkg / "pack.log")
                 if report["pack"]["exit"] == 0:
                     report["reopen"] = run("ciq-package", ["unpack", pkg / "repacked.barrel", pkg / "resumed"], pkg / "reopen.log")
-                    tree = lambda root: {str(p.relative_to(root)): digest(p) for p in root.rglob("*") if p.is_file()}
                     report["members_identical"] = report["reopen"]["exit"] == 0 and tree(pkg / "original") == tree(pkg / "resumed")
             row["packages"].append(report)
         rows.append(row)
@@ -196,7 +207,7 @@ def main():
         if not row["sdk"] and not row["packages"]:
             issues.append(f"{row['example']}: no SDK specimen")
         for label, specimen in [("SDK", row["sdk"]), *[(f"SDK-{n}", s) for n, s in enumerate(row["sdk_additional"], 1)], *[(f"source-{n}", s.get("prg")) for n, s in enumerate(row["source"])]]:
-            if specimen and (specimen["export"]["exit"] or not specimen.get("byte_identical") or specimen.get("unknown_opcodes") or not specimen.get("data_structured")):
+            if specimen and (specimen["export"]["exit"] or not specimen.get("byte_identical") or not specimen.get("export_identical") or not specimen.get("code_structured") or not specimen.get("data_structured")):
                 issues.append(f"{row['example']} {label}: incomplete export or reconstruction")
         for source in row["source"]:
             if source["compile"]["exit"] or not source.get("assembly_identical") or ("prg" in source and not source.get("prg_identical")):
