@@ -51,8 +51,8 @@ statement = "var" identifier "=" expression ";"
 update-target = identifier | "self" "." identifier | primary "[" expression "]"
 compound-operator = "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
 expression = logical-or ("?" expression ":" expression)?
-logical-or = logical-and ("||" logical-and)*
-logical-and = comparison ("&&" comparison)*
+logical-or = logical-and (("||" | "or") logical-and)*
+logical-and = comparison (("&&" | "and") comparison)*
 comparison = arithmetic (("==" | "!=" | "<" | "<=" | ">" | ">=") arithmetic)?
 arithmetic = product (("+" | "-" | "|" | "^") product)*
 product = unary (("*" | "/" | "%" | "&" | "<<" | ">>") unary)*
@@ -68,7 +68,7 @@ atom = signed-decimal-integer | string-literal | char-literal | "true" | "false"
 Identifiers use ASCII letters/underscore followed by ASCII
 letters/digits/underscore. `function`, `module`, `return`, `var`, `if`, `else`,
 `true`, `while`, `break`, `continue`, `class`, `extends`, `self`, `false`,
-`using`, `import`, `as`, `null`, and `new`
+`using`, `import`, `as`, `null`, `new`, `and`, and `or`
 are reserved. `true` and `false` produce Boolean literals. Whitespace and
 `//` or non-nested `/* ... */` comments are supported. The integer literal domain
 is the signed 32-bit range `-2147483648..=2147483647`. Decimal negative literals
@@ -142,7 +142,7 @@ parentheses override grouping. Both groups bind before comparisons. This is
 Monkey C precedence: `1 + 2 << 2` means `1 + (2 << 2)`, while `2 << 1 * 3`
 means `(2 << 1) * 3`. Decimal literals cover the signed 32-bit range. Unary minus binds more tightly than binary arithmetic and after
 postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
-`abs` on the negated value. Boolean `!` uses the same precedence, supports
+`abs` on the negated value. Unary `!` uses the same precedence, supports
 repeated prefixes (`!!value`), and binds before comparisons:
 `!a == b` means `(!a) == b`. Number complement `~` shares that unary
 precedence and allows repeated prefixes. Unary plus binds after postfix calls
@@ -190,7 +190,7 @@ Validation resolves operand API types to these result contracts:
 | Operands | Operators | Result |
 |---|---|---|
 | Number / Number | `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>` | Number |
-| Number | unary `+`, `-`, `~` | Number |
+| Number | unary `+`, `-`, `~`, `!` | Number |
 | Boolean | unary `!` | Boolean |
 | Char / Number, Number / Char | `+` | Char |
 | Char / Char | `+` | String |
@@ -229,13 +229,16 @@ not specified by that observation. Signed decimal literals remain constants;
 general negation uses a distinct IR operation and counts toward the nesting
 bound. See the [negation evidence](../investigations/compiler-number-negation.md).
 
-Logical negation requires a non-null Boolean and produces Boolean. It evaluates
-its operand once. Value-producing negation lowers to the operand, `bfpush`,
-then `eq`; condition negation reverses the true/false destinations. Other types
-are rejected without truth-value conversion. Postfix calls bind first:
-`!value.equals(1)` inverts the method result, while `(!value).equals(1)` calls
-the method on the inverted value. See the
-[Boolean negation evidence](../investigations/compiler-boolean-negation.md).
+Unary `!` inverts a non-null Boolean or complements a Number's 32 bits, preserving
+its operand type and evaluating it once. Thus `!7` is Number `-8`, not Boolean;
+`!!7` is Number `7`. Value-producing inversion lowers directly to `invv`.
+Boolean condition negation reverses the true/false destinations. Other types
+are rejected without truth-value conversion; numeric results cannot be used as
+Boolean conditions. A nullable Number needs a non-null proof. Postfix calls bind
+first: `!value.equals(1)` inverts the method result, while `(!value).equals(1)`
+calls the method on the inverted value. See the
+[Boolean evidence](../investigations/compiler-boolean-negation.md) and
+[operator review](../investigations/compiler-operator-coverage.md).
 
 Semantic IR contains typed arithmetic definitions with explicit
 left/right value IDs. Each initializer/return consumes one expression tree:
@@ -397,8 +400,10 @@ spellings; Jungle resolution remains unimplemented.
 
 ## Short-circuit expressions
 
-Boolean `&&` and `||` support conditions and value-producing expressions,
-including grouping and negation. Comparison binds before `&&`, which binds
+Boolean `&&`/`and` and `||`/`or` support conditions and value-producing expressions,
+including grouping and negation. Word spellings require complete identifier
+tokens and have identical short-circuit behavior and precedence; type annotations
+still use `or` for unions. Comparison binds before `&&`, which binds
 before `||`; each binary level is left associative. Evaluate the left operand
 once. `&&` evaluates the right only when the left is true; `||` evaluates it
 only when the left is false. Every operand must be Boolean, even when a constant

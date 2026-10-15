@@ -28,7 +28,7 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Choices.test(false) ? Choices.yes() : Choices.no());
         System.println(true ? false : true ? true : true);
         System.println(true ? false ? 1 : 2 : 3);
-        System.println(false || true ? 1 : 2);
+        System.println(false or true ? 1 : 2);
         System.println(true ? 1 : 2 + 3);
         System.println(1 + (false ? 2 : 3));
         System.println(Choices.sum(Choices.first(), true ? Choices.yes() : Choices.no(), Choices.last()));
@@ -54,6 +54,14 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Choices.orText("value")); System.println(Choices.orText(null));
         System.println(Choices.nested(7, true)); System.println(Choices.loop(true));
         var guarded = [n != null ? n : 0]; System.println(guarded[0]);
+        System.println(false and Choices.test(true));
+        System.println(true or Choices.test(false));
+        System.println(false || true and false);
+        System.println(true and Choices.test(false) or Choices.test(true));
+        System.println(!0); System.println(!1); System.println(!(-1));
+        System.println(!2147483647); System.println(!(-2147483648));
+        System.println(!!7); System.println((!7) == (~7));
+        if (n != null and n > 0) { System.println(!n); }
         System.exit();
     }
 }

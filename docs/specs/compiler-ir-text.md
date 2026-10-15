@@ -137,10 +137,12 @@ feed branches, compare for equality with another Boolean, or be printed. They
 cannot be integer operands; typed user calls and returns accept them. Lowering
 uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 
-## Boolean negation
+## Boolean and Number inversion
 
 `.not %<result-id> %<operand-id> [span=<start>:<end>]` consumes one non-null
-Boolean and defines Boolean. Other types are rejected without coercion. The
+Boolean or Number and defines the same type. Number inversion complements its
+32 bits, as for `.complement`; nullable operands need a non-null proof. Other
+types are rejected without coercion. The
 operand must be an earlier definition in the same block and obey ordinary
 one-use rules. Typed and text IR recompute the contract and include the operand
 in effect traversal. Lowering evaluates it once and emits `invv`, without a

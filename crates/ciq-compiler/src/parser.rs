@@ -571,6 +571,8 @@ impl<'a> Parser<'a> {
                         | "false"
                         | "null"
                         | "new"
+                        | "and"
+                        | "or"
                 ) =>
             {
                 Ok(token)
@@ -622,7 +624,10 @@ impl<'a> Parser<'a> {
             }
         };
         let mut left = operand(self)?;
-        while self.peek()? == if and { Kind::AndAnd } else { Kind::OrOr } {
+        while matches!(
+            (and, self.peek()?),
+            (true, Kind::AndAnd | Kind::Word("and")) | (false, Kind::OrOr | Kind::Word("or"))
+        ) {
             self.token()?;
             let right = operand(self)?;
             let span = Span {

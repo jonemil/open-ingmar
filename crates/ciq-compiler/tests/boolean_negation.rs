@@ -98,7 +98,12 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
         )
         .is_err()
     );
-    assert!(parse_ir(&f.to_ir_text().replace(".parameter %0 0", ".integer %0 1")).is_err());
+    assert_eq!(
+        parse_ir(&f.to_ir_text().replace(".parameter %0 0", ".integer %0 1"))
+            .unwrap()
+            .return_type(),
+        ReturnType::Integer
+    );
     assert!(parse_ir(&f.to_ir_text().replace(".not %1 %0", ".not %1 %99")).is_err());
     let guarded = compile("function f(n as Toybox.Lang.Number or Null) { if (!(n == null)) { return n + 1; } return 0; }").unwrap();
     assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());

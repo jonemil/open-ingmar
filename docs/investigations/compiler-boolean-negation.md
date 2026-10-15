@@ -67,7 +67,7 @@ instruction. Source/type/lowering rules are owned by the specs.
 
 Saved IR preserves a typed `.not` operation. Pipeline tests compare source and
 resumed unit IR, generated unsigned PRGs, and assembly round trips. Adversarial
-IR edits reject non-Boolean operands, missing definitions, and reordered calls
+IR edits reject explicit Boolean result mismatches, missing definitions, and reordered calls
 with otherwise valid definitions. Parser tests cover source spans and the
 64-level nesting limit. These establish shared validation, not new runtime
 claims.

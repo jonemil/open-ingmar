@@ -12,22 +12,14 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Review operator coverage against
-   the language reference before Dictionary. Address remaining forms supported
-   by our current value types; general unions and truthiness remain deferred.
-   Keep inference and validation consistent across source and saved IR.
-   Keep updates statement-only, following the
-   [increment/decrement evidence](investigations/compiler-increments.md); the
-   reference SDK rejects prefix/postfix expression results. Extend numeric update
-   contracts only alongside their value types.
-2. **Dictionary.** Establish construction, key/value contracts, literals,
+1. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.
-3. **Numeric types and deferred methods.** Add Long/Float/Double values,
+2. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-4. **Object and callable/reference facilities.** Grow shared Object contracts,
+3. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
@@ -46,6 +38,11 @@ Investigate the simulator process failure for minimum Number / -1 and % -1
 separately before claiming portable boundary behavior or exception recovery.
 
 ### Core contracts and evidence
+
+Keep general unions and non-Boolean truthiness deferred, as scoped by the
+[operator review](investigations/compiler-operator-coverage.md). Keep updates
+statement-only following the [SDK evidence](investigations/compiler-increments.md),
+and extend numeric update contracts alongside their value types.
 
 Keep generic signatures, invariant container elements, assignability, and
 nullable branch proofs shared across source and saved IR. Extend constructor

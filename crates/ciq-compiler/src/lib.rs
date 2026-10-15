@@ -512,8 +512,8 @@ pub enum Operation {
         index: ValueId,
         value: ValueId,
     },
-    /// Invert one non-null Boolean and produce Boolean, evaluating it once.
-    /// Other types are rejected rather than converted to truth values.
+    /// Invert a non-null Boolean or Number, evaluating it once and preserving
+    /// its type. Number uses 32-bit complement; other types are not coerced.
     Not {
         result: ValueId,
         operand: ValueId,
@@ -1424,7 +1424,7 @@ impl Function {
                 Operation::Not { result, operand } => {
                     let result_type = operators::not_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("logical negation requires a non-null Boolean"))?;
+                        .ok_or_else(|| fail("unary ! requires a non-null Boolean or Number"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }

@@ -32,3 +32,17 @@ fallback
 7
 7
 7
+false
+true
+false
+test
+test
+true
+-1
+-2
+0
+-2147483648
+2147483647
+7
+true
+-8

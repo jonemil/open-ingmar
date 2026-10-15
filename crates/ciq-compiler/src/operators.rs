@@ -2,9 +2,11 @@
 //! These rules do not enumerate every operator/type combination in Monkey C.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
-/// Resolve logical negation to Boolean; do not coerce other or nullable types.
+/// Resolve `!` on Boolean or Number without changing its type or coercing null.
 pub(crate) fn not_result(operand: &Type) -> Option<Type> {
-    (*operand == Type::named("Toybox.Lang.Boolean")).then(|| operand.clone())
+    (*operand == Type::named("Toybox.Lang.Boolean")
+        || *operand == Type::named("Toybox.Lang.Number"))
+    .then(|| operand.clone())
 }
 
 /// Resolve unary Number signs to Number without widening other or nullable types.
