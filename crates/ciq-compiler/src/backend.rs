@@ -74,7 +74,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }));
         }
         match &located.operation {
-            Operation::DictionaryNew { result }
+            Operation::DictionaryNew { result, .. }
             | Operation::BlockParameter { result, .. }
             | Operation::Null { result }
             | Operation::Boolean { result, .. }

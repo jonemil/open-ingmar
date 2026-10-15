@@ -267,15 +267,33 @@ call or new VM opcode is needed. See [source updates](compiler-subset.md#increme
 
 ## Dictionary allocation
 
-`.dictionary-new %<result> [span=<start>:<end>]` defines a fresh empty non-null
-Dictionary. Native construction uses `Operation::DictionaryNew`; validation
+`.dictionary-new %<result> [type=dictionary(<key>=><value>)] [span=<start>:<end>]`
+defines a fresh empty non-null Dictionary. Native construction uses
+`Operation::DictionaryNew` with optional `dictionary_type`; omission means an
+opaque Dictionary. Validation
 requires Dictionary's API 1.0.0 class, single use, block-local dependencies, and
 ordered allocation. Lowering emits `ipushz; newd`; no DATA record or compiler
 capacity operand is involved. Allocation failures remain runtime obligations.
 
-`dictionary` is a parameter-type tag and value-call `result=` tag. A Dictionary
-function return is inferred from its operations, as for other non-null result
-types. Locals and calls preserve references and check exact supported types.
+`dictionary` is the opaque parameter-type and value-call result tag.
+`dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
+function `result=`, call `result=`, and allocation `type=` fields. Keys are
+`integer`, `string`, `boolean`, or `char`; values are `integer`, `string`,
+`nullable-integer`, or `nullable-string`. Other tags, nested containers, and
+heterogeneous unions are rejected. For example:
+
+```text
+ciq-ir
+.function make result=dictionary(string=>nullable-integer)
+.dictionary-new %0 type=dictionary(string=>nullable-integer)
+.return %0
+.end
+```
+
+Typed function result headers remain explicit so an erased or differently typed
+allocation cannot change the contract on reload. `DictionaryType` backs the
+`TypedDictionary` parameter/result variants. Locals and calls preserve reference
+identity and invariant contracts; erasure to opaque Dictionary is one-way.
 `.call-native` accepts `size` and `isEmpty` on a non-null Dictionary. Existing
 nullable callback reads narrow to Dictionary under a non-null proof. Other
 Dictionary operations and conditional joins remain unsupported. See the

@@ -110,6 +110,11 @@ pub(crate) fn value_call(
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
     let class = match receiver {
+        api::Type::Dictionary { .. }
+            if crate::DictionaryType::from_api_type(receiver).is_some() =>
+        {
+            "Toybox.Lang.Dictionary"
+        }
         api::Type::Named(class) => class.as_str(),
         api::Type::Array(element) if crate::ArrayElement::from_api_type(element).is_some() => {
             "Toybox.Lang.Array"
@@ -365,7 +370,19 @@ mod tests {
         assert!(!accepts(&api::Type::Array(Box::new(object)), &exact));
 
         assert_eq!(value_parameters(&exact, "put").unwrap().len(), 2);
-        assert!(value_call(&exact, "size", &[], None).is_err());
+        assert_eq!(
+            value_call(&exact, "size", &[], None).unwrap(),
+            api::Type::named("Toybox.Lang.Number")
+        );
+        assert!(
+            value_call(
+                &exact,
+                "get",
+                &[api::Type::named("Toybox.Lang.String")],
+                None
+            )
+            .is_err()
+        );
         assert!(
             value_call(
                 &opaque,

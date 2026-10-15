@@ -4,10 +4,21 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-/// Extract a supported concrete Array element contract from an expected type.
-fn array_element(ty: &crate::api::Type) -> Option<crate::ArrayElement> {
+#[derive(Clone, Copy)]
+enum ConstructionType {
+    Array(crate::ArrayElement),
+    Dictionary(crate::DictionaryType),
+}
+
+/// Extract a supported container contract for contextual literal construction.
+fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     match ty {
-        crate::api::Type::Array(element) => crate::ArrayElement::from_api_type(element),
+        crate::api::Type::Array(element) => {
+            crate::ArrayElement::from_api_type(element).map(ConstructionType::Array)
+        }
+        crate::api::Type::Dictionary { .. } => {
+            crate::DictionaryType::from_api_type(ty).map(ConstructionType::Dictionary)
+        }
         _ => None,
     }
 }
@@ -22,6 +33,7 @@ fn emit(
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
         parser::ExpressionKind::DictionaryNew => Operation::DictionaryNew {
+            dictionary_type: None,
             result: ValueId(operations.len() as u32),
         },
         parser::ExpressionKind::Joined(value) => return Ok(value),
@@ -444,12 +456,12 @@ impl Builder<'_> {
         self.snapshot_with_context(expression, locals, None)
     }
 
-    /// Save an operand, passing Array context into empty literals/conditional arms.
+    /// Save an operand, passing container context into empty literals/conditional arms.
     fn snapshot_with_context(
         &mut self,
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
-        element: Option<crate::ArrayElement>,
+        element: Option<ConstructionType>,
     ) -> Result<parser::Expression, Diagnostic> {
         let span = expression.span;
         let value = self.value_with_context(expression, locals, element)?;
@@ -521,7 +533,7 @@ impl Builder<'_> {
         &mut self,
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
-        expected: Option<crate::ArrayElement>,
+        expected: Option<ConstructionType>,
     ) -> Result<parser::Expression, Diagnostic> {
         let parser::ExpressionKind::Conditional {
             condition,
@@ -834,7 +846,7 @@ impl Builder<'_> {
         &mut self,
         arguments: Vec<parser::Expression>,
         locals: &BTreeMap<String, LocalId>,
-        expected: &[Option<crate::ArrayElement>],
+        expected: &[Option<ConstructionType>],
     ) -> Result<Vec<ValueId>, Diagnostic> {
         let arguments = if arguments
             .iter()
@@ -849,12 +861,12 @@ impl Builder<'_> {
             .map(|arg| self.value(arg, locals))
             .collect()
     }
-    /// Snapshot call operands in order, supplying declared array argument types.
+    /// Snapshot call operands in order, supplying declared container argument types.
     fn snapshot_arguments(
         &mut self,
         arguments: Vec<parser::Expression>,
         locals: &BTreeMap<String, LocalId>,
-        expected: &[Option<crate::ArrayElement>],
+        expected: &[Option<ConstructionType>],
     ) -> Result<Vec<parser::Expression>, Diagnostic> {
         arguments
             .into_iter()
@@ -865,31 +877,27 @@ impl Builder<'_> {
             .collect()
     }
 
-    /// Read array argument expectations from predeclared user call signatures.
-    fn user_argument_context(
-        &self,
-        module: &str,
-        member: &str,
-    ) -> Vec<Option<crate::ArrayElement>> {
+    /// Read container argument expectations from predeclared user call signatures.
+    fn user_argument_context(&self, module: &str, member: &str) -> Vec<Option<ConstructionType>> {
         self.calls
             .get(&(module.into(), member.into()))
             .map(|signature| {
                 signature
                     .parameters
                     .iter()
-                    .map(|ty| array_element(&ty.api_type()))
+                    .map(|ty| construction_type(&ty.api_type()))
                     .collect()
             })
             .unwrap_or_default()
     }
 
-    /// Resolve Array argument expectations from a source or native receiver.
+    /// Resolve container argument expectations from a source or native receiver.
     /// This supplies construction context; final validation checks the call.
     fn receiver_argument_context(
         &self,
         receiver: &parser::Expression,
         member: &str,
-    ) -> Vec<Option<crate::ArrayElement>> {
+    ) -> Vec<Option<ConstructionType>> {
         let parser::ExpressionKind::Temporary(local) = receiver.kind else {
             return Vec::new();
         };
@@ -899,7 +907,7 @@ impl Builder<'_> {
         self.types
             .local_type(local)
             .and_then(|ty| crate::native::value_parameters(ty, member))
-            .map(|parameters| parameters.iter().map(array_element).collect())
+            .map(|parameters| parameters.iter().map(construction_type).collect())
             .unwrap_or_default()
     }
 
@@ -1009,7 +1017,7 @@ impl Builder<'_> {
             return self.value_with_context(
                 expression,
                 locals,
-                array_element(&self.result_type.api_type()),
+                construction_type(&self.result_type.api_type()),
             );
         }
         let span = expression.span;
@@ -1048,14 +1056,27 @@ impl Builder<'_> {
         self.value_with_context(expression, locals, None)
     }
 
-    /// Build a value, passing expected elements to direct `[]` or conditional arms.
+    /// Build a value, passing container contracts to empty literals or conditional arms.
     /// Nonempty literals keep their inferred contract and undergo IR validation.
     fn value_with_context(
         &mut self,
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
-        expected: Option<crate::ArrayElement>,
+        expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        if matches!(expression.kind, parser::ExpressionKind::DictionaryNew) {
+            if let Some(ConstructionType::Dictionary(dictionary_type)) = expected {
+                let result = ValueId(self.operations.len() as u32);
+                self.push(
+                    Operation::DictionaryNew {
+                        result,
+                        dictionary_type: Some(dictionary_type),
+                    },
+                    Some(expression.span),
+                );
+                return Ok(result);
+            }
+        }
         if matches!(expression.kind, parser::ExpressionKind::Conditional { .. }) {
             let expression = self.conditional_value(expression, locals, expected)?;
             return emit(
@@ -1069,13 +1090,18 @@ impl Builder<'_> {
         }
         if matches!(&expression.kind, parser::ExpressionKind::ArrayLiteral(elements) if elements.is_empty())
         {
-            let element_type = expected.ok_or_else(|| {
-                Diagnostic::at(
-                    self.source,
-                    expression.span.start,
-                    "empty array literal requires a concrete expected Array element type",
-                )
-            })?;
+            let element_type = expected
+                .and_then(|ty| match ty {
+                    ConstructionType::Array(element) => Some(element),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    Diagnostic::at(
+                        self.source,
+                        expression.span.start,
+                        "empty array literal requires a concrete expected Array element type",
+                    )
+                })?;
             let result = ValueId(self.operations.len() as u32);
             self.push(
                 Operation::ArrayNew {
@@ -1357,7 +1383,7 @@ impl Builder<'_> {
                             },
                         )
                     })?;
-                    let expected = self.types.local_type(local).and_then(array_element);
+                    let expected = self.types.local_type(local).and_then(construction_type);
                     let value = self.value_with_context(value, locals, expected)?;
                     self.push(Operation::LocalAssign { local, value }, Some(span));
                 }

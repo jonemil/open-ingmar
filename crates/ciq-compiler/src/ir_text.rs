@@ -83,6 +83,10 @@ pub(crate) fn parse_ir_context(
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
                     crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
                 }
+                tag if tag.starts_with("dictionary(") => crate::ReturnType::TypedDictionary(
+                    crate::DictionaryType::parse(tag)
+                        .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract"))?,
+                ),
                 "nullable-integer" => crate::ReturnType::NullableInteger,
                 "nullable-string" => crate::ReturnType::NullableString,
                 _ => return Err(fail(*name_at, "unsupported function result contract")),
@@ -100,6 +104,9 @@ pub(crate) fn parse_ir_context(
                         tag if tag.starts_with("source(") && tag.ends_with(')') => Ok(
                             crate::ParameterType::SourceObject(tag[7..tag.len() - 1].into()),
                         ),
+                        tag if tag.starts_with("dictionary(") => crate::DictionaryType::parse(tag)
+                            .map(crate::ParameterType::TypedDictionary)
+                            .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract")),
                         "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "integer" => Ok(crate::ParameterType::Integer),
@@ -213,7 +220,14 @@ pub(crate) fn parse_ir_context(
             Some(".new-source") => (33, call_width()),
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
-            Some(".dictionary-new") => (66, 2),
+            Some(".dictionary-new") => (
+                66,
+                if fields.get(2).is_some_and(|s| s.starts_with("type=")) {
+                    3
+                } else {
+                    2
+                },
+            ),
             Some(".block") => (10, 2),
             Some(".block-value") => (64, 3),
             Some(".jump-value") => (65, 3),
@@ -626,6 +640,14 @@ pub(crate) fn parse_ir_context(
             }
         } else if kind == 66 {
             Operation::DictionaryNew {
+                dictionary_type: if width == 3 {
+                    Some(
+                        crate::DictionaryType::parse(fields[2].strip_prefix("type=").unwrap())
+                            .ok_or_else(|| fail(*at, "unsupported Dictionary contract"))?,
+                    )
+                } else {
+                    None
+                },
                 result: parse_value(&fields[1])?,
             }
         } else if kind == 64 {
@@ -795,6 +817,11 @@ fn call_contract(
 ) -> Result<(crate::ReturnType, usize), Diagnostic> {
     if let Some(field) = fields.get(at).and_then(|s| s.strip_prefix("result=")) {
         let result = match field {
+            tag if tag.starts_with("dictionary(") => {
+                crate::ReturnType::TypedDictionary(crate::DictionaryType::parse(tag).ok_or_else(
+                    || Diagnostic::at(text, offset, "unsupported Dictionary contract"),
+                )?)
+            }
             "nullable-integer" => crate::ReturnType::NullableInteger,
             "nullable-string" => crate::ReturnType::NullableString,
             "integer" => crate::ReturnType::Integer,

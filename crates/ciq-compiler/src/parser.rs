@@ -196,7 +196,8 @@ impl Expression {
         match &self.kind {
             ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
-            | ExpressionKind::ArrayLiteral(_) => true,
+            | ExpressionKind::ArrayLiteral(_)
+            | ExpressionKind::DictionaryNew => true,
             ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
@@ -263,6 +264,38 @@ struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Parse the supported Array element annotation after its canonical path.
     /// Number/Char elements are accepted; raw and nullable arrays are not.
+    fn dictionary_annotation(&mut self) -> Result<Option<crate::DictionaryType>, Diagnostic> {
+        if self.peek()? != Kind::Punctuation('<') {
+            return Ok(None);
+        }
+        self.token()?;
+        let at = self.offset;
+        let key = match self.path()?.as_str() {
+            "Toybox.Lang.Number" => crate::DictionaryKey::Number,
+            "Toybox.Lang.String" => crate::DictionaryKey::String,
+            "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
+            "Toybox.Lang.Char" => crate::DictionaryKey::Char,
+            _ => return Err(self.error(at, "unsupported Dictionary key contract")),
+        };
+        self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
+        let mut value = match self.path()?.as_str() {
+            "Toybox.Lang.Number" => crate::DictionaryValue::Number,
+            "Toybox.Lang.String" => crate::DictionaryValue::String,
+            _ => return Err(self.error(at, "Dictionary values require Number or String")),
+        };
+        if self.peek()? == Kind::Word("or") {
+            self.token()?;
+            self.expect(Kind::Word("Null"), "'Null'")?;
+            value = match value {
+                crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
+                crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
+                _ => unreachable!(),
+            };
+        }
+        self.expect(Kind::Punctuation('>'), "'>'")?;
+        Ok(Some(crate::DictionaryType { key, value }))
+    }
+
     fn array_annotation(&mut self) -> Result<crate::ArrayElement, Diagnostic> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
@@ -1509,7 +1542,10 @@ impl Parser<'_> {
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
-                        "Toybox.Lang.Dictionary" => crate::ParameterType::Dictionary,
+                        "Toybox.Lang.Dictionary" => self
+                            .dictionary_annotation()?
+                            .map(crate::ParameterType::TypedDictionary)
+                            .unwrap_or(crate::ParameterType::Dictionary),
                         "Toybox.WatchUi.View" => {
                             crate::ParameterType::Object(crate::NativeClass::View)
                         }
@@ -1569,7 +1605,10 @@ impl Parser<'_> {
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
-                "Toybox.Lang.Dictionary" => crate::ReturnType::Dictionary,
+                "Toybox.Lang.Dictionary" => self
+                    .dictionary_annotation()?
+                    .map(crate::ReturnType::TypedDictionary)
+                    .unwrap_or(crate::ReturnType::Dictionary),
                 "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
                 "Toybox.WatchUi.BehaviorDelegate" => {
                     crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate)

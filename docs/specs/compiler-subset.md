@@ -33,6 +33,10 @@ value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
+           | "Toybox.Lang.Dictionary" "<" dictionary-key "," dictionary-value ">"
+dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
+               | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String") ("or" "Null")?
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -801,6 +805,18 @@ replace Dictionary locals and pass through explicitly annotated non-null
 Dictionary parameters/results. Copies preserve reference identity; reassignment
 does not copy contents. Calls and construction retain source evaluation order.
 
+`Toybox.Lang.Dictionary<K, V>` also accepts invariant non-null Number, String,
+Boolean, or Char keys and Number/String values, optionally `or Null`. The
+Dictionary itself is non-null. Char keys require API 1.3.0; the other contracts
+require 1.0.0. `DictionaryType` carries the bounded contracts through source,
+semantic IR, locals, function arguments/results, and API checks.
+
+A direct `{}` receives its key/value contracts from an annotated return,
+call parameter, or reassigned typed local. Without that context it stays opaque;
+later uses do not retrospectively type an opaque local. Different key or value
+contracts cannot widen or narrow through assignment. Typed references may pass
+to opaque Dictionary parameters/results, but erasure cannot be reversed.
+
 The executable method group is `size()` → Number and `isEmpty()` → Boolean,
 both API 1.0.0. Chaining and discarded results use existing native-call rules.
 Native callback Dictionary-or-Null state supports these methods under a non-null
@@ -808,21 +824,19 @@ proof; unguarded access is rejected. Its nullable declaration/assignment rules
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.
 
-This is an opaque container profile. Nonempty literals, key/value access and
-mutation, indexing, Dictionary equality, conditional Dictionary joins, direct
+Nonempty literals, key/value access and mutation, indexing, Dictionary equality,
+conditional Dictionary joins, direct
 printing, `new Dictionary()`, and the other methods remain unsupported. No key
-or value contract is inferred from an empty literal. See
+or value contract is inferred from an empty literal without context. See
 [the example](../../examples/compiler-dictionary/README.md) and
 [SDK evidence](../investigations/compiler-dictionary.md).
 
-### Planned typed Dictionary profile
+### Planned Dictionary literals and access
 
-These are intended contracts, not executable support yet. Add explicit
-`Toybox.Lang.Dictionary<K, V>` parameter/result types and homogeneous scalar
-literal inference before lookup and mutation. Empty literals acquire K/V from
-an expected typed contract; without one they retain the opaque profile above.
-Do not infer key/value contracts from later writes or reinterpret an opaque
-callback Dictionary as a typed one.
+These are intended contracts, not executable support yet. Add homogeneous
+scalar literal inference before lookup and mutation. Do not infer key/value
+contracts from later writes or reinterpret an opaque callback Dictionary as a
+typed one.
 
 Keep both mutable parameters invariant. A write requires key K and value V;
 Null is permitted only when V includes Null. Indexed reads and `get` produce

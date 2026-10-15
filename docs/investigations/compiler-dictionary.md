@@ -53,7 +53,9 @@ The [constant format](../specs/data-dictionaries.md) records the verified framin
 The [tracked example](../../examples/compiler-dictionary/README.md) isolates
 empty `{}` construction, local reference copies/reassignment, typed Dictionary
 arguments/results, native observers, chained calls, and repeated loop allocation.
-Both SDK and generated simulator runs match all ten expected lines. The launch
+Both SDK and generated simulator runs match all seventeen expected lines. Typed
+functions also check contextual empty returns/arguments/reassignment, nullable
+value annotations, chaining, and erasure into an opaque parameter. The launch
 provides Null callback state, so its guarded observer is checked structurally,
 not executed against a populated launch Dictionary. Unguarded access is rejected
 by compiler tests.
@@ -62,7 +64,7 @@ The console checker confirms source/saved-IR parity, structured CODE/DATA export
 exact PRG reconstruction, and stable re-export for both programs. No DATA format
 extension is needed for this profile. It uses `ipushz; newd`, plus existing local
 and member-call instructions. The codec and assembler/disassembler now recognize
-operand-free `newd`. Artifacts: `scratch/check-dictionary-empty/`.
+operand-free `newd`. Artifacts: `scratch/check-dictionary-types/`.
 
 Current executable contracts are in the
 [source profile](../specs/compiler-subset.md#dictionary-values) and

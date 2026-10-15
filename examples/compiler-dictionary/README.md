@@ -1,7 +1,10 @@
-# Empty Dictionary values
+# Typed and opaque Dictionary values
 
 [app.mc](app.mc) checks `{}`, local copies/reassignment, Dictionary arguments and
 results, chained `size`/`isEmpty` calls, and repeated construction in a loop.
+Typed functions preserve invariant key/value annotations, including nullable
+String values. Empty literals acquire their types from results, call arguments,
+and reassignment. Typed references can pass to opaque Dictionary parameters.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 

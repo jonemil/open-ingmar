@@ -43,8 +43,8 @@ published method accepts Null. These members are API 1.0.0; Dictionary's own
 `toString()` override requires 1.0.1. The existing `size`/`isEmpty` declarations
 remain 1.0.0. [SDK type probes](../investigations/compiler-dictionary.md#typed-keyvalue-contracts)
 support specialization and invariant contracts. The compiler still uses the
-opaque [executable Dictionary profile](compiler-subset.md#dictionary-values);
-typed source/saved IR and these additional method lowerings remain planned.
+[bounded executable Dictionary profile](compiler-subset.md#dictionary-values),
+including typed source/saved IR. Additional method lowerings remain planned.
 
 Declaration availability, assignability, and executable support are separate
 checks. A broad Object parameter can have a narrower executable profile.

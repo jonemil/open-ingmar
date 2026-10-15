@@ -8,3 +8,10 @@ make
 true
 true
 true
+0
+true
+0
+true
+true
+size
+0

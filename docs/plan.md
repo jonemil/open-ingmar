@@ -16,10 +16,11 @@ Choose increments by dependency, following the
    writes, then complete the method group. Scalar constant records and `hpush`
    have [structured support](specs/data-dictionaries.md), and
    [literal experiments](investigations/compiler-dictionary.md#literal-semantics)
-   establish fresh scalar loads and ordered dynamic stores. Carry the
-   [typed API contracts](specs/api-declarations.md#declaration-model) through
-   source and saved IR, then add literal lowering,
-   following the [planned profile](specs/compiler-subset.md#planned-typed-dictionary-profile).
+   establish fresh scalar loads and ordered dynamic stores. Add nonempty scalar
+   literals through source, semantic/saved IR, DATA requirements, and `hpush`
+   lowering using the [typed contracts](specs/compiler-subset.md#dictionary-values).
+   Then add lookup and writes, following the
+   [planned profile](specs/compiler-subset.md#planned-dictionary-literals-and-access).
    Start with Number/String values and their nullable lookup results; widen to
    Boolean/Char values alongside the required nullable core types. Keep
    heterogeneous values and nullable lookup results explicit. Remaining own

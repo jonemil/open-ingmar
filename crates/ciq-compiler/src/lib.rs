@@ -15,7 +15,9 @@ mod array_builders;
 pub mod backend;
 mod bindings;
 mod control_flow;
+mod dictionary;
 pub use bindings::{array_bindings, string_bindings, symbol_bindings};
+pub use dictionary::{DictionaryKey, DictionaryType, DictionaryValue};
 mod ir_text;
 mod joins;
 mod names;
@@ -214,6 +216,8 @@ impl TupleShape {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// Non-null Dictionary with invariant bounded key/value contracts.
+    TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
     NullableInteger,
@@ -233,6 +237,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Non-null Dictionary with invariant bounded key/value contracts.
+    TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
     NullableInteger,
@@ -261,6 +267,7 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => ValueType::Dictionary.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
@@ -282,6 +289,7 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => ValueType::Dictionary.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
@@ -294,6 +302,7 @@ impl ReturnType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
+    TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
     NullableInteger,
@@ -335,6 +344,7 @@ impl ValueType {
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
+            Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => api::Type::named("Toybox.Lang.Dictionary"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
@@ -355,6 +365,9 @@ impl ValueType {
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
             ty if *ty == TupleShape::ViewDelegate.api_type() => {
                 Some(Self::Tuple(TupleShape::ViewDelegate))
+            }
+            api::Type::Dictionary { .. } => {
+                DictionaryType::from_api_type(ty).map(Self::TypedDictionary)
             }
             api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
@@ -377,9 +390,10 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
-    /// Allocate a fresh empty Dictionary; key/value operations are not yet supported.
+    /// Allocate a fresh empty Dictionary with optional invariant key/value contracts.
     DictionaryNew {
         result: ValueId,
+        dictionary_type: Option<DictionaryType>,
     },
     /// Define the single incoming stack value immediately after a block marker.
     /// The entry block cannot have a parameter; every predecessor supplies one
@@ -1052,8 +1066,16 @@ impl Function {
                     }
                     (None, vec![value])
                 }
-                Operation::DictionaryNew { result } => {
-                    types.insert(result, ValueType::Dictionary);
+                Operation::DictionaryNew {
+                    result,
+                    dictionary_type,
+                } => {
+                    types.insert(
+                        result,
+                        dictionary_type
+                            .map(ValueType::TypedDictionary)
+                            .unwrap_or(ValueType::Dictionary),
+                    );
                     (Some(result), vec![])
                 }
                 Operation::ArrayBegin { .. } => (None, vec![]),
@@ -1615,6 +1637,8 @@ impl Function {
                     }
                     let incoming = type_of(value);
                     if local_types[&local] != incoming
+                        && !(local_types[&local] == ValueType::Dictionary
+                            && matches!(incoming, ValueType::TypedDictionary(_)))
                         && !(local_types[&local] == ValueType::NullableDictionary
                             && incoming == ValueType::Null)
                         && !(local_types[&local] == ValueType::NullableInteger
@@ -1681,6 +1705,7 @@ impl Function {
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
+                            ValueType::TypedDictionary(ty) => ReturnType::TypedDictionary(ty),
                             ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Tuple(shape) => ReturnType::Tuple(shape),
@@ -1982,6 +2007,7 @@ impl Function {
                             ParameterType::String => "string",
                             ParameterType::Boolean => "boolean",
                             ParameterType::Char => "char",
+                            ParameterType::TypedDictionary(ty) => return ty.text(),
                             ParameterType::Dictionary => "dictionary",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
@@ -1998,7 +2024,8 @@ impl Function {
             )
         };
         let result = match self.return_type {
-            ReturnType::NullableInteger
+            ReturnType::TypedDictionary(_)
+            | ReturnType::NullableInteger
             | ReturnType::NullableString
             | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
             _ => String::new(),
@@ -2009,7 +2036,16 @@ impl Function {
         );
         for operation in &self.operations {
             text.push_str(&match operation.operation {
-                Operation::DictionaryNew { result } => format!(".dictionary-new %{}", result.0),
+                Operation::DictionaryNew {
+                    result,
+                    dictionary_type,
+                } => format!(
+                    ".dictionary-new %{}{}",
+                    result.0,
+                    dictionary_type
+                        .map(|ty| format!(" type={}", ty.text()))
+                        .unwrap_or_default()
+                ),
                 Operation::Block { block } => format!(".block ^{}", block.0),
                 Operation::BlockParameter {
                     result,
@@ -2414,6 +2450,7 @@ fn validate_call_arguments(
                     | ValueType::Object(_)
                     | ValueType::Array(_)
                     | ValueType::Dictionary
+                    | ValueType::TypedDictionary(_)
                     | ValueType::Null
                     | ValueType::NullableInteger
                     | ValueType::NullableString
@@ -2436,6 +2473,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
+        ReturnType::TypedDictionary(ty) => Ok(ValueType::TypedDictionary(ty)),
         ReturnType::Dictionary => Ok(ValueType::Dictionary),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
@@ -2457,6 +2495,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
+        ReturnType::TypedDictionary(ty) => return format!(" result={}", ty.text()),
         ReturnType::Dictionary => " result=dictionary",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",
