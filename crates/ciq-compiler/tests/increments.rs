@@ -5,6 +5,47 @@ use ciq_compiler::{
 };
 
 #[test]
+fn char_increment_preserves_type_across_source_saved_ir_and_direct_addition() {
+    for (target, setup, result) in [
+        ("c", "var c = 'a';", "c"),
+        ("c[0]", "var c = ['a'];", "c[0]"),
+    ] {
+        for update in [format!("{target}++"), format!("++{target}")] {
+            let source = format!(
+                "function f() as Toybox.Lang.Char {{ {setup} {update}; return {result}; }}"
+            );
+            let f = compile(&source).unwrap();
+            assert_eq!(f.return_type(), ReturnType::Char);
+            let text = f.to_ir_text();
+            assert_eq!(f, parse_ir(&text).unwrap());
+            assert!(parse_ir(&text.replace(".increment", ".decrement")).is_err());
+            assert_eq!(
+                f.lower(),
+                compile(&source.replace(&update, &format!("{target} += 1")))
+                    .unwrap()
+                    .lower()
+            );
+            let old = ciq_compiler::api::ApiContext::new(
+                ciq_compiler::api::ApiLevel(1, 2, 9),
+                ciq_compiler::api::ApiLevel(1, 0, 0),
+            )
+            .unwrap();
+            assert!(ciq_compiler::compile_with_api(&source, old).is_err());
+            assert!(ciq_compiler::parse_ir_with_api(&text, old).is_err());
+            let mut operations = f.operations().to_vec();
+            for op in &mut operations {
+                if let Operation::Step { increment, .. } = &mut op.operation {
+                    *increment = false;
+                }
+            }
+            assert!(
+                Function::with_signature("f".into(), vec![], ReturnType::Char, operations).is_err()
+            );
+        }
+    }
+}
+
+#[test]
 fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
     for (update, compound, directive) in [
         ("n++", "n += 1", ".increment"),
@@ -49,17 +90,19 @@ fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
 }
 
 #[test]
-fn updates_reject_non_number_targets_expression_uses_and_invalid_saved_steps() {
+fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() {
     for source in [
         "function f(n) { n++; }",
         "function f() { unknown++; }",
         "function f() { var n = 1; (n)++; }",
         "function f() { var n = 1; ++(n); }",
         "function f() { var n = true; ++n; }",
-        "function f() { var n = 'a'; n++; }",
+        "function f() { var n = 'a'; n--; }",
+        "function f() { var n = 'a'; --n; }",
         "function f() { var n = \"a\"; n++; }",
         "function f() { var n = [1]; --n; }",
-        "function f() { var n = ['a']; n[0]++; }",
+        "function f() { var n = ['a']; n[0]--; }",
+        "function f() { var n = ['a']; --n[0]; }",
         "function f() { var n = \"1\".toNumber(); n++; }",
         "function f() { var n = 1; return n++; }",
         "function f() { var n = 1; return ++n; }",

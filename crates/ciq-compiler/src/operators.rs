@@ -12,6 +12,13 @@ pub(crate) fn number_unary_result(operand: &Type) -> Option<Type> {
     (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())
 }
 
+/// Resolve a Number step or Char increment without coercion or concatenation.
+pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+    (*operand == Type::named("Toybox.Lang.Number")
+        || (increment && *operand == Type::named("Toybox.Lang.Char")))
+    .then(|| operand.clone())
+}
+
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number pairs support addition, subtraction, multiplication, division, and
 /// remainder, bitwise AND/OR/XOR, and left/arithmetic-right shifts. Addition of Char/Number in either

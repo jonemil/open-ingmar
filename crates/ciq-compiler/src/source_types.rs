@@ -180,9 +180,16 @@ impl Types {
                     .and_then(|ty| operators::not_result(candidate(ty))),
             ),
             Operation::Step {
-                result, operand, ..
-            }
-            | Operation::Negate { result, operand }
+                result,
+                operand,
+                increment,
+            } => (
+                *result,
+                self.values
+                    .get(operand)
+                    .and_then(|ty| operators::step_result(candidate(ty), *increment)),
+            ),
+            Operation::Negate { result, operand }
             | Operation::Positive { result, operand }
             | Operation::Complement { result, operand } => (
                 *result,

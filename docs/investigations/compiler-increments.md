@@ -34,10 +34,17 @@ promotion or failure behavior for other numeric classes.
 
 The SDK also runs a Char increment probe: `'a'` becomes `b` with numeric value
 98, and incrementing the first element of `['c']` produces `d`. It rejects
-Char decrement with a Char/Number subtraction diagnostic. Our current update
-profile is Number-only; [the plan](../plan.md#next-work) retains Char increment
-as the next extension. Probe source/logs are in
+Char decrement with a Char/Number subtraction diagnostic. Probe source/logs are in
 `scratch/compiler-increment-errors/char-increment-*` and `char-decrement.mc.txt`.
+
+The complete example also checks prefix/postfix Char locals and array elements.
+SDK and generated runs match all 31 expected lines: local updates print `b`
+then numeric value `99`; array updates print `d` then `e` through a shared
+reference. Each indexed update prints `chars` then `index` once. The console
+checker accepts source/saved-IR parity, structured reconstruction of both
+PRGs, and both runtime logs. Artifacts and verdicts are in
+`scratch/check-char-increments/`. No additional VM opcode or DATA record is
+needed; Char increment uses push-one and `addv`.
 
 ## Lowering and reconstruction
 
@@ -48,17 +55,11 @@ Decrement substitutes `subv` (`0x04`). Field updates capture self/member and use
 All required instructions were already supported. No new opcode or DATA record
 was encountered in this specimen.
 
-Our source builder retains a Number `Step` between the existing target read and
-write. Saved IR uses `.increment`/`.decrement`; validation checks non-null Number
-operands, single use, source order, and write-back contracts. Both saved and
-native paths select push-one plus `addv`/`subv`. Indexed updates reuse compound
-assignment's captured location, including its frame budget.
-
 Source/resumed unit IR produce identical unsigned PRGs. SDK and generated PRGs
 export CODE/DATA structurally, reconstruct byte-for-byte, and produce identical
 repeat exports. Own-key signing is checked separately from reconstruction and
-simulator behavior. Artifacts, console logs, and exports are under
-`scratch/compiler-increments/`. Artifact SHA-256 values:
+simulator behavior. The Number-only probe's artifacts, console logs, and exports
+are under `scratch/compiler-increments/`. Artifact SHA-256 values:
 
 - Generated unsigned:
   `de9cfdf007e27d1e7f69597269de0bda03c4520eb7d7e09858d2e8a580dbded8`.
@@ -79,18 +80,17 @@ base.resourcePath=../native-names/resources
 ```
 
 Reuse the ignored Minimal Console manifest/resource scaffold with
-`MinimalConsoleApp` as entry. Build and export:
+`MinimalConsoleApp` as entry. Build, then use the
+[console specimen checker](../../scripts/README.md#console-specimen-check):
 
 ```sh
 sh scripts/build-example.sh scratch/compiler-increments
-cargo run -p ciq-dis -- all scratch/compiler-increments/build/fr265/compiler-increments.prg scratch/compiler-increments/sdk-export
-cargo run -p ciq-asm -- project scratch/compiler-increments/sdk-export scratch/compiler-increments/sdk-rebuilt.prg
-cargo run -p ciq-dis -- all scratch/compiler-increments/sdk-rebuilt.prg scratch/compiler-increments/sdk-reexport
+python3 scripts/check-example.py prepare compiler-increments --sdk-prg scratch/compiler-increments/build/fr265/compiler-increments.prg --output scratch/check-char-increments
+python3 scripts/check-example.py simulate scratch/check-char-increments
 ```
 
-Run the SDK PRG separately and compare its console log to `expected.txt`. Repeat
-export/reconstruction for the generated PRG, comparing input/rebuilt bytes and
-both exported trees.
+Run preparation in the Rust environment and simulation in the SDK environment,
+using a fresh checker output directory.
 
 Adding `a[(true || false).hashCode() - 1]++;` before exit makes SDK 9.2.0 report
 an internal compiler error. Removing that update permits compilation, including

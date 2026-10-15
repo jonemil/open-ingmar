@@ -369,7 +369,8 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
-    /// Add or subtract one from a non-null Number, producing a Number value.
+    /// Add or subtract one from a Number, or increment a Char, preserving its type.
+    /// Nullable operands and Char decrement are rejected.
     /// Target capture and write-back are separate ordered IR operations.
     Step {
         result: ValueId,
@@ -1356,11 +1357,16 @@ impl Function {
                     (Some(result), vec![operand])
                 }
                 Operation::Step {
-                    result, operand, ..
+                    result,
+                    operand,
+                    increment,
                 } => {
-                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
-                        .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("increment/decrement requires a non-null Number"))?;
+                    let result_type =
+                        operators::step_result(&type_of(operand).api_type(), increment)
+                            .and_then(|ty| ValueType::from_api_type(&ty))
+                            .ok_or_else(|| {
+                                fail("step requires a non-null Number, or Char for increment")
+                            })?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }

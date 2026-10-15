@@ -3,6 +3,7 @@ using Toybox.System;
 module Updates {
     function index() { System.println("index"); return 0; }
     function array(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { System.println("array"); return a; }
+    function chars(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Array<Toybox.Lang.Char> { System.println("chars"); return a; }
 }
 class MinimalConsoleApp extends Application.AppBase {
     var count = 10;
@@ -29,6 +30,13 @@ class MinimalConsoleApp extends Application.AppBase {
         if (found != null) { System.println(found); }
         var limit = 0;
         while (limit < 2) { limit++; System.println(limit); }
+        var ch = 'a';
+        ch++; System.println(ch);
+        ++ch; System.println(ch.toNumber());
+        var chars = ['c'];
+        var shared = chars;
+        Updates.chars(chars)[Updates.index()]++; System.println(shared[0]);
+        ++Updates.chars(chars)[Updates.index()]; System.println(shared[0]);
         System.exit();
     }
 }

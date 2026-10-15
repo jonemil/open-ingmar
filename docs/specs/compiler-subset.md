@@ -585,16 +585,18 @@ Assignment-containing IR uses the conservative schedule specified in
 
 ## Increment and decrement
 
-`target++;`, `++target;`, `target--;`, and `--target;` update a Number by one.
+`target++;` and `++target;` add one to a Number or Char, preserving its type.
+`target--;` and `--target;` subtract one from a Number; Char decrement is rejected.
 The two operator characters must be contiguous. Accepted targets are bare
-initialized locals, explicit `self` Number fields, and Number-array elements.
+initialized Number/Char locals, explicit `self` Number fields, and Number/Char
+array elements. Char requires API 1.3.0, as for other Char expressions.
 Parameters, grouped local targets, other value/element types, and unknown or
 out-of-scope names are rejected. A nullable Number local needs an established
 non-null proof at the read. Existing assignment contracts still govern its write.
 
 Both prefix and postfix forms are statements with identical supported behavior;
 they cannot be arguments, conditions, initializers, return values, or parts of
-larger expressions. Source lowering retains a checked Number step and separate
+larger expressions. Source lowering retains a checked step and separate
 write, without assigning expression-result semantics to either spelling.
 
 For indexed targets, evaluate/capture array then index once, read the selected
