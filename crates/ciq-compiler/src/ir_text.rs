@@ -199,6 +199,7 @@ pub(crate) fn parse_ir_context(
             Some(".string") => (8, 3),
             Some(".println") => (9, 2),
             Some(".discard") => (29, 2),
+            Some(".array-constant") => (61, call_width()),
             Some(".array-new") => (30, 3),
             Some(".array-begin") => (57, 4),
             Some(".array-fill") => (58, 4),
@@ -418,6 +419,29 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 class: crate::NativeClass::from_name(&fields[2])
                     .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+            }
+        } else if kind == 61 {
+            if width < 4 {
+                return Err(fail(*at, "constant array requires a type and elements"));
+            }
+            Operation::ArrayConstant {
+                result: parse_value(&fields[1])?,
+                element_type: match fields[2].as_str() {
+                    "number" => crate::ArrayElement::Number,
+                    "char" => crate::ArrayElement::Char,
+                    _ => return Err(fail(*at, "constant arrays require Number or Char elements")),
+                },
+                values: fields[3..width]
+                    .iter()
+                    .map(|s| {
+                        let hex = s
+                            .strip_prefix("0x")
+                            .filter(|s| s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+                            .ok_or_else(|| fail(*at, "array constants require eight hex digits"))?;
+                        u32::from_str_radix(hex, 16)
+                            .map_err(|_| fail(*at, "invalid array constant"))
+                    })
+                    .collect::<Result<_, _>>()?,
             }
         } else if kind == 57 {
             Operation::ArrayBegin {

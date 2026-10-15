@@ -239,11 +239,33 @@ even if its result is consumed later.
 API context requires 1.3.0 for Char, or 1.0.0 for Number, View, and Array.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
-or uninitialized element contract is implied. Nonempty source literals use the
-private construction operations below.
+or uninitialized element contract is implied. Nonempty source literals use
+constant loads or the private construction operations below.
 The explicit IR element type preserves empty allocation after source contextual
 typing. See [nonempty construction](../investigations/compiler-array-literals.md)
 and [empty construction](../investigations/compiler-empty-arrays.md).
+
+## Constant arrays
+
+```text
+.array-constant %0 number 0x0000000a 0x00000014
+.return %0
+```
+
+`.array-constant %<result> <element> <bits>... [span=<start>:<end>]` defines a
+fresh mutable array.
+The element type is `number` or `char`; at least one element is required. Each
+value is `0x` followed by exactly eight hexadecimal digits, preserving signed
+Number or raw Char bits. Mixed types, nested containers, and other element
+contracts are rejected. API checks require Number/Array 1.0.0 or Char 1.3.0.
+Definition/use and ordered-effect checks include this allocation.
+
+Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
+applications materialize its [DATA record](data-arrays.md) and bind the outer
+tag offset. Raw CODE output requires an explicit matching DATA source; it does
+not allocate DATA. A new mutable array is loaded on every execution, even when
+the same record is referenced repeatedly. Source selection is limited to
+homogeneous literal tokens; computed/effectful elements use private builders.
 
 ## Private array construction
 

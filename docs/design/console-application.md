@@ -49,7 +49,7 @@ preserves existing record order for lossless work.
 
 The builder lays out class/module records first, calculates numeric statics
 references required by the current DATA model, then appends literal records.
-CODE labels and string placements resolve through existing typed encoders.
+CODE labels and string/array placements resolve through existing typed encoders.
 This keeps the native path in memory and makes saved-unit-IR resumption use the
 same builder. A linker or new crate is unnecessary for the current profile.
 

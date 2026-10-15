@@ -8,6 +8,12 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
     Item::Instruction { opcode, operands }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum LiteralKey {
+    String(String),
+    Array(crate::ValueId),
+}
+
 /// Lower a validated IR function into a typed VM assembly program.
 ///
 /// Selects instructions and assigns parameter/local frame slots. Assignments
@@ -26,21 +32,44 @@ pub fn lower(function: &Function) -> Program {
 /// Lower a function using a unit-unique entry label and internal alias prefix.
 pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     let mut definitions = BTreeMap::new();
-    let mut strings = BTreeMap::new();
+    let mut literal_aliases = BTreeMap::new();
     let mut literals = Vec::new();
     let mut slots = BTreeMap::new();
     let mut builders = BTreeMap::new();
     for located in function.operations() {
         if let Operation::String { value, .. } = &located.operation {
-            if !strings.contains_key(value) {
-                let alias = format!("__ciq_string_{}_{}", label, strings.len());
-                strings.insert(value.clone(), alias.clone());
+            if !literal_aliases.contains_key(&LiteralKey::String(value.clone())) {
+                let alias = format!("__ciq_string_{}_{}", label, literal_aliases.len());
+                literal_aliases.insert(LiteralKey::String(value.clone()), alias.clone());
                 literals.push(Item::String(ciq_prg::data::StringDeclaration {
                     alias,
                     value: value.clone(),
                     at: None,
                 }));
             }
+        }
+        if let Operation::ArrayConstant {
+            result,
+            element_type,
+            values,
+        } = &located.operation
+        {
+            let alias = format!("__ciq_array_{}_{}", label, result.0);
+            literal_aliases.insert(LiteralKey::Array(*result), alias.clone());
+            literals.push(Item::Array(ciq_prg::data::arrays::Declaration {
+                alias,
+                at: None,
+                values: values
+                    .iter()
+                    .map(|v| {
+                        if *element_type == crate::ArrayElement::Number {
+                            ciq_prg::data::arrays::Value::Number(*v)
+                        } else {
+                            ciq_prg::data::arrays::Value::Char(*v)
+                        }
+                    })
+                    .collect(),
+            }));
         }
         match &located.operation {
             Operation::Null { result }
@@ -56,6 +85,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
+            | Operation::ArrayConstant { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
             | Operation::SourceNew { result, .. }
@@ -126,7 +156,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ));
                 let (opcode, operands) = integer(index as i32);
                 items.push(instruction(opcode, operands));
-                expression(value, &definitions, &slots, &builders, &strings, &mut items);
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
                 items.push(instruction(Opcode::Aputv, vec![]));
                 continue;
             }
@@ -147,7 +184,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         &definitions,
                         &slots,
                         &builders,
-                        &strings,
+                        &literal_aliases,
                         &mut items,
                     );
                     items.push(instruction(
@@ -185,7 +222,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
-                    &strings,
+                    &literal_aliases,
                     &mut items,
                 );
                 items.push(instruction(
@@ -239,9 +276,30 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 index,
                 value,
             } => {
-                expression(array, &definitions, &slots, &builders, &strings, &mut items);
-                expression(index, &definitions, &slots, &builders, &strings, &mut items);
-                expression(value, &definitions, &slots, &builders, &strings, &mut items);
+                expression(
+                    array,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
+                expression(
+                    index,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
                 items.push(instruction(Opcode::Aputv, vec![]));
                 continue;
             }
@@ -251,7 +309,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     Opcode::Spush,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
                 ));
-                expression(value, &definitions, &slots, &builders, &strings, &mut items);
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
                 items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
@@ -271,7 +336,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
-                    &strings,
+                    &literal_aliases,
                     &mut items,
                 );
                 items.push(instruction(
@@ -293,7 +358,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                             &definitions,
                             &slots,
                             &builders,
-                            &strings,
+                            &literal_aliases,
                             &mut items,
                         );
                     }
@@ -324,7 +389,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     arguments,
                     &definitions,
                     (&slots, &builders),
-                    &strings,
+                    &literal_aliases,
                     &mut items,
                 );
                 continue;
@@ -339,7 +404,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     arguments,
                     &definitions,
                     (&slots, &builders),
-                    &strings,
+                    &literal_aliases,
                     &mut items,
                 );
                 continue;
@@ -353,7 +418,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     ],
                 ));
                 items.push(instruction(Opcode::Frpush, vec![]));
-                expression(value, &definitions, &slots, &builders, &strings, &mut items);
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
                 items.push(instruction(Opcode::Invokem, vec![Operand::Bits(2)]));
                 items.push(instruction(Opcode::Popv, vec![]));
                 continue;
@@ -380,7 +452,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }
             _ => continue,
         };
-        expression(value, &definitions, &slots, &builders, &strings, &mut items);
+        expression(
+            value,
+            &definitions,
+            &slots,
+            &builders,
+            &literal_aliases,
+            &mut items,
+        );
         items.push(instruction(opcode, operands));
     }
     Program::new(items).expect("bounded validated IR lowers to valid assembly")
@@ -391,7 +470,7 @@ fn expression(
     definitions: &BTreeMap<ValueId, &Operation>,
     slots: &BTreeMap<LocalId, u64>,
     builders: &BTreeMap<crate::BuilderId, u64>,
-    strings: &BTreeMap<String, String>,
+    literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
     enum Task {
@@ -489,6 +568,12 @@ fn expression(
                 Operation::ArrayFinish { builder, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(builders[builder])])
                 }
+                Operation::ArrayConstant { result, .. } => (
+                    Opcode::Apush,
+                    vec![Operand::Array(
+                        literal_aliases[&LiteralKey::Array(*result)].clone(),
+                    )],
+                ),
                 Operation::ArrayNew { .. } => {
                     items.push(instruction(Opcode::Ipushz, vec![]));
                     (Opcode::Newa, vec![])
@@ -499,9 +584,12 @@ fn expression(
                 }
                 Operation::Boolean { value: true, .. } => (Opcode::Btpush, vec![]),
                 Operation::Boolean { value: false, .. } => (Opcode::Bfpush, vec![]),
-                Operation::String { value, .. } => {
-                    (Opcode::News, vec![Operand::String(strings[value].clone())])
-                }
+                Operation::String { value, .. } => (
+                    Opcode::News,
+                    vec![Operand::String(
+                        literal_aliases[&LiteralKey::String(value.clone())].clone(),
+                    )],
+                ),
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
@@ -695,14 +783,21 @@ fn statement_call(
     arguments: &[ValueId],
     definitions: &BTreeMap<ValueId, &Operation>,
     frame: (&BTreeMap<LocalId, u64>, &BTreeMap<crate::BuilderId, u64>),
-    strings: &BTreeMap<String, String>,
+    literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
     items.push(call_target(module, member));
     if !arguments.is_empty() {
         items.push(instruction(Opcode::Frpush, vec![]));
         for value in arguments {
-            expression(*value, definitions, frame.0, frame.1, strings, items);
+            expression(
+                *value,
+                definitions,
+                frame.0,
+                frame.1,
+                literal_aliases,
+                items,
+            );
         }
     }
     items.push(if arguments.is_empty() {

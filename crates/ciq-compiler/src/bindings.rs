@@ -215,3 +215,59 @@ pub fn string_bindings(
     }
     Ok(bindings)
 }
+
+/// Bind CODE constant-array declarations to matching records in a DATA source.
+///
+/// Unplaced requirements must match exactly one record by typed scalar content;
+/// pinned requirements must also match its offset. Undeclared references use
+/// DATA aliases directly. Missing, ambiguous, or conflicting matches are errors.
+/// Validates DATA layout without encoding method references or allocating records.
+pub fn array_bindings(
+    program: &Program,
+    data: &ciq_prg::data::Source,
+) -> Result<BTreeMap<String, u32>, Error> {
+    use ciq_prg::data::Fragment;
+    let fail = |message: String| Error { line: 0, message };
+    let offsets = data.array_bindings().map_err(|e| fail(e.to_string()))?;
+    let mut bindings = offsets.clone();
+    for item in program.items() {
+        let Item::Array(literal) = item else { continue };
+        let matches: Vec<_> = data
+            .fragments
+            .iter()
+            .filter_map(|fragment| {
+                let Fragment::Array(record) = fragment else {
+                    return None;
+                };
+                let at = offsets[&record.alias];
+                (record.values == literal.values && literal.at.is_none_or(|pinned| pinned == at))
+                    .then_some(at)
+            })
+            .collect();
+        if matches.len() != 1 {
+            return Err(fail(format!(
+                "expected one DATA array matching &{}; found {}",
+                literal.alias,
+                matches.len()
+            )));
+        }
+        let at = matches[0];
+        if bindings
+            .insert(literal.alias.clone(), at)
+            .is_some_and(|old| old != at)
+        {
+            return Err(fail(format!(
+                "conflicting DATA binding for &{}",
+                literal.alias
+            )));
+        }
+    }
+    for item in program.items() {
+        if let Item::Array(literal) = item {
+            if literal.at.is_some() {
+                bindings.remove(&literal.alias);
+            }
+        }
+    }
+    Ok(bindings)
+}

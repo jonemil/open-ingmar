@@ -212,3 +212,31 @@ fn unplaced_literals_require_external_data_bindings() {
             .to_text()
     );
 }
+
+#[test]
+fn inline_array_requirements_preserve_scalar_bits_and_validate_aliases_and_placement() {
+    let text = ".array values at=0x00000024\n.element number=0xffffffff\n.element char=0x12345678\n.element boolean=false\n.element null\n.endarray\napush &values\nreturn\n";
+    let program = Program::parse(text).unwrap();
+    assert_eq!(program, Program::parse(&program.to_text()).unwrap());
+    assert_eq!(program.encode().unwrap(), [0x40, 0, 0, 0, 0x24, 0x16]);
+    for bad in [
+        ".array missing\n.element null\n",
+        ".array bad\n.endarray extra\n",
+        ".array values\n.element number=0x100000000\n.endarray\n",
+        ".array values at=0x01000000\n.endarray\n",
+        ".array values\n.endarray\n.array values\n.endarray\n",
+    ] {
+        assert!(Program::parse(bad).is_err(), "accepted {bad}");
+    }
+    let Item::Array(mut declaration) = program.items()[0].clone() else {
+        panic!()
+    };
+    declaration.alias = "invalid alias".into();
+    assert!(Program::new(vec![Item::Array(declaration)]).is_err());
+    let arrays = BTreeMap::from([("values".to_owned(), 0x24)]);
+    assert!(
+        program
+            .encode_with_literals(&BTreeMap::new(), &BTreeMap::new(), &arrays)
+            .is_err()
+    );
+}

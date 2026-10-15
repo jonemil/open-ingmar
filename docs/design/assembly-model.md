@@ -7,7 +7,7 @@ existing ordinary CODE assembly grammar/model, not full section-project assembly
 or signing.
 
 `Program` is an ordered sequence of immutable items: labels, instructions,
-inline symbol declarations, and inline string declarations with optional
+inline symbol declarations, and inline string/array declarations with optional
 placement. An instruction has an `Opcode` and typed operand fields: `Bits(u64)`,
 `Symbol(alias)`, `String(alias)`, `Array(alias)`, or `Code(alias)`. Semantic value
 IDs from compiler IR are absent here. Symbol/literal references await
@@ -17,7 +17,7 @@ after layout. See
 
 Both `Program::new(items)` and `Program::parse(text)` apply the same structural
 validation: identifier syntax, operand count/width, allowed reference kinds,
-optional 24-bit string placement, duplicate string aliases/labels, and the
+optional 24-bit literal placement, duplicate string/array aliases and labels, and the
 24-bit CODE layout limit. A parsed model retains assembly line numbers for
 errors; constructed items use line zero. Source-line provenance is not part of
 semantic item equality.
@@ -31,7 +31,8 @@ a new program to edit it and reapply validation.
 `encode_with_references(symbols, strings)` and
 `encode_with_literals(symbols, strings, arrays)` share binding resolution,
 duplicate symbol/string checks, operand-width checks, and `ciq-mc` byte encoding.
-Array aliases resolve only through the separate array map; project declarations
+Array aliases resolve through inline pinned declarations or the separate array
+map; project declarations
 belong in [DATA array source](../specs/data-arrays.md).
 Unresolved or conflicting bindings are errors. Symbol declaration placement
 metadata is preserved, but CODE encoding does not write a SYMBOLS section;
@@ -45,10 +46,10 @@ reconstruction, template edits, signing commands, and filesystem output policy.
 The compiler depends on the shared model without acquiring signing/archive
 dependencies.
 
-Unplaced string declarations describe literal requirements. CODE encoding uses
-external string offsets for their operands; it does not allocate DATA or verify
+Unplaced string/array declarations describe literal requirements. CODE encoding
+uses separate external offsets for their operands; it does not allocate DATA or verify
 that an arbitrary external map contains the declared content. The compiler's
-explicit DATA binder checks content and layout before supplying the map. Pinned
+explicit DATA binders check content and layout before supplying the maps. Pinned
 declarations retain their existing direct encoding/template behavior.
 Section-project CODE still contains references only, with declarations in the
 authoritative DATA source. See [string assembly](../specs/data-strings.md) and

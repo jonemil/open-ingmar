@@ -111,5 +111,5 @@ continue to use raw preservation and cannot satisfy structured coverage.
 
 String pools, nested arrays, Dictionary/ByteArray, other scalar types, class-field
 array-reference relocation, and other SDK/device versions remain unverified or
-unsupported. The compiler's typed-append construction is unchanged; the next
-[lowering review](../plan.md#next-work) considers the established VM instructions.
+unsupported. Compiler selection and private construction are covered by the
+[lowering review](natural-lowering.md#constant-array-selection).

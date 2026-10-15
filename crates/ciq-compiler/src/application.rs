@@ -711,17 +711,16 @@ pub fn build_console_application(
         f.value = Reference::Raw(positions[&alias]);
     }
     let mut fragments = classes.into_iter().map(Fragment::Class).collect::<Vec<_>>();
-    fragments.extend(assembly.items().iter().filter_map(|i| {
-        if let Item::String(s) = i {
-            Some(Fragment::String(s.clone()))
-        } else {
-            None
-        }
+    fragments.extend(assembly.items().iter().filter_map(|i| match i {
+        Item::String(s) => Some(Fragment::String(s.clone())),
+        Item::Array(a) => Some(Fragment::Array(a.clone())),
+        _ => None,
     }));
     let data = data::Source { fragments };
     let strings = data.string_bindings().map_err(error)?;
+    let arrays = data.array_bindings().map_err(error)?;
     let code = assembly
-        .encode_with_references(&bindings, &strings)
+        .encode_with_literals(&bindings, &strings, &arrays)
         .map_err(error)?;
     let data = data
         .encode_with_references(&BTreeMap::new(), &labels)

@@ -15,7 +15,7 @@ mod array_builders;
 pub mod backend;
 mod bindings;
 mod control_flow;
-pub use bindings::{string_bindings, symbol_bindings};
+pub use bindings::{array_bindings, string_bindings, symbol_bindings};
 mod ir_text;
 mod names;
 mod native;
@@ -369,6 +369,14 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Load a fresh mutable flat scalar array from DATA.
+    /// Values retain raw 32-bit Number/Char bits; arrays must be nonempty and
+    /// homogeneous, with Number or Char elements only.
+    ArrayConstant {
+        result: ValueId,
+        element_type: ArrayElement,
+        values: Vec<u32>,
+    },
     /// Allocate a private array builder before its elements are evaluated.
     /// The builder cannot escape as a value; fills must cover every index in order.
     ArrayBegin {
@@ -1260,6 +1268,27 @@ impl Function {
                     types.insert(result, ValueType::Object(class));
                     (Some(result), vec![])
                 }
+                Operation::ArrayConstant {
+                    result,
+                    element_type,
+                    ref values,
+                } => {
+                    if values.is_empty()
+                        || !matches!(element_type, ArrayElement::Number | ArrayElement::Char)
+                    {
+                        return Err(fail(
+                            "constant arrays require nonempty Number or Char elements",
+                        ));
+                    }
+                    let ty = ValueType::Array(element_type);
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &ty.api_type())
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ty);
+                    (Some(result), vec![])
+                }
                 Operation::ArrayNew {
                     result,
                     element_type,
@@ -1628,6 +1657,7 @@ impl Function {
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
+                    | Operation::ArrayConstant { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
@@ -1778,8 +1808,10 @@ impl Function {
     ///
     /// [`backend::lower`] selects instructions and assigns frame slots. Module
     /// and member aliases remain unresolved for later binding. Deduplicated
-    /// literal declarations carry content without DATA placement; bind them with
-    /// [`string_bindings`] before encoding CODE. Output is not a complete PRG.
+    /// string declarations carry content without DATA placement; bind them with
+    /// [`string_bindings`]. Constant-array declarations use [`array_bindings`]
+    /// and retain separate identities before encoding CODE. Output is not a
+    /// complete PRG.
     pub fn lower(&self) -> ciq_assembly::Program {
         backend::lower(self)
     }
@@ -2015,6 +2047,19 @@ impl Function {
                     values
                         .iter()
                         .map(|v| format!(" %{}", v.0))
+                        .collect::<String>()
+                ),
+                Operation::ArrayConstant {
+                    result,
+                    element_type,
+                    ref values,
+                } => format!(
+                    ".array-constant %{} {}{}",
+                    result.0,
+                    element_type.text(),
+                    values
+                        .iter()
+                        .map(|v| format!(" 0x{v:08x}"))
                         .collect::<String>()
                 ),
                 Operation::ArrayFinish { result, builder } => {

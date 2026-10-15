@@ -41,8 +41,13 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
     let f = compile("function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }")
         .unwrap();
     let text = f.to_ir_text();
-    assert!(text.contains(".array-begin &0 number"));
-    assert!(parse_ir(&text.replace(".array-begin &0 number", ".array-begin &0 char")).is_err());
+    assert!(text.contains(".array-constant %0 number"));
+    assert_eq!(
+        parse_ir(&text.replace(".array-constant %0 number", ".array-constant %0 char"))
+            .unwrap()
+            .return_type(),
+        ReturnType::Array(ArrayElement::Char),
+    );
 }
 
 #[test]

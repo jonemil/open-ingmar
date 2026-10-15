@@ -73,6 +73,13 @@ named CODE references for recognized targets. Standalone symbolic CODE export
 keeps `apush` numeric because it does not embed array declarations. Library users
 can supply separate maps through `Program::encode_with_literals`.
 
+Standalone/compiler CODE can also carry inline `.array` requirements using the
+same grammar. They occupy no CODE bytes and do not allocate DATA. An `at` binds
+the reference directly; an unplaced requirement needs an external array map.
+The compiler's `array_bindings` checks typed content against an explicit DATA
+source: exactly one record must match, and pinned offsets must also match.
+Section projects keep declarations exclusively in authoritative DATA source.
+
 Same-width scalar changes preserve layout. Changing element kinds/counts or
 preceding records can move later DATA targets: update placement constraints and
 manifest lengths as needed, and account for opaque or numeric references. Named

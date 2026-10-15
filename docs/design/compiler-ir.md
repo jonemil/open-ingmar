@@ -79,7 +79,11 @@ ordinary typed locals in that order. This retains the earlier receiver/index
 across later branches while leaving plain writes free of temporary slots.
 Bounds checks remain with the runtime, after operand effects.
 
-Array literals use private construction identities, separate from values and
+Flat nonempty literals containing only Number tokens or only Char tokens use
+`ArrayConstant`, retaining typed raw bits in IR. The backend emits an unplaced
+array declaration and `apush`; application DATA layout supplies its offset.
+Each execution loads a fresh mutable array. No expression folding is performed.
+Other array literals use private construction identities, separate from values and
 ordinary locals. `ArrayBegin` allocates the final length before element effects;
 ordered fills enforce the element contract. `ArrayFinish` exposes the typed
 array only when all slots are initialized. Builder progress must agree at every
@@ -340,7 +344,10 @@ Semantic strings carry UTF-8 content rather than DATA addresses. Lowering
 deduplicates content per function and emits unplaced declarations with symbolic
 `news` operands. Explicit DATA binding or the application builder supplies
 placement, keeping function IR independent of section layout. PRG reconstruction
-completes method bindings after layout.
+completes method bindings after layout. Constant arrays retain element type and
+raw scalar bits, with one declaration per IR allocation site. Their separate
+DATA bindings point to record tags; sharing a DATA record does not share the
+runtime array. Explicit binders reject missing or ambiguous content matches.
 
 `System.println` is an explicit intrinsic with an established SDK binding;
 arbitrary SDK identities and return types are not inferred from spelling.

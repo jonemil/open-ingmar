@@ -853,7 +853,11 @@ follow the [Number-array contract](#number-arrays); View literals follow the
 types, nested arrays, and trailing commas are rejected. Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
-Nonempty construction allocates the final length before evaluating elements
+Homogeneous nonempty lists of Number tokens or Char tokens become typed IR
+constants and DATA array records loaded with `apush`. Each execution creates a
+fresh mutable array. Computed expressions are not folded into these records.
+
+Other nonempty construction allocates the final length before evaluating elements
 left to right, once each, and stores each result with VM array instructions.
 A private builder prevents unfilled slots from escaping; branching elements
 use a reusable staging local. Builder and ordinary slots share the normal frame

@@ -489,7 +489,8 @@ impl Builder<'_> {
         })
     }
 
-    /// Construct a typed array with allocation before ordered element evaluation.
+    /// Construct a typed array using a flat constant load for literal tokens,
+    /// otherwise allocating before ordered element evaluation.
     /// A private builder prevents uninitialized slots from escaping as values;
     /// branching elements use a staging local with empty-stack CFG edges.
     fn array_literal(
@@ -504,6 +505,41 @@ impl Builder<'_> {
                 span.start,
                 "empty array literal requires a concrete expected Array element type",
             ));
+        }
+        // Select only literal tokens, without folding computed expressions.
+        let constant = elements
+            .iter()
+            .map(|e| match e.kind {
+                parser::ExpressionKind::Integer(n) => Some((crate::ArrayElement::Number, n as u32)),
+                parser::ExpressionKind::Char(c) => Some((crate::ArrayElement::Char, c)),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        if let Some(values) = constant {
+            let element_type = values[0].0;
+            if values.iter().all(|v| v.0 == element_type) {
+                let result = ValueId(self.operations.len() as u32);
+                self.push(
+                    Operation::ArrayConstant {
+                        result,
+                        element_type,
+                        values: values.into_iter().map(|v| v.1).collect(),
+                    },
+                    Some(span),
+                );
+                let array = self.local_id(span)?;
+                self.push(
+                    Operation::LocalInitialize {
+                        local: array,
+                        value: result,
+                    },
+                    Some(span),
+                );
+                return Ok(parser::Expression {
+                    kind: parser::ExpressionKind::Temporary(array),
+                    span,
+                });
+            }
         }
         let builder = crate::BuilderId(self.local_id(span)?.0);
         let grouped = elements.iter().all(|e| !e.needs_materialization());

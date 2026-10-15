@@ -484,3 +484,62 @@ fn cli_binds_strings_across_saved_stages() {
     assert!(!invalid.exists());
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn cli_binds_constant_arrays_across_saved_stages_and_rejects_missing_data() {
+    let dir = std::env::temp_dir().join(format!("ciq-compiler-array-{}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("probe.mc");
+    let ir = dir.join("probe.ciqir");
+    let assembly = dir.join("probe.mcasm");
+    let data = dir.join("data.mcasm");
+    fs::write(&source, "function probe() { return [10, 20][0]; }").unwrap();
+    fs::write(&data, ".string prefix \"before\"\n.array actual\n.element number=0x0000000a\n.element number=0x00000014\n.endarray\n").unwrap();
+    for (from, emit, input, output) in [
+        ("source", "ir", &source, &ir),
+        ("ir", "assembly", &ir, &assembly),
+    ] {
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", emit])
+            .arg(input)
+            .arg(output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    let mut results = Vec::new();
+    for (from, input) in [("source", &source), ("ir", &ir), ("assembly", &assembly)] {
+        let output = dir.join(format!("{from}.code"));
+        let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+            .args(["--from", from, "--emit", "code", "--data"])
+            .arg(&data)
+            .arg(input)
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        results.push(fs::read(output).unwrap());
+    }
+    assert_eq!(results[0], results[1]);
+    assert_eq!(results[0], results[2]);
+    fs::write(&data, ".array wrong\n.element char=0x0000000a\n.endarray\n").unwrap();
+    let invalid = dir.join("invalid.code");
+    let run = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
+        .args(["--emit", "code", "--data"])
+        .arg(&data)
+        .arg(&source)
+        .arg(&invalid)
+        .output()
+        .unwrap();
+    assert!(!run.status.success());
+    assert!(!invalid.exists());
+    fs::remove_dir_all(dir).unwrap();
+}

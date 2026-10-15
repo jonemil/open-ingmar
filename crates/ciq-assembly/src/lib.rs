@@ -2,8 +2,8 @@
 //!
 //! Parses, prints, and encodes ordinary CODE assembly through [`Program`].
 //! Text parsing and typed construction use the same validation. Encoding
-//! resolves symbol/string aliases and relative CODE labels into instruction bytes; PRG
-//! reconstruction and signing belong to the assembler tool.
+//! resolves symbol/string/array aliases and relative CODE labels into instruction
+//! bytes; PRG reconstruction and signing belong to the assembler tool.
 use ciq_mc::{Instruction, Opcode};
 use ciq_prg::{
     data::StringDeclaration,
@@ -43,12 +43,14 @@ pub enum Item {
     },
     Symbol(Declaration),
     String(StringDeclaration),
+    /// A constant-array literal requirement, materialized separately in DATA.
+    Array(ciq_prg::data::arrays::Declaration),
 }
 
 /// A validated CODE assembly program containing instructions and declarations.
 ///
-/// Symbol/string aliases and CODE labels resolve during encoding. Equality compares
-/// program content and ignores source line numbers.
+/// Symbol/string/array aliases and CODE labels resolve during encoding.
+/// Equality compares program content and ignores source line numbers.
 #[derive(Debug, Clone)]
 pub struct Program {
     items: Vec<Item>,
@@ -65,8 +67,8 @@ impl Program {
     /// Construct and validate a CODE assembly program from typed items.
     ///
     /// Applies the same operand and layout checks as [`Self::parse`]. Symbol,
-    /// string, and CODE references may remain unresolved until encoding. Errors use line
-    /// zero because the items have no source line numbers.
+    /// string, array, and CODE references may remain unresolved until encoding.
+    /// Errors use line zero because the items have no source line numbers.
     pub fn new(items: Vec<Item>) -> Result<Self, Error> {
         let program = Self {
             lines: vec![0; items.len()],
@@ -88,13 +90,14 @@ impl Program {
     /// Parse CODE `.mcasm` text into a validated assembly program.
     ///
     /// Rejects unsupported syntax and invalid operands or layout. Symbol, string,
-    /// and CODE references are retained for binding. Errors identify the input
-    /// line; comments and whitespace are not retained in the program.
+    /// array, and CODE references are retained for binding. Errors identify the
+    /// input line; comments and whitespace are not retained in the program.
     pub fn parse(text: &str) -> Result<Self, Error> {
         let mut program = Self {
             items: Vec::new(),
             lines: Vec::new(),
         };
+        let mut array = None::<ciq_prg::data::arrays::Declaration>;
         for (index, line) in text.lines().enumerate() {
             let fail = |message: String| Error {
                 line: index + 1,
@@ -104,6 +107,24 @@ impl Program {
             let Some(first) = fields.first() else {
                 continue;
             };
+            if let Some(active) = &mut array {
+                if first == ".endarray" && fields.len() == 1 {
+                    program.items.push(Item::Array(array.take().unwrap()));
+                    program.lines.push(index + 1);
+                } else {
+                    active
+                        .push_element(&fields)
+                        .map_err(|e| fail(e.to_string()))?;
+                }
+                continue;
+            }
+            if first == ".array" {
+                array = Some(
+                    ciq_prg::data::arrays::Declaration::parse_header(&fields)
+                        .map_err(|e| fail(e.to_string()))?,
+                );
+                continue;
+            }
             let item = if first == ".symbol" {
                 Item::Symbol(Declaration::parse(&fields).map_err(|e| fail(e.to_string()))?)
             } else if first == ".string" {
@@ -151,10 +172,17 @@ impl Program {
             program.items.push(item);
             program.lines.push(index + 1);
         }
+        if array.is_some() {
+            return Err(Error {
+                line: text.lines().count(),
+                message: "unterminated array declaration".into(),
+            });
+        }
         program.validate()?;
         Ok(program)
     }
     fn validate(&self) -> Result<(), Error> {
+        let mut array_aliases = std::collections::BTreeSet::new();
         let mut string_aliases = std::collections::BTreeSet::new();
         for (index, item) in self.items.iter().enumerate() {
             let fail = |message| self.error(index, message);
@@ -166,6 +194,18 @@ impl Program {
                     if !valid_alias(&declaration.alias) {
                         return Err(fail("invalid symbol alias"));
                     }
+                }
+                Item::Array(declaration) => {
+                    if !valid_alias(&declaration.alias) || !array_aliases.insert(&declaration.alias)
+                    {
+                        return Err(fail("invalid or duplicate array alias"));
+                    }
+                    if declaration.at.is_some_and(|at| at >= 0x1000000) {
+                        return Err(fail("inline code array placement exceeds 24 bits"));
+                    }
+                    declaration
+                        .encoded_length()
+                        .map_err(|e| self.error(index, e.to_string()))?;
                 }
                 Item::String(declaration) => {
                     if !string_aliases.insert(&declaration.alias) {
@@ -270,6 +310,7 @@ impl Program {
                     .to_text(),
                 ),
                 Item::String(d) => text.push_str(&d.to_text()),
+                Item::Array(d) => text.push_str(&d.to_text()),
                 Item::Instruction { opcode, operands } => {
                     text.push_str(opcode.mnemonic());
                     for (operand, width) in operands.iter().zip(opcode.operand_widths()) {
@@ -302,7 +343,7 @@ impl Program {
     ///
     /// The maps bind symbol aliases to IDs and string aliases to DATA offsets.
     /// Missing or duplicate aliases and values exceeding operand widths are
-    /// errors. Output contains instructions only, not symbol or string records.
+    /// errors. Output contains instructions only, not symbol or literal records.
     /// Unplaced literal declarations require an external binding when referenced;
     /// their content must be materialized separately in DATA by the caller.
     /// CODE labels resolve locally to instruction boundaries. Missing labels,
@@ -337,9 +378,19 @@ impl Program {
             .sum();
         let mut declarations = Source::default();
         let mut strings = external_strings.clone();
+        let mut arrays = external_arrays.clone();
         for (index, item) in self.items.iter().enumerate() {
             match item {
                 Item::Symbol(d) => declarations.declarations.push(d.clone()),
+                Item::Array(d) => {
+                    if let Some(at) = d.at {
+                        if arrays.insert(d.alias.clone(), at).is_some() {
+                            return Err(
+                                self.error(index, format!("duplicate array alias {}", d.alias))
+                            );
+                        }
+                    }
+                }
                 Item::String(d) => {
                     if let Some(at) = d.at {
                         if strings.insert(d.alias.clone(), at).is_some() {
@@ -401,7 +452,7 @@ impl Program {
                         at as u64
                     }
                     Operand::Array(alias) => {
-                        let at = *external_arrays.get(alias).ok_or_else(|| {
+                        let at = *arrays.get(alias).ok_or_else(|| {
                             self.error(index, format!("undefined array alias {alias}"))
                         })?;
                         if at >= ciq_prg::data::ADDRESS_LIMIT as u32 {

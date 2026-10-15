@@ -75,7 +75,12 @@ impl Types {
             }
             Operation::String { result, .. } => (*result, Some(Type::named("Toybox.Lang.String"))),
             Operation::Null { result } => (*result, Some(Type::Null)),
-            Operation::ArrayNew {
+            Operation::ArrayConstant {
+                result,
+                element_type,
+                ..
+            }
+            | Operation::ArrayNew {
                 result,
                 element_type,
             } => (

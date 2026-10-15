@@ -42,7 +42,12 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
     let ops = f.operations();
     let allocation = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::ArrayBegin { .. }))
+        .position(|op| {
+            matches!(
+                op.operation,
+                Operation::ArrayBegin { .. } | Operation::ArrayConstant { .. }
+            )
+        })
         .unwrap();
     let element = ops
         .iter()
@@ -77,7 +82,7 @@ fn array_literals_enforce_element_api_and_resource_limits() {
     let list = |count| {
         format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Char> {{ return [{}]; }}",
-            vec!["'a'"; count].join(",")
+            vec!["'a' + 0"; count].join(",")
         )
     };
     compile(&list(100)).unwrap();
@@ -126,7 +131,12 @@ fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
     let mut ops: Vec<LocatedOperation> = f.operations().to_vec();
     let allocation = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::ArrayBegin { .. }))
+        .position(|op| {
+            matches!(
+                op.operation,
+                Operation::ArrayBegin { .. } | Operation::ArrayConstant { .. }
+            )
+        })
         .unwrap();
     let call = ops
         .iter()

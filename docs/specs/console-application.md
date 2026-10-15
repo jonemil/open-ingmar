@@ -105,8 +105,8 @@ Fixed native symbol IDs in this profile:
 
 DATA contains [version-2 records][classes] in this order: statics, globals,
 synthesized app class, source Views in declaration order, user modules in
-lexicographic order, then CODE literal
-strings in assembly order. Positions are calculated from record lengths; no SDK
+lexicographic order, then CODE string/constant-array literals in assembly order.
+Positions are calculated from record lengths; no SDK
 DATA prefix or opaque spans are transplanted.
 
 Statics maps module lookup IDs, including globals, to numeric DATA offsets.

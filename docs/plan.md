@@ -12,33 +12,18 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Review natural lowering.** Before adding language features, review source
-   → semantic IR and IR → VM assembly against SDK `-O 0` output from our examples.
-   Keep source operations explicit enough in IR to select their corresponding
-   VM instructions; replace workaround sequences with direct instructions where
-   their semantics and target availability are established. Next, review
-   constant-array representation and DATA binding for `apush`, retaining direct
-   private construction for effectful/branching literals. Use the
-   [constant-array coverage baseline](investigations/constant-arrays.md).
-   Follow the [lowering review](investigations/natural-lowering.md) for remaining
-   representation questions; keep direct Boolean/null selection intact.
-   Preserve types,
-   evaluation order, captured locations, and failure behavior. Validate native
-   and text paths, structured reconstruction, and SDK/generated simulator
-   behavior. This is baseline instruction selection, not optimization; matching
-   SDK binary layout or every instruction sequence is not required.
-2. **Remaining operators and assignment forms.** Add increment/decrement with
+1. **Remaining operators and assignment forms.** Add increment/decrement with
    checked local/field/indexed targets and prefix/postfix results, preserving
    captured locations and read/effect order. Investigate conditional
    expressions and their result-type joins separately.
-3. **Dictionary.** Establish construction, key/value contracts, literals,
+2. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.
-4. **Numeric types and deferred methods.** Add Long/Float/Double values,
+3. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-5. **Object and callable/reference facilities.** Grow shared Object contracts,
+4. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
@@ -63,8 +48,12 @@ nullable branch proofs shared across source and saved IR. Extend constructor
 and object-reference contracts as core classes need them. Comparator calls and
 ordinary object weak references need their own dispatch/lifetime evidence;
 keep them distinct from the verified [immutable weak specialization][weak-results].
-Revisit direct array filling after initialized-element and memory contracts are
-established; literal construction currently uses typed append.
+Keep semantic operations explicit enough to select established VM instructions,
+following the [lowering review](investigations/natural-lowering.md). Preserve
+private initialization for effectful/branching array literals and typed DATA
+constants for scalar literals. Baseline instruction selection should preserve
+evaluation order and failure behavior without optimization or requiring the
+SDK's exact layout. Validate native/text paths and structured reconstruction.
 
 Revisit deferred [Number][number-methods], [String][string-methods], and
 [Boolean][boolean-methods] methods as their prerequisites become available.

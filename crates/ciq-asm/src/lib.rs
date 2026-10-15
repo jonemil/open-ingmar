@@ -112,9 +112,12 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
             Encoding::Assembly => {
                 let text = std::str::from_utf8(&bytes)?;
                 for line in text.lines() {
-                    if tokens(line)?.first().is_some_and(|f| f == ".string") {
+                    if tokens(line)?
+                        .first()
+                        .is_some_and(|f| f == ".string" || f == ".array")
+                    {
                         return Err(
-                            "project string declarations belong in the authoritative DATA source"
+                            "project literal declarations belong in the authoritative DATA source"
                                 .into(),
                         );
                     }

@@ -11,7 +11,7 @@ sequences for established VM instructions?
 | Boolean `!value` | Typed `Not` / `.not` | Direct `invv` |
 | Equality/inequality with literal null | `Compare` and a `Null` definition | Direct `isnull`/`isnotnull` on the other operand |
 | Number `~value` | Typed `Complement` / `.complement` | Direct `invv` |
-| Array literal | Private begin/fill/finish construction, with grouped or staged elements | Direct `newa`, `aputvdup`, and `aputv`; constant-array selection remains open |
+| Array literal | Typed constant or private begin/fill/finish construction | `apush` with DATA binding, or direct `newa`/stores |
 | Numeric binary operations/comparisons | Typed `Binary` / `Compare` | Corresponding VM arithmetic/comparison instructions |
 
 **Interpretation:** Boolean negation and literal-null comparison already retain
@@ -22,9 +22,8 @@ selection, without constant folding or an optimization pass. Comparison with a
 stored null-valued operand remains binary because its definition is a read,
 not a null literal. Existing type checking and flow proofs still apply.
 
-Array construction retains allocation, initialization, and publication in IR.
-Constant-array selection and DATA binding remain the next source/IR boundary
-to review before choosing `apush`.
+Array construction retains either typed constant contents or private allocation,
+initialization, and publication in IR. See [constant selection](#constant-array-selection).
 Do not recognize arbitrary XOR/native-call sequences as substitutes for the
 missing semantic representation. See [the plan](../plan.md#next-work).
 
@@ -123,7 +122,7 @@ comparisons, and both barrel member checks, with no new decoding gaps.
 
 ## Array construction
 
-Nonempty literals retain private begin/fill/finish operations in IR. A builder
+Nonconstant nonempty literals retain private begin/fill/finish operations in IR. A builder
 is a construction identity rather than a language value; a CFG check requires
 ordered initialization of every index and identical progress on incoming paths.
 Only finish publishes the typed array. This permits final-length allocation
@@ -155,8 +154,8 @@ Builder tests reject premature publication, skipped/repeated/out-of-range fills,
 wrong element types, inactive identities, escaping through ordinary reads,
 unfinished returns, and inconsistent CFG joins. Boundary tests verify private
 slots share the 255-slot frame budget. Source/text paths retain the same builder
-validation. Grouped/individual stores use supported VM opcodes; `apush` selection
-and constant DATA binding remain the next review increment.
+validation. Grouped/individual stores use supported VM opcodes; constant
+selection is covered below.
 
 The audit at `scratch/example-audit/natural-arrays/report.json` retains all 115
 fully structured PRG round trips, all 62 documented source/resumed-IR paths,
@@ -168,3 +167,60 @@ and both barrel member checks. No new decoding gap is exposed.
 
 [boolean]: ../../examples/compiler-boolean-negation/README.md
 [nullable]: ../../examples/compiler-nullable-contracts/README.md
+
+## Constant-array selection
+
+Date: 2026-10-15. Environment: SDK 9.2.0 / `fr265`, `-O 0`.
+Homogeneous Number/Char literal tokens now retain typed raw contents in
+`ArrayConstant` / `.array-constant`. Lowering emits an unplaced DATA requirement
+and `apush`, rather than recognizing patterns of unrelated fill operations.
+Computed/effectful/branching elements keep private builders. This is literal
+representation and instruction selection; expressions are not constant-folded.
+
+**Experimentally observed:** a complete probe runs the following checks in order:
+
+- `make()` returns `[10, 20, 30]`; calling it twice and changing the first result
+  to 99 leaves the second at 10.
+- `chars()` returns `['a', 'b']`; changing one result to `z` leaves another at `a`.
+- A two-iteration loop creates `[1, 2]`, prints its first element, and overwrites
+  it with 99. Both iterations print 1.
+- An array of two calls prints the markers 7 and 8 before `[7, 8]`.
+- `[(true || false).hashCode(), 2]` prints `[1, 2]`, followed by a `done` marker.
+
+SDK and generated simulator logs match exactly. The generated program uses three
+constant records; its branching literal retains the builder path. The SDK uses
+an additional constant load for that expression; matching its folding choices
+is outside this baseline review.
+
+Artifacts are under `scratch/natural-constant-arrays/`: `app.mc`, the SDK-only
+`MinimalConsoleApp` wrapper, `monkey.jungle`, `unit.ciqir`, unsigned/signed PRGs,
+SDK/generated exports/reexports, and console/session logs. Reproduce by defining
+`make`, `chars`, and a Number identity function that prints its argument, then
+running the checks above from `start()` and calling `System.exit()`. Use the
+Minimal Console manifest/resources and a wrapper whose `onStart` calls `start`.
+Build through `scripts/build-example.sh`; independently compile with:
+
+```sh
+cargo run -p ciq-compiler -- --unit --emit prg --target-api 5.2.0 --min-api 1.3.0 --app-id 45cb2c25c6a94ad68e936ab46ff4ab9e --entry start scratch/natural-constant-arrays/app.mc scratch/natural-constant-arrays/unsigned.prg
+```
+
+Sign the generated PRG with our key and run each program separately with
+[the simulator helper](../../scripts/README.md). Preserve console logs between
+runs. Source and resumed-unit-IR PRGs are identical. SDK/generated programs each
+reconstruct byte-for-byte through structured CODE/DATA and produce identical
+repeat exports. The generated unsigned PRG has SHA-256
+`caea7f003d9964327d76a0c961f4a25d3a639c000303f75040b6be4ec838daf5`.
+The SDK probe has SHA-256
+`56d8be7b50c5934c4ea6f4c3de706cb4a2ea7a52e4e025b278a15768c6fd540e`.
+
+The same text/native model handles raw function CODE: inline `.array`
+requirements bind by typed content against explicit DATA. Checks reject missing,
+ambiguous, conflicting, or mispinned records, invalid types/bit patterns, and
+reordered allocations. Instruction availability beyond the tested SDK/device,
+other scalar types, nested arrays, and deep-copy semantics remain unverified.
+
+The repeated audit at
+`scratch/example-audit/natural-constant-arrays/report.json` covers all 56
+examples: 67 SDK and 48 generated PRGs retain fully structured CODE/DATA,
+byte-exact reconstruction, and stable exports. All 62 documented compiler
+commands retain saved-stage equivalence; both barrel member checks pass.
