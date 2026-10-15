@@ -1,8 +1,8 @@
-# Open Connect IQ toolchain
+# Open Ingmar
 
-An independent Rust toolchain for Garmin Connect IQ: PRG containers, VM
-instructions, assembly/disassembly, signing, barrel/IQ packaging, and a
-restricted Monkey C compiler.
+Open Ingmar is an independent Rust toolchain for Garmin Connect IQ: PRG
+containers, VM instructions, assembly/disassembly, signing, barrel/IQ packaging,
+and a restricted Monkey C compiler.
 
 This is an independent project, unaffiliated with Garmin.
 
