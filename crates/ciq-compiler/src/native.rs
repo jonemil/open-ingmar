@@ -55,26 +55,10 @@ pub(crate) fn constant(
 }
 
 /// Resolve declared argument types for contextual source construction.
-/// This substitutes Array's element contract without authorizing the call;
+/// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
-    let (class, element) = match receiver {
-        api::Type::Named(name) => (name.as_str(), None),
-        api::Type::Array(element) => ("Toybox.Lang.Array", Some(element.as_ref())),
-        _ => return None,
-    };
-    let method = api::core().method(class, member)?.method;
-    Some(
-        method
-            .parameters
-            .iter()
-            .map(|ty| {
-                element
-                    .map(|element| substitute_parameter(ty, "Element", element))
-                    .unwrap_or_else(|| ty.clone())
-            })
-            .collect(),
-    )
+    Some(api::core().method_for_type(receiver, member)?.parameters)
 }
 
 /// Resolve a catalogue callback into supported IR contracts. Unknown members,
@@ -125,10 +109,10 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
-    let (class, generic_argument) = match receiver {
-        api::Type::Named(class) => (class.as_str(), None),
+    let class = match receiver {
+        api::Type::Named(class) => class.as_str(),
         api::Type::Array(element) if crate::ArrayElement::from_api_type(element).is_some() => {
-            ("Toybox.Lang.Array", Some(element.as_ref()))
+            "Toybox.Lang.Array"
         }
         _ => return Err("native calls require a supported class-valued receiver".into()),
     };
@@ -140,20 +124,17 @@ pub(crate) fn value_call(
             .method(class, member)
             .ok_or("native member is not known in the API catalogue")?
     };
-    if resolved.method.parameters.len() != arguments.len() {
+    let signature = api::core()
+        .method_for_type(receiver, member)
+        .ok_or("native member requires concrete container parameters")?;
+    if signature.parameters.len() != arguments.len() {
         return Err("native call argument count does not match its API contract".into());
     }
-    if !resolved
-        .method
+    if !signature
         .parameters
         .iter()
         .zip(arguments)
-        .all(|(expected, actual)| {
-            let expected = generic_argument
-                .map(|argument| substitute_parameter(expected, "Element", argument))
-                .unwrap_or_else(|| expected.clone());
-            accepts(&expected, actual)
-        })
+        .all(|(expected, actual)| accepts(expected, actual))
     {
         return Err("native call argument types do not match its API contract".into());
     }
@@ -262,31 +243,7 @@ pub(crate) fn value_call(
             "{class}.equals lowering currently requires scalar or nullable scalar arguments"
         ));
     }
-    Ok(generic_argument
-        .map(|argument| substitute_parameter(resolved.result, "Element", argument))
-        .unwrap_or_else(|| resolved.result.clone()))
-}
-
-fn substitute_parameter(ty: &api::Type, name: &str, argument: &api::Type) -> api::Type {
-    match ty {
-        api::Type::Parameter(parameter) if parameter == name => argument.clone(),
-        api::Type::Array(element) => {
-            api::Type::Array(Box::new(substitute_parameter(element, name, argument)))
-        }
-        api::Type::Tuple(elements) => api::Type::Tuple(
-            elements
-                .iter()
-                .map(|ty| substitute_parameter(ty, name, argument))
-                .collect(),
-        ),
-        api::Type::Union(types) => api::Type::Union(
-            types
-                .iter()
-                .map(|ty| substitute_parameter(ty, name, argument))
-                .collect(),
-        ),
-        other => other.clone(),
-    }
+    Ok(signature.result)
 }
 
 fn scalar_or_null(ty: &api::Type) -> bool {
@@ -306,7 +263,7 @@ fn scalar_or_null(ty: &api::Type) -> bool {
 
 /// Check exact types, declared inheritance, or union membership without implicit
 /// conversions. Every alternative of an actual union must be accepted.
-/// Arrays may widen to their declared class/base, but element contracts are invariant.
+/// Containers may widen to their declared class/base; their parameters are invariant.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual {
         return true;
@@ -328,6 +285,7 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         let actual = match actual {
             api::Type::Named(actual) => actual.as_str(),
             api::Type::Array(_) | api::Type::Tuple(_) => "Toybox.Lang.Array",
+            api::Type::Dictionary { .. } => "Toybox.Lang.Dictionary",
             _ => return false,
         };
         let mut class = api::core().class(actual);
@@ -383,6 +341,41 @@ pub(crate) fn module_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dictionary_assignability_is_invariant_and_erasure_is_one_way() {
+        let string = api::Type::named("Toybox.Lang.String");
+        let number = api::Type::named("Toybox.Lang.Number");
+        let object = api::Type::named("Toybox.Lang.Object");
+        let exact = api::Type::dictionary(string.clone(), number.clone());
+        assert!(accepts(&exact, &exact));
+        for other in [
+            api::Type::dictionary(object.clone(), number.clone()),
+            api::Type::dictionary(string.clone(), object.clone()),
+            api::Type::dictionary(string, api::Type::Union(vec![number, api::Type::Null])),
+        ] {
+            assert!(!accepts(&other, &exact));
+            assert!(!accepts(&exact, &other));
+        }
+        let opaque = api::Type::named("Toybox.Lang.Dictionary");
+        assert!(accepts(&opaque, &exact));
+        assert!(accepts(&object, &exact));
+        assert!(!accepts(&exact, &opaque));
+        assert!(!accepts(&exact, &api::Type::Null));
+        assert!(!accepts(&api::Type::Array(Box::new(object)), &exact));
+
+        assert_eq!(value_parameters(&exact, "put").unwrap().len(), 2);
+        assert!(value_call(&exact, "size", &[], None).is_err());
+        assert!(
+            value_call(
+                &opaque,
+                "get",
+                &[api::Type::named("Toybox.Lang.String")],
+                None
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn weak_reference_declaration_does_not_enable_object_lowering() {

@@ -96,12 +96,17 @@ impl ApiContext {
     }
 
     /// Check class introduction levels in a value or signature type, including
-    /// Array elements. Null/Void have no class level; unions require all alternatives.
+    /// container parameters. Null/Void have no class level; unions require all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
             Type::Array(element) => {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
                 self.check_type(catalogue, element)
+            }
+            Type::Dictionary { key, value } => {
+                self.check_class(catalogue, "Toybox.Lang.Dictionary")?;
+                self.check_type(catalogue, key)?;
+                self.check_type(catalogue, value)
             }
             Type::Tuple(elements) => {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
@@ -171,6 +176,12 @@ pub enum Type {
     /// Mutable Array with an explicit element contract. Array element contracts
     /// are invariant; this does not imply executable support for every element.
     Array(Box<Type>),
+    /// Mutable Dictionary with invariant key and value contracts. This describes
+    /// API types without enabling executable Dictionary lookup or mutation.
+    Dictionary {
+        key: Box<Type>,
+        value: Box<Type>,
+    },
     /// Positional Array shape with an exact number of typed slots.
     Tuple(Vec<Type>),
     Named(String),
@@ -186,6 +197,58 @@ impl Type {
     pub fn named(path: impl Into<String>) -> Self {
         Self::Named(path.into())
     }
+
+    /// Construct a Dictionary signature type with explicit key/value contracts.
+    /// Class availability and executable support must be checked separately.
+    pub fn dictionary(key: Type, value: Type) -> Self {
+        Self::Dictionary {
+            key: Box::new(key),
+            value: Box::new(value),
+        }
+    }
+}
+
+fn substitute_parameters(ty: &Type, bindings: &[(&str, &Type)]) -> Option<Type> {
+    Some(match ty {
+        Type::Parameter(name) => {
+            let (_, argument) = bindings.iter().find(|(parameter, _)| *parameter == name)?;
+            substitute_parameters(argument, &[])?
+        }
+        Type::Array(element) => Type::Array(Box::new(substitute_parameters(element, bindings)?)),
+        Type::Dictionary { key, value } => Type::dictionary(
+            substitute_parameters(key, bindings)?,
+            substitute_parameters(value, bindings)?,
+        ),
+        Type::Tuple(elements) => Type::Tuple(
+            elements
+                .iter()
+                .map(|ty| substitute_parameters(ty, bindings))
+                .collect::<Option<_>>()?,
+        ),
+        Type::Union(types) => {
+            fn append(types: &mut Vec<Type>, ty: Type) {
+                match ty {
+                    Type::Union(alternatives) => {
+                        for alternative in alternatives {
+                            append(types, alternative);
+                        }
+                    }
+                    ty if !types.contains(&ty) => types.push(ty),
+                    _ => {}
+                }
+            }
+            let mut alternatives = Vec::new();
+            for ty in types {
+                append(&mut alternatives, substitute_parameters(ty, bindings)?);
+            }
+            if alternatives.len() == 1 {
+                alternatives.pop()?
+            } else {
+                Type::Union(alternatives)
+            }
+        }
+        other => other.clone(),
+    })
 }
 
 /// A runtime-provided method contract; no method body is compiled from it.
@@ -233,6 +296,15 @@ pub struct ResolvedMethod<'a> {
     pub required_api: ApiLevel,
 }
 
+/// A method declaration with container parameters replaced by receiver types.
+/// Introduction levels and executable support remain separate checks.
+#[derive(Debug)]
+pub struct InstantiatedMethod<'a> {
+    pub declaration: ResolvedMethod<'a>,
+    pub parameters: Vec<Type>,
+    pub result: Type,
+}
+
 impl ResolvedMethod<'_> {
     /// Check introduction levels only; other target restrictions remain unknown.
     pub fn available_at(self, level: ApiLevel) -> bool {
@@ -259,6 +331,39 @@ pub struct Constant {
 }
 
 impl Catalogue {
+    /// Resolve a method and substitute a typed receiver's container parameters
+    /// throughout its argument/result types. Nullable substitutions are flattened
+    /// and deduplicated. Return None for unknown receivers/members or unresolved
+    /// parameters, including key/value methods on an opaque named Dictionary.
+    pub fn method_for_type(&self, receiver: &Type, member: &str) -> Option<InstantiatedMethod<'_>> {
+        let bindings;
+        let (class, substitutions): (&str, &[(&str, &Type)]) = match receiver {
+            Type::Named(name) => (name, &[]),
+            Type::Array(element) => {
+                bindings = vec![("Element", element.as_ref())];
+                ("Toybox.Lang.Array", &bindings)
+            }
+            Type::Dictionary { key, value } => {
+                bindings = vec![("Key", key.as_ref()), ("Value", value.as_ref())];
+                ("Toybox.Lang.Dictionary", &bindings)
+            }
+            _ => return None,
+        };
+        let declaration = self.method(class, member)?;
+        let parameters = declaration
+            .method
+            .parameters
+            .iter()
+            .map(|ty| substitute_parameters(ty, substitutions))
+            .collect::<Option<Vec<_>>>()?;
+        let result = substitute_parameters(declaration.result, substitutions)?;
+        Some(InstantiatedMethod {
+            declaration,
+            parameters,
+            result,
+        })
+    }
+
     /// Resolve a recorded native constant in its canonical module.
     pub fn constant(&self, module: &str, member: &str) -> Option<&Constant> {
         self.constants.get(&(module.into(), member.into()))
@@ -364,6 +469,46 @@ fn build_core() -> Catalogue {
         );
     }
     classes.get_mut("Toybox.Lang.Dictionary").unwrap().methods = vec![
+        method(
+            "get",
+            vec![Type::Parameter("Key".into())],
+            Type::Union(vec![Type::Parameter("Value".into()), Type::Null]),
+            initial,
+        ),
+        method(
+            "put",
+            vec![
+                Type::Parameter("Key".into()),
+                Type::Parameter("Value".into()),
+            ],
+            Type::Void,
+            initial,
+        ),
+        method(
+            "hasKey",
+            vec![Type::Parameter("Key".into())],
+            Type::named("Toybox.Lang.Boolean"),
+            initial,
+        ),
+        method(
+            "remove",
+            vec![Type::Parameter("Key".into())],
+            Type::Void,
+            initial,
+        ),
+        method(
+            "keys",
+            vec![],
+            Type::Array(Box::new(Type::Parameter("Key".into()))),
+            initial,
+        ),
+        method(
+            "values",
+            vec![],
+            Type::Array(Box::new(Type::Parameter("Value".into()))),
+            initial,
+        ),
+        method("toString", vec![], Type::named(string), ApiLevel(1, 0, 1)),
         method("size", vec![], Type::named(number), initial),
         method(
             "isEmpty",
@@ -673,6 +818,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn substitution_recurses_through_container_and_tuple_signatures() {
+        let key = Type::named("Toybox.Lang.String");
+        let value = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
+        let template = Type::Tuple(vec![Type::dictionary(
+            Type::Parameter("Key".into()),
+            Type::Array(Box::new(Type::Union(vec![
+                Type::Parameter("Value".into()),
+                Type::Null,
+            ]))),
+        )]);
+        let actual = substitute_parameters(&template, &[("Key", &key), ("Value", &value)]);
+        assert_eq!(
+            actual,
+            Some(Type::Tuple(vec![Type::dictionary(
+                key.clone(),
+                Type::Array(Box::new(value)),
+            )]))
+        );
+        assert!(substitute_parameters(&template, &[("Key", &key)]).is_none());
+        let unbound = Type::Array(Box::new(Type::Parameter("Other".into())));
+        assert!(substitute_parameters(&template, &[("Key", &key), ("Value", &unbound)]).is_none());
+    }
+
+    #[test]
     fn enclosing_module_and_inherited_base_levels_are_required() {
         let mut catalogue = build_core();
         catalogue.modules.get_mut("Toybox.Lang").unwrap().since = ApiLevel(2, 0, 0);
@@ -774,6 +943,11 @@ mod tests {
                 Type::Array(element) => {
                     assert!(api.class("Toybox.Lang.Array").is_some());
                     check_type(api, element);
+                }
+                Type::Dictionary { key, value } => {
+                    assert!(api.class("Toybox.Lang.Dictionary").is_some());
+                    check_type(api, key);
+                    check_type(api, value);
                 }
                 Type::Named(name) => assert!(
                     api.class(name).is_some() || api.enum_level(name).is_some(),

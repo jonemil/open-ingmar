@@ -9,10 +9,10 @@ separates declaration lookup, compiler validation, and executable lowering.
 
 ## Declaration model
 
-Types represent named classes, Null, Void, unions, invariant Arrays, positional
-tuples, and method type parameters. A declaration describes a runtime-provided
-API; compiler analysis state does not belong in it. `Lang.Object` is the root
-class. Modules are namespaces and do not inherit Object.
+Types represent named classes, Null, Void, unions, invariant Arrays and
+Dictionaries, positional tuples, and class type parameters. A declaration
+describes a runtime-provided API; compiler analysis state does not belong in it.
+`Lang.Object` is the root class. Modules are namespaces and do not inherit Object.
 
 `Catalogue::method()` follows superclass paths and returns the declaring class,
 effective result, and required API level. `Method.result` retains the generic
@@ -23,10 +23,28 @@ receivers retain WeakReference. This does not enable ordinary weak references.
 
 Assignability follows declared superclass paths without implicit conversion or
 acceptance of unknown classes. Every alternative of an actual union must satisfy
-the expected type. Generic Array signatures substitute the receiver's element
-contract before checking arguments/results. Arrays may widen to Object but not
-to mutable Arrays with different elements. Tuples require exact arity and
+the expected type. `Catalogue::method_for_type()` substitutes Array's `Element`
+or Dictionary's `Key`/`Value` throughout argument/result types, including nested
+containers and tuples. It retains the resolved declaration/availability and
+normalizes substituted unions by flattening and removing duplicate alternatives.
+Unresolved signature parameters return None; an opaque named Dictionary cannot
+invent key/value contracts. `Catalogue::method()` still returns generic declarations.
+
+Container parameters are invariant: differing Array elements or Dictionary
+key/value contracts cannot widen or narrow through assignment. Typed containers
+may widen to their opaque class or Object; erasure does not permit assigning
+them back to a typed container. Tuples require exact arity and
 per-slot assignability; they are not homogeneous Array contracts.
+
+Dictionary declarations specialize `get(K)` to `V or Null`, `put(K, V)` and
+`remove(K)` to Void, `hasKey(K)` to Boolean, `keys()` to `Array<K>`, and
+`values()` to `Array<V>`. A non-null V rejects Null writes even though the broad
+published method accepts Null. These members are API 1.0.0; Dictionary's own
+`toString()` override requires 1.0.1. The existing `size`/`isEmpty` declarations
+remain 1.0.0. [SDK type probes](../investigations/compiler-dictionary.md#typed-keyvalue-contracts)
+support specialization and invariant contracts. The compiler still uses the
+opaque [executable Dictionary profile](compiler-subset.md#dictionary-values);
+typed source/saved IR and these additional method lowerings remain planned.
 
 Declaration availability, assignability, and executable support are separate
 checks. A broad Object parameter can have a narrower executable profile.
@@ -37,7 +55,7 @@ Source class identity and native projection follow the
 ## Availability
 
 Introduction checks include the requested class, intervening bases, enclosing
-modules, methods, and recursively referenced signature/element types. Class
+modules, methods, and recursively referenced signature/container types. Class
 existence does not establish availability of every initializer or method.
 Deprecation alone does not mean unavailable; unknown restrictions stay explicit.
 

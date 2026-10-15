@@ -110,7 +110,7 @@ SHA-256 is
 
 ## Typed key/value contracts
 
-**Experimentally observed:** fourteen isolated SDK builds under
+**Experimentally observed:** eighteen isolated SDK builds under
 `scratch/dictionary-types/` use `-O 0 -l 3`. Method parameters/results accept
 `Lang.Dictionary<Lang.String, Lang.Number>`; locals use inferred types.
 The accepted typed application prints 1 for `one` and Null for an absent key.
@@ -127,6 +127,10 @@ The accepted typed application prints 1 for `one` and Null for an absent key.
 | Return `{"one" => "bad"}` with that result annotation | Rejected |
 | Return `Dictionary<String, Number>` as `Dictionary<Object, Number>` | Rejected |
 | Return `Dictionary<String, Number>` as `Dictionary<String, Object>` | Rejected |
+| Return `keys()` as `Array<String>` | Accepted |
+| Return `values()` as `Array<Number>` for non-null Number values | Accepted |
+| Return `values()` as `Array<Number or Null>` for nullable Number values | Accepted |
+| Return those nullable values as `Array<Number>` | Rejected |
 
 The broad published `put` signature permits Null, but a concrete non-null value
 contract rejects it. Preserve that distinction when specializing API methods.
