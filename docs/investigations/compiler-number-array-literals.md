@@ -20,8 +20,10 @@ application paths agree. Candidate inference selects a concrete element tag;
 whole-function checking still establishes validity and branch proofs.
 
 **Limits:** these specimens do not establish SDK allocation order, failure
-timing, or memory equivalence. Our allocation-before-effects and typed-append
-strategy is unchanged. Empty/contextual inference, object elements, and nested
+timing, or memory equivalence. The
+[lowering follow-up](natural-lowering.md#array-construction) replaces typed append
+with private final-length allocation and direct stores. Empty/contextual
+inference, object elements, and nested
 arrays remain outside this profile.
 
 ## Reproduction

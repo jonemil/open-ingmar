@@ -29,6 +29,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     let mut strings = BTreeMap::new();
     let mut literals = Vec::new();
     let mut slots = BTreeMap::new();
+    let mut builders = BTreeMap::new();
     for located in function.operations() {
         if let Operation::String { value, .. } = &located.operation {
             if !strings.contains_key(value) {
@@ -55,6 +56,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Not { result, .. }
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
+            | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
             | Operation::SourceNew { result, .. }
             | Operation::NativeConstant { result, .. }
@@ -71,7 +73,13 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             Operation::LocalInitialize { local, .. } => {
                 slots.insert(
                     *local,
-                    (function.parameter_count() + slots.len() + 1) as u64,
+                    (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
+                );
+            }
+            Operation::ArrayBegin { builder, .. } => {
+                builders.insert(
+                    *builder,
+                    (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
                 );
             }
             _ => {}
@@ -79,7 +87,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     }
     let mut items = literals;
     items.push(Item::Label(label.into()));
-    items.push(if slots.is_empty() {
+    items.push(if slots.is_empty() && builders.is_empty() {
         instruction(
             Opcode::Argc,
             vec![Operand::Bits(function.parameter_count() as u64 + 1)],
@@ -89,11 +97,72 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             Opcode::Argcincsp,
             vec![
                 Operand::Bits(function.parameter_count() as u64 + 1),
-                Operand::Bits(slots.len() as u64),
+                Operand::Bits((slots.len() + builders.len()) as u64),
             ],
         )
     });
     for located in function.operations() {
+        match located.operation {
+            Operation::ArrayBegin {
+                builder, length, ..
+            } => {
+                let (opcode, operands) = integer(length as i32);
+                items.push(instruction(opcode, operands));
+                items.push(instruction(Opcode::Newa, vec![]));
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
+            Operation::ArrayFill {
+                builder,
+                index,
+                value,
+            } => {
+                items.push(instruction(
+                    Opcode::Lgetv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                let (opcode, operands) = integer(index as i32);
+                items.push(instruction(opcode, operands));
+                expression(value, &definitions, &slots, &builders, &strings, &mut items);
+                items.push(instruction(Opcode::Aputv, vec![]));
+                continue;
+            }
+            Operation::ArrayFillMany {
+                builder,
+                start,
+                ref values,
+            } => {
+                items.push(instruction(
+                    Opcode::Lgetv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                for (index, value) in values.iter().enumerate() {
+                    let (opcode, operands) = integer((start + index as u32) as i32);
+                    items.push(instruction(opcode, operands));
+                    expression(
+                        *value,
+                        &definitions,
+                        &slots,
+                        &builders,
+                        &strings,
+                        &mut items,
+                    );
+                    items.push(instruction(
+                        if index + 1 == values.len() {
+                            Opcode::Aputv
+                        } else {
+                            Opcode::Aputvdup
+                        },
+                        vec![],
+                    ));
+                }
+                continue;
+            }
+            _ => (),
+        }
         let (value, opcode, operands) = match located.operation {
             Operation::Block { block } => {
                 items.push(Item::Label(format!("__ciq_block_{}_{}", label, block.0)));
@@ -111,7 +180,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 on_true,
                 on_false,
             } => {
-                expression(condition, &definitions, &slots, &strings, &mut items);
+                expression(
+                    condition,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &strings,
+                    &mut items,
+                );
                 items.push(instruction(
                     Opcode::Bf,
                     vec![Operand::Code(format!(
@@ -163,9 +239,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 index,
                 value,
             } => {
-                expression(array, &definitions, &slots, &strings, &mut items);
-                expression(index, &definitions, &slots, &strings, &mut items);
-                expression(value, &definitions, &slots, &strings, &mut items);
+                expression(array, &definitions, &slots, &builders, &strings, &mut items);
+                expression(index, &definitions, &slots, &builders, &strings, &mut items);
+                expression(value, &definitions, &slots, &builders, &strings, &mut items);
                 items.push(instruction(Opcode::Aputv, vec![]));
                 continue;
             }
@@ -175,7 +251,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     Opcode::Spush,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
                 ));
-                expression(value, &definitions, &slots, &strings, &mut items);
+                expression(value, &definitions, &slots, &builders, &strings, &mut items);
                 items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
@@ -190,7 +266,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ref member,
                 ref arguments,
             } => {
-                expression(receiver, &definitions, &slots, &strings, &mut items);
+                expression(
+                    receiver,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &strings,
+                    &mut items,
+                );
                 items.push(instruction(
                     Opcode::Getsv,
                     vec![Operand::Symbol(format!(
@@ -205,7 +288,14 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 if !arguments.is_empty() {
                     items.push(instruction(Opcode::Frpush, vec![]));
                     for value in arguments {
-                        expression(*value, &definitions, &slots, &strings, &mut items);
+                        expression(
+                            *value,
+                            &definitions,
+                            &slots,
+                            &builders,
+                            &strings,
+                            &mut items,
+                        );
                     }
                 }
                 items.push(if arguments.is_empty() {
@@ -233,7 +323,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     member,
                     arguments,
                     &definitions,
-                    &slots,
+                    (&slots, &builders),
                     &strings,
                     &mut items,
                 );
@@ -248,7 +338,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     member,
                     arguments,
                     &definitions,
-                    &slots,
+                    (&slots, &builders),
                     &strings,
                     &mut items,
                 );
@@ -263,7 +353,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     ],
                 ));
                 items.push(instruction(Opcode::Frpush, vec![]));
-                expression(value, &definitions, &slots, &strings, &mut items);
+                expression(value, &definitions, &slots, &builders, &strings, &mut items);
                 items.push(instruction(Opcode::Invokem, vec![Operand::Bits(2)]));
                 items.push(instruction(Opcode::Popv, vec![]));
                 continue;
@@ -290,7 +380,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }
             _ => continue,
         };
-        expression(value, &definitions, &slots, &strings, &mut items);
+        expression(value, &definitions, &slots, &builders, &strings, &mut items);
         items.push(instruction(opcode, operands));
     }
     Program::new(items).expect("bounded validated IR lowers to valid assembly")
@@ -300,6 +390,7 @@ fn expression(
     root: ValueId,
     definitions: &BTreeMap<ValueId, &Operation>,
     slots: &BTreeMap<LocalId, u64>,
+    builders: &BTreeMap<crate::BuilderId, u64>,
     strings: &BTreeMap<String, String>,
     items: &mut Vec<Item>,
 ) {
@@ -395,6 +486,9 @@ fn expression(
                     ]);
                     (Opcode::Popv, vec![])
                 }
+                Operation::ArrayFinish { builder, .. } => {
+                    (Opcode::Lgetv, vec![Operand::Bits(builders[builder])])
+                }
                 Operation::ArrayNew { .. } => {
                     items.push(instruction(Opcode::Ipushz, vec![]));
                     (Opcode::Newa, vec![])
@@ -412,19 +506,7 @@ fn expression(
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
                 ),
-                Operation::Integer { value: 0, .. } => (Opcode::Ipushz, vec![]),
-                Operation::Integer { value, .. } => {
-                    let (opcode, mask) = if i8::try_from(*value).is_ok() {
-                        (Opcode::Ipush1, 0xff)
-                    } else if i16::try_from(*value).is_ok() {
-                        (Opcode::Ipush2, 0xffff)
-                    } else if (-8_388_608..=8_388_607).contains(value) {
-                        (Opcode::Ipush3, 0xffffff)
-                    } else {
-                        (Opcode::Ipush4, 0xffffffff)
-                    };
-                    (opcode, vec![Operand::Bits(u64::from(*value as u32) & mask)])
-                }
+                Operation::Integer { value, .. } => integer(*value),
                 Operation::ObjectCall {
                     receiver,
                     member,
@@ -612,7 +694,7 @@ fn statement_call(
     member: &str,
     arguments: &[ValueId],
     definitions: &BTreeMap<ValueId, &Operation>,
-    slots: &BTreeMap<LocalId, u64>,
+    frame: (&BTreeMap<LocalId, u64>, &BTreeMap<crate::BuilderId, u64>),
     strings: &BTreeMap<String, String>,
     items: &mut Vec<Item>,
 ) {
@@ -620,7 +702,7 @@ fn statement_call(
     if !arguments.is_empty() {
         items.push(instruction(Opcode::Frpush, vec![]));
         for value in arguments {
-            expression(*value, definitions, slots, strings, items);
+            expression(*value, definitions, frame.0, frame.1, strings, items);
         }
     }
     items.push(if arguments.is_empty() {
@@ -632,4 +714,20 @@ fn statement_call(
         )
     });
     items.push(instruction(Opcode::Popv, vec![]));
+}
+
+fn integer(value: i32) -> (Opcode, Vec<Operand>) {
+    if value == 0 {
+        return (Opcode::Ipushz, vec![]);
+    }
+    let (opcode, mask) = if i8::try_from(value).is_ok() {
+        (Opcode::Ipush1, 0xff)
+    } else if i16::try_from(value).is_ok() {
+        (Opcode::Ipush2, 0xffff)
+    } else if (-8_388_608..=8_388_607).contains(&value) {
+        (Opcode::Ipush3, 0xffffff)
+    } else {
+        (Opcode::Ipush4, 0xffffffff)
+    };
+    (opcode, vec![Operand::Bits(u64::from(value as u32) & mask)])
 }

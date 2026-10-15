@@ -239,11 +239,55 @@ even if its result is consumed later.
 API context requires 1.3.0 for Char, or 1.0.0 for Number, View, and Array.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
-or uninitialized element contract is implied. Nonempty source literals fill it
-using ordinary local storage, native `add`, and discarded call results.
+or uninitialized element contract is implied. Nonempty source literals use the
+private construction operations below.
 The explicit IR element type preserves empty allocation after source contextual
 typing. See [nonempty construction](../investigations/compiler-array-literals.md)
 and [empty construction](../investigations/compiler-empty-arrays.md).
+
+## Private array construction
+
+Builders are not language values or ordinary locals. Their IDs use `&<u32>`;
+they cannot be returned, copied, passed to calls, or read with `.read`.
+
+```text
+.array-begin &0 number 2
+.integer %0 10
+.integer %1 20
+.array-fill-many &0 0 %0 %1
+.array-finish %2 &0
+.return %2
+```
+
+- `.array-begin &<builder> <element> <length>` allocates the final length.
+  Element contracts are `char`, `number`, or `view`; length is decimal, positive,
+  and fits a nonnegative Number. Builder declarations are unique within a
+  function. Allocation remains ordered and may fail before element effects.
+- `.array-fill &<builder> <index> %<value>` initializes the next slot.
+  The decimal index must equal the number of slots already filled and be less
+  than the declared length. The value must match the element contract.
+- `.array-fill-many &<builder> <start> %<value>...` initializes a nonempty group
+  of consecutive remaining slots, evaluating and storing each value before
+  the next. Start and group length must fit the remaining construction range.
+  Values obey ordinary definition, single-use, block, and effect-order checks.
+- `.array-finish %<result> &<builder>` requires all slots initialized. It consumes
+  the builder and exposes a non-null typed Array; reuse requires execution of
+  the original begin again, such as in a loop.
+
+Optional `span=<start>:<end>` follows each operation. Every CFG join requires
+identical active-builder progress on its incoming paths. Returns cannot leave
+builders active. Premature publication, skipped/repeated/out-of-order fills,
+unknown/inactive builders, and mismatched element types are errors. The finite
+CFG check includes backedges; it rejects paths with inconsistent progress.
+
+Each builder reserves a VM frame slot alongside parameters and ordinary locals,
+under the shared 255-slot limit. Lowering selects a Number push, `newa`, and a
+private store at begin; fills use `aputv`, or `aputvdup` followed by final `aputv`
+for grouped values. Finish loads the completed array. No native `add` binding
+or availability requirement is imposed by construction. API checks still apply
+to Array, element types, and any calls within elements. Empty construction keeps
+the separate `.array-new` operation. See
+[lowering evidence](../investigations/natural-lowering.md#array-construction).
 
 ## Array element reads
 

@@ -42,7 +42,7 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
     let ops = f.operations();
     let allocation = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::ArrayNew { .. }))
+        .position(|op| matches!(op.operation, Operation::ArrayBegin { .. }))
         .unwrap();
     let element = ops
         .iter()
@@ -55,7 +55,7 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
         ops.iter()
             .filter(|op| matches!(op.operation, Operation::LocalInitialize { .. }))
             .count(),
-        2
+        1
     );
     let f = compile("function f() as Toybox.Lang.Char { return [(true || false).hashCode().toChar(), 'a'][0]; }").unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -82,7 +82,7 @@ fn array_literals_enforce_element_api_and_resource_limits() {
     };
     compile(&list(100)).unwrap();
     assert!(
-        compile(&list(200))
+        compile(&list(1020))
             .unwrap_err()
             .message
             .contains("1024-operation")
@@ -126,7 +126,7 @@ fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
     let mut ops: Vec<LocatedOperation> = f.operations().to_vec();
     let allocation = ops
         .iter()
-        .position(|op| matches!(op.operation, Operation::ArrayNew { .. }))
+        .position(|op| matches!(op.operation, Operation::ArrayBegin { .. }))
         .unwrap();
     let call = ops
         .iter()

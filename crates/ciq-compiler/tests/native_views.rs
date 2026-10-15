@@ -91,7 +91,7 @@ fn constructed_references_keep_invariant_contracts_and_observable_order() {
     let changed = text
         .lines()
         .map(|line| {
-            if line.starts_with(".array-new ") {
+            if line.starts_with(".array-begin ") {
                 line.replace("view", "number")
             } else {
                 line.into()

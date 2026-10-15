@@ -79,18 +79,23 @@ ordinary typed locals in that order. This retains the earlier receiver/index
 across later branches while leaving plain writes free of temporary slots.
 Bounds checks remain with the runtime, after operand effects.
 
-Array literals use staged construction alongside logical expressions.
-`ArrayNew` creates an empty typed array before element effects, and native
-append maintains its invariant element contract. The builder keeps the array
-and current element in two temporary locals, so branch joins have empty stacks
-and no expression value crosses a block. The element slot is reused across the
-literal. This avoids exposing a partly filled Array with Null slots as
-the declared element type. Direct allocation/fill needs initialized-element
-rules before replacing this strategy; the present lowering does not promise SDK
+Array literals use private construction identities, separate from values and
+ordinary locals. `ArrayBegin` allocates the final length before element effects;
+ordered fills enforce the element contract. `ArrayFinish` exposes the typed
+array only when all slots are initialized. Builder progress must agree at every
+CFG join, and returns cannot leave an unfinished builder. A completed builder
+can be restarted by the same declaration when a loop executes it again.
+
+Straight-line literals use grouped fills: emit each element and store it before
+the next, with `aputvdup` for non-final stores and `aputv` for the last. Literals
+with control flow stage each element in a reusable local and use separate
+stores through the private frame slot. Branch edges retain empty stacks and
+block-local value IDs. Builders and staging locals share the frame budget.
+Construction uses no native append call. This does not require matching SDK
 memory use.
 
 The source builder selects Number or Char from the first element's candidate
-type and records that concrete contract on `ArrayNew`. Candidate tracking uses
+type and records that concrete contract on `ArrayBegin`. Candidate tracking uses
 shared operator/native contracts, parameter annotations, fixed local types,
 and user-call result declarations. It can select a nullable value's possible
 non-null class, but does not establish a branch proof. Whole-function validation

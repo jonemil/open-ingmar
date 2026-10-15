@@ -11,6 +11,7 @@
 
 pub mod api;
 pub mod application;
+mod array_builders;
 pub mod backend;
 mod bindings;
 mod control_flow;
@@ -75,6 +76,10 @@ pub struct ValueId(pub u32);
 /// Semantic local identity; the backend independently assigns VM slots.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalId(pub u32);
+
+/// Private array-construction identity, separate from values and ordinary locals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BuilderId(pub u32);
 
 /// A semantic block identity, independent of assembly labels and CODE offsets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -364,6 +369,31 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Allocate a private array builder before its elements are evaluated.
+    /// The builder cannot escape as a value; fills must cover every index in order.
+    ArrayBegin {
+        builder: BuilderId,
+        element_type: ArrayElement,
+        length: u32,
+    },
+    /// Initialize the next builder element from one checked value.
+    ArrayFill {
+        builder: BuilderId,
+        index: u32,
+        value: ValueId,
+    },
+    /// Fill consecutive private-builder slots, evaluating and storing each value
+    /// before the next. Operands must be single-use values in the same block.
+    ArrayFillMany {
+        builder: BuilderId,
+        start: u32,
+        values: Vec<ValueId>,
+    },
+    /// Expose a completed builder as a typed array value, consuming the builder.
+    ArrayFinish {
+        result: ValueId,
+        builder: BuilderId,
+    },
     /// Invoke a source instance method on a receiver with proven constructor
     /// class. Unit validation checks ownership and the declared call contract.
     ObjectCall {
@@ -895,6 +925,13 @@ impl Function {
         let mut return_type = None;
         let mut definitions = std::collections::BTreeMap::<ValueId, usize>::new();
         let structure = control_flow::validate(&operations)?;
+        let builders = array_builders::validate(&structure, &operations)?;
+        if parameter_count + builders.len() > MAX_LOCALS {
+            return Err(IrError {
+                operation: None,
+                message: "parameters plus builders exceed 255-slot limit".into(),
+            });
+        }
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
@@ -916,6 +953,33 @@ impl Function {
             let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
             origins.observe(&located.operation).map_err(fail)?;
             let (result, operands) = match located.operation {
+                Operation::ArrayBegin { .. } => (None, vec![]),
+                Operation::ArrayFill { builder, value, .. } => {
+                    let expected =
+                        ValueType::from_api_type(&builders[&builder].0.api_type()).unwrap();
+                    if type_of(value) != expected {
+                        return Err(fail("array builder element must match its declared type"));
+                    }
+                    (None, vec![value])
+                }
+                Operation::ArrayFillMany {
+                    builder,
+                    ref values,
+                    ..
+                } => {
+                    let expected =
+                        ValueType::from_api_type(&builders[&builder].0.api_type()).unwrap();
+                    if values.iter().any(|v| type_of(*v) != expected) {
+                        return Err(fail(
+                            "array builder elements must match their declared type",
+                        ));
+                    }
+                    (None, values.clone())
+                }
+                Operation::ArrayFinish { result, builder } => {
+                    types.insert(result, ValueType::Array(builders[&builder].0));
+                    (Some(result), vec![])
+                }
                 Operation::ObjectCall {
                     receiver,
                     ref class,
@@ -1398,7 +1462,7 @@ impl Function {
                     if locals.len() > MAX_LOCALS {
                         return Err(fail("function exceeds 255-local limit"));
                     }
-                    if parameter_count + locals.len() > MAX_LOCALS {
+                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
                         return Err(fail("parameters plus locals exceed 255-slot limit"));
                     }
                     (None, vec![value])
@@ -1564,6 +1628,9 @@ impl Function {
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
+                    | Operation::ArrayBegin { .. }
+                    | Operation::ArrayFill { .. }
+                    | Operation::ArrayFillMany { .. }
                     | Operation::NativeNew { .. }
                     | Operation::TupleNew { .. }
                     | Operation::SourceNew { .. }
@@ -1597,7 +1664,10 @@ impl Function {
                         index,
                         value,
                     } => vec![*array, *index, *value],
-                    Operation::LocalInitialize { value, .. }
+                    Operation::ArrayBegin { .. } => vec![],
+                    Operation::ArrayFillMany { values, .. } => values.clone(),
+                    Operation::ArrayFill { value, .. }
+                    | Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
                     | Operation::SelfFieldAssign { value, .. }
                     | Operation::Return { value }
@@ -1918,6 +1988,37 @@ impl Function {
                 ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
+                }
+                Operation::ArrayBegin {
+                    builder,
+                    element_type,
+                    length,
+                } => format!(
+                    ".array-begin &{} {} {}",
+                    builder.0,
+                    element_type.text(),
+                    length
+                ),
+                Operation::ArrayFill {
+                    builder,
+                    index,
+                    value,
+                } => format!(".array-fill &{} {} %{}", builder.0, index, value.0),
+                Operation::ArrayFillMany {
+                    builder,
+                    start,
+                    ref values,
+                } => format!(
+                    ".array-fill-many &{} {}{}",
+                    builder.0,
+                    start,
+                    values
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>()
+                ),
+                Operation::ArrayFinish { result, builder } => {
+                    format!(".array-finish %{} &{}", result.0, builder.0)
                 }
                 Operation::ArrayNew {
                     result,

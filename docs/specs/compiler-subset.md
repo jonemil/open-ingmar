@@ -853,11 +853,12 @@ follow the [Number-array contract](#number-arrays); View literals follow the
 types, nested arrays, and trailing commas are rejected. Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
-Nonempty construction allocates an empty typed array before evaluating elements
-left to right, once each, and appends each result through `add(Char)`. Two hidden local
-slots retain the array and current element across logical-expression joins;
-they share the normal frame budget. The current operation/nesting limits also
-apply. An allocation or append failure remains a runtime obligation. See
+Nonempty construction allocates the final length before evaluating elements
+left to right, once each, and stores each result with VM array instructions.
+A private builder prevents unfilled slots from escaping; branching elements
+use a reusable staging local. Builder and ordinary slots share the normal frame
+budget. Operation/nesting limits still apply. Allocation and store failures
+remain runtime obligations. See
 [literal evidence](../investigations/compiler-array-literals.md).
 
 String `toCharArray()` returns a non-null `Array<Char>` since API 1.3.0. The
@@ -997,8 +998,10 @@ Nonempty literals such as `[1, 2]`, `[n, -n]`, and `[M.make(), 3]` produce a fre
 contract; every element must have that same non-null type. Parameters, locals,
 user/native calls, arithmetic, and element reads can supply the first element.
 Nullable values require the usual branch proof, including when used first.
-Allocation precedes element effects; evaluation and typed append proceed left
-to right as for Char literals. This lowering requires API 1.3.0 for `add`.
+Allocation precedes element effects; evaluation and typed stores proceed left
+to right as for Char literals. Construction requires Array/Number availability
+(1.0.0), without an incidental native `add` requirement. Element calls and
+other Array methods retain their own API constraints.
 Empty construction uses [contextual types](#empty-array-literals). See the
 [literal evidence][number-array-literals].
 

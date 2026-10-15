@@ -200,6 +200,10 @@ pub(crate) fn parse_ir_context(
             Some(".println") => (9, 2),
             Some(".discard") => (29, 2),
             Some(".array-new") => (30, 3),
+            Some(".array-begin") => (57, 4),
+            Some(".array-fill") => (58, 4),
+            Some(".array-finish") => (59, 3),
+            Some(".array-fill-many") => (60, call_width()),
             Some(".new-native") => (31, 3),
             Some(".tuple-new") => (32, call_width()),
             Some(".new-source") => (33, call_width()),
@@ -254,6 +258,24 @@ pub(crate) fn parse_ir_context(
                     .parse()
                     .map_err(|_| fail(*at, "local ID exceeds u32"))?,
             ))
+        };
+        let parse_builder = |text: &str| -> Result<crate::BuilderId, Diagnostic> {
+            let digits = text
+                .strip_prefix('&')
+                .filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+                .ok_or_else(|| fail(*at, "builder IDs use & followed by decimal u32"))?;
+            Ok(crate::BuilderId(
+                digits
+                    .parse()
+                    .map_err(|_| fail(*at, "builder ID exceeds u32"))?,
+            ))
+        };
+        let parse_count = |text: &str| -> Result<u32, Diagnostic> {
+            if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(fail(*at, "builder lengths and indexes require decimal u32"));
+            }
+            text.parse()
+                .map_err(|_| fail(*at, "builder count exceeds u32"))
         };
         let parse_block = |text: &str| -> Result<BlockId, Diagnostic> {
             let digits = text
@@ -396,6 +418,40 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 class: crate::NativeClass::from_name(&fields[2])
                     .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+            }
+        } else if kind == 57 {
+            Operation::ArrayBegin {
+                builder: parse_builder(&fields[1])?,
+                element_type: match fields[2].as_str() {
+                    "char" => crate::ArrayElement::Char,
+                    "number" => crate::ArrayElement::Number,
+                    "view" => crate::ArrayElement::Object(crate::NativeClass::View),
+                    _ => return Err(fail(*at, "unsupported builder element type")),
+                },
+                length: parse_count(&fields[3])?,
+            }
+        } else if kind == 60 {
+            if width < 4 {
+                return Err(fail(*at, "array fill group requires at least one value"));
+            }
+            Operation::ArrayFillMany {
+                builder: parse_builder(&fields[1])?,
+                start: parse_count(&fields[2])?,
+                values: fields[3..width]
+                    .iter()
+                    .map(|v| parse_value(v))
+                    .collect::<Result<_, _>>()?,
+            }
+        } else if kind == 58 {
+            Operation::ArrayFill {
+                builder: parse_builder(&fields[1])?,
+                index: parse_count(&fields[2])?,
+                value: parse_value(&fields[3])?,
+            }
+        } else if kind == 59 {
+            Operation::ArrayFinish {
+                result: parse_value(&fields[1])?,
+                builder: parse_builder(&fields[2])?,
             }
         } else if kind == 30 {
             let element_type = match fields[2].as_str() {

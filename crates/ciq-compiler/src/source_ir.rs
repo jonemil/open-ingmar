@@ -489,9 +489,9 @@ impl Builder<'_> {
         })
     }
 
-    /// Construct a typed array literal before evaluating its elements in order.
-    /// Two temporary locals retain the array and current element across joins;
-    /// native append preserves the element contract without uninitialized slots.
+    /// Construct a typed array with allocation before ordered element evaluation.
+    /// A private builder prevents uninitialized slots from escaping as values;
+    /// branching elements use a staging local with empty-stack CFG edges.
     fn array_literal(
         &mut self,
         elements: Vec<parser::Expression>,
@@ -505,20 +505,20 @@ impl Builder<'_> {
                 "empty array literal requires a concrete expected Array element type",
             ));
         }
-        let array = self.local_id(span)?;
-        let element = self.local_id(span)?;
-        let result = ValueId(self.operations.len() as u32);
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        let grouped = elements.iter().all(|e| !e.needs_materialization());
+        let element = if grouped {
+            None
+        } else {
+            Some(self.local_id(span)?)
+        };
+        let mut values = Vec::new();
+        let length = elements.len() as u32;
         self.push(
-            Operation::ArrayNew {
-                result,
+            Operation::ArrayBegin {
+                builder,
                 element_type: crate::ArrayElement::Char,
-            },
-            Some(span),
-        );
-        self.push(
-            Operation::LocalInitialize {
-                local: array,
-                value: result,
+                length,
             },
             Some(span),
         );
@@ -533,14 +533,20 @@ impl Builder<'_> {
                 // Materializing a logical element can insert an entry block.
                 // Locate the provisional allocation by identity, not position.
                 let allocation = self.operations.iter_mut().find(|op| {
-                    matches!(op.operation, Operation::ArrayNew { result: id, .. } if id == result)
+                    matches!(op.operation, Operation::ArrayBegin { builder: id, .. } if id == builder)
                 }).expect("literal allocation was emitted before its elements");
-                allocation.operation = Operation::ArrayNew {
-                    result,
+                allocation.operation = Operation::ArrayBegin {
+                    builder,
                     element_type,
+                    length,
                 };
-                self.types.set_array(result, array, element_type);
+                self.types.set_builder(builder, element_type);
             }
+            if grouped {
+                values.push(value);
+                continue;
+            }
+            let element = element.expect("staged literals reserve an element local");
             let store = if index == 0 {
                 Operation::LocalInitialize {
                     local: element,
@@ -553,34 +559,43 @@ impl Builder<'_> {
                 }
             };
             self.push(store, Some(element_span));
-            let receiver = ValueId(self.operations.len() as u32);
+            let value = ValueId(self.operations.len() as u32);
             self.push(
                 Operation::LocalRead {
-                    result: receiver,
-                    local: array,
-                },
-                Some(span),
-            );
-            let argument = ValueId(self.operations.len() as u32);
-            self.push(
-                Operation::LocalRead {
-                    result: argument,
+                    result: value,
                     local: element,
                 },
                 Some(element_span),
             );
-            let result = ValueId(self.operations.len() as u32);
             self.push(
-                Operation::NativeCall {
-                    result,
-                    receiver,
-                    member: "add".into(),
-                    arguments: vec![argument],
+                Operation::ArrayFill {
+                    builder,
+                    index: index as u32,
+                    value,
                 },
                 Some(element_span),
             );
-            self.push(Operation::Discard { value: result }, Some(element_span));
         }
+        if grouped {
+            self.push(
+                Operation::ArrayFillMany {
+                    builder,
+                    start: 0,
+                    values,
+                },
+                Some(span),
+            );
+        }
+        let result = ValueId(self.operations.len() as u32);
+        self.push(Operation::ArrayFinish { result, builder }, Some(span));
+        let array = self.local_id(span)?;
+        self.push(
+            Operation::LocalInitialize {
+                local: array,
+                value: result,
+            },
+            Some(span),
+        );
         Ok(parser::Expression {
             kind: parser::ExpressionKind::Temporary(array),
             span,

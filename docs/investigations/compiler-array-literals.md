@@ -22,7 +22,9 @@ outside the compiler profile.
   primitive encodes `ipushz; newa` as `37 14`. An edited allocation definition
   cannot move ahead of an earlier call while retaining its later consumer.
 
-**Design decision:** allocate an empty Char array first and fill it with typed
+The [lowering follow-up](natural-lowering.md#array-construction) replaces native
+append with private final-length construction and direct stores. The original
+**design decision** was to allocate an empty Char array first and fill it with typed
 `add` calls. The builder retains the array and current element in two temporary
 locals, reusing the element slot. This preserves allocation before element
 effects and keeps short-circuit branch stacks empty. The array always satisfies

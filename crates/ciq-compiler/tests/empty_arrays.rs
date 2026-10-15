@@ -110,7 +110,7 @@ fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
 }
 
 #[test]
-fn empty_allocation_does_not_inherit_append_api_requirements() {
+fn array_construction_does_not_inherit_append_api_requirements() {
     let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return []; }";
     let f = compile_with_api(source, initial).unwrap();
@@ -120,7 +120,7 @@ fn empty_allocation_does_not_inherit_append_api_requirements() {
             "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1]; }",
             initial
         )
-        .is_err()
+        .is_ok()
     );
     assert!(
         compile_with_api(

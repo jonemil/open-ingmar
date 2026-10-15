@@ -41,8 +41,8 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
     let f = compile("function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }")
         .unwrap();
     let text = f.to_ir_text();
-    assert!(text.contains(".array-new %0 number"));
-    assert!(parse_ir(&text.replace(".array-new %0 number", ".array-new %0 char")).is_err());
+    assert!(text.contains(".array-begin &0 number"));
+    assert!(parse_ir(&text.replace(".array-begin &0 number", ".array-begin &0 char")).is_err());
 }
 
 #[test]
@@ -80,10 +80,10 @@ fn allocation_precedes_element_effects_and_append_preserves_source_order() {
             .unwrap();
     assert!(matches!(
         single.operations()[0].operation,
-        Operation::ArrayNew {
+        Operation::ArrayBegin {
             element_type: ArrayElement::Number,
             ..
         }
     ));
-    assert!(text.find(".array-new").unwrap() < text.find(".call ").unwrap());
+    assert!(text.find(".array-begin").unwrap() < text.find(".call ").unwrap());
 }

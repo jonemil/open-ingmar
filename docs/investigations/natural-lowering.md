@@ -11,7 +11,7 @@ sequences for established VM instructions?
 | Boolean `!value` | Typed `Not` / `.not` | Direct `invv` |
 | Equality/inequality with literal null | `Compare` and a `Null` definition | Direct `isnull`/`isnotnull` on the other operand |
 | Number `~value` | Typed `Complement` / `.complement` | Direct `invv` |
-| Array literal | Empty typed `ArrayNew`, staged values, native `add` calls | Needs construction representation before direct fill/load selection |
+| Array literal | Private begin/fill/finish construction, with grouped or staged elements | Direct `newa`, `aputvdup`, and `aputv`; constant-array selection remains open |
 | Numeric binary operations/comparisons | Typed `Binary` / `Compare` | Corresponding VM arithmetic/comparison instructions |
 
 **Interpretation:** Boolean negation and literal-null comparison already retain
@@ -22,9 +22,9 @@ selection, without constant folding or an optimization pass. Comparison with a
 stored null-valued operand remains binary because its definition is a read,
 not a null literal. Existing type checking and flow proofs still apply.
 
-Array literals lose construction identity when expanded into native append
-calls. That source/IR boundary needs review before the backend can choose its
-natural encodings.
+Array construction retains allocation, initialization, and publication in IR.
+Constant-array selection and DATA binding remain the next source/IR boundary
+to review before choosing `apush`.
 Do not recognize arbitrary XOR/native-call sequences as substitutes for the
 missing semantic representation. See [the plan](../plan.md#next-work).
 
@@ -120,6 +120,51 @@ next representation question; no native-call sequence recognition is added.
 The repeated audit at `scratch/example-audit/natural-complement/report.json`
 retains all 115 structured PRG round trips, all documented source/resumed-IR
 comparisons, and both barrel member checks, with no new decoding gaps.
+
+## Array construction
+
+Nonempty literals retain private begin/fill/finish operations in IR. A builder
+is a construction identity rather than a language value; a CFG check requires
+ordered initialization of every index and identical progress on incoming paths.
+Only finish publishes the typed array. This permits final-length allocation
+before element effects without exposing Null slots under a non-null element
+contract. Empty literals keep the already-safe empty `ArrayNew` operation.
+
+Straight-line literals use `.array-fill-many`: the backend retains the array
+with `aputvdup` between elements and consumes it with final `aputv`. Each element
+executes and is stored before the next. Elements requiring branching/staged
+construction use individual fills through a private frame slot, plus a reusable
+element local; CFG edges still have empty stacks. A finished builder can be
+allocated again when a loop repeats its declaration. Frame-budget checks count
+builder and ordinary slots separately, including overlapping numeric identities.
+
+**Experimentally observed:** regenerated [Char literals][char-arrays],
+[Number literals][number-arrays], and [native View arrays][view-arrays] match
+their retained SDK console logs. These cover ordered calls, logical-expression
+joins, repeated construction, guarded values, object construction, mutation,
+and shared references. Validation artifacts/logs are under
+`scratch/natural-arrays/`, named `char`, `number`, and `view`.
+
+The removal of native append calls also removes their incidental API requirement
+from literals. Number construction needs Array/Number availability (1.0.0), and
+Char still needs 1.3.0. Element calls and explicit Array methods retain their
+individual requirements. This is a declaration/selection change; simulator
+evidence remains limited to SDK 9.2.0 and `fr265`.
+
+Builder tests reject premature publication, skipped/repeated/out-of-range fills,
+wrong element types, inactive identities, escaping through ordinary reads,
+unfinished returns, and inconsistent CFG joins. Boundary tests verify private
+slots share the 255-slot frame budget. Source/text paths retain the same builder
+validation. Grouped/individual stores use supported VM opcodes; `apush` selection
+and constant DATA binding remain the next review increment.
+
+The audit at `scratch/example-audit/natural-arrays/report.json` retains all 115
+fully structured PRG round trips, all 62 documented source/resumed-IR paths,
+and both barrel member checks. No new decoding gap is exposed.
+
+[char-arrays]: ../../examples/compiler-array-literals/README.md
+[number-arrays]: ../../examples/compiler-number-array-literals/README.md
+[view-arrays]: ../../examples/compiler-native-views/README.md
 
 [boolean]: ../../examples/compiler-boolean-negation/README.md
 [nullable]: ../../examples/compiler-nullable-contracts/README.md

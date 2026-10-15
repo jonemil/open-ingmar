@@ -10,6 +10,7 @@ pub(crate) struct Types {
     parameters: Vec<ParameterType>,
     values: BTreeMap<ValueId, Type>,
     locals: BTreeMap<LocalId, Type>,
+    builders: BTreeMap<crate::BuilderId, ArrayElement>,
     origins: crate::source_objects::Origins,
 }
 
@@ -19,6 +20,7 @@ impl Types {
             parameters: parameters.clone(),
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
+            builders: BTreeMap::new(),
             origins: crate::source_objects::Origins::new(parameters),
         }
     }
@@ -28,6 +30,20 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation);
         let (result, ty) = match operation {
+            Operation::ArrayBegin {
+                builder,
+                element_type,
+                ..
+            } => {
+                self.builders.insert(*builder, *element_type);
+                return;
+            }
+            Operation::ArrayFinish { result, builder } => (
+                *result,
+                self.builders
+                    .get(builder)
+                    .map(|e| Type::Array(Box::new(e.api_type()))),
+            ),
             Operation::NativeConstant {
                 result,
                 module,
@@ -190,11 +206,9 @@ impl Types {
         self.values.get(&value)
     }
 
-    /// Replace a provisional allocation contract before emitting any array reads.
-    pub(crate) fn set_array(&mut self, value: ValueId, local: LocalId, element: ArrayElement) {
-        let ty = Type::Array(Box::new(element.api_type()));
-        self.values.insert(value, ty.clone());
-        self.locals.insert(local, ty);
+    /// Select the private builder's final element contract after the first element.
+    pub(crate) fn set_builder(&mut self, builder: crate::BuilderId, element: ArrayElement) {
+        self.builders.insert(builder, element);
     }
 }
 
