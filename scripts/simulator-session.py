@@ -30,6 +30,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default="fr265")
     parser.add_argument("--prg", type=Path, default=Path("examples/hello-world/build/fr265/hello-world.prg"))
+    parser.add_argument("--output-dir", type=Path,
+                        help="save captures in a new directory instead of the shared scratch location")
     parser.add_argument("--observe-seconds", type=float, default=15,
                         help="seconds to observe the console before capturing the display (default: 15)")
     parser.add_argument("--interactive", action="store_true",
@@ -58,8 +60,9 @@ def main():
     if link.resolve() != data.resolve():
         raise RuntimeError("Container Garmin data directory already points elsewhere.")
 
-    output = repo / "scratch" / ("simulator-interactive" if args.interactive else "simulator")
-    output.mkdir(parents=True, exist_ok=True)
+    output = args.output_dir.resolve() if args.output_dir else (
+        repo / "scratch" / ("simulator-interactive" if args.interactive else "simulator"))
+    output.mkdir(parents=True, exist_ok=not args.output_dir)
     console_log = output / "monkeydo.log"
     console_log.write_text("")
     with (output / "simulator.log").open("w") as log:
@@ -87,7 +90,7 @@ def main():
                 if args.interactive:
                     print("Simulator is open on your desktop. Use its controls and menus; close the window or press Ctrl+C to stop.",
                           flush=True)
-                    print("Console logs: scratch/simulator-interactive/", flush=True)
+                    print(f"Console logs: {output}/", flush=True)
                 else:
                     print(f"Observing for {args.observe_seconds:g} seconds; console output is saved as it arrives...",
                           flush=True)
@@ -117,7 +120,7 @@ def main():
             else:
                 print(f"monkeydo exited with code {console.returncode}. Capturing the display...", flush=True)
             subprocess.run(["import", "-window", "root", str(output / "screen.png")], check=True, timeout=15)
-            print("Session captured in scratch/simulator/: screen.png, simulator.log, monkeydo.log.", flush=True)
+            print(f"Session captured in {output}/: screen.png, simulator.log, monkeydo.log.", flush=True)
             if simulator.poll() is not None:
                 raise RuntimeError(f"Simulator exited with code {simulator.returncode}; inspect the capture and logs.")
             if console.poll() is not None and console.returncode:

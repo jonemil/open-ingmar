@@ -63,7 +63,18 @@ def main():
     parser.add_argument("--bin-dir", type=Path, default=Path("target/debug"))
     parser.add_argument("--sdk-index", type=Path,
                         help="JSON mapping example names to freshly built SDK PRGs")
+    parser.add_argument("--example", action="append",
+                        help="audit only this example directory name; repeat to select several")
+    parser.add_argument("--verbose", action="store_true",
+                        help="print progress for each example")
     options = parser.parse_args()
+    directories = sorted(p for p in Path("examples").iterdir()
+                         if p.is_dir() and (p / "README.md").is_file())
+    if options.example:
+        unknown = set(options.example) - {p.name for p in directories}
+        if unknown:
+            parser.error(f"unknown examples: {', '.join(sorted(unknown))}")
+        directories = [p for p in directories if p.name in options.example]
     output = options.output
     output.mkdir(parents=True, exist_ok=False)
     bins = {name: (options.bin_dir / name).resolve()
@@ -140,9 +151,7 @@ def main():
         return result
 
     rows = []
-    for directory in sorted(Path("examples").iterdir()):
-        if not directory.is_dir() or not (directory / "README.md").is_file():
-            continue
+    for directory in directories:
         home = output / directory.name
         home.mkdir()
         row = {"example": directory.name, "source": [], "packages": []}
@@ -205,7 +214,8 @@ def main():
             row["packages"].append(report)
         rows.append(row)
         (output / "report.json").write_text(json.dumps(rows, indent=2) + "\n")
-        print(f"{directory.name}: source={len(row['source'])} sdk={'checked' if row['sdk'] else 'missing'}", flush=True)
+        if options.verbose:
+            print(f"{directory.name}: source={len(row['source'])} sdk={'checked' if row['sdk'] else 'missing'}", flush=True)
     issues = []
     for row in rows:
         if not row["sdk"] and not row["packages"]:

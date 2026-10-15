@@ -27,6 +27,8 @@ jobs:
         run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
       - name: Build Rustdoc
         run: cargo +stable doc --workspace --no-deps --locked
+      - name: Test support helpers
+        run: python3 -m unittest discover -s scripts/tests
       - name: Install Markdown checker dependencies
         run: |
           python3 -m venv scratch/markdown-preview/venv

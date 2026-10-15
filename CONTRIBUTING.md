@@ -19,8 +19,9 @@ cargo doc --workspace --no-deps --locked
 ```
 
 Use [the Markdown preview helper](scripts/README.md#preview-repository-documentation)
-to check documentation links. GitHub CI runs these checks on stable Rust and
-checks compilation with the declared minimum Rust version.
+to check documentation links. Follow the [validation policy](docs/validation.md)
+to select focused and final checks locally. GitHub CI runs the full checks on
+stable Rust and checks compilation with the declared minimum Rust version.
 
 Changes involving VM behavior also need the applicable
 [toolchain validation](docs/plan.md#toolchain-completion) and simulator evidence.

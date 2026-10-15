@@ -1,8 +1,8 @@
 # Working instructions
 
 - Read [README.md](README.md) and [docs/plan.md](docs/plan.md) before
-  substantial work. Reuse context already read; follow relevant links rather
-  than rereading the documentation tree.
+  substantial work. Reuse context already read. Locate relevant definitions
+  with targeted searches, then read narrow excerpts rather than whole files.
 - Follow [docs/research.md](docs/research.md) for investigations and evidence,
   and [docs/architecture.md](docs/architecture.md) for implementation
   boundaries.
@@ -15,13 +15,11 @@
   boundaries, and concrete Rustdoc descriptions of behavior and requirements.
   Keep our provisional formats current-only; do not add compatibility paths for
   superseded local grammars.
-- For repeated mechanical checks, reuse existing commands or add a small helper
-  with meaningful pass/fail exit codes and concise diagnostics. Save large logs
-  under `scratch/`; inspect relevant excerpts on failure or when investigating
-  unknown behavior. Do not build helpers for trivial one-off checks or replace
+- Follow [validation policy](docs/validation.md): focused checks while iterating,
+  one final check for the affected scope, and concise helper verdicts. Save full
+  logs under `scratch/`; inspect failures and unknown behavior. Repeat passed
+  checks only after relevant changes or unresolved concerns. Do not replace
   necessary visual/semantic review with a successful process exit.
-- Run checks appropriate to the change and required final checks. Repeat passed
-  checks only after relevant changes or when unresolved concerns justify it.
 - Language/API feature work includes required support across the compiler, IR,
   VM encoding/decoding, assembler/disassembler, and affected PRG formats. Follow
   [toolchain completion](docs/plan.md#toolchain-completion); raw export fallback

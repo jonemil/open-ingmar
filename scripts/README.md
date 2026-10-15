@@ -1,5 +1,45 @@
 # SDK support scripts
 
+## Console specimen check
+
+For examples with one documented complete-PRG compiler command and nonempty
+expected console output, prepare the check in the Rust environment:
+
+```sh
+python3 scripts/check-example.py prepare compiler-increments \
+  --sdk-prg scratch/compiler-increments/build/fr265/compiler-increments.prg \
+  --output scratch/check-increments
+```
+
+Build the SDK PRG from the same source/configuration first. Preparation builds
+our tools, audits this example's saved stages and SDK/generated structured
+reconstruction, and signs generated output with `keys/developer_key.der`.
+`--key`, `--device`, and `--expected` override defaults; expected text defaults
+to the example's `expected.txt`. SDK input and expected text are snapshotted.
+Preparation success does not establish runtime acceptance.
+
+In the SDK/simulator environment, using the same shared project files:
+
+```sh
+python3 scripts/check-example.py simulate scratch/check-increments
+```
+
+The helper runs SDK/generated programs serially on Xvfb and compares each console
+to expected text, preserving all lines and normalizing platform line endings.
+It prints one verdict, saves captures/logs and `runtime/report.json`, and returns
+nonzero for process failure, missing captures, or differing output. Use a new
+preparation directory per change; `simulate --output <new-directory>` preserves
+an additional runtime attempt. Do not run concurrent simulator sessions.
+
+Use the existing simulator/interactive helpers for programs requiring visual or
+input checks. `simulator-session.py --output-dir <new-directory>` also supports
+isolated captures directly. The default shared capture location is unchanged.
+Helper regression checks use the Python standard library:
+
+```sh
+python3 -m unittest discover -s scripts/tests
+```
+
 ## Example toolchain audit
 
 From the repository root, build the tools and choose a fresh ignored output
@@ -18,7 +58,10 @@ fallback or missing SDK specimens. It does not run simulator sessions or rebuild
 SDK inputs. Partial DATA sources containing opaque `.bytes` spans also fail the
 coverage check. Use `--bin-dir` for another tool build and `--sdk-index <file.json>`
 to select SDK PRGs explicitly. The index maps example directory names to one
-path or a list of paths for multiple specimens.
+path or a list of paths for multiple specimens. Use `--example <directory-name>`
+to select an affected example during iteration; repeat it for several examples.
+Omit that flag for the full final audit. Output is a summary by default;
+`--verbose` adds per-example progress.
 
 Unknown opcode discovery uses decoder walks from CODE start and recorded
 source-line PCs, never guessed widths or arbitrary-byte resynchronization.

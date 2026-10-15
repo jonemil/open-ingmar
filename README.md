@@ -44,7 +44,7 @@ describes library responsibilities and dependencies.
 ## Build and check
 
 Rust 1.85 or newer is required. Keep `Cargo.lock` in version control for the CLI
-tools. Run checks appropriate to the change:
+tools. Follow the [validation policy](docs/validation.md) to choose checks:
 
 ```sh
 cargo build --workspace
