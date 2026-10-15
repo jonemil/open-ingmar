@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-conditionals](compiler-conditionals/README.md): lazy conditional
+  expressions, typed joins, operand order, nullable results, and shared arrays.
 - [compiler-increments](compiler-increments/README.md): Number updates and Char
   increment statements with checked local, field, and indexed targets.
 - [compiler-compound-targets](compiler-compound-targets/README.md): field/indexed

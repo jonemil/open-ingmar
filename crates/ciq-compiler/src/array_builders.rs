@@ -115,7 +115,9 @@ pub(crate) fn validate(
                 Operation::Branch {
                     on_true, on_false, ..
                 } => successors.extend([on_true, on_false]),
-                Operation::Jump { target } => successors.push(target),
+                Operation::Jump { target } | Operation::JumpValue { target, .. } => {
+                    successors.push(target)
+                }
                 Operation::Return { .. } | Operation::ReturnVoid if !active.is_empty() => {
                     return Err(fail(index, "return leaves an unfinished array builder"));
                 }

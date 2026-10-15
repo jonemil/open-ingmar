@@ -14,7 +14,10 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
     let explicit = operations.iter().any(|o| {
         matches!(
             o.operation,
-            Operation::Block { .. } | Operation::Branch { .. } | Operation::Jump { .. }
+            Operation::Block { .. }
+                | Operation::Branch { .. }
+                | Operation::Jump { .. }
+                | Operation::JumpValue { .. }
         )
     });
     if !explicit {
@@ -56,7 +59,7 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
                     edges.extend([(index, block, on_true), (index, block, on_false)]);
                     terminated = true;
                 }
-                Operation::Jump { target } => {
+                Operation::Jump { target } | Operation::JumpValue { target, .. } => {
                     edges.push((index, block, target));
                     terminated = true;
                 }

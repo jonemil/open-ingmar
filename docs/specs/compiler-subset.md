@@ -50,7 +50,7 @@ statement = "var" identifier "=" expression ";"
           | "break" ";" | "continue" ";"
 update-target = identifier | "self" "." identifier | primary "[" expression "]"
 compound-operator = "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
-expression = logical-or
+expression = logical-or ("?" expression ":" expression)?
 logical-or = logical-and ("||" logical-and)*
 logical-and = comparison ("&&" comparison)*
 comparison = arithmetic (("==" | "!=" | "<" | "<=" | ">" | ">=") arithmetic)?
@@ -521,6 +521,35 @@ arm blocks. Both arms may read parameters and enclosing locals. The
 block-local values and initialization on every path. See
 [conditions.mc](../../examples/compiler-probe/conditions.mc) and
 [initial simulator evidence](../investigations/compiler-conditions.md).
+
+## Conditional expressions
+
+`condition ? whenTrue : whenFalse` binds below logical OR and associates to the
+right. The condition must be Boolean. Evaluate it once, then evaluate only the
+selected arm. Both arms must type-check even with a constant condition. Preserve
+operand/argument order when an enclosing expression has earlier effects.
+
+Supported arm types match exactly: Number, Char, Boolean, String, Null, or an
+invariant Number/Char Array. Number/String alternatives may also join with Null
+or their existing nullable type, producing Number-or-Null/String-or-Null. No
+Char-to-Number promotion, heterogeneous union, nullable Char/Array, class join,
+Void arm, or non-Boolean truthiness is supported. Expected Array element context
+from a declaration, call, or return reaches direct empty literals in both arms;
+no element contract is inferred solely from a sibling arm.
+
+Join inference uses candidate expression types. A direct nullable storage read
+retains its declared nullable type, even under a non-null branch proof; an
+arithmetic operation under that proof produces Number normally. IR validation
+still checks that such operations are safe. Nullable results need proof at their
+non-null consumers, as for other nullable values.
+
+Lower through [typed IR joins](compiler-ir-text.md#expression-joins). Stage
+results and earlier operands when a consumer needs call/field/array stack setup;
+these locals count toward the existing frame limit. A direct conditional return
+carries its selected value on the VM stack without a staging local. Existing
+nesting/node/operation bounds apply, including nested arms, calls, and arrays.
+See the [example](../../examples/compiler-conditionals/README.md) and
+[SDK/runtime evidence](../investigations/compiler-conditionals.md).
 
 ## Statement arms and joins
 

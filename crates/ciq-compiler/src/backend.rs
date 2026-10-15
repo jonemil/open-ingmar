@@ -23,8 +23,10 @@ enum LiteralKey {
 /// right. Relies on [`Function`] validation to exclude shared expression values
 /// and incompatible effect schedules. Module/member aliases and literal DATA
 /// placements remain unresolved. Print calls discard their result. Explicit
-/// blocks lower to labels and symbolic branches, with an empty evaluation stack
-/// on each edge; local slots are allocated across the whole function.
+/// blocks lower to labels and symbolic branches. Ordinary edges carry an empty
+/// stack; value edges carry one typed block parameter. Calls and other operations
+/// with stack setup require that parameter to be staged first. Local slots are
+/// allocated across the whole function.
 pub fn lower(function: &Function) -> Program {
     lower_named(function, function.name())
 }
@@ -72,7 +74,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }));
         }
         match &located.operation {
-            Operation::Null { result }
+            Operation::BlockParameter { result, .. }
+            | Operation::Null { result }
             | Operation::Boolean { result, .. }
             | Operation::Char { result, .. }
             | Operation::String { result, .. }
@@ -207,6 +210,21 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 continue;
             }
             Operation::Jump { target } => {
+                items.push(instruction(
+                    Opcode::Goto,
+                    vec![Operand::Code(format!("__ciq_block_{}_{}", label, target.0))],
+                ));
+                continue;
+            }
+            Operation::JumpValue { target, value } => {
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &literal_aliases,
+                    &mut items,
+                );
                 items.push(instruction(
                     Opcode::Goto,
                     vec![Operand::Code(format!("__ciq_block_{}_{}", label, target.0))],
@@ -495,6 +513,7 @@ fn expression(
     while let Some(task) = tasks.pop() {
         let (opcode, operands) = match task {
             Task::Value(value) => match definitions[&value] {
+                Operation::BlockParameter { .. } => continue,
                 Operation::NativeConstant { module, member, .. } => {
                     let (_, value) =
                         crate::native::constant(module, member, None).expect("validated constant");

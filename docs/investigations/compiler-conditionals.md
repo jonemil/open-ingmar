@@ -61,7 +61,7 @@ union cases in this table have compile evidence only, not separate runtime runs.
 **Interpretation:** join alternatives without changing their runtime values.
 The SDK supports unions beyond our current value types. The bounded initial
 profile and planned IR representation belong in the
-[IR contract](../specs/compiler-ir-text.md#planned-expression-joins).
+[IR contract](../specs/compiler-ir-text.md#expression-joins).
 
 ## VM and reconstruction
 
@@ -110,7 +110,27 @@ Use `ciq-dis all`, `ciq-asm project`, and a second export to compare bytes and
 trees. Saved `checks.json` files record exact reconstruction, stable export, and
 console equality; build/runtime logs and expected text remain beside each probe.
 
-No source/IR implementation or generated-program runtime comparison is claimed
-for conditional expressions yet.
+## Complete toolchain comparison
+
+The [tracked example](../../examples/compiler-conditionals/README.md) checks
+nested/lazy arms, argument order, nullable guards, shared Char arrays, an expected
+empty-array contract, branching array elements, and loops. SDK and generated
+programs match all 27 expected lines. Source and resumed unit IR produce identical
+PRGs; both SDK/generated PRGs reconstruct exactly through structured CODE/DATA
+exports and stable re-exports. No new VM opcode or DATA record was required.
+Artifacts and console-checker reports are in `scratch/check-conditionals-final/`.
+
+The first generated run failed at the first conditional print with
+`UnexpectedTypeException: Expected Method, given Number`. Its join value was
+below print-call setup on the stack. Staging the result before setup fixes the
+run; native/text IR now reject such unsafe direct uses. The failed capture is
+`scratch/check-conditionals/runtime/generated/`.
+
+For reproduction, create the shared scaffold pointing its source path at
+`../../examples/compiler-conditionals`, then build
+`scratch/compiler-conditionals`. Run the console checker preparation with
+`--sdk-prg scratch/compiler-conditionals/build/fr265/compiler-conditionals.prg`
+and a fresh output directory, followed by its simulation phase in the SDK
+environment.
 
 [reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

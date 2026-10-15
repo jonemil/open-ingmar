@@ -213,6 +213,8 @@ pub(crate) fn parse_ir_context(
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
             Some(".block") => (10, 2),
+            Some(".block-value") => (64, 3),
+            Some(".jump-value") => (65, 3),
             Some(".branch") => (11, 4),
             Some(".jump") => (12, 2),
             Some(".equal") => (13, 4),
@@ -618,6 +620,17 @@ pub(crate) fn parse_ir_context(
         } else if kind == 15 {
             Operation::LocalAssign {
                 local: parse_local(&fields[1])?,
+                value: parse_value(&fields[2])?,
+            }
+        } else if kind == 64 {
+            Operation::BlockParameter {
+                result: parse_value(&fields[1])?,
+                value_type: crate::joins::parse_type(&fields[2])
+                    .ok_or_else(|| fail(*at, "unsupported block value type"))?,
+            }
+        } else if kind == 65 {
+            Operation::JumpValue {
+                target: parse_block(&fields[1])?,
                 value: parse_value(&fields[2])?,
             }
         } else if kind == 10 {

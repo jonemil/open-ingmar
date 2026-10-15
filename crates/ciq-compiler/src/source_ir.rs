@@ -21,6 +21,10 @@ fn emit(
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::Joined(value) => return Ok(value),
+        parser::ExpressionKind::Conditional { .. } => {
+            unreachable!("conditional must be materialized")
+        }
         parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
             result: ValueId(operations.len() as u32),
             result_type: calls
@@ -437,7 +441,7 @@ impl Builder<'_> {
         self.snapshot_with_context(expression, locals, None)
     }
 
-    /// Save an operand, passing an expected array contract to a direct empty literal.
+    /// Save an operand, passing Array context into empty literals/conditional arms.
     fn snapshot_with_context(
         &mut self,
         expression: parser::Expression,
@@ -504,6 +508,69 @@ impl Builder<'_> {
         self.push(Operation::Block { block: join }, None);
         Ok(parser::Expression {
             kind: parser::ExpressionKind::Temporary(local),
+            span,
+        })
+    }
+
+    /// Build lazy arms and a typed stack join, without a default initializer.
+    /// An expected Array contract supplies context to empty literals in each arm.
+    fn conditional_value(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        expected: Option<crate::ArrayElement>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let parser::ExpressionKind::Conditional {
+            condition,
+            when_true,
+            when_false,
+        } = expression.kind
+        else {
+            unreachable!()
+        };
+        let span = expression.span;
+        if !matches!(
+            self.operations.first().map(|op| &op.operation),
+            Some(Operation::Block { .. })
+        ) {
+            self.operations.insert(
+                0,
+                LocatedOperation {
+                    operation: Operation::Block { block: BlockId(0) },
+                    span: None,
+                },
+            );
+        }
+        let on_true = self.block_id();
+        let on_false = self.block_id();
+        let join = self.block_id();
+        self.condition(*condition, locals, on_true, on_false)?;
+        self.push(Operation::Block { block: on_true }, None);
+        let left = self.value_with_context(*when_true, locals, expected)?;
+        self.push(
+            Operation::JumpValue {
+                target: join,
+                value: left,
+            },
+            Some(span),
+        );
+        self.push(Operation::Block { block: on_false }, None);
+        let right = self.value_with_context(*when_false, locals, expected)?;
+        self.push(
+            Operation::JumpValue {
+                target: join,
+                value: right,
+            },
+            Some(span),
+        );
+        let value_type = self.types.value_type(left).zip(self.types.value_type(right))
+            .and_then(|(left, right)| crate::joins::result(left, right))
+            .ok_or_else(|| Diagnostic::at(self.source, span.start, "conditional arms require matching core types or Number/String nullable alternatives"))?;
+        self.push(Operation::Block { block: join }, None);
+        let result = ValueId(self.operations.len() as u32);
+        self.push(Operation::BlockParameter { result, value_type }, Some(span));
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Joined(result),
             span,
         })
     }
@@ -667,6 +734,9 @@ impl Builder<'_> {
         use parser::ExpressionKind as E;
         let span = expression.span;
         let kind = match expression.kind {
+            kind @ E::Conditional { .. } => {
+                return self.snapshot(parser::Expression { kind, span }, locals);
+            }
             E::ArrayLiteral(elements) => return self.array_literal(elements, span, locals),
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
@@ -975,7 +1045,7 @@ impl Builder<'_> {
         self.value_with_context(expression, locals, None)
     }
 
-    /// Build a value, using an expected element contract only for direct `[]`.
+    /// Build a value, passing expected elements to direct `[]` or conditional arms.
     /// Nonempty literals keep their inferred contract and undergo IR validation.
     fn value_with_context(
         &mut self,
@@ -983,6 +1053,17 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<crate::ArrayElement>,
     ) -> Result<ValueId, Diagnostic> {
+        if matches!(expression.kind, parser::ExpressionKind::Conditional { .. }) {
+            let expression = self.conditional_value(expression, locals, expected)?;
+            return emit(
+                self.source,
+                expression,
+                locals,
+                &self.parameters,
+                &mut self.operations,
+                self.calls,
+            );
+        }
         if matches!(&expression.kind, parser::ExpressionKind::ArrayLiteral(elements) if elements.is_empty())
         {
             let element_type = expected.ok_or_else(|| {
@@ -1019,6 +1100,25 @@ impl Builder<'_> {
         for operation in &self.operations[first..] {
             self.types.observe(&operation.operation);
         }
+        Ok(result)
+    }
+
+    /// Stage a direct incoming value before a consumer pushes its stack setup.
+    /// Other expressions have already materialized branching children as locals.
+    fn value_for_setup(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<ValueId, Diagnostic> {
+        let span = expression.span;
+        let value = self.value(expression, locals)?;
+        if !self.operations.last().is_some_and(|op| matches!(op.operation, Operation::BlockParameter { result, .. } if result == value)) {
+            return Ok(value);
+        }
+        let local = self.local_id(span)?;
+        self.push(Operation::LocalInitialize { local, value }, Some(span));
+        let result = ValueId(self.operations.len() as u32);
+        self.push(Operation::LocalRead { result, local }, Some(span));
         Ok(result)
     }
 
@@ -1203,7 +1303,7 @@ impl Builder<'_> {
                     );
                 }
                 parser::Statement::FieldAssign { name, value, .. } => {
-                    let value = self.value(value, locals)?;
+                    let value = self.value_for_setup(value, locals)?;
                     self.push(
                         Operation::SelfFieldAssign { field: name, value },
                         Some(span),
@@ -1237,7 +1337,7 @@ impl Builder<'_> {
                             "System receiver is shadowed",
                         ));
                     }
-                    let value = self.value(argument, locals)?;
+                    let value = self.value_for_setup(argument, locals)?;
                     self.push(Operation::Println { value }, Some(span));
                 }
                 parser::Statement::Assign { name, value, .. } => {

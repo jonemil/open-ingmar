@@ -12,18 +12,15 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Implement conditional
-   expressions using [typed edge values](specs/compiler-ir-text.md#planned-expression-joins),
-   following the [SDK evidence](investigations/compiler-conditionals.md).
-   Start with Boolean conditions, matching core value/array types, and existing
-   Number/String nullable joins. Add native/text IR parity and direct VM
-   branch-and-stack lowering before extending the source parser; then validate
-   nested expressions, lazy arms, operand order, null proofs, and frame/depth
-   boundaries through the complete toolchain. Keep general unions and truthiness
-   out of this first slice. Keep updates statement-only,
-   following the [increment/decrement evidence](investigations/compiler-increments.md);
-   the reference SDK rejects prefix/postfix expression results. Extend numeric
-   update contracts only alongside their value types.
+1. **Remaining operators and assignment forms.** Refine conditional arm-type
+   inference from nullable edge proofs: a direct guarded nullable read currently
+   retains its declared nullable type when selecting the join contract. Keep
+   inference and validation consistent across source and saved IR. Reassess
+   remaining operator gaps before Dictionary; general unions and truthiness
+   remain deferred. Keep updates statement-only, following the
+   [increment/decrement evidence](investigations/compiler-increments.md); the
+   reference SDK rejects prefix/postfix expression results. Extend numeric update
+   contracts only alongside their value types.
 2. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.

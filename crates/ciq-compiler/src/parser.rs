@@ -119,6 +119,13 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    Conditional {
+        condition: Box<Expression>,
+        when_true: Box<Expression>,
+        when_false: Box<Expression>,
+    },
+    // Builder-only incoming value at a typed join; consumed in its join block.
+    Joined(crate::ValueId),
     // Builder-only numeric step; source updates are statements, not values.
     Step {
         operand: Box<Expression>,
@@ -186,7 +193,9 @@ impl Expression {
     /// Report whether this tree needs control flow or staged array construction.
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
-            ExpressionKind::Logical { .. } | ExpressionKind::ArrayLiteral(_) => true,
+            ExpressionKind::Conditional { .. }
+            | ExpressionKind::Logical { .. }
+            | ExpressionKind::ArrayLiteral(_) => true,
             ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
@@ -501,7 +510,7 @@ impl<'a> Parser<'a> {
             }
             Some(
                 c @ ('(' | ')' | '{' | '}' | '[' | ']' | ';' | '+' | '-' | '=' | '.' | ',' | '>'
-                | '<' | '!' | '*' | '/' | '%' | '&' | '|' | '^' | '~'),
+                | '<' | '!' | '*' | '/' | '%' | '&' | '|' | '^' | '~' | '?' | ':'),
             ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
@@ -570,7 +579,39 @@ impl<'a> Parser<'a> {
         }
     }
     fn expression(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        self.logical(depth, false)
+        let condition = self.logical(depth, false)?;
+        if self.peek()? == Kind::Punctuation('?') {
+            self.conditional(condition, depth)
+        } else {
+            Ok(condition)
+        }
+    }
+
+    /// Parse right-associative conditional arms below logical OR precedence.
+    fn conditional(
+        &mut self,
+        condition: Expression,
+        depth: usize,
+    ) -> Result<Expression, Diagnostic> {
+        if depth >= 64 {
+            return Err(self.error(condition.span.start, "expression nesting exceeds 64"));
+        }
+        self.token()?;
+        let when_true = self.expression(depth + 1)?;
+        self.expect(Kind::Punctuation(':'), "':'")?;
+        let when_false = self.expression(depth + 1)?;
+        let span = Span {
+            start: condition.span.start,
+            end: when_false.span.end,
+        };
+        self.node(
+            ExpressionKind::Conditional {
+                condition: Box::new(condition),
+                when_true: Box::new(when_true),
+                when_false: Box::new(when_false),
+            },
+            span,
+        )
     }
     fn logical(&mut self, depth: usize, and: bool) -> Result<Expression, Diagnostic> {
         let operand = |parser: &mut Self| {

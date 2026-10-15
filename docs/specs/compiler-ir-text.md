@@ -162,7 +162,8 @@ assigned true on the true outcome, and read after both outcomes join. Surroundin
 operands evaluated before a later branch are stored in distinct temporary locals
 and read in the final block. Temporary locals obey the same type, initialization,
 frame-budget, and null-proof rules as source locals; no producer-only metadata
-or new directive grants special treatment. Each CODE edge has an empty stack.
+or new directive grants special treatment. These logical-result edges have an
+empty stack.
 See the [value-result evidence](../investigations/compiler-logical-values.md).
 
 ## Number negation
@@ -669,7 +670,8 @@ ciq-ir
 
 All new directives accept the existing optional source span. A body containing
 block/branch/jump operations must begin with `.block`. Every block must end in
-`.return`, `.branch`, or `.jump`, with no operations after its terminator until
+`.return`, `.branch`, `.jump`, or `.jump-value`, with no operations after its
+terminator until
 the next block. Targets may name earlier or later blocks. Every block must be
 reachable from entry; missing targets, duplicate blocks, disconnected cycles,
 and implicit
@@ -682,14 +684,15 @@ but reads and assignments require the unique initializer to execute on every
 incoming path. Its declaration must also precede the textual use. Availability
 is the fixed-point intersection described below. A local initialized in only
 one arm cannot be read or assigned in a sibling or join.
-Cross-block expression/phi values remain unsupported. Local slots are allocated
+Typed [expression joins](#expression-joins) carry incoming values through fresh
+block parameters. Other cross-block value IDs remain unsupported. Local slots are allocated
 across the entire function, including mutually exclusive paths.
 
 The 1024-operation limit includes block markers and terminators. Effectful
 functions retain left-to-right expression and statement order within each
 block; block markers and jumps participate in schedule validation. Branches
-consume their comparisons, and no evaluation-stack values are carried over an
-edge. Source parsing, typed construction, and text resumption use these same
+consume their comparisons. Ordinary edges carry no evaluation-stack values;
+value edges carry exactly their parameter. Source parsing, typed construction, and text resumption use these same
 checks. Source conditions use these same forward joins with `.jump` for
 continuing arms, including nested statements and early returns. Source local
 names/scopes are resolved before serialization; the IR only retains globally
@@ -744,43 +747,48 @@ are not part of this IR.
 
 [assignment-source]: compiler-subset.md#local-reassignment
 
-## Planned expression joins
+## Expression joins
 
-This extension is planned, not accepted by the current IR or source parser.
-Conditional expressions need a result from exactly one incoming path. Use typed
-block parameters with values supplied by incoming jumps rather than a default
-local initializer or an eager select operation. Keep existing mutable locals for
-source storage; expression joins have value identity, not mutable-local identity.
+Conditional expressions use a single typed block parameter, independently of
+mutable locals. Native IR uses `BlockParameter { result, value_type }` immediately
+after `Block`; incoming edges use `JumpValue { target, value }`. Text syntax is:
 
-Each incoming edge must supply the declared number and types of values. An edge
-operand is consumed in its predecessor; a block parameter is defined at block
-entry and used once within that block. Check predecessor completeness,
-definition/use order, type assignability, and reachability in both native and
-text construction. Existing edges without arguments retain empty-stack behavior.
-Define the concrete native/text representation together during implementation.
+```text
+.block ^3
+.block-value %7 integer
+.return %7
+```
 
-Lower edge values to VM stack values carried to the shared label, following the
-[SDK evidence](../investigations/compiler-conditionals.md). Other source operands
-must be staged before a later operand branches, preserving left-to-right effects.
-Do not evaluate an unselected arm, create a placeholder value, or introduce a
-native call for selection. Validate stack shape at joins; frame storage used for
-surrounding operand staging remains subject to the shared slot limit.
+Each predecessor must end in `.jump-value ^3 %<value>`, consuming one assignable
+value in that predecessor. Plain jumps and branch targets cannot enter a
+parameterized block. The entry block cannot have a parameter; a block accepts
+at most one. Missing targets, malformed placement, type/arity mismatches,
+duplicate definitions, and unused/reused values are errors in native and text
+construction. The parameter defines a fresh block-local value; the predecessor's
+value ID does not cross the edge.
 
-The first source profile uses Boolean conditions and matching Number, Char,
-Boolean, String, Null, or invariant Number/Char-array arm types. Joining Number
-or String with Null (including their existing nullable forms) produces the
-corresponding nullable type. Preserve raw values and array identity. Do not
-promote Char to Number, widen array elements, infer arbitrary unions, or accept
-Void arms. Broader unions, nullable Char/arrays, native/source class joins, and
-non-Boolean truthiness remain deferred.
+Type tags are `integer`, `char`, `boolean`, `string`, `null`, `nullable-integer`,
+`nullable-string`, `array-number`, and `array-char`. They map to the existing
+core/nullable/invariant Array contracts. Availability checks apply to the
+parameter and its incoming values, including Char's API 1.3.0 requirement.
 
-Source syntax will be `condition ? whenTrue : whenFalse`, below logical OR in
-precedence and right associative. Both arms must type-check, even for a constant
-condition. Existing nullable edge proofs apply inside the selected arm and
-intersect at the join; a value join alone must not manufacture a non-null proof.
-Carry expected array element context into both arms for direct empty literals.
-Retain existing expression/node, operation, and frame limits, including nested
-conditionals within calls and staged array construction.
+Lower a value edge to its operand and `goto`; the parameter emits no load, copy,
+placeholder initializer, or native call. Exactly one value arrives on the VM
+stack. Consume it in a return, discard, local initialization/assignment, branch,
+or another value jump. A prefix-free chain of unary operations or left operands
+of binary/comparison operations may precede that consumption. Operations that
+push call, field, or array setup must first stage the result in a local. Both
+stack-use validation and declaration/evaluation-order validation enforce this;
+no unrelated root may run before the parameter is consumed. Ordinary edges keep
+an empty stack. Surrounding operand staging shares the existing frame budget;
+a direct conditional return needs no additional local.
+
+Source joins use matching supported types or Number/String nullable alternatives;
+see [conditional expressions](compiler-subset.md#conditional-expressions) for
+source inference and restrictions. Native IR may declare a compatible nullable
+parameter explicitly. Nullable edge proofs still concern source storage and
+intersect at joins; an incoming value does not create a proof about that storage.
+See [SDK evidence](../investigations/compiler-conditionals.md).
 
 ## Cyclic control flow
 

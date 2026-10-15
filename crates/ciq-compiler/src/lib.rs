@@ -17,6 +17,7 @@ mod bindings;
 mod control_flow;
 pub use bindings::{array_bindings, string_bindings, symbol_bindings};
 mod ir_text;
+mod joins;
 mod names;
 mod native;
 mod null_flow;
@@ -369,6 +370,19 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Define the single incoming stack value immediately after a block marker.
+    /// The entry block cannot have a parameter; every predecessor supplies one
+    /// assignable value via `JumpValue`. Supported types follow the join profile.
+    /// Consume it before call/field/array setup, staging in a local when needed.
+    BlockParameter {
+        result: ValueId,
+        value_type: api::Type,
+    },
+    /// Transfer one value to a parameterized block, consuming it in this block.
+    JumpValue {
+        target: BlockId,
+        value: ValueId,
+    },
     /// Add or subtract one from a Number, or increment a Char, preserving its type.
     /// Nullable operands and Char decrement are rejected.
     /// Target capture and write-back are separate ordered IR operations.
@@ -941,6 +955,7 @@ impl Function {
         let mut return_type = None;
         let mut definitions = std::collections::BTreeMap::<ValueId, usize>::new();
         let structure = control_flow::validate(&operations)?;
+        let join_types = joins::validate(&operations)?;
         let builders = array_builders::validate(&structure, &operations)?;
         if parameter_count + builders.len() > MAX_LOCALS {
             return Err(IrError {
@@ -956,6 +971,7 @@ impl Function {
         let mut types = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
+        let mut consumers = std::collections::BTreeMap::new();
         let mut local_types = std::collections::BTreeMap::new();
         let mut origins = source_objects::Origins::new(parameter_types.clone());
         for (index, located) in operations.iter().enumerate() {
@@ -969,6 +985,21 @@ impl Function {
             let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
             origins.observe(&located.operation).map_err(fail)?;
             let (result, operands) = match located.operation {
+                Operation::BlockParameter {
+                    result,
+                    ref value_type,
+                } => {
+                    types.insert(result, ValueType::from_api_type(value_type).unwrap());
+                    (Some(result), vec![])
+                }
+                Operation::JumpValue { target, value } => {
+                    if !native::accepts(&join_types[&target], &type_of(value).api_type()) {
+                        return Err(fail(
+                            "edge value does not match target block parameter type",
+                        ));
+                    }
+                    (None, vec![value])
+                }
                 Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::ArrayFill { builder, value, .. } => {
                     let expected =
@@ -1634,6 +1665,7 @@ impl Function {
                     ));
                 }
                 *uses.entry(operand).or_insert(0usize) += 1;
+                consumers.insert(operand, index);
             }
             if let Some(result) = result {
                 value_blocks.insert(result, structure.blocks[index]);
@@ -1668,10 +1700,12 @@ impl Function {
                 });
             }
         }
+        joins::validate_stack_uses(&operations, &consumers)?;
         if operations.iter().any(|located| {
             matches!(
                 located.operation,
-                Operation::ModuleCall { .. }
+                Operation::BlockParameter { .. }
+                    | Operation::ModuleCall { .. }
                     | Operation::Binary {
                         kind: BinaryOp::Divide | BinaryOp::Remainder,
                         ..
@@ -1718,6 +1752,7 @@ impl Function {
                     } => vec![*array, *index, *value],
                     Operation::ArrayBegin { .. } => vec![],
                     Operation::ArrayFillMany { values, .. } => values.clone(),
+                    Operation::JumpValue { value, .. } => vec![*value],
                     Operation::ArrayFill { value, .. }
                     | Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
@@ -1909,6 +1944,17 @@ impl Function {
         for operation in &self.operations {
             text.push_str(&match operation.operation {
                 Operation::Block { block } => format!(".block ^{}", block.0),
+                Operation::BlockParameter {
+                    result,
+                    ref value_type,
+                } => format!(
+                    ".block-value %{} {}",
+                    result.0,
+                    joins::type_tag(value_type).unwrap()
+                ),
+                Operation::JumpValue { target, value } => {
+                    format!(".jump-value ^{} %{}", target.0, value.0)
+                }
                 Operation::Branch {
                     condition,
                     on_true,

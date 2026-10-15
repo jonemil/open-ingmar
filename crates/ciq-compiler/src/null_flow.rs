@@ -66,7 +66,7 @@ pub(crate) fn inputs(
                     );
                 }
             }
-            Operation::Jump { target } => {
+            Operation::Jump { target } | Operation::JumpValue { target, .. } => {
                 edges.insert((block, target), None);
             }
             _ => (),
