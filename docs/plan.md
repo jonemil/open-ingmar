@@ -12,12 +12,11 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Refine conditional arm-type
-   inference from nullable edge proofs: a direct guarded nullable read currently
-   retains its declared nullable type when selecting the join contract. Keep
-   inference and validation consistent across source and saved IR. Reassess
-   remaining operator gaps before Dictionary; general unions and truthiness
-   remain deferred. Keep updates statement-only, following the
+1. **Remaining operators and assignment forms.** Review operator coverage against
+   the language reference before Dictionary. Address remaining forms supported
+   by our current value types; general unions and truthiness remain deferred.
+   Keep inference and validation consistent across source and saved IR.
+   Keep updates statement-only, following the
    [increment/decrement evidence](investigations/compiler-increments.md); the
    reference SDK rejects prefix/postfix expression results. Extend numeric update
    contracts only alongside their value types.

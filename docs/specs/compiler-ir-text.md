@@ -785,8 +785,13 @@ a direct conditional return needs no additional local.
 
 Source joins use matching supported types or Number/String nullable alternatives;
 see [conditional expressions](compiler-subset.md#conditional-expressions) for
-source inference and restrictions. Native IR may declare a compatible nullable
-parameter explicitly. Nullable edge proofs still concern source storage and
+source inference and restrictions. Source construction resolves each join from
+checked incoming operand types, including full-graph null proofs and local
+writes. It stores the resolved type explicitly in the immutable function and
+its text output. Native/text IR retain their declared parameter types and check
+incoming values against them; parsing does not infer or silently narrow them.
+Native IR may declare a compatible nullable parameter explicitly.
+Nullable edge proofs still concern source storage and
 intersect at joins; an incoming value does not create a proof about that storage.
 See [SDK evidence](../investigations/compiler-conditionals.md).
 

@@ -10,6 +10,15 @@ module Choices {
     function chars(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Array<Toybox.Lang.Char> { return a; }
     function empty(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
     function nullable(b as Toybox.Lang.Boolean) as Toybox.Lang.Number or Null { return b ? 7 : null; }
+    function orZero(n as Toybox.Lang.Number or Null) { return n != null ? n : 0; }
+    function orText(s as Toybox.Lang.String or Null) as Toybox.Lang.String { return s == null ? "fallback" : s; }
+    function nested(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { return n != null ? (b ? n : n) : 0; }
+    function loop(b as Toybox.Lang.Boolean) {
+        var n = "7".toNumber();
+        var result = 0;
+        while (n != null) { result = b ? n : 0; n = null; }
+        return result;
+    }
 }
 class MinimalConsoleApp extends Application.AppBase {
     var count = 0;
@@ -41,6 +50,10 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(numbers[0]); System.println(numbers[1]);
         var i = 0;
         while (i < 2) { System.println(i == 0 ? "zero" : "one"); i++; }
+        System.println(Choices.orZero(7)); System.println(Choices.orZero(null));
+        System.println(Choices.orText("value")); System.println(Choices.orText(null));
+        System.println(Choices.nested(7, true)); System.println(Choices.loop(true));
+        var guarded = [n != null ? n : 0]; System.println(guarded[0]);
         System.exit();
     }
 }

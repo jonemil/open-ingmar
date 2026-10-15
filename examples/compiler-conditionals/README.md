@@ -1,8 +1,8 @@
 # Conditional expressions
 
 [app.mc](app.mc) checks lazy arms, right association, precedence, ordered call
-arguments, nullable joins/guards, shared arrays, empty-array context, staged
-array elements, and loops. SDK and generated `fr265` programs match
+arguments, guarded Number/String result inference, shared arrays, empty-array
+context, staged array elements, and loops. SDK and generated `fr265` programs match
 [expected output](expected.txt).
 
 From the repository root, using fresh output paths:

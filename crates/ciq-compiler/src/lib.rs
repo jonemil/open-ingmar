@@ -876,6 +876,29 @@ impl Function {
         context: Option<api::ApiContext>,
         declared_result: Option<ReturnType>,
     ) -> Result<Self, IrError> {
+        Self::construct_with_join_inference(
+            name,
+            parameter_types,
+            operations,
+            instance_method,
+            context,
+            declared_result,
+            false,
+        )
+    }
+
+    /// Validate a function, optionally resolving source joins from checked edge
+    /// operands. Source joins have forward edges; native/text contracts remain
+    /// explicit. Resolved types are stored in the returned immutable function.
+    fn construct_with_join_inference(
+        name: String,
+        parameter_types: Vec<ParameterType>,
+        mut operations: Vec<LocatedOperation>,
+        instance_method: bool,
+        context: Option<api::ApiContext>,
+        declared_result: Option<ReturnType>,
+        infer_joins: bool,
+    ) -> Result<Self, IrError> {
         let source_parameters = parameter_types.iter().filter_map(|ty| {
             if let ParameterType::SourceObject(class) = ty {
                 Some(class.as_str())
@@ -956,6 +979,12 @@ impl Function {
         let mut definitions = std::collections::BTreeMap::<ValueId, usize>::new();
         let structure = control_flow::validate(&operations)?;
         let join_types = joins::validate(&operations)?;
+        let incoming_values = if infer_joins {
+            joins::incoming_values(&operations)
+        } else {
+            Default::default()
+        };
+        let mut inferred_types = std::collections::BTreeMap::new();
         let builders = array_builders::validate(&structure, &operations)?;
         if parameter_count + builders.len() > MAX_LOCALS {
             return Err(IrError {
@@ -989,11 +1018,23 @@ impl Function {
                     result,
                     ref value_type,
                 } => {
+                    let inferred;
+                    let value_type = if infer_joins {
+                        inferred =
+                            joins::infer_type(&incoming_values[&structure.blocks[index]], &types)
+                                .map_err(fail)?;
+                        inferred_types.insert(index, inferred.clone());
+                        &inferred
+                    } else {
+                        value_type
+                    };
                     types.insert(result, ValueType::from_api_type(value_type).unwrap());
                     (Some(result), vec![])
                 }
                 Operation::JumpValue { target, value } => {
-                    if !native::accepts(&join_types[&target], &type_of(value).api_type()) {
+                    if !infer_joins
+                        && !native::accepts(&join_types[&target], &type_of(value).api_type())
+                    {
                         return Err(fail(
                             "edge value does not match target block parameter type",
                         ));
@@ -1672,6 +1713,11 @@ impl Function {
                 if definitions.insert(result, index).is_some() {
                     return Err(fail("duplicate value definition"));
                 }
+            }
+        }
+        for (index, inferred) in inferred_types {
+            if let Operation::BlockParameter { value_type, .. } = &mut operations[index].operation {
+                *value_type = inferred;
             }
         }
         if let (Some(context), Some(result)) = (context, declared_result) {

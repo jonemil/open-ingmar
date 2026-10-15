@@ -115,10 +115,18 @@ console equality; build/runtime logs and expected text remain beside each probe.
 The [tracked example](../../examples/compiler-conditionals/README.md) checks
 nested/lazy arms, argument order, nullable guards, shared Char arrays, an expected
 empty-array contract, branching array elements, and loops. SDK and generated
-programs match all 27 expected lines. Source and resumed unit IR produce identical
+programs match all 34 expected lines. Source and resumed unit IR produce identical
 PRGs; both SDK/generated PRGs reconstruct exactly through structured CODE/DATA
 exports and stable re-exports. No new VM opcode or DATA record was required.
-Artifacts and console-checker reports are in `scratch/check-conditionals-final/`.
+Artifacts and console-checker reports are in `scratch/check-conditional-refinement/`.
+
+Guarded Number/String functions return the selected read directly: Number input
+7/Null prints `7`/`0`, and String input `value`/Null prints `value`/`fallback`.
+Nested guarded arms, a guarded loop-body join, and a branching array element
+each print `7`. The SDK accepts these sources; our saved IR contains resolved
+non-null join contracts and resumes to the same program. Regression cases reject
+unproven reads, stored-test proofs, writes that invalidate a proof, and a saved
+IR guard changed to the wrong edge.
 
 The first generated run failed at the first conditional print with
 `UnexpectedTypeException: Expected Method, given Number`. Its join value was

@@ -1660,7 +1660,7 @@ fn build_body(
             .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
             .collect()
     };
-    let result = Function::construct_for_api(
+    let result = Function::construct_with_join_inference(
         ast.name,
         parameter_types,
         builder.operations,
@@ -1671,6 +1671,7 @@ fn build_body(
             .filter(|signature| !matches!(signature.result, crate::ReturnType::Tuple(_)))
             .map(|signature| signature.result.clone())
             .or(result_type),
+        true,
     );
     let function = result.map_err(|error| {
         let offset = error

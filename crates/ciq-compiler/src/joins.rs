@@ -1,5 +1,5 @@
 //! Typed single-value control-flow edges for conditional expressions.
-use crate::{BlockId, IrError, LocatedOperation, Operation, api::Type};
+use crate::{BlockId, IrError, LocatedOperation, Operation, ValueId, ValueType, api::Type};
 use std::collections::BTreeMap;
 
 /// Parse an exact text tag for a supported incoming stack-value contract.
@@ -47,6 +47,38 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
         }
     }
     None
+}
+
+/// Collect source join operands without changing their predecessor identities.
+pub(crate) fn incoming_values(operations: &[LocatedOperation]) -> BTreeMap<BlockId, Vec<ValueId>> {
+    let mut incoming: BTreeMap<_, Vec<_>> = BTreeMap::new();
+    for op in operations {
+        if let Operation::JumpValue { target, value } = op.operation {
+            incoming.entry(target).or_default().push(value);
+        }
+    }
+    incoming
+}
+
+/// Infer a source join from previously checked edge operands. Their types
+/// already reflect full-CFG null proofs and writes; no candidate type is trusted.
+pub(crate) fn infer_type(
+    incoming: &[ValueId],
+    types: &BTreeMap<ValueId, ValueType>,
+) -> Result<Type, &'static str> {
+    let mut joined = None;
+    for value in incoming {
+        let ty = types
+            .get(value)
+            .ok_or("source join requires earlier incoming values")?
+            .api_type();
+        joined = Some(match joined {
+            None if type_tag(&ty).is_some() => ty,
+            Some(previous) => result(&previous, &ty).ok_or("conditional arms require matching core types or Number/String nullable alternatives")?,
+            _ => return Err("unsupported conditional arm type"),
+        });
+    }
+    joined.ok_or("source join requires incoming values")
 }
 
 /// Check parameter placement and every incoming edge's stack arity.

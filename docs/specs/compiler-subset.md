@@ -537,11 +537,13 @@ Void arm, or non-Boolean truthiness is supported. Expected Array element context
 from a declaration, call, or return reaches direct empty literals in both arms;
 no element contract is inferred solely from a sibling arm.
 
-Join inference uses candidate expression types. A direct nullable storage read
-retains its declared nullable type, even under a non-null branch proof; an
-arithmetic operation under that proof produces Number normally. IR validation
-still checks that such operations are safe. Nullable results need proof at their
-non-null consumers, as for other nullable values.
+Join inference uses checked incoming operand types after the complete graph's
+null-flow analysis. A direct nullable read under a non-null proof contributes
+Number or String, so `n != null ? n : 0` has type Number. Nested joins and copies
+of proven reads retain those checked types. Unproven reads remain nullable;
+stored Boolean tests do not establish proofs, and local writes invalidate them.
+Nullable results still require proof at non-null consumers. Source construction
+and saved IR share these validation rules.
 
 Lower through [typed IR joins](compiler-ir-text.md#expression-joins). Stage
 results and earlier operands when a consumer needs call/field/array stack setup;
