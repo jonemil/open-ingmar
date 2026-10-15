@@ -12,8 +12,15 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Investigate conditional
-   expressions and their result-type joins. Keep updates statement-only,
+1. **Remaining operators and assignment forms.** Implement conditional
+   expressions using [typed edge values](specs/compiler-ir-text.md#planned-expression-joins),
+   following the [SDK evidence](investigations/compiler-conditionals.md).
+   Start with Boolean conditions, matching core value/array types, and existing
+   Number/String nullable joins. Add native/text IR parity and direct VM
+   branch-and-stack lowering before extending the source parser; then validate
+   nested expressions, lazy arms, operand order, null proofs, and frame/depth
+   boundaries through the complete toolchain. Keep general unions and truthiness
+   out of this first slice. Keep updates statement-only,
    following the [increment/decrement evidence](investigations/compiler-increments.md);
    the reference SDK rejects prefix/postfix expression results. Extend numeric
    update contracts only alongside their value types.

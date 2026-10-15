@@ -8,6 +8,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Example toolchain audit](example-toolchain-audit.md): coverage of all example
   projects, unsupported opcode/record groups, and reconstruction checks.
 
+- [Conditional expressions](compiler-conditionals.md): lazy arms, precedence,
+  strict result-type joins, runtime truthiness, and VM stack joins.
 - [Increment/decrement](compiler-increments.md): statement-only SDK syntax,
   direct arithmetic lowering, target capture, and Number boundary behavior.
 - [Compound targets](compiler-compound-targets.md): field/indexed reads,

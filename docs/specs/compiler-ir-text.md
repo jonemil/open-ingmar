@@ -744,6 +744,44 @@ are not part of this IR.
 
 [assignment-source]: compiler-subset.md#local-reassignment
 
+## Planned expression joins
+
+This extension is planned, not accepted by the current IR or source parser.
+Conditional expressions need a result from exactly one incoming path. Use typed
+block parameters with values supplied by incoming jumps rather than a default
+local initializer or an eager select operation. Keep existing mutable locals for
+source storage; expression joins have value identity, not mutable-local identity.
+
+Each incoming edge must supply the declared number and types of values. An edge
+operand is consumed in its predecessor; a block parameter is defined at block
+entry and used once within that block. Check predecessor completeness,
+definition/use order, type assignability, and reachability in both native and
+text construction. Existing edges without arguments retain empty-stack behavior.
+Define the concrete native/text representation together during implementation.
+
+Lower edge values to VM stack values carried to the shared label, following the
+[SDK evidence](../investigations/compiler-conditionals.md). Other source operands
+must be staged before a later operand branches, preserving left-to-right effects.
+Do not evaluate an unselected arm, create a placeholder value, or introduce a
+native call for selection. Validate stack shape at joins; frame storage used for
+surrounding operand staging remains subject to the shared slot limit.
+
+The first source profile uses Boolean conditions and matching Number, Char,
+Boolean, String, Null, or invariant Number/Char-array arm types. Joining Number
+or String with Null (including their existing nullable forms) produces the
+corresponding nullable type. Preserve raw values and array identity. Do not
+promote Char to Number, widen array elements, infer arbitrary unions, or accept
+Void arms. Broader unions, nullable Char/arrays, native/source class joins, and
+non-Boolean truthiness remain deferred.
+
+Source syntax will be `condition ? whenTrue : whenFalse`, below logical OR in
+precedence and right associative. Both arms must type-check, even for a constant
+condition. Existing nullable edge proofs apply inside the selected arm and
+intersect at the join; a value join alone must not manufacture a non-null proof.
+Carry expected array element context into both arms for direct empty literals.
+Retain existing expression/node, operation, and frame limits, including nested
+conditionals within calls and staged array construction.
+
 ## Cyclic control flow
 
 Backward branch/jump targets are permitted. The graph is checked for
