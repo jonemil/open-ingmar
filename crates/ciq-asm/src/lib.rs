@@ -102,6 +102,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
         .unwrap_or_default();
     let (data_payload, strings) = data_source.encode_with_references(&bindings, &labels)?;
     let arrays = data_source.array_bindings()?;
+    let dictionaries = data_source.dictionary_bindings()?;
     let (debug_payload, debug_strings) = debug_source.encode()?;
     let mut line_targets = Vec::new();
     let mut exception_targets = Vec::new();
@@ -114,7 +115,7 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
                 for line in text.lines() {
                     if tokens(line)?
                         .first()
-                        .is_some_and(|f| f == ".string" || f == ".array")
+                        .is_some_and(|f| f == ".string" || f == ".array" || f == ".dictionary")
                     {
                         return Err(
                             "project literal declarations belong in the authoritative DATA source"
@@ -122,7 +123,12 @@ pub fn assemble_project(directory: &Path) -> Result<Prg, Box<dyn StdError>> {
                         );
                     }
                 }
-                Program::parse(text)?.encode_with_literals(&bindings, &strings, &arrays)?
+                Program::parse(text)?.encode_with_data_references(
+                    &bindings,
+                    &strings,
+                    &arrays,
+                    &dictionaries,
+                )?
             }
             Encoding::Symbols => symbol_source.encode()?,
             Encoding::Data => data_payload.clone(),

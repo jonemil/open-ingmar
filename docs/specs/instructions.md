@@ -58,6 +58,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
 - [`aputv`](#aputv): store an array element.
 - [`aputvdup`](#aputvdup): store an array element and retain the array.
+- [`hpush`](#hpush): load a serialized constant Dictionary.
 - [`apush`](#apush): load a serialized constant array.
 - [`lgetv`](#lgetv): load a local-frame slot.
 - [`lputv`](#lputv): store a local-frame slot.
@@ -385,6 +386,25 @@ fatal bounds error after operand effects in SDK and generated apps.
 [typed-writes]: ../investigations/compiler-typed-array-writes.md
 
 [writes]: ../investigations/compiler-array-writes.md
+
+## hpush
+
+**Load a constant Dictionary.** Opcode `0x42`; length **5 bytes**.
+Operand: `address: u32be`, identifying the outer DATA constant tag.
+
+Abstract stack: `[...] → [..., dictionary]`.
+
+The initial Dictionary probe loads its nonempty literal with
+`42 00 00 32 ac` at CODE+`0x53`. The referenced record has a local string pool
+and Dictionary root `0x0b`. See [the DATA contract](data-dictionaries.md).
+Editable assembly uses `hpush &alias` with a separate Dictionary binding map;
+numeric operands preserve their bits. The mnemonic is corroborated by the
+pinned instruction research; the encoding and record reference are observed in
+our SDK-compiled sources.
+
+**Limits:** Scalar records reconstruct exactly and edited contents run in the
+simulator. Fresh-versus-shared behavior across repeated loads, nested records,
+and banked/nonzero-prefix addresses remain unverified.
 
 ## apush
 

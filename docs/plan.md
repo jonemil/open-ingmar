@@ -13,9 +13,10 @@ Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
 1. **Dictionary.** Establish key/value contracts, nonempty literals, lookup and
-   writes, then complete the method group. The SDK constant-literal probe exposes
-   opcode `0x42` and an unsupported DATA constant encoding; model both through
-   structured assembly/disassembly before claiming literal support. Keep
+   writes, then complete the method group. Scalar constant records and `hpush`
+   now have [structured support](specs/data-dictionaries.md); establish source
+   key/value typing and repeated-load identity/mutation behavior before adding
+   literal lowering. Keep
    heterogeneous values and nullable lookup results explicit. Remaining own
    methods are `get`, `put`, `hasKey`, `remove`, `keys`, `values`, and `toString`;
    inherited Object methods need Dictionary-specific evidence. See the

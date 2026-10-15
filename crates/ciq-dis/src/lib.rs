@@ -147,6 +147,10 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     }
     let strings = data.as_ref().map(string_declarations).unwrap_or_default();
     let arrays = data.as_ref().map(array_declarations).unwrap_or_default();
+    let dictionaries = data
+        .as_ref()
+        .map(dictionary_declarations)
+        .unwrap_or_default();
     let mut entries = Vec::new();
     let mut files = Vec::new();
     let mut comments = Vec::new();
@@ -160,6 +164,7 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 structured.is_some(),
                 &strings,
                 &arrays,
+                &dictionaries,
                 &code_labels,
             ) {
                 Ok(text) => (Encoding::Assembly, text.into_bytes()),
@@ -380,6 +385,17 @@ fn array_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, St
         .iter()
         .filter_map(|f| match f {
             Fragment::Array(a) => a.at.map(|at| (at, a.alias.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn dictionary_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, String> {
+    source
+        .fragments
+        .iter()
+        .filter_map(|f| match f {
+            Fragment::Dictionary(d) => d.at.map(|at| (at, d.alias.clone())),
             _ => None,
         })
         .collect()
@@ -660,6 +676,7 @@ pub fn disassemble_symbolic(prg: &Prg) -> Result<String, Box<dyn StdError>> {
         true,
         &strings,
         &std::collections::BTreeMap::new(),
+        &std::collections::BTreeMap::new(),
         &labels,
     )?);
     Ok(text)
@@ -689,6 +706,7 @@ pub fn disassemble_with_symbols(
         &std::collections::BTreeMap::new(),
         &std::collections::BTreeMap::new(),
         &std::collections::BTreeMap::new(),
+        &std::collections::BTreeMap::new(),
     )
 }
 
@@ -698,6 +716,7 @@ fn disassemble_named(
     named: bool,
     strings: &std::collections::BTreeMap<u32, StringDeclaration>,
     arrays: &std::collections::BTreeMap<u32, String>,
+    dictionaries: &std::collections::BTreeMap<u32, String>,
     labels: &std::collections::BTreeMap<u32, String>,
 ) -> Result<String, Error> {
     let mut text = String::new();
@@ -727,6 +746,14 @@ fn disassemble_named(
                 let at = u32::from_be_bytes(instruction.operands().try_into().unwrap());
                 if let Some(string) = strings.get(&at) {
                     write!(text, " &{}", string.alias).unwrap();
+                    start += width;
+                    continue;
+                }
+            }
+            if instruction.opcode() == ciq_mc::Opcode::Hpush {
+                let at = u32::from_be_bytes(instruction.operands().try_into().unwrap());
+                if let Some(alias) = dictionaries.get(&at) {
+                    write!(text, " &{alias}").unwrap();
                     start += width;
                     continue;
                 }

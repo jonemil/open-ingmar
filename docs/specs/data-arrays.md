@@ -3,7 +3,8 @@
 This profile covers flat constant arrays used by `apush`, based on
 [constant-array experiments](../investigations/constant-arrays.md). It does not
 cover string pools, nested containers, Dictionary, ByteArray, or other scalar
-types. Unsupported framing or element tags stop the complete DATA walk.
+types. [Dictionary constants](data-dictionaries.md) have a separate profile.
+Unsupported framing or element tags stop the complete DATA walk.
 
 ## Binary record
 

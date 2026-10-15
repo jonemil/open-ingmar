@@ -1,7 +1,8 @@
 # ciq-assembly
 
 Shared library for symbolic CODE assembly used by the compiler and assembler.
-`Program` retains labels and symbol/string/array references until layout and encoding.
+`Program` retains labels and symbol/String/Array/Dictionary references until
+layout and encoding.
 Typed construction and text parsing share validation.
 
 Start with `Program::new`, `Program::parse`, and its printing/encoding methods

@@ -31,6 +31,8 @@ pub enum Operand {
     String(String),
     /// A constant-array DATA alias used by `apush`.
     Array(String),
+    /// A constant Dictionary DATA alias used by `hpush`.
+    Dictionary(String),
     /// A local CODE label resolved to a signed relative instruction operand.
     Code(String),
 }
@@ -147,7 +149,9 @@ impl Program {
                             return Ok(Operand::Symbol(alias.into()));
                         }
                         if let Some(alias) = value.strip_prefix('&') {
-                            return Ok(if opcode == Opcode::Apush {
+                            return Ok(if opcode == Opcode::Hpush {
+                                Operand::Dictionary(alias.into())
+                            } else if opcode == Opcode::Apush {
                                 Operand::Array(alias.into())
                             } else {
                                 Operand::String(alias.into())
@@ -246,6 +250,15 @@ impl Program {
                             {
                                 return Err(fail("invalid string reference or non-string operand"));
                             }
+                            Operand::Dictionary(alias)
+                                if *opcode != Opcode::Hpush
+                                    || field != 0
+                                    || !valid_alias(alias) =>
+                            {
+                                return Err(fail(
+                                    "invalid Dictionary reference or non-Dictionary operand",
+                                ));
+                            }
                             Operand::Array(alias)
                                 if *opcode != Opcode::Apush
                                     || field != 0
@@ -321,7 +334,9 @@ impl Program {
                             }
                             Operand::Symbol(alias) => text.push_str(&format!("@{alias}")),
                             Operand::String(alias) => text.push_str(&format!("&{alias}")),
-                            Operand::Array(alias) => text.push_str(&format!("&{alias}")),
+                            Operand::Array(alias) | Operand::Dictionary(alias) => {
+                                text.push_str(&format!("&{alias}"))
+                            }
                             Operand::Code(alias) => text.push_str(&format!("code:{alias}")),
                         }
                     }
@@ -364,6 +379,24 @@ impl Program {
         external: &BTreeMap<String, u32>,
         external_strings: &BTreeMap<String, u32>,
         external_arrays: &BTreeMap<String, u32>,
+    ) -> Result<Vec<u8>, Error> {
+        self.encode_with_data_references(
+            external,
+            external_strings,
+            external_arrays,
+            &BTreeMap::new(),
+        )
+    }
+
+    /// Encode CODE with separate symbol, String, Array, and Dictionary maps.
+    /// Dictionary aliases bind DATA records for `hpush`; declarations live in
+    /// the authoritative DATA source. Reject unresolved aliases or bad ranges.
+    pub fn encode_with_data_references(
+        &self,
+        external: &BTreeMap<String, u32>,
+        external_strings: &BTreeMap<String, u32>,
+        external_arrays: &BTreeMap<String, u32>,
+        external_dictionaries: &BTreeMap<String, u32>,
     ) -> Result<Vec<u8>, Error> {
         let labels = self.labels()?;
         let code_length: usize = self
@@ -448,6 +481,18 @@ impl Program {
                             return Err(
                                 self.error(index, "resolved string placement exceeds 24 bits")
                             );
+                        }
+                        at as u64
+                    }
+                    Operand::Dictionary(alias) => {
+                        let at = *external_dictionaries.get(alias).ok_or_else(|| {
+                            self.error(index, format!("undefined Dictionary alias {alias}"))
+                        })?;
+                        if at >= ciq_prg::data::ADDRESS_LIMIT as u32 {
+                            return Err(self.error(
+                                index,
+                                "resolved Dictionary placement exceeds supported DATA range",
+                            ));
                         }
                         at as u64
                     }

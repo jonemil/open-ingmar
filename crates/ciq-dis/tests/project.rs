@@ -11,6 +11,63 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn dictionary_constants_export_rebuild_and_edit_with_typed_references() {
+    let temporary = TemporaryDirectory::new();
+    let first = temporary.0.join("dictionary");
+    let second = temporary.0.join("dictionary-again");
+    let data = ciq_prg::data::Source::parse(
+        ".dictionary d\n.string key \"key\"\n.entry string=&key number=0x29\n.enddictionary\n",
+    )
+    .unwrap()
+    .encode()
+    .unwrap()
+    .0;
+    let original = Prg::from_sections(vec![
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x42, 0, 0, 0, 0, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &first).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Data);
+    assert_eq!(manifest.entries[1].encoding, Encoding::Assembly);
+    assert!(
+        fs::read_to_string(first.join(&manifest.entries[1].file))
+            .unwrap()
+            .contains("hpush &dict_00000000")
+    );
+    let rebuilt = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(rebuilt, original);
+    ciq_dis::export_project(&rebuilt, &second).unwrap();
+    for entry in &manifest.entries {
+        assert_eq!(
+            fs::read(first.join(&entry.file)).unwrap(),
+            fs::read(second.join(&entry.file)).unwrap()
+        );
+    }
+    let path = first.join(&manifest.entries[0].file);
+    fs::write(
+        &path,
+        fs::read_to_string(&path)
+            .unwrap()
+            .replace("number=0x00000029", "number=0x0000002a"),
+    )
+    .unwrap();
+    let edited = ciq_asm::assemble_project(&first).unwrap();
+    assert_eq!(
+        edited.unique_section(CODE).unwrap(),
+        original.unique_section(CODE).unwrap()
+    );
+    let (dict, _) = ciq_prg::data::dictionaries::dictionary_at(
+        edited.unique_section(DATA).unwrap().payload(),
+        0,
+    )
+    .unwrap();
+    assert_eq!(
+        dict.entries[0].1,
+        ciq_prg::data::dictionaries::Value::Number(42)
+    );
+}
+
+#[test]
 fn constant_arrays_export_with_typed_aliases_and_support_scalar_edits() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("first");

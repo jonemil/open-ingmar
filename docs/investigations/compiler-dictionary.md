@@ -26,11 +26,27 @@ point. An external corroboration is the Ghidra plugin's `newd` entry in
 The SDK SYMBOLS table identifies `isEmpty` as `0x008000b8`; `size` uses the
 already supported `0x008000ae`.
 
-The nonempty literal still stops CODE decoding at `0x53`, with bytes
-`42 00 00 32 ac`. DATA walking reports `unsupported constant-array framing`.
-These are outstanding opcode/constant-format gaps, not accepted raw fallback for
-an implemented language feature. Their record/operand semantics remain to be
-established; do not infer later instruction boundaries by scanning byte values.
+The nonempty literal uses `42 00 00 32 ac` at CODE+`0x53`, referencing a
+Dictionary record at DATA+`0x32ac`. The pinned Ghidra research names this opcode
+`hpush`. The constant's local string pool uses offsets 0 and 6 for `one`/`two`;
+the value block has root `0x0b` and two entries. Additional SDK specimens under
+`scratch/dictionary-constants/` cover numeric-only entries, Char/Boolean/Number
+mixing, shared string references, empty strings, and UTF-8. The mixed-key output
+record reorders source entries; preserve the encoded order without inferring a
+source iteration guarantee.
+
+All five specimens, including the original probe, export structured CODE/DATA,
+reconstruct byte-for-byte, and re-export identically. Verdicts/artifacts are under
+`scratch/dictionary-constants/verified/`; the earlier opcode/DATA gaps are closed
+for this flat scalar profile. Unsupported nested values and other scalar types
+still stop the complete walk.
+
+An edit of the original probe's Dictionary entry changes `one` from 1 to 41.
+After project assembly and own-key signing, the simulator prints
+`0, true, 41, null, 3, true, null, false, 2`, one per line. The other output is
+unchanged. Artifacts are `scratch/dictionary-constants/edited*`. This establishes
+editable constant contents, not fresh-versus-shared repeated-load behavior.
+The [constant format](../specs/data-dictionaries.md) records the verified framing.
 
 ## Empty-container profile
 
@@ -64,8 +80,15 @@ example's README has standalone compile/sign/run commands.
 
 For the broader probe, use the operations described above in an SDK-only
 `onStart` with `System.exit()`. Build and run it separately, then export all
-sections with `ciq-dis all`; expect the recorded CODE/DATA gaps until implemented.
+sections with `ciq-dis all` and reconstruct with `ciq-asm project`. Both exports
+should be structured for the tested scalar records.
 Sources, build logs, console captures, and exports are retained under
 `scratch/compiler-dictionary-probe/`.
 
 [api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Dictionary.html
+
+To reproduce the edit, copy the original probe's exported project and change
+`.entry string=&pool_00000000 number=0x00000001` to use `number=0x00000029`.
+Assemble the copied project, sign the changed PRG with the developer key, and
+run it in a fresh simulator capture directory. Compare its complete console log
+against the nine values above; the process exit alone is insufficient.

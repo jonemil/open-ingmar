@@ -9,7 +9,7 @@ construct `ciq-assembly::Program` directly. Crate responsibilities belong in
 
 A `Program` is an ordered sequence of labels, instructions, symbol declarations,
 and string/array literal requirements. Instructions contain an `Opcode` and
-`Bits`, `Symbol`, `String`, `Array`, or relative `Code` operands. Semantic IR
+`Bits`, `Symbol`, `String`, `Array`, `Dictionary`, or relative `Code` operands. Semantic IR
 value IDs are absent. Native construction and text parsing share validation:
 identifier syntax, operand kinds/counts/widths, duplicate aliases/labels, and
 supported layout bounds. Parsed errors retain assembly line numbers; constructed
@@ -56,3 +56,9 @@ remain raw. Known label fixups do not establish general relocation: opaque
 references and integrity fields must also remain valid after length changes.
 Ignoring pins, automatic symbol-ID allocation, includes, extended CODE, and a
 separate linker remain outside the supported profile. See [the plan](../plan.md).
+
+Dictionary constants belong in [DATA source](data-dictionaries.md). Their CODE
+references use `hpush &alias` and a separate Dictionary binding map supplied to
+`Program::encode_with_data_references`; inline Dictionary requirements are not
+yet part of `Program`. Existing encoding entry points remain available for
+programs without Dictionary aliases.
