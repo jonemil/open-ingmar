@@ -8,20 +8,9 @@ calling convention. No external implementation was consulted or copied.
 
 ## Implementation and boundary
 
-Source files collect global functions and flat module members into a validated
-`CompilationUnit`. Qualified calls resolve against all collected signatures,
-including forward references. Existing function validation enforces integer
-parameters, arguments, and returns; the unit checks ownership and exact argument
-counts. It rejects duplicate identities, global/module name collisions, and
-unresolved callees. Reopened modules and recursive signatures are accepted;
-recursive runtime behavior is not established by this experiment.
-
-Ownership remains separate from the function body. Lowering uses distinct,
-length-prefixed CODE labels and internal aliases, combining bodies in source
-order. Unit IR adds owner records around existing function documents. Native,
-saved-unit-IR, and saved-assembly CODE are byte-identical. See
-[design](../design/compiler-ir.md#compilation-units) and
-[source/text rules](../specs/compiler-unit.md).
+Native, saved-unit-IR, and saved-assembly CODE agree. Declaration resolution is
+specified by the [unit contract](../specs/compiler-unit.md); recursive signatures
+were accepted structurally, not exercised at runtime here.
 
 ## Simulator observations
 
@@ -166,18 +155,10 @@ before the next session overwrites `scratch/simulator/`.
 
 ## Tests and next work
 
-Seven tests cover cross-file forward calls, source/typed/text checks, input-file
-locations, duplicate/conflicting declarations, reserved module names, reopened
-modules, recursive signature resolution, unique internal/string labels, text
-framing/comments/CRLF, the combined 256-function bound, and CLI stage resumption
-without overwriting files. Runtime order, call frames, and results use the
-simulator as the compatibility oracle.
-
-Next investigate the smallest application's lifecycle, receiver/API behavior,
-and metadata requirements, then generate them independently. Bare global calls,
-classes, arbitrary SDK signatures, resource generation, complete PRG production,
-and Jungle resolution remain future work. The source and IR profiles are still
-provisional; no new crate or linker was introduced.
+Compiler checks covered cross-file forward calls, ownership/arity errors,
+reopened modules, recursive signatures, unique labels, text framing, the
+256-function bound, and CLI stop/resume without overwriting outputs. Runtime
+call order/frames/results use the simulator evidence above.
 
 [arguments]: compiler-arguments.md
 [arguments-reproduction]: compiler-arguments.md#reproduction

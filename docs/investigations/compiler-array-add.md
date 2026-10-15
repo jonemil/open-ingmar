@@ -37,16 +37,8 @@ symbol table, and both simulator logs are retained under
 
 ## Compiler boundary
 
-The API catalogue represents `add`'s parameter and result using the Array
-`Element` type parameter. Native resolution substitutes the concrete receiver
-element before checking arguments and deriving the result. The executable profile
-currently admits only non-null `Array<Char>` values, so other append element
-contracts are not implied.
-
-Native value calls also have [statement evidence](compiler-native-statements.md)
-for discarding results. Bulk append and removals have
-[separate evidence](compiler-array-mutation.md). Char literal construction has
-[its own evidence](compiler-array-literals.md). Sort, general Array construction,
-and element writes remain unsupported.
+This runtime probe covers Char-array append and alias visibility. Generic element
+substitution/type checks are specified in [API declarations](../specs/api-declarations.md).
+[Bulk append/removal](compiler-array-mutation.md) has separate runtime evidence.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

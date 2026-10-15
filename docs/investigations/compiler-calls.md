@@ -102,25 +102,10 @@ print/string generation are still SDK-provided; this is not frontend support for
 
 ## IR and binding boundaries
 
-`ModuleCall` defines an integer result from symbolic module/member names.
-`.call %<result> <module> <member>` has optional source spans. Every expression
-definition has one use; storing a call result in a local allows repeated reads
-without repeated invocation. Calls are effectful. For call-containing functions,
-shared validation requires all operations to match left-to-right expression
-traversal and ordered initialization/return sinks. It rejects incompatible IR
-schedules rather than changing effects. Pure-only functions keep their earlier
-definition-order flexibility. This conservative limitation can evolve with a
-general scheduling/effect policy.
-
-The compiler emits generated aliases `__ciq_module_<name>` and
-`__ciq_member_<name>`. `symbol_bindings` resolves these by unique stored names
-`globals/<name>` and `<name>` in an explicit metadata-only `.symbol` source;
-ordinary assembly aliases retain their declared IDs.
-Missing/ambiguous/conflicting bindings, duplicate declarations, and non-symbol
-source items fail before CODE output creation. Numeric IDs and DATA records are
-not allocated. The CLI exposes this as `--symbols <file>` for CODE emission from
-source, IR, or assembly. Earlier symbolic output and self-contained pure CODE
-commands remain unchanged.
+Native/text checks covered ordered calls/results, symbolic module/member binding,
+and rejection of missing, ambiguous, conflicting, or reordered references.
+Synthetic callees make dropped/repeated calls observable; physical VM frames
+remain outside that evaluator. See [the IR contract](../specs/compiler-ir-text.md#module-calls-and-operation-order).
 
 ## Reproduction
 
@@ -173,44 +158,12 @@ Specific append integration for the measured 855-byte CODE/7770-byte RESOURCES
 scaffold. Inline declarations bind compiler aliases to existing IDs; only the
 manifest-selected symbol source is serialized, so SYMBOLS remains unchanged:
 
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import shutil, re
-root = Path('scratch/compiler-calls')
-for name, payload in [('probe', 'native.bin'), ('reversed', 'reversed.bin')]:
-    project = root / f'{name}-project'
-    shutil.copytree(root / 'runtime-project', project)
-    size = len((root / payload).read_bytes())
-    padding = (-size) % 32
-    manifest = project / 'sections.ciq'
-    text = manifest.read_text()
-    assert '0xc0debabe 855 assembly' in text and '0xf00d600d 7770 raw' in text
-    symbols = (project / '010-symbols-5717b015.mcasm').read_text()
-    bindings = []
-    for alias, stored in [('__ciq_module_Numbers', 'globals/Numbers'), ('__ciq_member_left', 'left'), ('__ciq_member_right', 'right')]:
-        ids = re.findall(r'^\.symbol \S+ "' + re.escape(stored) + r'" id=(0x[0-9a-f]+) ', symbols, re.M)
-        assert len(ids) == 1
-        bindings.append(f'.symbol {alias} "{stored}" id={ids[0]}')
-    code = project / '003-code-c0debabe.mcasm'
-    body = code.read_text()
-    assert body.count('\nprobe:\n') == 1
-    code.write_text(body.replace('\nprobe:\n', '\nprobe_original:\n') + '\n' +
-                   '\n'.join(bindings) + '\n' + (root / f'{name}.mcasm').read_text())
-    lines = project / '005-line_numbers-c0de7ab1.mcasm'
-    lines.write_text(lines.read_text().replace('pc=code:probe ', 'pc=code:probe_original '))
-    resources = project / '007-resources-f00d600d.bin'
-    resources.write_bytes(resources.read_bytes() + bytes(padding))
-    manifest.write_text(text.replace('0xc0debabe 855 assembly', f'0xc0debabe {855 + size} assembly')
-                           .replace('0xf00d600d 7770 raw', f'0xf00d600d {7770 + padding} raw'))
-PY
-target/debug/ciq-asm project scratch/compiler-calls/probe-project scratch/compiler-calls/probe-49.prg -y keys/developer_key.der
-target/debug/ciq-asm project scratch/compiler-calls/reversed-project scratch/compiler-calls/reversed-2.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-calls/probe-49.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-calls/reversed-2.prg -y keys/developer_key.der
-sh scripts/run-simulator-container.sh --prg scratch/compiler-calls/probe-49.prg
-sh scripts/run-simulator-container.sh --prg scratch/compiler-calls/reversed-2.prg
-```
+Integrate into a fresh scaffold export: rename the old entry label and its line
+references to an unused alias, preserving their body/PCs. Append generated
+assembly under the original alias, redirect its method reference, and apply the
+DATA/resource lengths and offsets recorded in this record. Reconstruct/sign,
+verify our key, and run each case separately using the
+[shared procedure](../research.md#shared-compiler-reproduction).
 
 Actual simulator execution reused the existing Garmin container through
 container-broker with
@@ -253,8 +206,4 @@ names/spans/exact encodings, effectful IR schedule rejection, unsupported
 source/IR shapes, absent/ambiguous/conflicting symbol bindings, and actual CLI
 resumption/binding failures. Synthetic effectful integer callees in the
 instruction test make dropped/repeated/reordered calls observable; this is not a
-full VM/frame emulator. All 142 workspace tests pass with Rust 1.99, plus
-formatting and workspace/all-target Clippy with warnings denied.
-
-Follow-up evidence: [parameters and arguments](compiler-arguments.md) and
-[strings and printing](compiler-strings.md).
+full VM/frame emulator.

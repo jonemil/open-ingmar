@@ -9,7 +9,7 @@ investigates and plans; it does not implement a Rust package crate. SDK 9.2.0 /
 Local implementation references produced here:
 [barrel package profile](../specs/barrel-package.md),
 [IQ package/signing profile](../specs/iq-package.md), and
-[staged ciq-package design](../design/package-crate.md).
+[staged ciq-package design](../specs/package-reading.md).
 
 ## Sources and attribution
 
@@ -203,7 +203,7 @@ simulated.
 
 ## Plan and dependency findings
 
-See [package design](../design/package-crate.md) for the current crate boundary.
+See [package design](../specs/package-reading.md) for the current crate boundary.
 The dependency observations below describe candidates at the research date.
 
 Candidate libraries can handle established archive formats independently of

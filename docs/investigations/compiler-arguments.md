@@ -109,29 +109,11 @@ independent function bodies; it does not implement module/project generation or
 
 ## Implementation boundaries
 
-The frontend accepts untyped integer parameter lists and integer expression
-arguments. Duplicate parameter names, local shadowing, typed/default parameters,
-malformed lists, and local/object receivers are rejected with locations. Call
-arity and integer types must match the supplied scaffold; whole-program
-arity/type checking is not implemented.
-
-Function IR records a parameter count, default zero. `ParameterRead` defines a
-value from a zero-based semantic position; repeated reads create fresh values.
-Parameter position is independent of value/local IDs and VM slots.
-`Function::with_parameters` and the
-[IR text parser](../specs/compiler-ir-text.md) share validation; `Function::new`
-preserves zero-parameter construction. Text adds `parameters=<count>` on
-`.function`, `.parameter %<result> <index>`, and ordered argument IDs after
-`.call %<result> <module> <member>`. Old source/IR/assembly paths stay
-compatible.
-
-Backend code selects the callable, emits `frpush` for nonempty argument lists,
-evaluates arguments left to right, and emits `invokem` with count+1. Empty calls
-retain `invokemz`. Argument dependencies and nested calls participate in the
-existing call-containing evaluation-order validator. Counts are limited to 254
-parameters/arguments; parameters plus locals to 255; operations to 1024;
-combined parenthesis/call nesting to 64. Maximum count tests verify encoding
-bounds, not device/runtime limits.
+Native/text checks covered parameter/local slot mapping, repeated reads, nested
+argument order, malformed signatures, binding failures, and resource limits.
+The test evaluator uses synthetic callees/context markers, not a full VM.
+Current contracts are in [source](../specs/compiler-subset.md) and
+[IR](../specs/compiler-ir-text.md#parameter-metadata-and-reads).
 
 ## Reproduction
 
@@ -183,49 +165,12 @@ target/debug/ciq-compiler --emit code --symbols scratch/compiler-arguments/sdk-p
 Specific append integration for the measured 863-byte CODE/7770-byte RESOURCES
 scaffold. Assertions deliberately fail for a different build:
 
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import shutil, re
-root = Path('scratch/compiler-arguments')
-for name in ['probe', 'reversed']:
-    project = root / f'{name}-project'
-    shutil.copytree(root / 'sdk-project', project)
-    size = len((root / f'{name}.bin').read_bytes()) + len((root / 'difference.bin').read_bytes())
-    padding = (-size) % 32
-    manifest = project / 'sections.ciq'
-    text = manifest.read_text()
-    assert '0xc0debabe 863 assembly' in text and '0xf00d600d 7770 raw' in text
-    symbols = (project / '010-symbols-5717b015.mcasm').read_text()
-    bindings = []
-    for alias, stored in [('__ciq_module_Numbers','globals/Numbers'), ('__ciq_member_difference','difference'), ('__ciq_member_left','left'), ('__ciq_member_right','right')]:
-        ids = re.findall(r'^\.symbol \S+ "' + re.escape(stored) + r'" id=(0x[0-9a-f]+) ', symbols, re.M)
-        assert len(ids) == 1
-        bindings.append(f'.symbol {alias} "{stored}" id={ids[0]}')
-    code = project / '003-code-c0debabe.mcasm'
-    body = code.read_text()
-    for label in ['probe', 'difference']:
-        assert body.count(f'\n{label}:\n') == 1
-        body = body.replace(f'\n{label}:\n', f'\n{label}_original:\n')
-    code.write_text(body + '\n' + '\n'.join(bindings) + '\n' +
-                   (root / f'{name}.mcasm').read_text() + '\n' + (root / 'difference.mcasm').read_text())
-    lines = project / '005-line_numbers-c0de7ab1.mcasm'
-    linebody = lines.read_text()
-    for label in ['probe', 'difference']:
-        linebody = linebody.replace(f'pc=code:{label} ', f'pc=code:{label}_original ')
-    lines.write_text(linebody)
-    resources = project / '007-resources-f00d600d.bin'
-    resources.write_bytes(resources.read_bytes() + bytes(padding))
-    manifest.write_text(text.replace('0xc0debabe 863 assembly', f'0xc0debabe {863 + size} assembly')
-                           .replace('0xf00d600d 7770 raw', f'0xf00d600d {7770 + padding} raw'))
-PY
-target/debug/ciq-asm project scratch/compiler-arguments/probe-project scratch/compiler-arguments/probe-48.prg -y keys/developer_key.der
-target/debug/ciq-asm project scratch/compiler-arguments/reversed-project scratch/compiler-arguments/reversed-negative-40.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-arguments/probe-48.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-arguments/reversed-negative-40.prg -y keys/developer_key.der
-sh scripts/run-simulator-container.sh --prg scratch/compiler-arguments/probe-48.prg
-sh scripts/run-simulator-container.sh --prg scratch/compiler-arguments/reversed-negative-40.prg
-```
+Integrate into a fresh scaffold export: rename the old entry label and its line
+references to an unused alias, preserving their body/PCs. Append generated
+assembly under the original alias, redirect its method reference, and apply the
+DATA/resource lengths and offsets recorded in this record. Reconstruct/sign,
+verify our key, and run each case separately using the
+[shared procedure](../research.md#shared-compiler-reproduction).
 
 Actual execution reused the existing Garmin container through container-broker
 with
@@ -271,9 +216,4 @@ Six new tests cover parameter/local slot mapping, repeated/unused parameters,
 nested argument context/order, semantic/IR position and dependency validation,
 malformed signatures/lists, source/IR encoding/nesting bounds, and CLI text
 resumption. The restricted test evaluator uses synthetic callees and
-stack/context markers; it is not a full VM/frame implementation. All 148
-workspace tests pass on Rust 1.99; formatting and workspace/all-target Clippy
-with warnings denied pass.
-
-Follow-up evidence: [strings and printing](compiler-strings.md) and
-[compilation units](compiler-unit.md).
+stack/context markers; it is not a full VM/frame implementation.

@@ -125,6 +125,6 @@ key, but a changed product/manifest requires renewed corresponding signatures.
 The writer targets SDK-produced developer packages. IQ archive acceptance
 by Garmin upload/install workflows has not been tested independently; existing
 simulator runs only validate extracted/reassembled PRGs. See
-[package design](../design/package-crate.md).
+[package design](package-reading.md).
 
 [ref-independent-archive-signature-investigat]: ../investigations/package-formats.md

@@ -31,128 +31,75 @@ crates are currently unpublished.
   Depends on `ciq-mc`,
   `ciq-assembly`, and `ciq-prg` for DATA sources.
 
-See [the documentation guide](README.md) for the distinction between design,
-format specifications, evidence records, and Rust API documentation.
-
-## Representation and preservation
-
-Container handling preserves section order, duplicate/unknown identifiers, and
-opaque payloads. Supported code and metadata have structured views; unsupported
-content remains raw. Exported section projects can reconstruct a complete PRG
-without an original template. The compiler can now generate a complete console application from a function
-unit using a constrained, simulator-tested bootstrap profile.
-
-The [assembly language](design/assembly-source.md) serves handwritten code,
-compiler output, and disassembly. Its [shared model](design/assembly-model.md)
-keeps labels and symbol/string/array references until layout and encoding. Identity
-and placement are distinct; optional constraints pin layout, while unconstrained
-allocation must be deterministic.
-
-CODE labels resolve supported DATA method targets and line PCs. DEBUG aliases
-resolve line filename/function offsets. Named relative branches also resolve
-after CODE layout, as do named exception starts, ends, and handlers. General
-relocation, opaque metadata fixups, extended CODE, resource assembly, and
-automatic symbol ID allocation
-remain incomplete. Every length-changing edit must account for affected
-references and integrity fields. Equal length alone does not prove validity.
-
-## Complete section export and signing boundary
-
-Project reconstruction is separate from signing. Without `-y`, preserve raw
-signing material. With `-y <developer-key>`, reconstruct first, remove original
-developer/store signing sections, and append one signature using the supplied
-key. Private keys remain outside exported projects and Git. Standalone `sign`
-and `verify` operations use the same signing layer.
-
-The output need not reproduce the original developer's identity. Our intended
-workflow uses our own key and tests executable behavior. This does not make an
-output an update signed by the original publisher. See
-[the signature profile](specs/developer-signatures.md) and
-[signing evidence](investigations/developer-signing.md).
-
-### Test expectations
-
-- **Opaque preservation**: unchanged reading/writing must retain every byte,
-  including signatures, without requiring an original private key.
-- **Structured reconstruction**: SDK-compiled specimens and our generated PRGs
-  must disassemble into assembler input for the required CODE/DATA profile,
-  reassemble unchanged, and produce the same structured export on disassembly.
-  Raw fallback does not establish this guarantee. Without re-signing, require
-  byte equality with each input PRG; compiler output need not equal SDK output.
-- **Reassembly with signing**: accept expected signature/public-key changes,
-  verify the new identity and integrity, check intended code/data changes, and
-  independently compare unrelated sections.
-- **Runtime compatibility**: successful parsing, encoding, or verification does
-  not establish execution. Use the official simulator for behavior.
-
-Expected signing differences do not excuse arbitrary binary mismatches.
-Signature and preservation tests cover malformed inputs, tampering, key
-replacement, and CLI workflows. Evidence records retain simulator observations.
-
 ## Shared compiler/assembly pipeline
 
-The current flow is source → validated semantic IR → symbolic VM assembly →
-CODE. IR and `.mcasm` text are optional serialization boundaries; the native
-path does not print and reparse intermediate files. Both paths share validation
-and encoding and must remain equivalent as representations evolve.
+Source → validated semantic IR → symbolic VM assembly → CODE is the native
+pipeline. IR and `.mcasm` text are optional inspection/resumption boundaries;
+readers reconstruct the same models and reuse validation and encoding. Semantic
+IR retains values, storage identity, types, control flow, and effect order without
+VM slots, native import indexes, or section offsets.
 
-`ciq-compiler` owns semantic values and locals, positional parameters, ordered
-calls/prints/writes, blocks and cyclic edges, integer/string/Boolean
-validation, fixed-type local reassignment, fixed-point initialization, and source
-diagnostics. Its internal
-source builder resolves arm scopes and innermost loop targets, emitting
-structured statements into IR;
-parsing and VM instruction selection remain separate.
-`backend::lower()` selects VM instructions and assigns frame/local slots;
-`Function::lower()` delegates to it. Assembly receives already-selected
-instructions and handles layout/binding/encoding through `ciq-mc`. See [compiler
-design](design/compiler-ir.md),
-[the source subset](specs/compiler-subset.md), and
-[the IR format](specs/compiler-ir-text.md).
+The frontend resolves declarations/names and constructs semantic IR. The backend
+selects instructions and assigns frame storage; `Function::lower()` delegates to
+`backend::lower()`. Assembly receives selected instructions and resolves labels,
+symbols, and literal references before encoding. See the
+[IR specification](specs/compiler-ir-text.md) and
+[assembly specification](specs/assembly.md).
 
-Raw function CODE can still use existing application DATA/module metadata.
-Symbol binding consumes an explicit symbol source; it does not create method
-records. Literal requirements are unplaced in CODE; explicit DATA sources supply
-their offsets without resolving method aliases until reconstruction.
-Compilation units collect global/module functions across files, check qualified
-callee identities and integer argument counts/types, and lower their bodies into
-one CODE layout. A separate application builder generates lifecycle assembly,
-DATA/modules, imports, and unsigned sections for the
-[console bootstrap profile](specs/console-application.md), using no SDK payloads.
-Source AppBase classes now supply instance methods and self calls, with
-explicit ownership/receiver contracts. Source initialize and onStart use native
-base/callback contracts; startup state retains its opaque nullable Dictionary
-type. Broader lifecycle, object values, and resources remain future work. See
-[unit rules](specs/compiler-unit.md) and [application design](design/console-application.md).
-Signing, packaging, and project configuration do not belong in the frontend.
+The API catalogue supplies runtime-provided declarations and availability;
+operator rules and executable native profiles check supported uses before
+instruction selection. Declarations contain no runtime implementations or VM
+storage decisions. [API contracts](specs/api-declarations.md) distinguish these
+responsibilities and the target/deployment inputs.
 
-### Agreed layer names and future extraction
+Compilation units collect source declarations across files before checking calls,
+then lower into one CODE/DATA layout with owner-qualified identities. Source
+files are not relocatable objects. Application generation consumes validated units
+and CODE labels to produce lifecycle assembly, DATA, imports, and unsigned PRG
+sections without an SDK template. Source language, class, and application rules
+belong in their [specifications](specs/compiler-subset.md), not a second feature
+inventory here.
 
-Keep `ciq-assembly` as shared assembly infrastructure and `ciq-asm` / `ciq-dis`
-as the paired tools. Semantic IR and codegen are distinct responsibilities
-inside `ciq-compiler` today.
+Keep `ciq-assembly` as shared machine assembly infrastructure and `ciq-asm` /
+`ciq-dis` as paired tools. Semantic IR and codegen remain inside `ciq-compiler`.
+An eventual `ciq-ir` could own semantic models/text without VM dependencies;
+a VM backend could become `ciq-codegen`. Extract crates only when consumers or
+dependency boundaries justify them. A linker, LLVM, optimization, and a full VM
+remain deferred in [the plan](plan.md).
 
-An eventual `ciq-ir` could own semantic types, validation, and text I/O without
-VM or assembly dependencies. VM-specific lowering would remain in a backend,
-possibly `ciq-codegen`. Extract crates when consumers or dependency boundaries
-warrant it; the present names, APIs, and provisional IR schema need not be
-frozen.
+## Preservation, layout, and signing
+
+Container reading/writing preserves ordered sections, duplicates, unknown IDs,
+and opaque bytes. Supported structured views must reconstruct their inputs
+without a template. The [PRG](specs/prg-container.md),
+[section project](specs/section-project.md), and section specs define exact
+preservation and binding rules. Numeric/raw preservation does not establish
+relocation safety; length-changing edits must account for all affected references
+and integrity fields, including opaque ones.
+
+Symbols, literals, methods, branches, line mappings, and exceptions bind through
+shared layout identities where their reference semantics are known. Identity is
+separate from placement. The assembly spec owns deterministic layout and pinning;
+general relocation and opaque-reference fixups remain incomplete.
+
+Signing follows reconstruction. Without a supplied key, preserve signing
+material. With one, replace developer/store signing sections with the supported
+own-key signature. That does not preserve the original publisher's identity or
+regenerate IQ signatures. [Signing](specs/developer-signatures.md) and
+[validation](validation.md) distinguish byte preservation, identity/integrity,
+structured reconstruction, and runtime acceptance.
 
 ## Source projects and packages
 
-Observed barrels distribute source/build metadata, not VM object files. IQ
-archives distribute device PRGs plus package metadata/signatures. A PRG remains
-the assembler's reconstruction unit; re-signing it alone does not regenerate IQ
-signatures. Package operations have separate bounded profiles and lifecycle
-rules. See [package design](design/package-crate.md) and
-[format evidence](investigations/package-formats.md).
+Observed barrels distribute source/build metadata; IQ packages distribute device
+PRGs and signed package metadata. Package aliases are not VM symbols. PRG,
+cryptography, and archive responsibilities remain separate even when an export
+coordinates them. The [package profiles](specs/package-reading.md) specify
+supported operations.
 
-Multi-file and source/archive-barrel builds produce one CODE/DATA layout in the
-observed SDK outputs. This supports collecting declarations before whole-program
-layout, without requiring topological source order, a relocatable object format,
-a separate linker, or an option to discard placement constraints.
-
-A future build layer will resolve Jungle files and manifests into compiler
-inputs/export settings and generate a barrel's packaged configuration. Keep
-configuration resolution separate from compilation, archive encoding, and
-signing. See [project-build design](design/project-builds.md).
+A future project layer resolves Jungle/manifest inputs into source, resources,
+dependencies, target constraints, and export settings. It must feed the compiler,
+resource generation, packaging, and signing through explicit resolved inputs,
+without putting configuration parsing in the frontend or archive library.
+[Project-build requirements](specs/project-builds.md) define that intended boundary;
+[the plan](plan.md) owns sequencing.

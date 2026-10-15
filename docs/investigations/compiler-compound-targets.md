@@ -91,21 +91,12 @@ Char bounds compounds, and other runtime versions were not separately tested.
 
 ## Compiler contracts and validation
 
-Number-field compounds reuse ordinary self-field read, binary operation, and
-field assignment. Indexed compounds capture receiver/index in two typed locals.
-A plain RHS inlines the old read into the binary expression; a branching RHS
-stages the old read and computed result before defining final write operands.
-All values stay block-local and single-use. No new IR directive or VM opcode
-is needed. Hidden locals share the existing frame budget.
-
-Tests compare all ten Number field compounds with explicit read/binary/write
-assembly and reparse their saved IR. Indexed tests cover all ten Number
-operators, Char addition, single receiver/index evaluation, one array read and
-write, spans, guarded nullable operands, wrong types, nested/View targets,
-read-before-RHS validation, frame limits, and 64-level RHS call nesting.
-Complete source/resumed IR, unsigned PRG, and assembly-text checks preserve the
-native/text pipeline. General object properties, new field kinds, and
-increment/decrement remain separate work.
+Native/text checks compare all ten Number field compounds with explicit
+read/binary/write assembly. Indexed checks cover Number operators, Char addition,
+single receiver/index evaluation, one read/write, nullable guards, invalid types,
+read-before-RHS order, frame limits, and 64-level RHS nesting. Complete saved-IR,
+assembly, and unsigned-PRG paths agree. See the
+[current target contracts](../specs/compiler-subset.md#indexed-compound-assignment).
 
 [example]: ../../examples/compiler-compound-targets/README.md
 [output]: ../../examples/compiler-compound-targets/expected.txt

@@ -1,7 +1,7 @@
 # Rust package reader and extraction
 
 Date: 2026-10-10. Implements stage 1 of
-[the package design](../design/package-crate.md), following
+[the package design](../specs/package-reading.md), following
 [the format investigation](package-formats.md). Scope: list and bounded
 extraction, preserving exact payloads. No package signing/writing or new
 simulator experiment. SDK specimens are the previously recorded SDK 9.2.0 /

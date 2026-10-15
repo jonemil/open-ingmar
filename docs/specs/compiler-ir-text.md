@@ -1,14 +1,33 @@
-# Provisional compiler IR text
+# Semantic compiler IR and text format
 
-This semantic IR format supports inspection and resumption of compiler stages.
-It is separate from Garmin MIR and VM assembly. Syntax/API can change as
-operations are introduced; it is not a stable interchange contract. Evidence:
-[pipeline experiment](../investigations/compiler-pipeline.md),
-[arithmetic extension](../investigations/compiler-arithmetic.md),
-[local declarations](../investigations/compiler-locals.md),
-[module calls](../investigations/compiler-calls.md),
-[parameters/arguments](../investigations/compiler-arguments.md), and
-[strings/printing](../investigations/compiler-strings.md).
+This specification defines the semantic model and its optional text format.
+The representation is provisional and independent of Garmin MIR. The in-memory
+pipeline is source → validated semantic IR → symbolic VM assembly → CODE;
+text readers reconstruct the same models rather than defining alternate paths.
+See [architecture](../architecture.md) and [pipeline evidence](../investigations/compiler-pipeline.md).
+
+## Semantic model
+
+Value IDs identify computations; local IDs identify stored state; parameters
+identify positions; private array builders identify incomplete construction.
+None selects a VM slot, native symbol/import ID, or section address. Source
+spans carry diagnostic provenance. Immutable validated models are the boundary
+between source checking and VM instruction selection.
+
+Expression values are single-use and block-local. Stored locals carry values
+across graph edges, whose evaluation stacks are empty. Staging preserves earlier
+operands before a later operand branches. Typed construction, source lowering,
+and text resumption share type, initialization, null-proof, source-identity, and
+effect-order checks; no producer may bypass backend assumptions. Keeping this
+semantic boundary makes dependencies inspectable without a general SSA/register
+allocator, mandatory text intermediates, or a separate linker.
+
+[Source contracts](compiler-subset.md), [class contracts](compiler-classes.md),
+and [unit contracts](compiler-unit.md) own accepted language behavior and
+resolution. [API declarations](api-declarations.md) own catalogue semantics.
+This page specifies IR operations, model invariants, serialization, and lowering.
+
+## Text and value definitions
 
 ```text
 ciq-ir
@@ -402,7 +421,7 @@ deployment metadata. Resupply them when resuming text. Omitting both performs
 the existing bounded contract/lowering checks without an API-level claim.
 These inputs do not select a device, derive a level from the SDK, or check
 permissions, app kind, execution scope, or VM capabilities. See the
-[API declaration design](../design/api-declarations.md) for coverage.
+[API declaration design](api-declarations.md) for coverage.
 
 ## Local operations
 
@@ -892,7 +911,7 @@ The operation is an ordered statement, not a CFG terminator. IR still requires
 its ordinary returns and branches; exit has no expression value. Wrong arity,
 unknown declarations, and unsupported native statement contracts are errors.
 
-## Native value calls
+## Discarded values and native Void calls
 
 `.discard %<value-id> [span=<start>:<end>]` evaluates and consumes one earlier
 non-Void value without defining a result or changing the function return type.
@@ -996,107 +1015,24 @@ runtime-provided method and defines its semantic result. The receiver and
 arguments must be earlier values with the usual single-use/block restrictions.
 Optional source spans use the ordinary syntax.
 
-Validation accepts a Number receiver with `toString`, `abs`, `toNumber`, or
-`hashCode` taking no arguments, `format` taking one String argument,
-`compareTo` taking Number/Boolean/Char, or `equals` taking a supported scalar,
-nullable scalar, or Null. Number comparison requires API 5.0.0 when a context
-is supplied. Its broad Object declaration does not enable other argument
-profiles. Equality returns Boolean; hash and conversion return Number.
-Boolean receivers accept zero-argument `toString` and `hashCode`, `compareTo`
-with one Number/Boolean/Char argument, and `equals` with a supported scalar,
-nullable scalar, or Null. Their results are String, Number, Number, and Boolean
-respectively. Boolean comparison requires API 5.0.0 with explicit context;
-the other three methods date from 1.0.0. The same shared argument/result
-validation applies; native comparison does not enable Boolean ordering
-operators or arithmetic.
-String receivers accept zero-argument `length`, `hashCode`, `toLower`,
-`toUpper`, `toString`, and `toNumber`, plus `find` with one String argument,
-`toNumberWithBase` with one Number argument,
-`compareTo` with one String argument, `equals` with a supported scalar/nullable
-scalar or Null, and `substring` with two Number-or-Null arguments. Each index
-accepts Number, Null, or Number-or-Null. Resolve contracts through the API
-catalogue:
-Number `abs`, `toNumber`, `hashCode`, and `compareTo`, and String `length`,
-produce Number. String `hashCode` and `compareTo` also produce Number;
-Number/String `equals` produces Boolean.
-String `find`/`toNumber`/`toNumberWithBase` produce Number or Null;
-`substring` produces String or Null. Formatting, string conversion, and case
-conversion produce String.
-Number results retain ordinary integer operand/return rules. Each chained call
-must resolve against its receiver's type. Source, typed, and text producers
-share these requirements.
-Unsupported members, receivers, argument counts/types, and result contracts are
-rejected before lowering. String `toNumberWithBase` requires API 1.4.1 and
-String `compareTo` requires 5.0.0 with explicit context. Format content, numeric
-base ranges, and conversion content remain runtime obligations.
+Receiver, argument, result, generic-element, and API contracts are the same as
+[the supported native methods](compiler-subset.md#native-value-calls). Validation
+recomputes native results from catalogue/receiver contracts rather than trusting
+frontend metadata. Unknown or unsupported members, receivers, argument counts,
+and types are rejected. Runtime formatting, conversion ranges, and case mapping
+are not compile-time evaluations.
 
-Number's zero-argument `toChar` defines Char. Char receivers accept zero-argument
-`toLower`/`toUpper` returning Char, `toNumber`/`hashCode` returning Number, and
-`toString` returning String. `compareTo` accepts Number/Boolean/Char and returns
-Number; inherited `equals` accepts Number/String/Boolean/Char, Null, or nullable
-Number/String and returns Boolean. Other equality profiles also accept Char.
-Char has a distinct value category retained by locals, user calls, and returns.
-Parameter text uses `char`; value-producing user calls use `result=char`.
-Function result text is inferred as for other scalars, so `.function result=char`
-is not accepted. Char class/signature/value use and conversion require API 1.3.0
-with context; comparison additionally requires 5.0.0. Source and saved IR share
-these checks. `.char` defines constants; nullable Char is unsupported. Char
-operators follow the contracts below. Native calls and ordinary value storage
-need no new VM allocation.
-See the
-[Char evidence](../investigations/compiler-char-methods.md).
+Char and Array values use `char`, `char-array`, `number-array`, or `view-array`
+in parameter/user-call metadata, with `result=<category>` for valued calls.
+Function result categories are inferred from returns; those categories are not
+`.function result=` fields. Each chained call checks the preceding result's type.
+Nullable arrays/Char and unsupported elements cannot be introduced by text edits.
 
-String `toCharArray` defines `Array<Char>` and `toUtf8Array` defines
-`Array<Number>`, both since API 1.3.0. Array receivers support `size` returning
-Number, `toString` returning String, and `indexOf` returning Number. Search,
-append, and removals require the receiver's element type; `addAll` requires an
-array with that same invariant type. `add`/`addAll`, `reverse`, and `slice`
-retain the receiver's array type; removals return Boolean. Slice accepts two
-Number-or-Null bounds. Generic signatures are substituted before checking.
-
-Parameter/user-call categories are `char-array`, `number-array`, and `view-array`.
-Value-producing user calls use the corresponding `result=<category>`.
-Function results are inferred from returns; no array category is accepted
-as a `.function result=` field. Native results are recomputed from their
-receiver/member contracts. Text cannot misdeclare element types or reorder
-mutation relative to its consumers.
-
-Matching arrays use ordinary locals, reads, assignments, calls, and returns.
-Nullable arrays and other element types are unsupported. API context checks
-Array and element classes separately from methods: Number/View-array signatures
-need 1.0.0, Char-array signatures need 1.3.0, and the String conversions and
-mutation/search/transform methods above need 1.3.0. See the source
-[Char profile](compiler-subset.md#char-arrays),
-[Number profile](compiler-subset.md#number-arrays), and
-[Number-array evidence](../investigations/compiler-number-arrays.md). The
-[View profile](compiler-subset.md#native-views) adds native object references.
-
-`.add` on Number/Number defines Number, on Char/Number or Number/Char defines
-Char, and on Char/Char defines String. `.subtract` accepts only Number/Number.
-All six comparison directives accept Number/Char in either order and Char/Char,
-defining
-Boolean. An exact String on either side of `.add` accepts Number/String/Boolean/
-Char/Null and supported nullable Number/String alternatives, defining String.
-The corresponding `.equal`/`.not-equal` profiles exclude Boolean mixing and
-compare String
-identity, not content. String ordering and subtraction are unsupported. These
-operations provide no non-null proof for the other operand; two unchecked
-nullable operands do not satisfy the exact String requirement. Other Boolean
-and null comparison rules remain as described above. See the
-[String evidence](../investigations/compiler-string-operators.md).
-Numeric mixed equality differs from Object.equals; no implicit conversion is
-added to user signatures. Every producer and resumed text recomputes these
-results from operand types. Lowering selects arithmetic/comparison instructions directly, without native
-conversion calls. Existing one-use, block, and effect-order rules apply.
-See [the operator evidence](../investigations/compiler-char-operators.md).
-
-Zero-argument `weak` accepts Number, String, or Boolean and defines that exact
-receiver type under the catalogue's specialized result contract. It requires
-API 1.2.0 with explicit context. Nullable receivers need the usual non-null
-proof; other weak-reference receivers/results are unsupported. Saved IR
-recomputes this result from the receiver rather than trusting a frontend
-annotation. `weak` uses ordinary `getsv`/`invokemz` lowering and is retained as
-a call. See [the evidence](../investigations/compiler-immutable-weak.md).
+Arithmetic and comparison directives enforce the same
+[operator contracts](compiler-subset.md#operator-contracts) as source, including
+mixed Char addition, String identity equality, and nullable restrictions.
+Native `weak` remains a call whose exact immutable receiver determines its
+specialized result; it is not erased or rewritten as a copy.
 
 Native calls are effectful: receiver evaluation precedes arguments and
 invocation, and their operation order must agree with dependency traversal at

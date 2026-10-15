@@ -1,38 +1,15 @@
 # Native and textual compiler pipeline checkpoint
 
-2026-10-10. The user requested exercising both paths before growing the
-compiler, so IR design choices cannot silently make text resumption or native
-composition awkward. Scope: the existing constant-return function subset and
-full existing ordinary CODE assembly syntax; no new language expressions,
-general relocation, or independent application construction.
+2026-10-10. SDK/simulator 9.2.0, `fr265`. Question: do native, saved-IR,
+and saved-assembly paths produce equivalent CODE and permit an edited function
+to execute? The experiment used a constant-return function appended to an SDK
+scaffold; it did not test independent application generation.
 
-## Implementation and observations
-
-Introduced `ciq-assembly` as the shared model/parser/printer/encoder layer,
-depending only on our standard-library-only container/instruction crates.
-`ciq-asm` delegates its existing text APIs to it and keeps PRG/signing work.
-`ciq-compiler` lowers directly to its typed `Program`, rather than printing a
-string and reparsing to encode. Semantic IR now has a
-[provisional versioned text format](../specs/compiler-ir-text.md), with the same
-validator used by typed construction and source lowering.
-[The assembly model](../design/assembly-model.md) shares structural checks and
-encoding between native/text inputs. No external implementation was copied or
-newly imported.
-
-The body remains one integer definition and a return of that value. This
-deliberately strict validator rejects IR that would require scheduling, locals,
-or control flow the backend cannot yet handle. Optional source spans survive
-serialization; they are metadata about the original source, not a requirement
-that native and parsed assembly line provenance match.
-
-Six new tests cover: all 128 accepted literal pipelines preserving
-IR/items/labels/bytes; alternate value IDs and edited IR; invalid typed/text IR;
-typed assembly references/declarations/layout round trips; invalid native
-assembly and external binding resolution; CLI stop/resume, identical binaries,
-invalid-stage/IR rejection, and output preservation. Existing
-full-project/signing tests exercise the refactored assembly entry points. All
-122 workspace tests pass with Rust 1.99; formatting and Clippy with warnings
-denied pass.
+All 128 accepted literal inputs agreed across native/text models and CODE.
+Alternate value IDs/spans, malformed IR/assembly, external bindings, CLI stage
+resumption, and output preservation were checked. Shared-model responsibilities
+and current invariants are specified in [assembly](../specs/assembly.md) and
+[IR](../specs/compiler-ir-text.md).
 
 ## Reproduction and compatibility checks
 
@@ -84,20 +61,11 @@ Console prints greeting and `43`; inspected screen shows `Hello world!` and
 Signatures verify against our external key. Logs/screens remain ignored in
 `scratch/pipeline/simulator-43/`.
 
-## Limits and next work
+## Artifacts and limits
 
-This establishes the representation boundaries for a complete function, not the
-final IR design. `.ciqir` syntax, operation set, and APIs remain provisional.
-Assembly comments/formatting and parsed line numbers are not serialized as
-semantic content. The shared assembly model covers ordinary CODE and its
-existing inline declarations; full DATA/class/resource/project models remain in
-their current layers. Raw CODE output still needs the PRG scaffold, metadata,
-and signing to run. Branches, exception handling, and generalized stack
-scheduling remain unsupported.
-
-Next extend the semantic IR and both readers/printers together when adding
-arithmetic. Keep tests comparing native output with output resumed from each
-text boundary. Resource/project generation can evolve independently.
+This runtime check establishes the recorded scaffold/function path. It does not
+establish general relocation, all VM stack behavior, or compatibility beyond the
+stated SDK/device. Current language and format support belong in the specs.
 
 - **Artifact:** Native / IR-resumed / assembly-resumed `41` CODE. **SHA-256:**
   `cf2fd8b7314d28594165c1ca7b7f56207ac2c911abbd86632dc91b5757923680`.
@@ -124,11 +92,10 @@ IR][ref-llvm-ir], [LLVM MC][ref-llvm-mc],
 names][ref-cargo-target-names]. These informed terminology; they are not
 compatibility requirements.
 
-Local evidence:
+Related evidence:
 [initial replacement](../investigations/function-replacement.md),
 [instruction semantics](../investigations/instruction-semantics.md),
 [MIR/module observations](../investigations/module-method-names.md),
-[pipeline parity](../investigations/compiler-pipeline.md),
 [locals](../investigations/compiler-locals.md),
 [module calls](../investigations/compiler-calls.md), and
 [parameters/arguments](../investigations/compiler-arguments.md).

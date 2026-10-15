@@ -9,20 +9,9 @@ consulted or copied.
 
 ## Implementation and scope
 
-The source builder lowers `while` to test/body/exit blocks.
-It reevaluates the comparison on each visit and emits a symbolic backedge from
-continuing body paths. Returning paths omit the backedge. Body-local declarations
-retain their fixed slots but initialize on every iteration. There is no generated
-iteration cap; the syntax/compilation limits define the bounded subset.
-
-Graph validation now walks reachability from entry, rejecting disconnected
-cycles. Definite initialization intersects predecessor sets to a greatest fixed
-point, with an empty external predecessor for entry. This prevents body-only
-initializers from becoming available on a zero-iteration exit or first header
-visit. Local declarations still precede textual uses; values remain block-local
-and all edges carry empty evaluation stacks. [Design][design],
-[source syntax][source],
-and [cyclic IR rules][ir] document the contract.
+Test/body/exit graph construction and fixed-point initialization follow the
+[IR rules](../specs/compiler-ir-text.md#cyclic-control-flow); source scope follows
+[the while contract](../specs/compiler-subset.md#while-loops).
 
 ## Simulator observations
 
@@ -107,27 +96,16 @@ capture before the next session overwrites `scratch/simulator/`.
 
 ## Validation and limits
 
-Rust tests independently execute bounded integer/Boolean instruction sequences
-for zero/multiple iterations, nested loops/branches, and early returns. They
-check body-local slot reuse, backward targets, empty edge stacks, typed/native/
-text parity, repeated condition placement, and effectful calls remaining within
-test/body/exit blocks. String types through loops are tested structurally, not by
-this simulator specimen.
-
-Initialization tests include shuffled numeric block IDs, zero-iteration exits,
-backedge-only values, a mandatory first-body initializer, and reads before an
-initializer in a cyclic block. Reachability tests reject disconnected cycles
-whose members nevertheless have predecessors. Combined `if`/`while` nesting is
-limited to 64, and source body scopes/shadowing/return requirements are checked.
-
-This establishes the tested profile on one target. Termination and condition
-outcomes are not proven; even an always-returning body needs a source return for
-the zero-iteration exit. `break`, `continue`, optional `else`, other loop forms,
-and exception source compilation remain unsupported.
+Instruction-oracle checks cover zero/multiple iterations, nested branches/loops,
+early returns, repeated condition effects, fixed body-local slots, and empty edge
+stacks. Native/text paths agree. Initialization tests reject backedge-only or
+body-only availability and disconnected cycles, including shuffled block IDs.
+String loop types were checked structurally, not in this runtime specimen.
+Neither termination nor a nonzero iteration count is established.
 
 [assignments]: compiler-assignments.md
 [scaffold]: control-flow.md#reproduction
-[design]: ../design/compiler-ir.md#loops-and-initialization-analysis
+[design]: ../specs/compiler-ir-text.md#cyclic-control-flow
 [source]: ../specs/compiler-subset.md#while-loops
 [ir]: ../specs/compiler-ir-text.md#cyclic-control-flow
 [integration]: compiler-nested-conditions.md#reproduction

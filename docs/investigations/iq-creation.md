@@ -1,7 +1,7 @@
 # Own-key IQ creation and edited program execution
 
 Date: 2026-10-10. Scope: stage 5 of
-[the package plan](../design/package-crate.md), limited to the documented modern
+[the package plan](../specs/package-reading.md), limited to the documented modern
 developer profile. Implementation follows our
 [creation rules](../specs/iq-creation.md), using the existing signing crate and
 7z writer. No dependencies changed. Garmin SDK/simulator 9.2.0 and device
@@ -22,7 +22,7 @@ foreign product elements, comments, unknown data, nonempty product tags, and
 insertion of missing attributes), replacement with a different ephemeral RSA
 key, unsigned edited products, shared product paths, source preservation, debug
 omission/preservation, missing metadata, malformed PRGs, and staging cleanup.
-All 107 workspace tests pass with Rust 1.99; formatting and Clippy
+99; formatting and Clippy
 (`--workspace --all-targets -- -D warnings`) pass. Rust 1.85 compatibility of
 this change was not rerun; earlier baseline evidence is historical. Real private
 keys are never embedded in fixtures.
@@ -87,5 +87,5 @@ edits; omission is the default.
 
 The initial packaging stages are now complete for their supported profiles.
 Return to assembler module naming and branch/exception relocation; the
-[first compiler milestone](../design/first-compiler.md) gives the next small
+[first compiler milestone](../architecture.md#shared-compilerassembly-pipeline) gives the next small
 executable source-language objective.

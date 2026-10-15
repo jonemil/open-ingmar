@@ -97,13 +97,7 @@ reconstruction.
 
 ## Limits
 
-The repeated 56-example audit is saved at
-`scratch/example-audit/member-get/report.json`. All 67 SDK PRGs and 48 generated
-PRGs reconstruct byte-for-byte with identical repeat exports; documented
-source/resumed-IR checks pass. No `0x0d` gap remains in the decoder walks.
-SDK CODE is structured in 49 specimens and DATA in 58. Remaining opcode groups
-are `0x2d` (11 examples), `0x40` (nine), and `0x49` (six); DATA record `0x03`
-remains in nine groups. The audit returns nonzero for 18 SDK coverage issues.
+Structured coverage is recorded in the [example audit](example-toolchain-audit.md).
 
 The probe establishes the field-read encoding and compound-update behavior.
 It does not characterize inheritance, missing/read-only members, invalid

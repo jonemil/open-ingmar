@@ -61,23 +61,12 @@ Garmin's compiler/SDK implementation.
 
 ## Validation and limits
 
-The instruction oracle checks Boolean triples through logical returns,
-comparison/grouping/negation, and reassigned loop flags. It also checks empty
-stacks at branch edges. Typed/unit text tests cover native arguments and source
-self-call argument forms; self-call runtime behavior is not established by this
-module-only specimen.
-
-All temporary types and initialization are rechecked by ordinary IR validation.
-Edited text missing initialization and typed edits assigning Number to a
-Boolean temporary are rejected. A stored guard does not narrow the checked
-original storage, even when its right operand used a valid non-null proof.
-A snapshot made from a proved scalar read retains that scalar value's type.
-
-Temporary locals share the existing slot budget: tests admit a logical return
-with 254 parameters and one temporary, but reject adding a source local beyond
-that combined budget. This is a compiler-boundary check, not runtime evidence
-for maximum frame sizes. Slots are not reused and snapshots are conservative;
-optimization is separate work. Other logical operand types remain unsupported.
+Instruction-oracle checks cover Boolean triples, reassigned loop flags, and empty
+edge stacks. Typed/text checks cover module/self-call arguments, missing
+initialization, and wrong temporary types; this module-only runtime specimen does
+not establish self-call behavior. Stored guards do not carry narrowing facts.
+The 254-parameter-plus-one-temporary boundary passes; an additional local fails.
+That is a compiler budget check, not proof of maximum runtime frame capacity.
 
 [example]: ../../examples/compiler-logical-values/README.md
 [condition specimen]: compiler-short-circuit.md

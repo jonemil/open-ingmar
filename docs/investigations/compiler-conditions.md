@@ -12,14 +12,9 @@ The [checked-in source](../../examples/compiler-probe/conditions.mc) initializes
 `adjusted = value + 1`, then compares `adjusted == 1`, returning `47` on true
 and `49` on false. A second input changes only `==` to `>`.
 
-Semantic IR has explicit blocks, integer comparisons, Boolean branches, and
-jumps. Validation requires forward edges, reachable terminated blocks,
-block-local expression values, and initialized locals on every incoming path.
-The frontend initially accepts only a terminal conditional with a single return
-per arm. [Design](../design/compiler-ir.md), [source grammar][source], and
-[IR](../specs/compiler-ir-text.md#control-flow) describe the
-contract. Loops, reassignment, Boolean locals, and exception compilation remain
-unsupported.
+Current graph/type/initialization rules are in the
+[IR spec](../specs/compiler-ir-text.md#control-flow); this experiment tests the
+terminal two-return input above.
 
 **Experimentally observed:** each generated CODE body is 27 bytes. Source-native
 and saved-IR encoding are identical. Equality CODE is:
@@ -124,8 +119,8 @@ simulator capture before the next session overwrites `scratch/simulator/`.
 
 These runs establish this bounded integer condition/frame profile on one
 device. Effectful branch arms are covered structurally in Rust tests, not by
-this simulator experiment. General branch statements, nested conditions,
-loops, stack value joins, and exception source lowering need further work.
+this simulator experiment. Other source forms require their own specimens; current language support is
+specified separately.
 
 [source]: ../specs/compiler-subset.md#terminal-conditions
 [scaffold]: control-flow.md#reproduction

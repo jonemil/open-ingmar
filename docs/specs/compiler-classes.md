@@ -4,7 +4,7 @@ This profile adds AppBase-, View-, and BehaviorDelegate-derived classes to
 [compilation units][unit].
 Existing function parameter and result rules still apply. The
 [application builder][app] selects one AppBase class and binds additional Views/delegates.
-See [receiver design][design] and [runtime evidence][evidence].
+See [runtime evidence][evidence].
 
 ## Source and ownership
 
@@ -438,5 +438,4 @@ other device/API profiles and broader inherited lookup remain unverified.
 [unit]: compiler-unit.md
 [app]: console-application.md
 [ir]: compiler-ir-text.md#instance-receivers
-[design]: ../design/compiler-ir.md#class-ownership-and-instance-receivers
 [evidence]: ../investigations/compiler-class.md

@@ -39,6 +39,6 @@ signature/public-key differences. They must check the new signature's validity
 and independently check program content, preserved raw sections, and runtime
 behavior. Exact-byte preservation tests remain applicable when no signing or
 content transformation occurs. See
-[test expectations](../architecture.md#test-expectations).
+[test expectations](../validation.md).
 
-[ref-the-signing-boundary]: ../architecture.md#complete-section-export-and-signing-boundary
+[ref-the-signing-boundary]: ../architecture.md#preservation-layout-and-signing

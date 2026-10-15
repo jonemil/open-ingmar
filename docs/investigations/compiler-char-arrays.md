@@ -95,24 +95,12 @@ Our current profile follows that checking rule without implicit conversions.
 
 ## Compiler boundaries
 
-Semantic API types preserve an Array element contract. This record covers
-Char arrays; [Number arrays](compiler-number-arrays.md) have separate evidence.
-Introduction checks recurse into Char, so even a
-Char-array parameter calling API-1.0 `size` needs context 1.3.0. Array type
-invariance and assignability to Object are our checking policy; the read-only
-specimens do not establish broader SDK generic variance or mutation rules.
-
-Pipeline tests compare source/resumed unit IR, unsigned PRGs, and assembly round
-trips. Edited IR cannot misdeclare a Char-array user-call result as String or
-change an array parameter to String and retain size dispatch. Wrong arguments,
-receiver types, scalar consumers, and insufficient API contexts are rejected.
-Console entry results remain scalar/Void; array entries are rejected.
-
-Element access has [separate evidence](compiler-array-reads.md); broader Array
-methods remain in [the plan][plan]. A native
-array result does not establish general object mutation, nullable arrays, or
-ordinary object/reference lifetime behavior. Char-array literals have
-[separate construction evidence](compiler-array-literals.md).
+The read-only runtime specimens establish Char-array dispatch, not SDK generic
+variance or mutation semantics. Compiler checks covered native/text/PRG equality,
+wrong result/element contracts, and Char's 1.3.0 requirement even when the selected
+method dates from 1.0.0. [Element reads](compiler-array-reads.md),
+[Number arrays](compiler-number-arrays.md), and mutations have separate evidence;
+[the source spec](../specs/compiler-subset.md#char-arrays) owns current support.
 
 [example]: ../../examples/compiler-char-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html

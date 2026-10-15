@@ -73,16 +73,5 @@ These observations describe the agent's execution environment, not necessarily
 the user's desktop installation. Compilation and simulator execution have not
 yet been attempted successfully.
 
-## Next steps
-
-1. Establish a compatible Java runtime and verify compiler help/version
-   behavior.
-2. Locate or obtain the `fr265` device package and record its revision and
-   paths.
-3. Resolve native simulator dependencies and establish a display for execution
-   where required.
-4. Build a minimal independently written reference application in `scratch/`,
-   recording exact commands and artifact hashes.
-
-External implementation reconnaissance can proceed independently of SDK
-execution readiness.
+Current setup commands are in [SDK support scripts](../../scripts/README.md).
+[The plan](../plan.md) owns remaining toolchain work.

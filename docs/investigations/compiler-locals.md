@@ -136,38 +136,12 @@ target/debug/ciq-dis all examples/hello-world/build/fr265/hello-world.prg scratc
 Specific integration for the measured 744-byte CODE/7777-byte RESOURCES scaffold
 (assertions deliberately reject other builds):
 
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import shutil
-root = Path('scratch/compiler-locals')
-for name in ['probe', 'negative']:
-    project = root / f'{name}-project'
-    shutil.copytree(root / 'base-project', project)
-    size = len((root / ('native.bin' if name == 'probe' else 'negative.bin')).read_bytes())
-    padding = (-size) % 32
-    manifest = project / 'sections.ciq'
-    text = manifest.read_text()
-    assert '0xc0debabe 744 assembly' in text and '0xf00d600d 7777 raw' in text
-    code = project / '003-code-c0debabe.mcasm'
-    body = code.read_text()
-    assert body.count('\nprobe:\n') == 1
-    code.write_text(body.replace('\nprobe:\n', '\nprobe_original:\n') + '\n' +
-                    (root / f'{name}.mcasm').read_text())
-    lines = project / '005-line_numbers-c0de7ab1.mcasm'
-    lines.write_text(lines.read_text().replace('pc=code:probe ', 'pc=code:probe_original '))
-    resources = project / '007-resources-f00d600d.bin'
-    resources.write_bytes(resources.read_bytes() + bytes(padding))
-    manifest.write_text(text.replace('0xc0debabe 744 assembly', f'0xc0debabe {744 + size} assembly')
-                           .replace('0xf00d600d 7777 raw', f'0xf00d600d {7777 + padding} raw'))
-PY
-target/debug/ciq-asm project scratch/compiler-locals/probe-project scratch/compiler-locals/probe-37.prg -y keys/developer_key.der
-target/debug/ciq-asm project scratch/compiler-locals/negative-project scratch/compiler-locals/negative-6.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-locals/probe-37.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-locals/negative-6.prg -y keys/developer_key.der
-sh scripts/run-simulator-container.sh --prg scratch/compiler-locals/probe-37.prg
-sh scripts/run-simulator-container.sh --prg scratch/compiler-locals/negative-6.prg
-```
+Integrate into a fresh scaffold export: rename the old entry label and its line
+references to an unused alias, preserving their body/PCs. Append generated
+assembly under the original alias, redirect its method reference, and apply the
+DATA/resource lengths and offsets recorded in this record. Reconstruct/sign,
+verify our key, and run each case separately using the
+[shared procedure](../research.md#shared-compiler-reproduction).
 
 Actual integration reused `scratch/arithmetic/base-project`, the identical
 baseline export. Runtime reused the existing Garmin container through
@@ -214,6 +188,3 @@ limits, and CLI output/diagnostics. The restricted instruction evaluator checks
 stack balance and store-before-read within this subset, not physical frames. All
 136 workspace tests pass on Rust 1.99; formatting and workspace/all-target
 Clippy with warnings denied pass.
-
-Follow-up evidence: [module calls](compiler-calls.md) and
-[local reassignment](compiler-assignments.md).

@@ -2,7 +2,7 @@
 
 Question: rebuild our SDK developer IQ package without a private key, preserving
 all signed bytes and identity. Scope: stage 4 of
-[the package plan](../design/package-crate.md); own-key IQ creation remains
+[the package plan](../specs/package-reading.md); own-key IQ creation remains
 future work.
 
 ## Provenance and implementation
@@ -78,10 +78,4 @@ deterministic CLI output; changed manifest/PRG/signature/key rejection;
 existing/in-source output and size limits; and encoded-header decoding limits,
 CRC corruption, and unsupported layouts. Fixtures use independently authored
 content and generated ephemeral RSA keys. No real private key is included in
-tests. All 103 workspace tests pass; formatting and Clippy
-(`--workspace --all-targets -- -D warnings`) pass. Rust 1.85 remains the
-declared baseline; these changes were tested with Rust 1.99, not rerun with
-1.85.
-
-Next: own-key IQ creation, regenerating product and exact-byte manifest
-signatures with explicit external-debug-file policy.
+tests.

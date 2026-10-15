@@ -1,4 +1,4 @@
-# Future project builds and Jungle configuration
+# Project builds and target requirements
 
 Project builds are planned; no Rust Jungle parser or project build driver
 exists. Resolve real application and barrel projects into explicit compiler and
@@ -13,11 +13,9 @@ exclusions. The Monkey C compiler consumes those resolved inputs; archive
 writing remains in `ciq-package`, and signing remains in `ciq-sign`. Decide
 crate names and public APIs when implementation begins.
 
-The build layer must collect declarations across all selected source files
-before binding references, allowing forward references and mutual recursion
-without requiring dependency-ordered input files. Source file boundaries and
-module namespaces are separate concerns; investigate `using`/`import` visibility
-rules before implementing cross-file name resolution.
+Resolve inputs before the [compilation-unit](compiler-unit.md) declaration pass.
+File boundaries do not establish module ownership; project selection must retain
+source provenance and the supported name-visibility rules.
 
 Support two project workflows:
 
@@ -51,16 +49,13 @@ operations, not just modules. Resource validation must resolve name/icon and
 settings references against the selected resources. An unsupported manifest
 feature must be diagnosed rather than silently omitted.
 
-The [API declaration model](api-declarations.md) owns class/member availability.
+The [API catalogue](api-declarations.md) owns class/member availability.
 Keep catalogue coverage, selected-device capabilities, application minimum API,
 and VM encoding capabilities distinct. Target resolution supplies constraints;
 it does not duplicate the API catalogue for each device.
 
-The compiler currently accepts explicit API-level inputs through `ApiContext`
-and paired `--target-api`/`--min-api` options. These are caller assertions, not
-device selection or manifest resolution; they do not set PRG deployment
-metadata. The resolver should supply these inputs from verified target and
-manifest data rather than using the SDK version as a target capability.
+The resolver must supply [API context](api-declarations.md#availability) from
+verified target/manifest data, not infer device capability from the SDK version.
 
 Build mode (debug/release/test) and execution scope (foreground/background/
 glance) are separate inputs. Preserve declaration annotations and resource
@@ -86,15 +81,10 @@ must not become an assumed address-field width. The
 demonstrates this distinction: the same `news 0x01000000` encoding runs after
 raising only the simulated watch-app memory allowance.
 
-Do not introduce per-device address regions without evidence that devices use
-different VM address formats. First investigate a shared region model. The
-external research's high-nibble description suggests DATA addresses in
-`0x00000000..0x0fffffff` and CODE addresses in `0x10000000..0x1fffffff`;
-the successful `0x01000000` string fits that hypothesis. This is a provisional
-interpretation, not a verified 28-bit offset specification. Retain full u32
-address representations and distinguish region selectors from offsets. Verify
-selector handling and additional offset bits before defining authoring bounds;
-unknown addresses must remain preservable numerically.
+A shared high-nibble region model remains a hypothesis, not a verified 28-bit
+offset rule; see the boundary investigation. Do not invent per-device regions.
+Retain full u32 addresses, distinguish selectors from offsets, and preserve
+unknown numeric addresses until additional bits/selector behavior are verified.
 
 Device profiles should initially supply capacity and capability constraints,
 rather than redefining section regions. Add VM format variants only when

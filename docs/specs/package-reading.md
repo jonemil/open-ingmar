@@ -5,6 +5,15 @@
 dependency review: [reader investigation](../investigations/package-reading.md).
 This is a bounded supported profile, not a general-purpose archive extractor.
 
+## Representation
+
+Retain archive kind, ordered member metadata, exact uncompressed content, and
+raw manifests alongside parsed fields. Model multiple products/shared files
+explicitly; package aliases are not VM symbols. Untouched signed manifests must
+not be parsed and reserialized. Listing must not eagerly decompress all payloads;
+codec adapters bound the work needed to inspect metadata. Reading, signing, and
+project resolution remain separate [architecture](../architecture.md) layers.
+
 ## Commands and outputs
 
 ```sh

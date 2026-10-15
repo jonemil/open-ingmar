@@ -2,8 +2,7 @@
 
 SDK 9.2.0 and independently generated fr265 applications agree on all ten lines
 of [the example][example], checked 2026-10-13. This extends the existing
-[Char construction experiment][char] without introducing an inferred saved-IR
-operation or changing allocation instructions.
+[Char construction experiment][char] to Number-valued inputs.
 
 ## Observations and limits
 
@@ -21,10 +20,9 @@ whole-function checking still establishes validity and branch proofs.
 
 **Limits:** these specimens do not establish SDK allocation order, failure
 timing, or memory equivalence. The
-[lowering follow-up](natural-lowering.md#array-construction) replaces typed append
-with private final-length allocation and direct stores. Empty/contextual
-inference, object elements, and nested
-arrays remain outside this profile.
+[lowering experiments](natural-lowering.md#array-construction) cover direct
+construction separately. Current accepted elements and contextual inference are
+specified in [the source contract](../specs/compiler-subset.md#number-arrays).
 
 ## Reproduction
 

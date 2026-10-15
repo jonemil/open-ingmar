@@ -1,7 +1,7 @@
 # Supported Monkey C compiler subset
 
-Restricted frontend. Design:
-[small semantic IR](../design/compiler-ir.md). Runtime evidence:
+Restricted frontend. Semantic model:
+[small semantic IR](compiler-ir-text.md#semantic-model). Runtime evidence:
 [constant returns](../investigations/first-compiler.md),
 [arithmetic](../investigations/compiler-arithmetic.md),
 [locals](../investigations/compiler-locals.md),
@@ -11,7 +11,7 @@ Restricted frontend. Design:
 
 Number/String/Boolean/Char/null restrictions describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
-The [core type/API model](../design/api-declarations.md) connects values to
+The [core type/API model](api-declarations.md) connects values to
 `Lang` identities for operator validation and the bounded native calls below.
 General member lookup remains unsupported. Explicit API-level checks cover the
 known native references; see [API context inputs][api-context].
@@ -125,7 +125,7 @@ inspectable immutable `Function` IR; `Function::assembly()` lowers/prints it.
 Public IR types are preliminary. `Function::new` validates explicitly
 constructed operations, `parse_ir` resumes [IR text](compiler-ir-text.md), and
 `Function::lower()` constructs the
-[shared assembly model](../design/assembly-model.md) directly. Existing
+[shared assembly model](assembly.md) directly. Existing
 assembler/signing commands consume the output after explicitly integrating it
 into an application section project.
 

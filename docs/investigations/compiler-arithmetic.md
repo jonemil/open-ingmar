@@ -6,23 +6,7 @@ composition and text resumption work. Official SDK 9.2.0 `fr265` simulator
 console and inspected screen captures confirm `40 + (8 - 5)` returns `43`, and
 `2 - 5` returns `-3`.
 
-## Implementation and interpretation
-
-[Source grammar](../specs/compiler-subset.md),
-[IR syntax](../specs/compiler-ir-text.md), and
-[layer design](../design/compiler-ir.md) describe our implementation.
-Instruction assumptions come from
-[our instruction reference](../specs/instructions.md) and earlier controlled
-function experiments; no external implementation code was incorporated.
-
-The frontend builds a private expression AST with source spans, then semantic
-integer/binary definitions and a final return. Value IDs identify computation,
-not VM slots. Validation requires earlier, unique definitions and exactly one
-use per value: this is one pure expression tree. Unused/shared definitions are
-rejected pending a scheduling policy. Valid definition order need not be stack
-order. `backend::lower()` traverses dependencies from the return value, emits
-left operand before right operand, and selects VM instructions.
-`Function::lower()` delegates to it. There is no constant folding or new crate.
+## Inputs and instruction observations
 
 Tracked input: [arithmetic.mc](../../examples/compiler-probe/arithmetic.mc).
 Generated body:
@@ -42,12 +26,9 @@ CODE bytes: `35 01 38 28 38 08 38 05 04 03 16` (11 bytes). The negative
 comparison emits `35 01 38 02 38 05 04 16` (8 bytes). Actual arithmetic
 instructions execute; results are not folded into literals.
 
-Literals remain decimal `0..=127`. Results can be negative or exceed 127.
-Nesting is limited to 64 parentheses and functions to 1024 operations including
-return. Unary signs, other operators, locals, calls, multiple
-statements/functions, and control flow remain unsupported. Runtime evidence
-establishes these particular integer operations and left-minus-right order; it
-does not establish general frames, overflow, promotion, or a full VM model.
+These specimens establish integer addition/subtraction and operand order, not
+general frames, overflow, promotion, or a full VM representation. Current syntax,
+limits, and lowering are in [the source spec](../specs/compiler-subset.md).
 
 ## Reproduction
 
@@ -74,38 +55,12 @@ target/debug/ciq-compiler scratch/arithmetic/negative.mc scratch/arithmetic/nega
 Explicit integration for the measured 744-byte CODE/7777-byte RESOURCES scaffold
 (assertions fail for a different build):
 
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import shutil
-root = Path('scratch/arithmetic')
-for name, assembly, size in [('probe', 'probe.mcasm', 11), ('negative', 'negative.mcasm', 8)]:
-    project = root / f'{name}-project'
-    shutil.copytree(root / 'base-project', project)
-    manifest = project / 'sections.ciq'
-    text = manifest.read_text()
-    assert '0xc0debabe 744 assembly' in text
-    assert '0xf00d600d 7777 raw' in text
-    code = project / '003-code-c0debabe.mcasm'
-    body = code.read_text()
-    assert body.count('\nprobe:\n') == 1
-    code.write_text(body.replace('\nprobe:\n', '\nprobe_original:\n') + '\n' +
-                    (root / assembly).read_text())
-    lines = project / '005-line_numbers-c0de7ab1.mcasm'
-    lines.write_text(lines.read_text().replace('pc=code:probe ', 'pc=code:probe_original '))
-    resources = project / '007-resources-f00d600d.bin'
-    padding = 32 - size
-    resources.write_bytes(resources.read_bytes() + bytes(padding))
-    manifest.write_text(text.replace('0xc0debabe 744 assembly', f'0xc0debabe {744 + size} assembly')
-                           .replace('0xf00d600d 7777 raw', f'0xf00d600d {7777 + padding} raw'))
-PY
-target/debug/ciq-asm project scratch/arithmetic/probe-project scratch/arithmetic/probe-43.prg -y keys/developer_key.der
-target/debug/ciq-asm project scratch/arithmetic/negative-project scratch/arithmetic/negative-3.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/arithmetic/probe-43.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/arithmetic/negative-3.prg -y keys/developer_key.der
-sh scripts/run-simulator-container.sh --prg scratch/arithmetic/probe-43.prg
-sh scripts/run-simulator-container.sh --prg scratch/arithmetic/negative-3.prg
-```
+Integrate into a fresh scaffold export: rename the old entry label and its line
+references to an unused alias, preserving their body/PCs. Append generated
+assembly under the original alias, redirect its method reference, and apply the
+DATA/resource lengths and offsets recorded in this record. Reconstruct/sign,
+verify our key, and run each case separately using the
+[shared procedure](../research.md#shared-compiler-reproduction).
 
 Actual execution reused the Garmin container through container-broker, invoking
 `xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --prg <path> --device fr265 --observe-seconds 8`.
@@ -149,7 +104,4 @@ results, dependency scheduling with reordered definitions, malformed
 graphs/source diagnostics, resource limits, and CLI source/IR/assembly
 equivalence. The restricted test interpreter checks instruction results without
 pretending to model physical frames; simulator evidence remains the runtime
-oracle. All 129 workspace tests pass on Rust 1.99, plus formatting and
-workspace/all-target Clippy with warnings denied. Next: local
-declarations/reads, then verified calls; branch/exception research remains
-separate.
+oracle.

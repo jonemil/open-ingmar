@@ -1,0 +1,93 @@
+# API declarations and core types
+
+`ciq-compiler::api::core()` provides immutable runtime API declarations, populated
+in Rust. It owns module/class names, signatures, superclass paths, introduction
+levels, callback flags, enum constants, generic parameters, and exact
+receiver-result overrides. It contains no runtime method bodies or VM bindings.
+No declaration-file grammar is defined. [Architecture](../architecture.md)
+separates declaration lookup, compiler validation, and executable lowering.
+
+## Declaration model
+
+Types represent named classes, Null, Void, unions, invariant Arrays, positional
+tuples, and method type parameters. A declaration describes a runtime-provided
+API; compiler analysis state does not belong in it. `Lang.Object` is the root
+class. Modules are namespaces and do not inherit Object.
+
+`Catalogue::method()` follows superclass paths and returns the declaring class,
+effective result, and required API level. `Method.result` retains the generic
+signature; `ResolvedMethod.result` substitutes an exact receiver override.
+Overrides do not propagate to subclasses. `Object.weak` therefore resolves to
+Number, String, or Boolean for those exact immutable receivers, while other
+receivers retain WeakReference. This does not enable ordinary weak references.
+
+Assignability follows declared superclass paths without implicit conversion or
+acceptance of unknown classes. Every alternative of an actual union must satisfy
+the expected type. Generic Array signatures substitute the receiver's element
+contract before checking arguments/results. Arrays may widen to Object but not
+to mutable Arrays with different elements. Tuples require exact arity and
+per-slot assignability; they are not homogeneous Array contracts.
+
+Declaration availability, assignability, and executable support are separate
+checks. A broad Object parameter can have a narrower executable profile.
+Enum constants retain their declared types even if VM encoding uses a Number.
+Source class identity and native projection follow the
+[class specification](compiler-classes.md).
+
+## Availability
+
+Introduction checks include the requested class, intervening bases, enclosing
+modules, methods, and recursively referenced signature/element types. Class
+existence does not establish availability of every initializer or method.
+Deprecation alone does not mean unavailable; unknown restrictions stay explicit.
+
+`ApiContext` contains target and application minimum API levels. The minimum must
+be at least 1.0.0 and no greater than the target. Unguarded references must fit
+both levels. Unknown declaration, unavailable target, deployment-minimum
+violation, and unsupported lowering require distinct diagnostics.
+
+Context is supplied externally through source/IR `_with_api` entry points or
+`validate_api`; ordinary entry points omit availability checks but still validate
+supported lowering. Saved IR does not serialize context. These levels are caller
+assertions: they neither select a device nor set PRG deployment metadata. Device,
+app-type, scope, permission, and guarded optional-API checks remain planned in
+[project builds](project-builds.md).
+
+## Executable contracts
+
+The [source specification](compiler-subset.md#native-value-calls) owns supported
+methods, signatures, API thresholds, and operator behavior. The
+[IR specification](compiler-ir-text.md) owns their serialized representation and
+shared validation. Catalogue entries must not silently widen those profiles.
+Internal values map to `Lang` API identities; operator rules select result types
+before the backend selects instructions. Numeric operations need not be method
+calls. API object identity does not establish a heap allocation, tagged layout,
+or boxing protocol; do not infer those from the language's heap markers.
+
+Current catalogue inheritance/type references are checked by tests. Any future
+external definition reader must establish equivalent closure and availability
+invariants. A runtime may later associate these declarations with its own
+implementations without coupling the catalogue to VM storage.
+
+## Deferred core methods
+
+These documented members lack executable prerequisites. Supported methods are
+listed only in the source specification. Public API attribution and runtime
+results remain in the linked investigations.
+
+- **Number:** `toDouble`, `toFloat`, and `toLong` (1.0.0) need their numeric types.
+  [Number evidence](../investigations/compiler-number-methods.md).
+- **String:** `toFloat` (1.0.0), `toDouble`, `toLong`, and `toLongWithBase` (3.1.0)
+  need those values and nullable results.
+  [String evidence](../investigations/compiler-string-methods.md).
+- **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
+  Method values. Ordinary `weak` (1.2.0), including Char receivers, needs
+  WeakReference values/consumers; Char itself requires 1.3.0. The immutable
+  Number/String/Boolean specialization does not establish this behavior.
+  [Boolean](../investigations/compiler-boolean-methods.md),
+  [Char](../investigations/compiler-char-methods.md), and
+  [weak-result evidence](../investigations/compiler-immutable-weak.md).
+- **Array:** sorting needs comparator/callable support. Inherited equality,
+  hashing, and weak references require array-specific evidence.
+
+[The plan](../plan.md) owns sequencing and newly discovered prerequisites.

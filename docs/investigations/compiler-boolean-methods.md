@@ -4,28 +4,10 @@ Reviewed 2026-10-11 against Garmin's [Boolean][boolean] and [Object][object]
 API pages. Runtime experiment: SDK/compiler/simulator 9.2.0, fr265,
 optimization disabled. Scope: contracts and dispatch, not runtime bodies.
 
-## Method inventory
-
-Boolean declares one method and inherits five from Object. Introductions and
-signatures below are public contracts; executable prerequisites describe our
-bounded compiler profile.
-
-| Method | Result | Since | Executable scope or prerequisite |
-|---|---|---|---|
-| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean/Char arguments |
-| inherited `toString()` | String | 1.0.0 | Supported |
-| inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
-| inherited `hashCode()` | Number | 1.0.0 | Supported |
-| inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbol and callable Method values |
-| inherited `weak()` | WeakReference; effective Boolean | 1.2.0 | Supported; [separate probe][weak-results] |
-
-**Documented:** comparison treats false as zero and true as one, and admits
-Numeric, Boolean, or Char arguments. Other numeric types require executable value
-support. Char comparisons have [separate evidence][char-results]. Results promise
-a sign, not an exact magnitude.
-The [immutable weak probe][weak-results] establishes the receiver-specific result
-and SDK checker discrepancy. Callable values and ordinary object weak references
-were not tested here. Nullable Boolean remains outside the source/IR profile.
+Supported method contracts are defined in [the source spec](../specs/compiler-subset.md#native-value-calls);
+[API declarations](../specs/api-declarations.md#deferred-core-methods) record
+remaining prerequisites. This record retains public attribution and the tests
+that establish runtime behavior.
 
 ## Experiment
 

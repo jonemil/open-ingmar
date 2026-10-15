@@ -22,7 +22,7 @@ an edge. Both returning arms omit the join. Every function path must return;
 following unreachable statements are rejected.
 
 The [source specification](../specs/compiler-subset.md#statement-arms-and-joins)
-and [IR design](../design/compiler-ir.md#control-flow-and-joins) record these
+and [IR specification](../specs/compiler-ir-text.md#control-flow) record these
 rules. They are our bounded subset, not a claim of complete Monkey C scoping.
 
 ## Simulator specimens and observations
@@ -145,18 +145,10 @@ captures before the next session overwrites `scratch/simulator/`.
 
 ## Validation and remaining limits
 
-Rust tests independently execute bounded integer/Boolean instruction sequences,
-including both early-return directions and joins with one or two predecessors.
-They check empty evaluation stacks at branches/jumps/returns, text parity,
-source spans, sibling scope isolation, shadowing, missing returns, unreachable
-statements, effectful initializer order, 64-level conditional nesting, and global
-frame/operation bounds. Existing straight-line tests still pass.
-
-These experiments establish selected integer/print behavior on one target, not
-maximum-depth/device limits. General module side effects within arms are tested
-structurally; this runtime specimen uses the print intrinsic. Mutable locals,
-optional `else`, standalone blocks, backward edges, loops, and exception source
-compilation remain unsupported. Reassignment needs explicit type and
-initialization rules before loops can use it.
+Instruction-oracle checks cover both early-return directions, one/two-predecessor
+joins, initialized locals, empty edge stacks, and ordered effects. Native/text
+paths agree. Malformed graphs and source scope/type errors are rejected.
+[The source spec](../specs/compiler-subset.md#statement-arms-and-joins) owns the
+current grammar; these runtime observations remain limited to the stated inputs.
 
 [scaffold]: control-flow.md#reproduction

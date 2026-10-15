@@ -9,10 +9,11 @@
 - Keep findings, designs, experiments, and outstanding questions in this
   repository's Markdown documentation. Update relevant docs when new evidence
   changes a conclusion. The plan covers upcoming work and discovered needs;
-  design describes current structure and intent. Do not maintain completed-work
-  lists or document routine maintenance.
-- Follow [docs/README.md](docs/README.md) for readable prose, design/spec
-  boundaries, and concrete Rustdoc descriptions of behavior and requirements.
+  architecture and specs own current structure, intent, and contracts. Keep
+  investigations to essential evidence; do not maintain completed-work lists or
+  document routine maintenance.
+- Follow [docs/README.md](docs/README.md) for authoritative documentation homes,
+  readable prose, and concrete Rustdoc descriptions of behavior and requirements.
   Keep our provisional formats current-only; do not add compatibility paths for
   superseded local grammars.
 - Follow [validation policy](docs/validation.md): focused checks while iterating,

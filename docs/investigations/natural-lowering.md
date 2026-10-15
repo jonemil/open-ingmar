@@ -4,34 +4,9 @@ Date: 2026-10-14. Environment: SDK 9.2.0, `fr265`, SDK specimens built with
 `-O 0`. Question: where do source → IR → VM assembly paths substitute workaround
 sequences for established VM instructions?
 
-## Review findings
-
-| Source operation | Semantic representation | Instruction selection |
-|---|---|---|
-| Boolean `!value` | Typed `Not` / `.not` | Direct `invv` |
-| Equality/inequality with literal null | `Compare` and a `Null` definition | Direct `isnull`/`isnotnull` on the other operand |
-| Number `~value` | Typed `Complement` / `.complement` | Direct `invv` |
-| Array literal | Typed constant or private begin/fill/finish construction | `apush` with DATA binding, or direct `newa`/stores |
-| Numeric binary operations/comparisons | Typed `Binary` / `Compare` | Corresponding VM arithmetic/comparison instructions |
-
-**Interpretation:** Boolean negation and literal-null comparison already retain
-their meaning sufficiently in IR. Their direct backend selection needs no IR
-grammar change. A literal null has no evaluation effects; selecting a unary
-check preserves the other operand's evaluation once. This is local instruction
-selection, without constant folding or an optimization pass. Comparison with a
-stored null-valued operand remains binary because its definition is a read,
-not a null literal. Existing type checking and flow proofs still apply.
-
-Array construction retains either typed constant contents or private allocation,
-initialization, and publication in IR. See [constant selection](#constant-array-selection).
-Do not recognize arbitrary XOR/native-call sequences as substitutes for the
-missing semantic representation. See [the plan](../plan.md#next-work).
-
-Field reads already use direct `getselfv`; capture/staging locals preserve
-compound-target order across effects and branches. The SDK's stacked `getv`
-sequence is an alternative encoding, not a requirement to duplicate its stack
-layout. Native/user calls use member lookup and invoke instructions. Literal
-integer widths and arithmetic are already selected directly.
+Current semantic/lowering contracts are in [the IR spec](../specs/compiler-ir-text.md).
+This review compares controlled SDK/generated behavior; it does not require
+identical instruction sequences or layout.
 
 ## Boolean and null selection evidence
 
@@ -64,19 +39,7 @@ This validates direct selection for these profiles; it does not establish VM
 compatibility for other SDK/devices or require byte equality with SDK output.
 API-version declarations remain distinct from VM instruction availability.
 
-The repeated audit is saved at
-`scratch/example-audit/natural-null-boolean/report.json`. All 67 SDK and 48
-generated PRGs retain fully structured CODE/DATA, exact reconstruction, and
-identical repeat exports. All 62 documented source/resumed-IR commands and both
-barrel member checks pass; the audit exposes no new decoding gaps.
-
 ## Number complement
-
-Source `~value` now retains a unary parser node, `Operation::Complement`, and
-`.complement` in saved IR. Both paths require a non-null Number and preserve
-operand spans, single-use dependencies, effect scheduling, and nullable proofs.
-Lowering emits the operand once followed by `invv`. Ordinary XOR stays binary;
-`~~value` retains two unary operations rather than folding them away.
 
 **Experimentally observed:** regenerating the
 [Number-bit example](../../examples/compiler-number-bits/README.md) into
@@ -113,29 +76,9 @@ produce identical unsigned PRGs. Artifacts and logs are under
 
 Shared tests reject Boolean/Char/null and unguarded nullable operands, malformed
 saved operands, and missing definitions. Source/text round trips and the
-64-prefix and nested-call parser limits pass. Array construction remains the
-next representation question; no native-call sequence recognition is added.
-
-The repeated audit at `scratch/example-audit/natural-complement/report.json`
-retains all 115 structured PRG round trips, all documented source/resumed-IR
-comparisons, and both barrel member checks, with no new decoding gaps.
+64-prefix and nested-call parser limits pass. These are compiler validation checks, not additional runtime observations.
 
 ## Array construction
-
-Nonconstant nonempty literals retain private begin/fill/finish operations in IR. A builder
-is a construction identity rather than a language value; a CFG check requires
-ordered initialization of every index and identical progress on incoming paths.
-Only finish publishes the typed array. This permits final-length allocation
-before element effects without exposing Null slots under a non-null element
-contract. Empty literals keep the already-safe empty `ArrayNew` operation.
-
-Straight-line literals use `.array-fill-many`: the backend retains the array
-with `aputvdup` between elements and consumes it with final `aputv`. Each element
-executes and is stored before the next. Elements requiring branching/staged
-construction use individual fills through a private frame slot, plus a reusable
-element local; CFG edges still have empty stacks. A finished builder can be
-allocated again when a loop repeats its declaration. Frame-budget checks count
-builder and ordinary slots separately, including overlapping numeric identities.
 
 **Experimentally observed:** regenerated [Char literals][char-arrays],
 [Number literals][number-arrays], and [native View arrays][view-arrays] match
@@ -144,22 +87,10 @@ joins, repeated construction, guarded values, object construction, mutation,
 and shared references. Validation artifacts/logs are under
 `scratch/natural-arrays/`, named `char`, `number`, and `view`.
 
-The removal of native append calls also removes their incidental API requirement
-from literals. Number construction needs Array/Number availability (1.0.0), and
-Char still needs 1.3.0. Element calls and explicit Array methods retain their
-individual requirements. This is a declaration/selection change; simulator
-evidence remains limited to SDK 9.2.0 and `fr265`.
-
-Builder tests reject premature publication, skipped/repeated/out-of-range fills,
-wrong element types, inactive identities, escaping through ordinary reads,
-unfinished returns, and inconsistent CFG joins. Boundary tests verify private
-slots share the 255-slot frame budget. Source/text paths retain the same builder
-validation. Grouped/individual stores use supported VM opcodes; constant
-selection is covered below.
-
-The audit at `scratch/example-audit/natural-arrays/report.json` retains all 115
-fully structured PRG round trips, all 62 documented source/resumed-IR paths,
-and both barrel member checks. No new decoding gap is exposed.
+Builder checks reject incomplete/out-of-order fills, wrong types, inactive or
+escaping identities, unfinished returns, and inconsistent joins. Native/text
+paths agree; builder slots share the 255-slot frame budget. API availability is
+checked separately from VM encoding and this runtime profile.
 
 [char-arrays]: ../../examples/compiler-array-literals/README.md
 [number-arrays]: ../../examples/compiler-number-array-literals/README.md
@@ -171,12 +102,6 @@ and both barrel member checks. No new decoding gap is exposed.
 ## Constant-array selection
 
 Date: 2026-10-15. Environment: SDK 9.2.0 / `fr265`, `-O 0`.
-Homogeneous Number/Char literal tokens now retain typed raw contents in
-`ArrayConstant` / `.array-constant`. Lowering emits an unplaced DATA requirement
-and `apush`, rather than recognizing patterns of unrelated fill operations.
-Computed/effectful/branching elements keep private builders. This is literal
-representation and instruction selection; expressions are not constant-folded.
-
 **Experimentally observed:** a complete probe runs the following checks in order:
 
 - `make()` returns `[10, 20, 30]`; calling it twice and changing the first result
@@ -218,9 +143,3 @@ requirements bind by typed content against explicit DATA. Checks reject missing,
 ambiguous, conflicting, or mispinned records, invalid types/bit patterns, and
 reordered allocations. Instruction availability beyond the tested SDK/device,
 other scalar types, nested arrays, and deep-copy semantics remain unverified.
-
-The repeated audit at
-`scratch/example-audit/natural-constant-arrays/report.json` covers all 56
-examples: 67 SDK and 48 generated PRGs retain fully structured CODE/DATA,
-byte-exact reconstruction, and stable exports. All 62 documented compiler
-commands retain saved-stage equivalence; both barrel member checks pass.

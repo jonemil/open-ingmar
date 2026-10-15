@@ -67,7 +67,7 @@ resolve the [negative-literal postfix][negation] and
 
 Preserve native/text pipeline equivalence and complete-app simulator validation
 for each group. Keep API minimum, selected target API, VM capabilities, and
-device capacity distinct. Grow the [API declaration model][api-design] through
+device capacity distinct. Grow the [API declarations][api-design] through
 core contracts; broader device/app/permission inputs and Application/System
 integration belong to the later project/SDK phase. A Jungle driver or complete
 API definition parser is not a prerequisite for this core work.
@@ -281,26 +281,26 @@ specimens compiled from our sources, and the official simulator. Do not
 reverse Garmin's compiler/SDK implementation. Documentation establishes source
 and API contracts; binary-format and dispatch conclusions require experiments.
 
-Each extension updates the relevant design/spec, native and text paths,
+Each extension updates the relevant specification, native and text paths,
 diagnostics, and focused checks. For complete apps compare unsigned native/text
 PRGs and verify own-key signing separately. Inspect console or visible behavior
 as appropriate; successful encoding or a running process is not runtime proof.
 Use [research conventions](research.md) and [support scripts](../scripts/README.md)
 for evidence and reproduction; do not keep completed-step lists in this plan.
 
-[builds]: design/project-builds.md
-[constraints]: design/project-builds.md#target-constraints-and-section-layout
+[builds]: specs/project-builds.md
+[constraints]: specs/project-builds.md#target-constraints-and-section-layout
 [official-docs]: investigations/official-garmin-documentation.md
 [source]: specs/compiler-subset.md
 [boundary]: investigations/string-address-boundary.md
 
-[api-design]: design/api-declarations.md
+[api-design]: specs/api-declarations.md
 
-[number-methods]: investigations/compiler-number-methods.md#method-inventory
+[number-methods]: specs/api-declarations.md#deferred-core-methods
 
-[string-methods]: investigations/compiler-string-methods.md#method-inventory
+[string-methods]: specs/api-declarations.md#deferred-core-methods
 
-[boolean-methods]: investigations/compiler-boolean-methods.md#method-inventory
+[boolean-methods]: specs/api-declarations.md#deferred-core-methods
 
 [weak-results]: investigations/compiler-immutable-weak.md
 

@@ -8,17 +8,10 @@ The experiment reuses the [control-flow scaffold][scaffold] and existing
 
 ## Implementation
 
-The parser accepts optional `else` and semicolon-terminated `break`/`continue`.
-An omitted false arm falls through. The source builder tracks enclosing loop
-pairs: `break` selects the innermost exit and `continue` its test. They lower to
-jumps; no IR syntax or VM opcode changes are required.
-
-Statement sequences report path termination, including return and loop control.
-Only falling-through paths contribute join edges or an implicit loop backedge.
-Both terminating conditional arms omit their join. A loop's false-condition
-exit remains available, so its body cannot replace a following required return.
-Existing graph reachability, initialization, effect-order, and stack rules apply.
-See [source syntax][source] and [design][design].
+`break` and `continue` lower to existing jumps; there is no new opcode. The
+[source rules](../specs/compiler-subset.md#loop-control) and
+[IR graph rules](../specs/compiler-ir-text.md#cyclic-control-flow) define target
+selection, joins, and initialization.
 
 ## Simulator observations
 
@@ -101,19 +94,14 @@ Save each simulator capture before the next session overwrites it.
 
 ## Validation and limits
 
-Instruction-oracle tests check nested target selection, skipped updates,
-zero/multiple iterations, mixed return/break/continue arms, and empty edge
-stacks. They also check optional false paths, arm-local visibility, missing
-returns, outside-loop controls, reserved keywords, missing semicolons, and
-unreachable following statements. Typed/text IR and assembly remain equivalent.
-
-This establishes the tested profile on one target, not termination guarantees
-or complete Monkey C compatibility. Labeled controls, `for`, `do/while`,
-brace-free arms, Boolean literals, and exception source lowering remain outside
-the subset. Existing nesting, operation, slot, and type limits are unchanged.
+Instruction-oracle checks cover nested target selection, skipped writes,
+zero/multiple iterations, mixed return/control arms, and empty edge stacks.
+Source checks reject out-of-loop controls, scope errors, missing terminators,
+and unreachable statements; typed/text/assembly paths agree. This does not
+establish loop termination or full Monkey C compatibility.
 
 [scaffold]: control-flow.md#reproduction
 [loops]: compiler-loops.md
 [source]: ../specs/compiler-subset.md#loop-control
-[design]: ../design/compiler-ir.md#loops-and-initialization-analysis
+[design]: ../specs/compiler-ir-text.md#cyclic-control-flow
 [integration]: compiler-nested-conditions.md#reproduction

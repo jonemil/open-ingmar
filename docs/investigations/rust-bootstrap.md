@@ -157,25 +157,12 @@ The compiler's source/debug correspondence establishes which function these
 bytes implement. Precise call/frame semantics are still research questions;
 operand values remain raw bit patterns in the Rust model.
 
-## Implementation and local verification
+## Reconstruction checks
 
-Four workspace members now have working implementations: `ciq-prg` preserves
-ordered opaque sections, `ciq-mc` decodes/encodes the observed instruction
-subset, `ciq-dis` prints section listings or assembly, and `ciq-asm` reassembles
-code into an existing PRG template. They use only the Rust standard library and
-workspace dependencies. Local specs are
-[section framing](../specs/prg-container.md) and
-[instruction subset/assembly grammar](../specs/bytecode-subset.md).
+Rust/Cargo 1.99.0 was used. Malformed/truncated containers, opaque section
+preservation, instruction widths/unknown opcodes, and invalid assembly operands
+were checked separately from these byte comparisons:
 
-Verification used Rust/Cargo 1.99.0. The manifest declares Rust 1.85 as the
-intended minimum for edition 2024; that older toolchain has not been tested
-here.
-
-- `cargo test --workspace`: ten passing tests covering malformed/truncated
-  containers, section preservation, ambiguous code, variable-width instructions,
-  unsupported opcodes, and invalid assembly operands.
-- `cargo clippy --workspace --all-targets -- -D warnings`: passed.
-- `cargo fmt --all -- --check`: passed.
 - Both complete ordinary code sections decoded: Minimal Console has 171
   instructions; Hello World has 231.
 - All debug function ranges with start/end PCs align to decoded instruction
@@ -186,7 +173,6 @@ here.
   byte-identical files for both specimens, checked using Python byte equality.
   This checks the reconstructed section stream and all preserved
   signatures/resources, not merely instruction text.
-- Shared build helper shell syntax and the six existing downloader tests passed.
 
 - **Artifact:** Minimal Console original and
   `scratch/rust-bootstrap/minimal-console-roundtrip.prg`. **Bytes:** 122188.
@@ -209,24 +195,12 @@ cargo run -p ciq-asm -- examples/minimal-console/build/fr265/minimal-console.prg
 python3 -c 'from pathlib import Path; assert Path("examples/minimal-console/build/fr265/minimal-console.prg").read_bytes() == Path("scratch/roundtrip/minimal-console.prg").read_bytes()'
 ```
 
-## Remaining runtime experiment
+## Runtime limit
 
-Podman is available only on the host. No newly emitted PRG has been launched in
-the simulator during this investigation. The original Hello World baseline was
-already verified in the [simulator investigation](simulator-container.md).
-
-Run the prepared reassembled Minimal Console specimen on the host:
-
-```sh
-sh scripts/run-simulator-container.sh --prg scratch/rust-bootstrap/minimal-console-roundtrip.prg
-```
-
-Expected console output is `Hello!`; the base view has no custom greeting on
-screen. For interaction, put `--interactive` first. After this baseline check,
-change the original numeric probe from `41` to `42` at equal instruction length
-and test simulator behavior. A later equivalent-but-different program requires
-evidence about signature handling and affected references; byte identity here is
-the first deliberate milestone, not the final goal.
+This bootstrap record establishes byte preservation, not execution of a changed
+program. [Function replacement](function-replacement.md) and
+[the compiler probe](first-compiler.md) provide separate changed-code runtime
+evidence; [the simulator record](simulator-container.md) establishes the baseline.
 
 [ref-monkeyc-ghidra-plugin]: https://github.com/Gualdimar/MonkeyC-Ghidra-Plugin/tree/12ae55010721165b4ba98254d5e77db22eaa1b07
 [ref-monkeyc-optimizer]: https://github.com/markw65/monkeyc-optimizer/tree/2920dc88c23caadded9f66ee0613a7de6ab2d1ea

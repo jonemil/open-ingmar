@@ -1,6 +1,6 @@
 # IQ package signature verification implementation
 
-Date: 2026-10-10. Stage 2 of [the package design](../design/package-crate.md),
+Date: 2026-10-10. Stage 2 of [the package design](../specs/package-reading.md),
 following [the reader](package-reading.md) and
 [independent format/signature research](package-formats.md). Scope: public-SPKI
 and detached-signature APIs, then read-only IQ verification. No writer,

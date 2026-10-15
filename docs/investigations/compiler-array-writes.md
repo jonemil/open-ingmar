@@ -91,13 +91,10 @@ or behavior on other VM/device versions is established.
 
 ## Compiler validation boundaries
 
-Focused checks cover source/resumed IR and unsigned PRG equivalence, assembly
-text, exact primitive bytes/spans, API 1.0.0 parameter writes, malformed saved
-operands, wrong types, missing/invalidated null proofs, and read/write effect
-order. Plain writes work at the existing frame limit; staged hidden locals
-consume that budget and diagnose overflow. The
-[Char/View extension](compiler-typed-array-writes.md) records the shared
-element contract and its separate runtime evidence.
+Native/text/PRG checks passed for primitive writes, invalid operands/types,
+nullable guards, and read/write order. Plain writes fit the existing frame limit;
+staged captures consume that budget and overflow is rejected. Runtime bounds
+failures above remain distinct from these compiler checks.
 
 [example]: ../../examples/compiler-array-writes/README.md
 [output]: ../../examples/compiler-array-writes/expected.txt

@@ -4,30 +4,10 @@ Reviewed 2026-10-11 against Garmin's [Char][char], [Number][number], and
 [Object][object] API pages. Runtime experiments: SDK/compiler/simulator 9.2.0,
 fr265, optimization disabled.
 
-## Method inventory
-
-Char has five direct methods, including a `toString` override, and four other
-inherited Object members. The table separates declared introductions from our
-executable scope. Inherited calls also require Char's API 1.3.0 introduction.
-
-| Method | Result | Since | Executable scope or prerequisite |
-|---|---|---|---|
-| `toLower()` | Char | 1.3.0 | Supported |
-| `toUpper()` | Char | 1.3.0 | Supported |
-| `toNumber()` | Number | 1.3.0 | Supported |
-| `toString()` | String | 1.3.0 | Supported |
-| `compareTo(Object)` | Number | 5.0.0 | Supported for Number/Boolean/Char arguments |
-| inherited `equals(Object or Null)` | Boolean | 1.0.0 | Supported for scalar/nullable scalar arguments |
-| inherited `hashCode()` | Number | 1.0.0 | Supported |
-| inherited `method(Symbol)` | Method | 1.0.0 | Needs Symbols and callable values |
-| inherited `weak()` | WeakReference | 1.2.0 | Needs ordinary weak-reference values and consumers |
-
-**Documented:** Char represents Unicode characters, and `toNumber()` returns
-the UTF-32 representation interpreted as Number. Comparison also accepts other
-numeric types, which need executable support. The documented immutable-value
-exception to `weak()` does not list Char; do not extend our Number/String/Boolean
-specialization to it without evidence. `Number.toChar()` returns Char from
-API 1.3.0; its page specifies no range restriction.
+Supported method contracts are defined in [the source spec](../specs/compiler-subset.md#native-value-calls);
+[API declarations](../specs/api-declarations.md#deferred-core-methods) record
+remaining prerequisites. This record retains public attribution and the tests
+that establish runtime behavior.
 
 ## Conversion boundaries
 

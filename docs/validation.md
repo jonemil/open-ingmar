@@ -16,8 +16,9 @@ GitHub CI continues to run the full Rust and documentation checks.
    run existing nesting/depth tests early; after frame allocation changes, run
    slot-boundary tests early. Preserve the supported limits.
 4. Run the applicable final checks below. Update each fact in its authoritative
-   document: design for structure, spec for contracts, investigation for evidence,
-   plan for remaining work. Link instead of repeating explanations.
+   document: architecture for component boundaries, specs for contracts and
+   rationale, investigations for evidence, plan for remaining work. Link instead
+   of repeating explanations.
 
 ## Check selection
 

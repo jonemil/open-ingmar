@@ -89,4 +89,4 @@ Adding/removing library sources is not a PRG relocation operation.
 Limits still to investigate: nested dependencies, annotation selection,
 localization, device-specific assets, multiple Jungle inputs, optional
 metadata/licensing files, ZIP64/large members, and archive formats in other SDK
-versions. See [package design](../design/package-crate.md).
+versions. See [package design](package-reading.md).

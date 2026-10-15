@@ -5,26 +5,12 @@ constant-return function and run it inside the known-good application? Result:
 source → small semantic IR → readable assembly → assembled/signed PRG →
 simulator is verified for `41` and `42`.
 
-## Design and evidence
+## Inputs and evidence
 
-The [representation decision](../design/compiler-ir.md) compares direct lowering
-with a small value-based IR. Chosen initial IR: an integer definition with a
-value ID, then a return of that value, both with source spans. It is an internal
-Rust representation, not Garmin MIR. The frontend and backend are independently
-written in `ciq-compiler`; no external implementation was incorporated.
-Opcode/frame assumptions come from
-[our instruction specifications](../specs/instructions.md) and
-[the prior arithmetic replacement](function-replacement.md). The latter supports
-context-independent arithmetic without the original globals-resolution sequence,
-but does not prove the complete calling convention.
-
-Before implementation,
-[the restricted grammar and lowering contract](../specs/compiler-subset.md) were
-documented. Only a parameterless top-level function returning a decimal integer
-in `0..=127` is accepted. Unsupported syntax is rejected with locations. This
-range avoids unresolved high-bit immediate semantics; it is not the VM's integer
-range. Compiler tests use independently authored inputs and require no Garmin
-SDK.
+The [instruction specifications](../specs/instructions.md) and
+[arithmetic replacement](function-replacement.md) supplied the calling/encoding
+hypotheses. The experiment checks a context-independent global return, not a
+complete calling convention. Current IR and source contracts belong in the specs.
 
 SDK/simulator 9.2.0, `fr265`, scaffold compiled with `-O 0`. Input: tracked
 [probe.mc](../../examples/compiler-probe/probe.mc), returning `41`. A local
@@ -153,18 +139,10 @@ cmp scratch/compiler/hello-42.prg scratch/compiler/hello-42-roundtrip.prg
 | Signed generated `41` PRG | `4f68711f23f19333fc0e68e7a9aa492c971980f638046a7e3e16912064eccf10` |
 | Signed generated `42` PRG | `3068b5b5f7000479faaf5c8b29e10d9c4d72b54be98b9e6e93414f78bd221bff` |
 
-## Implementation validation and next step
+## Validation and limits
 
-Five new tests cover IR value identity/source spans, every accepted literal
-assembled and evaluated by a restricted encoding test, unsupported-input
-rejection, Unicode/comment locations, and CLI overwrite/invalid-input behavior.
-The encoding test is not a full VM or a substitute for the simulator evidence.
-All 116 workspace tests pass with Rust 1.99; formatting and Clippy with warnings
-denied pass.
-
-The result supports `argc 0x01` followed by a context-independent integer return
-for this global function and its existing call sites. It does not establish
-frame setup for arbitrary methods, closures, parameters, or locals. Next extend
-the IR/parser/backend to a small arithmetic expression, then locals and calls
-using controlled specimens; continue branch/exception investigation before
-supporting conditions and changing code layout generally.
+Compiler checks covered literal encodings, value IDs/spans, diagnostics, and CLI
+output preservation. A restricted encoding evaluator was used, not a full VM.
+The runtime results support `argc 0x01` and a context-independent integer return
+at these global call sites. They do not establish arbitrary method frames,
+closures, parameters, locals, or general relocation.

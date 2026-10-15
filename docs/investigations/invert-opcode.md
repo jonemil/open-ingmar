@@ -94,14 +94,7 @@ lines above. Preserve each session's logs. Use fresh reconstruction output paths
 
 ## Limits
 
-The repeated 56-example audit is saved at
-`scratch/example-audit/inversion/report.json`. All 67 SDK PRGs and 48 generated
-PRGs reconstruct byte-for-byte with identical repeat exports; documented
-source/resumed-IR checks pass. SDK CODE is structured in 56 specimens, up from
-49; DATA remains structured in 58. No `0x2d` gaps remain in the decoder walks.
-Remaining opcode groups are `0x40` (nine examples) and `0x49` (six); DATA record
-`0x03` remains in nine groups. The audit returns nonzero for 11 SDK coverage
-issues. No additional opcode group was exposed in this run.
+Structured coverage is recorded in the [example audit](example-toolchain-audit.md).
 
 The experiment establishes Number/Boolean behavior in the selected environment.
 Other value types, invalid operands, and other SDK/device versions remain

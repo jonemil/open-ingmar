@@ -33,11 +33,15 @@ evidence rather than treating every item below as a mandatory template:
 4. Minimal source inputs, commands, artifact hashes, and relevant byte offsets
    or hex excerpts.
 5. Findings with evidence categories, uncertainty, and conflicting observations.
-6. Implications for local specs or Rust APIs, and the next experiment.
+6. Unresolved implications; put upcoming implementation work in the plan.
 
-Lead with the question, result, and limits. Keep the investigation index a short
+Lead with the question, result, and limits. Prefer links to tracked specimen
+sources and expected output over copies. Keep only distinctive reproduction
+steps; use the shared validation helpers for ordinary compile/sign/run/round-trip
+commands. Do not retain routine test totals, repeated passing audits, completed
+implementation summaries, or superseded feature inventories. Keep the investigation index a short
 topic map, not a milestone report. Omit routine workspace test counts and
-implementation summaries already covered by design/specs; retain checks that
+implementation summaries already covered by specs; retain checks that
 support a specific observation. Replace superseded next-step lists with links
 to follow-up evidence. Keep source inputs, reproduction commands, artifact
 identity, conflicting results, and relevant failed experiments.
@@ -47,7 +51,7 @@ repositories, or incidental build artifacts. Use `scratch/` for local specimens.
 If an independently redistributable fixture is needed later, deliberately choose
 its location and document its origin and reproducibility.
 
-## Specifications and design
+## Specifications
 
 Follow [the documentation guide](README.md) for formatting and scope. Keep
 investigations concise while retaining the evidence needed to reproduce their
@@ -74,5 +78,22 @@ Review related method contracts together and reuse specimens where useful;
 isolate calls that could prevent later observations. Record prerequisites and
 unknowns without duplicating the supported contracts in specs.
 
-Update the relevant design/spec pages when evidence changes their conclusions;
+Update the relevant specifications when evidence changes their conclusions;
 put newly discovered work in [the plan](plan.md).
+
+## Shared compiler reproduction
+
+Each example README owns its compiler command and expected result. For SDK
+comparison, select the same sources with the example's recorded Jungle/manifest
+configuration. If a source only provides `start()`, retain the specimen's AppBase
+wrapper and its native base initialization; do not assume every example shares
+an entry class or resource profile. Build with `scripts/build-example.sh` using
+the recorded SDK, target, API settings, and optimization level.
+
+Use the [console specimen checker](../scripts/README.md#console-specimen-check)
+for supported complete console examples, and the
+[full audit](../scripts/README.md#example-toolchain-audit) for coverage. Those
+helpers own mechanical saved-stage, reconstruction, signing, and expected-output
+checks. Investigations need only record the selected inputs/settings and actual
+outcome. Older append-to-scaffold experiments retain their specific offsets,
+section changes, and alignment steps because those are part of the experiment.

@@ -65,9 +65,7 @@ simulator behavior. Artifacts, console logs, and exports are under
 - SDK:
   `63e87de199a30e6e023a6b033e80aeeba6b716aa3fb479090dd1178a82aea0ea`.
 
-The repeated audit at `scratch/example-audit/increments/report.json` covers all
-57 examples with no coverage issues, including this example's SDK/generated
-structured reconstruction and saved-stage equivalence.
+Structured coverage is recorded in the [example audit](example-toolchain-audit.md).
 
 ## Reproduction and a separate SDK failure
 

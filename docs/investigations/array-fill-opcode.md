@@ -103,14 +103,7 @@ element's effect and subsequent array inspection do not execute.
 
 ## Limits
 
-The repeated 56-example audit is saved at
-`scratch/example-audit/array-fill/report.json`. All 67 SDK PRGs and 48 generated
-PRGs reconstruct byte-for-byte with identical repeat exports; documented
-source/resumed-IR checks pass. SDK CODE is structured in 58 specimens, up from
-56; DATA is structured in 58. No `0x49` gaps remain in the decoder walks.
-Opcode `0x40` and DATA record `0x03` remain in nine example groups; the audit
-returns nonzero for those nine SDK coverage issues. No new opcode group was
-exposed in this run.
+Structured coverage is recorded in the [example audit](example-toolchain-audit.md).
 
 The probe establishes encoding, element order, resulting contents, and the
 observed bounds failure. It does not establish initialization visibility during

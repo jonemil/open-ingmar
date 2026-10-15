@@ -3,8 +3,8 @@
 SDK 9.2.0 and generated fr265 applications agree on the 12 lines in
 [the example][example]. Nonempty literals construct usable `Array<Char>` values
 with ordered element effects, including logical expressions and typed user
-results. Checked 2026-10-13. Empty source literals and other element types are
-outside the compiler profile.
+results. Checked 2026-10-13. This specimen covers Char elements; current source support
+is specified independently of the experiment.
 
 ## Observations and interpretation
 
@@ -22,19 +22,11 @@ outside the compiler profile.
   primitive encodes `ipushz; newa` as `37 14`. An edited allocation definition
   cannot move ahead of an earlier call while retaining its later consumer.
 
-The [lowering follow-up](natural-lowering.md#array-construction) replaces native
-append with private final-length construction and direct stores. The original
-**design decision** was to allocate an empty Char array first and fill it with typed
-`add` calls. The builder retains the array and current element in two temporary
-locals, reusing the element slot. This preserves allocation before element
-effects and keeps short-circuit branch stacks empty. The array always satisfies
-its element contract; no uninitialized Null slots are exposed as Char values.
-
-This is an independent lowering strategy. Equal output does not establish equal
-SDK allocation counts, memory use, or allocation-failure timing. Direct fixed
-length allocation/filling needs initialized-element rules and its own evidence.
-Empty source `[]` has no inferred element contract yet; explicit IR allocation
-names `char` and therefore can construct an empty array without guessing.
+Allocation counts, memory use, and allocation-failure timing were not compared.
+[The lowering experiments](natural-lowering.md#array-construction) separately
+exercise direct stores; the [source](../specs/compiler-subset.md#char-arrays) and
+[IR](../specs/compiler-ir-text.md#private-array-construction) specs own the
+construction/initialization contracts.
 
 ## Reproduction
 
@@ -66,13 +58,8 @@ xvfb-run -a -s '-screen 0 1280x1024x24' \
 Save `scratch/simulator/monkeydo.log` after each run. The retained full logs are
 `sdk-monkeydo.log` and `generated-monkeydo.log` under
 `scratch/compiler-array-literals/`; both match the example's expected output.
-The compiler reuses existing `newa`, typed append, local storage, and result
-discarding; no new VM opcode or native symbol binding is required.
-
-Source and saved-IR checks reject unsupported element types/API contexts and
-malformed allocation text. Literal construction shares the normal operation,
-nesting, and local-frame budgets. General Array typing, contextual empty
-literals, direct stores, and native object construction remain in [the plan][plan].
+Source/text checks reject invalid elements/API contexts and malformed allocation
+text. Construction uses the common operation, nesting, and frame budgets.
 
 [example]: ../../examples/compiler-array-literals/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen

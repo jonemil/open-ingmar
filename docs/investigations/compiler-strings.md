@@ -131,52 +131,12 @@ Bounded append integration: preserve old instructions and line PCs, redirect the
 DATA method via its existing `probe` label, and retain signature alignment.
 Generated declarations go into DATA; project CODE permits references only.
 
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import json, re
-root = Path('scratch/compiler-strings')
-project = root / 'generated-project'
-asm = (root / 'generated.mcasm').read_text().splitlines()
-literals = [line for line in asm if line.startswith('.string ')]
-added_data = sum(len(json.loads(line.split(' ', 2)[2]).encode()) + 4
-                 for line in literals)
-added_code = len((root / 'generated.bin').read_bytes())
-padding = (-(added_data + added_code)) % 32
-symbols = (project / '010-symbols-5717b015.mcasm').read_text()
-bindings = []
-for alias, name in [('__ciq_sdk_System', 'Toybox_System'),
-                    ('__ciq_member_println', 'println')]:
-    ids = re.findall(r'^\.symbol \S+ "' + re.escape(name)
-                     + r'" id=(0x[0-9a-f]+) ', symbols, re.M)
-    assert len(ids) == 1
-    bindings.append(f'.symbol {alias} "{name}" id={ids[0]}')
-code = project / '003-code-c0debabe.mcasm'
-body = code.read_text()
-assert body.count('\nprobe:\n') == 1
-code.write_text(body.replace('\nprobe:\n', '\nprobe_original:\n') + '\n'
-                + '\n'.join(bindings) + '\n'
-                + '\n'.join(line for line in asm
-                            if not line.startswith('.string ')) + '\n')
-lines = project / '005-line_numbers-c0de7ab1.mcasm'
-lines.write_text(lines.read_text().replace('pc=code:probe ',
-                                          'pc=code:probe_original '))
-resources = project / '007-resources-f00d600d.bin'
-resources.write_bytes(resources.read_bytes() + bytes(padding))
-manifest = project / 'sections.ciq'
-text = manifest.read_text()
-for kind, growth in [('0xda7ababe', added_data), ('0xc0debabe', added_code),
-                     ('0xf00d600d', padding)]:
-    pattern = rf'(section {kind} )(\d+)( )'
-    assert len(re.findall(pattern, text)) == 1
-    text = re.sub(pattern, lambda m: m[1] + str(int(m[2]) + growth) + m[3],
-                  text)
-manifest.write_text(text)
-PY
-target/debug/ciq-asm project scratch/compiler-strings/generated-project scratch/compiler-strings/generated-43.prg -y keys/developer_key.der
-target/debug/ciq-asm verify scratch/compiler-strings/generated-43.prg -y keys/developer_key.der
-sh scripts/run-simulator-container.sh --prg scratch/compiler-strings/generated-43.prg
-```
+Integrate into a fresh scaffold export: rename the old entry label and its line
+references to an unused alias, preserving their body/PCs. Append generated
+assembly under the original alias, redirect its method reference, and apply the
+DATA/resource lengths and offsets recorded in this record. Reconstruct/sign,
+verify our key, and run each case separately using the
+[shared procedure](../research.md#shared-compiler-reproduction).
 
 Actual execution reused the existing Garmin container with:
 
@@ -222,7 +182,3 @@ Tests cover native/IR/assembly/CLI parity, UTF-8 lengths and escapes, repeated
 local reads, ordered print sinks, required result discards, invalid string uses,
 missing/ambiguous bindings, pinned declarations, and DATA layout before method
 binding.
-
-Follow-up evidence: [control flow](control-flow.md),
-[conditions](compiler-conditions.md), and
-[application bootstrap](application-bootstrap.md).

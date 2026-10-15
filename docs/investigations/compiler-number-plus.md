@@ -75,19 +75,10 @@ claims apply only to the stated SDK/device profile.
 
 ## Compiler validation boundaries
 
-`Positive` retains a Number identity in semantic IR, so parsing cannot erase its
-type requirement before validation. `.positive` consumes one non-null Number
-and defines an unchanged Number. Source candidate tracking, saved IR, and
-lowering share that contract. The backend emits the operand once and no
-conversion or arithmetic instruction.
-
-Tests cover complete source/resumed IR and unsigned PRG equivalence, assembly
-text, identity bytes and source spans, API 1.0.0 operands, wrong types, malformed
-saved operands, null-proof invalidation, reads ordered before writes, and
-sign/group nesting. Ordinary nested-call stress tests retain their existing
-stack budget. Source `+1` is supported, but `.integer +1` remains outside the
-saved constant grammar. Compound assignments and increment/decrement are
-separate work.
+Native/text/PRG checks passed for primitive bytes/spans, wrong types, API context,
+malformed operands, null-proof invalidation, read/write order, and sign/call
+nesting. The [source contract](../specs/compiler-subset.md#arithmetic-and-lowering-contract)
+and [IR](../specs/compiler-ir-text.md) specify the checked identity.
 
 [example]: ../../examples/compiler-number-plus/README.md
 [output]: ../../examples/compiler-number-plus/expected.txt

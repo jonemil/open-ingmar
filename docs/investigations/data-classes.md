@@ -131,13 +131,5 @@ Both complete 13-section real projects reconstruct byte for byte:
   `8608ed040f18294a2a9af870f53e26e64a0d2fe3ef8c032d600043b591d182d7`.
 
 Local experiment artifacts are under ignored `scratch/classes/`; the temporary
-`inspect.py` independently tabulates specimen records. There are no firmware
-research additions to these tracked notes.
-
-Next: determine a lossless class declaration grammar from the preserved
-keys/header references before adding class assembly; separately complete own-key
-signing and the planned simulator instruction modification. Do not relax
-relocation restrictions based solely on the new inspection capability.
-
-[ref-monkeyc-ghidra-plugin]: https://github.com/Gualdimar/MonkeyC-Ghidra-Plugin/tree/12ae55010721165b4ba98254d5e77db22eaa1b07
+`inspect.py` independently tabulates specimen records. [ref-monkeyc-ghidra-plugin]: https://github.com/Gualdimar/MonkeyC-Ghidra-Plugin/tree/12ae55010721165b4ba98254d5e77db22eaa1b07
 [ref-monkeyc-optimizer]: https://github.com/markw65/monkeyc-optimizer/tree/2920dc88c23caadded9f66ee0613a7de6ab2d1ea

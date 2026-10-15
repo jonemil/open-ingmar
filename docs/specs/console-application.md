@@ -4,7 +4,9 @@ Generate a complete unsigned watch-app PRG from a [compilation unit][unit]. This
 profile is simulator-verified with SDK 9.2.0 and Forerunner 265. It uses fixed
 native identities and constrained container fields; compatibility with other
 API/device profiles is not established. No SDK file or original PRG is an input.
-See [runtime evidence][evidence] and [application design][design].
+The application builder supplies metadata/lifecycle code separately from semantic
+function IR and uses the shared symbolic assembly model. See
+[runtime evidence][evidence] and [architecture](../architecture.md).
 
 ## Input and lifecycle
 
@@ -30,8 +32,8 @@ Generated lifecycle behavior:
 
 User functions may print strings/integers, call declared module members, and use
 existing locals/control flow. The [class extension](compiler-classes.md) adds source ownership and self calls;
-Null and opaque callback-state values are supported; general arrays/objects remain
-unsupported. Void functions and qualified statement calls follow
+The source, class, and IR specs define supported values and construction;
+this profile does not introduce a separate language subset. Void functions and qualified statement calls follow
 [the source rules][void-source]. Generated lifecycle assembly supplies those
 fixed operations separately from semantic function IR.
 
@@ -184,7 +186,7 @@ exported and reconstructed through the existing section-project tools.
 
 [unit]: compiler-unit.md
 [classes]: data-classes.md
-[design]: ../design/console-application.md
+[design]: console-application.md
 [evidence]: ../investigations/application-bootstrap.md
 
 [void-source]: compiler-subset.md#void-functions-and-statement-calls

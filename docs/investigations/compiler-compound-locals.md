@@ -58,31 +58,12 @@ disassembled or decompiled.
 
 ## Compiler representation and boundaries
 
-Local compounds become ordinary local read, binary expression, and local
-assignment. Typed/saved IR therefore use the same operand, assignability,
-null-proof, and effect-order checks. A branching RHS snapshots the old local
-before its effects, using the existing temporary-local/frame budget. Plain
-compound operands need no hidden locals. Reordering a saved read after its
-RHS call fails validation.
-
-The initializer fixes the local type. A Number receiving a Char-result sum,
-or a Char receiving String concatenation, is rejected. Nullable Number locals
-need a current proof before the compound read. The write invalidates it just
-as ordinary assignment does; the specimen checks again before printing 42.
-This conservative rule does not infer a new proof from the Number result.
-
-Tests compare all ten compounds with explicit read/binary/write CODE and check
-source/resumed IR, unsigned PRGs, assembly text, spans, invalid types/targets,
-scope, nullable reads, effect order, staged locals, and frame limits. Assignment
-construction is isolated from RHS parsing so ordinary and compound RHS calls
-retain the 64-level nesting limit without enlarged thread stacks.
-
-Compound assignments remain statements on bare locals. Fields and array
-elements require separate location/read/failure-order evidence. An SDK-only
-probe also rejects `n += (n = 20)` as an assignment-expression syntax error;
-our source profile likewise rejects it. Parameters, increment/decrement,
-logical compounds, unsigned shifts, and wider numeric types remain outside
-this increment.
+Native/text checks compare all ten compounds with explicit read/binary/write CODE,
+including staged RHS effects, nullable proofs, fixed local types, and frame limits.
+They reject a saved read moved after RHS effects; call nesting retains 64 levels.
+An SDK-only probe rejects `n += (n = 20)` as an assignment-expression syntax error.
+The [source spec](../specs/compiler-subset.md#local-compound-assignment) owns the
+current contracts; [field/indexed probes](compiler-compound-targets.md) are separate.
 
 [example]: ../../examples/compiler-compound-locals/README.md
 [output]: ../../examples/compiler-compound-locals/expected.txt

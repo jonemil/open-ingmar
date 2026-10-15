@@ -13,35 +13,37 @@ documentation. This page defines how to write and organize that documentation.
   Rustdoc; do not duplicate format specifications here.
 - **Architecture** (`architecture.md`): crate responsibilities, dependencies,
   shared pipelines, and implementation boundaries.
-- **Design** (`design/`): responsibilities, invariants, decisions, tradeoffs,
-  current structure, and intent. Explain why a component or API exists.
 - **Plan** (`plan.md`): where we are heading, next work, newly discovered needs,
   and deferred directions. Do not keep a list of completed steps.
-- **Specifications** (`specs/`): source languages, text syntax, binary layouts,
-  archive profiles, and external protocols. Define accepted inputs, output
-  rules, limits, and errors precisely enough to implement independently.
-- **Investigations** (`investigations/`): questions, procedures, observations,
-  provenance, and uncertainty. These provide evidence for design and formats.
+- **Specifications** (`specs/`): authoritative subsystem contracts, including
+  design intent, invariants, rationale, languages/formats, supported behavior,
+  limits, and errors. Mark planned requirements separately from implemented rules.
+  Define enough detail to implement independently without investigation notes.
+- **Investigations** (`investigations/`): compact evidence records: question,
+  environment/input, procedure, observed outcome, provenance, and uncertainty.
+  Link to current contracts instead of repeating implementation descriptions.
 - **Research conventions** (`research.md`): evidence categories, attribution,
   and requirements for reproducible investigations.
 - **Rustdoc**: what an API does, what it produces, and its requirements and
   restrictions. Include relevant failure conditions and guarantees.
 
-Design and specs describe current intent, supported behavior, and open design
-questions. Investigations can retain relevant history when it explains the
-evidence; they do not need a record of every completed step. The plan owns work
-sequencing; link to it instead of maintaining extension orders in design pages.
+Architecture describes intended component relationships; specs own detailed
+contracts and the reasons needed to understand them. There is no separate design
+layer. The plan owns upcoming work; do not maintain completed-step lists or
+extension sequences in other pages. Examples own runnable commands/expected
+output; crate Rustdoc owns concrete API use.
 
-Use Git history for superseded designs and implementation evolution. Our
-provisional formats have one current grammar and unnumbered headers; update
-their readers, writers, tests, and examples together without retaining older
-profiles. Garmin format and SDK/device versions identify compatibility rules
-and the scope of investigation evidence.
+Give each rule one authoritative home. Other pages may introduce it briefly and
+link there. Shared source/IR validation contracts should be defined once, with
+representation-specific syntax and lowering documented where they belong. Keep
+provisional formats current-only; Git history retains superseded designs.
 
-Specs describe our supported profiles, not complete Garmin compatibility. Keep
-unknowns explicit and link to evidence instead of repeating experiments. An API
-model belongs in design even when it also has a text serialization; the
-serialization grammar belongs in specs.
+Specs describe supported profiles, not complete Garmin compatibility. Preserve
+unknowns and distinguish intended requirements from experimentally established
+rules. API/SDK/device versions scope compatibility evidence, not our local format
+history. Investigations are supporting evidence, not required implementation
+references or a parallel feature inventory. They can be retired when the spec,
+tests, and retained provenance adequately capture their value.
 
 ## Writing conventions
 
@@ -75,8 +77,8 @@ browser review and local link checking.
 Standard Cargo/Rustdoc builds produce API pages under
 `target/doc/<crate_name>/index.html`; see the [root build instructions][build].
 Public types and
-functions document the contracts needed to use each crate. Design and format
-pages provide broader project context in the repository; API docs must remain
+functions document the contracts needed to use each crate. Specifications and architecture
+provide broader project context in the repository; API docs must remain
 useful independently of those pages. Broken intra-doc links are build errors
 through the workspace Rustdoc lint.
 

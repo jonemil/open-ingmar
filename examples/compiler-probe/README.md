@@ -14,7 +14,7 @@ explicit integration with Hello World's application scaffold, own-key signing,
 and simulator runs for `41` and a changed source returning `42`.
 
 See [the supported grammar](../../docs/specs/compiler-subset.md) and
-[IR design](../../docs/design/compiler-ir.md). Keep generated assembly and
+[IR design](../../docs/specs/compiler-ir-text.md#semantic-model). Keep generated assembly and
 binaries under ignored `scratch/`.
 
 You can also emit semantic IR with `--emit ir`, resume it with `--from ir`, or

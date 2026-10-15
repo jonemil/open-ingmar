@@ -65,146 +65,12 @@ local developer key and run it in the official simulator. The example documents
 commands, expected output, and current lifecycle/View restrictions.
 
 Readable IR and assembly provide inspection and editing points in the compiler
-pipeline. See [compiler design](docs/design/compiler-ir.md) for the stages and
-[IR syntax](docs/specs/compiler-ir-text.md) for saved text.
+pipeline. See the [IR specification](docs/specs/compiler-ir-text.md) for its
+semantic model and saved text.
 
-The [native call example](examples/compiler-native-calls/README.md) exercises
-inherited Number-to-String conversion on locals and parameters.
-
-The [typed Lang example](examples/compiler-lang-values/README.md) passes String
-and Boolean values through module and instance methods.
-
-The [nullable Number example](examples/compiler-nullable-numbers/README.md)
-checks native search/conversion results before using them as Numbers.
-
-The [substring example](examples/compiler-substring/README.md) exercises nullable
-String results, guarded returns, and nullable/negative indices.
-
-The [Number method example](examples/compiler-number-methods/README.md) groups
-conversion, comparison, equality, and hashing checks.
-
-The [String method example](examples/compiler-string-methods/README.md) groups
-text operations, base conversion, comparison, equality, and hashing.
-
-The [Boolean method example](examples/compiler-boolean-methods/README.md) groups
-comparison, equality, hashing, and string conversion.
-
-The [immutable weak example](examples/compiler-immutable-weak/README.md) checks
-receiver-specific results on Number, String, and Boolean.
-
-The [Char method example](examples/compiler-char-methods/README.md) groups
-character conversion, comparison, equality, and hashing.
-
-The [Char literal example](examples/compiler-char-literals/README.md) exercises
-BMP literals and escapes through source, IR, and native calls.
-
-The [Char operator example](examples/compiler-char-operators/README.md) exercises
-numeric comparisons, mixed addition, and Char concatenation.
-
-The [String operator example](examples/compiler-string-operators/README.md)
-exercises scalar concatenation, nullable inputs, and identity equality.
-
-The [Number literal example](examples/compiler-number-literals/README.md)
-exercises signed 32-bit constants and immediate-width boundaries.
-
-The [Number-array literal example](examples/compiler-number-array-literals/README.md)
-checks inferred elements, typed calls, and evaluation order.
-
-The [empty-array example](examples/compiler-empty-arrays/README.md) checks
-contextual construction in returns, arguments, and local assignments.
-
-The [native View example](examples/compiler-native-views/README.md) checks
-object construction, typed references, and View-array operations.
-
-The [initial View example](examples/compiler-initial-view/README.md) supplies
-the source lifecycle callback with a validated one-view positional result.
-
-The [visible View example](examples/compiler-visible-view/README.md) constructs
-a source View and draws text through its typed onUpdate callback.
-
-The [field counter example](examples/compiler-fields/README.md) checks Number
-field initialization, independent instances, and state across drawing callbacks.
-
-The [object-call example](examples/compiler-object-calls/README.md) calls source
-methods through copied and reassigned references to constructed Views.
-
-The [source signature example](examples/compiler-source-signatures/README.md)
-preserves exact View class contracts through parameters, factories, and returns.
-
-The [retained View example](examples/compiler-reference-fields/README.md) uses
-constructor arguments and reference fields across lifecycle callbacks.
-
-The [input counter](examples/compiler-input-counter/README.md) returns a
-View/delegate pair and redraws retained state after selection callbacks.
-
-The [Number comparison example](examples/compiler-number-comparisons/README.md)
-checks ordering, inequality, operand order, and null guards.
-
-The [Number products example](examples/compiler-number-products/README.md) checks
-multiplication, division, remainder, precedence, and operand effects.
-
-The [Number negation example](examples/compiler-number-negation/README.md)
-exercises unary expressions, precedence, and guarded nullable operands.
-
-The [Boolean negation example](examples/compiler-boolean-negation/README.md)
-exercises logical inversion, precedence, and operand effects.
-
-The [short-circuit example](examples/compiler-short-circuit/README.md) exercises
-Boolean conditions, skipped calls, loops, and nullable guards.
-
-The [logical value example](examples/compiler-logical-values/README.md)
-exercises Boolean results and call order across expression joins.
-
-The [Char array example](examples/compiler-char-arrays/README.md) exercises
-String conversion, typed array calls, and read-only Array methods.
-
-The [increment/decrement example](examples/compiler-increments/README.md) checks
-Number update statements on locals, self fields, and captured array elements.
-
-The [compound-target example](examples/compiler-compound-targets/README.md)
-checks field/indexed updates, captured locations, and RHS mutations.
-
-The [local-compound example](examples/compiler-compound-locals/README.md) checks
-scalar updates, typed results, loops, and staged operands.
-
-The [unary-plus example](examples/compiler-number-plus/README.md) checks
-Number identity, precedence, guarded operands, and single evaluation.
-
-The [Number bitwise example](examples/compiler-number-bits/README.md) checks
-bit operations, signed shifts, precedence, and ordered operands.
-
-The [typed-array write example](examples/compiler-typed-array-writes/README.md)
-checks Char replacement and shared native/source View references.
-
-The [array-write example](examples/compiler-array-writes/README.md) checks
-Number element replacement, aliases, and operand order.
-
-The [array-read example](examples/compiler-array-reads/README.md) exercises
-element access, postfix chains, and array/index evaluation order.
-
-The [Array transform example](examples/compiler-array-transforms/README.md)
-checks element-preserving reverse and slice results.
-
-The [Char-array append example](examples/compiler-array-add/README.md) checks
-mutation through shared references and the typed `add` result.
-
-The [Array mutation example](examples/compiler-array-mutation/README.md) covers
-bulk append, removals, aliases, and conditional effects.
-
-The [native statement example](examples/compiler-native-statements/README.md)
-executes calls while discarding their results.
-
-The [array literal example](examples/compiler-array-literals/README.md) constructs
-Char arrays with ordered element effects and logical expressions.
-
-The [Number-array example](examples/compiler-number-arrays/README.md) exercises
-UTF-8 conversion, typed element reads, and generic Array methods.
-
-The [nullable contract example](examples/compiler-nullable-contracts/README.md)
-passes nullable values through module and instance calls.
-
-The [lifecycle example](examples/compiler-lifecycle/README.md) supplies source
-initialization and a typed native startup callback with a null-state check.
+Browse [the examples](examples/README.md) for native calls, core Lang objects,
+operators, arrays, and source classes. Each example owns its build commands and
+expected behavior; the source and IR specs define supported contracts.
 
 ## Disassemble and assemble
 
@@ -267,9 +133,12 @@ The reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
 - [Barrel package profile](docs/specs/barrel-package.md)
 - [IQ package/signing profile](docs/specs/iq-package.md)
 - [IQ verification commands and reports](docs/specs/package-verification.md)
-- [Package crate design](docs/design/package-crate.md)
-- [Compiler goals and acceptance](docs/design/first-compiler.md)
-- [Future project builds and Jungle support](docs/design/project-builds.md)
+- [Package operations](docs/specs/package-reading.md)
+- [Monkey C source contracts](docs/specs/compiler-subset.md)
+- [Semantic IR and text](docs/specs/compiler-ir-text.md)
+- [API declarations](docs/specs/api-declarations.md)
+- [Assembly model and layout](docs/specs/assembly.md)
+- [Future project builds and Jungle support](docs/specs/project-builds.md)
 - [Investigation index](docs/investigations/README.md)
 - [Monkey C examples](examples/README.md)
 - [SDK support scripts](scripts/README.md)

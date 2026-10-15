@@ -8,7 +8,7 @@ equivalently?
 
 The implementation follows our [barrel profile](../specs/barrel-package.md),
 [packing specification](../specs/barrel-packing.md), and
-[package plan](../design/package-crate.md). No external research repository's
+[package plan](../specs/package-reading.md). No external research repository's
 implementation was copied. Existing pinned `zip 6.0.0` (MIT) supplies
 ZIP/Deflate writing; no dependency or lockfile changes were needed. Codec
 versions, license/advisory review and Rust 1.85 baseline evidence are recorded
@@ -75,12 +75,7 @@ RESOURCES differed in these separately named output builds, and its cause was
 not investigated. No new runtime capture or IQ distribution acceptance is
 claimed.
 
-Five new integration tests cover payload/empty-directory preservation,
-creation-order/timestamp/permission determinism and CLI packing,
-mismatched/invalid manifests, existing/in-source output refusal, input/output
-limits, symlinks, and case collisions. All 99 workspace tests pass on the
-container’s Rust 1.99; formatting and Clippy
-(`--workspace --all-targets -- -D warnings`) pass. This change was not rerun on
-Rust 1.85; the prior 1.85 verification remains historical evidence. Next
-implement unchanged IQ repacking with exact signed member bytes retained, before
-introducing own-key IQ creation.
+Integration checks passed for payload/empty-directory preservation, deterministic
+packing, manifest rejection, output refusal, extraction limits, symlinks, and
+case collisions. These are archive checks; SDK consumption and runtime limits
+are distinguished above.

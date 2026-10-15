@@ -88,15 +88,7 @@ Rebuilt artifacts require fresh export/output paths.
 
 ## Limits
 
-The repeated 56-example audit, saved under
-`scratch/example-audit/null-checks/report.json`, reconstructs all 67 SDK PRGs and
-48 generated PRGs byte-for-byte with identical repeat exports. SDK CODE is
-structured in 49 specimens; DATA is structured in 58. All documented
-source/resumed-IR checks still pass. Remaining unsupported opcode groups are
-`0x0d` (one example), `0x2d` (11), `0x40` (nine), and `0x49` (six), with DATA
-record `0x03` in nine groups. More `0x2d` occurrences become reachable after
-null checks decode. The audit returns nonzero for the 18 remaining SDK coverage
-issues; preservation and repeat-export equality alone do not close them.
+Structured coverage is recorded in the [example audit](example-toolchain-audit.md).
 
 These observations establish encoding and null-test results for the selected
 values and environment. They do not establish physical VM stack representation

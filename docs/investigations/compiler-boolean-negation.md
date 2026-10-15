@@ -61,12 +61,9 @@ Experimentally observed in both applications:
   `!(n == null)` also runs as a Boolean condition.
 - The effectful Boolean helper prints once before its result is inverted.
 
-The original generated specimen used operand evaluation followed by `bfpush; eq`.
-The [lowering review](natural-lowering.md) replaces that sequence with `invv`
-and verifies matching simulator behavior. We did not inspect the SDK compiler's
-implementation or require matching SDK CODE.
-The [inversion-opcode follow-up](invert-opcode.md) establishes the SDK's `invv`
-encoding and its structured assembly/disassembly support.
+The [inversion probe](invert-opcode.md) establishes SDK `invv` encoding;
+[the lowering comparison](natural-lowering.md) verifies the generated direct
+instruction. Source/type/lowering rules are owned by the specs.
 
 Saved IR preserves a typed `.not` operation. Pipeline tests compare source and
 resumed unit IR, generated unsigned PRGs, and assembly round trips. Adversarial
@@ -75,7 +72,7 @@ with otherwise valid definitions. Parser tests cover source spans and the
 64-level nesting limit. These establish shared validation, not new runtime
 claims.
 
-Non-Boolean operands, nullable Boolean contracts, and `!=` remain unsupported.
+This specimen does not establish non-Boolean or nullable-Boolean negation.
 Negated null-proof propagation and conditional logical effects are investigated
 in the [short-circuit follow-up](compiler-short-circuit.md). Boolean results
 across joins have [separate evidence](compiler-logical-values.md).

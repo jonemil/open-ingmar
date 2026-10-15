@@ -64,17 +64,11 @@ establish exception recovery, other index types, or other VM/device behavior.
 
 ## Compiler boundaries
 
-Shared validation derives the value contract from the receiver's element type.
-Tests reject Number/Char mixing, Null, wrong indices, and delegate/Dc/array
-values in View slots. Saved IR cannot relabel an array or value to bypass those
-checks. Char operands retain their API 1.3.0 requirement; View parameter writes
-use the existing 1.0.0 type contract, while construction/native calls have their
-own availability requirements.
-
-Source View objects project to native View when stored in arrays. This does
-not expand named source signatures, inheritance, nullable object support, or
-the set of supported array element types. Complete source/resumed IR,
-assembly text, and unsigned PRG checks preserve the shared pipeline.
+Native/text/PRG checks passed for invariant element types and rejected wrong
+indices, Number/Char mixing, Null, unsupported View-slot values, and forged IR
+contracts. Char type availability and native constructor/method availability were
+checked separately. Runtime View-array storage does not retain exact source-class
+identity; source signatures have [separate evidence](compiler-source-signatures.md).
 
 [example]: ../../examples/compiler-typed-array-writes/README.md
 [output]: ../../examples/compiler-typed-array-writes/expected.txt

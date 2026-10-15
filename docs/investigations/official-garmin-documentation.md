@@ -322,10 +322,10 @@ specifying our supported subset.
 [tests]: https://developer.garmin.com/connect-iq/core-topics/unit-testing/
 [libraries]: https://developer.garmin.com/connect-iq/core-topics/shareable-libraries/
 [debugging]: https://developer.garmin.com/connect-iq/core-topics/debugging/
-[build-design]: ../design/project-builds.md
+[build-design]: ../specs/project-builds.md
 
 [lang-object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [lang-number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html
-[api-design]: ../design/api-declarations.md
+[api-design]: ../specs/api-declarations.md
 
 [system-api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/System.html
