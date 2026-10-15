@@ -79,6 +79,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Integer { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
+            | Operation::Step { result, .. }
             | Operation::Positive { result, .. }
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
@@ -477,6 +478,7 @@ fn expression(
         Value(ValueId),
         Binary(BinaryOp),
         Negate,
+        Step(bool),
         Invert,
         NullCheck(bool),
         ArrayRead,
@@ -657,6 +659,12 @@ fn expression(
                     tasks.extend([Task::Invert, Task::Value(*operand)]);
                     continue;
                 }
+                Operation::Step {
+                    operand, increment, ..
+                } => {
+                    tasks.extend([Task::Step(*increment), Task::Value(*operand)]);
+                    continue;
+                }
                 Operation::Positive { operand, .. } => {
                     tasks.push(Task::Value(*operand));
                     continue;
@@ -702,6 +710,17 @@ fn expression(
                 _ => unreachable!("statement is not a value definition"),
             },
             Task::Negate => (Opcode::Subv, vec![]),
+            Task::Step(increment) => {
+                items.push(instruction(Opcode::Ipush1, vec![Operand::Bits(1)]));
+                (
+                    if increment {
+                        Opcode::Addv
+                    } else {
+                        Opcode::Subv
+                    },
+                    vec![],
+                )
+            }
             Task::Invert => (Opcode::Invv, vec![]),
             Task::NullCheck(false) => (Opcode::Isnull, vec![]),
             Task::NullCheck(true) => (Opcode::Isnotnull, vec![]),

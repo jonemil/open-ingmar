@@ -158,6 +158,9 @@ exercises Boolean results and call order across expression joins.
 The [Char array example](examples/compiler-char-arrays/README.md) exercises
 String conversion, typed array calls, and read-only Array methods.
 
+The [increment/decrement example](examples/compiler-increments/README.md) checks
+Number update statements on locals, self fields, and captured array elements.
+
 The [compound-target example](examples/compiler-compound-targets/README.md)
 checks field/indexed updates, captured locations, and RHS mutations.
 

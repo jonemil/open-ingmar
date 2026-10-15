@@ -8,6 +8,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Example toolchain audit](example-toolchain-audit.md): coverage of all example
   projects, unsupported opcode/record groups, and reconstruction checks.
 
+- [Increment/decrement](compiler-increments.md): statement-only SDK syntax,
+  direct arithmetic lowering, target capture, and Number boundary behavior.
 - [Compound targets](compiler-compound-targets.md): field/indexed reads,
   captured locations, RHS mutations, and read/write bounds failures.
 - [Local compounds](compiler-compound-locals.md): read/binary/write lowering,

@@ -166,6 +166,8 @@ pub(crate) fn parse_ir_context(
             Some(".assign-self") => (39, 3),
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
+            Some(".increment") => (62, 3),
+            Some(".decrement") => (63, 3),
             Some(".positive") => (55, 3),
             Some(".complement") => (56, 3),
             Some(".negate") => (26, 3),
@@ -513,6 +515,12 @@ pub(crate) fn parse_ir_context(
             Operation::Complement {
                 result: parse_value(&fields[1])?,
                 operand: parse_value(&fields[2])?,
+            }
+        } else if kind == 62 || kind == 63 {
+            Operation::Step {
+                result: parse_value(&fields[1])?,
+                operand: parse_value(&fields[2])?,
+                increment: kind == 62,
             }
         } else if kind == 55 {
             Operation::Positive {

@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-increments](compiler-increments/README.md): Number prefix/postfix
+  update statements with checked local, field, and indexed targets.
 - [compiler-compound-targets](compiler-compound-targets/README.md): field/indexed
   updates, captured locations, and RHS mutation order.
 - [compiler-compound-locals](compiler-compound-locals/README.md): local compound

@@ -369,6 +369,13 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Add or subtract one from a non-null Number, producing a Number value.
+    /// Target capture and write-back are separate ordered IR operations.
+    Step {
+        result: ValueId,
+        operand: ValueId,
+        increment: bool,
+    },
     /// Load a fresh mutable flat scalar array from DATA.
     /// Values retain raw 32-bit Number/Char bits; arrays must be nonempty and
     /// homogeneous, with Number or Char elements only.
@@ -1348,6 +1355,15 @@ impl Function {
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
+                Operation::Step {
+                    result, operand, ..
+                } => {
+                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                        .and_then(|ty| ValueType::from_api_type(&ty))
+                        .ok_or_else(|| fail("increment/decrement requires a non-null Number"))?;
+                    types.insert(result, result_type);
+                    (Some(result), vec![operand])
+                }
                 Operation::Positive { result, operand } => {
                     let result_type = operators::number_unary_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
@@ -1736,7 +1752,8 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::Positive { operand, .. }
+                                Operation::Step { operand, .. }
+                                | Operation::Positive { operand, .. }
                                 | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
                                 | Operation::Not { operand, .. } => {
@@ -2082,6 +2099,16 @@ impl Function {
                 Operation::Not { result, operand } => {
                     format!(".not %{} %{}", result.0, operand.0)
                 }
+                Operation::Step {
+                    result,
+                    operand,
+                    increment,
+                } => format!(
+                    ".{} %{} %{}",
+                    if increment { "increment" } else { "decrement" },
+                    result.0,
+                    operand.0
+                ),
                 Operation::Positive { result, operand } => {
                     format!(".positive %{} %{}", result.0, operand.0)
                 }

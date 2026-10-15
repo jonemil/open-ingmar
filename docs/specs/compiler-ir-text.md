@@ -228,6 +228,19 @@ published after all slots are filled. Array/View/InputDelegate exist at API
 failure timing or memory equivalence with SDK lowering is implied. See
 [input evidence](../investigations/compiler-input-counter.md).
 
+## Number steps
+
+`.increment %<result> %<operand> [span=<start>:<end>]` and `.decrement` add or
+subtract one from a non-null Number. Typed construction uses `Operation::Step`
+with an `increment` Boolean; Char, other classes, and unproven nullable operands
+are rejected. These are semantic value operations: capture/read and target
+write-back remain explicit surrounding operations. Source updates themselves
+are statements and expose no expression result.
+
+Lowering emits the operand, `ipush1 0x01`, and `addv` or `subv`. Existing single
+use, block-local dependency, type, and effect-order checks apply. No extra native
+call or new VM opcode is needed. See [source updates](compiler-subset.md#increment-and-decrement).
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty

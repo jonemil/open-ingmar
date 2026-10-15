@@ -10,6 +10,11 @@ pub(crate) struct ParsedFunction {
 }
 
 pub(crate) enum Statement {
+    Update {
+        target: Expression,
+        increment: bool,
+        span: Span,
+    },
     ArrayCompound {
         target: Expression,
         kind: crate::BinaryOp,
@@ -84,6 +89,7 @@ impl Statement {
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
+            Self::Update { span, .. } => *span,
             Self::FieldAssign { span, .. }
             | Self::ArrayAssign { span, .. }
             | Self::ArrayCompound { span, .. } => *span,
@@ -113,6 +119,11 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    // Builder-only numeric step; source updates are statements, not values.
+    Step {
+        operand: Box<Expression>,
+        increment: bool,
+    },
     SelfField(String),
     SourceNew {
         class: String,
@@ -176,6 +187,7 @@ impl Expression {
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
             ExpressionKind::Logical { .. } | ExpressionKind::ArrayLiteral(_) => true,
+            ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
             | ExpressionKind::Positive(operand)
@@ -218,6 +230,7 @@ enum Kind<'a> {
     ShiftLeft,
     ShiftRight,
     Compound(crate::BinaryOp),
+    Step(bool),
     AndAnd,
     OrOr,
     End,
@@ -447,10 +460,12 @@ impl<'a> Parser<'a> {
                 })
             }
             Some('-') if rest.starts_with("--") => {
-                return Err(self.error(start, "decrement operators are unsupported"));
+                self.offset += 2;
+                Kind::Step(false)
             }
             Some('+') if rest.starts_with("++") => {
-                return Err(self.error(start, "increment operators are unsupported"));
+                self.offset += 2;
+                Kind::Step(true)
             }
             Some('&') if rest.starts_with("&&") => {
                 self.offset += 2;
@@ -759,6 +774,49 @@ impl<'a> Parser<'a> {
         };
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
+    /// Parse construction outside ordinary primary-expression frames so nested
+    /// calls retain the supported expression-depth budget on the default stack.
+    fn construct(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let open = self.token()?;
+        let path = self.path()?;
+        let native = self
+            .names
+            .view(&path)
+            .then_some(crate::NativeClass::View)
+            .or_else(|| {
+                self.names
+                    .behavior_delegate(&path)
+                    .then_some(crate::NativeClass::BehaviorDelegate)
+            });
+        if native.is_none() && path.contains('.') {
+            return Err(self.error(open.span.start, "unsupported qualified construction class"));
+        }
+        let (arguments, end) = self.call_arguments(open.span.start, depth)?;
+        if native.is_some() && !arguments.is_empty() {
+            return Err(self.error(
+                open.span.start,
+                "supported native construction requires zero arguments",
+            ));
+        }
+        self.node(
+            if let Some(class) = native {
+                ExpressionKind::NativeNew {
+                    class,
+                    qualifier: path.split('.').next().unwrap().into(),
+                }
+            } else {
+                ExpressionKind::SourceNew {
+                    class: path,
+                    arguments,
+                }
+            },
+            Span {
+                start: open.span.start,
+                end,
+            },
+        )
+    }
+
     fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let mut expression = if self.peek()? == Kind::Punctuation('[') {
             let open = self.token()?;
@@ -783,44 +841,7 @@ impl<'a> Parser<'a> {
                 },
             )?
         } else if self.peek()? == Kind::Word("new") {
-            let open = self.token()?;
-            let path = self.path()?;
-            let native = self
-                .names
-                .view(&path)
-                .then_some(crate::NativeClass::View)
-                .or_else(|| {
-                    self.names
-                        .behavior_delegate(&path)
-                        .then_some(crate::NativeClass::BehaviorDelegate)
-                });
-            if native.is_none() && path.contains('.') {
-                return Err(self.error(open.span.start, "unsupported qualified construction class"));
-            }
-            let (arguments, end) = self.call_arguments(open.span.start, depth)?;
-            if native.is_some() && !arguments.is_empty() {
-                return Err(self.error(
-                    open.span.start,
-                    "supported native construction requires zero arguments",
-                ));
-            }
-            self.node(
-                if let Some(class) = native {
-                    ExpressionKind::NativeNew {
-                        class,
-                        qualifier: path.split('.').next().unwrap().into(),
-                    }
-                } else {
-                    ExpressionKind::SourceNew {
-                        class: path,
-                        arguments,
-                    }
-                },
-                Span {
-                    start: open.span.start,
-                    end,
-                },
-            )?
+            self.construct(depth)?
         } else if self.peek()? == Kind::Punctuation('(') {
             let open = self.token()?;
             if depth >= 64 {
@@ -1131,6 +1152,32 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a prefix statement update outside the recursive block parser frame.
+    fn prefix_update(&mut self, start: usize, increment: bool) -> Result<Statement, Diagnostic> {
+        self.token()?;
+        let target = self.expression(0)?;
+        self.finish_update(target, increment, start)
+    }
+
+    /// Check an update target and require its statement terminator.
+    fn finish_update(
+        &mut self,
+        target: Expression,
+        increment: bool,
+        start: usize,
+    ) -> Result<Statement, Diagnostic> {
+        self.assignment_target(&target, start)?;
+        let end = self
+            .expect(Kind::Punctuation(';'), "';' (updates are statements)")?
+            .span
+            .end;
+        Ok(Statement::Update {
+            target,
+            increment,
+            span: Span { start, end },
+        })
+    }
+
     /// Parse a braced statement sequence, bounding control-flow nesting and total
     /// source operations before semantic construction.
     fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), Diagnostic> {
@@ -1237,10 +1284,14 @@ impl<'a> Parser<'a> {
                         },
                     }
                 }
+                Kind::Step(increment) => self.prefix_update(start, increment)?,
                 Kind::End => return Err(self.error(start, "expected '}' before end of input")),
                 _ => {
                     let expression = self.expression(0)?;
-                    if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
+                    if let Kind::Step(increment) = self.peek()? {
+                        self.token()?;
+                        self.finish_update(expression, increment, start)?
+                    } else if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
                         let assignment = self.token()?.kind;
                         self.assignment_target(&expression, start)?;
                         let value = self.expression(0)?;

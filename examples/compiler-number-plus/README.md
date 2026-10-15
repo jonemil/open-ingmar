@@ -17,7 +17,7 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-number-plus/generat
 Unary plus preserves the Number value and evaluates its operand once. It binds
 after postfix calls and before binary operators. Repeated or mixed prefixes
 need parentheses: `+(+n)` and `+(-n)` are accepted, while `+ +n` and `+-n`
-are rejected. `++` remains unsupported increment syntax.
+are rejected. `++` is a separate statement update, not a unary-plus expression.
 
 Our profile requires a non-null Number, including a fresh nullable Number read
 under an established null proof. Saved IR retains `.positive` for that check;

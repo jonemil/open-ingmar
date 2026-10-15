@@ -108,33 +108,12 @@ fn emit(
                 "logical expression was not materialized before value emission",
             ));
         }
-        parser::ExpressionKind::Not(operand) => {
-            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::Not {
-                result: ValueId(operations.len() as u32),
-                operand,
-            }
-        }
-        parser::ExpressionKind::Positive(operand) => {
-            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::Positive {
-                result: ValueId(operations.len() as u32),
-                operand,
-            }
-        }
-        parser::ExpressionKind::Complement(operand) => {
-            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::Complement {
-                result: ValueId(operations.len() as u32),
-                operand,
-            }
-        }
-        parser::ExpressionKind::Negate(operand) => {
-            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::Negate {
-                result: ValueId(operations.len() as u32),
-                operand,
-            }
+        kind @ (parser::ExpressionKind::Not(_)
+        | parser::ExpressionKind::Step { .. }
+        | parser::ExpressionKind::Positive(_)
+        | parser::ExpressionKind::Complement(_)
+        | parser::ExpressionKind::Negate(_)) => {
+            emit_unary(source, kind, locals, parameters, operations, calls)?
         }
         parser::ExpressionKind::Char(value) => Operation::Char {
             result: ValueId(operations.len() as u32),
@@ -217,11 +196,49 @@ fn emit(
     Ok(result)
 }
 
-/// Emit array/index operands in order and return their read operation. Keep this
-/// frame separate so long arithmetic trees retain their existing stack budget.
+/// Emit one unary operand and its operation without enlarging every recursive
+/// expression frame. Source/parser depth limits remain unchanged.
+fn emit_unary(
+    source: &str,
+    kind: parser::ExpressionKind,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+    calls: &CallContext,
+) -> Result<Operation, Diagnostic> {
+    enum Unary {
+        Not,
+        Positive,
+        Complement,
+        Negate,
+        Step(bool),
+    }
+    use parser::ExpressionKind as E;
+    let (operand, kind) = match kind {
+        E::Not(operand) => (operand, Unary::Not),
+        E::Positive(operand) => (operand, Unary::Positive),
+        E::Complement(operand) => (operand, Unary::Complement),
+        E::Negate(operand) => (operand, Unary::Negate),
+        E::Step { operand, increment } => (operand, Unary::Step(increment)),
+        _ => unreachable!("unary expression"),
+    };
+    let operand = emit(source, *operand, locals, parameters, operations, calls)?;
+    let result = ValueId(operations.len() as u32);
+    Ok(match kind {
+        Unary::Not => Operation::Not { result, operand },
+        Unary::Positive => Operation::Positive { result, operand },
+        Unary::Complement => Operation::Complement { result, operand },
+        Unary::Negate => Operation::Negate { result, operand },
+        Unary::Step(increment) => Operation::Step {
+            result,
+            operand,
+            increment,
+        },
+    })
+}
+
 /// Emit a left-associated arithmetic chain without one Rust frame per term.
-/// Preserve operand order and each operation's original source span; grouped
-/// right operands use the parser's bounded nesting depth.
+/// Preserve operand order and source spans; grouped operands use bounded depth.
 fn emit_binary_chain(
     source: &str,
     mut expression: parser::Expression,
@@ -253,6 +270,8 @@ fn emit_binary_chain(
     Ok(left)
 }
 
+/// Emit array/index operands in order and return their read operation. Keep this
+/// frame separate so long arithmetic trees retain their existing stack budget.
 fn emit_array_read(
     source: &str,
     kind: parser::ExpressionKind,
@@ -653,6 +672,10 @@ impl Builder<'_> {
                 return self.logical_value(parser::Expression { kind, span }, locals);
             }
             E::Not(operand) => E::Not(Box::new(self.prepare(*operand, locals)?)),
+            E::Step { operand, increment } => E::Step {
+                operand: Box::new(self.prepare(*operand, locals)?),
+                increment,
+            },
             E::Positive(operand) => E::Positive(Box::new(self.prepare(*operand, locals)?)),
             E::Complement(operand) => E::Complement(Box::new(self.prepare(*operand, locals)?)),
             E::Negate(operand) => E::Negate(Box::new(self.prepare(*operand, locals)?)),
@@ -1010,6 +1033,31 @@ impl Builder<'_> {
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<(), Diagnostic> {
+        self.array_change(target, span, locals, |old| {
+            let value_span = Span {
+                start: old.span.start,
+                end: value.span.end,
+            };
+            parser::Expression {
+                kind: parser::ExpressionKind::Binary {
+                    kind,
+                    left: Box::new(old),
+                    right: Box::new(value),
+                },
+                span: value_span,
+            }
+        })
+    }
+
+    /// Capture an array location once and emit a checked read/change/write.
+    /// The change may stage control flow without reevaluating either location operand.
+    fn array_change(
+        &mut self,
+        target: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+        change: impl FnOnce(parser::Expression) -> parser::Expression,
+    ) -> Result<(), Diagnostic> {
         use parser::{Expression, ExpressionKind as E};
         let target_span = target.span;
         let E::ArrayRead { array, index } = target.kind else {
@@ -1033,18 +1081,7 @@ impl Builder<'_> {
             },
             span: target_span,
         };
-        let value_span = Span {
-            start: target_span.start,
-            end: value.span.end,
-        };
-        let mut value = Expression {
-            kind: E::Binary {
-                kind,
-                left: Box::new(old),
-                right: Box::new(value),
-            },
-            span: value_span,
-        };
+        let mut value = change(old);
         if value.needs_materialization() {
             value = self.snapshot(value, locals)?;
         }
@@ -1059,6 +1096,45 @@ impl Builder<'_> {
             },
             Some(span),
         );
+        Ok(())
+    }
+
+    /// Emit a statement update with one target read and one checked write.
+    /// Indexed targets retain captured array/index values across the operation.
+    fn update(
+        &mut self,
+        target: parser::Expression,
+        increment: bool,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        use parser::{Expression, ExpressionKind as E};
+        let step = |operand: Expression| Expression {
+            kind: E::Step {
+                operand: Box::new(operand),
+                increment,
+            },
+            span,
+        };
+        if matches!(target.kind, E::ArrayRead { .. }) {
+            return self.array_change(target, span, locals, step);
+        }
+        let operation = match &target.kind {
+            E::Local(name) => {
+                let local = locals.get(name).copied().ok_or_else(|| Diagnostic::at(
+                    self.source, span.start, "update requires an in-scope initialized local; parameter updates are unsupported",
+                ))?;
+                let value = self.value(step(target), locals)?;
+                Operation::LocalAssign { local, value }
+            }
+            E::SelfField(name) => {
+                let field = name.clone();
+                let value = self.value(step(target), locals)?;
+                Operation::SelfFieldAssign { field, value }
+            }
+            _ => unreachable!("parsed update target"),
+        };
+        self.push(operation, Some(span));
         Ok(())
     }
 
@@ -1081,6 +1157,11 @@ impl Builder<'_> {
                 ));
             }
             match statement {
+                parser::Statement::Update {
+                    target, increment, ..
+                } => {
+                    self.update(target, increment, span, locals)?;
+                }
                 parser::Statement::ArrayCompound {
                     target,
                     kind,

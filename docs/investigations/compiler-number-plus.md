@@ -58,7 +58,7 @@ builds reject `+ +n`, `+-n`, `+~n`, and `+!n` as extraneous prefix input.
 The grouped equivalents using Numbers in the main example compile and run.
 This is why our positive parser consumes a primary/postfix operand rather than
 another unparenthesized unary prefix. Contiguous `++` is reserved for the
-separate, currently unsupported increment operator.
+separate [increment operator](compiler-increments.md), outside unary expressions.
 
 A separate SDK-only module prints `+true`, `+'A'`, `+"text"`, and `+null`.
 The build succeeds and the simulator prints `true`, `A`, `text`, `null`, then

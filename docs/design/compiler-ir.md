@@ -69,6 +69,13 @@ Void calls have separate statement contracts and do not become expression
 values. The IR accepts discarded pure values even though the source subset
 restricts expression statements to calls and assignments.
 
+Number update statements retain a typed `Step` value operation between the
+existing target read and write. The source parser accepts prefix/postfix forms
+only as statements; they share this representation because neither yields a
+source expression result. Indexed updates reuse compound assignment's captured
+array/index handling. Lowering selects direct add/subtract-one instructions;
+validation requires a non-null Number rather than the broader `+` contracts.
+
 `ArrayWrite` is a resultless statement with receiver, index, and value operands.
 It preserves the receiver's invariant Number/Char/View element contract and
 existing alias identity. Source View instances project to the native element

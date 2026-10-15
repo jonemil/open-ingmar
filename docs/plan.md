@@ -12,10 +12,13 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Remaining operators and assignment forms.** Add increment/decrement with
-   checked local/field/indexed targets and prefix/postfix results, preserving
-   captured locations and read/effect order. Investigate conditional
-   expressions and their result-type joins separately.
+1. **Remaining operators and assignment forms.** Extend increment to Char
+   locals/array elements using the observed addition contract; SDK Char decrement
+   is rejected. Then investigate conditional expressions and their result-type
+   joins. Keep updates statement-only,
+   following the [increment/decrement evidence](investigations/compiler-increments.md);
+   the reference SDK rejects prefix/postfix expression results. Extend numeric
+   update contracts only alongside their value types.
 2. **Dictionary.** Establish construction, key/value contracts, literals,
    lookup/write behavior, then implement its supported method group. Keep
    heterogeneous values and nullable lookup results explicit.

@@ -38,6 +38,8 @@ argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
           | identifier "=" expression ";"
           | identifier compound-operator expression ";"
+          | update-target ("++" | "--") ";"
+          | ("++" | "--") update-target ";"
           | primary "[" expression "]" "=" expression ";"
           | primary "[" expression "]" compound-operator expression ";"
           | "System" "." "println" "(" expression ")" ";"
@@ -46,6 +48,7 @@ statement = "var" identifier "=" expression ";"
           | "if" "(" expression ")" block ("else" block)?
           | "while" "(" expression ")" block
           | "break" ";" | "continue" ";"
+update-target = identifier | "self" "." identifier | primary "[" expression "]"
 compound-operator = "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
 expression = logical-or
 logical-or = logical-and ("||" logical-and)*
@@ -77,7 +80,7 @@ statements/additional functions in default mode, and other operators are
 rejected. A negative literal must be parenthesized before a member call:
 `(-1).abs()` is accepted, while `-1.abs()` remains rejected because of an SDK
 literal-postfix discrepancy. Repeated negation requires parentheses, as in
-`-(-value)`; adjacent `--` is rejected as unsupported decrement.
+`-(-value)`; adjacent `--` denotes a statement update and is not unary negation.
 Literal overflow is diagnosed at the literal's source start. See the
 [Number literal evidence](../investigations/compiler-number-literals.md).
 
@@ -147,7 +150,7 @@ and before binary operators; it returns a non-null Number operand unchanged
 after evaluating it once. It accepts literals, parameters, locals, calls, and
 grouped expressions. Repeated or mixed prefixes require grouping, as in
 `+(+n)`, `+(-n)`, and `+(~n)`; `+ +n`, `+-n`, and `+~n` are rejected.
-Contiguous `++` remains unsupported increment syntax. Compound assignments
+Contiguous `++`/`--` denote statement updates, described below. Compound assignments
 support bare locals as specified below. Unsigned `>>>` and general object
 calls remain unsupported; the bounded native calls below are separate. Parse
 nesting is bounded at 64; the semantic function is limited to 1024 operations
@@ -554,8 +557,8 @@ other loop forms and standalone blocks remain future work.
 `<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
 The local target must be a bare identifier. Parameters, unknown/forward names,
 and arm locals used outside their scope are rejected. Assignment is a statement,
-not an expression. Local compound statements are specified below;
-increment/decrement remain unsupported.
+not an expression. Local compound and increment/decrement statements are
+specified below.
 Class methods additionally support [explicit self field
 assignment](compiler-classes.md#number-instance-fields).
 
@@ -580,13 +583,34 @@ Assignment-containing IR uses the conservative schedule specified in
 
 [assignments]: ../investigations/compiler-assignments.md
 
+## Increment and decrement
+
+`target++;`, `++target;`, `target--;`, and `--target;` update a Number by one.
+The two operator characters must be contiguous. Accepted targets are bare
+initialized locals, explicit `self` Number fields, and Number-array elements.
+Parameters, grouped local targets, other value/element types, and unknown or
+out-of-scope names are rejected. A nullable Number local needs an established
+non-null proof at the read. Existing assignment contracts still govern its write.
+
+Both prefix and postfix forms are statements with identical supported behavior;
+they cannot be arguments, conditions, initializers, return values, or parts of
+larger expressions. Source lowering retains a checked Number step and separate
+write, without assigning expression-result semantics to either spelling.
+
+For indexed targets, evaluate/capture array then index once, read the selected
+element, add/subtract one, and write back to that captured location. Bounds and
+allocation failures remain runtime obligations. Captures share the ordinary
+frame budget; local updates reuse their existing slot. The tested Number
+boundaries wrap from maximum to minimum on increment and minimum to maximum on
+decrement. See [SDK/runtime evidence](../investigations/compiler-increments.md).
+
 ## Local compound assignment
 
 A bare in-scope initialized local supports `+=`, `-=`, `*=`, `/=`, `%=`,
 `&=`, `|=`, `^=`, `<<=`, and `>>=` as statements. Operator characters must be
 contiguous. Parameters, grouped local targets, and unknown or out-of-scope
-names are rejected. Field/indexed compound targets are specified below. Assignment expressions, increment/decrement,
-logical compounds, and unsigned-right-shift compounds remain unsupported.
+names are rejected. Field/indexed compound targets are specified below. Assignment expressions, logical compounds, and unsigned-right-shift compounds
+remain unsupported.
 
 `n op= rhs;` reads the existing local once, evaluates `rhs` once, applies the
 corresponding supported binary operator, then writes the result to the existing
