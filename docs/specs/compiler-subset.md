@@ -815,6 +815,32 @@ or value contract is inferred from an empty literal. See
 [the example](../../examples/compiler-dictionary/README.md) and
 [SDK evidence](../investigations/compiler-dictionary.md).
 
+### Planned typed Dictionary profile
+
+These are intended contracts, not executable support yet. Add explicit
+`Toybox.Lang.Dictionary<K, V>` parameter/result types and homogeneous scalar
+literal inference before lookup and mutation. Empty literals acquire K/V from
+an expected typed contract; without one they retain the opaque profile above.
+Do not infer key/value contracts from later writes or reinterpret an opaque
+callback Dictionary as a typed one.
+
+Keep both mutable parameters invariant. A write requires key K and value V;
+Null is permitted only when V includes Null. Indexed reads and `get` produce
+`V or Null` regardless of the key expression. `hasKey` alone cannot prove a
+non-null result when Null values are permitted. General heterogeneous unions,
+Null keys, and nested containers need separate contracts before acceptance.
+The first executable group should use Number/String values, whose nullable
+consumers already exist; nullable Boolean/Char results need those core type
+prerequisites before widening the group.
+
+Literal construction must return a fresh reference per evaluation. Flat scalar
+constants can use `hpush`; effectful entries must execute key then value, insert
+that pair, and continue in source order. Duplicate keys must not suppress
+expression effects. Construction storage stays private until initialization
+completes. Preserve these contracts through native/saved IR and assembly;
+[SDK evidence](../investigations/compiler-dictionary.md#literal-semantics)
+establishes the scalar repeated-load and dynamic-store behavior.
+
 ## Native value calls
 
 A Number-valued expression may receive these catalogue-resolved methods:

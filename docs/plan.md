@@ -14,9 +14,13 @@ Choose increments by dependency, following the
 
 1. **Dictionary.** Establish key/value contracts, nonempty literals, lookup and
    writes, then complete the method group. Scalar constant records and `hpush`
-   now have [structured support](specs/data-dictionaries.md); establish source
-   key/value typing and repeated-load identity/mutation behavior before adding
-   literal lowering. Keep
+   have [structured support](specs/data-dictionaries.md), and
+   [literal experiments](investigations/compiler-dictionary.md#literal-semantics)
+   establish fresh scalar loads and ordered dynamic stores. Add invariant typed
+   Dictionary contracts through API/source and saved IR, then literal lowering,
+   following the [planned profile](specs/compiler-subset.md#planned-typed-dictionary-profile).
+   Start with Number/String values and their nullable lookup results; widen to
+   Boolean/Char values alongside the required nullable core types. Keep
    heterogeneous values and nullable lookup results explicit. Remaining own
    methods are `get`, `put`, `hasKey`, `remove`, `keys`, `values`, and `toString`;
    inherited Object methods need Dictionary-specific evidence. See the

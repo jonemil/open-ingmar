@@ -64,10 +64,75 @@ extension is needed for this profile. It uses `ipushz; newd`, plus existing loca
 and member-call instructions. The codec and assembler/disassembler now recognize
 operand-free `newd`. Artifacts: `scratch/check-dictionary-empty/`.
 
-**Interpretation:** keep the first compiler container opaque until key/value
-contracts and constant encodings are established. Current contracts are in the
+Current executable contracts are in the
 [source profile](../specs/compiler-subset.md#dictionary-values) and
 [IR allocation format](../specs/compiler-ir-text.md#dictionary-allocation).
+
+## Literal semantics
+
+**Experimentally observed:** SDK-only `scratch/dictionary-semantics/app.mc`
+uses a method returning `{"one" => 1, "two" => 2}`. Its body is `hpush` at
+CODE+`0x26`, referencing DATA+`0x3315`, followed by `return`. Three calls execute
+that same instruction. After the first call, a local reference copy sees a
+replacement of `one` with 41. The second call still reads 1, compares unequal
+to the first result, and the copy compares equal to the first. Removing `two`
+from the first result leaves a third result with both entries.
+
+**Interpretation:** this flat scalar constant creates a fresh mutable Dictionary
+per load; local copies share the returned reference. This does not establish
+deep copying of nested containers or arbitrary Object equality.
+
+The same source constructs a dynamic literal with two entries. Each key/value
+comes from `key(marker, value)`, which prints the marker and returns the value:
+
+```monkeyc
+var dynamic = {key("key1", "same") => key("value1", 1),
+               key("key2", "same") => key("value2", 2)};
+```
+
+The console prints `key1, value1, key2, value2`, then size 1 and value 2.
+At CODE+`0xf5`, the SDK emits `ipush1 2; newd; dup 0`, evaluates the first
+key/value, uses `aputvdup` at `0x11b`, then evaluates the second pair and uses
+`aputv` at `0x13d`. Thus allocation precedes entry effects, and insertion occurs
+between successive pairs. A constant literal `{"same" => 1, "same" => 2}`
+also yields size 1/value 2; its DATA record contains only the last entry.
+This does not justify eliminating effectful overwritten expressions.
+
+A mixed literal `{1 => 10, 'a' => 20, true => 30}` returns 10, 20, and 30
+for those keys, and Null for a missing String key. These results do not
+establish cross-type key equality, Null keys, or iteration order.
+
+The complete 19-line console matches `scratch/dictionary-semantics/expected.txt`.
+Structured export/reassembly is byte-exact and re-export is identical, including
+the dynamic construction instructions. Verdicts are in `report.json`; SDK PRG
+SHA-256 is
+`53493a349c8ad890e06feb03f27e4c7c7d2f6bba95260f596968af8f2a051ba4`.
+
+## Typed key/value contracts
+
+**Experimentally observed:** fourteen isolated SDK builds under
+`scratch/dictionary-types/` use `-O 0 -l 3`. Method parameters/results accept
+`Lang.Dictionary<Lang.String, Lang.Number>`; locals use inferred types.
+The accepted typed application prints 1 for `one` and Null for an absent key.
+
+| Check | SDK result |
+|---|---|
+| Return `d[k]` as `Number or Null` | Accepted |
+| Return `d[k]` or `d.get(k)` as non-null Number | Rejected: nullable result |
+| Read a Number key from `Dictionary<String, Number>` | Rejected |
+| Write String through indexing or `put` to that Dictionary | Rejected |
+| Write Null through indexing or `put` to that Dictionary | Rejected |
+| Write Null to `Dictionary<String, Number or Null>` | Accepted |
+| Return `{"one" => 1}` or `{}` as `Dictionary<String, Number>` | Accepted |
+| Return `{"one" => "bad"}` with that result annotation | Rejected |
+| Return `Dictionary<String, Number>` as `Dictionary<Object, Number>` | Rejected |
+| Return `Dictionary<String, Number>` as `Dictionary<String, Object>` | Rejected |
+
+The broad published `put` signature permits Null, but a concrete non-null value
+contract rejects it. Preserve that distinction when specializing API methods.
+The widening cases support invariant mutable contracts; they do not establish
+all union or subclass combinations. Build diagnostics and verdicts are in each
+case's `build.log` and the parent `report.json`.
 
 ## Reproduction
 
@@ -92,3 +157,10 @@ To reproduce the edit, copy the original probe's exported project and change
 Assemble the copied project, sign the changed PRG with the developer key, and
 run it in a fresh simulator capture directory. Compare its complete console log
 against the nine values above; the process exit alone is insufficient.
+
+For literal semantics, place the described operations in an AppBase `onStart`,
+print each observation, and exit. Use the shared console Jungle/manifest,
+`scripts/build-example.sh`, and `scripts/simulator-session.py`. Export,
+reconstruct, and re-export with the usual CLI commands, checking bytes and the
+entire console. For typed cases, compile each method independently with `-l 3`;
+use a minimal `onStart` that exits so unrelated code cannot hide a diagnostic.

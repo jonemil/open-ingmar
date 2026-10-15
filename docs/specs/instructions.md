@@ -56,8 +56,8 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`getv`](#getv): load a member using a stacked receiver and symbol.
 - [`putv`](#putv): store an object member.
 - [`invokem`](#invokem): invoke a callable with counted call slots.
-- [`aputv`](#aputv): store an array element.
-- [`aputvdup`](#aputvdup): store an array element and retain the array.
+- [`aputv`](#aputv): store an Array element or Dictionary entry.
+- [`aputvdup`](#aputvdup): store an element/entry and retain the receiver.
 - [`hpush`](#hpush): load a serialized constant Dictionary.
 - [`apush`](#apush): load a serialized constant array.
 - [`lgetv`](#lgetv): load a local-frame slot.
@@ -337,7 +337,8 @@ calls, and absent return values remain unresolved.
 
 ## agetv
 
-**Read an array element.** Opcode `0x10`; length **1 byte**. Operands: none.
+**Read an Array element or Dictionary entry.** Opcode `0x10`; length
+**1 byte**. Operands: none.
 
 Successful abstract stack: `[..., array, index] → [..., value]`.
 
@@ -354,13 +355,20 @@ and empty-array indices produce a fatal bounds error in the SDK probes, despite
 The [Number-array experiment](../investigations/compiler-number-arrays.md) also
 verifies numeric reads and arithmetic through this opcode.
 
-**Limits:** Other element types, non-Number index conversion, and other
-VM/target versions remain unverified. Failure behavior is not a successful
-stack transition; do not treat the error as a recoverable exception.
+For a Dictionary, the operands are receiver and key; a missing key returns Null.
+The [Dictionary probe](../investigations/compiler-dictionary.md#literal-semantics)
+verifies String, Number, Char, and Boolean keys with Number values. Array bounds
+rules do not apply to Dictionary keys.
+
+**Limits:** Other Array element types, Array index conversion, and other
+VM/target versions remain unverified. Array failure behavior is not a successful
+stack transition; do not treat the error as a recoverable exception. Dictionary
+key hashing and equality beyond these scalar reads remain unverified.
 
 ## aputv
 
-**Store an array element.** Opcode `0x11`; length **1 byte**. Operands: none.
+**Store an Array element or Dictionary entry.** Opcode `0x11`; length
+**1 byte**. Operands: none.
 
 Abstract stack: `[..., array, index, value] → [...]`.
 
@@ -381,7 +389,13 @@ contract for both element kinds, including alias visibility and source View
 references. Char length-equal and View negative-index probes report the same
 fatal bounds error after operand effects in SDK and generated apps.
 
-**Limits:** Other index types and other VM/device profiles are unverified.
+For a Dictionary, the operands are receiver, key, and value. The store inserts
+or replaces an entry and consumes all three operands. The
+[Dictionary probe](../investigations/compiler-dictionary.md#literal-semantics)
+verifies replacement through shared references and dynamic literal stores.
+
+**Limits:** Other Array index types, general Dictionary key/value types, and
+other VM/device profiles are unverified.
 
 [typed-writes]: ../investigations/compiler-typed-array-writes.md
 
@@ -402,9 +416,14 @@ numeric operands preserve their bits. The mnemonic is corroborated by the
 pinned instruction research; the encoding and record reference are observed in
 our SDK-compiled sources.
 
-**Limits:** Scalar records reconstruct exactly and edited contents run in the
-simulator. Fresh-versus-shared behavior across repeated loads, nested records,
-and banked/nonzero-prefix addresses remain unverified.
+Repeated execution of the same instruction produces independently mutable
+Dictionaries for the tested flat scalar record: replacement/removal through one
+result does not alter later results. Copying a result into another local retains
+the same reference. See
+[literal semantics](../investigations/compiler-dictionary.md#literal-semantics).
+
+**Limits:** Nested records, deep-copy behavior, invalid addresses, and
+banked/nonzero-prefix addresses remain unverified.
 
 ## apush
 
@@ -425,8 +444,8 @@ other SDK/device versions remain unverified.
 
 ## aputvdup
 
-**Store an array element and retain the array.** Opcode `0x49`; length
-**1 byte**. Operands: none. Successful abstract stack:
+**Store an Array element or Dictionary entry and retain the receiver.**
+Opcode `0x49`; length **1 byte**. Operands: none. Successful abstract stack:
 `[..., array, index, value] → [..., array]`.
 
 Unlike `aputv`, this store leaves the array on the stack for subsequent stores.
@@ -439,6 +458,12 @@ SDK/reconstructed execution preserves element effects and values in source
 order. Changing the second index from 1 to 3 in a length-three array triggers
 an out-of-bounds error after its RHS prints 20, before the third RHS executes.
 This confirms write-time bounds checking for that specimen.
+
+Dictionary literals use the same stack shape with a key in place of the index.
+The [Dictionary probe](../investigations/compiler-dictionary.md#literal-semantics)
+uses `aputvdup` for the first dynamic entry and `aputv` for the last. A preceding
+`dup` retains the completed Dictionary. Duplicate keys replace earlier values
+after their key/value expressions have executed.
 
 The general stack effect is source-derived and cross-checked with the compiled
 sequence. Other element types, invalid receivers/index types, exception
@@ -504,6 +529,11 @@ The SDK's empty `{}` emits `ipushz; newd`. Our compiler uses the same sequence;
 repeated allocation and zero `size`/true `isEmpty` results run in the simulator.
 The initial mixed Dictionary probe has `37 2f 13 02` at CODE+`0x27`: push zero,
 allocate, store local 2. See [Dictionary evidence](../investigations/compiler-dictionary.md).
+
+The [dynamic literal probe](../investigations/compiler-dictionary.md#literal-semantics)
+supplies entry count 2, then fills the Dictionary with indexed stores. Duplicate
+keys leave one entry. The operand's allocation/capacity effect is unverified;
+it does not establish the final number of distinct keys.
 
 **Limits:** Nonzero size semantics, initial capacity, allocation failure, and
 constant Dictionary loads are not established by this empty-allocation profile.
