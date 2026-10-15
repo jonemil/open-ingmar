@@ -61,6 +61,7 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`apush`](#apush): load a serialized constant array.
 - [`lgetv`](#lgetv): load a local-frame slot.
 - [`lputv`](#lputv): store a local-frame slot.
+- [`newd`](#newd): create a Dictionary.
 - [`newa`](#newa): create an array.
 - [`newc`](#newc): create a class instance.
 - [`return`](#return): return from a function.
@@ -472,6 +473,20 @@ MinimalConsoleApp/getInitialView.
 
 **Limits:** Initial element values, allowable sizes, allocation failures, and
 length conversion remain unverified.
+
+## newd
+
+**Create a Dictionary.** Opcode `0x2f`; length **1 byte**. Operands: none.
+
+Abstract stack: `[..., size] → [..., dictionary]`.
+
+The SDK's empty `{}` emits `ipushz; newd`. Our compiler uses the same sequence;
+repeated allocation and zero `size`/true `isEmpty` results run in the simulator.
+The initial mixed Dictionary probe has `37 2f 13 02` at CODE+`0x27`: push zero,
+allocate, store local 2. See [Dictionary evidence](../investigations/compiler-dictionary.md).
+
+**Limits:** Nonzero size semantics, initial capacity, allocation failure, and
+constant Dictionary loads are not established by this empty-allocation profile.
 
 ## newc
 

@@ -214,6 +214,7 @@ impl TupleShape {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    Dictionary,
     Integer,
     NullableInteger,
     String,
@@ -232,6 +233,7 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    Dictionary,
     Integer,
     NullableInteger,
     String,
@@ -259,6 +261,7 @@ impl ParameterType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::Dictionary => ValueType::Dictionary.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Array(element) => ValueType::Array(*element).api_type(),
@@ -279,6 +282,7 @@ impl ReturnType {
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
+            Self::Dictionary => ValueType::Dictionary.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Tuple(shape) => shape.api_type(),
@@ -290,6 +294,7 @@ impl ReturnType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
+    Dictionary,
     Integer,
     NullableInteger,
     String,
@@ -305,12 +310,12 @@ enum ValueType {
 }
 
 impl ValueType {
-    /// Return the scalar alternative of a supported nullable value. Opaque
-    /// callback Dictionaries retain their union because non-null use is unsupported.
+    /// Return the non-null alternative of a supported nullable value.
     fn without_null(self) -> Self {
         match self {
             Self::NullableInteger => Self::Integer,
             Self::NullableString => Self::String,
+            Self::NullableDictionary => Self::Dictionary,
             _ => self,
         }
     }
@@ -330,6 +335,7 @@ impl ValueType {
             ]),
             Self::Boolean => api::Type::named("Toybox.Lang.Boolean"),
             Self::Char => api::Type::named("Toybox.Lang.Char"),
+            Self::Dictionary => api::Type::named("Toybox.Lang.Dictionary"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
             Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
@@ -357,6 +363,7 @@ impl ValueType {
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
                 "Toybox.Lang.Char" => Some(Self::Char),
+                "Toybox.Lang.Dictionary" => Some(Self::Dictionary),
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
@@ -370,6 +377,10 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Allocate a fresh empty Dictionary; key/value operations are not yet supported.
+    DictionaryNew {
+        result: ValueId,
+    },
     /// Define the single incoming stack value immediately after a block marker.
     /// The entry block cannot have a parameter; every predecessor supplies one
     /// assignable value via `JumpValue`. Supported types follow the join profile.
@@ -1041,6 +1052,10 @@ impl Function {
                     }
                     (None, vec![value])
                 }
+                Operation::DictionaryNew { result } => {
+                    types.insert(result, ValueType::Dictionary);
+                    (Some(result), vec![])
+                }
                 Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::ArrayFill { builder, value, .. } => {
                     let expected =
@@ -1137,7 +1152,9 @@ impl Function {
                                     _ => None,
                                 };
                                 if let Some(
-                                    ty @ (ValueType::NullableInteger | ValueType::NullableString),
+                                    ty @ (ValueType::NullableInteger
+                                    | ValueType::NullableString
+                                    | ValueType::NullableDictionary),
                                 ) = declared
                                 {
                                     return ty;
@@ -1664,6 +1681,7 @@ impl Function {
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
+                            ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Tuple(shape) => ReturnType::Tuple(shape),
                             ValueType::Array(element) => ReturnType::Array(element),
@@ -1751,6 +1769,7 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::BlockParameter { .. }
+                    | Operation::DictionaryNew { .. }
                     | Operation::ModuleCall { .. }
                     | Operation::Binary {
                         kind: BinaryOp::Divide | BinaryOp::Remainder,
@@ -1963,6 +1982,7 @@ impl Function {
                             ParameterType::String => "string",
                             ParameterType::Boolean => "boolean",
                             ParameterType::Char => "char",
+                            ParameterType::Dictionary => "dictionary",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
                             ParameterType::Object(NativeClass::BehaviorDelegate) => {
@@ -1989,6 +2009,7 @@ impl Function {
         );
         for operation in &self.operations {
             text.push_str(&match operation.operation {
+                Operation::DictionaryNew { result } => format!(".dictionary-new %{}", result.0),
                 Operation::Block { block } => format!(".block ^{}", block.0),
                 Operation::BlockParameter {
                     result,
@@ -2392,6 +2413,7 @@ fn validate_call_arguments(
                     | ValueType::Char
                     | ValueType::Object(_)
                     | ValueType::Array(_)
+                    | ValueType::Dictionary
                     | ValueType::Null
                     | ValueType::NullableInteger
                     | ValueType::NullableString
@@ -2414,6 +2436,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
+        ReturnType::Dictionary => Ok(ValueType::Dictionary),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
             validate_call_names(None, &class)?;
@@ -2434,6 +2457,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",
+        ReturnType::Dictionary => " result=dictionary",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",
         ReturnType::Object(NativeClass::BehaviorDelegate) => " result=behavior-delegate",

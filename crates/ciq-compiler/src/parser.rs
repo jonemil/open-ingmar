@@ -119,6 +119,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    DictionaryNew,
     Conditional {
         condition: Box<Expression>,
         when_true: Box<Expression>,
@@ -820,6 +821,21 @@ impl<'a> Parser<'a> {
         };
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
+    /// Parse an empty Dictionary literal; reject entries outside this profile.
+    fn empty_dictionary(&mut self, start: usize) -> Result<Expression, Diagnostic> {
+        let close = self.expect(
+            Kind::Punctuation('}'),
+            "empty Dictionary literal requires '{}'",
+        )?;
+        self.node(
+            ExpressionKind::DictionaryNew,
+            Span {
+                start,
+                end: close.span.end,
+            },
+        )
+    }
+
     /// Parse construction outside ordinary primary-expression frames so nested
     /// calls retain the supported expression-depth budget on the default stack.
     fn construct(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
@@ -995,6 +1011,7 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::Integer(value), token.span)
             }
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
+            Kind::Punctuation('{') => self.empty_dictionary(token.span.start),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),
             Kind::Word("false") => self.node(ExpressionKind::Boolean(false), token.span),
             Kind::Word(name)
@@ -1492,6 +1509,7 @@ impl Parser<'_> {
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
+                        "Toybox.Lang.Dictionary" => crate::ParameterType::Dictionary,
                         "Toybox.WatchUi.View" => {
                             crate::ParameterType::Object(crate::NativeClass::View)
                         }
@@ -1551,6 +1569,7 @@ impl Parser<'_> {
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
+                "Toybox.Lang.Dictionary" => crate::ReturnType::Dictionary,
                 "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
                 "Toybox.WatchUi.BehaviorDelegate" => {
                     crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate)

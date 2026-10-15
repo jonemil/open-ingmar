@@ -21,6 +21,9 @@ fn emit(
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
+        parser::ExpressionKind::DictionaryNew => Operation::DictionaryNew {
+            result: ValueId(operations.len() as u32),
+        },
         parser::ExpressionKind::Joined(value) => return Ok(value),
         parser::ExpressionKind::Conditional { .. } => {
             unreachable!("conditional must be materialized")

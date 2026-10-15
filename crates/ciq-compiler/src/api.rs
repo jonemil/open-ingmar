@@ -363,6 +363,15 @@ fn build_core() -> Catalogue {
             },
         );
     }
+    classes.get_mut("Toybox.Lang.Dictionary").unwrap().methods = vec![
+        method("size", vec![], Type::named(number), initial),
+        method(
+            "isEmpty",
+            vec![],
+            Type::named("Toybox.Lang.Boolean"),
+            initial,
+        ),
+    ];
     classes.get_mut(object).unwrap().methods = vec![
         method("toString", vec![], Type::named(string), initial),
         method(

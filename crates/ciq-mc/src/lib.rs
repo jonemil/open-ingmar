@@ -67,6 +67,7 @@ opcodes! {
     Npush = 0x2c, "npush", [];
     Invv = 0x2d, "invv", [];
     Dup = 0x2e, "dup", [1];
+    Newd = 0x2f, "newd", [];
     Getm = 0x30, "getm", [];
     Throw = 0x33, "throw", [];
     Cpush = 0x34, "cpush", [4];
@@ -210,6 +211,17 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dictionary_allocation_has_no_inline_operands() {
+        let decoded = decode(&[0x37, 0x2f]).unwrap();
+        assert_eq!(decoded[1].offset, 1);
+        assert_eq!(decoded[1].instruction.opcode(), Opcode::Newd);
+        let mut bytes = Vec::new();
+        decoded[1].instruction.encode_into(&mut bytes);
+        assert_eq!(bytes, [0x2f]);
+        assert!(Instruction::new(Opcode::Newd, vec![0]).is_err());
+    }
 
     #[test]
     fn retaining_array_store_has_no_operands_and_preserves_next_index() {

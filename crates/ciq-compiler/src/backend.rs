@@ -74,7 +74,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }));
         }
         match &located.operation {
-            Operation::BlockParameter { result, .. }
+            Operation::DictionaryNew { result }
+            | Operation::BlockParameter { result, .. }
             | Operation::Null { result }
             | Operation::Boolean { result, .. }
             | Operation::Char { result, .. }
@@ -595,6 +596,10 @@ fn expression(
                         literal_aliases[&LiteralKey::Array(*result)].clone(),
                     )],
                 ),
+                Operation::DictionaryNew { .. } => {
+                    items.push(instruction(Opcode::Ipushz, vec![]));
+                    (Opcode::Newd, vec![])
+                }
                 Operation::ArrayNew { .. } => {
                     items.push(instruction(Opcode::Ipushz, vec![]));
                     (Opcode::Newa, vec![])

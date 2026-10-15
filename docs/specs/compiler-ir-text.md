@@ -265,6 +265,22 @@ Lowering emits the operand, `ipush1 0x01`, and `addv` or `subv`. Existing single
 use, block-local dependency, type, and effect-order checks apply. No extra native
 call or new VM opcode is needed. See [source updates](compiler-subset.md#increment-and-decrement).
 
+## Dictionary allocation
+
+`.dictionary-new %<result> [span=<start>:<end>]` defines a fresh empty non-null
+Dictionary. Native construction uses `Operation::DictionaryNew`; validation
+requires Dictionary's API 1.0.0 class, single use, block-local dependencies, and
+ordered allocation. Lowering emits `ipushz; newd`; no DATA record or compiler
+capacity operand is involved. Allocation failures remain runtime obligations.
+
+`dictionary` is a parameter-type tag and value-call `result=` tag. A Dictionary
+function return is inferred from its operations, as for other non-null result
+types. Locals and calls preserve references and check exact supported types.
+`.call-native` accepts `size` and `isEmpty` on a non-null Dictionary. Existing
+nullable callback reads narrow to Dictionary under a non-null proof. Other
+Dictionary operations and conditional joins remain unsupported. See the
+[source profile](compiler-subset.md#dictionary-values).
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
@@ -901,10 +917,12 @@ errors. For example:
 `.null %<result-id> [span=<start>:<end>]` defines null. `.equal`/`.not-equal` permit
 Number/Char pairs, Boolean pairs, null pairs, and nullable Dictionary/null pairs;
 it also accepts the String identity profile below.
-Ordering directives permit Number/Char pairs. Callback-state reads/locals preserve their
-opaque nullable type.
+Ordering directives permit Number/Char pairs. Callback-state reads/locals retain
+their declared nullable type; proven reads yield a non-null Dictionary.
 Printing and arithmetic reject Null and Dictionary values. Null may be used
-in nullable Number/String user contracts; Dictionary remains callback-only. A nullable Dictionary local may be assigned null; other
+in nullable Number/String user contracts. Non-null Dictionary references support
+the [allocation/call profile](#dictionary-allocation). A nullable callback
+Dictionary local may be assigned null; other
 assignments preserve the initializer type. Lowering uses `npush` for null and
 the existing local-slot and equality instructions.
 

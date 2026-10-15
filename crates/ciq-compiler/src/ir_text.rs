@@ -106,6 +106,7 @@ pub(crate) fn parse_ir_context(
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
+                        "dictionary" => Ok(crate::ParameterType::Dictionary),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
                         "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
                         "behavior-delegate" => Ok(crate::ParameterType::Object(
@@ -212,6 +213,7 @@ pub(crate) fn parse_ir_context(
             Some(".new-source") => (33, call_width()),
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
+            Some(".dictionary-new") => (66, 2),
             Some(".block") => (10, 2),
             Some(".block-value") => (64, 3),
             Some(".jump-value") => (65, 3),
@@ -622,6 +624,10 @@ pub(crate) fn parse_ir_context(
                 local: parse_local(&fields[1])?,
                 value: parse_value(&fields[2])?,
             }
+        } else if kind == 66 {
+            Operation::DictionaryNew {
+                result: parse_value(&fields[1])?,
+            }
         } else if kind == 64 {
             Operation::BlockParameter {
                 result: parse_value(&fields[1])?,
@@ -795,6 +801,7 @@ fn call_contract(
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
             "char" => crate::ReturnType::Char,
+            "dictionary" => crate::ReturnType::Dictionary,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             "view" => crate::ReturnType::Object(crate::NativeClass::View),

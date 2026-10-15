@@ -12,9 +12,14 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Establish construction, key/value contracts, literals,
-   lookup/write behavior, then implement its supported method group. Keep
-   heterogeneous values and nullable lookup results explicit.
+1. **Dictionary.** Establish key/value contracts, nonempty literals, lookup and
+   writes, then complete the method group. The SDK constant-literal probe exposes
+   opcode `0x42` and an unsupported DATA constant encoding; model both through
+   structured assembly/disassembly before claiming literal support. Keep
+   heterogeneous values and nullable lookup results explicit. Remaining own
+   methods are `get`, `put`, `hasKey`, `remove`, `keys`, `values`, and `toString`;
+   inherited Object methods need Dictionary-specific evidence. See the
+   [initial investigation](investigations/compiler-dictionary.md).
 2. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value

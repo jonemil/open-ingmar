@@ -179,6 +179,11 @@ pub(crate) fn value_call(
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
             | (
+                "Toybox.Lang.Dictionary",
+                "Toybox.Lang.Dictionary",
+                "size" | "isEmpty"
+            )
+            | (
                 "Toybox.Lang.Array",
                 "Toybox.Lang.Array",
                 "size"

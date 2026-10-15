@@ -9,7 +9,7 @@ Restricted frontend. Semantic model:
 [parameters/arguments](../investigations/compiler-arguments.md), and
 [strings/printing](../investigations/compiler-strings.md).
 
-Number/String/Boolean/Char/null restrictions describe the current implementation.
+The scalar, container, and null restrictions describe the current implementation.
 They do not define separate primitive types for the full Monkey C language.
 The [core type/API model](api-declarations.md) connects values to
 `Lang` identities for operator validation and the bounded native calls below.
@@ -29,7 +29,7 @@ block = "{" statement* "}"
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
-           | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+           | "Toybox.Lang.Boolean" | "Toybox.Lang.Char" | "Toybox.Lang.Dictionary"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
@@ -58,7 +58,7 @@ arithmetic = product (("+" | "-" | "|" | "^") product)*
 product = unary (("*" | "/" | "%" | "&" | "<<" | ">>") unary)*
 unary = primary | ("-" | "+") primary | ("!" | "~") unary
 primary = atom ("." member "(" argument-list? ")" | "[" expression "]")*
-atom = signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
+atom = "{" "}" | signed-decimal-integer | string-literal | char-literal | "true" | "false" | "null"
      | parameter-or-local-identifier
      | module "." member "(" argument-list? ")" | "(" expression ")"
      | "[" argument-list? "]"
@@ -791,7 +791,29 @@ operations retain their own forms. `WatchUi.requestUpdate()` is the other
 supported native module statement: zero arguments, Void, API 1.0.0. It requests
 a redraw of the current View and follows the same alias/validation rules.
 Runtime exit invokes a supplied source `onStop` callback in the
-validated console app; its Dictionary-or-null state is not a user-call argument.
+validated console app; its unguarded Dictionary-or-null state is not a user-call argument.
+
+## Dictionary values
+
+`{}` creates a fresh empty `Toybox.Lang.Dictionary` (API 1.0.0). Whitespace and
+comments may separate the braces. Dictionary references may initialize/copy or
+replace Dictionary locals and pass through explicitly annotated non-null
+Dictionary parameters/results. Copies preserve reference identity; reassignment
+does not copy contents. Calls and construction retain source evaluation order.
+
+The executable method group is `size()` → Number and `isEmpty()` → Boolean,
+both API 1.0.0. Chaining and discarded results use existing native-call rules.
+Native callback Dictionary-or-Null state supports these methods under a non-null
+proof; unguarded access is rejected. Its nullable declaration/assignment rules
+remain unchanged. Ordinary source nullable Dictionary annotations are not yet
+supported.
+
+This is an opaque container profile. Nonempty literals, key/value access and
+mutation, indexing, Dictionary equality, conditional Dictionary joins, direct
+printing, `new Dictionary()`, and the other methods remain unsupported. No key
+or value contract is inferred from an empty literal. See
+[the example](../../examples/compiler-dictionary/README.md) and
+[SDK evidence](../investigations/compiler-dictionary.md).
 
 ## Native value calls
 
@@ -812,7 +834,7 @@ Number `compareTo` requires API 5.0.0; the other listed Number methods require
 Boolean or Char only. Unchecked nullable comparison arguments are rejected.
 `equals`
 accepts Number, String, Boolean, Char, Null, or nullable Number/String; it returns
-Boolean. Dictionary arguments remain outside this lowering profile.
+Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
 Comparison/equality/hash behavior is supplied by the runtime; comparison signs
@@ -887,7 +909,8 @@ statements. Native Void methods still require their own supported statement
 contract; discarding does not enable `Array.sort` or unknown members. See the
 [statement evidence](../investigations/compiler-native-statements.md).
 
-Null/Dictionary receivers remain unsupported. Chained calls
+Null receivers remain unsupported; Dictionary receivers follow their bounded
+[profile](#dictionary-values). Chained calls
 must resolve each member against the preceding result's type, for example
 `41.toString().toUpper().length().format("%03d")`. String and Boolean user
 parameters/results require the function annotations defined above.

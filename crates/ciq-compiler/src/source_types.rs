@@ -30,6 +30,9 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation);
         let (result, ty) = match operation {
+            Operation::DictionaryNew { result } => {
+                (*result, Some(Type::named("Toybox.Lang.Dictionary")))
+            }
             Operation::BlockParameter { result, value_type } => (*result, Some(value_type.clone())),
             Operation::ArrayBegin {
                 builder,

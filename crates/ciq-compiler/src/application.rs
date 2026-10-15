@@ -36,6 +36,7 @@ const TO_CHAR: u32 = 0x008004c6;
 const TO_CHAR_ARRAY: u32 = 0x008004c4;
 const TO_UTF8_ARRAY: u32 = 0x008004c5;
 const SIZE: u32 = 0x008000ae;
+const IS_EMPTY: u32 = 0x008000b8;
 const INDEX_OF: u32 = 0x008004bf;
 const ARRAY_ADD: u32 = 0x0080014e;
 const ARRAY_ADD_ALL: u32 = 0x008004be;
@@ -341,6 +342,7 @@ pub fn build_console_application(
         ("toCharArray".into(), TO_CHAR_ARRAY),
         ("toUtf8Array".into(), TO_UTF8_ARRAY),
         ("size".into(), SIZE),
+        ("isEmpty".into(), IS_EMPTY),
         ("indexOf".into(), INDEX_OF),
         ("add".into(), ARRAY_ADD),
         ("addAll".into(), ARRAY_ADD_ALL),
@@ -435,6 +437,7 @@ pub fn build_console_application(
         ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),
         ("__ciq_native_toUtf8Array".into(), TO_UTF8_ARRAY),
         ("__ciq_native_size".into(), SIZE),
+        ("__ciq_native_isEmpty".into(), IS_EMPTY),
         ("__ciq_native_indexOf".into(), INDEX_OF),
         ("__ciq_native_add".into(), ARRAY_ADD),
         ("__ciq_native_addAll".into(), ARRAY_ADD_ALL),
