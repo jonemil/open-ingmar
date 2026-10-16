@@ -124,6 +124,9 @@ pub(crate) fn parse_ir_context(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "string-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::String))
+                        }
                         "number-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Number))
                         }
@@ -456,16 +459,31 @@ pub(crate) fn parse_ir_context(
                 element_type: match fields[2].as_str() {
                     "number" => crate::ArrayElement::Number,
                     "char" => crate::ArrayElement::Char,
-                    _ => return Err(fail(*at, "constant arrays require Number or Char elements")),
+                    "string" => crate::ArrayElement::String,
+                    _ => {
+                        return Err(fail(
+                            *at,
+                            "constant arrays require Number, Char, or String elements",
+                        ));
+                    }
                 },
                 values: fields[3..width]
                     .iter()
                     .map(|s| {
+                        if fields[2] == "string" {
+                            return s
+                                .strip_prefix('"')
+                                .map(|s| crate::ArrayConstantValue::String(s.into()))
+                                .ok_or_else(|| {
+                                    fail(*at, "String array constants require quoted text")
+                                });
+                        }
                         let hex = s
                             .strip_prefix("0x")
                             .filter(|s| s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit()))
                             .ok_or_else(|| fail(*at, "array constants require eight hex digits"))?;
                         u32::from_str_radix(hex, 16)
+                            .map(crate::ArrayConstantValue::Bits)
                             .map_err(|_| fail(*at, "invalid array constant"))
                     })
                     .collect::<Result<_, _>>()?,
@@ -476,6 +494,7 @@ pub(crate) fn parse_ir_context(
                 element_type: match fields[2].as_str() {
                     "char" => crate::ArrayElement::Char,
                     "number" => crate::ArrayElement::Number,
+                    "string" => crate::ArrayElement::String,
                     "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                     _ => return Err(fail(*at, "unsupported builder element type")),
                 },
@@ -508,6 +527,7 @@ pub(crate) fn parse_ir_context(
             let element_type = match fields[2].as_str() {
                 "char" => crate::ArrayElement::Char,
                 "number" => crate::ArrayElement::Number,
+                "string" => crate::ArrayElement::String,
                 "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                 _ => return Err(fail(*at, "unsupported array element type")),
             };
@@ -894,6 +914,7 @@ fn call_contract(
             "dictionary" => crate::ReturnType::Dictionary,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
+            "string-array" => crate::ReturnType::Array(crate::ArrayElement::String),
             "view" => crate::ReturnType::Object(crate::NativeClass::View),
             "dc" => crate::ReturnType::Object(crate::NativeClass::Dc),
             "behavior-delegate" => crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate),

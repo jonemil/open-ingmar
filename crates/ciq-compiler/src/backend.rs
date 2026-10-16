@@ -69,20 +69,35 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
         {
             let alias = format!("__ciq_array_{}_{}", label, result.0);
             literal_aliases.insert(LiteralKey::Array(*result), alias.clone());
+            let mut pool = Vec::<ciq_prg::data::StringDeclaration>::new();
+            let values = values
+                .iter()
+                .map(|value| match value {
+                    crate::ArrayConstantValue::Bits(n)
+                        if *element_type == crate::ArrayElement::Number =>
+                    {
+                        ciq_prg::data::arrays::Value::Number(*n)
+                    }
+                    crate::ArrayConstantValue::Bits(n) => ciq_prg::data::arrays::Value::Char(*n),
+                    crate::ArrayConstantValue::String(s) => {
+                        let index = pool.iter().position(|p| p.value == *s).unwrap_or_else(|| {
+                            let index = pool.len();
+                            pool.push(ciq_prg::data::StringDeclaration {
+                                alias: format!("s{index}"),
+                                value: s.clone(),
+                                at: None,
+                            });
+                            index
+                        });
+                        ciq_prg::data::arrays::Value::String(pool[index].alias.clone())
+                    }
+                })
+                .collect();
             literals.push(Item::Array(ciq_prg::data::arrays::Declaration {
-                pool: None,
+                pool: (!pool.is_empty()).then_some(pool),
                 alias,
                 at: None,
-                values: values
-                    .iter()
-                    .map(|v| {
-                        if *element_type == crate::ArrayElement::Number {
-                            ciq_prg::data::arrays::Value::Number(*v)
-                        } else {
-                            ciq_prg::data::arrays::Value::Char(*v)
-                        }
-                    })
-                    .collect(),
+                values,
             }));
         }
         match &located.operation {

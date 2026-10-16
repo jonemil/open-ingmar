@@ -1017,11 +1017,12 @@ Nonempty Char-array literals accept Char-valued expressions, for example
 `['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a
 fresh non-null `Array<Char>` and may receive postfix reads/calls. Number literals
 follow the [Number-array contract](#number-arrays); View literals follow the
-[native object contract](#native-views). Other element types, mixed
+[native object contract](#native-views); String literals follow the
+[String-array contract](#string-arrays). Other element types, mixed
 types, nested arrays, and trailing commas are rejected. Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
-Homogeneous nonempty lists of Number tokens or Char tokens become typed IR
+Homogeneous nonempty lists of Number, Char, or String tokens become typed IR
 constants and DATA array records loaded with `apush`. Each execution creates a
 fresh mutable array. Computed expressions are not folded into these records.
 
@@ -1070,7 +1071,7 @@ array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparisons, Boolean conditions, scalar equality methods, or
-console entry results. General Array construction, `sort`, and ordinary
+console entry results. Native Array constructors, `sort`, and ordinary
 object weak references remain unsupported. Native Array calls may be values or
 statements that discard the result.
 Guard nullable String receivers before conversion; that proof does not imply
@@ -1089,16 +1090,18 @@ The compiler emits `agetv`, with no clamping, negative-index adjustment, or
 static bounds analysis. An index outside `0..array.size()` remains a runtime
 obligation; the tested VM reports a fatal bounds error. Reads are order-sensitive
 in IR validation even without other calls/writes, because failure order is
-observable. String/dictionary indexing, nullable arrays, and other element
-contracts remain unsupported. See the
+observable. Indexing a String itself and nullable Array receivers remain
+unsupported; Dictionary indexing follows its [own contract](#dictionary-values).
+See the
 [array-read evidence](../investigations/compiler-array-reads.md).
 
 ## Array element writes
 
 `array[index] = value;` replaces an element of a non-null supported array.
 The index must be non-null Number; the value must match the invariant Number,
-Char, or native View element contract. Guarded fresh nullable Number reads are
-accepted for Number indices/values. View values may be native or source View
+Char, String, or native View element contract. Guarded fresh nullable reads are
+accepted for Number indices and Number/String values. View values may be native
+or source View
 instances; storing/reading through a View array erases exact source identity.
 Null values, delegates, and drawing contexts cannot fill View slots. Receiver, index, and value evaluate once, in that order.
 The assignment produces no value and does not change the array's length.
@@ -1163,11 +1166,12 @@ other; no implicit numeric/Char conversion is performed.
 The Array/Number classes require API 1.0.0; conversion and the mutation/search/
 transform methods above require 1.3.0. Context checking keeps signature-type
 availability separate from method availability. Nullable String receivers need
-proof before conversion. Nullable arrays and other element types are unsupported.
+proof before conversion. Nullable arrays and unsupported element types remain
+rejected.
 
 Nonempty literals such as `[1, 2]`, `[n, -n]`, and `[M.make(), 3]` produce a fresh
-`Array<Number>`. The first element selects Number or Char from its expression
-contract; every element must have that same non-null type. Parameters, locals,
+`Array<Number>`. The first element selects the supported element type from its
+expression contract; every element must have that same non-null type. Parameters, locals,
 user/native calls, arithmetic, and element reads can supply the first element.
 Nullable values require the usual branch proof, including when used first.
 Allocation precedes element effects; evaluation and typed stores proceed left
@@ -1183,10 +1187,34 @@ printing, and cannot be console entry results. See the
 
 [number-array-literals]: ../investigations/compiler-number-array-literals.md
 
+## String arrays
+
+`Toybox.Lang.Array<Toybox.Lang.String>` is an invariant non-null String-element
+contract. Parameters/results preserve that type; indexed reads produce String
+and writes require String. Nullable source values require a non-null proof
+before construction, writes, or native arguments. Mixed types, Null elements,
+nested arrays, and nullable Array receivers remain unsupported.
+
+Homogeneous literals such as `["one", "two"]` use pooled DATA constants.
+Repeated text shares a local pool entry; repeated execution loads independently
+mutable arrays. Computed literals, including conditional and guarded elements,
+use the same ordered private construction as Char/Number arrays. An expected
+String-array contract supplies the type of a direct `[]`.
+
+`size`, `toString`, `indexOf`, `add`, `addAll`, `remove`, `removeAll`, `reverse`,
+and `slice` use the existing Array contracts with String substituted for the
+element type. Search/removal compare String text. Array/String types,
+construction, indexing, `size`, and `toString` require API 1.0.0; the other
+methods require 1.3.0. Sort and inherited Object methods remain deferred.
+Arrays must be converted to String before printing.
+
+See the [example](../../examples/compiler-string-arrays/README.md) and
+[runtime evidence](../investigations/compiler-string-arrays.md).
+
 ## Empty array literals
 
-A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`, or
-`Array<View>`.
+A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,
+`Array<String>`, or `Array<View>`.
 Parentheses preserve direct context. Supported contexts are:
 
 - An explicitly annotated array return: `return [];`.

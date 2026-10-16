@@ -151,6 +151,7 @@ impl NativeClass {
 pub enum ArrayElement {
     Number,
     Char,
+    String,
     Object(NativeClass),
 }
 
@@ -160,20 +161,27 @@ impl ArrayElement {
         api::Type::named(match self {
             Self::Number => "Toybox.Lang.Number",
             Self::Char => "Toybox.Lang.Char",
+            Self::String => "Toybox.Lang.String",
             Self::Object(class) => class.name(),
         })
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
-        [Self::Number, Self::Char, Self::Object(NativeClass::View)]
-            .into_iter()
-            .find(|element| element.api_type() == *ty)
+        [
+            Self::Number,
+            Self::Char,
+            Self::String,
+            Self::Object(NativeClass::View),
+        ]
+        .into_iter()
+        .find(|element| element.api_type() == *ty)
     }
 
     fn text(self) -> &'static str {
         match self {
             Self::Number => "number",
             Self::Char => "char",
+            Self::String => "string",
             Self::Object(NativeClass::View) => "view",
             Self::Object(NativeClass::Dc) => "dc",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
@@ -184,11 +192,20 @@ impl ArrayElement {
         match self {
             Self::Number => "number-array",
             Self::Char => "char-array",
+            Self::String => "string-array",
             Self::Object(NativeClass::View) => "view-array",
             Self::Object(NativeClass::Dc) => "dc-array",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate-array",
         }
     }
+}
+
+/// Payload of a homogeneous Array constant. Bits are interpreted as Number or
+/// Char by the element contract; String contains text rather than a pool alias.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArrayConstantValue {
+    Bits(u32),
+    String(String),
 }
 
 /// Supported positional native callback results, independent of runtime storage.
@@ -458,12 +475,12 @@ pub enum Operation {
         increment: bool,
     },
     /// Load a fresh mutable flat scalar array from DATA.
-    /// Values retain raw 32-bit Number/Char bits; arrays must be nonempty and
-    /// homogeneous, with Number or Char elements only.
+    /// Values retain raw Number/Char bits or String text. Arrays must be nonempty
+    /// and homogeneous; the payload kind must agree with the element contract.
     ArrayConstant {
         result: ValueId,
         element_type: ArrayElement,
-        values: Vec<u32>,
+        values: Vec<ArrayConstantValue>,
     },
     /// Allocate a private array builder before its elements are evaluated.
     /// The builder cannot escape as a value; fills must cover every index in order.
@@ -1502,10 +1519,18 @@ impl Function {
                     ref values,
                 } => {
                     if values.is_empty()
-                        || !matches!(element_type, ArrayElement::Number | ArrayElement::Char)
+                        || !values.iter().all(|value| {
+                            matches!(
+                                (element_type, value),
+                                (
+                                    ArrayElement::Number | ArrayElement::Char,
+                                    ArrayConstantValue::Bits(_)
+                                ) | (ArrayElement::String, ArrayConstantValue::String(_))
+                            )
+                        })
                     {
                         return Err(fail(
-                            "constant arrays require nonempty Number or Char elements",
+                            "constant arrays require nonempty homogeneous Number, Char, or String elements",
                         ));
                     }
                     let ty = ValueType::Array(element_type);
@@ -2441,7 +2466,10 @@ impl Function {
                     element_type.text(),
                     values
                         .iter()
-                        .map(|v| format!(" 0x{v:08x}"))
+                        .map(|v| match v {
+                            ArrayConstantValue::Bits(n) => format!(" 0x{n:08x}"),
+                            ArrayConstantValue::String(s) => format!(" {s:?}"),
+                        })
                         .collect::<String>()
                 ),
                 Operation::ArrayFinish { result, builder } => {
@@ -2730,6 +2758,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Tuple(TupleShape::ViewDelegate) => " result=view-delegate",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
+        ReturnType::Array(ArrayElement::String) => " result=string-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::BehaviorDelegate)) => {

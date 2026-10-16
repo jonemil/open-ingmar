@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-string-arrays](compiler-string-arrays/README.md): pooled String
+  constants, ordered construction, typed reads/writes, and Array methods.
 - [compiler-dictionary](compiler-dictionary/README.md): typed/opaque Dictionaries,
   scalar/computed literals, nullable lookup, mutation, and native methods.
 - [compiler-conditionals](compiler-conditionals/README.md): lazy conditional

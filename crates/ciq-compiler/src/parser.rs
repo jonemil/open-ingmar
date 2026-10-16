@@ -305,6 +305,7 @@ impl<'a> Parser<'a> {
         let element = match self.path()?.as_str() {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            "Toybox.Lang.String" => crate::ArrayElement::String,
             "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),
             _ => return Err(self.error(at, "unsupported Array element annotation")),
         };

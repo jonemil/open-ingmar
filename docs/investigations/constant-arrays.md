@@ -133,6 +133,5 @@ The reconstructed simulator output is `[one, two]`, then `changed`. Changing
 only the first local pool text to `ONE`, assembling, and signing with our key
 produces `[ONE, two]`, then `changed`. Artifacts: `structured/`, `reexport/`,
 `edited/`, and `runtime-{rebuilt,edited}/` under the probe directory. This checks
-String-pool editing and execution; repeated-load independence for String arrays
-has not been tested. The compiler's String-array source/IR profile remains
-planned; the [binary profile](../specs/data-arrays.md) is independently editable.
+String-pool editing and execution. Fresh repeated loads and the compiler pipeline
+are covered by the [String-array specimen](compiler-string-arrays.md).

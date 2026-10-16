@@ -747,8 +747,18 @@ impl Builder<'_> {
         let constant = elements
             .iter()
             .map(|e| match e.kind {
-                parser::ExpressionKind::Integer(n) => Some((crate::ArrayElement::Number, n as u32)),
-                parser::ExpressionKind::Char(c) => Some((crate::ArrayElement::Char, c)),
+                parser::ExpressionKind::Integer(n) => Some((
+                    crate::ArrayElement::Number,
+                    crate::ArrayConstantValue::Bits(n as u32),
+                )),
+                parser::ExpressionKind::Char(c) => Some((
+                    crate::ArrayElement::Char,
+                    crate::ArrayConstantValue::Bits(c),
+                )),
+                parser::ExpressionKind::String(ref s) => Some((
+                    crate::ArrayElement::String,
+                    crate::ArrayConstantValue::String(s.clone()),
+                )),
                 _ => None,
             })
             .collect::<Option<Vec<_>>>();

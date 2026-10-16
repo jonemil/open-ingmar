@@ -71,6 +71,6 @@ manifest lengths as needed, and account for opaque or numeric references. Named
 array CODE references bind to the resolved layout. Class-field array references
 are retained numerically; general DATA relocation remains incomplete.
 
-For the tested Number/Char/Boolean/Null profile, `apush` creates a mutable array
+For the tested flat scalar profile, including String, `apush` creates a mutable array
 whose contents are independent across repeated loads of the same constant.
 Nested/deep-copy behavior and other SDK/device versions remain unverified.

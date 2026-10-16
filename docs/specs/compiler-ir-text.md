@@ -419,16 +419,21 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 .return %0
 ```
 
-`.array-constant %<result> <element> <bits>... [span=<start>:<end>]` defines a
+`.array-constant %<result> <element> <value>... [span=<start>:<end>]` defines a
 fresh mutable array.
-The element type is `number` or `char`; at least one element is required. Each
-value is `0x` followed by exactly eight hexadecimal digits, preserving signed
-Number or raw Char bits. Mixed types, nested containers, and other element
-contracts are rejected. API checks require Number/Array 1.0.0 or Char 1.3.0.
+The element type is `number`, `char`, or `string`; at least one element is
+required. Number/Char values use `0x` followed by exactly eight hexadecimal
+digits, preserving their raw bits. String values are quoted text using the
+ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
+Typed IR uses `ArrayConstantValue::Bits` for Number/Char or `::String` for text;
+the payload kind must match the element contract. Mixed types and nested
+containers are rejected. API checks require Array/Number/String 1.0.0 or Char
+1.3.0.
 Definition/use and ordered-effect checks include this allocation.
 
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
-applications materialize its [DATA record](data-arrays.md) and bind the outer
+applications materialize its [DATA record](data-arrays.md), using a shared local
+pool entry for equal String text, and bind the outer
 tag offset. Raw CODE output requires an explicit matching DATA source; it does
 not allocate DATA. A new mutable array is loaded on every execution, even when
 the same record is referenced repeatedly. Source selection is limited to
@@ -449,7 +454,7 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
 ```
 
 - `.array-begin &<builder> <element> <length>` allocates the final length.
-  Element contracts are `char`, `number`, or `view`; length is decimal, positive,
+  Element contracts are `char`, `number`, `string`, or `view`; length is decimal, positive,
   and fits a nonnegative Number. Builder declarations are unique within a
   function. Allocation remains ordered and may fail before element effects.
 - `.array-fill &<builder> <index> %<value>` initializes the next slot.
@@ -591,7 +596,7 @@ ciq-ir
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
-`number-array`,
+`number-array`, `string-array`,
 `nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1012,7 +1017,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:view:dc:char-array:number-array:view-array:...`.
+`parameter-types=integer:string:boolean:char:view:dc:char-array:number-array:string-array:view-array:...`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -1206,7 +1211,8 @@ frontend metadata. Unknown or unsupported members, receivers, argument counts,
 and types are rejected. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
-Char and Array values use `char`, `char-array`, `number-array`, or `view-array`
+Char and Array values use `char`, `char-array`, `number-array`, `string-array`,
+or `view-array`
 in parameter/user-call metadata, with `result=<category>` for valued calls.
 Function result categories are inferred from returns; those categories are not
 `.function result=` fields. Each chained call checks the preceding result's type.
