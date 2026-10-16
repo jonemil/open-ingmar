@@ -12,7 +12,7 @@ fn nullable_user_contracts_preserve_complete_app_and_text() {
         include_str!("../../../examples/compiler-nullable-contracts/values.mc"),
     ])
     .unwrap();
-    let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 0, 0)).unwrap();
+    let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 3, 0)).unwrap();
     unit.validate_api(context).unwrap();
     let resumed = parse_unit_ir(&unit.to_ir_text()).unwrap();
     resumed.validate_api(context).unwrap();
@@ -92,7 +92,6 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
         "function f() as Toybox.Lang.String or Null { }",
         "function f() as Toybox.Lang.Number { return null; }",
         "function f() { return null; }",
-        "function f() as Toybox.Lang.Boolean or Null { return null; }",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) { return 0; }",
         "function f(x as Null or Toybox.Lang.Number) { return 0; }",
     ] {

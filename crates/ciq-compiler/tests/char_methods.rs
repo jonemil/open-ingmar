@@ -76,8 +76,8 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f() { return 65.toChar().compareTo(\"A\"); }",
         "function f() { return 65.toChar().compareTo(null); }",
         "function f(n as Toybox.Lang.Number or Null) { return n.toChar().toNumber(); }",
-        "function f(c as Toybox.Lang.Char or Null) {}",
-        "function f() as Toybox.Lang.Char or Null { return null; }",
+        "function f(c as Toybox.Lang.Char or Null) { return c.toNumber(); }",
+        "function f() as Toybox.Lang.Char or Null { return true; }",
         "function f() { return 65.toChar().weak(); }",
         "function f() { return 'A'; }",
     ] {

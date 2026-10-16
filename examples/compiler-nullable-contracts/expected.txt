@@ -1,0 +1,23 @@
+42
+0
+7
+0
+HELLO
+fallback
+scalar
+fallback
+retry
+5
+false
+true
+true
+true
+65
+63
+90
+false is present
+true
+true
+67
+true
+C

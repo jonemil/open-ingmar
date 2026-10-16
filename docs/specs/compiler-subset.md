@@ -32,6 +32,7 @@ value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char" | "Toybox.Lang.Dictionary"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
+           | ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") "or" "Null"
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
            | "Toybox.Lang.Dictionary" "<" dictionary-key "," dictionary-value ">"
 dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
@@ -208,10 +209,10 @@ negative Number offsets. Char + Char concatenates the two characters.
 Comparison uses numeric values: `'A' == 65` is true on the validated profile,
 while `'A'.equals(65)` is false. Subtraction involving Char is unsupported.
 With one exact String operand, concatenation accepts Number, String, Boolean,
-Char, Null, or nullable Number/String, returning String. The VM supplies scalar
+Char, Null, or their nullable scalar forms, returning String. The VM supplies scalar
 conversion and formats Null as `null`. Equality accepts the same profile except
-Boolean, using String identity: copied references compare true, while separately
-created equal-content strings compare false. Use `.equals()` for content.
+Boolean (including Boolean-or-Null), using String identity: copied references
+compare true, while separately created equal-content strings compare false. Use `.equals()` for content.
 Nullable alternatives are accepted only with an exact String on the other side;
 this does not establish a non-null proof for subsequent use. String ordering,
 subtraction, and other object/container operands are unsupported. See the
@@ -298,10 +299,10 @@ qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`,
 `Void`. Native short names, module aliases in annotations, and general unions
 are outside this subset. Unqualified declared source View names additionally
 provide [exact source contracts](compiler-classes.md#source-class-signatures).
-Number and String annotations additionally accept the exact suffix `or Null`
-for both parameters and results. Nullable Boolean/Char, reversed alternatives,
-parenthesized unions, and other type syntax remain unsupported. These
-declarations require no `using` statement.
+All four scalar annotations additionally accept the exact suffix `or Null`
+for both parameters and results. Reversed alternatives, parenthesized unions,
+and other type syntax remain unsupported. These declarations require no `using`
+statement.
 
 Unannotated functions with value returns require Number results; those with no
 value returns have a Void contract. String, Boolean, Char, View, array, and
@@ -539,9 +540,9 @@ selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
 Supported arm types match exactly: Number, Char, Boolean, String, Null, or an
-invariant Number/Char Array. Number/String alternatives may also join with Null
-or their existing nullable type, producing Number-or-Null/String-or-Null. No
-Char-to-Number promotion, heterogeneous union, nullable Char/Array, class join,
+invariant Number/Char Array. Scalar alternatives may also join with Null
+or their existing nullable type, producing the corresponding scalar-or-Null. No
+Char-to-Number promotion, heterogeneous union, nullable Array, class join,
 Void arm, or non-Boolean truthiness is supported. Expected Array element context
 from a declaration, call, or return reaches direct empty literals in both arms;
 no element contract is inferred solely from a sibling arm.
@@ -925,8 +926,8 @@ Number `compareTo` requires API 5.0.0; the other listed Number methods require
 1.0.0. Its declaration takes Object, but current lowering admits Number or
 Boolean or Char only. Unchecked nullable comparison arguments are rejected.
 `equals`
-accepts Number, String, Boolean, Char, Null, or nullable Number/String; it returns
-Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
+accepts Number, String, Boolean, Char, Null, or their nullable scalar forms;
+it returns Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
 Comparison/equality/hash behavior is supplied by the runtime; comparison signs
@@ -966,7 +967,7 @@ returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
 including when it appears only in a function signature. Typed arguments,
 returns, local initialization/assignment, printing, and chained calls retain
 the exact Char type. Char operators follow the operand table above; nullable Char
-remains unsupported.
+requires a non-null proof for scalar operators and method receivers.
 Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).
@@ -974,7 +975,7 @@ the compiler adds no Unicode scalar-range validation. See the
 Number, String, and Boolean receivers also support zero-argument `weak()` since
 API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
 It remains an effectful native call; the compiler does not replace it with its
-receiver. Nullable Number/String receivers require a direct non-null proof
+receiver. Nullable scalar receivers require a direct non-null proof
 before the call. Other classes and ordinary object weak references are outside
 this lowering profile. See the [weak-result evidence][weak-evidence].
 
@@ -1379,7 +1380,7 @@ A direct `if (value == null)` or `if (null == value)` proves that parameter or
 local non-null on the false path. Direct `value != null` or `null != value`
 proves non-null on the true path. Boolean negation reverses this proof edge;
 `if (!(value == null))` proves non-null on the true path. Fresh reads there have
-the non-null Number or String type
+the non-null Number, String, Boolean, or Char type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc

@@ -76,15 +76,21 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
     let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
+    let nullable_boolean = Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]);
+    let nullable_char = Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]);
     let null_check = kind.is_equality()
         && ((left == &Type::Null
             && (right == &Type::Null
                 || right == &nullable_dictionary
                 || right == &nullable_number
-                || right == &nullable_string))
+                || right == &nullable_string
+                || right == &nullable_boolean
+                || right == &nullable_char))
             || ((left == &nullable_dictionary
                 || left == &nullable_number
-                || left == &nullable_string)
+                || left == &nullable_string
+                || left == &nullable_boolean
+                || left == &nullable_char)
                 && right == &Type::Null));
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
@@ -123,6 +129,8 @@ mod tests {
             ValueType::String,
             ValueType::NullableString,
             ValueType::Boolean,
+            ValueType::NullableBoolean,
+            ValueType::NullableChar,
             ValueType::Char,
             ValueType::Array(crate::ArrayElement::Char),
             ValueType::Array(crate::ArrayElement::Number),
@@ -155,7 +163,9 @@ mod tests {
                                     | ValueType::NullableInteger
                                     | ValueType::String
                                     | ValueType::NullableString
+                                    | ValueType::NullableChar
                                     | ValueType::Boolean
+                                    | ValueType::NullableBoolean
                                     | ValueType::Char
                                     | ValueType::Null
                             ) =>
@@ -196,10 +206,14 @@ mod tests {
                                     | ValueType::NullableDictionary
                                     | ValueType::NullableInteger
                                     | ValueType::NullableString
+                                    | ValueType::NullableBoolean
+                                    | ValueType::NullableChar
                             ) | (
                                 ValueType::NullableDictionary
                                     | ValueType::NullableInteger
-                                    | ValueType::NullableString,
+                                    | ValueType::NullableString
+                                    | ValueType::NullableBoolean
+                                    | ValueType::NullableChar,
                                 ValueType::Null
                             )
                         );
@@ -212,12 +226,14 @@ mod tests {
                                     | ValueType::NullableInteger
                                     | ValueType::String
                                     | ValueType::NullableString
+                                    | ValueType::NullableChar
                                     | ValueType::Char
                                     | ValueType::Null
                             ) | (
                                 ValueType::Integer
                                     | ValueType::NullableInteger
                                     | ValueType::NullableString
+                                    | ValueType::NullableChar
                                     | ValueType::Char
                                     | ValueType::Null,
                                 ValueType::String
@@ -254,6 +270,8 @@ mod tests {
             ValueType::String,
             ValueType::NullableString,
             ValueType::Boolean,
+            ValueType::NullableBoolean,
+            ValueType::NullableChar,
             ValueType::Char,
             ValueType::Array(crate::ArrayElement::Char),
             ValueType::Array(crate::ArrayElement::Number),

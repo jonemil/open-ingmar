@@ -590,9 +590,18 @@ impl Builder<'_> {
             },
             Some(span),
         );
-        let value_type = self.types.value_type(left).zip(self.types.value_type(right))
+        let value_type = self
+            .types
+            .value_type(left)
+            .zip(self.types.value_type(right))
             .and_then(|(left, right)| crate::joins::result(left, right))
-            .ok_or_else(|| Diagnostic::at(self.source, span.start, "conditional arms require matching core types or Number/String nullable alternatives"))?;
+            .ok_or_else(|| {
+                Diagnostic::at(
+                    self.source,
+                    span.start,
+                    "conditional arms require matching core types or scalar/Null alternatives",
+                )
+            })?;
         self.push(Operation::Block { block: join }, None);
         let result = ValueId(self.operations.len() as u32);
         self.push(Operation::BlockParameter { result, value_type }, Some(span));

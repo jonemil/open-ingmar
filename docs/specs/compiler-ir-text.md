@@ -605,8 +605,8 @@ defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
 `number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
 `nullable-string-array`,
-`nullable-integer`, or
-`nullable-string`; omission means integer.
+`nullable-integer`, `nullable-string`, `nullable-boolean`, or
+`nullable-char`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
 Void is invalid in a value call. Names use ASCII identifier rules and remain
 symbolic. The optional span
@@ -910,8 +910,8 @@ construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
 Type tags are `integer`, `char`, `boolean`, `string`, `null`, `nullable-integer`,
-`nullable-string`, `array-number`, and `array-char`. They map to the existing
-core/nullable/invariant Array contracts. Availability checks apply to the
+`nullable-string`, `nullable-boolean`, `nullable-char`, `array-number`, and
+`array-char`. They map to the existing core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 Lower a value edge to its operand and `goto`; the parameter emits no load, copy,
@@ -925,7 +925,7 @@ no unrelated root may run before the parameter is consumed. Ordinary edges keep
 an empty stack. Surrounding operand staging shares the existing frame budget;
 a direct conditional return needs no additional local.
 
-Source joins use matching supported types or Number/String nullable alternatives;
+Source joins use matching supported types or scalar/Null alternatives;
 see [conditional expressions](compiler-subset.md#conditional-expressions) for
 source inference and restrictions. Source construction resolves each join from
 checked incoming operand types, including full-graph null proofs and local
@@ -1030,8 +1030,8 @@ Array categories include `char-array`, `number-array`, `boolean-array`,
 `string-array`,
 `nullable-number-array`, `nullable-string-array`, and `view-array`.
 Ordinary signatures also accept
-`nullable-integer` and `nullable-string`. Separate entries with colons;
-the list must match `parameters=<count>`. Omitted types are integers. This field
+`nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
+Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
 also accepted; unit validation restricts it to native AppBase.onStart/onStop
 contracts. Unsupported names, duplicate lists, and mismatched counts are
@@ -1299,9 +1299,10 @@ all facts; IR text carries no trusted narrowing metadata. See
 
 ## Nullable user signatures
 
-A function declaration may carry `result=nullable-integer` or
-`result=nullable-string`. Every value return must be Null, the corresponding
-scalar type, or the same union. A void return is invalid. The declared union is
+A function declaration may carry `result=nullable-integer`,
+`result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
+Every value return must be Null, the corresponding scalar type, or the same
+union. A void return is invalid. The declared union is
 preserved even when all returns are scalar or all are Null; canonical text
 always writes it. Omitted result metadata infers a uniform scalar/Void contract
 and rejects nullable/Null returns. Other function result fields are unsupported.

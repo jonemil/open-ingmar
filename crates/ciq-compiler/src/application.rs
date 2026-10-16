@@ -286,6 +286,8 @@ pub fn build_console_application(
         entry.return_type(),
         ReturnType::NullableInteger
             | ReturnType::NullableString
+            | ReturnType::NullableBoolean
+            | ReturnType::NullableChar
             | ReturnType::TypedDictionary(_)
             | ReturnType::Array(_)
             | ReturnType::Object(_)

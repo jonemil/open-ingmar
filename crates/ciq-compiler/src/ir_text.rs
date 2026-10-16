@@ -90,6 +90,8 @@ pub(crate) fn parse_ir_context(
                 ),
                 "nullable-integer" => crate::ReturnType::NullableInteger,
                 "nullable-string" => crate::ReturnType::NullableString,
+                "nullable-boolean" => crate::ReturnType::NullableBoolean,
+                "nullable-char" => crate::ReturnType::NullableChar,
                 _ => return Err(fail(*name_at, "unsupported function result contract")),
             });
         } else if field == "receiver=instance" && !instance_method {
@@ -110,6 +112,8 @@ pub(crate) fn parse_ir_context(
                             .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract")),
                         "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
+                        "nullable-boolean" => Ok(crate::ParameterType::NullableBoolean),
+                        "nullable-char" => Ok(crate::ParameterType::NullableChar),
                         "integer" => Ok(crate::ParameterType::Integer),
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
@@ -937,6 +941,8 @@ fn call_contract(
             }
             "nullable-integer" => crate::ReturnType::NullableInteger,
             "nullable-string" => crate::ReturnType::NullableString,
+            "nullable-boolean" => crate::ReturnType::NullableBoolean,
+            "nullable-char" => crate::ReturnType::NullableChar,
             "integer" => crate::ReturnType::Integer,
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
