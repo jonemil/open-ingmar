@@ -1,6 +1,107 @@
 using Toybox.Application;
 using Toybox.System;
 module Dictionaries {
+    function flags() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Boolean> {
+        return {"one" => false, "two" => true};
+    }
+    function nullableFlags() as Toybox.Lang.Dictionary<Toybox.Lang.Boolean, Toybox.Lang.Boolean or Null> {
+        return {true => false, false => null};
+    }
+    function characters() as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Char> {
+        return {1 => 'A', 2 => 'C'};
+    }
+    function nullableChars() as Toybox.Lang.Dictionary<Toybox.Lang.Char, Toybox.Lang.Char or Null> {
+        return {'a' => 'A', 'b' => null};
+    }
+    function nullFlag() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Boolean or Null> {
+        return {"nothing" => null};
+    }
+    function nullChar() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Char or Null> {
+        return {"nothing" => null};
+    }
+    function flag(value as Toybox.Lang.Boolean or Null) as Toybox.Lang.Boolean or Null {
+        System.println("flag"); return value;
+    }
+    function character(value as Toybox.Lang.Char or Null) as Toybox.Lang.Char or Null {
+        System.println("character"); return value;
+    }
+    function computedFlags(choose as Toybox.Lang.Boolean)
+        as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Boolean or Null> {
+        return {"first" => choose ? Dictionaries.flag(false) : null,
+                "last" => Dictionaries.flag(true)};
+    }
+    function computedChars(choose as Toybox.Lang.Boolean)
+        as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Char or Null> {
+        return {"first" => choose ? Dictionaries.character('B') : null,
+                "last" => Dictionaries.character('D')};
+    }
+    function showFlag(value as Toybox.Lang.Boolean or Null) as Void {
+        if (value != null) { System.println(value); } else { System.println("null"); }
+    }
+    function showChar(value as Toybox.Lang.Char or Null) as Void {
+        if (value != null) { System.println(value.toNumber()); } else { System.println("null"); }
+    }
+    function scalarValues() as Void {
+        var flags = Dictionaries.flags();
+        Dictionaries.showFlag(flags["one"]);
+        Dictionaries.showFlag(flags.get("missing"));
+        var saved = flags.values();
+        var shared = flags;
+        shared.put("one", true);
+        Dictionaries.showFlag(flags["one"]);
+        Dictionaries.showFlag(Dictionaries.flags()["one"]);
+        System.println(saved.indexOf(false) >= 0);
+        System.println(flags.values().indexOf(false));
+        saved[saved.indexOf(false)] = true;
+        System.println(flags.size());
+        System.println({"one" => false}.toString());
+        var nullable = Dictionaries.nullableFlags();
+        Dictionaries.showFlag(nullable[true]);
+        Dictionaries.showFlag(nullable[false]);
+        System.println(nullable.hasKey(false));
+        nullable[true] = null;
+        nullable.put(false, true);
+        Dictionaries.showFlag(nullable.get(false));
+        nullable.remove(true);
+        System.println(nullable.hasKey(true));
+        System.println(nullable.values().indexOf(null));
+        System.println(Dictionaries.nullFlag().values().indexOf(null));
+        var chars = Dictionaries.characters();
+        var before = chars.get(1);
+        chars[1] = 'B';
+        Dictionaries.showChar(before);
+        Dictionaries.showChar(chars[1]);
+        Dictionaries.showChar(chars.get(3));
+        Dictionaries.showChar(Dictionaries.characters()[1]);
+        System.println(chars.values().indexOf('B') >= 0);
+        var nullableChars = Dictionaries.nullableChars();
+        Dictionaries.showChar(nullableChars['a']);
+        Dictionaries.showChar(nullableChars['b']);
+        var retained = nullableChars.values();
+        nullableChars.put('b', 'B');
+        nullableChars['a'] = null;
+        System.println(retained.indexOf(null) >= 0);
+        Dictionaries.showChar(nullableChars['b']);
+        nullableChars.remove('a');
+        System.println(nullableChars.hasKey('a'));
+        System.println(Dictionaries.nullChar().values().indexOf(null));
+        var computedFlags = Dictionaries.computedFlags(true);
+        Dictionaries.showFlag(computedFlags["first"]);
+        Dictionaries.showFlag(computedFlags["last"]);
+        computedFlags = Dictionaries.computedFlags(false);
+        Dictionaries.showFlag(computedFlags["first"]);
+        var computedChars = Dictionaries.computedChars(true);
+        Dictionaries.showChar(computedChars["first"]);
+        Dictionaries.showChar(computedChars["last"]);
+        computedChars = Dictionaries.computedChars(false);
+        Dictionaries.showChar(computedChars["first"]);
+        var inferred = {"first" => Dictionaries.flag(false), "second" => null};
+        Dictionaries.showFlag(inferred["first"]);
+        System.println(inferred.values().indexOf(null) >= 0);
+        var inferredChars = {"first" => Dictionaries.character('E'), "second" => null};
+        Dictionaries.showChar(inferredChars["first"]);
+        System.println(inferredChars.values().indexOf(null) >= 0);
+    }
     function make() as Toybox.Lang.Dictionary { System.println("make"); return {}; }
     function size(d as Toybox.Lang.Dictionary) { System.println("size"); return d.size(); }
     function makeTyped() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number> {
@@ -236,6 +337,7 @@ class MinimalConsoleApp extends Application.AppBase {
         Dictionaries.computed();
         Dictionaries.strings();
         Dictionaries.arrays();
+        Dictionaries.scalarValues();
         System.exit();
     }
 }

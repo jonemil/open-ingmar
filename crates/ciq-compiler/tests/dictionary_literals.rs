@@ -114,8 +114,8 @@ fn duplicate_scalar_keys_keep_the_last_value_in_the_data_record() {
 fn malformed_constants_and_unsupported_value_types_fail_before_lowering() {
     for literal in [
         "{null => 1}",
-        "{\"x\" => true}",
-        "{\"x\" => 'a'}",
+        "{\"x\" => true, \"y\" => 1}",
+        "{\"x\" => 'a', \"y\" => 1}",
         "{\"x\" => null}",
         "{1 => 2, \"x\" => 3}",
         "{\"x\" => 1, \"y\" => \"bad\"}",

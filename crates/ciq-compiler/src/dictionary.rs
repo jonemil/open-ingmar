@@ -61,9 +61,8 @@ pub(crate) fn constant_type(
     entries: &[(DictionaryScalar, DictionaryScalar)],
     expected: Option<DictionaryType>,
 ) -> Result<DictionaryType, String> {
-    let fail = || {
-        "Dictionary constants require homogeneous scalar keys and Number/String values".to_owned()
-    };
+    let fail =
+        || "Dictionary constants require homogeneous scalar keys and scalar/Null values".to_owned();
     let (first, _) = entries.first().ok_or_else(fail)?;
     let ty = if let Some(expected) = expected {
         expected
@@ -166,6 +165,10 @@ pub enum DictionaryValue {
     NullableNumber,
     String,
     NullableString,
+    Boolean,
+    NullableBoolean,
+    Char,
+    NullableChar,
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
@@ -190,6 +193,10 @@ impl DictionaryType {
             DictionaryValue::NullableNumber => ("Number", true),
             DictionaryValue::String => ("String", false),
             DictionaryValue::NullableString => ("String", true),
+            DictionaryValue::Boolean => ("Boolean", false),
+            DictionaryValue::NullableBoolean => ("Boolean", true),
+            DictionaryValue::Char => ("Char", false),
+            DictionaryValue::NullableChar => ("Char", true),
         };
         let value = Type::named(format!("Toybox.Lang.{value}"));
         Type::dictionary(
@@ -221,6 +228,10 @@ impl DictionaryType {
             DictionaryValue::NullableNumber,
             DictionaryValue::String,
             DictionaryValue::NullableString,
+            DictionaryValue::Boolean,
+            DictionaryValue::NullableBoolean,
+            DictionaryValue::Char,
+            DictionaryValue::NullableChar,
         ] {
             let candidate = Self {
                 key,
@@ -245,6 +256,10 @@ impl DictionaryType {
             DictionaryValue::NullableNumber => "nullable-integer",
             DictionaryValue::String => "string",
             DictionaryValue::NullableString => "nullable-string",
+            DictionaryValue::Boolean => "boolean",
+            DictionaryValue::NullableBoolean => "nullable-boolean",
+            DictionaryValue::Char => "char",
+            DictionaryValue::NullableChar => "nullable-char",
         };
         format!("dictionary({key}=>{value})")
     }
@@ -267,6 +282,10 @@ impl DictionaryType {
                 "nullable-integer" => DictionaryValue::NullableNumber,
                 "string" => DictionaryValue::String,
                 "nullable-string" => DictionaryValue::NullableString,
+                "boolean" => DictionaryValue::Boolean,
+                "nullable-boolean" => DictionaryValue::NullableBoolean,
+                "char" => DictionaryValue::Char,
+                "nullable-char" => DictionaryValue::NullableChar,
                 _ => return None,
             },
         })
@@ -319,14 +338,26 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
             _ => None,
         }
     }
-    fn value(ty: &Type, number: &mut bool, string: &mut bool, nullable: &mut bool) -> Option<()> {
+    fn value(ty: &Type, scalar: &mut Option<Type>, nullable: &mut bool) -> Option<()> {
         match ty {
-            Type::Named(name) if name == "Toybox.Lang.Number" => *number = true,
-            Type::Named(name) if name == "Toybox.Lang.String" => *string = true,
+            Type::Named(name)
+                if matches!(
+                    name.as_str(),
+                    "Toybox.Lang.Number"
+                        | "Toybox.Lang.String"
+                        | "Toybox.Lang.Boolean"
+                        | "Toybox.Lang.Char"
+                ) =>
+            {
+                if scalar.as_ref().is_some_and(|previous| previous != ty) {
+                    return None;
+                }
+                *scalar = Some(ty.clone());
+            }
             Type::Null => *nullable = true,
             Type::Union(types) => {
                 for ty in types {
-                    value(ty, number, string, nullable)?;
+                    value(ty, scalar, nullable)?;
                 }
             }
             _ => return None,
@@ -334,19 +365,14 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
         Some(())
     }
     let first = key(&entries.first()?.0)?;
-    let (mut number, mut string, mut nullable) = (false, false, false);
+    let (mut scalar, mut nullable) = (None, false);
     for (k, v) in entries {
         if key(k)? != first {
             return None;
         }
-        value(v, &mut number, &mut string, &mut nullable)?;
+        value(v, &mut scalar, &mut nullable)?;
     }
-    let name = match (number, string) {
-        (true, false) => "Toybox.Lang.Number",
-        (false, true) => "Toybox.Lang.String",
-        _ => return None,
-    };
-    let value = Type::named(name);
+    let value = scalar?;
     DictionaryType::from_api_type(&Type::dictionary(
         first.clone(),
         if nullable {

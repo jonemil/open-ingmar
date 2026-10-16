@@ -12,9 +12,10 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Extend Boolean/Char contracts to Dictionary values; keep heterogeneous and nullable
-   results explicit. Inherited Object methods need Dictionary-specific evidence.
-   Follow the [source contracts](specs/compiler-subset.md#dictionary-values) and
+1. **Dictionary.** Establish inherited Object equality/hash contracts with
+   Dictionary-specific evidence. Ordinary weak references belong to the shared
+   Object work below. Keep heterogeneous and nullable results explicit; follow
+   the [source contracts](specs/compiler-subset.md#dictionary-values) and
    [remaining extensions](specs/compiler-subset.md#planned-dictionary-extensions),
    using the [investigation](investigations/compiler-dictionary.md) for evidence.
    Nullable Array elements currently need explicit context; broader literal

@@ -6,7 +6,16 @@ use ciq_compiler::{
 #[test]
 fn enumeration_preserves_generic_elements_through_saved_stages() {
     for key in ["Number", "String", "Boolean", "Char"] {
-        for value in ["Number", "Number or Null", "String", "String or Null"] {
+        for value in [
+            "Number",
+            "Number or Null",
+            "String",
+            "String or Null",
+            "Boolean",
+            "Boolean or Null",
+            "Char",
+            "Char or Null",
+        ] {
             for (method, element) in [("keys", key), ("values", value)] {
                 let source = format!(
                     "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key}, \

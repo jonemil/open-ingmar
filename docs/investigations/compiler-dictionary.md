@@ -1,5 +1,24 @@
 # Dictionary construction and operations
 
+## Boolean and Char values
+
+**Observed (2026-10-16):** SDK 9.2.0 / `fr265` accepts typed Boolean/Char values,
+including nullable value contracts and `values()` results with matching Array
+elements. The extended [specimen](../../examples/compiler-dictionary/README.md)
+checks all four key kinds, constants/computed entries, indexed/native access,
+mutation, and typed enumeration. SDK/generated simulator consoles match the
+complete expected output. Structured reconstruction uses the established
+Boolean/Char/Null DATA tags and native/index instructions without raw fallback.
+Artifacts: `scratch/check-dictionary-scalars/`.
+
+A present false value remains distinct from Null. Missing reads return Null even
+for non-null V. Null writes retain keys; removal deletes them. Saved scalar
+reads and enumeration Arrays retain their values across later Dictionary
+mutation, while Dictionary reference copies share writes. Conditional markers
+confirm skipped branches and ordered, single evaluation of computed values.
+Null-only dictionaries use explicit context. These observations do not establish
+heterogeneous value contracts or inherited Object equality/hash behavior.
+
 ## Enumeration Arrays
 
 **Observed:** SDK 9.2.0 / `fr265` binds `keys` to symbol `0x008000b9` and

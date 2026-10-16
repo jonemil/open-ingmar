@@ -284,7 +284,14 @@ impl<'a> Parser<'a> {
         let mut value = match self.path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryValue::Number,
             "Toybox.Lang.String" => crate::DictionaryValue::String,
-            _ => return Err(self.error(at, "Dictionary values require Number or String")),
+            "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
+            "Toybox.Lang.Char" => crate::DictionaryValue::Char,
+            _ => {
+                return Err(self.error(
+                    at,
+                    "Dictionary values require Number, String, Boolean, or Char",
+                ));
+            }
         };
         if self.peek()? == Kind::Word("or") {
             self.token()?;
@@ -292,6 +299,8 @@ impl<'a> Parser<'a> {
             value = match value {
                 crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
                 crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
+                crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
+                crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
                 _ => unreachable!(),
             };
         }

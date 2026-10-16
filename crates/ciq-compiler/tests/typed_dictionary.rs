@@ -91,7 +91,7 @@ fn saved_ir_does_not_recover_erased_or_incompatible_allocation_types() {
     );
     for bad in [
         "dictionary(string)",
-        "dictionary(string=>boolean)",
+        "dictionary(string=>object)",
         "dictionary(null=>integer)",
         "dictionary(string=>integer=>integer)",
         "dictionary(string=>array-integer)",
@@ -116,8 +116,7 @@ fn unsupported_annotations_and_methods_remain_rejected() {
     for bad in [
         "Toybox.Lang.Object, Toybox.Lang.Number",
         "Null, Toybox.Lang.Number",
-        "Toybox.Lang.String, Toybox.Lang.Boolean",
-        "Toybox.Lang.String, Toybox.Lang.Char",
+        "Toybox.Lang.String, Toybox.Lang.Boolean or Toybox.Lang.Char",
         "Toybox.Lang.String, Toybox.Lang.Array<Toybox.Lang.Number>",
         "Toybox.Lang.String, Toybox.Lang.Number or Toybox.Lang.String",
     ] {

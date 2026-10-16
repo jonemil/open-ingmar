@@ -37,7 +37,7 @@ value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
            | "Toybox.Lang.Dictionary" "<" dictionary-key "," dictionary-value ">"
 dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
                | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
-dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String") ("or" "Null")?
+dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") ("or" "Null")?
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -807,9 +807,9 @@ Dictionary parameters/results. Copies preserve reference identity; reassignment
 does not copy contents. Calls and construction retain source evaluation order.
 
 `Toybox.Lang.Dictionary<K, V>` also accepts invariant non-null Number, String,
-Boolean, or Char keys and Number/String values, optionally `or Null`. The
-Dictionary itself is non-null. Char keys require API 1.3.0; the other contracts
-require 1.0.0. `DictionaryType` carries the bounded contracts through source,
+Boolean, or Char keys and values of those scalar types, optionally `or Null`.
+The Dictionary itself is non-null. Char keys or values require API 1.3.0;
+the other contracts require 1.0.0. `DictionaryType` carries the bounded contracts through source,
 semantic IR, locals, function arguments/results, and API checks.
 
 A direct `{}` receives its key/value contracts from an annotated return,
@@ -819,11 +819,11 @@ contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
 Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
-Number, String, Boolean, or Char keys, and Number/String values with optional
+Number, String, Boolean, or Char keys and homogeneous scalar values with optional
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed key kinds, mixed Number/String values, container-valued entries,
+Null keys, mixed key kinds, mixed non-null value kinds, container-valued entries,
 and trailing commas are unsupported. Nested Dictionary literal syntax is also
 unsupported, including inside entry call arguments. Ordinary calls and Array
 reads may produce scalar entries.
@@ -842,7 +842,7 @@ No partially constructed reference escapes. Branching operands use private
 locals under the existing frame limit. Every evaluation returns a fresh mutable
 Dictionary; String keys compare by text.
 
-Computed value inference retains candidate Number/String nullability, including
+Computed value inference retains candidate scalar nullability, including
 nullable call results. An expected contract instead checks actual values using
 the full IR null proofs. A guarded nullable key still needs a non-null proof;
 selecting its non-null class during inference does not authorize an unsafe key.
@@ -904,8 +904,9 @@ contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Boolean/Char values and their nullable forms need
-bounded Dictionary value contracts before widening that group.
+contracts before acceptance. Wider numeric values follow their core type
+prerequisites. Inherited Object methods need Dictionary-specific contracts and
+runtime evidence.
 
 
 ## Native value calls

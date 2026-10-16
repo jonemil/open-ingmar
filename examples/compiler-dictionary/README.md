@@ -5,7 +5,7 @@ results, chained `size`/`isEmpty` calls, and repeated construction in a loop.
 Typed functions preserve invariant key/value annotations, including nullable
 String values. Empty literals acquire their types from results, call arguments,
 and reassignment. Typed references can pass to opaque Dictionary parameters.
-Nonempty constants cover all supported key types, Number/String/null values,
+Nonempty constants cover all supported scalar key/value types and Null values,
 duplicate keys, repeated loads, local replacement, and shared pool strings.
 Indexed reads/writes and `get`/`put`/`hasKey`/`remove` exercise nullable lookup,
 alias visibility, Null values versus missing keys, and fresh constant loads.
@@ -17,6 +17,10 @@ mutation snapshots, chaining, and discarded results. Multi-entry checks avoid
 assuming a String entry order.
 `keys`/`values` check typed Array results, empty and nullable entries, membership
 without assuming order, independent mutations, and effectful receivers.
+Boolean/Char values also check nullable lookups, false-versus-Null, fresh
+constant loads, shared writes, and conditional/computed entry effects. Null-only
+Boolean/Char dictionaries use explicit context; inferred mixed scalar/Null
+entries retain their nullable value contracts.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 

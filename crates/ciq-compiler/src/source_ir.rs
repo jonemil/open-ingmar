@@ -708,7 +708,7 @@ impl Builder<'_> {
             expected
         } else {
             candidates.into_iter().collect::<Option<Vec<_>>>().and_then(|types| crate::dictionary::inferred_type(&types))
-                .ok_or_else(|| Diagnostic::at(self.source, span.start, "computed Dictionary entries require homogeneous scalar keys and Number/String values; Null-only values need typed context"))?
+                .ok_or_else(|| Diagnostic::at(self.source, span.start, "computed Dictionary entries require homogeneous scalar keys and scalar/Null values; Null-only values need typed context"))?
         };
         let allocation = self.operations.iter_mut().find(|op| matches!(op.operation, Operation::DictionaryBegin { builder: id, .. } if id == builder)).expect("Dictionary allocation precedes its entries");
         allocation.operation = Operation::DictionaryBegin {

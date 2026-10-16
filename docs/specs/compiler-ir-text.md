@@ -278,8 +278,8 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary` is the opaque parameter-type and value-call result tag.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
-`integer`, `string`, `boolean`, or `char`; values are `integer`, `string`,
-`nullable-integer`, or `nullable-string`. Other tags, nested containers, and
+`integer`, `string`, `boolean`, or `char`; values are those scalar tags or
+`nullable-integer`, `nullable-string`, `nullable-boolean`, or `nullable-char`. Other tags, nested containers, and
 heterogeneous unions are rejected. For example:
 
 ```text
