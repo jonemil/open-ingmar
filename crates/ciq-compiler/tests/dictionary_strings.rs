@@ -23,7 +23,6 @@ fn dictionary_strings_use_existing_native_calls_and_preserve_saved_stages() {
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
         assert!(p.to_text().contains("__ciq_native_toString"));
         assert!(parse_ir(&text.replace(" toString", " toString %0")).is_err());
-        assert!(parse_ir(&text.replace(" toString", " keys")).is_err());
     }
     for source in [
         "function f() as Toybox.Lang.String { return {}.toString().toUpper(); }",

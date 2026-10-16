@@ -12,8 +12,7 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Enable `keys` and `values` for the supported key/value
-   groups using the Array contracts. Widen beyond Number/String values
+1. **Dictionary.** Widen beyond Number/String values
    alongside nullable Boolean/Char core types; keep heterogeneous and nullable
    results explicit. Inherited Object methods need Dictionary-specific evidence.
    Follow the [source contracts](specs/compiler-subset.md#dictionary-values) and

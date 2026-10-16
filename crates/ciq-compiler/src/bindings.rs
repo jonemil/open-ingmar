@@ -108,6 +108,10 @@ pub fn symbol_bindings(
                 "put".into()
             } else if alias == "__ciq_native_hasKey" {
                 "hasKey".into()
+            } else if alias == "__ciq_native_keys" {
+                "keys".into()
+            } else if alias == "__ciq_native_values" {
+                "values".into()
             } else if alias == "__ciq_native_size" {
                 "size".to_string()
             } else if alias == "__ciq_native_indexOf" {

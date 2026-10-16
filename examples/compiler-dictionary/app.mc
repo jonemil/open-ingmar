@@ -44,6 +44,52 @@ module Dictionaries {
     function text(d as Toybox.Lang.Dictionary) as Toybox.Lang.String {
         return d.toString();
     }
+    function keys(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>)
+        as Toybox.Lang.Array<Toybox.Lang.String> { return d.keys(); }
+    function values(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>)
+        as Toybox.Lang.Array<Toybox.Lang.Number> { return d.values(); }
+    function arrays() as Void {
+        var d = {"one" => 1, "two" => 2};
+        var keys = Dictionaries.keys(d);
+        var values = Dictionaries.values(d);
+        System.println(keys.size());
+        System.println(keys.indexOf("one") >= 0 && keys.indexOf("two") >= 0);
+        System.println(values.indexOf(1) >= 0 && values.indexOf(2) >= 0);
+        d["one"] = 41;
+        d.put("three", 3);
+        System.println(keys.size());
+        System.println(values.indexOf(1) >= 0);
+        System.println(values.indexOf(41));
+        keys[keys.indexOf("one")] = "edited";
+        values[values.indexOf(1)] = 7;
+        keys.add("extra"); values.add(99);
+        System.println(d.size());
+        System.println(d.hasKey("one"));
+        System.println(d.hasKey("extra"));
+        Dictionaries.showNumber(d["one"]);
+        System.println(d.keys().indexOf("edited"));
+        System.println(d.values().indexOf(7));
+        System.println(Dictionaries.makeTyped().keys().size());
+        System.println(Dictionaries.makeTyped().values().size());
+        var numbers = {1 => "one", 2 => "two"};
+        System.println(numbers.keys().indexOf(2) >= 0);
+        System.println(numbers.values().indexOf("two") >= 0);
+        var flags = {true => "yes", false => null};
+        System.println(flags.keys().indexOf(true) >= 0);
+        System.println(flags.keys().indexOf(false) >= 0);
+        System.println(flags.values().indexOf(null) >= 0);
+        var chars = {'a' => 1, 'b' => 2};
+        System.println(chars.keys().indexOf('a') >= 0);
+        var nullable = Dictionaries.onlyNull();
+        System.println(nullable.values().indexOf(null));
+        nullable.put("other", 3);
+        var retained = nullable.values();
+        nullable.remove("nothing");
+        System.println(retained.size());
+        System.println(retained.indexOf(null) >= 0);
+        Dictionaries.receiver(d).keys();
+        Dictionaries.receiver(d).values();
+    }
     function strings() as Void {
         System.println(Dictionaries.text({}));
         var d = {"one" => 1};
@@ -189,6 +235,7 @@ class MinimalConsoleApp extends Application.AppBase {
         Dictionaries.access();
         Dictionaries.computed();
         Dictionaries.strings();
+        Dictionaries.arrays();
         System.exit();
     }
 }

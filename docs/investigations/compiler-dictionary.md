@@ -1,4 +1,21 @@
-# Dictionary construction and initial operations
+# Dictionary construction and operations
+
+## Enumeration Arrays
+
+**Observed:** SDK 9.2.0 / `fr265` binds `keys` to symbol `0x008000b9` and
+`values` to `0x008000ba`, using ordinary native calls. In
+[`compiler-dictionary`](../../examples/compiler-dictionary/README.md), both SDK
+and generated programs check typed Array results for every supported key/value
+group, empty Arrays, nullable entries, and effectful receivers. Membership checks
+avoid assuming order. Dictionary writes/additions/removals leave saved Arrays
+unchanged; editing/appending returned Arrays leaves the Dictionary unchanged.
+These scalar observations do not establish deep-copy behavior for object entries.
+
+Reproduce with the example's SDK build and the
+[console specimen check](../../scripts/README.md#console-specimen-check).
+Structured export/reassembly checks both PRGs without CODE/DATA raw fallback.
+The executable contracts live in the
+[source profile](../specs/compiler-subset.md#dictionary-values).
 
 Date: 2026-10-15. SDK 9.2.0, `fr265`, debug, `-O 0`.
 Question: how are Dictionaries created, accessed, and represented in bytecode?

@@ -44,7 +44,9 @@
   unverified hypotheses. Do not turn assumptions into specifications.
 - Keep this file lightweight. Put detailed plans and technical specifications in
   `docs/` and link them here as needed.
-- When profiling development time, follow [workflow measurement](docs/workflow-measurement.md).
+- Enable workflow profiling only when the user explicitly requests it; follow
+  [workflow measurement](docs/workflow-measurement.md). Normal validation stays
+  enabled.
 - Reuse the [workspace validation runner](scripts/README.md#workspace-validation)
   for final checks; overlap independent checks and documentation work, and use
   completion-aware waiting instead of fixed sleeps.

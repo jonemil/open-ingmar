@@ -861,6 +861,15 @@ Typed references additionally support the following API 1.0.0 contracts:
 | `d[key] = value`, `d.put(key, value)` | Statement only |
 | `d.hasKey(key)` | Boolean |
 | `d.remove(key)` | Statement only |
+| `d.keys()` | Array<K> |
+| `d.values()` | Array<V> |
+
+Enumeration returns independent mutable Arrays containing the current keys or
+values, with unspecified order. Later Dictionary changes do not update these
+Arrays, and Array edits do not change the Dictionary. Nullable V remains nullable
+in the returned Array; non-null V does not acquire lookup's missing-key Null.
+Array argument/result invariance, element checks, null proofs, and method API
+minimums still apply. Opaque Dictionary references cannot supply K or V.
 
 Reads require a key of K; writes require K and V. Null is permitted only when V
 includes Null. Inserting Null retains the key; removal deletes it, and removing

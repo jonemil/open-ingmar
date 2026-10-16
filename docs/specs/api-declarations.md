@@ -44,8 +44,8 @@ published method accepts Null. These members are API 1.0.0; Dictionary's own
 remain 1.0.0. [SDK type probes](../investigations/compiler-dictionary.md#typed-keyvalue-contracts)
 support specialization and invariant contracts. The compiler still uses the
 [bounded executable Dictionary profile](compiler-subset.md#dictionary-values),
-including typed source/saved IR and lookup/mutation. `keys`, `values`, and
-Dictionary's own `toString` lowering remain planned.
+including typed source/saved IR, lookup/mutation, typed `keys`/`values` Arrays,
+and Dictionary's own `toString` dispatch.
 
 Declaration availability, assignability, and executable support are separate
 checks. A broad Object parameter can have a narrower executable profile.

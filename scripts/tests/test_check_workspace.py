@@ -64,7 +64,7 @@ class WorkspaceChecks(unittest.TestCase):
             self.assertEqual(CHECK.wait(self.output, 0), 1)
 
     def test_actual_process_status_logs_and_timings_are_preserved(self):
-        checks = CHECK.Checks(self.output)
+        checks = CHECK.Checks(self.output, timings=True)
         with redirect_stdout(io.StringIO()):
             self.assertEqual(checks.job('pass', 'rust.tests', [sys.executable, '-c', 'print("ok")']), 0)
             self.assertEqual(checks.job('fail', 'rust.tests', [sys.executable, '-c', 'raise SystemExit(7)']), 7)
@@ -103,6 +103,16 @@ class WorkspaceChecks(unittest.TestCase):
         checks.cancel()
         self.assertIsNotNone(process.poll())
         self.assertTrue(checks.cancelled.is_set())
+
+    def test_normal_validation_does_not_enable_timing(self):
+        checks = CHECK.Checks(self.output)
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(checks.job('normal', 'other', [sys.executable, '-c', 'pass']), 0)
+        checks.finish(0)
+        self.assertFalse(checks.report['timings'])
+        self.assertNotIn('duration_seconds', checks.report)
+        self.assertNotIn('start', checks.report['jobs'][0])
+        self.assertNotIn('duration_seconds', checks.report['jobs'][0])
 
     def test_command_cli_preserves_failure_and_rejects_reusing_output(self):
         argv = [sys.executable, str(Path(CHECK.__file__)), "command", "--output",

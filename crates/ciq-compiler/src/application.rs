@@ -38,6 +38,8 @@ const TO_UTF8_ARRAY: u32 = 0x008004c5;
 const SIZE: u32 = 0x008000ae;
 const DICTIONARY_PUT: u32 = 0x008000b4;
 const DICTIONARY_GET: u32 = 0x008000b5;
+const DICTIONARY_KEYS: u32 = 0x008000b9;
+const DICTIONARY_VALUES: u32 = 0x008000ba;
 const HAS_KEY: u32 = 0x008000b6;
 const IS_EMPTY: u32 = 0x008000b8;
 const INDEX_OF: u32 = 0x008004bf;
@@ -350,6 +352,8 @@ pub fn build_console_application(
         ("get".into(), DICTIONARY_GET),
         ("put".into(), DICTIONARY_PUT),
         ("hasKey".into(), HAS_KEY),
+        ("keys".into(), DICTIONARY_KEYS),
+        ("values".into(), DICTIONARY_VALUES),
         ("indexOf".into(), INDEX_OF),
         ("add".into(), ARRAY_ADD),
         ("addAll".into(), ARRAY_ADD_ALL),
@@ -448,6 +452,8 @@ pub fn build_console_application(
         ("__ciq_native_get".into(), DICTIONARY_GET),
         ("__ciq_native_put".into(), DICTIONARY_PUT),
         ("__ciq_native_hasKey".into(), HAS_KEY),
+        ("__ciq_native_keys".into(), DICTIONARY_KEYS),
+        ("__ciq_native_values".into(), DICTIONARY_VALUES),
         ("__ciq_native_indexOf".into(), INDEX_OF),
         ("__ciq_native_add".into(), ARRAY_ADD),
         ("__ciq_native_addAll".into(), ARRAY_ADD_ALL),

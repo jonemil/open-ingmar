@@ -1,5 +1,10 @@
 # Workflow measurement
 
+Enable measurement only when the user explicitly requests it for the work.
+Ordinary validation remains enabled without profiling. Pass `--timings` to the
+workspace runner's `run` or `command` subcommand for timed checks; omit it during
+normal work. Do not start session collectors automatically.
+
 Measure where a development turn spends elapsed time before changing the work
 cycle. Use existing session metadata and timers inside helpers; avoid extra
 agent calls just to record timestamps. Keep raw events and reports in ignored

@@ -29,16 +29,19 @@ def process_identity(pid):
 class Checks:
     """Save checked subprocess outcomes and timings without parsing their logs."""
 
-    def __init__(self, output):
+    def __init__(self, output, timings=False):
         self.output = output.resolve()
         self.output.mkdir(parents=True, exist_ok=False)
         self.lock = threading.RLock()
         self.cancelled = threading.Event()
         self.processes = set()
-        self.clock = time.monotonic()
+        self.timings = timings
+        self.clock = time.monotonic() if timings else None
         self.report = {"status": "running", "pid": os.getpid(),
                        "process_identity": process_identity(os.getpid()),
-                       "start": time.time(), "jobs": []}
+                       "timings": timings, "jobs": []}
+        if timings:
+            self.report["start"] = time.time()
         self.save()
 
     def save(self):
@@ -52,9 +55,11 @@ class Checks:
         """Run one check and retain its exact exit status, log, and duration."""
         if self.cancelled.is_set():
             return 1
-        clock = time.monotonic()
+        clock = time.monotonic() if self.timings else None
         row = {"name": name, "category": category, "argv": list(map(str, argv)),
-               "start": time.time(), "status": "running", "log": f"{name}.log"}
+               "status": "running", "log": f"{name}.log"}
+        if self.timings:
+            row["start"] = time.time()
         with self.lock:
             self.report["jobs"].append(row)
             self.save()
@@ -76,10 +81,12 @@ class Checks:
             except (OSError, RuntimeError) as exc:
                 log.write(f"{exc}\n")
         with self.lock:
-            row.update(end=time.time(), duration_seconds=time.monotonic() - clock,
-                       exit_code=code, status="passed" if code == 0 else "failed")
+            row.update(exit_code=code, status="passed" if code == 0 else "failed")
+            if self.timings:
+                row.update(end=time.time(), duration_seconds=time.monotonic() - clock)
             self.save()
-        print(f"{'PASS' if code == 0 else 'FAIL'} {name} ({row['duration_seconds']:.1f}s)",
+        elapsed = f" ({row['duration_seconds']:.1f}s)" if self.timings else ""
+        print(f"{'PASS' if code == 0 else 'FAIL'} {name}{elapsed}",
               flush=True)
         return code
 
@@ -124,15 +131,16 @@ class Checks:
 
     def finish(self, code, status="complete"):
         """Publish the final verdict only after all selected lanes have ended."""
-        self.report.update(status=status, exit_code=code, end=time.time(),
-                           duration_seconds=time.monotonic() - self.clock)
+        self.report.update(status=status, exit_code=code)
+        if self.timings:
+            self.report.update(end=time.time(), duration_seconds=time.monotonic() - self.clock)
         self.save()
 
 
 @contextmanager
-def session(output):
+def session(output, timings=False):
     """Record interrupted runs and clean up children before restoring signals."""
-    checks = Checks(output)
+    checks = Checks(output, timings=timings)
     def interrupt(*_):
         raise KeyboardInterrupt()
     previous = signal.signal(signal.SIGTERM, interrupt)
@@ -148,7 +156,7 @@ def session(output):
 
 def run(args):
     """Build audit tools, then overlap the audit with a serial Cargo-check lane."""
-    with session(args.output) as checks:
+    with session(args.output, timings=getattr(args, "timings", False)) as checks:
         if args.audit:
             code = checks.job("tools", "rust.build", [
                 "cargo", "build", "--locked", "-p", "ciq-compiler", "-p", "ciq-dis",
@@ -184,7 +192,7 @@ def command(args):
     argv = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
     if not argv:
         raise ValueError("command requires an executable after --")
-    with session(args.output) as checks:
+    with session(args.output, timings=getattr(args, "timings", False)) as checks:
         code = checks.job("command", args.category, argv)
         checks.finish(code)
         return code
@@ -226,12 +234,14 @@ def main():
     phases = parser.add_subparsers(dest="phase", required=True)
     start = phases.add_parser("run", help="run final checks; output must be new")
     start.add_argument("--output", type=Path, required=True)
+    start.add_argument("--timings", action="store_true", help="record timing only when profiling is requested")
     start.add_argument("--audit", action="store_true")
     start.add_argument("--sdk-index", type=Path)
     start.add_argument("--rustdoc", action="store_true")
     start.add_argument("--msrv", action="store_true")
     timed = phases.add_parser("command", help="time an individual checked command")
     timed.add_argument("--output", type=Path, required=True)
+    timed.add_argument("--timings", action="store_true")
     timed.add_argument("--category", required=True)
     timed.add_argument("argv", nargs=argparse.REMAINDER)
     waiting = phases.add_parser("wait", help="wait in the same Linux container/PID namespace")

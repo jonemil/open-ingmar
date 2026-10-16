@@ -22,9 +22,11 @@ With `--audit`, it builds the required tools first, then runs the audit alongsid
 the serial Cargo checks. This avoids concurrent Cargo commands contending for
 the same build directory. Every selected lane must succeed; one failing lane
 stops its remaining checks while independent lanes finish. Logs and an atomically
-updated `report.json` retain each job's actual status, category, timestamps, and
-monotonic duration. Timings overlap and must not be added as sequential elapsed
-time. Start one final runner per checkout; do not edit code while it checks it.
+updated `report.json` retain each job's actual status and category. When the user
+explicitly requests workflow measurement, add `--timings` to record timestamps
+and monotonic durations. Timing is off by default. Timings overlap and must not
+be added as sequential elapsed time. Start one final runner per checkout; do not
+edit code while it checks it.
 
 The command can run in the background using ordinary shell job control. While it
 runs, prepare documentation and the final response. To wait without fixed sleeps,
@@ -41,8 +43,7 @@ is required only for waiting; other environments can run checks in the foregroun
 Reading a successful subprocess exit alone never substitutes for the final
 selected-check verdict or simulator acceptance.
 
-Use the same reporting for individual SDK, simulator, or other commands instead
-of creating a timing script per feature:
+Use the same reporting for individual SDK, simulator, or other commands:
 
 ```sh
 python3 scripts/check-workspace.py command --output scratch/checks/sdk-build \

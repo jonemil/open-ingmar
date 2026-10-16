@@ -15,6 +15,8 @@ scalars, short-circuit keys, and private construction across branches/loops.
 `toString` checks empty/typed/opaque references, scalar keys and Null values,
 mutation snapshots, chaining, and discarded results. Multi-entry checks avoid
 assuming a String entry order.
+`keys`/`values` check typed Array results, empty and nullable entries, membership
+without assuming order, independent mutations, and effectful receivers.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 
@@ -27,6 +29,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-The remaining Dictionary methods stay planned. See
+Inherited Object methods and wider value groups remain planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).
