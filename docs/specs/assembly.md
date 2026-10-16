@@ -57,8 +57,14 @@ references and integrity fields must also remain valid after length changes.
 Ignoring pins, automatic symbol-ID allocation, includes, extended CODE, and a
 separate linker remain outside the supported profile. See [the plan](../plan.md).
 
-Dictionary constants belong in [DATA source](data-dictionaries.md). Their CODE
-references use `hpush &alias` and a separate Dictionary binding map supplied to
-`Program::encode_with_data_references`; inline Dictionary requirements are not
-yet part of `Program`. Existing encoding entry points remain available for
-programs without Dictionary aliases.
+Dictionary constants use the [DATA source grammar](data-dictionaries.md).
+`Item::Dictionary` also accepts an inline `.dictionary` requirement in standalone
+compiler/assembly programs. This declares required DATA contents, not CODE bytes;
+an optional `at=` binds its address. Unplaced requirements need external DATA
+bindings. Their references use `hpush &alias` and a separate map supplied to
+`Program::encode_with_data_references`. Duplicate/invalid aliases, unresolved
+pool strings, and invalid layouts fail validation. Existing encoding entry points
+remain available for programs without external Dictionary aliases.
+
+Section projects retain authoritative Dictionary declarations in DATA;
+inline CODE requirements remain rejected there, as for Arrays/Strings.

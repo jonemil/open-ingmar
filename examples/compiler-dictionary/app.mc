@@ -14,6 +14,12 @@ module Dictionaries {
     function makeNullable() as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.String or Null> {
         return {};
     }
+    function populated() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number> {
+        return {"one" => 1, "two" => 2, "one" => 41};
+    }
+    function onlyNull() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> {
+        return {"nothing" => null};
+    }
 }
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
@@ -35,6 +41,15 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Dictionaries.makeTyped().isEmpty());
         System.println(Dictionaries.makeNullable().isEmpty());
         System.println(Dictionaries.size(typed));
+        System.println(Dictionaries.populated().size());
+        System.println(Dictionaries.populated().isEmpty());
+        var nonempty = Dictionaries.populated();
+        nonempty = {"three" => 3};
+        System.println(nonempty.size());
+        System.println({1 => "same", 2 => "same"}.size());
+        System.println({true => "yes", false => null}.size());
+        System.println({'a' => -1, 'b' => -2147483648}.size());
+        System.println(Dictionaries.onlyNull().size());
         System.exit();
     }
 }

@@ -120,6 +120,7 @@ pub(crate) struct Expression {
 }
 pub(crate) enum ExpressionKind {
     DictionaryNew,
+    DictionaryLiteral(Vec<(Expression, Expression)>),
     Conditional {
         condition: Box<Expression>,
         when_true: Box<Expression>,
@@ -197,7 +198,8 @@ impl Expression {
             ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
-            | ExpressionKind::DictionaryNew => true,
+            | ExpressionKind::DictionaryNew
+            | ExpressionKind::DictionaryLiteral(_) => true,
             ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
@@ -854,14 +856,80 @@ impl<'a> Parser<'a> {
         };
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
-    /// Parse an empty Dictionary literal; reject entries outside this profile.
-    fn empty_dictionary(&mut self, start: usize) -> Result<Expression, Diagnostic> {
-        let close = self.expect(
-            Kind::Punctuation('}'),
-            "empty Dictionary literal requires '{}'",
-        )?;
+    /// Parse scalar literal entries without recursing into unsupported containers.
+    fn dictionary_scalar(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        match self.peek()? {
+            Kind::Integer(_)
+            | Kind::String(_)
+            | Kind::Char(_)
+            | Kind::Word("true" | "false" | "null") => self.atom(depth),
+            Kind::Punctuation('-') => {
+                let sign = self.token()?;
+                let magnitude = self.token()?;
+                let Kind::Integer(digits) = magnitude.kind else {
+                    return Err(self.error(
+                        sign.span.start,
+                        "Dictionary negative values require a Number literal",
+                    ));
+                };
+                let value = digits
+                    .parse::<i64>()
+                    .ok()
+                    .and_then(|n| i32::try_from(-n).ok())
+                    .ok_or_else(|| {
+                        self.error(
+                            sign.span.start,
+                            "Number literal exceeds signed 32-bit range",
+                        )
+                    })?;
+                self.node(
+                    ExpressionKind::Integer(value),
+                    Span {
+                        start: sign.span.start,
+                        end: magnitude.span.end,
+                    },
+                )
+            }
+            _ => Err(self.error(
+                self.offset,
+                "Dictionary constants require scalar literal entries",
+            )),
+        }
+    }
+
+    /// Parse an empty Dictionary or a nonempty flat scalar literal.
+    fn dictionary_literal(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.peek()? == Kind::Punctuation('}') {
+            let close = self.token()?;
+            return self.node(
+                ExpressionKind::DictionaryNew,
+                Span {
+                    start,
+                    end: close.span.end,
+                },
+            );
+        }
+        let mut entries = Vec::new();
+        loop {
+            let key = self.dictionary_scalar(depth)?;
+            self.expect(
+                Kind::Punctuation('='),
+                "'=>' between Dictionary key and value",
+            )?;
+            self.expect(
+                Kind::Punctuation('>'),
+                "'=>' between Dictionary key and value",
+            )?;
+            let value = self.dictionary_scalar(depth)?;
+            entries.push((key, value));
+            if self.peek()? != Kind::Punctuation(',') {
+                break;
+            }
+            self.token()?;
+        }
+        let close = self.expect(Kind::Punctuation('}'), "'}'")?;
         self.node(
-            ExpressionKind::DictionaryNew,
+            ExpressionKind::DictionaryLiteral(entries),
             Span {
                 start,
                 end: close.span.end,
@@ -1044,7 +1112,7 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::Integer(value), token.span)
             }
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
-            Kind::Punctuation('{') => self.empty_dictionary(token.span.start),
+            Kind::Punctuation('{') => self.dictionary_literal(token.span.start, depth),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),
             Kind::Word("false") => self.node(ExpressionKind::Boolean(false), token.span),
             Kind::Word(name)

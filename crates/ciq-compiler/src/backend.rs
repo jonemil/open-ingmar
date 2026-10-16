@@ -12,6 +12,7 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
 enum LiteralKey {
     String(String),
     Array(crate::ValueId),
+    Dictionary(crate::ValueId),
 }
 
 /// Lower a validated IR function into a typed VM assembly program.
@@ -50,6 +51,16 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 }));
             }
         }
+        if let Operation::DictionaryConstant {
+            result, entries, ..
+        } = &located.operation
+        {
+            let alias = format!("__ciq_dictionary_{}_{}", label, result.0);
+            literal_aliases.insert(LiteralKey::Dictionary(*result), alias.clone());
+            literals.push(Item::Dictionary(crate::dictionary::constant_record(
+                alias, entries,
+            )));
+        }
         if let Operation::ArrayConstant {
             result,
             element_type,
@@ -74,7 +85,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }));
         }
         match &located.operation {
-            Operation::DictionaryNew { result, .. }
+            Operation::DictionaryConstant { result, .. }
+            | Operation::DictionaryNew { result, .. }
             | Operation::BlockParameter { result, .. }
             | Operation::Null { result }
             | Operation::Boolean { result, .. }
@@ -590,6 +602,12 @@ fn expression(
                 Operation::ArrayFinish { builder, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(builders[builder])])
                 }
+                Operation::DictionaryConstant { result, .. } => (
+                    Opcode::Hpush,
+                    vec![Operand::Dictionary(
+                        literal_aliases[&LiteralKey::Dictionary(*result)].clone(),
+                    )],
+                ),
                 Operation::ArrayConstant { result, .. } => (
                     Opcode::Apush,
                     vec![Operand::Array(

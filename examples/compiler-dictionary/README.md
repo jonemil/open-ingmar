@@ -1,10 +1,12 @@
-# Typed and opaque Dictionary values
+# Dictionary values and scalar literals
 
 [app.mc](app.mc) checks `{}`, local copies/reassignment, Dictionary arguments and
 results, chained `size`/`isEmpty` calls, and repeated construction in a loop.
 Typed functions preserve invariant key/value annotations, including nullable
 String values. Empty literals acquire their types from results, call arguments,
 and reassignment. Typed references can pass to opaque Dictionary parameters.
+Nonempty constants cover all supported key types, Number/String/null values,
+duplicate keys, repeated loads, local replacement, and shared pool strings.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 
@@ -17,6 +19,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-Key/value operations and nonempty literals remain planned. See
+Indexed access, mutation, and computed entries remain planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).

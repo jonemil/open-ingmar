@@ -50,7 +50,6 @@ fn dictionary_methods_and_nullable_state_require_checked_non_null_receivers() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { var d = {\"one\" => 1}; return d.size(); }",
         "function f() { var d = {}; return d.get(\"one\"); }",
         "function f() { var d = {}; d.put(\"one\", 1); return d.size(); }",
         "function f() { var d = {}; return d.size(1); }",

@@ -271,3 +271,64 @@ pub fn array_bindings(
     }
     Ok(bindings)
 }
+
+/// Bind inline Dictionary requirements by matching DATA alias, or otherwise by
+/// unique ordered scalar contents and optional placement. Local string aliases
+/// resolve to text before comparison. Missing, ambiguous, or conflicting matches fail.
+pub fn dictionary_bindings(
+    program: &Program,
+    data: &ciq_prg::data::Source,
+) -> Result<BTreeMap<String, u32>, Error> {
+    use ciq_prg::data::Fragment;
+    let fail = |message: String| Error { line: 0, message };
+    let offsets = data
+        .dictionary_bindings()
+        .map_err(|e| fail(e.to_string()))?;
+    let mut bindings = offsets.clone();
+    for item in program.items() {
+        let Item::Dictionary(literal) = item else {
+            continue;
+        };
+        let expected = crate::dictionary::record_entries(literal)
+            .ok_or_else(|| fail("invalid Dictionary string reference".into()))?;
+        let named = offsets.contains_key(&literal.alias);
+        let matches: Vec<_> = data
+            .fragments
+            .iter()
+            .filter_map(|fragment| {
+                let Fragment::Dictionary(record) = fragment else {
+                    return None;
+                };
+                let at = offsets[&record.alias];
+                ((!named || record.alias == literal.alias)
+                    && crate::dictionary::record_entries(record).as_ref() == Some(&expected)
+                    && literal.at.is_none_or(|pinned| pinned == at))
+                .then_some(at)
+            })
+            .collect();
+        if matches.len() != 1 {
+            return Err(fail(format!(
+                "expected one DATA Dictionary matching &{}; found {}",
+                literal.alias,
+                matches.len()
+            )));
+        }
+        if bindings
+            .insert(literal.alias.clone(), matches[0])
+            .is_some_and(|old| old != matches[0])
+        {
+            return Err(fail(format!(
+                "conflicting DATA binding for &{}",
+                literal.alias
+            )));
+        }
+    }
+    for item in program.items() {
+        if let Item::Dictionary(literal) = item {
+            if literal.at.is_some() {
+                bindings.remove(&literal.alias);
+            }
+        }
+    }
+    Ok(bindings)
+}

@@ -47,11 +47,13 @@ pub enum Item {
     String(StringDeclaration),
     /// A constant-array literal requirement, materialized separately in DATA.
     Array(ciq_prg::data::arrays::Declaration),
+    /// A Dictionary literal requirement, materialized separately in DATA.
+    Dictionary(ciq_prg::data::dictionaries::Declaration),
 }
 
 /// A validated CODE assembly program containing instructions and declarations.
 ///
-/// Symbol/string/array aliases and CODE labels resolve during encoding.
+/// Symbol/literal aliases and CODE labels resolve during encoding.
 /// Equality compares program content and ignores source line numbers.
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -100,6 +102,7 @@ impl Program {
             lines: Vec::new(),
         };
         let mut array = None::<ciq_prg::data::arrays::Declaration>;
+        let mut dictionary = None::<ciq_prg::data::dictionaries::Declaration>;
         for (index, line) in text.lines().enumerate() {
             let fail = |message: String| Error {
                 line: index + 1,
@@ -109,6 +112,19 @@ impl Program {
             let Some(first) = fields.first() else {
                 continue;
             };
+            if let Some(active) = &mut dictionary {
+                if first == ".enddictionary" && fields.len() == 1 {
+                    program
+                        .items
+                        .push(Item::Dictionary(dictionary.take().unwrap()));
+                    program.lines.push(index + 1);
+                } else {
+                    active
+                        .push_field(&fields)
+                        .map_err(|e| fail(e.to_string()))?;
+                }
+                continue;
+            }
             if let Some(active) = &mut array {
                 if first == ".endarray" && fields.len() == 1 {
                     program.items.push(Item::Array(array.take().unwrap()));
@@ -123,6 +139,13 @@ impl Program {
             if first == ".array" {
                 array = Some(
                     ciq_prg::data::arrays::Declaration::parse_header(&fields)
+                        .map_err(|e| fail(e.to_string()))?,
+                );
+                continue;
+            }
+            if first == ".dictionary" {
+                dictionary = Some(
+                    ciq_prg::data::dictionaries::Declaration::parse_header(&fields)
                         .map_err(|e| fail(e.to_string()))?,
                 );
                 continue;
@@ -176,10 +199,10 @@ impl Program {
             program.items.push(item);
             program.lines.push(index + 1);
         }
-        if array.is_some() {
+        if array.is_some() || dictionary.is_some() {
             return Err(Error {
                 line: text.lines().count(),
-                message: "unterminated array declaration".into(),
+                message: "unterminated container declaration".into(),
             });
         }
         program.validate()?;
@@ -187,6 +210,7 @@ impl Program {
     }
     fn validate(&self) -> Result<(), Error> {
         let mut array_aliases = std::collections::BTreeSet::new();
+        let mut dictionary_aliases = std::collections::BTreeSet::new();
         let mut string_aliases = std::collections::BTreeSet::new();
         for (index, item) in self.items.iter().enumerate() {
             let fail = |message| self.error(index, message);
@@ -198,6 +222,19 @@ impl Program {
                     if !valid_alias(&declaration.alias) {
                         return Err(fail("invalid symbol alias"));
                     }
+                }
+                Item::Dictionary(declaration) => {
+                    if !valid_alias(&declaration.alias)
+                        || !dictionary_aliases.insert(&declaration.alias)
+                    {
+                        return Err(fail("invalid or duplicate Dictionary alias"));
+                    }
+                    if declaration.at.is_some_and(|at| at >= 0x1000000) {
+                        return Err(fail("inline Dictionary placement exceeds 24 bits"));
+                    }
+                    declaration
+                        .encoded_length()
+                        .map_err(|e| self.error(index, e.to_string()))?;
                 }
                 Item::Array(declaration) => {
                     if !valid_alias(&declaration.alias) || !array_aliases.insert(&declaration.alias)
@@ -324,6 +361,7 @@ impl Program {
                 ),
                 Item::String(d) => text.push_str(&d.to_text()),
                 Item::Array(d) => text.push_str(&d.to_text()),
+                Item::Dictionary(d) => text.push_str(&d.to_text()),
                 Item::Instruction { opcode, operands } => {
                     text.push_str(opcode.mnemonic());
                     for (operand, width) in operands.iter().zip(opcode.operand_widths()) {
@@ -412,9 +450,18 @@ impl Program {
         let mut declarations = Source::default();
         let mut strings = external_strings.clone();
         let mut arrays = external_arrays.clone();
+        let mut dictionaries = external_dictionaries.clone();
         for (index, item) in self.items.iter().enumerate() {
             match item {
                 Item::Symbol(d) => declarations.declarations.push(d.clone()),
+                Item::Dictionary(d) => {
+                    if let Some(at) = d.at {
+                        if dictionaries.insert(d.alias.clone(), at).is_some() {
+                            return Err(self
+                                .error(index, format!("duplicate Dictionary alias {}", d.alias)));
+                        }
+                    }
+                }
                 Item::Array(d) => {
                     if let Some(at) = d.at {
                         if arrays.insert(d.alias.clone(), at).is_some() {
@@ -485,7 +532,7 @@ impl Program {
                         at as u64
                     }
                     Operand::Dictionary(alias) => {
-                        let at = *external_dictionaries.get(alias).ok_or_else(|| {
+                        let at = *dictionaries.get(alias).ok_or_else(|| {
                             self.error(index, format!("undefined Dictionary alias {alias}"))
                         })?;
                         if at >= ciq_prg::data::ADDRESS_LIMIT as u32 {

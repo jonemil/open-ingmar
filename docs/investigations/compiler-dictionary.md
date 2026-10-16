@@ -48,12 +48,12 @@ unchanged. Artifacts are `scratch/dictionary-constants/edited*`. This establishe
 editable constant contents, not fresh-versus-shared repeated-load behavior.
 The [constant format](../specs/data-dictionaries.md) records the verified framing.
 
-## Empty-container profile
+## Compiler specimen
 
 The [tracked example](../../examples/compiler-dictionary/README.md) isolates
 empty `{}` construction, local reference copies/reassignment, typed Dictionary
 arguments/results, native observers, chained calls, and repeated loop allocation.
-Both SDK and generated simulator runs match all seventeen expected lines. Typed
+Both SDK and generated simulator runs match all twenty-four expected lines. Typed
 functions also check contextual empty returns/arguments/reassignment, nullable
 value annotations, chaining, and erasure into an opaque parameter. The launch
 provides Null callback state, so its guarded observer is checked structurally,
@@ -62,9 +62,14 @@ by compiler tests.
 
 The console checker confirms source/saved-IR parity, structured CODE/DATA export,
 exact PRG reconstruction, and stable re-export for both programs. No DATA format
-extension is needed for this profile. It uses `ipushz; newd`, plus existing local
-and member-call instructions. The codec and assembler/disassembler now recognize
-operand-free `newd`. Artifacts: `scratch/check-dictionary-types/`.
+extension is needed for this profile. It uses `ipushz; newd` for empty values,
+`hpush` for constants, and existing local/member-call instructions. The codec and
+assembler/disassembler recognize operand-free `newd`. Nonempty literals cover
+all four key types,
+Number/String/null values, duplicate keys, shared pool strings, and repeated
+factory loads through `hpush`. Observer output establishes allocation and
+cardinality; scalar contents/pools are checked structurally, with value lookup
+still outside the compiler profile. Artifacts: `scratch/check-dictionary-literals/`.
 
 Current executable contracts are in the
 [source profile](../specs/compiler-subset.md#dictionary-values) and

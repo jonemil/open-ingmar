@@ -16,8 +16,8 @@ pub mod backend;
 mod bindings;
 mod control_flow;
 mod dictionary;
-pub use bindings::{array_bindings, string_bindings, symbol_bindings};
-pub use dictionary::{DictionaryKey, DictionaryType, DictionaryValue};
+pub use bindings::{array_bindings, dictionary_bindings, string_bindings, symbol_bindings};
+pub use dictionary::{DictionaryKey, DictionaryScalar, DictionaryType, DictionaryValue};
 mod ir_text;
 mod joins;
 mod names;
@@ -390,6 +390,13 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Load a fresh Dictionary from a nonempty flat scalar constant. The type
+    /// checks every entry before last-value replacement of equal scalar keys.
+    DictionaryConstant {
+        result: ValueId,
+        dictionary_type: DictionaryType,
+        entries: Vec<(DictionaryScalar, DictionaryScalar)>,
+    },
     /// Allocate a fresh empty Dictionary with optional invariant key/value contracts.
     DictionaryNew {
         result: ValueId,
@@ -1065,6 +1072,16 @@ impl Function {
                         ));
                     }
                     (None, vec![value])
+                }
+                Operation::DictionaryConstant {
+                    result,
+                    dictionary_type,
+                    ref entries,
+                } => {
+                    dictionary::constant_type(entries, Some(dictionary_type))
+                        .map_err(|e| fail(&e))?;
+                    types.insert(result, ValueType::TypedDictionary(dictionary_type));
+                    (Some(result), vec![])
                 }
                 Operation::DictionaryNew {
                     result,
@@ -1804,6 +1821,7 @@ impl Function {
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
                     | Operation::ArrayConstant { .. }
+                    | Operation::DictionaryConstant { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
@@ -1957,9 +1975,9 @@ impl Function {
     /// [`backend::lower`] selects instructions and assigns frame slots. Module
     /// and member aliases remain unresolved for later binding. Deduplicated
     /// string declarations carry content without DATA placement; bind them with
-    /// [`string_bindings`]. Constant-array declarations use [`array_bindings`]
-    /// and retain separate identities before encoding CODE. Output is not a
-    /// complete PRG.
+    /// [`string_bindings`]. Container declarations use [`array_bindings`] or
+    /// [`dictionary_bindings`]; declarations retain separate identities until
+    /// CODE encoding. Output is not a complete PRG.
     pub fn lower(&self) -> ciq_assembly::Program {
         backend::lower(self)
     }
@@ -2024,7 +2042,8 @@ impl Function {
             )
         };
         let result = match self.return_type {
-            ReturnType::TypedDictionary(_)
+            ReturnType::Dictionary
+            | ReturnType::TypedDictionary(_)
             | ReturnType::NullableInteger
             | ReturnType::NullableString
             | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
@@ -2036,6 +2055,20 @@ impl Function {
         );
         for operation in &self.operations {
             text.push_str(&match operation.operation {
+                Operation::DictionaryConstant {
+                    result,
+                    dictionary_type,
+                    ref entries,
+                } => format!(
+                    ".dictionary-constant %{} {} {}",
+                    result.0,
+                    dictionary_type.text(),
+                    entries
+                        .iter()
+                        .map(|(key, value)| format!("{} {}", key.text(), value.text()))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
                 Operation::DictionaryNew {
                     result,
                     dictionary_type,

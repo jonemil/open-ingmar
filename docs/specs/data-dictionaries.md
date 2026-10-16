@@ -65,7 +65,8 @@ within the declaration is unrestricted; all strings resolve during encoding.
 The serializer derives lengths/counts and preserves declaration order. Outer
 placement follows the existing [DATA layout rules](data-strings.md).
 
-Dictionary declarations live in authoritative DATA source, not inline CODE.
+Section projects keep Dictionary declarations in authoritative DATA source.
+Standalone assembly may declare inline [DATA requirements](assembly.md).
 CODE uses `hpush &example`; `Operand::Dictionary` and a separate Dictionary
 binding map prevent confusion with Array/String aliases. The current layout
 profile permits only zero-prefix DATA addresses below `0x01000000`; numeric

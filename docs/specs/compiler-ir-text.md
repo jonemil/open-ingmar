@@ -290,14 +290,43 @@ ciq-ir
 .end
 ```
 
-Typed function result headers remain explicit so an erased or differently typed
-allocation cannot change the contract on reload. `DictionaryType` backs the
+Typed and opaque Dictionary result headers remain explicit so an erased or
+differently typed allocation cannot change the contract on reload.
+`DictionaryType` backs the
 `TypedDictionary` parameter/result variants. Locals and calls preserve reference
 identity and invariant contracts; erasure to opaque Dictionary is one-way.
 `.call-native` accepts `size` and `isEmpty` on a non-null Dictionary. Existing
 nullable callback reads narrow to Dictionary under a non-null proof. Other
 Dictionary operations and conditional joins remain unsupported. See the
 [source profile](compiler-subset.md#dictionary-values).
+
+## Dictionary constants
+
+`.dictionary-constant %<result> dictionary(<key>=><value>) <key-scalar> <value-scalar> ... [span=<start>:<end>]`
+defines a fresh non-null Dictionary from nonempty flat scalar entries. Native
+construction uses `Operation::DictionaryConstant`, `DictionaryType`, and pairs
+of `DictionaryScalar`. Scalar syntax is `number 0x<bits>`, `char 0x<bits>`,
+`boolean true|false`, `string "text"`, or `null`. Number/Char bits must fit u32;
+Strings require quotes and use the existing escape rules. For example:
+
+```text
+.dictionary-constant %0 dictionary(string=>nullable-integer) string "one" number 0x00000001 string "missing" null
+```
+
+The [source contracts](compiler-subset.md#dictionary-values) govern supported
+key/value kinds, nullability, and entry typing. Missing pairs, empty entry lists,
+incompatible scalar types, and unencodable pool strings fail before lowering.
+The operation retains source entry order and duplicate keys for inspection;
+materialization retains the last value for equal scalar keys and shares equal
+pool strings. No computed entries are folded into this operation.
+
+Lowering declares an unplaced `Item::Dictionary` requirement and emits
+`hpush &alias`. Complete applications materialize it in DATA; native/text
+assembly uses the same model. `dictionary_bindings()` binds requirements against
+provided DATA by matching alias and ordered scalar contents, or otherwise by a
+unique content match. Local pool aliases resolve to text for comparison. Missing,
+ambiguous, incompatible, or conflicting bindings fail. See
+[DATA constants](data-dictionaries.md) and [assembly](assembly.md).
 
 ## Array allocation
 

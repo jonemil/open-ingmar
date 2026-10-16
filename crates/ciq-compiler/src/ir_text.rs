@@ -80,6 +80,7 @@ pub(crate) fn parse_ir_context(
                 return Err(fail(*name_at, "duplicate result contract"));
             }
             result_type = Some(match result {
+                "dictionary" => crate::ReturnType::Dictionary,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
                     crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
                 }
@@ -220,6 +221,7 @@ pub(crate) fn parse_ir_context(
             Some(".new-source") => (33, call_width()),
             Some(".constant") => (34, 4),
             Some(".call-native-discard") => (35, call_width()),
+            Some(".dictionary-constant") => (67, call_width()),
             Some(".dictionary-new") => (
                 66,
                 if fields.get(2).is_some_and(|s| s.starts_with("type=")) {
@@ -637,6 +639,26 @@ pub(crate) fn parse_ir_context(
             Operation::LocalAssign {
                 local: parse_local(&fields[1])?,
                 value: parse_value(&fields[2])?,
+            }
+        } else if kind == 67 {
+            if width < 5 {
+                return Err(fail(*at, "Dictionary constant requires a type and entries"));
+            }
+            let dictionary_type = crate::DictionaryType::parse(&fields[2])
+                .ok_or_else(|| fail(*at, "unsupported Dictionary contract"))?;
+            let mut next = 3;
+            let mut entries = Vec::new();
+            while next < width {
+                let key = crate::DictionaryScalar::parse(&fields[..width], &mut next)
+                    .ok_or_else(|| fail(*at, "invalid Dictionary scalar key"))?;
+                let value = crate::DictionaryScalar::parse(&fields[..width], &mut next)
+                    .ok_or_else(|| fail(*at, "invalid Dictionary scalar value"))?;
+                entries.push((key, value));
+            }
+            Operation::DictionaryConstant {
+                result: parse_value(&fields[1])?,
+                dictionary_type,
+                entries,
             }
         } else if kind == 66 {
             Operation::DictionaryNew {

@@ -817,6 +817,21 @@ later uses do not retrospectively type an opaque local. Different key or value
 contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
+Nonempty `{key => value, ...}` literals accept scalar tokens: homogeneous
+Number, String, Boolean, or Char keys, and Number/String values with optional
+Null. Without context, a non-null value establishes the value type; any Null
+makes it nullable. Null-only values require an expected nullable contract.
+Typed contexts check every entry without changing invariant key/value types.
+Null keys, mixed key kinds, mixed Number/String values, computed or parenthesized
+entries, nested containers, and trailing commas are unsupported.
+
+Signed Number tokens use the existing 32-bit literal range. Strings are UTF-8;
+their record-local pool length, including the zero terminator, must fit u16.
+All entries are type-checked before equal scalar keys retain their last value.
+Overwritten entries must also be supported literal tokens. Lowering uses `hpush`
+and a [scalar DATA constant](data-dictionaries.md), with a fresh mutable
+Dictionary on each evaluation; literal String keys compare by their text.
+
 The executable method group is `size()` → Number and `isEmpty()` → Boolean,
 both API 1.0.0. Chaining and discarded results use existing native-call rules.
 Native callback Dictionary-or-Null state supports these methods under a non-null
@@ -824,7 +839,7 @@ proof; unguarded access is rejected. Its nullable declaration/assignment rules
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.
 
-Nonempty literals, key/value access and mutation, indexing, Dictionary equality,
+Key/value access and mutation, indexing, Dictionary equality,
 conditional Dictionary joins, direct
 printing, `new Dictionary()`, and the other methods remain unsupported. No key
 or value contract is inferred from an empty literal without context. See
@@ -833,8 +848,7 @@ or value contract is inferred from an empty literal without context. See
 
 ### Planned Dictionary literals and access
 
-These are intended contracts, not executable support yet. Add homogeneous
-scalar literal inference before lookup and mutation. Do not infer key/value
+These are intended contracts, not executable support yet. Do not infer key/value
 contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
@@ -847,9 +861,8 @@ The first executable group should use Number/String values, whose nullable
 consumers already exist; nullable Boolean/Char results need those core type
 prerequisites before widening the group.
 
-Literal construction must return a fresh reference per evaluation. Flat scalar
-constants can use `hpush`; effectful entries must execute key then value, insert
-that pair, and continue in source order. Duplicate keys must not suppress
+Effectful literals must allocate before entries, then execute key, value, and
+insertion for each pair in source order. Duplicate keys must not suppress
 expression effects. Construction storage stays private until initialization
 completes. Preserve these contracts through native/saved IR and assembly;
 [SDK evidence](../investigations/compiler-dictionary.md#literal-semantics)

@@ -130,7 +130,6 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         "d.put(\"one\", 1); return 0;",
         "return d[\"one\"];",
         "return true ? d : d;",
-        "return {\"one\" => 1}.size();",
     ] {
         let source = format!("function f(d as {NUMBER}) {{ {body} }}");
         assert!(compile(&source).is_err(), "accepted {source}");

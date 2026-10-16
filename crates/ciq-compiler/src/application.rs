@@ -718,13 +718,15 @@ pub fn build_console_application(
     fragments.extend(assembly.items().iter().filter_map(|i| match i {
         Item::String(s) => Some(Fragment::String(s.clone())),
         Item::Array(a) => Some(Fragment::Array(a.clone())),
+        Item::Dictionary(d) => Some(Fragment::Dictionary(d.clone())),
         _ => None,
     }));
     let data = data::Source { fragments };
     let strings = data.string_bindings().map_err(error)?;
     let arrays = data.array_bindings().map_err(error)?;
+    let dictionaries = data.dictionary_bindings().map_err(error)?;
     let code = assembly
-        .encode_with_literals(&bindings, &strings, &arrays)
+        .encode_with_data_references(&bindings, &strings, &arrays, &dictionaries)
         .map_err(error)?;
     let data = data
         .encode_with_references(&BTreeMap::new(), &labels)

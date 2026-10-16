@@ -106,7 +106,7 @@ fn emit(
                 class,
             }
         }
-        parser::ExpressionKind::ArrayLiteral(_) => {
+        parser::ExpressionKind::DictionaryLiteral(_) | parser::ExpressionKind::ArrayLiteral(_) => {
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
@@ -590,6 +590,50 @@ impl Builder<'_> {
         })
     }
 
+    fn dictionary_literal(
+        &mut self,
+        entries: Vec<(parser::Expression, parser::Expression)>,
+        expected: Option<ConstructionType>,
+        span: Span,
+    ) -> Result<parser::Expression, Diagnostic> {
+        fn scalar(expression: parser::Expression) -> Option<crate::DictionaryScalar> {
+            use crate::DictionaryScalar as S;
+            use parser::ExpressionKind as E;
+            Some(match expression.kind {
+                E::Integer(n) => S::Number(n as u32),
+                E::String(s) => S::String(s),
+                E::Char(c) => S::Char(c),
+                E::Boolean(b) => S::Boolean(b),
+                E::Null => S::Null,
+                _ => return None,
+            })
+        }
+        let entries = entries.into_iter().map(|(key, value)| Some((scalar(key)?, scalar(value)?))).collect::<Option<Vec<_>>>()
+            .ok_or_else(|| Diagnostic::at(self.source, span.start, "Dictionary constants require scalar literal tokens; computed entries are not supported"))?;
+        let expected = expected.and_then(|ty| {
+            if let ConstructionType::Dictionary(ty) = ty {
+                Some(ty)
+            } else {
+                None
+            }
+        });
+        let dictionary_type = crate::dictionary::constant_type(&entries, expected)
+            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::DictionaryConstant {
+                result,
+                dictionary_type,
+                entries,
+            },
+            Some(span),
+        );
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Joined(result),
+            span,
+        })
+    }
+
     /// Construct a typed array using a flat constant load for literal tokens,
     /// otherwise allocating before ordered element evaluation.
     /// A private builder prevents uninitialized slots from escaping as values;
@@ -752,6 +796,7 @@ impl Builder<'_> {
             kind @ E::Conditional { .. } => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
+            E::DictionaryLiteral(entries) => return self.dictionary_literal(entries, None, span),
             E::ArrayLiteral(elements) => return self.array_literal(elements, span, locals),
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
@@ -1064,6 +1109,17 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        if let parser::ExpressionKind::DictionaryLiteral(entries) = expression.kind {
+            let expression = self.dictionary_literal(entries, expected, expression.span)?;
+            return emit(
+                self.source,
+                expression,
+                locals,
+                &self.parameters,
+                &mut self.operations,
+                self.calls,
+            );
+        }
         if matches!(expression.kind, parser::ExpressionKind::DictionaryNew) {
             if let Some(ConstructionType::Dictionary(dictionary_type)) = expected {
                 let result = ValueId(self.operations.len() as u32);
