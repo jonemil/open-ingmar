@@ -289,7 +289,7 @@ fn emit_binary_chain(
     Ok(left)
 }
 
-/// Emit array/index operands in order and return their read operation. Keep this
+/// Emit receiver/key operands in order and select Array or Dictionary read IR. Keep this
 /// frame separate so long arithmetic trees retain their existing stack budget.
 fn emit_array_read(
     source: &str,
@@ -304,11 +304,23 @@ fn emit_array_read(
     };
     let array = emit(source, *array, locals, parameters, operations, calls)?;
     let index = emit(source, *index, locals, parameters, operations, calls)?;
-    Ok(Operation::ArrayRead {
-        result: ValueId(operations.len() as u32),
-        array,
-        index,
-    })
+    let result = ValueId(operations.len() as u32);
+    if matches!(
+        crate::source_types::value_type(operations, array, calls.parameter_types.clone()),
+        Some(crate::api::Type::Dictionary { .. })
+    ) {
+        Ok(Operation::DictionaryRead {
+            result,
+            dictionary: array,
+            key: index,
+        })
+    } else {
+        Ok(Operation::ArrayRead {
+            result,
+            array,
+            index,
+        })
+    }
 }
 
 /// Resolve call ownership and emit receiver/arguments in source order. Keep call
@@ -1378,14 +1390,23 @@ impl Builder<'_> {
                     let array = self.value(array, locals)?;
                     let index = self.value(index, locals)?;
                     let value = self.value(value, locals)?;
-                    self.push(
+                    let operation = if matches!(
+                        self.types.value_type(array),
+                        Some(crate::api::Type::Dictionary { .. })
+                    ) {
+                        Operation::DictionaryWrite {
+                            dictionary: array,
+                            key: index,
+                            value,
+                        }
+                    } else {
                         Operation::ArrayWrite {
                             array,
                             index,
                             value,
-                        },
-                        Some(span),
-                    );
+                        }
+                    };
+                    self.push(operation, Some(span));
                 }
                 parser::Statement::FieldAssign { name, value, .. } => {
                     let value = self.value_for_setup(value, locals)?;

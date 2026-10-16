@@ -6,7 +6,7 @@ instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
 - [compiler-dictionary](compiler-dictionary/README.md): typed/opaque Dictionaries,
-  scalar literals, reference calls, `size`, and `isEmpty`.
+  scalar literals, nullable lookup, mutation, and native methods.
 - [compiler-conditionals](compiler-conditionals/README.md): lazy conditional
   expressions, typed joins, operand order, nullable results, and shared arrays.
 - [compiler-increments](compiler-increments/README.md): Number updates and Char

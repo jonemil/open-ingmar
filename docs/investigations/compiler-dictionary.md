@@ -53,7 +53,7 @@ The [constant format](../specs/data-dictionaries.md) records the verified framin
 The [tracked example](../../examples/compiler-dictionary/README.md) isolates
 empty `{}` construction, local reference copies/reassignment, typed Dictionary
 arguments/results, native observers, chained calls, and repeated loop allocation.
-Both SDK and generated simulator runs match all twenty-four expected lines. Typed
+Both SDK and generated simulator runs match all sixty-three expected lines. Typed
 functions also check contextual empty returns/arguments/reassignment, nullable
 value annotations, chaining, and erasure into an opaque parameter. The launch
 provides Null callback state, so its guarded observer is checked structurally,
@@ -65,11 +65,20 @@ exact PRG reconstruction, and stable re-export for both programs. No DATA format
 extension is needed for this profile. It uses `ipushz; newd` for empty values,
 `hpush` for constants, and existing local/member-call instructions. The codec and
 assembler/disassembler recognize operand-free `newd`. Nonempty literals cover
-all four key types,
-Number/String/null values, duplicate keys, shared pool strings, and repeated
-factory loads through `hpush`. Observer output establishes allocation and
-cardinality; scalar contents/pools are checked structurally, with value lookup
-still outside the compiler profile. Artifacts: `scratch/check-dictionary-literals/`.
+all four key types, Number/String/null values, duplicate keys, and shared pool
+strings. Indexed and native reads/writes verify values, missing-key Null results,
+alias visibility, Null-valued key presence versus removal, and absent-key removal.
+Two calls through `populated` produce independently mutable Dictionaries:
+changing/removing entries from one leaves the other at 41 with its `two` key.
+Receiver/key/value markers also agree for indexed writes, native calls, and
+conditional RHS/key staging. Artifacts: `scratch/check-dictionary-access/`.
+
+The SDK SYMBOLS table binds `put` to `0x008000b4`, `get` to `0x008000b5`,
+`hasKey` to `0x008000b6`, and `remove` to `0x008000b7`. The last matches Array's
+existing `remove` ID; receiver-specific contracts distinguish Void Dictionary
+removal from Boolean Array removal. Both programs reconstruct structurally
+through the existing indexed and member-call opcodes; no additional opcode or
+DATA profile is needed for these operations.
 
 Current executable contracts are in the
 [source profile](../specs/compiler-subset.md#dictionary-values) and

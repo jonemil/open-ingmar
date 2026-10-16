@@ -102,6 +102,12 @@ pub fn symbol_bindings(
                 "toCharArray".to_string()
             } else if alias == "__ciq_native_toUtf8Array" {
                 "toUtf8Array".to_string()
+            } else if alias == "__ciq_native_get" {
+                "get".into()
+            } else if alias == "__ciq_native_put" {
+                "put".into()
+            } else if alias == "__ciq_native_hasKey" {
+                "hasKey".into()
             } else if alias == "__ciq_native_size" {
                 "size".to_string()
             } else if alias == "__ciq_native_indexOf" {

@@ -390,6 +390,21 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Read a typed Dictionary key, producing its value contract or Null.
+    /// Evaluate receiver before key; missing keys do not raise Array bounds errors.
+    DictionaryRead {
+        result: ValueId,
+        dictionary: ValueId,
+        key: ValueId,
+    },
+    /// Insert or replace a typed Dictionary entry without producing a value.
+    /// Evaluate receiver, key, and value once in source order. Null values require
+    /// a nullable value contract and remain distinct from removing the key.
+    DictionaryWrite {
+        dictionary: ValueId,
+        key: ValueId,
+        value: ValueId,
+    },
     /// Load a fresh Dictionary from a nonempty flat scalar constant. The type
     /// checks every entry before last-value replacement of equal scalar keys.
     DictionaryConstant {
@@ -1442,6 +1457,47 @@ impl Function {
                     types.insert(result, ty);
                     (Some(result), vec![])
                 }
+                Operation::DictionaryRead {
+                    result,
+                    dictionary,
+                    key,
+                } => {
+                    if !matches!(type_of(dictionary), ValueType::TypedDictionary(_)) {
+                        return Err(fail("Dictionary reads require a typed non-null Dictionary"));
+                    }
+                    let ty = native::value_call(
+                        &type_of(dictionary).api_type(),
+                        "get",
+                        &[type_of(key).api_type()],
+                        context,
+                    )
+                    .map_err(|e| fail(&e))?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty)
+                            .ok_or_else(|| fail("unsupported Dictionary lookup result"))?,
+                    );
+                    (Some(result), vec![dictionary, key])
+                }
+                Operation::DictionaryWrite {
+                    dictionary,
+                    key,
+                    value,
+                } => {
+                    if !matches!(type_of(dictionary), ValueType::TypedDictionary(_)) {
+                        return Err(fail(
+                            "Dictionary writes require a typed non-null Dictionary",
+                        ));
+                    }
+                    native::value_call(
+                        &type_of(dictionary).api_type(),
+                        "put",
+                        &[type_of(key).api_type(), type_of(value).api_type()],
+                        context,
+                    )
+                    .map_err(|e| fail(&e))?;
+                    (None, vec![dictionary, key, value])
+                }
                 Operation::ArrayRead {
                     result,
                     array,
@@ -1817,6 +1873,8 @@ impl Function {
                         kind: BinaryOp::Divide | BinaryOp::Remainder,
                         ..
                     }
+                    | Operation::DictionaryRead { .. }
+                    | Operation::DictionaryWrite { .. }
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
@@ -1853,7 +1911,12 @@ impl Function {
             let mut schedule = Vec::new();
             for (index, located) in operations.iter().enumerate() {
                 let roots = match &located.operation {
-                    Operation::ArrayWrite {
+                    Operation::DictionaryWrite {
+                        dictionary: array,
+                        key: index,
+                        value,
+                    }
+                    | Operation::ArrayWrite {
                         array,
                         index,
                         value,
@@ -1908,7 +1971,12 @@ impl Function {
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
                                 }
-                                Operation::ArrayRead {
+                                Operation::DictionaryRead {
+                                    dictionary: left,
+                                    key: right,
+                                    ..
+                                }
+                                | Operation::ArrayRead {
                                     array: left,
                                     index: right,
                                     ..
@@ -2274,6 +2342,22 @@ impl Function {
                     result,
                     element_type,
                 } => format!(".array-new %{} {}", result.0, element_type.text()),
+                Operation::DictionaryRead {
+                    result,
+                    dictionary,
+                    key,
+                } => format!(
+                    ".dictionary-read %{} %{} %{}",
+                    result.0, dictionary.0, key.0
+                ),
+                Operation::DictionaryWrite {
+                    dictionary,
+                    key,
+                    value,
+                } => format!(
+                    ".dictionary-write %{} %{} %{}",
+                    dictionary.0, key.0, value.0
+                ),
                 Operation::ArrayRead {
                     result,
                     array,

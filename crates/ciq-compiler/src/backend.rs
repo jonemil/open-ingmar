@@ -100,6 +100,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
             | Operation::Not { result, .. }
+            | Operation::DictionaryRead { result, .. }
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
             | Operation::ArrayConstant { result, .. }
@@ -303,7 +304,12 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ]);
                 continue;
             }
-            Operation::ArrayWrite {
+            Operation::DictionaryWrite {
+                dictionary: array,
+                key: index,
+                value,
+            }
+            | Operation::ArrayWrite {
                 array,
                 index,
                 value,
@@ -693,7 +699,12 @@ fn expression(
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
                 }
-                Operation::ArrayRead { array, index, .. } => {
+                Operation::DictionaryRead {
+                    dictionary: array,
+                    key: index,
+                    ..
+                }
+                | Operation::ArrayRead { array, index, .. } => {
                     tasks.extend([Task::ArrayRead, Task::Value(*index), Task::Value(*array)]);
                     continue;
                 }

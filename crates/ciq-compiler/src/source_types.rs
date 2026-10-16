@@ -1,4 +1,4 @@
-//! Candidate value types and constructor classes for source call/Array lowering.
+//! Candidate value types and constructor classes for source call/index lowering.
 //! These do not prove null safety or validity; whole-function IR validation does.
 use std::collections::BTreeMap;
 
@@ -134,6 +134,19 @@ impl Types {
                 result_type,
                 ..
             } => (*result, Some(result_type.api_type())),
+            Operation::DictionaryRead {
+                result,
+                dictionary,
+                key,
+            } => (
+                *result,
+                self.values
+                    .get(dictionary)
+                    .zip(self.values.get(key))
+                    .and_then(|(receiver, key)| {
+                        native::value_call(receiver, "get", &[candidate(key).clone()], None).ok()
+                    }),
+            ),
             Operation::ArrayRead { result, array, .. } => (
                 *result,
                 self.values.get(array).and_then(|ty| match ty {
@@ -255,4 +268,18 @@ fn candidate(ty: &Type) -> &Type {
         }
     }
     ty
+}
+
+/// Replay candidate types for a primitive emitter that has no builder cache.
+/// Whole-function validation still checks null proofs, argument types, and API levels.
+pub(crate) fn value_type(
+    operations: &[crate::LocatedOperation],
+    value: ValueId,
+    parameters: Vec<ParameterType>,
+) -> Option<Type> {
+    let mut types = Types::new(parameters);
+    for op in operations {
+        types.observe(&op.operation);
+    }
+    types.value_type(value).cloned()
 }

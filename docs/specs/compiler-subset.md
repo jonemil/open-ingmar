@@ -832,34 +832,50 @@ Overwritten entries must also be supported literal tokens. Lowering uses `hpush`
 and a [scalar DATA constant](data-dictionaries.md), with a fresh mutable
 Dictionary on each evaluation; literal String keys compare by their text.
 
-The executable method group is `size()` → Number and `isEmpty()` → Boolean,
-both API 1.0.0. Chaining and discarded results use existing native-call rules.
-Native callback Dictionary-or-Null state supports these methods under a non-null
-proof; unguarded access is rejected. Its nullable declaration/assignment rules
+Opaque references support `size()` → Number and `isEmpty()` → Boolean.
+Typed references additionally support the following API 1.0.0 contracts:
+
+| Form | Result |
+|---|---|
+| `d[key]`, `d.get(key)` | V or Null |
+| `d[key] = value`, `d.put(key, value)` | Statement only |
+| `d.hasKey(key)` | Boolean |
+| `d.remove(key)` | Statement only |
+
+Reads require a key of K; writes require K and V. Null is permitted only when V
+includes Null. Inserting Null retains the key; removal deletes it, and removing
+an absent key leaves the Dictionary unchanged. Copies share mutations. Receiver,
+key, and value expressions execute once in that order. Indexed access uses
+`agetv`/`aputv`; explicit methods retain native dispatch.
+
+Every lookup is nullable, including reads from non-null V and `hasKey` branches.
+Store the result and use the existing non-null proofs before arithmetic, String
+methods, or printing. A stored scalar result retains its value across later
+Dictionary mutations. `hasKey` does not establish a proof for a later lookup.
+Guarded nullable keys use the existing proof rules; there is no implicit key
+conversion. Indexed compound assignments and increments remain unsupported.
+
+Chaining and discarded results use existing native-call rules.
+Native callback Dictionary-or-Null state supports the opaque observers under a
+non-null proof; unguarded access is rejected. Its nullable declaration/assignment rules
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.
 
-Key/value access and mutation, indexing, Dictionary equality,
-conditional Dictionary joins, direct
-printing, `new Dictionary()`, and the other methods remain unsupported. No key
+Dictionary equality, conditional Dictionary joins, direct printing,
+`new Dictionary()`, and the other methods remain unsupported. No key
 or value contract is inferred from an empty literal without context. See
 [the example](../../examples/compiler-dictionary/README.md) and
 [SDK evidence](../investigations/compiler-dictionary.md).
 
-### Planned Dictionary literals and access
+### Planned Dictionary extensions
 
 These are intended contracts, not executable support yet. Do not infer key/value
 contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
-Keep both mutable parameters invariant. A write requires key K and value V;
-Null is permitted only when V includes Null. Indexed reads and `get` produce
-`V or Null` regardless of the key expression. `hasKey` alone cannot prove a
-non-null result when Null values are permitted. General heterogeneous unions,
-Null keys, and nested containers need separate contracts before acceptance.
-The first executable group should use Number/String values, whose nullable
-consumers already exist; nullable Boolean/Char results need those core type
-prerequisites before widening the group.
+General heterogeneous unions, Null keys, and nested containers need separate
+contracts before acceptance. Nullable Boolean/Char results need those core type
+prerequisites before widening the value group.
 
 Effectful literals must allocate before entries, then execute key, value, and
 insertion for each pair in source order. Duplicate keys must not suppress

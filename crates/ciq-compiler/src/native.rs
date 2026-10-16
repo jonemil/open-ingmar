@@ -167,7 +167,7 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.Dictionary",
                 "Toybox.Lang.Dictionary",
-                "size" | "isEmpty"
+                "size" | "isEmpty" | "get" | "put" | "hasKey" | "remove"
             )
             | (
                 "Toybox.Lang.Array",
@@ -374,14 +374,18 @@ mod tests {
             value_call(&exact, "size", &[], None).unwrap(),
             api::Type::named("Toybox.Lang.Number")
         );
-        assert!(
+        assert_eq!(
             value_call(
                 &exact,
                 "get",
                 &[api::Type::named("Toybox.Lang.String")],
                 None
             )
-            .is_err()
+            .unwrap(),
+            api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Number"),
+                api::Type::Null
+            ])
         );
         assert!(
             value_call(

@@ -16,15 +16,15 @@ Choose increments by dependency, following the
    writes, then complete the method group. Scalar constant records and `hpush`
    have [structured support](specs/data-dictionaries.md), and
    [literal experiments](investigations/compiler-dictionary.md#literal-semantics)
-   establish fresh scalar loads and ordered dynamic stores. Add typed lookup and
-   writes using the [contracts](specs/compiler-subset.md#dictionary-values), then
-   effectful literal construction with ordered allocation/insertion. Follow the
-   [planned profile](specs/compiler-subset.md#planned-dictionary-literals-and-access).
-   Start with Number/String values and their nullable lookup results; widen to
-   Boolean/Char values alongside the required nullable core types. Keep
+   establish fresh scalar loads and ordered dynamic stores. Add effectful
+   literal construction with ordered allocation/insertion using the
+   [contracts](specs/compiler-subset.md#dictionary-values). Follow the
+   [planned profile](specs/compiler-subset.md#planned-dictionary-extensions).
+   Widen beyond Number/String values alongside nullable Boolean/Char core types. Keep
    heterogeneous values and nullable lookup results explicit. Remaining own
-   methods are `get`, `put`, `hasKey`, `remove`, `keys`, `values`, and `toString`;
-   inherited Object methods need Dictionary-specific evidence. See the
+   methods are `keys`, `values`, and `toString`. Grow Array String/nullable-element
+   contracts as needed for the first two; inherited Object methods need
+   Dictionary-specific evidence. See the
    [initial investigation](investigations/compiler-dictionary.md).
 2. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded

@@ -295,10 +295,36 @@ differently typed allocation cannot change the contract on reload.
 `DictionaryType` backs the
 `TypedDictionary` parameter/result variants. Locals and calls preserve reference
 identity and invariant contracts; erasure to opaque Dictionary is one-way.
-`.call-native` accepts `size` and `isEmpty` on a non-null Dictionary. Existing
-nullable callback reads narrow to Dictionary under a non-null proof. Other
-Dictionary operations and conditional joins remain unsupported. See the
+`.call-native` accepts the [source method profile](compiler-subset.md#dictionary-values);
+Void `put`/`remove` calls use `.call-native-discard`. Existing nullable callback
+reads narrow to opaque Dictionary under a non-null proof. Conditional Dictionary
+joins remain unsupported. See the
 [source profile](compiler-subset.md#dictionary-values).
+
+## Dictionary access
+
+`.dictionary-read %<result> %<dictionary> %<key> [span=<start>:<end>]` reads a typed
+non-null Dictionary and yields V or Null. Native construction uses
+`Operation::DictionaryRead`; lowering evaluates receiver then key and emits
+`agetv`. Missing keys yield Null rather than an Array bounds failure.
+
+`.dictionary-write %<dictionary> %<key> %<value> [span=<start>:<end>]` inserts or
+replaces an entry without producing a result. `Operation::DictionaryWrite`
+evaluates receiver, key, and value, then emits `aputv`. It does not use an Array
+index or require an existing key. Both operations validate against the generic
+`get`/`put` contracts, including key/value types and API availability.
+
+Native `get`/`hasKey` use ordinary `.call-native`; `put`/`remove` use the Void
+statement form. Explicit method calls preserve member dispatch. Saved IR infers
+lookup nullability from the validated receiver, never from key presence.
+Opaque receivers, wrong keys/values, unproved nullable operands, and invalid
+value uses of Void methods fail validation. See the
+[source rules](compiler-subset.md#dictionary-values).
+
+Reads and writes participate in the effect schedule. A read consumed before a
+write cannot move after it. Branching operands use the existing staging rules;
+incoming join parameters cannot bypass the stack-use checks. Source candidate
+types select the operation, while full IR validation proves its safety.
 
 ## Dictionary constants
 

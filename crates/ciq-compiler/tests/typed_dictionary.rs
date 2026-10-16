@@ -127,7 +127,6 @@ fn unsupported_annotations_and_methods_remain_rejected() {
     }
     for body in [
         "return d.get(\"one\");",
-        "d.put(\"one\", 1); return 0;",
         "return d[\"one\"];",
         "return true ? d : d;",
     ] {

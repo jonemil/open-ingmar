@@ -1,4 +1,4 @@
-# Dictionary values and scalar literals
+# Dictionary values, lookup, and mutation
 
 [app.mc](app.mc) checks `{}`, local copies/reassignment, Dictionary arguments and
 results, chained `size`/`isEmpty` calls, and repeated construction in a loop.
@@ -7,6 +7,9 @@ String values. Empty literals acquire their types from results, call arguments,
 and reassignment. Typed references can pass to opaque Dictionary parameters.
 Nonempty constants cover all supported key types, Number/String/null values,
 duplicate keys, repeated loads, local replacement, and shared pool strings.
+Indexed reads/writes and `get`/`put`/`hasKey`/`remove` exercise nullable lookup,
+alias visibility, Null values versus missing keys, and fresh constant loads.
+Printed markers check operand order, including conditional keys/RHS values.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 
@@ -19,6 +22,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-Indexed access, mutation, and computed entries remain planned. See
+Computed literal entries and the remaining Dictionary methods stay planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).
