@@ -607,21 +607,20 @@ impl Builder<'_> {
         entries: Vec<(parser::Expression, parser::Expression)>,
         expected: Option<ConstructionType>,
         span: Span,
+        locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
-        fn scalar(expression: parser::Expression) -> Option<crate::DictionaryScalar> {
+        fn scalar(expression: &parser::Expression) -> Option<crate::DictionaryScalar> {
             use crate::DictionaryScalar as S;
             use parser::ExpressionKind as E;
-            Some(match expression.kind {
-                E::Integer(n) => S::Number(n as u32),
-                E::String(s) => S::String(s),
-                E::Char(c) => S::Char(c),
-                E::Boolean(b) => S::Boolean(b),
+            Some(match &expression.kind {
+                E::Integer(n) => S::Number(*n as u32),
+                E::String(s) => S::String(s.clone()),
+                E::Char(c) => S::Char(*c),
+                E::Boolean(b) => S::Boolean(*b),
                 E::Null => S::Null,
                 _ => return None,
             })
         }
-        let entries = entries.into_iter().map(|(key, value)| Some((scalar(key)?, scalar(value)?))).collect::<Option<Vec<_>>>()
-            .ok_or_else(|| Diagnostic::at(self.source, span.start, "Dictionary constants require scalar literal tokens; computed entries are not supported"))?;
         let expected = expected.and_then(|ty| {
             if let ConstructionType::Dictionary(ty) = ty {
                 Some(ty)
@@ -629,17 +628,98 @@ impl Builder<'_> {
                 None
             }
         });
-        let dictionary_type = crate::dictionary::constant_type(&entries, expected)
-            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-        let result = ValueId(self.operations.len() as u32);
+        if let Some(constants) = entries
+            .iter()
+            .map(|(key, value)| Some((scalar(key)?, scalar(value)?)))
+            .collect::<Option<Vec<_>>>()
+        {
+            let dictionary_type = crate::dictionary::constant_type(&constants, expected)
+                .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::DictionaryConstant {
+                    result,
+                    dictionary_type,
+                    entries: constants,
+                },
+                Some(span),
+            );
+            return Ok(parser::Expression {
+                kind: parser::ExpressionKind::Joined(result),
+                span,
+            });
+        }
+        let grouped = entries
+            .iter()
+            .all(|(key, value)| !key.needs_materialization() && !value.needs_materialization());
+        let builder = crate::BuilderId(self.local_id(span)?.0);
+        let length = entries.len() as u32;
+        let provisional = expected.unwrap_or(crate::DictionaryType {
+            key: crate::DictionaryKey::String,
+            value: crate::DictionaryValue::Number,
+        });
         self.push(
-            Operation::DictionaryConstant {
-                result,
-                dictionary_type,
-                entries,
+            Operation::DictionaryBegin {
+                builder,
+                dictionary_type: provisional,
+                length,
             },
             Some(span),
         );
+        let mut values = Vec::new();
+        let mut candidates = Vec::new();
+        for (index, (key, value)) in entries.into_iter().enumerate() {
+            let (key, value) = if grouped {
+                (key, value)
+            } else {
+                (self.snapshot(key, locals)?, self.snapshot(value, locals)?)
+            };
+            let key = self.value(key, locals)?;
+            let value = self.value(value, locals)?;
+            candidates.push(
+                self.types
+                    .value_type(key)
+                    .cloned()
+                    .zip(self.types.value_type(value).cloned()),
+            );
+            if grouped {
+                values.push((key, value));
+            } else {
+                self.push(
+                    Operation::DictionaryFill {
+                        builder,
+                        start: index as u32,
+                        entries: vec![(key, value)],
+                    },
+                    Some(span),
+                );
+            }
+        }
+        let dictionary_type = if let Some(expected) = expected {
+            expected
+        } else {
+            candidates.into_iter().collect::<Option<Vec<_>>>().and_then(|types| crate::dictionary::inferred_type(&types))
+                .ok_or_else(|| Diagnostic::at(self.source, span.start, "computed Dictionary entries require homogeneous scalar keys and Number/String values; Null-only values need typed context"))?
+        };
+        let allocation = self.operations.iter_mut().find(|op| matches!(op.operation, Operation::DictionaryBegin { builder: id, .. } if id == builder)).expect("Dictionary allocation precedes its entries");
+        allocation.operation = Operation::DictionaryBegin {
+            builder,
+            dictionary_type,
+            length,
+        };
+        self.types.set_dictionary(builder, dictionary_type);
+        if grouped {
+            self.push(
+                Operation::DictionaryFill {
+                    builder,
+                    start: 0,
+                    entries: values,
+                },
+                Some(span),
+            );
+        }
+        let result = ValueId(self.operations.len() as u32);
+        self.push(Operation::DictionaryFinish { result, builder }, Some(span));
         Ok(parser::Expression {
             kind: parser::ExpressionKind::Joined(result),
             span,
@@ -808,7 +888,9 @@ impl Builder<'_> {
             kind @ E::Conditional { .. } => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
-            E::DictionaryLiteral(entries) => return self.dictionary_literal(entries, None, span),
+            E::DictionaryLiteral(entries) => {
+                return self.dictionary_literal(entries, None, span, locals);
+            }
             E::ArrayLiteral(elements) => return self.array_literal(elements, span, locals),
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
@@ -1122,7 +1204,7 @@ impl Builder<'_> {
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
         if let parser::ExpressionKind::DictionaryLiteral(entries) = expression.kind {
-            let expression = self.dictionary_literal(entries, expected, expression.span)?;
+            let expression = self.dictionary_literal(entries, expected, expression.span, locals)?;
             return emit(
                 self.source,
                 expression,

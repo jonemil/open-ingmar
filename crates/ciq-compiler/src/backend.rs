@@ -104,6 +104,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
             | Operation::ArrayConstant { result, .. }
+            | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
             | Operation::SourceNew { result, .. }
@@ -124,7 +125,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
                 );
             }
-            Operation::ArrayBegin { builder, .. } => {
+            Operation::DictionaryBegin { builder, .. } | Operation::ArrayBegin { builder, .. } => {
                 builders.insert(
                     *builder,
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
@@ -151,6 +152,55 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
     });
     for located in function.operations() {
         match located.operation {
+            Operation::DictionaryBegin {
+                builder, length, ..
+            } => {
+                let (opcode, operands) = integer(length as i32);
+                items.push(instruction(opcode, operands));
+                items.push(instruction(Opcode::Newd, vec![]));
+                items.push(instruction(
+                    Opcode::Lputv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                continue;
+            }
+            Operation::DictionaryFill {
+                builder,
+                ref entries,
+                ..
+            } => {
+                items.push(instruction(
+                    Opcode::Lgetv,
+                    vec![Operand::Bits(builders[&builder])],
+                ));
+                for (index, (key, value)) in entries.iter().enumerate() {
+                    expression(
+                        *key,
+                        &definitions,
+                        &slots,
+                        &builders,
+                        &literal_aliases,
+                        &mut items,
+                    );
+                    expression(
+                        *value,
+                        &definitions,
+                        &slots,
+                        &builders,
+                        &literal_aliases,
+                        &mut items,
+                    );
+                    items.push(instruction(
+                        if index + 1 == entries.len() {
+                            Opcode::Aputv
+                        } else {
+                            Opcode::Aputvdup
+                        },
+                        vec![],
+                    ));
+                }
+                continue;
+            }
             Operation::ArrayBegin {
                 builder, length, ..
             } => {
@@ -605,7 +655,8 @@ fn expression(
                     ]);
                     (Opcode::Popv, vec![])
                 }
-                Operation::ArrayFinish { builder, .. } => {
+                Operation::DictionaryFinish { builder, .. }
+                | Operation::ArrayFinish { builder, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(builders[builder])])
                 }
                 Operation::DictionaryConstant { result, .. } => (

@@ -11,6 +11,7 @@ pub(crate) struct Types {
     values: BTreeMap<ValueId, Type>,
     locals: BTreeMap<LocalId, Type>,
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
+    dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
     origins: crate::source_objects::Origins,
 }
 
@@ -21,6 +22,7 @@ impl Types {
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
             builders: BTreeMap::new(),
+            dictionaries: BTreeMap::new(),
             origins: crate::source_objects::Origins::new(parameters),
         }
     }
@@ -30,6 +32,18 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation);
         let (result, ty) = match operation {
+            Operation::DictionaryBegin {
+                builder,
+                dictionary_type,
+                ..
+            } => {
+                self.dictionaries.insert(*builder, *dictionary_type);
+                return;
+            }
+            Operation::DictionaryFinish { result, builder } => (
+                *result,
+                self.dictionaries.get(builder).map(|ty| ty.api_type()),
+            ),
             Operation::DictionaryConstant {
                 result,
                 dictionary_type,
@@ -252,6 +266,9 @@ impl Types {
     }
 
     /// Select the private builder's final element contract after the first element.
+    pub(crate) fn set_dictionary(&mut self, builder: crate::BuilderId, ty: crate::DictionaryType) {
+        self.dictionaries.insert(builder, ty);
+    }
     pub(crate) fn set_builder(&mut self, builder: crate::BuilderId, element: ArrayElement) {
         self.builders.insert(builder, element);
     }

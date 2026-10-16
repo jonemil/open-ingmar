@@ -259,6 +259,7 @@ struct Parser<'a> {
     offset: usize,
     lookahead: Option<Token<'a>>,
     expressions: usize,
+    dictionary_entry: bool,
     names: crate::names::Names,
     native_base: Option<crate::ClassBase>,
 }
@@ -856,49 +857,11 @@ impl<'a> Parser<'a> {
         };
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
-    /// Parse scalar literal entries without recursing into unsupported containers.
-    fn dictionary_scalar(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        match self.peek()? {
-            Kind::Integer(_)
-            | Kind::String(_)
-            | Kind::Char(_)
-            | Kind::Word("true" | "false" | "null") => self.atom(depth),
-            Kind::Punctuation('-') => {
-                let sign = self.token()?;
-                let magnitude = self.token()?;
-                let Kind::Integer(digits) = magnitude.kind else {
-                    return Err(self.error(
-                        sign.span.start,
-                        "Dictionary negative values require a Number literal",
-                    ));
-                };
-                let value = digits
-                    .parse::<i64>()
-                    .ok()
-                    .and_then(|n| i32::try_from(-n).ok())
-                    .ok_or_else(|| {
-                        self.error(
-                            sign.span.start,
-                            "Number literal exceeds signed 32-bit range",
-                        )
-                    })?;
-                self.node(
-                    ExpressionKind::Integer(value),
-                    Span {
-                        start: sign.span.start,
-                        end: magnitude.span.end,
-                    },
-                )
-            }
-            _ => Err(self.error(
-                self.offset,
-                "Dictionary constants require scalar literal entries",
-            )),
-        }
-    }
-
-    /// Parse an empty Dictionary or a nonempty flat scalar literal.
+    /// Parse Dictionary expressions while excluding nested Dictionary literal syntax.
     fn dictionary_literal(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
+        if self.dictionary_entry {
+            return Err(self.error(start, "nested Dictionary literal syntax is unsupported"));
+        }
         if self.peek()? == Kind::Punctuation('}') {
             let close = self.token()?;
             return self.node(
@@ -911,7 +874,11 @@ impl<'a> Parser<'a> {
         }
         let mut entries = Vec::new();
         loop {
-            let key = self.dictionary_scalar(depth)?;
+            if depth >= 64 {
+                return Err(self.error(start, "expression nesting exceeds 64 levels"));
+            }
+            self.dictionary_entry = true;
+            let key = self.expression(depth + 1)?;
             self.expect(
                 Kind::Punctuation('='),
                 "'=>' between Dictionary key and value",
@@ -920,7 +887,8 @@ impl<'a> Parser<'a> {
                 Kind::Punctuation('>'),
                 "'=>' between Dictionary key and value",
             )?;
-            let value = self.dictionary_scalar(depth)?;
+            let value = self.expression(depth + 1)?;
+            self.dictionary_entry = false;
             entries.push((key, value));
             if self.peek()? != Kind::Punctuation(',') {
                 break;
@@ -1562,6 +1530,7 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
         offset: 0,
         lookahead: None,
         expressions: 0,
+        dictionary_entry: false,
         names: crate::names::Names::default(),
         native_base: None,
     };
@@ -1745,6 +1714,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
         offset: 0,
         lookahead: None,
         expressions: 0,
+        dictionary_entry: false,
         names: crate::names::Names::default(),
         native_base: None,
     };

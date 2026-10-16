@@ -214,6 +214,9 @@ pub(crate) fn parse_ir_context(
             Some(".discard") => (29, 2),
             Some(".array-constant") => (61, call_width()),
             Some(".array-new") => (30, 3),
+            Some(".dictionary-begin") => (70, 4),
+            Some(".dictionary-fill") => (71, call_width()),
+            Some(".dictionary-finish") => (72, 3),
             Some(".array-begin") => (57, 4),
             Some(".array-fill") => (58, 4),
             Some(".array-finish") => (59, 3),
@@ -515,6 +518,30 @@ pub(crate) fn parse_ir_context(
         } else if kind == 29 {
             Operation::Discard {
                 value: parse_value(&fields[1])?,
+            }
+        } else if kind == 70 {
+            Operation::DictionaryBegin {
+                builder: parse_builder(&fields[1])?,
+                dictionary_type: crate::DictionaryType::parse(&fields[2])
+                    .ok_or_else(|| fail(*at, "unsupported Dictionary contract"))?,
+                length: parse_count(&fields[3])?,
+            }
+        } else if kind == 71 {
+            if width < 5 || (width - 3) % 2 != 0 {
+                return Err(fail(*at, "Dictionary fill requires key/value pairs"));
+            }
+            Operation::DictionaryFill {
+                builder: parse_builder(&fields[1])?,
+                start: parse_count(&fields[2])?,
+                entries: fields[3..width]
+                    .chunks_exact(2)
+                    .map(|pair| Ok((parse_value(&pair[0])?, parse_value(&pair[1])?)))
+                    .collect::<Result<_, Diagnostic>>()?,
+            }
+        } else if kind == 72 {
+            Operation::DictionaryFinish {
+                result: parse_value(&fields[1])?,
+                builder: parse_builder(&fields[2])?,
             }
         } else if kind == 68 {
             Operation::DictionaryRead {

@@ -1,15 +1,38 @@
-//! Definite completion of private array builders across control-flow joins.
+//! Definite completion of private container builders across control-flow joins.
 use crate::{
-    ArrayElement, BlockId, BuilderId, IrError, LocatedOperation, Operation, control_flow::Structure,
+    ArrayElement, BlockId, BuilderId, DictionaryType, IrError, LocatedOperation, Operation,
+    control_flow::Structure,
 };
 use std::collections::{BTreeMap, VecDeque};
+
+#[derive(Clone, Copy)]
+pub(crate) enum Contract {
+    Array(ArrayElement),
+    Dictionary(DictionaryType),
+}
+impl Contract {
+    pub(crate) fn array(self) -> Option<ArrayElement> {
+        if let Self::Array(element) = self {
+            Some(element)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn dictionary(self) -> Option<DictionaryType> {
+        if let Self::Dictionary(ty) = self {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+}
 
 /// Check builder lifetimes and ordered fills on every reachable CFG path.
 /// Return immutable construction contracts for element checking and frame layout.
 pub(crate) fn validate(
     structure: &Structure,
     operations: &[LocatedOperation],
-) -> Result<BTreeMap<BuilderId, (ArrayElement, u32)>, IrError> {
+) -> Result<BTreeMap<BuilderId, (Contract, u32)>, IrError> {
     let fail = |index, message: &str| IrError {
         operation: Some(index),
         message: message.into(),
@@ -30,10 +53,31 @@ pub(crate) fn validate(
                 return Err(fail(index, "object builders support only View elements"));
             }
             if declarations
-                .insert(builder, (element_type, length))
+                .insert(builder, (Contract::Array(element_type), length))
                 .is_some()
             {
                 return Err(fail(index, "duplicate array builder declaration"));
+            }
+        }
+    }
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::DictionaryBegin {
+            builder,
+            dictionary_type,
+            length,
+        } = op.operation
+        {
+            if length == 0 || length > i32::MAX as u32 {
+                return Err(fail(
+                    index,
+                    "Dictionary builder length requires a positive Number",
+                ));
+            }
+            if declarations
+                .insert(builder, (Contract::Dictionary(dictionary_type), length))
+                .is_some()
+            {
+                return Err(fail(index, "duplicate container builder declaration"));
             }
         }
     }
@@ -41,7 +85,9 @@ pub(crate) fn validate(
         && !operations.iter().any(|o| {
             matches!(
                 o.operation,
-                Operation::ArrayFill { .. }
+                Operation::DictionaryFill { .. }
+                    | Operation::DictionaryFinish { .. }
+                    | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
                     | Operation::ArrayFinish { .. }
             )
@@ -61,9 +107,10 @@ pub(crate) fn validate(
         let mut successors = vec![];
         for &index in &blocks[&block] {
             match operations[index].operation {
-                Operation::ArrayBegin { builder, .. } => {
+                Operation::DictionaryBegin { builder, .. }
+                | Operation::ArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
-                        return Err(fail(index, "array builder restarted before completion"));
+                        return Err(fail(index, "container builder restarted before completion"));
                     }
                 }
                 Operation::ArrayFill {
@@ -71,6 +118,12 @@ pub(crate) fn validate(
                     index: slot,
                     ..
                 } => {
+                    if declarations
+                        .get(&builder)
+                        .is_none_or(|(contract, _)| contract.array().is_none())
+                    {
+                        return Err(fail(index, "array fill requires an Array builder"));
+                    }
                     let count = active
                         .get_mut(&builder)
                         .ok_or_else(|| fail(index, "array fill requires an active builder"))?;
@@ -83,6 +136,12 @@ pub(crate) fn validate(
                     *count += 1;
                 }
                 Operation::ArrayFinish { builder, .. } => {
+                    if declarations
+                        .get(&builder)
+                        .is_none_or(|(contract, _)| contract.array().is_none())
+                    {
+                        return Err(fail(index, "array finish requires an Array builder"));
+                    }
                     let count = active
                         .remove(&builder)
                         .ok_or_else(|| fail(index, "array finish requires an active builder"))?;
@@ -98,6 +157,12 @@ pub(crate) fn validate(
                     start,
                     ref values,
                 } => {
+                    if declarations
+                        .get(&builder)
+                        .is_none_or(|(contract, _)| contract.array().is_none())
+                    {
+                        return Err(fail(index, "array fill requires an Array builder"));
+                    }
                     let count = active
                         .get_mut(&builder)
                         .ok_or_else(|| fail(index, "array fill requires an active builder"))?;
@@ -112,6 +177,51 @@ pub(crate) fn validate(
                     }
                     *count += values.len() as u32;
                 }
+                Operation::DictionaryFill {
+                    builder,
+                    start,
+                    ref entries,
+                } => {
+                    if declarations
+                        .get(&builder)
+                        .is_none_or(|(contract, _)| contract.dictionary().is_none())
+                    {
+                        return Err(fail(index, "Dictionary fill requires a Dictionary builder"));
+                    }
+                    let count = active
+                        .get_mut(&builder)
+                        .ok_or_else(|| fail(index, "Dictionary fill requires an active builder"))?;
+                    if entries.is_empty()
+                        || start != *count
+                        || entries.len() > (declarations[&builder].1 - *count) as usize
+                    {
+                        return Err(fail(
+                            index,
+                            "Dictionary fills must cover consecutive remaining entries",
+                        ));
+                    }
+                    *count += entries.len() as u32;
+                }
+                Operation::DictionaryFinish { result: _, builder } => {
+                    if declarations
+                        .get(&builder)
+                        .is_none_or(|(contract, _)| contract.dictionary().is_none())
+                    {
+                        return Err(fail(
+                            index,
+                            "Dictionary finish requires a Dictionary builder",
+                        ));
+                    }
+                    let count = active.remove(&builder).ok_or_else(|| {
+                        fail(index, "Dictionary finish requires an active builder")
+                    })?;
+                    if count != declarations[&builder].1 {
+                        return Err(fail(
+                            index,
+                            "Dictionary finish requires every source entry inserted",
+                        ));
+                    }
+                }
                 Operation::Branch {
                     on_true, on_false, ..
                 } => successors.extend([on_true, on_false]),
@@ -119,7 +229,7 @@ pub(crate) fn validate(
                     successors.push(target)
                 }
                 Operation::Return { .. } | Operation::ReturnVoid if !active.is_empty() => {
-                    return Err(fail(index, "return leaves an unfinished array builder"));
+                    return Err(fail(index, "return leaves an unfinished container builder"));
                 }
                 _ => (),
             }
@@ -129,7 +239,7 @@ pub(crate) fn validate(
                 if previous != &active {
                     return Err(fail(
                         blocks[&next][0],
-                        "array builder progress must agree on every incoming path",
+                        "container builder progress must agree on every incoming path",
                     ));
                 }
             } else {

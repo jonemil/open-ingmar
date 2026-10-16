@@ -300,3 +300,59 @@ pub(crate) fn record_entries(
         .map(|(k, v)| Some((scalar(k)?, scalar(v)?)))
         .collect()
 }
+
+/// Infer bounded contracts from source candidate types. Nullable key candidates
+/// select their non-null class; the IR checker must prove every actual key safe.
+pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> {
+    fn key(ty: &Type) -> Option<&Type> {
+        match ty {
+            Type::Named(_) => Some(ty),
+            Type::Union(types) => {
+                let mut non_null = types.iter().filter(|ty| **ty != Type::Null);
+                let first = non_null.next()?;
+                if non_null.next().is_none() {
+                    key(first)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    fn value(ty: &Type, number: &mut bool, string: &mut bool, nullable: &mut bool) -> Option<()> {
+        match ty {
+            Type::Named(name) if name == "Toybox.Lang.Number" => *number = true,
+            Type::Named(name) if name == "Toybox.Lang.String" => *string = true,
+            Type::Null => *nullable = true,
+            Type::Union(types) => {
+                for ty in types {
+                    value(ty, number, string, nullable)?;
+                }
+            }
+            _ => return None,
+        }
+        Some(())
+    }
+    let first = key(&entries.first()?.0)?;
+    let (mut number, mut string, mut nullable) = (false, false, false);
+    for (k, v) in entries {
+        if key(k)? != first {
+            return None;
+        }
+        value(v, &mut number, &mut string, &mut nullable)?;
+    }
+    let name = match (number, string) {
+        (true, false) => "Toybox.Lang.Number",
+        (false, true) => "Toybox.Lang.String",
+        _ => return None,
+    };
+    let value = Type::named(name);
+    DictionaryType::from_api_type(&Type::dictionary(
+        first.clone(),
+        if nullable {
+            Type::Union(vec![value, Type::Null])
+        } else {
+            value
+        },
+    ))
+}

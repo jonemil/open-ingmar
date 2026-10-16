@@ -10,6 +10,8 @@ duplicate keys, repeated loads, local replacement, and shared pool strings.
 Indexed reads/writes and `get`/`put`/`hasKey`/`remove` exercise nullable lookup,
 alias visibility, Null values versus missing keys, and fresh constant loads.
 Printed markers check operand order, including conditional keys/RHS values.
+Computed literals check duplicate effects, nullable values, Array-produced
+scalars, short-circuit keys, and private construction across branches/loops.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 
@@ -22,6 +24,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-Computed literal entries and the remaining Dictionary methods stay planned. See
+The remaining Dictionary methods stay planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).

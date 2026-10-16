@@ -9,7 +9,7 @@ See [architecture](../architecture.md) and [pipeline evidence](../investigations
 ## Semantic model
 
 Value IDs identify computations; local IDs identify stored state; parameters
-identify positions; private array builders identify incomplete construction.
+identify positions; private container builders identify incomplete construction.
 None selects a VM slot, native symbol/import ID, or section address. Source
 spans carry diagnostic provenance. Immutable validated models are the boundary
 between source checking and VM instruction selection.
@@ -354,6 +354,47 @@ unique content match. Local pool aliases resolve to text for comparison. Missing
 ambiguous, incompatible, or conflicting bindings fail. See
 [DATA constants](data-dictionaries.md) and [assembly](assembly.md).
 
+## Computed Dictionary construction
+
+`DictionaryBegin`, `DictionaryFill`, and `DictionaryFinish` represent a private
+nonempty literal with the [source key/value contract](compiler-subset.md#dictionary-values).
+Their text forms are:
+
+```text
+.dictionary-begin &<builder> dictionary(<key>=><value>) <length>
+.dictionary-fill &<builder> <start> %<key> %<value> ...
+.dictionary-finish %<result> &<builder>
+```
+
+Each accepts optional `span=<start>:<end>`. Length is the positive source entry
+count, including duplicates, and must fit a nonnegative Number. A fill supplies
+one or more pairs, beginning at the next source-entry ordinal and fitting the
+remaining count. Entries check against K/V using the same put contract as indexed
+writes. Finish consumes the completed builder and produces its typed Dictionary.
+
+Begin lowers to a Number push, `newd`, and private frame storage before entry
+effects. A fill evaluates/stores each pair before the next; non-final pairs use
+`aputvdup`, and the last uses `aputv`. Finish reads the private reference. Source
+control flow stages key/value operands into locals and emits separate fill
+groups, preserving empty-stack ordinary edges and incoming-value consumption.
+Candidate inference is provisional; final IR checking validates each entry and
+its API/null proofs. Shared checks follow below.
+
+## Private container checks
+
+Array and Dictionary builders share one identity namespace and lifetime checker.
+Begin declarations are unique within a function; operations cannot substitute
+one builder kind for the other. Every CFG join requires identical active-builder
+progress on incoming paths, including backedges. Returns cannot leave builders
+active. Unknown/inactive builders, early publication, skipped/repeated/out-of-order
+fills, and incompatible values fail validation. A completed identity can begin
+again only by re-executing its original declaration, such as in a loop.
+
+Builders reserve frame slots alongside parameters and ordinary locals under the
+shared 255-slot limit. They are not semantic values or ordinary local IDs; only
+finish exposes a usable reference. Allocation remains ordered before entry
+effects and can fail there.
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
@@ -422,11 +463,8 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
   the builder and exposes a non-null typed Array; reuse requires execution of
   the original begin again, such as in a loop.
 
-Optional `span=<start>:<end>` follows each operation. Every CFG join requires
-identical active-builder progress on its incoming paths. Returns cannot leave
-builders active. Premature publication, skipped/repeated/out-of-order fills,
-unknown/inactive builders, and mismatched element types are errors. The finite
-CFG check includes backedges; it rejects paths with inconsistent progress.
+Optional `span=<start>:<end>` follows each operation. Builders follow the
+[shared private construction checks](#private-container-checks).
 
 Each builder reserves a VM frame slot alongside parameters and ordinary locals,
 under the shared 255-slot limit. Lowering selects a Number push, `newa`, and a

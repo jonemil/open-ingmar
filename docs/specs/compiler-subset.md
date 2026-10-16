@@ -817,20 +817,34 @@ later uses do not retrospectively type an opaque local. Different key or value
 contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
-Nonempty `{key => value, ...}` literals accept scalar tokens: homogeneous
+Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
 Number, String, Boolean, or Char keys, and Number/String values with optional
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed key kinds, mixed Number/String values, computed or parenthesized
-entries, nested containers, and trailing commas are unsupported.
+Null keys, mixed key kinds, mixed Number/String values, container-valued entries,
+and trailing commas are unsupported. Nested Dictionary literal syntax is also
+unsupported, including inside entry call arguments. Ordinary calls and Array
+reads may produce scalar entries.
 
-Signed Number tokens use the existing 32-bit literal range. Strings are UTF-8;
-their record-local pool length, including the zero terminator, must fit u16.
-All entries are type-checked before equal scalar keys retain their last value.
-Overwritten entries must also be supported literal tokens. Lowering uses `hpush`
-and a [scalar DATA constant](data-dictionaries.md), with a fresh mutable
-Dictionary on each evaluation; literal String keys compare by their text.
+Literal-only entries use `hpush` and a [scalar DATA constant](data-dictionaries.md).
+Signed Number tokens use the existing 32-bit range. Constant strings are UTF-8;
+their local pool length, including the zero terminator, must fit u16. Every entry
+is type-checked before equal scalar keys retain their last value. Parentheses
+around literals do not introduce effects or require computed construction.
+
+Computed literals allocate a private Dictionary before entry expressions. Each
+pair evaluates key, then value, then inserts before the next pair. Every
+overwritten expression still executes. The `newd` argument is the source entry
+count, including duplicates; its capacity/allocation effect is not specified.
+No partially constructed reference escapes. Branching operands use private
+locals under the existing frame limit. Every evaluation returns a fresh mutable
+Dictionary; String keys compare by text.
+
+Computed value inference retains candidate Number/String nullability, including
+nullable call results. An expected contract instead checks actual values using
+the full IR null proofs. A guarded nullable key still needs a non-null proof;
+selecting its non-null class during inference does not authorize an unsafe key.
 
 Opaque references support `size()` → Number and `isEmpty()` → Boolean.
 Typed references additionally support the following API 1.0.0 contracts:
@@ -877,12 +891,6 @@ General heterogeneous unions, Null keys, and nested containers need separate
 contracts before acceptance. Nullable Boolean/Char results need those core type
 prerequisites before widening the value group.
 
-Effectful literals must allocate before entries, then execute key, value, and
-insertion for each pair in source order. Duplicate keys must not suppress
-expression effects. Construction storage stays private until initialization
-completes. Preserve these contracts through native/saved IR and assembly;
-[SDK evidence](../investigations/compiler-dictionary.md#literal-semantics)
-establishes the scalar repeated-load and dynamic-store behavior.
 
 ## Native value calls
 

@@ -11,9 +11,9 @@
 
 pub mod api;
 pub mod application;
-mod array_builders;
 pub mod backend;
 mod bindings;
+mod builders;
 mod control_flow;
 mod dictionary;
 pub use bindings::{array_bindings, dictionary_bindings, string_bindings, symbol_bindings};
@@ -80,7 +80,7 @@ pub struct ValueId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalId(pub u32);
 
-/// Private array-construction identity, separate from values and ordinary locals.
+/// Private container-construction identity, separate from values and ordinary locals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BuilderId(pub u32);
 
@@ -390,6 +390,25 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Allocate a private Dictionary before evaluating its entries. Length is the
+    /// source entry count passed to newd, not the final number of distinct keys.
+    DictionaryBegin {
+        builder: BuilderId,
+        dictionary_type: DictionaryType,
+        length: u32,
+    },
+    /// Insert consecutive source entries, evaluating each key then value before
+    /// its store. Duplicate keys still execute every expression and insertion.
+    DictionaryFill {
+        builder: BuilderId,
+        start: u32,
+        entries: Vec<(ValueId, ValueId)>,
+    },
+    /// Expose a fully initialized Dictionary after all source entries are inserted.
+    DictionaryFinish {
+        result: ValueId,
+        builder: BuilderId,
+    },
     /// Read a typed Dictionary key, producing its value contract or Null.
     /// Evaluate receiver before key; missing keys do not raise Array bounds errors.
     DictionaryRead {
@@ -1032,7 +1051,7 @@ impl Function {
             Default::default()
         };
         let mut inferred_types = std::collections::BTreeMap::new();
-        let builders = array_builders::validate(&structure, &operations)?;
+        let builders = builders::validate(&structure, &operations)?;
         if parameter_count + builders.len() > MAX_LOCALS {
             return Err(IrError {
                 operation: None,
@@ -1110,10 +1129,54 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
-                Operation::ArrayBegin { .. } => (None, vec![]),
+                Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => (None, vec![]),
+                Operation::DictionaryFill {
+                    builder,
+                    ref entries,
+                    ..
+                } => {
+                    let dictionary_type = builders[&builder]
+                        .0
+                        .dictionary()
+                        .expect("validated Dictionary builder");
+                    for &(key, value) in entries {
+                        native::value_call(
+                            &dictionary_type.api_type(),
+                            "put",
+                            &[type_of(key).api_type(), type_of(value).api_type()],
+                            context,
+                        )
+                        .map_err(|e| fail(&e))?;
+                    }
+                    (
+                        None,
+                        entries
+                            .iter()
+                            .flat_map(|(key, value)| [*key, *value])
+                            .collect(),
+                    )
+                }
+                Operation::DictionaryFinish { result, builder } => {
+                    types.insert(
+                        result,
+                        ValueType::TypedDictionary(
+                            builders[&builder]
+                                .0
+                                .dictionary()
+                                .expect("validated Dictionary builder"),
+                        ),
+                    );
+                    (Some(result), vec![])
+                }
                 Operation::ArrayFill { builder, value, .. } => {
-                    let expected =
-                        ValueType::from_api_type(&builders[&builder].0.api_type()).unwrap();
+                    let expected = ValueType::from_api_type(
+                        &builders[&builder]
+                            .0
+                            .array()
+                            .expect("validated Array builder")
+                            .api_type(),
+                    )
+                    .unwrap();
                     if type_of(value) != expected {
                         return Err(fail("array builder element must match its declared type"));
                     }
@@ -1124,8 +1187,14 @@ impl Function {
                     ref values,
                     ..
                 } => {
-                    let expected =
-                        ValueType::from_api_type(&builders[&builder].0.api_type()).unwrap();
+                    let expected = ValueType::from_api_type(
+                        &builders[&builder]
+                            .0
+                            .array()
+                            .expect("validated Array builder")
+                            .api_type(),
+                    )
+                    .unwrap();
                     if values.iter().any(|v| type_of(*v) != expected) {
                         return Err(fail(
                             "array builder elements must match their declared type",
@@ -1134,7 +1203,15 @@ impl Function {
                     (None, values.clone())
                 }
                 Operation::ArrayFinish { result, builder } => {
-                    types.insert(result, ValueType::Array(builders[&builder].0));
+                    types.insert(
+                        result,
+                        ValueType::Array(
+                            builders[&builder]
+                                .0
+                                .array()
+                                .expect("validated Array builder"),
+                        ),
+                    );
                     (Some(result), vec![])
                 }
                 Operation::ObjectCall {
@@ -1880,6 +1957,8 @@ impl Function {
                     | Operation::ArrayNew { .. }
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
+                    | Operation::DictionaryBegin { .. }
+                    | Operation::DictionaryFill { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
@@ -1921,7 +2000,11 @@ impl Function {
                         index,
                         value,
                     } => vec![*array, *index, *value],
-                    Operation::ArrayBegin { .. } => vec![],
+                    Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => vec![],
+                    Operation::DictionaryFill { entries, .. } => entries
+                        .iter()
+                        .flat_map(|(key, value)| [*key, *value])
+                        .collect(),
                     Operation::ArrayFillMany { values, .. } => values.clone(),
                     Operation::JumpValue { value, .. } => vec![*value],
                     Operation::ArrayFill { value, .. }
@@ -2293,6 +2376,32 @@ impl Function {
                 ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
+                }
+                Operation::DictionaryBegin {
+                    builder,
+                    dictionary_type,
+                    length,
+                } => format!(
+                    ".dictionary-begin &{} {} {}",
+                    builder.0,
+                    dictionary_type.text(),
+                    length
+                ),
+                Operation::DictionaryFill {
+                    builder,
+                    start,
+                    ref entries,
+                } => format!(
+                    ".dictionary-fill &{} {}{}",
+                    builder.0,
+                    start,
+                    entries
+                        .iter()
+                        .map(|(key, value)| format!(" %{} %{}", key.0, value.0))
+                        .collect::<String>()
+                ),
+                Operation::DictionaryFinish { result, builder } => {
+                    format!(".dictionary-finish %{} &{}", result.0, builder.0)
                 }
                 Operation::ArrayBegin {
                     builder,

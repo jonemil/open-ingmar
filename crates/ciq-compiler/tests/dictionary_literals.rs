@@ -111,7 +111,7 @@ fn duplicate_scalar_keys_keep_the_last_value_in_the_data_record() {
 }
 
 #[test]
-fn malformed_constants_and_unimplemented_dynamic_entries_fail_before_lowering() {
+fn malformed_constants_and_unsupported_value_types_fail_before_lowering() {
     for literal in [
         "{null => 1}",
         "{\"x\" => true}",
@@ -119,7 +119,6 @@ fn malformed_constants_and_unimplemented_dynamic_entries_fail_before_lowering() 
         "{\"x\" => null}",
         "{1 => 2, \"x\" => 3}",
         "{\"x\" => 1, \"y\" => \"bad\"}",
-        "{\"x\" => 1 + 2}",
         "{\"x\" => {}}",
         "{\"x\" => [1]}",
         "{\"x\" => 1,}",

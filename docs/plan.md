@@ -12,20 +12,13 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Establish key/value contracts, nonempty literals, lookup and
-   writes, then complete the method group. Scalar constant records and `hpush`
-   have [structured support](specs/data-dictionaries.md), and
-   [literal experiments](investigations/compiler-dictionary.md#literal-semantics)
-   establish fresh scalar loads and ordered dynamic stores. Add effectful
-   literal construction with ordered allocation/insertion using the
-   [contracts](specs/compiler-subset.md#dictionary-values). Follow the
-   [planned profile](specs/compiler-subset.md#planned-dictionary-extensions).
-   Widen beyond Number/String values alongside nullable Boolean/Char core types. Keep
-   heterogeneous values and nullable lookup results explicit. Remaining own
-   methods are `keys`, `values`, and `toString`. Grow Array String/nullable-element
-   contracts as needed for the first two; inherited Object methods need
-   Dictionary-specific evidence. See the
-   [initial investigation](investigations/compiler-dictionary.md).
+1. **Dictionary.** Complete `toString`, then grow Array String/nullable-element
+   contracts needed for `keys` and `values`. Widen beyond Number/String values
+   alongside nullable Boolean/Char core types; keep heterogeneous and nullable
+   results explicit. Inherited Object methods need Dictionary-specific evidence.
+   Follow the [source contracts](specs/compiler-subset.md#dictionary-values) and
+   [remaining extensions](specs/compiler-subset.md#planned-dictionary-extensions),
+   using the [investigation](investigations/compiler-dictionary.md) for evidence.
 2. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value

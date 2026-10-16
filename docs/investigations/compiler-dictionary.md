@@ -53,7 +53,7 @@ The [constant format](../specs/data-dictionaries.md) records the verified framin
 The [tracked example](../../examples/compiler-dictionary/README.md) isolates
 empty `{}` construction, local reference copies/reassignment, typed Dictionary
 arguments/results, native observers, chained calls, and repeated loop allocation.
-Both SDK and generated simulator runs match all sixty-three expected lines. Typed
+Both SDK and generated simulator runs match all eighty-nine expected lines. Typed
 functions also check contextual empty returns/arguments/reassignment, nullable
 value annotations, chaining, and erasure into an opaque parameter. The launch
 provides Null callback state, so its guarded observer is checked structurally,
@@ -71,7 +71,11 @@ alias visibility, Null-valued key presence versus removal, and absent-key remova
 Two calls through `populated` produce independently mutable Dictionaries:
 changing/removing entries from one leaves the other at 41 with its `two` key.
 Receiver/key/value markers also agree for indexed writes, native calls, and
-conditional RHS/key staging. Artifacts: `scratch/check-dictionary-access/`.
+conditional RHS/key staging. Computed entries additionally verify duplicate
+key/value effects, conditional keys/values, nullable inferred values, Array-read
+producers, observation before a later value mutates state, short-circuit keys,
+and repeated construction inside a loop. Both PRGs export/rebuild exactly.
+Artifacts: `scratch/check-dictionary-computed/`.
 
 The SDK SYMBOLS table binds `put` to `0x008000b4`, `get` to `0x008000b5`,
 `hasKey` to `0x008000b6`, and `remove` to `0x008000b7`. The last matches Array's

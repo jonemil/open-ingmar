@@ -34,6 +34,48 @@ module Dictionaries {
     }
     function key() as Toybox.Lang.String { System.println("key"); return "one"; }
     function value() { System.println("value"); return 123; }
+    function computedNullable(choose as Toybox.Lang.Boolean, n)
+        as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> {
+        return {"one" => choose ? n : null, "two" => n + 1};
+    }
+    function mutate(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) {
+        System.println("mutate"); d["one"] = 2; return 2;
+    }
+    function computed() as Void {
+        var duplicate = {Dictionaries.key() => Dictionaries.value(),
+                         Dictionaries.key() => Dictionaries.value()};
+        System.println(duplicate.size());
+        Dictionaries.showNumber(duplicate["one"]);
+        var staged = {(true ? Dictionaries.key() : "skip") =>
+                      (false ? 0 : Dictionaries.value()),
+                      "other" => true ? 7 : 0};
+        System.println(staged.size());
+        Dictionaries.showNumber(staged["one"]);
+        Dictionaries.showNumber(staged["other"]);
+        var nullable = Dictionaries.computedNullable(false, 5);
+        Dictionaries.showNumber(nullable["one"]);
+        Dictionaries.showNumber(nullable["two"]);
+        System.println(nullable.size());
+        var inferred = {Dictionaries.key() => duplicate.get("missing")};
+        System.println(inferred.size());
+        System.println(inferred.hasKey("one"));
+        Dictionaries.showNumber(inferred["one"]);
+        var producer = {"array" => [Dictionaries.value(), 4][0]};
+        Dictionaries.showNumber(producer["array"]);
+        var state = {"one" => 1};
+        var observation = {"before" => state["one"],
+                           "after" => Dictionaries.mutate(state)};
+        Dictionaries.showNumber(observation["before"]);
+        Dictionaries.showNumber(observation["after"]);
+        var i = 0;
+        while (i < 2) {
+            var repeated = {i => i + 1};
+            Dictionaries.showNumber(repeated[i]);
+            i++;
+        }
+        var choices = {(false || true) => 1 + 1};
+        Dictionaries.showNumber(choices[true]);
+    }
     function access() as Void {
         var d = Dictionaries.populated();
         Dictionaries.showNumber(d["one"]);
@@ -124,6 +166,7 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println({'a' => -1, 'b' => -2147483648}.size());
         System.println(Dictionaries.onlyNull().size());
         Dictionaries.access();
+        Dictionaries.computed();
         System.exit();
     }
 }
