@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-nullable-arrays](compiler-nullable-arrays/README.md): nullable Number
+  and String elements, contextual construction, guarded reads, and mutation.
 - [compiler-string-arrays](compiler-string-arrays/README.md): pooled String
   constants, ordered construction, typed reads/writes, and Array methods.
 - [compiler-dictionary](compiler-dictionary/README.md): typed/opaque Dictionaries,

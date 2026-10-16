@@ -150,27 +150,44 @@ impl NativeClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
     Number,
+    NullableNumber,
     Char,
     String,
+    NullableString,
     Object(NativeClass),
 }
 
 impl ArrayElement {
-    /// Return the native class type represented by this element contract.
+    /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(self) -> api::Type {
-        api::Type::named(match self {
-            Self::Number => "Toybox.Lang.Number",
+        let base = api::Type::named(match self {
+            Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
             Self::Char => "Toybox.Lang.Char",
-            Self::String => "Toybox.Lang.String",
+            Self::String | Self::NullableString => "Toybox.Lang.String",
             Self::Object(class) => class.name(),
-        })
+        });
+        if self.nullable_base().is_some() {
+            api::Type::Union(vec![base, api::Type::Null])
+        } else {
+            base
+        }
+    }
+
+    fn nullable_base(self) -> Option<Self> {
+        match self {
+            Self::NullableNumber => Some(Self::Number),
+            Self::NullableString => Some(Self::String),
+            _ => None,
+        }
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         [
             Self::Number,
+            Self::NullableNumber,
             Self::Char,
             Self::String,
+            Self::NullableString,
             Self::Object(NativeClass::View),
         ]
         .into_iter()
@@ -180,8 +197,10 @@ impl ArrayElement {
     fn text(self) -> &'static str {
         match self {
             Self::Number => "number",
+            Self::NullableNumber => "nullable-number",
             Self::Char => "char",
             Self::String => "string",
+            Self::NullableString => "nullable-string",
             Self::Object(NativeClass::View) => "view",
             Self::Object(NativeClass::Dc) => "dc",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
@@ -191,8 +210,10 @@ impl ArrayElement {
     fn array_text(self) -> &'static str {
         match self {
             Self::Number => "number-array",
+            Self::NullableNumber => "nullable-number-array",
             Self::Char => "char-array",
             Self::String => "string-array",
+            Self::NullableString => "nullable-string-array",
             Self::Object(NativeClass::View) => "view-array",
             Self::Object(NativeClass::Dc) => "dc-array",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate-array",
@@ -202,10 +223,12 @@ impl ArrayElement {
 
 /// Payload of a homogeneous Array constant. Bits are interpreted as Number or
 /// Char by the element contract; String contains text rather than a pool alias.
+/// Null requires a nullable element contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayConstantValue {
     Bits(u32),
     String(String),
+    Null,
 }
 
 /// Supported positional native callback results, independent of runtime storage.
@@ -1186,15 +1209,12 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ArrayFill { builder, value, .. } => {
-                    let expected = ValueType::from_api_type(
-                        &builders[&builder]
-                            .0
-                            .array()
-                            .expect("validated Array builder")
-                            .api_type(),
-                    )
-                    .unwrap();
-                    if type_of(value) != expected {
+                    let expected = builders[&builder]
+                        .0
+                        .array()
+                        .expect("validated Array builder")
+                        .api_type();
+                    if !native::accepts(&expected, &type_of(value).api_type()) {
                         return Err(fail("array builder element must match its declared type"));
                     }
                     (None, vec![value])
@@ -1204,15 +1224,15 @@ impl Function {
                     ref values,
                     ..
                 } => {
-                    let expected = ValueType::from_api_type(
-                        &builders[&builder]
-                            .0
-                            .array()
-                            .expect("validated Array builder")
-                            .api_type(),
-                    )
-                    .unwrap();
-                    if values.iter().any(|v| type_of(*v) != expected) {
+                    let expected = builders[&builder]
+                        .0
+                        .array()
+                        .expect("validated Array builder")
+                        .api_type();
+                    if values
+                        .iter()
+                        .any(|v| !native::accepts(&expected, &type_of(*v).api_type()))
+                    {
                         return Err(fail(
                             "array builder elements must match their declared type",
                         ));
@@ -1523,14 +1543,22 @@ impl Function {
                             matches!(
                                 (element_type, value),
                                 (
-                                    ArrayElement::Number | ArrayElement::Char,
+                                    ArrayElement::Number
+                                        | ArrayElement::NullableNumber
+                                        | ArrayElement::Char,
                                     ArrayConstantValue::Bits(_)
-                                ) | (ArrayElement::String, ArrayConstantValue::String(_))
+                                ) | (
+                                    ArrayElement::String | ArrayElement::NullableString,
+                                    ArrayConstantValue::String(_)
+                                ) | (
+                                    ArrayElement::NullableNumber | ArrayElement::NullableString,
+                                    ArrayConstantValue::Null
+                                )
                             )
                         })
                     {
                         return Err(fail(
-                            "constant arrays require nonempty homogeneous Number, Char, or String elements",
+                            "constant payloads must match a nonempty supported Array contract",
                         ));
                     }
                     let ty = ValueType::Array(element_type);
@@ -1628,7 +1656,7 @@ impl Function {
                     if type_of(index) != ValueType::Integer {
                         return Err(fail("array writes require a non-null Number index"));
                     }
-                    if Some(type_of(value)) != ValueType::from_api_type(&element.api_type()) {
+                    if !native::accepts(&element.api_type(), &type_of(value).api_type()) {
                         return Err(fail(
                             "array write value must match the receiver's element type",
                         ));
@@ -2469,6 +2497,7 @@ impl Function {
                         .map(|v| match v {
                             ArrayConstantValue::Bits(n) => format!(" 0x{n:08x}"),
                             ArrayConstantValue::String(s) => format!(" {s:?}"),
+                            ArrayConstantValue::Null => " null".into(),
                         })
                         .collect::<String>()
                 ),
@@ -2758,7 +2787,9 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Tuple(TupleShape::ViewDelegate) => " result=view-delegate",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
+        ReturnType::Array(ArrayElement::NullableNumber) => " result=nullable-number-array",
         ReturnType::Array(ArrayElement::String) => " result=string-array",
+        ReturnType::Array(ArrayElement::NullableString) => " result=nullable-string-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::BehaviorDelegate)) => {

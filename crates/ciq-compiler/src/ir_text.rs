@@ -124,6 +124,12 @@ pub(crate) fn parse_ir_context(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "nullable-number-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableNumber,
+                        )),
+                        "nullable-string-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableString,
+                        )),
                         "string-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::String))
                         }
@@ -458,8 +464,10 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 element_type: match fields[2].as_str() {
                     "number" => crate::ArrayElement::Number,
+                    "nullable-number" => crate::ArrayElement::NullableNumber,
                     "char" => crate::ArrayElement::Char,
                     "string" => crate::ArrayElement::String,
+                    "nullable-string" => crate::ArrayElement::NullableString,
                     _ => {
                         return Err(fail(
                             *at,
@@ -470,7 +478,10 @@ pub(crate) fn parse_ir_context(
                 values: fields[3..width]
                     .iter()
                     .map(|s| {
-                        if fields[2] == "string" {
+                        if s == "null" {
+                            return Ok(crate::ArrayConstantValue::Null);
+                        }
+                        if matches!(fields[2].as_str(), "string" | "nullable-string") {
                             return s
                                 .strip_prefix('"')
                                 .map(|s| crate::ArrayConstantValue::String(s.into()))
@@ -494,7 +505,9 @@ pub(crate) fn parse_ir_context(
                 element_type: match fields[2].as_str() {
                     "char" => crate::ArrayElement::Char,
                     "number" => crate::ArrayElement::Number,
+                    "nullable-number" => crate::ArrayElement::NullableNumber,
                     "string" => crate::ArrayElement::String,
+                    "nullable-string" => crate::ArrayElement::NullableString,
                     "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                     _ => return Err(fail(*at, "unsupported builder element type")),
                 },
@@ -527,7 +540,9 @@ pub(crate) fn parse_ir_context(
             let element_type = match fields[2].as_str() {
                 "char" => crate::ArrayElement::Char,
                 "number" => crate::ArrayElement::Number,
+                "nullable-number" => crate::ArrayElement::NullableNumber,
                 "string" => crate::ArrayElement::String,
+                "nullable-string" => crate::ArrayElement::NullableString,
                 "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                 _ => return Err(fail(*at, "unsupported array element type")),
             };
@@ -914,7 +929,13 @@ fn call_contract(
             "dictionary" => crate::ReturnType::Dictionary,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
+            "nullable-number-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableNumber)
+            }
             "string-array" => crate::ReturnType::Array(crate::ArrayElement::String),
+            "nullable-string-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableString)
+            }
             "view" => crate::ReturnType::Object(crate::NativeClass::View),
             "dc" => crate::ReturnType::Object(crate::NativeClass::Dc),
             "behavior-delegate" => crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate),

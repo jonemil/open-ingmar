@@ -1193,7 +1193,8 @@ printing, and cannot be console entry results. See the
 contract. Parameters/results preserve that type; indexed reads produce String
 and writes require String. Nullable source values require a non-null proof
 before construction, writes, or native arguments. Mixed types, Null elements,
-nested arrays, and nullable Array receivers remain unsupported.
+nested arrays, and nullable Array receivers remain unsupported for this profile.
+Nullable String elements have a [separate contract](#nullable-array-elements).
 
 Homogeneous literals such as `["one", "two"]` use pooled DATA constants.
 Repeated text shares a local pool entry; repeated execution loads independently
@@ -1211,10 +1212,40 @@ Arrays must be converted to String before printing.
 See the [example](../../examples/compiler-string-arrays/README.md) and
 [runtime evidence](../investigations/compiler-string-arrays.md).
 
+## Nullable Array elements
+
+`Toybox.Lang.Array<Toybox.Lang.Number or Null>` and
+`Toybox.Lang.Array<Toybox.Lang.String or Null>` are invariant non-null Array
+contracts. Indexed reads produce the base type or Null. Stores and native
+`add`, `indexOf`, `remove`, and `removeAll` accept either alternative; `addAll`
+requires the same Array contract. `reverse` and `slice` retain it. API levels
+match the base-element Array profile.
+
+Direct literals acquire a nullable element contract from an annotated return,
+a typed user/native argument, or assignment to an existing nullable-element
+Array local. This includes empty, Null-only, scalar-only, and computed literals.
+For example, a function returning `Array<Number or Null>` may return `[1, null]`.
+Literal tokens use typed DATA constants; other expressions allocate before
+ordered fills. Branching nullable literals use a separate staging local per
+element so differing operand types do not change an existing local's contract.
+
+Existing Array references cannot widen or narrow their element contracts.
+Unannotated literals retain the non-null inference rules; `[null]` and
+`[1, null]` without nullable context remain rejected. Nullable Char/Boolean
+values, nested arrays, and nullable Array receivers remain deferred.
+
+Store a nullable read in a local and guard a fresh local read before arithmetic,
+String methods, or printing. Writes and `a[index] != null` do not prove that a
+later indexed read is non-null. A scalar saved before Array mutation retains
+its earlier value. Reassigning that scalar invalidates its null proof.
+See the [example](../../examples/compiler-nullable-arrays/README.md) and
+[evidence](../investigations/compiler-nullable-arrays.md).
+
 ## Empty array literals
 
 A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,
-`Array<String>`, or `Array<View>`.
+`Array<String>`, `Array<View>`, or a supported
+[nullable element contract](#nullable-array-elements).
 Parentheses preserve direct context. Supported contexts are:
 
 - An explicitly annotated array return: `return [];`.
@@ -1224,7 +1255,7 @@ Parentheses preserve direct context. Supported contexts are:
 
 The literal allocates a fresh empty array at its position in evaluation order.
 Reassignment replaces the local reference; existing aliases retain the old
-array. No `add` call or element-storage temporary is emitted. Empty Number/View
+array. No `add` call or element-storage temporary is emitted. Empty Number/String/View
 allocation requires API 1.0.0; Char element availability requires 1.3.0.
 Enclosing calls retain their own API requirements.
 

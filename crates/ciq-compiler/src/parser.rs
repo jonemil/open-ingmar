@@ -302,13 +302,22 @@ impl<'a> Parser<'a> {
     fn array_annotation(&mut self) -> Result<crate::ArrayElement, Diagnostic> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
-        let element = match self.path()?.as_str() {
+        let mut element = match self.path()?.as_str() {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
             "Toybox.Lang.String" => crate::ArrayElement::String,
             "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),
             _ => return Err(self.error(at, "unsupported Array element annotation")),
         };
+        if self.peek()? == Kind::Word("or") {
+            self.token()?;
+            self.expect(Kind::Word("Null"), "'Null'")?;
+            element = match element {
+                crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
+                crate::ArrayElement::String => crate::ArrayElement::NullableString,
+                _ => return Err(self.error(at, "nullable Array elements require Number or String")),
+            };
+        }
         self.expect(Kind::Punctuation('>'), "'>'")?;
         Ok(element)
     }

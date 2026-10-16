@@ -12,14 +12,16 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Add nullable Number/String and Boolean Array element
-   contracts needed for `keys` and `values`, enabling these methods for supported
+1. **Dictionary.** Add Boolean Array element contracts needed for `keys`,
+   then enable `keys` and `values` for the supported
    key/value groups. Widen beyond Number/String values
    alongside nullable Boolean/Char core types; keep heterogeneous and nullable
    results explicit. Inherited Object methods need Dictionary-specific evidence.
    Follow the [source contracts](specs/compiler-subset.md#dictionary-values) and
    [remaining extensions](specs/compiler-subset.md#planned-dictionary-extensions),
    using the [investigation](investigations/compiler-dictionary.md) for evidence.
+   Nullable Array elements currently need explicit context; broader literal
+   inference can follow once mixed scalar/Null contracts are established.
 2. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value

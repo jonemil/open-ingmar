@@ -74,11 +74,15 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 .iter()
                 .map(|value| match value {
                     crate::ArrayConstantValue::Bits(n)
-                        if *element_type == crate::ArrayElement::Number =>
+                        if matches!(
+                            element_type,
+                            crate::ArrayElement::Number | crate::ArrayElement::NullableNumber
+                        ) =>
                     {
                         ciq_prg::data::arrays::Value::Number(*n)
                     }
                     crate::ArrayConstantValue::Bits(n) => ciq_prg::data::arrays::Value::Char(*n),
+                    crate::ArrayConstantValue::Null => ciq_prg::data::arrays::Value::Null,
                     crate::ArrayConstantValue::String(s) => {
                         let index = pool.iter().position(|p| p.value == *s).unwrap_or_else(|| {
                             let index = pool.len();

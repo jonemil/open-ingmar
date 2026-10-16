@@ -1,0 +1,31 @@
+[1, null, 3]
+1
+null
+[null, 2, 3, null, 4, 5, null]
+0
+true
+true
+[2, 3, 4, 5]
+[5, 4, 3, 2]
+[2, 3]
+2
+null
+0
+0
+[null, 2, null]
+[null, 2, null]
+[null, two, three, null, four, null]
+null
+two
+0
+true
+true
+[four, three, two]
+[two, three]
+[null]
+text
+text
+[yes, null, tail]
+text
+[null, null, tail]
+1

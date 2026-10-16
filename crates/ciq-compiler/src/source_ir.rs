@@ -729,10 +729,13 @@ impl Builder<'_> {
     /// Construct a typed array using a flat constant load for literal tokens,
     /// otherwise allocating before ordered element evaluation.
     /// A private builder prevents uninitialized slots from escaping as values;
-    /// branching elements use a staging local with empty-stack CFG edges.
+    /// branching elements stage values with empty-stack CFG edges. A nullable
+    /// expected contract permits Null and the base type without widening an
+    /// existing Array reference; its staging locals retain each operand's type.
     fn array_literal(
         &mut self,
         elements: Vec<parser::Expression>,
+        expected: Option<crate::ArrayElement>,
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
@@ -748,23 +751,31 @@ impl Builder<'_> {
             .iter()
             .map(|e| match e.kind {
                 parser::ExpressionKind::Integer(n) => Some((
-                    crate::ArrayElement::Number,
+                    Some(crate::ArrayElement::Number),
                     crate::ArrayConstantValue::Bits(n as u32),
                 )),
                 parser::ExpressionKind::Char(c) => Some((
-                    crate::ArrayElement::Char,
+                    Some(crate::ArrayElement::Char),
                     crate::ArrayConstantValue::Bits(c),
                 )),
                 parser::ExpressionKind::String(ref s) => Some((
-                    crate::ArrayElement::String,
+                    Some(crate::ArrayElement::String),
                     crate::ArrayConstantValue::String(s.clone()),
                 )),
+                parser::ExpressionKind::Null => Some((None, crate::ArrayConstantValue::Null)),
                 _ => None,
             })
             .collect::<Option<Vec<_>>>();
         if let Some(values) = constant {
-            let element_type = values[0].0;
-            if values.iter().all(|v| v.0 == element_type) {
+            let element_type = expected.or(values[0].0);
+            if let Some(element_type) = element_type.filter(|element| {
+                values.iter().all(|v| {
+                    let actual =
+                        v.0.map(|ty| ty.api_type())
+                            .unwrap_or(crate::api::Type::Null);
+                    crate::native::accepts(&element.api_type(), &actual)
+                })
+            }) {
                 let result = ValueId(self.operations.len() as u32);
                 self.push(
                     Operation::ArrayConstant {
@@ -790,7 +801,7 @@ impl Builder<'_> {
         }
         let builder = crate::BuilderId(self.local_id(span)?.0);
         let grouped = elements.iter().all(|e| !e.needs_materialization());
-        let element = if grouped {
+        let element = if grouped || expected.is_some() {
             None
         } else {
             Some(self.local_id(span)?)
@@ -800,7 +811,7 @@ impl Builder<'_> {
         self.push(
             Operation::ArrayBegin {
                 builder,
-                element_type: crate::ArrayElement::Char,
+                element_type: expected.unwrap_or(crate::ArrayElement::Char),
                 length,
             },
             Some(span),
@@ -808,7 +819,7 @@ impl Builder<'_> {
         for (index, expression) in elements.into_iter().enumerate() {
             let element_span = expression.span;
             let value = self.value(expression, locals)?;
-            if index == 0 {
+            if index == 0 && expected.is_none() {
                 let element_type = self
                     .types
                     .element(value)
@@ -829,8 +840,12 @@ impl Builder<'_> {
                 values.push(value);
                 continue;
             }
-            let element = element.expect("staged literals reserve an element local");
-            let store = if index == 0 {
+            let element = if expected.is_some() {
+                self.local_id(element_span)?
+            } else {
+                element.expect("staged literals reserve an element local")
+            };
+            let store = if index == 0 || expected.is_some() {
                 Operation::LocalInitialize {
                     local: element,
                     value,
@@ -901,7 +916,7 @@ impl Builder<'_> {
             E::DictionaryLiteral(entries) => {
                 return self.dictionary_literal(entries, None, span, locals);
             }
-            E::ArrayLiteral(elements) => return self.array_literal(elements, span, locals),
+            E::ArrayLiteral(elements) => return self.array_literal(elements, None, span, locals),
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
             }
@@ -1205,8 +1220,9 @@ impl Builder<'_> {
         self.value_with_context(expression, locals, None)
     }
 
-    /// Build a value, passing container contracts to empty literals or conditional arms.
-    /// Nonempty literals keep their inferred contract and undergo IR validation.
+    /// Build a value, passing container contracts into direct literals and
+    /// conditional arms. Existing Array references retain their invariant type;
+    /// nullable Array context may type a fresh literal's scalar/Null elements.
     fn value_with_context(
         &mut self,
         expression: parser::Expression,
@@ -1272,10 +1288,20 @@ impl Builder<'_> {
             );
             return Ok(result);
         }
-        let expression = if expression.needs_materialization() {
-            self.prepare(expression, locals)?
-        } else {
-            expression
+        let expression = match (expression, expected) {
+            (
+                parser::Expression {
+                    kind: parser::ExpressionKind::ArrayLiteral(elements),
+                    span,
+                },
+                Some(ConstructionType::Array(element)),
+            ) if element.nullable_base().is_some() => {
+                self.array_literal(elements, Some(element), span, locals)?
+            }
+            (expression, _) if expression.needs_materialization() => {
+                self.prepare(expression, locals)?
+            }
+            (expression, _) => expression,
         };
         let first = self.operations.len();
         let result = emit(

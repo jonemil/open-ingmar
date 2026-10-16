@@ -421,12 +421,13 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 
 `.array-constant %<result> <element> <value>... [span=<start>:<end>]` defines a
 fresh mutable array.
-The element type is `number`, `char`, or `string`; at least one element is
-required. Number/Char values use `0x` followed by exactly eight hexadecimal
+The element type is `number`, `char`, `string`, `nullable-number`, or
+`nullable-string`; at least one element is required. Number/Char values use `0x` followed by exactly eight hexadecimal
 digits, preserving their raw bits. String values are quoted text using the
 ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
 Typed IR uses `ArrayConstantValue::Bits` for Number/Char or `::String` for text;
-the payload kind must match the element contract. Mixed types and nested
+nullable contracts also permit `null` / `ArrayConstantValue::Null`. Every
+payload must match its element contract; other mixed types and nested
 containers are rejected. API checks require Array/Number/String 1.0.0 or Char
 1.3.0.
 Definition/use and ordered-effect checks include this allocation.
@@ -437,7 +438,8 @@ pool entry for equal String text, and bind the outer
 tag offset. Raw CODE output requires an explicit matching DATA source; it does
 not allocate DATA. A new mutable array is loaded on every execution, even when
 the same record is referenced repeatedly. Source selection is limited to
-homogeneous literal tokens; computed/effectful elements use private builders.
+literal tokens matching the element contract; computed/effectful elements use
+private builders.
 
 ## Private array construction
 
@@ -454,12 +456,14 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
 ```
 
 - `.array-begin &<builder> <element> <length>` allocates the final length.
-  Element contracts are `char`, `number`, `string`, or `view`; length is decimal, positive,
-  and fits a nonnegative Number. Builder declarations are unique within a
+  Element contracts are `char`, `number`, `string`, `view`, `nullable-number`,
+  or `nullable-string`; length is decimal, positive, and fits a nonnegative Number. Builder declarations are unique within a
   function. Allocation remains ordered and may fail before element effects.
 - `.array-fill &<builder> <index> %<value>` initializes the next slot.
   The decimal index must equal the number of slots already filled and be less
-  than the declared length. The value must match the element contract.
+  than the declared length. The value must be assignable to the element contract. Nullable contracts
+  accept the base scalar, Null, or their union without weakening null checks
+  for non-null builders.
 - `.array-fill-many &<builder> <start> %<value>...` initializes a nonempty group
   of consecutive remaining slots, evaluating and storing each value before
   the next. Start and group length must fit the remaining construction range.
@@ -596,7 +600,7 @@ ciq-ir
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
-`number-array`, `string-array`,
+`number-array`, `string-array`, `nullable-number-array`, `nullable-string-array`,
 `nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1017,7 +1021,9 @@ Source, typed, and text paths use the same operation and VM lowering.
 ## Nullable callback state
 
 Instance-function metadata may include
-`parameter-types=integer:string:boolean:char:view:dc:char-array:number-array:string-array:view-array:...`.
+`parameter-types=...` with colon-separated scalar/Array contracts.
+Array categories include `char-array`, `number-array`, `string-array`,
+`nullable-number-array`, `nullable-string-array`, and `view-array`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
 the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -1212,11 +1218,12 @@ and types are rejected. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
 Char and Array values use `char`, `char-array`, `number-array`, `string-array`,
-or `view-array`
+`nullable-number-array`, `nullable-string-array`, or `view-array`
 in parameter/user-call metadata, with `result=<category>` for valued calls.
 Function result categories are inferred from returns; those categories are not
 `.function result=` fields. Each chained call checks the preceding result's type.
-Nullable arrays/Char and unsupported elements cannot be introduced by text edits.
+Nullable Array receivers, nullable Char values, and unsupported element types
+cannot be introduced by text edits.
 
 Arithmetic and comparison directives enforce the same
 [operator contracts](compiler-subset.md#operator-contracts) as source, including
