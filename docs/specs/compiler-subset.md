@@ -854,6 +854,21 @@ current contents and produces a String unaffected by later Dictionary mutation.
 Entry order is unspecified. Conversion uses ordinary native dispatch and String
 result contracts, including chaining and discarded results.
 
+Opaque and typed references also inherit `equals(other)` → Boolean and
+`hashCode()` → Number from Object, since API 1.0.0. Equality tests Dictionary
+identity, including across different key/value contracts; separate dictionaries
+with equal contents compare unequal. Supported arguments are bounded typed or
+opaque Dictionary references, supported scalars, Null, and their supported
+nullable forms. Array and source/native object arguments remain outside this
+profile. Nullable callback Dictionary arguments need no guard; a nullable
+receiver requires a non-null proof.
+
+A Dictionary hash remains stable across mutations and agrees for shared
+references. The runtime supplies its value; distinct objects need not have
+different hashes. Both methods use ordinary native calls, preserve receiver then
+argument evaluation, and support discarded results. Scalar receivers retain
+[their own equality argument profile](#native-value-calls).
+
 Typed references additionally support the following API 1.0.0 contracts:
 
 | Form | Result |
@@ -891,7 +906,7 @@ non-null proof; unguarded access is rejected. Its nullable declaration/assignmen
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.
 
-Dictionary equality, conditional Dictionary joins, direct printing,
+Dictionary `==`/`!=`, conditional Dictionary joins, direct printing,
 `new Dictionary()`, and the other methods remain unsupported. No key
 or value contract is inferred from an empty literal without context. See
 [the example](../../examples/compiler-dictionary/README.md) and
@@ -905,8 +920,8 @@ typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
 contracts before acceptance. Wider numeric values follow their core type
-prerequisites. Inherited Object methods need Dictionary-specific contracts and
-runtime evidence.
+prerequisites. Object `method` and ordinary `weak` need callable/weak-reference
+contracts before accepting their results.
 
 
 ## Native value calls

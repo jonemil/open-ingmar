@@ -1,6 +1,53 @@
 using Toybox.Application;
 using Toybox.System;
 module Dictionaries {
+    function same(left as Toybox.Lang.Dictionary, right as Toybox.Lang.Dictionary)
+        as Toybox.Lang.Boolean { return left.equals(right); }
+    function comparison(value as Toybox.Lang.Dictionary) as Toybox.Lang.Dictionary {
+        System.println("argument"); return value;
+    }
+    function identity() as Void {
+        var empty = {};
+        var sharedEmpty = empty;
+        System.println(empty.equals(empty));
+        System.println(empty.equals(sharedEmpty));
+        System.println(empty.equals({}));
+        System.println(empty.equals(null));
+        System.println(empty.equals(1));
+        System.println(empty.equals("dictionary"));
+        System.println(empty.equals(false));
+        System.println(empty.equals('A'));
+        System.println(empty.hashCode() == sharedEmpty.hashCode());
+        var one = {"one" => 1};
+        var equalContents = {"one" => 1};
+        System.println(one.equals(equalContents));
+        System.println(one.equals(empty));
+        var copied = one;
+        var hash = one.hashCode();
+        one["one"] = 41;
+        one.put("two", 2);
+        System.println(one.equals(copied));
+        System.println(hash == one.hashCode());
+        one.remove("one");
+        System.println(hash == one.hashCode());
+        System.println(Dictionaries.same(one, copied));
+        System.println(Dictionaries.same(one, equalContents));
+        System.println(one.equals({true => "yes"}));
+        System.println(one.equals({'a' => false}));
+        System.println(Dictionaries.receiver(one).equals(Dictionaries.comparison(copied)));
+        Dictionaries.receiver(one).hashCode();
+        Dictionaries.receiver(one).equals(Dictionaries.comparison(equalContents));
+        var absent = "bad".toNumber();
+        System.println(one.equals(absent));
+        var number = "41".toNumber();
+        System.println(one.equals(number));
+        var text = "hello".substring(0, 1);
+        System.println(one.equals(text));
+        var boolean = true ? false : null;
+        System.println(one.equals(boolean));
+        var character = true ? 'A' : null;
+        System.println(one.equals(character));
+    }
     function flags() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Boolean> {
         return {"one" => false, "two" => true};
     }
@@ -338,6 +385,9 @@ class MinimalConsoleApp extends Application.AppBase {
         Dictionaries.strings();
         Dictionaries.arrays();
         Dictionaries.scalarValues();
+        Dictionaries.identity();
+        System.println(d.equals(state));
+        if (state != null) { System.println(state.hashCode() == state.hashCode()); }
         System.exit();
     }
 }

@@ -1,5 +1,31 @@
 # Dictionary construction and operations
 
+## Identity and hashing
+
+**Officially documented:** [Object][object-api] declares `equals(Object or Null)`
+and `hashCode()` at API 1.0.0. Hashes remain constant during an object's lifetime,
+and equal objects must have equal hashes. These declarations alone do not define
+Dictionary equality as content equality.
+
+**Observed (2026-10-16):** SDK 9.2.0 / `fr265` and our generated
+[specimen](../../examples/compiler-dictionary/README.md) agree: shared Dictionary
+references compare equal, while distinct empty or equal-content dictionaries do
+not. Comparison with supported scalars and Null returns false. Generic key/value
+contracts do not change runtime identity. Repeated hashes agree through entry
+replacement, insertion, and removal. Tests compare hash consistency without
+assuming particular values or uniqueness. Native symbol IDs reuse `equals`
+`0x008000b3` and `hashCode` `0x008000ad`.
+
+Effect markers establish receiver-before-argument evaluation once, including
+discarded results. Nullable scalar and launch-state arguments execute; the
+launch state is Null. A guarded non-null callback hash type-checks but is not
+exercised by this launch. Both PRGs reconstruct through structured CODE/DATA.
+Artifacts: `scratch/check-dictionary-identity/`. Reproduce with the shared console
+checker and the example's SDK build. Array comparisons and ordinary weak
+references were not established by this probe.
+
+[object-api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+
 ## Boolean and Char values
 
 **Observed (2026-10-16):** SDK 9.2.0 / `fr265` accepts typed Boolean/Char values,

@@ -12,22 +12,20 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Establish inherited Object equality/hash contracts with
-   Dictionary-specific evidence. Ordinary weak references belong to the shared
-   Object work below. Keep heterogeneous and nullable results explicit; follow
-   the [source contracts](specs/compiler-subset.md#dictionary-values) and
-   [remaining extensions](specs/compiler-subset.md#planned-dictionary-extensions),
-   using the [investigation](investigations/compiler-dictionary.md) for evidence.
-   Nullable Array elements currently need explicit context; broader literal
-   inference can follow once mixed scalar/Null contracts are established.
-2. **Numeric types and deferred methods.** Add Long/Float/Double values,
+1. **Numeric types and deferred methods.** Add Long/Float/Double values,
    literals, conversions, arithmetic/promotion, and comparisons in bounded
    groups. Revisit Number/String/Boolean/Char methods as their required value
    types become available.
-3. **Object and callable/reference facilities.** Grow shared Object contracts,
+2. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
    comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+
+Keep heterogeneous Dictionary values, Null keys, and nested containers deferred
+under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
+Nullable Array elements currently need explicit context; broader literal
+inference can follow once mixed scalar/Null contracts are established. Dictionary
+callable and ordinary weak-reference methods belong to the shared Object work.
 
 Array sorting remains deferred until comparator/callable support. Inherited
 Array equality, hashing, and ordinary weak references need array-specific

@@ -21,6 +21,10 @@ Boolean/Char values also check nullable lookups, false-versus-Null, fresh
 constant loads, shared writes, and conditional/computed entry effects. Null-only
 Boolean/Char dictionaries use explicit context; inferred mixed scalar/Null
 entries retain their nullable value contracts.
+Inherited `equals`/`hashCode` check shared/distinct identity, equal-content
+allocations, hash stability across mutation, cross-contract and nullable
+arguments, and receiver/argument effects. No particular hash value or collision
+behavior is assumed.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 
@@ -33,6 +37,7 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-Inherited Object methods and wider value groups remain planned. See
+Object callable/weak-reference methods and wider numeric value groups remain
+planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).

@@ -74,7 +74,7 @@ fn opaque_receivers_do_not_invent_generic_contracts_or_enable_lowering() {
     for source in [
         "function f(d as Toybox.Lang.Dictionary) { return d.get(\"one\"); }",
         "function f(d as Toybox.Lang.Dictionary) { d.put(\"one\", 1); return 0; }",
-        "function f(d as Toybox.Lang.Dictionary) { return d.hashCode(); }",
+        "function f(d as Toybox.Lang.Dictionary) { return d.hashCode(1); }",
     ] {
         assert!(ciq_compiler::compile(source).is_err(), "accepted {source}");
     }

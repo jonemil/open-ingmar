@@ -166,6 +166,11 @@ pub(crate) fn value_call(
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
             | (
                 "Toybox.Lang.Dictionary",
+                "Toybox.Lang.Object",
+                "equals" | "hashCode"
+            )
+            | (
+                "Toybox.Lang.Dictionary",
                 "Toybox.Lang.Dictionary",
                 "size"
                     | "isEmpty"
@@ -251,12 +256,25 @@ pub(crate) fn value_call(
             return Err("Array.slice requires Number or Null bounds".into());
         }
     }
-    if member == "equals" && !scalar_or_null(&arguments[0]) {
+    if member == "equals"
+        && !scalar_or_null(&arguments[0])
+        && !(class == "Toybox.Lang.Dictionary" && dictionary_or_null(&arguments[0]))
+    {
         return Err(format!(
-            "{class}.equals lowering currently requires scalar or nullable scalar arguments"
+            "{class}.equals argument is outside its supported comparison profile"
         ));
     }
     Ok(signature.result)
+}
+
+fn dictionary_or_null(ty: &api::Type) -> bool {
+    match ty {
+        api::Type::Null => true,
+        api::Type::Named(name) => name == "Toybox.Lang.Dictionary",
+        api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),
+        api::Type::Union(types) => types.iter().all(dictionary_or_null),
+        _ => false,
+    }
 }
 
 fn scalar_or_null(ty: &api::Type) -> bool {
