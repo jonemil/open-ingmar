@@ -60,6 +60,8 @@ opcodes! {
     Isnull = 0x20, "isnull", [];
     Jsr = 0x23, "jsr", [2];
     Ipush4 = 0x25, "ipush4", [4];
+    Lpush = 0x31, "lpush", [8];
+    Lpushz = 0x3c, "lpushz", [];
     Spush = 0x27, "spush", [4];
     Bt = 0x28, "bt", [2];
     Bf = 0x29, "bf", [2];

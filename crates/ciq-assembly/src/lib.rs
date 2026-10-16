@@ -273,7 +273,9 @@ impl Program {
                         operands.iter().zip(opcode.operand_widths()).enumerate()
                     {
                         match operand {
-                            Operand::Bits(value) if *value >= (1u64 << (width * 8)) => {
+                            Operand::Bits(value)
+                                if *width < 8 && *value >= (1u64 << (width * 8)) =>
+                            {
                                 return Err(fail("operand exceeds field width"));
                             }
                             Operand::Symbol(alias)
@@ -556,7 +558,7 @@ impl Program {
                         at as u64
                     }
                 };
-                if value >= (1u64 << (width * 8)) {
+                if *width < 8 && value >= (1u64 << (width * 8)) {
                     return Err(self.error(index, "resolved operand exceeds field width"));
                 }
                 bytes.extend_from_slice(&value.to_be_bytes()[8 - width..]);

@@ -8,6 +8,8 @@ SDK/version and scope; they are not current feature inventories. Use
 - [Example toolchain audit](example-toolchain-audit.md): coverage of all example
   projects, unsupported opcode/record groups, and reconstruction checks.
 
+- [Long values](compiler-long-values.md): signed literals, 64-bit instruction
+  operands, typed value transport, and simulator checks.
 - [Dictionary](compiler-dictionary.md): empty allocation, native observers,
   reference calls, and outstanding constant-literal encoding.
 - [Operator coverage](compiler-operator-coverage.md): logical keyword aliases,

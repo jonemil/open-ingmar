@@ -95,11 +95,15 @@ These documented members lack executable prerequisites. Supported methods are
 listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
-- **Number:** `toDouble`, `toFloat`, and `toLong` (1.0.0) need their numeric types.
+- **Number:** `toDouble`/`toFloat` (1.0.0) need their numeric types; `toLong`
+  needs a validated conversion contract beyond Long literal/value transport.
   [Number evidence](../investigations/compiler-number-methods.md).
 - **String:** `toFloat` (1.0.0), `toDouble`, `toLong`, and `toLongWithBase` (3.1.0)
-  need those values and nullable results.
+  need Float/Double values, nullable Long, and validated conversion contracts.
   [String evidence](../investigations/compiler-string-methods.md).
+- **Long:** `abs`, `format`, `toLong`, `toNumber`, `toString`, `equals`,
+  `compareTo`, and inherited methods await grouped runtime contracts.
+  `toFloat`/`toDouble` additionally require those numeric types.
 - **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
   Method values. Ordinary `weak` (1.2.0), including Char receivers, needs
   WeakReference values/consumers; Char itself requires 1.3.0. The immutable

@@ -190,6 +190,24 @@ operand once and retains call order. Lowering emits zero, the operand, then
 wraps to the same i32 minimum in the tested runtime. See the
 [evidence](../investigations/compiler-number-negation.md).
 
+## Long constants and values
+
+`.long %<result-id> <signed-decimal-i64> [span=<start>:<end>]` produces a Long
+without Number narrowing. Decimal text permits an optional leading minus;
+source suffixes, leading plus, hexadecimal text, and values outside i64 are
+invalid. `Operation::Long` holds i64; text/native construction share the same
+scalar type and value-use checks.
+
+`long` is a parameter and user-call result tag. Functions may infer uniform Long
+returns; `.function result=long` is not a separate field. Unit calls must match
+callee signatures exactly, including Long versus Number. Locals and printing
+retain the Long type; unsupported scalar operators and container forms remain
+invalid. API checking uses `Toybox.Lang.Long`, since 1.0.0.
+
+Lower zero as `lpushz`; other values use `lpush` with one big-endian eight-byte
+operand containing the signed value's two's-complement bits. The semantic IR
+holds no split words or DATA address. Both source and saved IR use this lowering.
+
 ## Char constants
 
 `.char %<result-id> 0x<eight-hex-digits> [span=<start>:<end>]` defines Char from
@@ -603,7 +621,7 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
+The result type is `integer`, `long`, `string`, `boolean`, `char`, `char-array`,
 `number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
 `nullable-string-array`, `nullable-boolean-array`, `nullable-char-array`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, or
@@ -1031,7 +1049,7 @@ Array categories include `char-array`, `number-array`, `boolean-array`,
 `string-array`,
 `nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
 `nullable-char-array`, and `view-array`.
-Ordinary signatures also accept
+Ordinary signatures also accept `long`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is

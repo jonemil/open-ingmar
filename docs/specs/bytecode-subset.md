@@ -5,6 +5,7 @@ Evidence and provenance:
 instruction encodings occur in Hello World, Minimal Console, and the
 [control-flow specimen](../investigations/control-flow.md).
 Char constants have [separate encoding evidence](../investigations/compiler-char-literals.md).
+Long immediates have [64-bit encoding evidence](../investigations/compiler-long-values.md).
 Signed Number immediates have [boundary evidence](../investigations/compiler-number-literals.md).
 Null checks have [focused encoding/runtime evidence](../investigations/null-check-opcodes.md).
 Stacked member reads have [field-update evidence](../investigations/member-get-opcode.md).
@@ -63,6 +64,7 @@ resolution occur in assembly, without stack interpretation.
 | `2d` | `invv` | none |
 | `2e` | `dup` | 1 |
 | `30` | `getm` | none |
+| `31` | `lpush` | 8 |
 | `33` | `throw` | none |
 | `34` | `cpush` | 4 |
 | `35` | `argc` | 1 |
@@ -70,6 +72,7 @@ resolution occur in assembly, without stack interpretation.
 | `38` | `ipush1` | 1 |
 | `39` | `ipush2` | 2 |
 | `3a` | `ipush3` | 3 |
+| `3c` | `lpushz` | none |
 | `3e` | `btpush` | none |
 | `3f` | `bfpush` | none |
 | `40` | `apush` | 4 |

@@ -167,6 +167,7 @@ pub(crate) enum ExpressionKind {
     Null,
     Boolean(bool),
     Integer(i32),
+    Long(i64),
     String(String),
     Local(String),
     ModuleCall {
@@ -234,6 +235,7 @@ enum Kind<'a> {
     Char(u32),
     Word(&'a str),
     Integer(&'a str),
+    Long(&'a str),
     String(&'a str),
     Punctuation(char),
     EqualEqual,
@@ -501,7 +503,12 @@ impl<'a> Parser<'a> {
             Some(c) if c.is_ascii_digit() => {
                 let length = rest.bytes().take_while(u8::is_ascii_digit).count();
                 self.offset += length;
-                Kind::Integer(&rest[..length])
+                if matches!(rest.as_bytes().get(length), Some(b'l' | b'L')) {
+                    self.offset += 1;
+                    Kind::Long(&rest[..length])
+                } else {
+                    Kind::Integer(&rest[..length])
+                }
             }
             Some('<' | '>') if rest.starts_with("<<=") || rest.starts_with(">>=") => {
                 self.offset += 3;
@@ -818,6 +825,15 @@ impl<'a> Parser<'a> {
         self.node(ExpressionKind::Positive(Box::new(operand)), span)
     }
     fn unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        if matches!(self.peek()?, Kind::Punctuation('+' | '-' | '~' | '!')) {
+            self.prefix_unary(depth)
+        } else {
+            self.primary(depth)
+        }
+    }
+
+    // Keep prefix parsing off the stack of ordinary nested calls.
+    fn prefix_unary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         if self.peek()? == Kind::Punctuation('+') {
             return self.positive(depth);
         }
@@ -842,6 +858,17 @@ impl<'a> Parser<'a> {
         let sign = self.token()?;
         if depth >= 64 {
             return Err(self.error(sign.span.start, "expression nesting exceeds 64 levels"));
+        }
+        if let Kind::Long(digits) = self.peek()? {
+            let magnitude = self.token()?;
+            return self.long_literal(
+                digits,
+                Span {
+                    start: sign.span.start,
+                    end: magnitude.span.end,
+                },
+                true,
+            );
         }
         if let Kind::Integer(digits) = self.peek()? {
             let magnitude = self.token()?;
@@ -1083,6 +1110,28 @@ impl<'a> Parser<'a> {
         Ok((arguments, end))
     }
 
+    /// Parse a signed Long token without enlarging recursive expression frames.
+    /// Negative source literals may include i64::MIN and require a grouped receiver.
+    fn long_literal(
+        &mut self,
+        digits: &str,
+        span: Span,
+        negative: bool,
+    ) -> Result<Expression, Diagnostic> {
+        let value = digits
+            .parse::<i128>()
+            .ok()
+            .and_then(|value| i64::try_from(if negative { -value } else { value }).ok())
+            .ok_or_else(|| self.error(span.start, "Long literal exceeds signed 64-bit range"))?;
+        if negative && self.peek()? == Kind::Punctuation('.') {
+            return Err(self.error(
+                span.start,
+                "parenthesize a negative literal before a member call",
+            ));
+        }
+        self.node(ExpressionKind::Long(value), span)
+    }
+
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
@@ -1092,6 +1141,7 @@ impl<'a> Parser<'a> {
                     .map_err(|error| self.error(token.span.start, error.to_string()))?;
                 self.node(ExpressionKind::String(fields[0][1..].into()), token.span)
             }
+            Kind::Long(digits) => self.long_literal(digits, token.span, false),
             Kind::Integer(digits) => {
                 let value = digits.parse::<i32>().map_err(|_| {
                     self.error(
@@ -1598,6 +1648,7 @@ impl Parser<'_> {
                     let at = self.offset;
                     let ty = match self.path()?.as_str() {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
+                        "Toybox.Lang.Long" => crate::ParameterType::Long,
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
@@ -1621,6 +1672,7 @@ impl Parser<'_> {
                             && !matches!(
                                 name,
                                 "Number"
+                                    | "Long"
                                     | "String"
                                     | "Boolean"
                                     | "Char"
@@ -1663,6 +1715,7 @@ impl Parser<'_> {
             let at = self.offset;
             let ty = match self.path()?.as_str() {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
+                "Toybox.Lang.Long" => crate::ReturnType::Long,
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
@@ -1680,6 +1733,7 @@ impl Parser<'_> {
                     && !matches!(
                         name,
                         "Number"
+                            | "Long"
                             | "String"
                             | "Boolean"
                             | "Char"

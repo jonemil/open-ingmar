@@ -446,6 +446,7 @@ fn build_core() -> Catalogue {
     for name in [
         object,
         number,
+        "Toybox.Lang.Long",
         string,
         "Toybox.Lang.Boolean",
         "Toybox.Lang.Char",

@@ -149,6 +149,10 @@ fn emit(
             result: ValueId(operations.len() as u32),
             value,
         },
+        parser::ExpressionKind::Long(value) => Operation::Long {
+            result: ValueId(operations.len() as u32),
+            value,
+        },
         parser::ExpressionKind::Integer(value) => Operation::Integer {
             result: ValueId(operations.len() as u32),
             value,

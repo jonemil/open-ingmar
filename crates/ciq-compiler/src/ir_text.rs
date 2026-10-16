@@ -115,6 +115,7 @@ pub(crate) fn parse_ir_context(
                         "nullable-boolean" => Ok(crate::ParameterType::NullableBoolean),
                         "nullable-char" => Ok(crate::ParameterType::NullableChar),
                         "integer" => Ok(crate::ParameterType::Integer),
+                        "long" => Ok(crate::ParameterType::Long),
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
@@ -197,6 +198,7 @@ pub(crate) fn parse_ir_context(
             Some(".assign-self") => (39, 3),
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
+            Some(".long") => (74, 3),
             Some(".increment") => (62, 3),
             Some(".decrement") => (63, 3),
             Some(".positive") => (55, 3),
@@ -831,6 +833,19 @@ pub(crate) fn parse_ir_context(
             Operation::Println {
                 value: parse_value(&fields[1])?,
             }
+        } else if kind == 74 {
+            let digits = &fields[2];
+            let magnitude = digits.strip_prefix('-').unwrap_or(digits);
+            if magnitude.is_empty() || !magnitude.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(fail(
+                    *at,
+                    "long requires decimal digits with optional leading minus",
+                ));
+            }
+            Operation::Long {
+                result: parse_value(&fields[1])?,
+                value: digits.parse().map_err(|_| fail(*at, "long exceeds i64"))?,
+            }
         } else if kind == 0 {
             let digits = &fields[2];
             let magnitude = digits.strip_prefix('-').unwrap_or(digits);
@@ -956,6 +971,7 @@ fn call_contract(
             "nullable-boolean" => crate::ReturnType::NullableBoolean,
             "nullable-char" => crate::ReturnType::NullableChar,
             "integer" => crate::ReturnType::Integer,
+            "long" => crate::ReturnType::Long,
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
             "char" => crate::ReturnType::Char,

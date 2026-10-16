@@ -32,7 +32,8 @@ Known references bind after target layout. Symbol IDs, DATA string/array offsets
 and CODE labels have separate reference kinds. CODE labels bind methods, line
 metadata, branches, and exception targets. Unknown or ambiguous references retain
 numeric representations. Numeric operands preserve bits without implying that
-the referenced object is valid or relocatable.
+the referenced object is valid or relocatable. Literal operands use u64 and must
+fit the selected field width; an eight-byte field accepts every u64 bit pattern.
 
 Unplaced inline string/array declarations are content requirements. The compiler's
 DATA binders require unique matching records; the assembly encoder itself checks

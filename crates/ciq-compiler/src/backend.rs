@@ -116,6 +116,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Char { result, .. }
             | Operation::String { result, .. }
             | Operation::Integer { result, .. }
+            | Operation::Long { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
@@ -719,6 +720,10 @@ fn expression(
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
                 ),
                 Operation::Integer { value, .. } => integer(*value),
+                Operation::Long { value: 0, .. } => (Opcode::Lpushz, vec![]),
+                Operation::Long { value, .. } => {
+                    (Opcode::Lpush, vec![Operand::Bits(*value as u64)])
+                }
                 Operation::ObjectCall {
                     receiver,
                     member,

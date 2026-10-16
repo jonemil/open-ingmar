@@ -276,6 +276,7 @@ pub enum ReturnType {
     TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
+    Long,
     NullableInteger,
     String,
     NullableString,
@@ -299,6 +300,7 @@ pub enum ParameterType {
     TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
+    Long,
     NullableInteger,
     String,
     NullableString,
@@ -326,6 +328,7 @@ impl ParameterType {
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
+            Self::Long => ValueType::Long.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
@@ -350,6 +353,7 @@ impl ReturnType {
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
+            Self::Long => ValueType::Long.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
@@ -369,6 +373,7 @@ enum ValueType {
     TypedDictionary(DictionaryType),
     Dictionary,
     Integer,
+    Long,
     NullableInteger,
     String,
     NullableString,
@@ -401,6 +406,7 @@ impl ValueType {
     fn api_type(self) -> api::Type {
         match self {
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
+            Self::Long => api::Type::named("Toybox.Lang.Long"),
             Self::NullableInteger => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Number"),
                 api::Type::Null,
@@ -448,6 +454,7 @@ impl ValueType {
             api::Type::Named(name) => match name.as_str() {
                 "Toybox.Graphics.FontDefinition" => Some(Self::FontDefinition),
                 "Toybox.Lang.Number" => Some(Self::Integer),
+                "Toybox.Lang.Long" => Some(Self::Long),
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
                 "Toybox.Lang.Char" => Some(Self::Char),
@@ -678,6 +685,11 @@ pub enum Operation {
     Negate {
         result: ValueId,
         operand: ValueId,
+    },
+    /// Produce a signed 64-bit Long without narrowing to a Number.
+    Long {
+        result: ValueId,
+        value: i64,
     },
     /// Define a Char from its raw 32-bit representation. This preserves VM bits,
     /// including values outside Unicode scalar ranges; source literals are narrower.
@@ -1429,6 +1441,10 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::Integer { result, .. } => (Some(result), vec![]),
+                Operation::Long { result, .. } => {
+                    types.insert(result, ValueType::Long);
+                    (Some(result), vec![])
+                }
                 Operation::Null { result } => {
                     types.insert(result, ValueType::Null);
                     (Some(result), vec![])
@@ -1465,10 +1481,9 @@ impl Function {
                             | ValueType::String
                             | ValueType::Boolean
                             | ValueType::Char
+                            | ValueType::Long
                     ) {
-                        return Err(fail(
-                            "println currently accepts only Number, String, Boolean, or Char",
-                        ));
+                        return Err(fail("println requires a supported non-null scalar"));
                     }
                     (None, vec![value])
                 }
@@ -1955,6 +1970,7 @@ impl Function {
                     } else {
                         match type_of(value) {
                             ValueType::Integer => ReturnType::Integer,
+                            ValueType::Long => ReturnType::Long,
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
@@ -2278,6 +2294,7 @@ impl Function {
                             ParameterType::NullableBoolean => "nullable-boolean",
                             ParameterType::NullableChar => "nullable-char",
                             ParameterType::Integer => "integer",
+                            ParameterType::Long => "long",
                             ParameterType::String => "string",
                             ParameterType::Boolean => "boolean",
                             ParameterType::Char => "char",
@@ -2403,6 +2420,7 @@ impl Function {
                     format!(".assign-self {field} %{}", value.0)
                 }
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
+                Operation::Long { result, value } => format!(".long %{} {value}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)
                 }
@@ -2785,6 +2803,7 @@ fn validate_call_arguments(
                     | ValueType::String
                     | ValueType::Boolean
                     | ValueType::Char
+                    | ValueType::Long
                     | ValueType::Object(_)
                     | ValueType::Array(_)
                     | ValueType::Dictionary
@@ -2812,6 +2831,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NullableBoolean => Ok(ValueType::NullableBoolean),
         ReturnType::NullableChar => Ok(ValueType::NullableChar),
         ReturnType::Integer => Ok(ValueType::Integer),
+        ReturnType::Long => Ok(ValueType::Long),
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
@@ -2836,6 +2856,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::NullableBoolean => " result=nullable-boolean",
         ReturnType::NullableChar => " result=nullable-char",
         ReturnType::Integer => "",
+        ReturnType::Long => " result=long",
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",

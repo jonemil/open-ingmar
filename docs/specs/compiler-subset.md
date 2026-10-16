@@ -28,7 +28,7 @@ function = "function" identifier "(" parameter-list? ")" ("as" result-type)? blo
 block = "{" statement* "}"
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
-value-type = "Toybox.Lang.Number" | "Toybox.Lang.String"
+value-type = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char" | "Toybox.Lang.Dictionary"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
@@ -294,18 +294,18 @@ IDs need not be contiguous; their numeric values never select physical slots.
 ## Function type contracts
 
 Ordinary source parameters default to Number. `as` annotations accept the fully
-qualified names `Toybox.Lang.Number`, `Toybox.Lang.String`,
+qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.String`,
 `Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
 `Void`. Native short names, module aliases in annotations, and general unions
 are outside this subset. Unqualified declared source View names additionally
 provide [exact source contracts](compiler-classes.md#source-class-signatures).
-All four scalar annotations additionally accept the exact suffix `or Null`
+Number, String, Boolean, and Char annotations additionally accept `or Null`
 for both parameters and results. Reversed alternatives, parenthesized unions,
 and other type syntax remain unsupported. These declarations require no `using`
 statement.
 
 Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. String, Boolean, Char, View, array, and
+value returns have a Void contract. Long, String, Boolean, Char, View, array, and
 nullable source results require explicit annotations. Each return must be
 assignable to its contract:
 a nullable result accepts its scalar type, Null, or the same union. Unrelated
@@ -798,6 +798,28 @@ a redraw of the current View and follows the same alias/validation rules.
 Runtime exit invokes a supplied source `onStop` callback in the
 validated console app; its unguarded Dictionary-or-null state is not a user-call argument.
 
+## Long values
+
+Long is a signed 64-bit scalar, distinct from Number, available since API 1.0.0.
+Decimal literals end in `l` or `L`; values must fit i64, including
+`-9223372036854775808l` and `9223372036854775807l`. An unsuffixed token retains
+Number's signed 32-bit limit. A minus immediately applied to a Long token forms
+a negative literal under the same spacing/postfix restrictions as Number.
+General Long unary operators are not enabled by this literal rule.
+
+Explicit `Toybox.Lang.Long` parameters/results, local copies/reassignment,
+module/instance calls, discarded calls, repeated construction, and
+`System.println` preserve all 64 bits. Long and Number contracts do not
+implicitly convert. Unannotated source returns still require Number; inferred
+IR returns can carry Long.
+
+Arithmetic, comparison, promotion, native Long methods/conversions, nullable
+Long, Long Array/Dictionary elements, conditional Long joins, and Long fields
+remain deferred. Existing native scalar argument profiles remain bounded to
+their documented types. See the
+[example](../../examples/compiler-long-values/README.md) and
+[encoding/runtime evidence](../investigations/compiler-long-values.md).
+
 ## Dictionary values
 
 `{}` creates a fresh empty `Toybox.Lang.Dictionary` (API 1.0.0). Whitespace and
@@ -858,7 +880,7 @@ Opaque and typed references also inherit `equals(other)` → Boolean and
 `hashCode()` → Number from Object, since API 1.0.0. Equality tests Dictionary
 identity, including across different key/value contracts; separate dictionaries
 with equal contents compare unequal. Supported arguments are bounded typed or
-opaque Dictionary references, supported scalars, Null, and their supported
+opaque Dictionary references, Number/String/Boolean/Char, Null, and their supported
 nullable forms. Array and source/native object arguments remain outside this
 profile. Nullable callback Dictionary arguments need no guard; a nullable
 receiver requires a non-null proof.
