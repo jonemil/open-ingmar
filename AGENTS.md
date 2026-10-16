@@ -45,5 +45,8 @@
 - Keep this file lightweight. Put detailed plans and technical specifications in
   `docs/` and link them here as needed.
 - When profiling development time, follow [workflow measurement](docs/workflow-measurement.md).
+- Reuse the [workspace validation runner](scripts/README.md#workspace-validation)
+  for final checks; overlap independent checks and documentation work, and use
+  completion-aware waiting instead of fixed sleeps.
 
 [EU Directive 2009/24/EC]: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024

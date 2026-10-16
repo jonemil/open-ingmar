@@ -19,7 +19,11 @@ for overlapping background work before changing these checks.
 3. Implement the affected stages and run focused tests. After parser/AST edits,
    run existing nesting/depth tests early; after frame allocation changes, run
    slot-boundary tests early. Preserve the supported limits.
-4. Run the applicable final checks below. Update each fact in its authoritative
+4. Once implementation is stable, start the applicable final checks below with
+   the [workspace runner](../scripts/README.md#workspace-validation). Keep Cargo
+   checks serial; run the freshly built example audit alongside them. Prepare
+   documentation and the final summary while checks run, then inspect the verdict.
+   Update each fact in its authoritative
    document: architecture for component boundaries, specs for contracts and
    rationale, investigations for evidence, plan for remaining work. Link instead
    of repeating explanations.
@@ -62,5 +66,9 @@ output should give a verdict and report/log location; inspect focused diagnostic
 on failure or when investigating unknown behavior. Preserve subprocess failure
 statuses and use fresh capture directories so stale output cannot pass a check.
 Batch independent checks when practical, while keeping simulator sessions serial.
+Use the runner's completion-aware `wait` in its container instead of fixed sleep
+and status-poll loops. Reuse its per-job timing report; do not generate another
+final-check script for each feature. Changes after launching checks require
+repeating only the checks affected by those changes.
 Do not add a helper for a trivial one-off command or repeat it manually after its
 equivalent automated check passes.

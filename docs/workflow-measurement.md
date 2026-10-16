@@ -3,8 +3,11 @@
 Measure where a development turn spends elapsed time before changing the work
 cycle. Use existing session metadata and timers inside helpers; avoid extra
 agent calls just to record timestamps. Keep raw events and reports in ignored
-`scratch/workflow/`. Collection currently uses local pilot scripts there;
-there is no supported reporting CLI or stable session-log schema dependency.
+`scratch/workflow/`. Session-level collection currently uses local pilot scripts
+there, without a supported session-reporting CLI or stable log-schema dependency.
+The [workspace validation runner](../scripts/README.md#workspace-validation)
+provides reusable per-check timing and outcome records, including overlapping
+Cargo and audit lanes. Session-level classification remains a separate pilot.
 
 ## Activity categories
 

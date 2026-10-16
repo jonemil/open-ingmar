@@ -1,5 +1,58 @@
 # SDK support scripts
 
+## Workspace validation
+
+Run focused tests while editing. Once implementation is stable, use the reusable
+final-check runner in the Rust environment:
+
+```sh
+python3 scripts/check-workspace.py run --output scratch/workspace-checks/new-run \
+  --audit --sdk-index scratch/example-audit/sdk-index.json --rustdoc --msrv
+```
+
+Output must be a new directory. Default checks are workspace tests, Clippy, and
+formatting. Select `--audit` for language/binary changes, `--rustdoc` for public
+API/docs changes, and `--msrv` when the declared minimum Rust version needs
+checking. MSRV is read from the workspace manifest. The SDK index has the same
+meaning as in the [example audit](#example-toolchain-audit); omit it to use the
+audit's specimen discovery. The runner does not rebuild SDK specimens or run
+simulators, and it is not added to CI.
+
+With `--audit`, it builds the required tools first, then runs the audit alongside
+the serial Cargo checks. This avoids concurrent Cargo commands contending for
+the same build directory. Every selected lane must succeed; one failing lane
+stops its remaining checks while independent lanes finish. Logs and an atomically
+updated `report.json` retain each job's actual status, category, timestamps, and
+monotonic duration. Timings overlap and must not be added as sequential elapsed
+time. Start one final runner per checkout; do not edit code while it checks it.
+
+The command can run in the background using ordinary shell job control. While it
+runs, prepare documentation and the final response. To wait without fixed sleeps,
+use the same Linux container/PID namespace:
+
+```sh
+python3 scripts/check-workspace.py wait scratch/workspace-checks/new-run --timeout 45
+```
+
+Waiting returns immediately on runner exit, or after the requested timeout:
+exit 0 means success, 1 means failure/incomplete reporting, and 2 means still
+running. A completed report retains its nonzero failure code. Linux pidfd support
+is required only for waiting; other environments can run checks in the foreground.
+Reading a successful subprocess exit alone never substitutes for the final
+selected-check verdict or simulator acceptance.
+
+Use the same reporting for individual SDK, simulator, or other commands instead
+of creating a timing script per feature:
+
+```sh
+python3 scripts/check-workspace.py command --output scratch/checks/sdk-build \
+  --category sdk.build -- sh scripts/build-example.sh scratch/compiler-dictionary
+```
+
+Arguments after `--` run directly, without an implicit shell. The command's exit
+status and category are retained. Use the categories in the
+[measurement protocol](../docs/workflow-measurement.md#activity-categories).
+
 ## Console specimen check
 
 For examples with one documented complete-PRG compiler command and nonempty
