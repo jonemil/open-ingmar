@@ -1,6 +1,84 @@
 using Toybox.Application;
 using Toybox.System;
 module NullableArrays {
+    function booleans() as Toybox.Lang.Array<Toybox.Lang.Boolean or Null> {
+        return [false, null, true];
+    }
+    function chars() as Toybox.Lang.Array<Toybox.Lang.Char or Null> {
+        return ['A', null, 'C'];
+    }
+    function emptyBoolean() as Toybox.Lang.Array<Toybox.Lang.Boolean or Null> { return []; }
+    function nullChar() as Toybox.Lang.Array<Toybox.Lang.Char or Null> { return [null]; }
+    function booleanValue(value as Toybox.Lang.Boolean or Null) as Toybox.Lang.Boolean or Null {
+        System.println("boolean"); return value;
+    }
+    function charValue(value as Toybox.Lang.Char or Null) as Toybox.Lang.Char or Null {
+        System.println("char"); return value;
+    }
+    function computedBoolean(choose as Toybox.Lang.Boolean)
+        as Toybox.Lang.Array<Toybox.Lang.Boolean or Null> {
+        return [choose ? NullableArrays.booleanValue(false) : null,
+                null, NullableArrays.booleanValue(true)];
+    }
+    function computedChar(choose as Toybox.Lang.Boolean)
+        as Toybox.Lang.Array<Toybox.Lang.Char or Null> {
+        return [choose ? NullableArrays.charValue('B') : null,
+                null, NullableArrays.charValue('D')];
+    }
+    function showBoolean(value as Toybox.Lang.Boolean or Null) as Void {
+        if (value != null) { System.println(value); } else { System.println("null"); }
+    }
+    function showChar(value as Toybox.Lang.Char or Null) as Void {
+        if (value != null) { System.println(value.toNumber()); } else { System.println("null"); }
+    }
+    function scalarArrays() as Void {
+        var b = NullableArrays.booleans();
+        System.println(b.toString());
+        NullableArrays.showBoolean(b[0]);
+        NullableArrays.showBoolean(b[1]);
+        var shared = b;
+        shared[0] = null;
+        b[1] = false;
+        b.add(null).addAll([true, null]);
+        System.println(b.toString());
+        System.println(b.indexOf(null));
+        System.println(b.remove(null));
+        System.println(b.removeAll(null));
+        System.println(b.reverse().toString());
+        System.println(b.slice(0, 2).toString());
+        var before = b[0];
+        b[0] = null;
+        NullableArrays.showBoolean(before);
+        NullableArrays.showBoolean(b[0]);
+        NullableArrays.showBoolean(NullableArrays.booleans()[0]);
+        b = [];
+        System.println(b.size());
+        System.println(NullableArrays.emptyBoolean().size());
+        System.println(NullableArrays.computedBoolean(true).toString());
+        System.println(NullableArrays.computedBoolean(false).toString());
+        var c = NullableArrays.chars();
+        NullableArrays.showChar(c[0]);
+        NullableArrays.showChar(c[1]);
+        var saved = c[0];
+        c[0] = null;
+        c[1] = 'B';
+        c.add(null).addAll(['D', null]);
+        System.println(c.indexOf(null));
+        System.println(c.remove(null));
+        System.println(c.removeAll(null));
+        NullableArrays.showChar(c.reverse()[0]);
+        NullableArrays.showChar(c.slice(0, 2)[1]);
+        NullableArrays.showChar(saved);
+        NullableArrays.showChar(NullableArrays.chars()[0]);
+        NullableArrays.showChar(NullableArrays.nullChar()[0]);
+        var computed = NullableArrays.computedChar(true);
+        NullableArrays.showChar(computed[0]);
+        NullableArrays.showChar(computed[1]);
+        NullableArrays.showChar(computed[2]);
+        computed = NullableArrays.computedChar(false);
+        NullableArrays.showChar(computed[0]);
+        NullableArrays.showChar(computed[2]);
+    }
     function numbers() as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
         return [1, null, 3];
     }
@@ -73,6 +151,7 @@ class MinimalConsoleApp extends Application.AppBase {
         var first = NullableArrays.numbers();
         first[0] = null;
         NullableArrays.showNumber(NullableArrays.numbers()[0]);
+        NullableArrays.scalarArrays();
         System.exit();
     }
 }

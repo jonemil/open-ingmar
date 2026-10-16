@@ -43,7 +43,7 @@ fn boolean_element_contracts_do_not_convert_numbers_or_allow_null() {
         "function f() { var a = [true]; a.addAll([1]); }",
         "function f() { var a = [true]; a[0]++; }",
         "function f() { var a = [true]; return a[0] + 1; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean or Null>) { return a.size(); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean or Null>) { return !a[0]; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>) as Toybox.Lang.Array<Toybox.Lang.Number> { return a; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");

@@ -131,6 +131,12 @@ pub(crate) fn parse_ir_context(
                         "boolean-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Boolean))
                         }
+                        "nullable-char-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableChar,
+                        )),
+                        "nullable-boolean-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableBoolean,
+                        )),
                         "nullable-number-array" => Ok(crate::ParameterType::Array(
                             crate::ArrayElement::NullableNumber,
                         )),
@@ -476,17 +482,22 @@ pub(crate) fn parse_ir_context(
                     "boolean" => crate::ArrayElement::Boolean,
                     "string" => crate::ArrayElement::String,
                     "nullable-string" => crate::ArrayElement::NullableString,
+                    "nullable-char" => crate::ArrayElement::NullableChar,
+                    "nullable-boolean" => crate::ArrayElement::NullableBoolean,
                     _ => {
                         return Err(fail(
                             *at,
-                            "constant arrays require Number, Char, or String elements",
+                            "constant arrays require supported scalar elements",
                         ));
                     }
                 },
                 values: fields[3..width]
                     .iter()
                     .map(|s| {
-                        if fields[2] == "boolean" {
+                        if s == "null" {
+                            return Ok(crate::ArrayConstantValue::Null);
+                        }
+                        if matches!(fields[2].as_str(), "boolean" | "nullable-boolean") {
                             return match s.as_str() {
                                 "true" => Ok(crate::ArrayConstantValue::Boolean(true)),
                                 "false" => Ok(crate::ArrayConstantValue::Boolean(false)),
@@ -494,9 +505,6 @@ pub(crate) fn parse_ir_context(
                                     Err(fail(*at, "Boolean array constants require true or false"))
                                 }
                             };
-                        }
-                        if s == "null" {
-                            return Ok(crate::ArrayConstantValue::Null);
                         }
                         if matches!(fields[2].as_str(), "string" | "nullable-string") {
                             return s
@@ -526,6 +534,8 @@ pub(crate) fn parse_ir_context(
                     "nullable-number" => crate::ArrayElement::NullableNumber,
                     "string" => crate::ArrayElement::String,
                     "nullable-string" => crate::ArrayElement::NullableString,
+                    "nullable-char" => crate::ArrayElement::NullableChar,
+                    "nullable-boolean" => crate::ArrayElement::NullableBoolean,
                     "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                     _ => return Err(fail(*at, "unsupported builder element type")),
                 },
@@ -562,6 +572,8 @@ pub(crate) fn parse_ir_context(
                 "nullable-number" => crate::ArrayElement::NullableNumber,
                 "string" => crate::ArrayElement::String,
                 "nullable-string" => crate::ArrayElement::NullableString,
+                "nullable-char" => crate::ArrayElement::NullableChar,
+                "nullable-boolean" => crate::ArrayElement::NullableBoolean,
                 "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                 _ => return Err(fail(*at, "unsupported array element type")),
             };
@@ -951,6 +963,10 @@ fn call_contract(
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
+            "nullable-char-array" => crate::ReturnType::Array(crate::ArrayElement::NullableChar),
+            "nullable-boolean-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableBoolean)
+            }
             "nullable-number-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::NullableNumber)
             }

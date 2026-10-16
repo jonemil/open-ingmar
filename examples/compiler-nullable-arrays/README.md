@@ -1,9 +1,10 @@
 # Nullable Array elements
 
-[app.mc](app.mc) checks explicit Number-or-Null and String-or-Null element
-contracts, literal/computed construction, guarded reads, Null writes, native
+[app.mc](app.mc) checks explicit Number/String/Boolean/Char-or-Null
+element contracts, literal/computed construction, guarded reads, Null writes, native
 mutation/search/transforms, shared references, fresh constant loads, and empty
 or Null-only contextual literals. Markers check conditional element effects.
+Boolean checks distinguish false from Null; Char reads use guarded conversions.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 
 From the repository root, using fresh output paths:

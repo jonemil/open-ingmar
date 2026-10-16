@@ -29,3 +29,40 @@ text
 text
 [null, null, tail]
 1
+[false, null, true]
+false
+null
+[null, false, true, null, true, null]
+0
+true
+true
+[true, true, false]
+[false, true]
+false
+null
+false
+0
+0
+boolean
+boolean
+[false, null, true]
+boolean
+[null, null, true]
+65
+null
+0
+true
+true
+68
+67
+65
+65
+null
+char
+char
+66
+null
+68
+char
+null
+68

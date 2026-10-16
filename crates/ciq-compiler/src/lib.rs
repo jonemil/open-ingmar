@@ -151,6 +151,8 @@ impl NativeClass {
 pub enum ArrayElement {
     Number,
     NullableNumber,
+    NullableChar,
+    NullableBoolean,
     Char,
     Boolean,
     String,
@@ -163,8 +165,8 @@ impl ArrayElement {
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
-            Self::Char => "Toybox.Lang.Char",
-            Self::Boolean => "Toybox.Lang.Boolean",
+            Self::Char | Self::NullableChar => "Toybox.Lang.Char",
+            Self::Boolean | Self::NullableBoolean => "Toybox.Lang.Boolean",
             Self::String | Self::NullableString => "Toybox.Lang.String",
             Self::Object(class) => class.name(),
         });
@@ -178,6 +180,8 @@ impl ArrayElement {
     fn nullable_base(self) -> Option<Self> {
         match self {
             Self::NullableNumber => Some(Self::Number),
+            Self::NullableChar => Some(Self::Char),
+            Self::NullableBoolean => Some(Self::Boolean),
             Self::NullableString => Some(Self::String),
             _ => None,
         }
@@ -187,6 +191,8 @@ impl ArrayElement {
         [
             Self::Number,
             Self::NullableNumber,
+            Self::NullableChar,
+            Self::NullableBoolean,
             Self::Char,
             Self::Boolean,
             Self::String,
@@ -201,6 +207,8 @@ impl ArrayElement {
         match self {
             Self::Number => "number",
             Self::NullableNumber => "nullable-number",
+            Self::NullableChar => "nullable-char",
+            Self::NullableBoolean => "nullable-boolean",
             Self::Char => "char",
             Self::Boolean => "boolean",
             Self::String => "string",
@@ -215,6 +223,8 @@ impl ArrayElement {
         match self {
             Self::Number => "number-array",
             Self::NullableNumber => "nullable-number-array",
+            Self::NullableChar => "nullable-char-array",
+            Self::NullableBoolean => "nullable-boolean-array",
             Self::Char => "char-array",
             Self::Boolean => "boolean-array",
             Self::String => "string-array",
@@ -1571,21 +1581,25 @@ impl Function {
                         || !values.iter().all(|value| {
                             matches!(
                                 (element_type, value),
-                                (ArrayElement::Boolean, ArrayConstantValue::Boolean(_))
-                                    | (
-                                        ArrayElement::Number
-                                            | ArrayElement::NullableNumber
-                                            | ArrayElement::Char,
-                                        ArrayConstantValue::Bits(_)
-                                    )
-                                    | (
-                                        ArrayElement::String | ArrayElement::NullableString,
-                                        ArrayConstantValue::String(_)
-                                    )
-                                    | (
-                                        ArrayElement::NullableNumber | ArrayElement::NullableString,
-                                        ArrayConstantValue::Null
-                                    )
+                                (
+                                    ArrayElement::Boolean | ArrayElement::NullableBoolean,
+                                    ArrayConstantValue::Boolean(_)
+                                ) | (
+                                    ArrayElement::Number
+                                        | ArrayElement::NullableNumber
+                                        | ArrayElement::Char
+                                        | ArrayElement::NullableChar,
+                                    ArrayConstantValue::Bits(_)
+                                ) | (
+                                    ArrayElement::String | ArrayElement::NullableString,
+                                    ArrayConstantValue::String(_)
+                                ) | (
+                                    ArrayElement::NullableNumber
+                                        | ArrayElement::NullableString
+                                        | ArrayElement::NullableChar
+                                        | ArrayElement::NullableBoolean,
+                                    ArrayConstantValue::Null
+                                )
                             )
                         })
                     {
@@ -2836,6 +2850,8 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Array(ArrayElement::Boolean) => " result=boolean-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Array(ArrayElement::NullableNumber) => " result=nullable-number-array",
+        ReturnType::Array(ArrayElement::NullableChar) => " result=nullable-char-array",
+        ReturnType::Array(ArrayElement::NullableBoolean) => " result=nullable-boolean-array",
         ReturnType::Array(ArrayElement::String) => " result=string-array",
         ReturnType::Array(ArrayElement::NullableString) => " result=nullable-string-array",
         ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",

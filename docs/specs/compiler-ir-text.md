@@ -421,12 +421,13 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 
 `.array-constant %<result> <element> <value>... [span=<start>:<end>]` defines a
 fresh mutable array.
-The element type is `number`, `char`, `boolean`, `string`, `nullable-number`, or
-`nullable-string`; at least one element is required. Number/Char values use `0x` followed by exactly eight hexadecimal
+The element type is `number`, `char`, `boolean`, `string`, `nullable-number`,
+`nullable-string`, `nullable-boolean`, or `nullable-char`; at least one element
+is required. Number/Char values use `0x` followed by exactly eight hexadecimal
 digits, preserving their raw bits. String values are quoted text using the
 ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
 Boolean payloads use `true`/`false` or `ArrayConstantValue::Boolean`; numeric
-0/1 and Null do not substitute for them.
+0/1 do not substitute for them; Null requires a nullable element contract.
 Typed IR uses `ArrayConstantValue::Bits` for Number/Char or `::String` for text;
 nullable contracts also permit `null` / `ArrayConstantValue::Null`. Every
 payload must match its element contract; other mixed types and nested
@@ -459,9 +460,9 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
 
 - `.array-begin &<builder> <element> <length>` allocates the final length.
   Element contracts are `char`, `number`, `boolean`, `string`, `view`,
-  `nullable-number`,
-  or `nullable-string`; length is decimal, positive, and fits a nonnegative Number. Builder declarations are unique within a
-  function. Allocation remains ordered and may fail before element effects.
+  `nullable-number`, `nullable-string`, `nullable-boolean`, or `nullable-char`.
+  Length is decimal, positive, and fits a nonnegative Number. Builder
+  declarations are unique within a function. Allocation remains ordered and may fail before element effects.
 - `.array-fill &<builder> <index> %<value>` initializes the next slot.
   The decimal index must equal the number of slots already filled and be less
   than the declared length. The value must be assignable to the element contract. Nullable contracts
@@ -604,7 +605,7 @@ ciq-ir
 defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
 `number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
-`nullable-string-array`,
+`nullable-string-array`, `nullable-boolean-array`, `nullable-char-array`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, or
 `nullable-char`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1028,7 +1029,8 @@ Instance-function metadata may include
 `parameter-types=...` with colon-separated scalar/Array contracts.
 Array categories include `char-array`, `number-array`, `boolean-array`,
 `string-array`,
-`nullable-number-array`, `nullable-string-array`, and `view-array`.
+`nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
+`nullable-char-array`, and `view-array`.
 Ordinary signatures also accept
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
@@ -1047,7 +1049,7 @@ it also accepts the String identity profile below.
 Ordering directives permit Number/Char pairs. Callback-state reads/locals retain
 their declared nullable type; proven reads yield a non-null Dictionary.
 Printing and arithmetic reject Null and Dictionary values. Null may be used
-in nullable Number/String user contracts. Non-null Dictionary references support
+in nullable scalar user contracts. Non-null Dictionary references support
 the [allocation/call profile](#dictionary-allocation). A nullable callback
 Dictionary local may be assigned null; other
 assignments preserve the initializer type. Lowering uses `npush` for null and
@@ -1224,12 +1226,13 @@ are not compile-time evaluations.
 
 Char and Array values use `char`, `char-array`, `number-array`, `boolean-array`,
 `string-array`,
-`nullable-number-array`, `nullable-string-array`, or `view-array`
+`nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
+`nullable-char-array`, or `view-array`
 in parameter/user-call metadata, with `result=<category>` for valued calls.
 Function result categories are inferred from returns; those categories are not
 `.function result=` fields. Each chained call checks the preceding result's type.
-Nullable Array receivers, nullable Char values, and unsupported element types
-cannot be introduced by text edits.
+Nullable Array receivers and unsupported element types cannot be introduced
+by text edits.
 
 Arithmetic and comparison directives enforce the same
 [operator contracts](compiler-subset.md#operator-contracts) as source, including
@@ -1282,7 +1285,7 @@ incoming facts and every initialization/assignment kills that local's proof.
 The fixed-point analysis handles backedges without treating a later guard as
 proof for a loop's first entry.
 
-A fresh read of a nullable Number/String local or parameter under this proof
+A fresh read of a nullable scalar local or parameter under this proof
 defines its non-null type; otherwise it defines the original union. Storage
 remains nullable. Local assignment can supply Null, the non-null type, or the same union, but always
 requires another proof before non-null use. Existing effect-order, one-use,

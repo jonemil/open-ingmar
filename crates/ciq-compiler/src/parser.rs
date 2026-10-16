@@ -316,6 +316,8 @@ impl<'a> Parser<'a> {
             element = match element {
                 crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
                 crate::ArrayElement::String => crate::ArrayElement::NullableString,
+                crate::ArrayElement::Char => crate::ArrayElement::NullableChar,
+                crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,
                 _ => return Err(self.error(at, "nullable Array elements require Number or String")),
             };
         }

@@ -12,8 +12,7 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Extend nullable Boolean/Char scalar contracts to Array
-   elements and Dictionary values; keep heterogeneous and nullable
+1. **Dictionary.** Extend Boolean/Char contracts to Dictionary values; keep heterogeneous and nullable
    results explicit. Inherited Object methods need Dictionary-specific evidence.
    Follow the [source contracts](specs/compiler-subset.md#dictionary-values) and
    [remaining extensions](specs/compiler-subset.md#planned-dictionary-extensions),

@@ -904,8 +904,8 @@ contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Nullable Boolean/Char results need those core type
-prerequisites before widening the value group.
+contracts before acceptance. Boolean/Char values and their nullable forms need
+bounded Dictionary value contracts before widening that group.
 
 
 ## Native value calls
@@ -1240,9 +1240,8 @@ inherited Object methods remain deferred. See the
 
 ## Nullable Array elements
 
-`Toybox.Lang.Array<Toybox.Lang.Number or Null>` and
-`Toybox.Lang.Array<Toybox.Lang.String or Null>` are invariant non-null Array
-contracts. Indexed reads produce the base type or Null. Stores and native
+`Toybox.Lang.Array<T or Null>` supports Number, String, Boolean, or Char T
+with invariant element contracts and a non-null Array reference. Indexed reads produce the base type or Null. Stores and native
 `add`, `indexOf`, `remove`, and `removeAll` accept either alternative; `addAll`
 requires the same Array contract. `reverse` and `slice` retain it. API levels
 match the base-element Array profile.
@@ -1257,11 +1256,11 @@ element so differing operand types do not change an existing local's contract.
 
 Existing Array references cannot widen or narrow their element contracts.
 Unannotated literals retain the non-null inference rules; `[null]` and
-`[1, null]` without nullable context remain rejected. Nullable Char/Boolean
-values, nested arrays, and nullable Array receivers remain deferred.
+`[1, null]` without nullable context remain rejected. Nested arrays and nullable
+Array receivers remain deferred.
 
-Store a nullable read in a local and guard a fresh local read before arithmetic,
-String methods, or printing. Writes and `a[index] != null` do not prove that a
+Store a nullable read in a local and guard a fresh local read before scalar
+operators, methods, or printing. A present false Boolean is distinct from Null. Writes and `a[index] != null` do not prove that a
 later indexed read is non-null. A scalar saved before Array mutation retains
 its earlier value. Reassigning that scalar invalidates its null proof.
 See the [example](../../examples/compiler-nullable-arrays/README.md) and
