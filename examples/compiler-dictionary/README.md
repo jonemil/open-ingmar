@@ -12,6 +12,9 @@ alias visibility, Null values versus missing keys, and fresh constant loads.
 Printed markers check operand order, including conditional keys/RHS values.
 Computed literals check duplicate effects, nullable values, Array-produced
 scalars, short-circuit keys, and private construction across branches/loops.
+`toString` checks empty/typed/opaque references, scalar keys and Null values,
+mutation snapshots, chaining, and discarded results. Multi-entry checks avoid
+assuming a String entry order.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 The launch-state guard checks nullable callback typing; this launch supplies Null.
 

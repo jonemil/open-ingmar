@@ -846,7 +846,13 @@ nullable call results. An expected contract instead checks actual values using
 the full IR null proofs. A guarded nullable key still needs a non-null proof;
 selecting its non-null class during inference does not authorize an unsafe key.
 
-Opaque references support `size()` → Number and `isEmpty()` → Boolean.
+Opaque and typed references support `size()` → Number, `isEmpty()` → Boolean,
+and `toString()` → String. Dictionary's `toString` override requires API 1.0.1;
+it does not fall back to the older Object declaration. Conversion reflects the
+current contents and produces a String unaffected by later Dictionary mutation.
+Entry order is unspecified. Conversion uses ordinary native dispatch and String
+result contracts, including chaining and discarded results.
+
 Typed references additionally support the following API 1.0.0 contracts:
 
 | Form | Result |
@@ -870,7 +876,7 @@ Guarded nullable keys use the existing proof rules; there is no implicit key
 conversion. Indexed compound assignments and increments remain unsupported.
 
 Chaining and discarded results use existing native-call rules.
-Native callback Dictionary-or-Null state supports the opaque observers under a
+Native callback Dictionary-or-Null state supports these opaque methods under a
 non-null proof; unguarded access is rejected. Its nullable declaration/assignment rules
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.

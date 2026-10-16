@@ -87,3 +87,15 @@ mutate
 1
 2
 2
+{}
+{one=>1}
+{one=>2}
+{1=>one}
+{true=>yes}
+{a=>7}
+{nothing=>null}
+true
+true
+receiver
+true
+1

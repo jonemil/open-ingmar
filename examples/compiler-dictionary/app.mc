@@ -41,6 +41,27 @@ module Dictionaries {
     function mutate(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) {
         System.println("mutate"); d["one"] = 2; return 2;
     }
+    function text(d as Toybox.Lang.Dictionary) as Toybox.Lang.String {
+        return d.toString();
+    }
+    function strings() as Void {
+        System.println(Dictionaries.text({}));
+        var d = {"one" => 1};
+        var before = d.toString();
+        d["one"] = 2;
+        System.println(before);
+        System.println(d.toString());
+        System.println({1 => "one"}.toString());
+        System.println({true => "yes"}.toString());
+        System.println({'a' => 7}.toString());
+        System.println(Dictionaries.onlyNull().toString());
+        var many = {"one" => 1, "two" => 2}.toString();
+        System.println(many.find("one=>1") != null);
+        System.println(many.find("two=>2") != null);
+        System.println(Dictionaries.receiver(d).toString().length() > 0);
+        d.toString();
+        System.println(d.size());
+    }
     function computed() as Void {
         var duplicate = {Dictionaries.key() => Dictionaries.value(),
                          Dictionaries.key() => Dictionaries.value()};
@@ -167,6 +188,7 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Dictionaries.onlyNull().size());
         Dictionaries.access();
         Dictionaries.computed();
+        Dictionaries.strings();
         System.exit();
     }
 }

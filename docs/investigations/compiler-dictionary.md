@@ -53,7 +53,7 @@ The [constant format](../specs/data-dictionaries.md) records the verified framin
 The [tracked example](../../examples/compiler-dictionary/README.md) isolates
 empty `{}` construction, local reference copies/reassignment, typed Dictionary
 arguments/results, native observers, chained calls, and repeated loop allocation.
-Both SDK and generated simulator runs match all eighty-nine expected lines. Typed
+Both SDK and generated simulator runs match all 101 expected lines. Typed
 functions also check contextual empty returns/arguments/reassignment, nullable
 value annotations, chaining, and erasure into an opaque parameter. The launch
 provides Null callback state, so its guarded observer is checked structurally,
@@ -87,6 +87,18 @@ DATA profile is needed for these operations.
 Current executable contracts are in the
 [source profile](../specs/compiler-subset.md#dictionary-values) and
 [IR allocation format](../specs/compiler-ir-text.md#dictionary-allocation).
+
+### String conversion
+
+The specimen's `strings` function confirms API 1.0.1 `toString` on empty opaque
+and populated typed references. SDK and generated runs match: `{}`, `{one=>1}`,
+`{1=>one}`, `{true=>yes}`, `{a=>7}`, and `{nothing=>null}` for the isolated cases.
+A saved String retains `{one=>1}` after the source Dictionary changes to
+`{one=>2}`. Multi-entry checks use `find` rather than assuming entry order.
+Receiver markers, chained String methods, and discarded conversions also agree.
+SDK SYMBOLS uses the existing `toString` ID `0x008000af`; structured export and
+exact reconstruction need no new VM or DATA support.
+Artifacts: `scratch/check-dictionary-string/` (SDK 9.2.0, `fr265`, 2026-10-16).
 
 ## Literal semantics
 

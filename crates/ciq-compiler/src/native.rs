@@ -167,7 +167,7 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.Dictionary",
                 "Toybox.Lang.Dictionary",
-                "size" | "isEmpty" | "get" | "put" | "hasKey" | "remove"
+                "size" | "isEmpty" | "get" | "put" | "hasKey" | "remove" | "toString"
             )
             | (
                 "Toybox.Lang.Array",
