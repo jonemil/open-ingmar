@@ -5,6 +5,10 @@ then validate the final change once. A failed check needs diagnosis; a passing
 check needs repetition only after a relevant edit or an unresolved concern.
 GitHub CI continues to run the full Rust and documentation checks.
 
+Use the [workflow measurement protocol](workflow-measurement.md) when profiling
+development time. Separate tool/job timings from estimated model time and account
+for overlapping background work before changing these checks.
+
 ## Work cycle
 
 1. Read the next planned increment and relevant contracts. Search for definitions
