@@ -55,7 +55,7 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
     for source in [
         "function f() { var a = [1, 'a']; }",
         "function f() { var a = ['a', 1]; }",
-        "function f() { var a = [true]; }",
+        "function f() { var a = [true, 1]; }",
         "function f() { var a = [\"a\", 1]; }",
         "function f() { var a = [null]; }",
         "function f() { var a = [[1]]; }",

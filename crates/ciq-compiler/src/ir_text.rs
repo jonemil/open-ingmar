@@ -124,6 +124,9 @@ pub(crate) fn parse_ir_context(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "boolean-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Boolean))
+                        }
                         "nullable-number-array" => Ok(crate::ParameterType::Array(
                             crate::ArrayElement::NullableNumber,
                         )),
@@ -466,6 +469,7 @@ pub(crate) fn parse_ir_context(
                     "number" => crate::ArrayElement::Number,
                     "nullable-number" => crate::ArrayElement::NullableNumber,
                     "char" => crate::ArrayElement::Char,
+                    "boolean" => crate::ArrayElement::Boolean,
                     "string" => crate::ArrayElement::String,
                     "nullable-string" => crate::ArrayElement::NullableString,
                     _ => {
@@ -478,6 +482,15 @@ pub(crate) fn parse_ir_context(
                 values: fields[3..width]
                     .iter()
                     .map(|s| {
+                        if fields[2] == "boolean" {
+                            return match s.as_str() {
+                                "true" => Ok(crate::ArrayConstantValue::Boolean(true)),
+                                "false" => Ok(crate::ArrayConstantValue::Boolean(false)),
+                                _ => {
+                                    Err(fail(*at, "Boolean array constants require true or false"))
+                                }
+                            };
+                        }
                         if s == "null" {
                             return Ok(crate::ArrayConstantValue::Null);
                         }
@@ -504,6 +517,7 @@ pub(crate) fn parse_ir_context(
                 builder: parse_builder(&fields[1])?,
                 element_type: match fields[2].as_str() {
                     "char" => crate::ArrayElement::Char,
+                    "boolean" => crate::ArrayElement::Boolean,
                     "number" => crate::ArrayElement::Number,
                     "nullable-number" => crate::ArrayElement::NullableNumber,
                     "string" => crate::ArrayElement::String,
@@ -539,6 +553,7 @@ pub(crate) fn parse_ir_context(
         } else if kind == 30 {
             let element_type = match fields[2].as_str() {
                 "char" => crate::ArrayElement::Char,
+                "boolean" => crate::ArrayElement::Boolean,
                 "number" => crate::ArrayElement::Number,
                 "nullable-number" => crate::ArrayElement::NullableNumber,
                 "string" => crate::ArrayElement::String,
@@ -928,6 +943,7 @@ fn call_contract(
             "char" => crate::ReturnType::Char,
             "dictionary" => crate::ReturnType::Dictionary,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
+            "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
             "nullable-number-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::NullableNumber)

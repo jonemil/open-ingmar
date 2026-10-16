@@ -762,6 +762,10 @@ impl Builder<'_> {
                     Some(crate::ArrayElement::String),
                     crate::ArrayConstantValue::String(s.clone()),
                 )),
+                parser::ExpressionKind::Boolean(b) => Some((
+                    Some(crate::ArrayElement::Boolean),
+                    crate::ArrayConstantValue::Boolean(b),
+                )),
                 parser::ExpressionKind::Null => Some((None, crate::ArrayConstantValue::Null)),
                 _ => None,
             })

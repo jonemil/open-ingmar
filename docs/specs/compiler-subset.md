@@ -1212,6 +1212,22 @@ Arrays must be converted to String before printing.
 See the [example](../../examples/compiler-string-arrays/README.md) and
 [runtime evidence](../investigations/compiler-string-arrays.md).
 
+## Boolean arrays
+
+`Toybox.Lang.Array<Toybox.Lang.Boolean>` is an invariant non-null Boolean-element
+contract. Literals infer Boolean; reads produce Boolean for conditions, logical
+operators, and native Boolean methods. Writes and element-taking Array methods
+require Boolean, with no Number conversion. Null elements remain unsupported.
+Typed parameters/results and direct contextual `[]` preserve the contract.
+
+Literal-only arrays use `apush` constants; computed elements use ordered private
+construction, including conditional/short-circuit expressions. Copies share
+mutation; repeated constant loads are independently mutable. The supported
+Array methods and API levels match the String/Number profile. Sorting and
+inherited Object methods remain deferred. See the
+[example](../../examples/compiler-boolean-arrays/README.md) and
+[evidence](../investigations/compiler-boolean-arrays.md).
+
 ## Nullable Array elements
 
 `Toybox.Lang.Array<Toybox.Lang.Number or Null>` and
@@ -1244,7 +1260,7 @@ See the [example](../../examples/compiler-nullable-arrays/README.md) and
 ## Empty array literals
 
 A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,
-`Array<String>`, `Array<View>`, or a supported
+`Array<String>`, `Array<Boolean>`, `Array<View>`, or a supported
 [nullable element contract](#nullable-array-elements).
 Parentheses preserve direct context. Supported contexts are:
 

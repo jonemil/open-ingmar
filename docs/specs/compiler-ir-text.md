@@ -421,14 +421,16 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 
 `.array-constant %<result> <element> <value>... [span=<start>:<end>]` defines a
 fresh mutable array.
-The element type is `number`, `char`, `string`, `nullable-number`, or
+The element type is `number`, `char`, `boolean`, `string`, `nullable-number`, or
 `nullable-string`; at least one element is required. Number/Char values use `0x` followed by exactly eight hexadecimal
 digits, preserving their raw bits. String values are quoted text using the
 ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
+Boolean payloads use `true`/`false` or `ArrayConstantValue::Boolean`; numeric
+0/1 and Null do not substitute for them.
 Typed IR uses `ArrayConstantValue::Bits` for Number/Char or `::String` for text;
 nullable contracts also permit `null` / `ArrayConstantValue::Null`. Every
 payload must match its element contract; other mixed types and nested
-containers are rejected. API checks require Array/Number/String 1.0.0 or Char
+containers are rejected. API checks require Array/Number/String/Boolean 1.0.0 or Char
 1.3.0.
 Definition/use and ordered-effect checks include this allocation.
 
@@ -456,7 +458,8 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
 ```
 
 - `.array-begin &<builder> <element> <length>` allocates the final length.
-  Element contracts are `char`, `number`, `string`, `view`, `nullable-number`,
+  Element contracts are `char`, `number`, `boolean`, `string`, `view`,
+  `nullable-number`,
   or `nullable-string`; length is decimal, positive, and fits a nonnegative Number. Builder declarations are unique within a
   function. Allocation remains ordered and may fail before element effects.
 - `.array-fill &<builder> <index> %<value>` initializes the next slot.
@@ -600,7 +603,8 @@ ciq-ir
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
 The result type is `integer`, `string`, `boolean`, `char`, `char-array`,
-`number-array`, `string-array`, `nullable-number-array`, `nullable-string-array`,
+`number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
+`nullable-string-array`,
 `nullable-integer`, or
 `nullable-string`; omission means integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1022,7 +1026,8 @@ Source, typed, and text paths use the same operation and VM lowering.
 
 Instance-function metadata may include
 `parameter-types=...` with colon-separated scalar/Array contracts.
-Array categories include `char-array`, `number-array`, `string-array`,
+Array categories include `char-array`, `number-array`, `boolean-array`,
+`string-array`,
 `nullable-number-array`, `nullable-string-array`, and `view-array`.
 Ordinary signatures also accept
 `nullable-integer` and `nullable-string`. Separate entries with colons;
@@ -1217,7 +1222,8 @@ frontend metadata. Unknown or unsupported members, receivers, argument counts,
 and types are rejected. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
-Char and Array values use `char`, `char-array`, `number-array`, `string-array`,
+Char and Array values use `char`, `char-array`, `number-array`, `boolean-array`,
+`string-array`,
 `nullable-number-array`, `nullable-string-array`, or `view-array`
 in parameter/user-call metadata, with `result=<category>` for valued calls.
 Function result categories are inferred from returns; those categories are not

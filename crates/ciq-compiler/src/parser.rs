@@ -304,6 +304,7 @@ impl<'a> Parser<'a> {
         let at = self.offset;
         let mut element = match self.path()?.as_str() {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
+            "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
             "Toybox.Lang.String" => crate::ArrayElement::String,
             "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),

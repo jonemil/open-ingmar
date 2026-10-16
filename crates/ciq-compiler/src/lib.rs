@@ -152,6 +152,7 @@ pub enum ArrayElement {
     Number,
     NullableNumber,
     Char,
+    Boolean,
     String,
     NullableString,
     Object(NativeClass),
@@ -163,6 +164,7 @@ impl ArrayElement {
         let base = api::Type::named(match self {
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
             Self::Char => "Toybox.Lang.Char",
+            Self::Boolean => "Toybox.Lang.Boolean",
             Self::String | Self::NullableString => "Toybox.Lang.String",
             Self::Object(class) => class.name(),
         });
@@ -186,6 +188,7 @@ impl ArrayElement {
             Self::Number,
             Self::NullableNumber,
             Self::Char,
+            Self::Boolean,
             Self::String,
             Self::NullableString,
             Self::Object(NativeClass::View),
@@ -199,6 +202,7 @@ impl ArrayElement {
             Self::Number => "number",
             Self::NullableNumber => "nullable-number",
             Self::Char => "char",
+            Self::Boolean => "boolean",
             Self::String => "string",
             Self::NullableString => "nullable-string",
             Self::Object(NativeClass::View) => "view",
@@ -212,6 +216,7 @@ impl ArrayElement {
             Self::Number => "number-array",
             Self::NullableNumber => "nullable-number-array",
             Self::Char => "char-array",
+            Self::Boolean => "boolean-array",
             Self::String => "string-array",
             Self::NullableString => "nullable-string-array",
             Self::Object(NativeClass::View) => "view-array",
@@ -223,9 +228,10 @@ impl ArrayElement {
 
 /// Payload of a homogeneous Array constant. Bits are interpreted as Number or
 /// Char by the element contract; String contains text rather than a pool alias.
-/// Null requires a nullable element contract.
+/// Boolean retains its logical value; Null requires a nullable element contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayConstantValue {
+    Boolean(bool),
     Bits(u32),
     String(String),
     Null,
@@ -1542,18 +1548,21 @@ impl Function {
                         || !values.iter().all(|value| {
                             matches!(
                                 (element_type, value),
-                                (
-                                    ArrayElement::Number
-                                        | ArrayElement::NullableNumber
-                                        | ArrayElement::Char,
-                                    ArrayConstantValue::Bits(_)
-                                ) | (
-                                    ArrayElement::String | ArrayElement::NullableString,
-                                    ArrayConstantValue::String(_)
-                                ) | (
-                                    ArrayElement::NullableNumber | ArrayElement::NullableString,
-                                    ArrayConstantValue::Null
-                                )
+                                (ArrayElement::Boolean, ArrayConstantValue::Boolean(_))
+                                    | (
+                                        ArrayElement::Number
+                                            | ArrayElement::NullableNumber
+                                            | ArrayElement::Char,
+                                        ArrayConstantValue::Bits(_)
+                                    )
+                                    | (
+                                        ArrayElement::String | ArrayElement::NullableString,
+                                        ArrayConstantValue::String(_)
+                                    )
+                                    | (
+                                        ArrayElement::NullableNumber | ArrayElement::NullableString,
+                                        ArrayConstantValue::Null
+                                    )
                             )
                         })
                     {
@@ -2498,6 +2507,7 @@ impl Function {
                             ArrayConstantValue::Bits(n) => format!(" 0x{n:08x}"),
                             ArrayConstantValue::String(s) => format!(" {s:?}"),
                             ArrayConstantValue::Null => " null".into(),
+                            ArrayConstantValue::Boolean(b) => format!(" {b}"),
                         })
                         .collect::<String>()
                 ),
@@ -2786,6 +2796,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Tuple(TupleShape::OneView) => " result=one-view",
         ReturnType::Tuple(TupleShape::ViewDelegate) => " result=view-delegate",
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
+        ReturnType::Array(ArrayElement::Boolean) => " result=boolean-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
         ReturnType::Array(ArrayElement::NullableNumber) => " result=nullable-number-array",
         ReturnType::Array(ArrayElement::String) => " result=string-array",

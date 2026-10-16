@@ -1,0 +1,23 @@
+false
+true
+[false, false, true]
+2
+0
+[false, false, true, true, false, true]
+true
+true
+[false, false]
+[false, false]
+[false]
+false slot
+true
+true
+0
+[true]
+true
+[true, false, true, true]
+false
+[false, true, false, false]
+true
+false
+[true, false]

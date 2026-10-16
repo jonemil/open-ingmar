@@ -3,8 +3,8 @@
 Measure where a development turn spends elapsed time before changing the work
 cycle. Use existing session metadata and timers inside helpers; avoid extra
 agent calls just to record timestamps. Keep raw events and reports in ignored
-`scratch/workflow/`. This protocol defines collection; a report generator is
-not implemented yet.
+`scratch/workflow/`. Collection currently uses local pilot scripts there;
+there is no supported reporting CLI or stable session-log schema dependency.
 
 ## Activity categories
 
