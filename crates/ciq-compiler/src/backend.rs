@@ -70,6 +70,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             let alias = format!("__ciq_array_{}_{}", label, result.0);
             literal_aliases.insert(LiteralKey::Array(*result), alias.clone());
             literals.push(Item::Array(ciq_prg::data::arrays::Declaration {
+                pool: None,
                 alias,
                 at: None,
                 values: values

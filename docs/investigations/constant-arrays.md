@@ -113,3 +113,26 @@ String pools, nested arrays, Dictionary/ByteArray, other scalar types, class-fie
 array-reference relocation, and other SDK/device versions remain unverified or
 unsupported. Compiler selection and private construction are covered by the
 [lowering review](natural-lowering.md#constant-array-selection).
+
+## String pools
+
+On 2026-10-16, SDK 9.2.0/`fr265` compiles `["one", "two"]` into `apush`
+referencing DATA+`0x329d` in `scratch/string-array-probe/`. The authored app prints
+`a.toString()`, assigns `a[0] = "changed"`, and prints `a[0]`. Build with
+`sh scripts/build-example.sh scratch/string-array-probe`; the probe uses the
+shared console manifest/resources and an ordinary AppBase/onStart shell.
+
+The 49-byte record has pool magic `0xabcdabcd`, pool length 12, then two local
+strings at offsets 0 and 6. Each String has u16 length 4 including its terminator.
+The value block has length 15, root `0x05`, count 2, and tag `0x03` references to
+those pool offsets. Outer length is 43. Pool presence therefore does not imply
+Dictionary; root-tag dispatch follows validated framing.
+
+Structured CODE/DATA export reconstructs the PRG exactly and re-exports stably.
+The reconstructed simulator output is `[one, two]`, then `changed`. Changing
+only the first local pool text to `ONE`, assembling, and signing with our key
+produces `[ONE, two]`, then `changed`. Artifacts: `structured/`, `reexport/`,
+`edited/`, and `runtime-{rebuilt,edited}/` under the probe directory. This checks
+String-pool editing and execution; repeated-load independence for String arrays
+has not been tested. The compiler's String-array source/IR profile remains
+planned; the [binary profile](../specs/data-arrays.md) is independently editable.

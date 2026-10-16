@@ -227,6 +227,7 @@ pub fn string_bindings(
 /// Unplaced requirements must match exactly one record by typed scalar content;
 /// pinned requirements must also match its offset. Undeclared references use
 /// DATA aliases directly. Missing, ambiguous, or conflicting matches are errors.
+/// Local String aliases resolve to text before scalar contents are compared.
 /// Validates DATA layout without encoding method references or allocating records.
 pub fn array_bindings(
     program: &Program,
@@ -238,6 +239,8 @@ pub fn array_bindings(
     let mut bindings = offsets.clone();
     for item in program.items() {
         let Item::Array(literal) = item else { continue };
+        let expected =
+            array_values(literal).ok_or_else(|| fail("invalid Array string reference".into()))?;
         let matches: Vec<_> = data
             .fragments
             .iter()
@@ -246,8 +249,9 @@ pub fn array_bindings(
                     return None;
                 };
                 let at = offsets[&record.alias];
-                (record.values == literal.values && literal.at.is_none_or(|pinned| pinned == at))
-                    .then_some(at)
+                (array_values(record).as_ref() == Some(&expected)
+                    && literal.at.is_none_or(|pinned| pinned == at))
+                .then_some(at)
             })
             .collect();
         if matches.len() != 1 {
@@ -276,6 +280,32 @@ pub fn array_bindings(
         }
     }
     Ok(bindings)
+}
+
+/// Resolve local pool aliases to String contents for semantic Array matching.
+fn array_values(
+    record: &ciq_prg::data::arrays::Declaration,
+) -> Option<Vec<ciq_prg::data::arrays::Value>> {
+    use ciq_prg::data::arrays::Value;
+    record.encode().ok()?;
+    record
+        .values
+        .iter()
+        .map(|value| {
+            Some(match value {
+                Value::String(alias) => Value::String(
+                    record
+                        .pool
+                        .as_ref()?
+                        .iter()
+                        .find(|s| s.alias == *alias)?
+                        .value
+                        .clone(),
+                ),
+                scalar => scalar.clone(),
+            })
+        })
+        .collect()
 }
 
 /// Bind inline Dictionary requirements by matching DATA alias, or otherwise by

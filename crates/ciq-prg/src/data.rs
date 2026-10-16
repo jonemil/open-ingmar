@@ -6,6 +6,7 @@ use std::fmt::Write;
 
 pub mod arrays;
 pub mod classes;
+mod constants;
 pub mod dictionaries;
 
 pub const ADDRESS_LIMIT: usize = 0x0100_0000;

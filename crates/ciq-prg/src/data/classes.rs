@@ -59,18 +59,13 @@ pub fn records(payload: &[u8]) -> Result<Vec<Record<'_>>, Error> {
         let start = at;
         if payload[at] == 3 {
             let offset = u32::try_from(at).map_err(|_| Error("DATA offset exceeds u32".into()))?;
-            let header = &payload[at..];
-            if header.get(5..9) == Some(&0xabcd_abcdu32.to_be_bytes())
-                || header.get(13) == Some(&0x0b)
-            {
-                let (dictionary, end) = super::dictionaries::dictionary_at(payload, offset)?;
-                records.push(Record::Dictionary(dictionary));
-                at = end;
-                continue;
-            }
-            let (array, end) = super::arrays::array_at(payload, offset)?;
-            records.push(Record::Array(array));
-            at = end;
+            let record = super::constants::decode(payload, offset)?;
+            at = record.end;
+            records.push(match record.root {
+                5 => Record::Array(super::arrays::from_record(offset, record)),
+                0x0b => Record::Dictionary(super::dictionaries::from_record(offset, record)),
+                _ => unreachable!("constant decoder checked root tag"),
+            });
             continue;
         }
         if payload[at] == 1 {

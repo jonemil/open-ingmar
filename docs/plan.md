@@ -12,7 +12,8 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Dictionary.** Grow Array String/nullable-element
+1. **Dictionary.** Add Array String source/IR contracts and literal lowering
+   through pooled constants, then nullable-element
    contracts needed for `keys` and `values`. Widen beyond Number/String values
    alongside nullable Boolean/Char core types; keep heterogeneous and nullable
    results explicit. Inherited Object methods need Dictionary-specific evidence.

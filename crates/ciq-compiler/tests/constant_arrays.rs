@@ -136,3 +136,36 @@ fn array_requirements_reject_missing_ambiguous_conflicting_and_mispinned_records
     let shifted = Source::parse(&format!(".string before \"prefix\"\n{record}")).unwrap();
     assert!(array_bindings(&pinned, &shifted).is_err());
 }
+
+#[test]
+fn pooled_array_requirements_match_contents_independently_of_local_aliases() {
+    let assembly = Program::parse(".array required\n.string item \"one\"\n.element string=&item\n.endarray\napush &required\nreturn\n").unwrap();
+    assert_eq!(assembly, Program::parse(&assembly.to_text()).unwrap());
+    let text = ".array actual\n.string different \"one\"\n.element string=&different\n.endarray\n";
+    let data = Source::parse(text).unwrap();
+    let bindings = array_bindings(&assembly, &data).unwrap();
+    assert_eq!(bindings["required"], 0);
+    assert_eq!(
+        assembly
+            .encode_with_literals(&BTreeMap::new(), &BTreeMap::new(), &bindings)
+            .unwrap(),
+        [0x40, 0, 0, 0, 0, 0x16]
+    );
+    assert!(
+        array_bindings(
+            &assembly,
+            &Source::parse(&text.replace("one", "two")).unwrap()
+        )
+        .is_err()
+    );
+    // Identical alias spelling must not hide different String contents.
+    assert!(
+        array_bindings(
+            &assembly,
+            &Source::parse(&text.replace("different", "item").replace("one", "two")).unwrap()
+        )
+        .is_err()
+    );
+    let ambiguous = format!("{text}{}", text.replace("actual", "other"));
+    assert!(array_bindings(&assembly, &Source::parse(&ambiguous).unwrap()).is_err());
+}
