@@ -149,9 +149,9 @@ means `(2 << 1) * 3`. Decimal literals cover the signed 32-bit range. Unary minu
 postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
 `abs` on the negated value. Unary `!` uses the same precedence, supports
 repeated prefixes (`!!value`), and binds before comparisons:
-`!a == b` means `(!a) == b`. Number complement `~` shares that unary
+`!a == b` means `(!a) == b`. Integer complement `~` shares that unary
 precedence and allows repeated prefixes. Unary plus binds after postfix calls
-and before binary operators; it returns a non-null Number operand unchanged
+and before binary operators; it returns a non-null Number/Long unchanged
 after evaluating it once. It accepts literals, parameters, locals, calls, and
 grouped expressions. Repeated or mixed prefixes require grouping, as in
 `+(+n)`, `+(-n)`, and `+(~n)`; `+ +n`, `+-n`, and `+~n` are rejected.
@@ -169,12 +169,13 @@ The SDK 9.2.0 simulator exits when the minimum Number is divided by, or has
 remainder taken against, -1. This boundary does not establish a portable result
 or a catchable Monkey C exception. See [product evidence][products].
 
-Bitwise operators require non-null Numbers, treating values as signed 32-bit
-bit patterns. Char, Boolean, String, and nullable operands without a proof are
+Number-only bitwise operators use non-null signed 32-bit bit patterns.
+Mixed Long operations follow the [Long contracts](#long-values). Char, Boolean, String, and nullable operands without a proof are
 rejected. `>>` is an arithmetic right shift in the tested VM. Complement retains
 a unary IR operation and lowers to `invv`, evaluating its operand once.
 
-Shift counts must be non-null Numbers. The compiler passes counts unchanged,
+For Number-only shifts, counts are non-null Numbers. Mixed Long shifts follow
+the [Long contracts](#long-values). The compiler passes counts unchanged,
 without range checks or masking. SDK/generated probes for -1, 32, and 33 agree
 with selecting the low five count bits; this is evidence for the tested VM,
 not a portable guarantee for other runtimes. See [bitwise evidence][bits].
@@ -234,7 +235,7 @@ not specified by that observation. Signed decimal literals remain constants;
 general negation uses a distinct IR operation and counts toward the nesting
 bound. See the [negation evidence](../investigations/compiler-number-negation.md).
 
-Unary `!` inverts a non-null Boolean or complements a Number's 32 bits, preserving
+Unary `!` inverts a Boolean or complements the 32/64 bits of Number/Long, preserving
 its operand type and evaluating it once. Thus `!7` is Number `-8`, not Boolean;
 `!!7` is Number `7`. Value-producing inversion lowers directly to `invv`.
 Boolean condition negation reverses the true/false destinations. Other types
@@ -626,10 +627,11 @@ Assignment-containing IR uses the conservative schedule specified in
 
 ## Increment and decrement
 
-`target++;` and `++target;` add one to a Number or Char, preserving its type.
-`target--;` and `--target;` subtract one from a Number; Char decrement is rejected.
+`target++;` and `++target;` add one to a Number, Long, or Char, preserving its type.
+`target--;` and `--target;` subtract one from a Number or Long; Char decrement
+is rejected.
 The two operator characters must be contiguous. Accepted targets are bare
-initialized Number/Char locals, explicit `self` Number fields, and Number/Char
+initialized Number/Long/Char locals, explicit `self` Number fields, and Number/Char
 array elements. Char requires API 1.3.0, as for other Char expressions.
 Parameters, grouped local targets, other value/element types, and unknown or
 out-of-scope names are rejected. A nullable Number local needs an established
@@ -827,8 +829,21 @@ wrap to signed 64-bit results. Integer division truncates toward zero, and
 remainder follows the dividend's sign. Zero division and minimum Long divided
 by or reduced modulo -1 remain unverified runtime boundaries.
 
-Bitwise operations, shifts, updates, native Long methods/conversions, nullable
-Long, Long Array/Dictionary elements, conditional Long joins, and Long fields
+Long/Long and mixed Number/Long pairs also support `&`, `|`, `^`, `<<`, and
+`>>`, producing Long whenever either operand is Long. This includes a Number
+left operand and Long shift count. The current runtime uses the low six bits
+of the count for a promoted Long shift; negative counts and counts above 63
+therefore wrap. Right shift is arithmetic, retaining the sign. Pure Number
+pairs retain their existing 32-bit contracts; the compiler inserts no count
+conversion or masking code.
+
+`!` and `~` complement all 64 Long bits and return Long. `!` does not make a
+Long into Boolean; conditions still require Boolean. Prefix/postfix `++` and
+`--` accept Long as statements, preserve its type, and wrap at the signed
+boundaries. Bitwise/shift compound assignments follow operator promotion and
+must preserve the local's storage type. Updates remain invalid as expressions.
+
+Native Long methods/conversions, nullable Long, Long Array/Dictionary elements, conditional Long joins, and Long fields
 remain deferred. Existing native scalar argument profiles remain bounded to
 their documented types. See the
 [example](../../examples/compiler-long-values/README.md) and

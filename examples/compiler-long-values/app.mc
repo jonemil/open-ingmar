@@ -2,6 +2,68 @@ using Toybox.Application;
 using Toybox.System;
 
 module Wide {
+    function shift(value as Toybox.Lang.Long, count as Toybox.Lang.Number) as Toybox.Lang.Long {
+        return value << count;
+    }
+    function shiftNumber(value as Toybox.Lang.Number, count as Toybox.Lang.Long) as Toybox.Lang.Long {
+        return value << count;
+    }
+    function right(value as Toybox.Lang.Long, count as Toybox.Lang.Number) as Toybox.Lang.Long {
+        return value >> count;
+    }
+    function bits() as Void {
+        var value = Wide.pass(4294967297l);
+        System.println(value & 3);
+        System.println(3 & value);
+        System.println(value | 2);
+        System.println(2 | value);
+        System.println(value ^ 1);
+        System.println(1 ^ value);
+        System.println(value & Wide.pass(4294967296l));
+        System.println(value | Wide.pass(4294967296l));
+        System.println(value ^ Wide.pass(4294967296l));
+        System.println(~value);
+        System.println(!value);
+        System.println(~Wide.zero());
+        System.println(!Wide.zero());
+        System.println(~Wide.minimum());
+        System.println(!Wide.maximum());
+        System.println(Wide.shift(1l, 0));
+        System.println(Wide.shift(1l, 31));
+        System.println(Wide.shift(1l, 32));
+        System.println(Wide.shift(1l, 63));
+        System.println(Wide.shift(1l, 64));
+        System.println(Wide.shift(1l, 65));
+        System.println(Wide.shiftNumber(1, 32l));
+        System.println(value >> 32);
+        System.println(1 >> Wide.pass(32l));
+        System.println(value << Wide.pass(1l));
+        System.println(value >> Wide.pass(1l));
+        System.println(Wide.right(-8l, 1));
+        System.println(Wide.right(Wide.minimum(), 63));
+        System.println(Wide.right(Wide.minimum(), 64));
+        System.println(Wide.right(Wide.minimum(), 65));
+        System.println(Wide.longEffect(1l) << Wide.numberEffect(32));
+        System.println(Wide.numberEffect(1) << Wide.longEffect(32l));
+        var updated = Wide.maximum();
+        updated++; System.println(updated);
+        --updated; System.println(updated);
+        updated = Wide.minimum();
+        updated--; System.println(updated);
+        ++updated; System.println(updated);
+        updated = Wide.pass(4294967297l);
+        updated &= 3; System.println(updated);
+        updated |= 4294967296l; System.println(updated);
+        updated ^= 1; System.println(updated);
+        updated <<= 1; System.println(updated);
+        updated >>= 32l; System.println(updated);
+        System.println(Wide.shift(1l, -1));
+        System.println(Wide.shift(1l, -64));
+        System.println(Wide.shift(1l, -65));
+        System.println(Wide.shiftNumber(1, 4294967296l));
+        System.println(Wide.shiftNumber(-1, -1l));
+        System.println(Wide.right(-8l, -1));
+    }
     function longEffect(value as Toybox.Lang.Long) as Toybox.Lang.Long {
         System.println("long"); return value;
     }
@@ -101,6 +163,7 @@ class MinimalConsoleApp extends Application.AppBase {
         var n = 0;
         while (n < 2) { System.println(Wide.pass(256l)); n++; }
         Wide.arithmetic();
+        Wide.bits();
         System.exit();
     }
 }

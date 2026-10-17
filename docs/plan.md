@@ -12,9 +12,10 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Numeric types and deferred methods.** Extend Long with bitwise operations,
-   shifts, updates, and native conversions/methods in bounded groups. Establish
-   shift/count contracts and isolate unverified division boundaries with SDK probes. Then
+1. **Numeric types and deferred methods.** Implement bounded native Long
+   methods and conversions using the existing integer contracts. Add nullable
+   Long when conversion consumers require it. Isolate unverified division
+   boundaries with SDK probes. Then
    add Float/Double values and their operations. Grow nullable/container Long
    contracts as their consumers require them. Revisit Number/String/Boolean/Char
    methods as their required value types become available.

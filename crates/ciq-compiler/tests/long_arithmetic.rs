@@ -62,9 +62,7 @@ fn long_signs_select_long_zero_and_preserve_operand_effects() {
             assert!(!assembly.contains("addv"));
             assert!(!assembly.contains("lpushz"));
         }
-        let edited = text
-            .replace(".positive", ".complement")
-            .replace(".negate", ".not");
+        let edited = text.replace("parameter-types=long", "parameter-types=string");
         assert_ne!(text, edited);
         assert!(parse_ir(&edited).is_err());
     }
@@ -82,9 +80,9 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Long { return 1l + true; }",
         "function f() as Toybox.Lang.Long { return 1l + null; }",
         "function f() as Toybox.Lang.String { return \"value\" + 1l; }",
-        "function f() as Toybox.Lang.Long { return 1l & 2l; }",
-        "function f() as Toybox.Lang.Long { return 1l << 2; }",
-        "function f() as Toybox.Lang.Long { var value = 1l; value++; return value; }",
+        "function f() as Toybox.Lang.Long { return 1l & false; }",
+        "function f() as Toybox.Lang.Long { return 1l << false; }",
+        "function f() as Toybox.Lang.Long { var value = 1l; return value++; }",
         "function f() { if (1l) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 2l; }",
     ] {

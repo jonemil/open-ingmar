@@ -2,16 +2,14 @@
 //! These rules do not enumerate every operator/type combination in Monkey C.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
-/// Resolve `!` on Boolean or Number without changing its type or coercing null.
+/// Resolve Boolean inversion or integer complement without changing its type.
 pub(crate) fn not_result(operand: &Type) -> Option<Type> {
-    (*operand == Type::named("Toybox.Lang.Boolean")
-        || *operand == Type::named("Toybox.Lang.Number"))
-    .then(|| operand.clone())
+    (*operand == Type::named("Toybox.Lang.Boolean") || integer(operand)).then(|| operand.clone())
 }
 
-/// Resolve 32-bit Number complement without widening other or nullable types.
+/// Resolve Number/Long complement without widening its width or admitting Null.
 pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
-    (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())
+    integer(operand).then(|| operand.clone())
 }
 
 /// Resolve unary signs without changing Number or Long width or admitting Null.
@@ -23,16 +21,15 @@ fn integer(ty: &Type) -> bool {
     matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Long"))
 }
 
-/// Resolve a Number step or Char increment without coercion or concatenation.
+/// Resolve a Number/Long step or Char increment, preserving the operand type.
 pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
-    (*operand == Type::named("Toybox.Lang.Number")
-        || (increment && *operand == Type::named("Toybox.Lang.Char")))
-    .then(|| operand.clone())
+    (integer(operand) || (increment && *operand == Type::named("Toybox.Lang.Char")))
+        .then(|| operand.clone())
 }
 
 /// Resolve supported arithmetic operand types to their semantic result type.
-/// Number/Long arithmetic promotes to Long when either operand is Long.
-/// Number pairs additionally support bitwise operations and shifts. Addition of Char/Number in either
+/// Number/Long arithmetic, bitwise operations, and shifts promote to Long when
+/// either operand is Long. Addition of Char/Number in either
 /// order returns Char; two Chars concatenate to String. An exact String operand
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
@@ -48,6 +45,11 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
         | BinaryOp::Multiply
         | BinaryOp::Divide
         | BinaryOp::Remainder
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
             if integer(left)
                 && integer(right)
                 && (*left == Type::named("Toybox.Lang.Long")
@@ -194,17 +196,10 @@ mod tests {
                         {
                             Some(ValueType::String)
                         }
-                        (
-                            BinaryOp::Add
-                            | BinaryOp::Subtract
-                            | BinaryOp::Multiply
-                            | BinaryOp::Divide
-                            | BinaryOp::Remainder,
-                            left,
-                            right,
-                        ) if matches!(left, ValueType::Integer | ValueType::Long)
-                            && matches!(right, ValueType::Integer | ValueType::Long)
-                            && (left == ValueType::Long || right == ValueType::Long) =>
+                        (_, left, right)
+                            if matches!(left, ValueType::Integer | ValueType::Long)
+                                && matches!(right, ValueType::Integer | ValueType::Long)
+                                && (left == ValueType::Long || right == ValueType::Long) =>
                         {
                             Some(ValueType::Long)
                         }

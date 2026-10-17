@@ -533,7 +533,7 @@ pub enum Operation {
         target: BlockId,
         value: ValueId,
     },
-    /// Add or subtract one from a Number, or increment a Char, preserving its type.
+    /// Step a Number/Long by one or increment a Char, preserving its type.
     /// Nullable operands and Char decrement are rejected.
     /// Target capture and write-back are separate ordered IR operations.
     Step {
@@ -662,13 +662,13 @@ pub enum Operation {
         index: ValueId,
         value: ValueId,
     },
-    /// Invert a non-null Boolean or Number, evaluating it once and preserving
-    /// its type. Number uses 32-bit complement; other types are not coerced.
+    /// Invert a Boolean or complement a Number/Long, evaluating it once.
+    /// Preserve its scalar type and integer width without coercing Null.
     Not {
         result: ValueId,
         operand: ValueId,
     },
-    /// Complement one non-null Number's 32 bits, evaluating the operand once.
+    /// Complement all bits of a Number/Long, evaluating the operand once.
     /// Nullable values require a non-null proof; other value types are rejected.
     Complement {
         result: ValueId,
@@ -1727,7 +1727,9 @@ impl Function {
                 Operation::Not { result, operand } => {
                     let result_type = operators::not_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("unary ! requires a non-null Boolean or Number"))?;
+                        .ok_or_else(|| {
+                            fail("unary ! requires a non-null Boolean, Number, or Long")
+                        })?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
@@ -1740,7 +1742,7 @@ impl Function {
                         operators::step_result(&type_of(operand).api_type(), increment)
                             .and_then(|ty| ValueType::from_api_type(&ty))
                             .ok_or_else(|| {
-                                fail("step requires a non-null Number, or Char for increment")
+                                fail("step requires a non-null Number/Long, or Char for increment")
                             })?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
@@ -1755,7 +1757,7 @@ impl Function {
                 Operation::Complement { result, operand } => {
                     let result_type = operators::complement_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("complement requires a non-null Number"))?;
+                        .ok_or_else(|| fail("complement requires a non-null Number or Long"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }

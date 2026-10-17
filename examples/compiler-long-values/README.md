@@ -5,7 +5,9 @@ boundaries, values above 32 bits, local copies/reassignment, module/instance
 arguments and results, discarded calls, repeated loads, and printing.
 Arithmetic adds mixed Number/Long promotion in both orders, signed division and
 remainder, unary signs, comparisons, compound writes, overflow boundaries, and
-operand effects through calls and a branching right operand. SDK and
+operand effects through calls and a branching right operand. Bitwise tests
+cover both mixed operand orders, full-width inversion, sign-preserving shifts,
+count boundaries/wrapping, statement updates, and compound writes. SDK and
 generated `fr265` programs match [expected output](expected.txt).
 
 From the repository root, using fresh output paths:
@@ -17,6 +19,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-long-values/unsigned.prg scratch/c
 sh scripts/run-simulator-container.sh --prg scratch/compiler-long-values/generated.prg
 ```
 
-Bitwise operations, shifts, updates, conversions, native Long methods,
-nullability, and Long container elements remain deferred. See the
+Conversions, native Long methods, nullability, and Long container elements
+remain deferred. See the
 [source contract](../../docs/specs/compiler-subset.md#long-values).

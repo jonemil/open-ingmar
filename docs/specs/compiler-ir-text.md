@@ -100,8 +100,9 @@ runtime operations. Rounding, signs, overflow evidence, and the simulator's
 minimum-Number/-1 failure follow the [source arithmetic contract][products].
 
 `.bit-and`, `.bit-or`, `.bit-xor`, `.shift-left`, and `.shift-right` each
-consume two non-null Numbers and produce Number. Shared validation rejects
-other types and missing null proofs. Lowering selects `andv`, `orv`, `xorv`,
+accept non-null Number/Long pairs and promote to Long when either operand is
+Long. Pure Number pairs produce Number. Shared validation rejects other types
+and missing null proofs. Lowering selects `andv`, `orv`, `xorv`,
 `shlv`, or `shrv` after emitting left and right operands once in that order.
 Shift counts pass unchanged to the VM; no range check, masking, or constant
 folding is emitted. All ordinary block,
@@ -109,7 +110,7 @@ single-use, staging, and effect-order rules apply. See
 [bitwise evidence](../investigations/compiler-number-bits.md).
 
 `.complement %<result-id> %<operand-id> [span=<start>:<end>]` consumes one
-non-null Number and produces its 32-bit complement as Number. Nullable operands
+non-null Number or Long and complements its 32 or 64 bits, preserving its type. Nullable operands
 require a non-null proof; other types are rejected. It retains source `~` as a
 unary operation and selects `invv`, evaluating the operand once. Single-use,
 block, staging, and effect-order rules apply. Repeated complements remain
@@ -140,8 +141,8 @@ uses `btpush`/`bfpush`, with ordinary local slots and `eq` for Boolean equality.
 ## Boolean and Number inversion
 
 `.not %<result-id> %<operand-id> [span=<start>:<end>]` consumes one non-null
-Boolean or Number and defines the same type. Number inversion complements its
-32 bits, as for `.complement`; nullable operands need a non-null proof. Other
+Boolean, Number, or Long and defines the same type. Integer inversion
+complements all 32 or 64 bits, as for `.complement`; nullable operands need a non-null proof. Other
 types are rejected without coercion. The
 operand must be an earlier definition in the same block and obey ordinary
 one-use rules. Typed and text IR recompute the contract and include the operand
@@ -216,6 +217,14 @@ Long-aware `.positive` preserves its operand; `.negate` uses `lpushz`, the
 operand, and `subv`. Validated value types drive zero selection. Number negation
 keeps `ipushz`. No arithmetic results or promotions are trusted from text tags.
 
+`.not` and `.complement` on Long retain Long and select `invv`. `.increment` and
+`.decrement` preserve Long through ordinary read/add-or-subtract/write lowering,
+using a Number one operand. Shifts use `shlv`/`shrv` and leave count normalization
+to the runtime; they add no masking or conversion instructions. Source and text
+validation recompute all these results, including a Long result for a Number
+left operand with Long count. Statement-only update syntax and storage
+invariance remain unchanged.
+
 ## Char constants
 
 `.char %<result-id> 0x<eight-hex-digits> [span=<start>:<end>]` defines Char from
@@ -279,7 +288,7 @@ failure timing or memory equivalence with SDK lowering is implied. See
 ## Number and Char steps
 
 `.increment %<result> %<operand> [span=<start>:<end>]` and `.decrement` add or
-subtract one from a non-null Number. Increment also accepts Char (API 1.3.0);
+subtract one from a non-null Number or Long. Increment also accepts Char (API 1.3.0);
 both operations preserve the operand type. Typed construction uses
 `Operation::Step` with an `increment` Boolean. Char decrement, other classes,
 and unproven nullable operands are rejected. These are semantic value operations:

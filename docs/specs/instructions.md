@@ -121,7 +121,7 @@ representation and compatibility with other SDK/device versions are unverified.
 ## invv
 
 **Invert a value.** Opcode `0x2d`; length **1 byte**. Operands: none.
-For Number, successful abstract stack: `[..., value] → [..., ~value]`.
+For Number/Long, successful abstract stack: `[..., value] → [..., ~value]`.
 For Boolean: `[..., value] → [..., !value]`.
 
 The [focused probe](../investigations/invert-opcode.md) compiles typed
@@ -131,9 +131,11 @@ and `0x10`, respectively.
 
 SDK/reconstructed simulator results confirm 32-bit Number complement for zero,
 -1, 42, and both signed boundaries, and logical negation for true/false.
+The [Long probe](../investigations/compiler-long-values.md#bitwise-shifts-and-updates)
+also confirms 64-bit Long complement. Our compiler selects `invv` for typed
+integer complement and Boolean negation; IR retains their distinct contracts.
 Behavior for other value types, invalid operands, and other SDK/device versions
-is unverified. Our compiler selects `invv` for typed Number complement and
-Boolean negation; its IR retains their distinct contracts.
+is unverified.
 
 ## popv
 

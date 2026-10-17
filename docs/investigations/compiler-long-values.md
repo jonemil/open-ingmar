@@ -42,8 +42,25 @@ zero divisors were not run. Source/storage narrowing is not inferred from
 operator promotion. SDK/generated structured CODE/DATA round trips remain exact.
 Artifacts: `scratch/check-long-arithmetic/`.
 
-Bitwise operations, shifts, updates, conversions, nullable/container values, and
-native Long methods were not established by this specimen. See the
+## Bitwise, shifts, and updates
+
+**Observed (2026-10-17):** SDK 9.2.0 / fr265 accepts the mixed bitwise/shift
+pairs as Long results. A typed Number-left/Long-count shift returns Long;
+`1 << 32l` yields 4294967296. `!` and `~` both complement all 64 Long bits.
+Signed right shifts extend the sign. Counts 0, 31, 32, 63, 64, 65, -1, -64,
+and -65 agree with low-six-bit normalization. Long counts beyond Number's range
+also agree: count 4294967296 acts as zero. These are simulator observations;
+they do not establish every device implementation or arbitrary numeric types.
+
+Statement increments/decrements wrap across both signed endpoints. Compound
+bitwise/shift writes retain Long values, including a Long shift count. Markers
+confirm receiver-free operand order in mixed shifts. SDK/generated consoles
+match the full expected output, with structured reconstruction and stable
+re-export. The VM already supplies these operations; no new encoding is needed.
+Artifacts: `scratch/check-long-bits/`.
+
+Conversions, nullable/container values, and native Long methods were not
+established by this specimen. See the
 [current contract](../specs/compiler-subset.md#long-values) for accepted scope.
 
 [api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Long.html
