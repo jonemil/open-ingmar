@@ -114,7 +114,7 @@ fn erased_references_and_forged_ir_do_not_establish_interface_members() {
     let unit = compile_sources(&[source, ORDERING]).unwrap();
     let text = unit.declarations()[0].function.to_ir_text();
     assert!(parse_ir(&text).is_ok()); // Class/member resolution remains a unit obligation.
-    assert!(parse_ir(&text.replace("source(Ordering)", "view")).is_err());
+    assert!(parse_ir(&text.replace("source(Ordering@WatchUi.View)", "view")).is_err());
     let incomplete = "class Ordering extends Toybox.WatchUi.View { function initialize(direction as Toybox.Lang.Number) { View.initialize(); } }";
     assert!(compile_sources(&[source, incomplete]).is_err());
 }

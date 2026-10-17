@@ -3,7 +3,8 @@
 [objects.mc](objects.mc) defines an implicit Object-rooted Counter and an
 explicit `Lang.Object` comparator through a module alias. [app.mc](app.mc)
 checks independent fields, aliases, inherited observers, retained Method
-receivers, and custom comparator dispatch. The [expected output](expected.txt)
+receivers, custom comparator dispatch, and exact cross-file source references
+through parameters, returns, retained fields, and replacement. The [expected output](expected.txt)
 matches SDK/generated `fr265` programs.
 
 From the repository root:
@@ -16,7 +17,6 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-root-objects/genera
 ```
 
 Each constructed class declares an initializer; Object initialization has no
-native base call. Exact source annotations/reference fields remain restricted
-to View classes. Opaque Object erasure, local calls, and structural comparator
-checking are available. See the
+native base call. Exact source annotations/reference fields retain class identity
+and its native base; opaque Object erasure loses source-member access. See the
 [class contract](../../docs/specs/compiler-classes.md#object-rooted-classes).

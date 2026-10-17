@@ -17,3 +17,14 @@ class Ordering extends L.Object {
     }
     function count() as Toybox.Lang.Number { return self.calls; }
 }
+
+class CounterBox {
+    var target as Counter;
+    function initialize(c as Counter) { self.target = c; }
+    function current() as Counter { return self.target; }
+    function swap(c as Counter) as Counter {
+        var previous = self.current();
+        self.target = c;
+        return previous;
+    }
+}

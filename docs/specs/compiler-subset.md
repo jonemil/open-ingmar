@@ -308,7 +308,7 @@ qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.Float`,
 `Toybox.Lang.Double`, `Toybox.Lang.String`,
 `Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
 `Void`. Native short names, module aliases in annotations, and general unions
-are outside this subset. Unqualified declared source View names additionally
+are outside this subset. Unqualified constructible source-class names additionally
 provide [exact source contracts](compiler-classes.md#source-class-signatures).
 Numeric, String, Boolean, and Char annotations additionally accept `or Null`
 for both parameters and results. Reversed alternatives, parenthesized unions,
@@ -1622,9 +1622,8 @@ Whole-unit validation resolves the class and rechecks the required method;
 an erased View/Object or Method cannot establish the structural contract.
 General interface-typed storage/annotations, nullable comparators, and bare
 `self` as a comparator remain unsupported. Object-rooted source classes support
-local construction and comparator use through their
-[class contract](compiler-classes.md#object-rooted-classes); exact source-class
-annotations still use the View-specific profile.
+construction, exact source signatures/reference fields, and comparator use
+through their [class contract](compiler-classes.md#object-rooted-classes).
 The existing source class/base and constructor requirements still apply.
 
 Sort uses ordinary native-call lowering with receiver-before-argument order.

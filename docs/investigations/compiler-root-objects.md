@@ -11,7 +11,11 @@ The [tracked two-file specimen][example] additionally uses a Lang module alias,
 independent Number fields, local aliases, Object observers, a retained Method,
 and an Object-rooted comparator. Replacing all original Counter variables
 leaves its Method bound to the original state (`6 + 4 = 10`); the replacement
-remains at `100`. SDK/generated programs match all 12 expected lines.
+remains at `100`. The specimen also passes Counter references through cross-file
+parameters, module/self results, a retained CounterBox field, replacement, and Object
+erasure. SDK/generated programs match all 16 expected lines. The original
+reference remains independently usable after field replacement (`22`), while
+the box refers to the replacement (`42`).
 
 SDK DATA records carry an Object superclass and imported Object field.
 The hidden constructor targets for both implicit and explicit classes contain
@@ -42,9 +46,10 @@ validates saved stages, structured SDK/generated CODE/DATA/SYMBOLS, lossless
 reconstruction, and runtime output. The initial SDK probe and its section export
 are in `scratch/root-object-probe/`.
 
-Exact source annotations/reference-field targets remain View-specific in our
-compiler. These probes do not establish automatic default initializers,
-source superclass chains, Object casts/refinement, or broader weak targets.
+The extended reference check is in `scratch/check-root-references/`; it includes
+SDK/generated structured round trips and runtime output. These probes do not
+establish automatic default initializers, source superclass chains, Object
+casts/refinement, or broader weak targets.
 See the [class contract][spec] and [plan](../plan.md).
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

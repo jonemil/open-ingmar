@@ -10,3 +10,7 @@ true
 100
 [bb, b, a]
 true
+21
+22
+42
+true

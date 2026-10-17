@@ -87,7 +87,11 @@ pub(crate) fn parse_ir_context(
                 "method" => crate::ReturnType::Method,
                 "symbol" => crate::ReturnType::Symbol,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
-                    crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
+                    crate::ReturnType::SourceObject(
+                        crate::SourceClass::parse(&tag[7..tag.len() - 1]).ok_or_else(|| {
+                            Diagnostic::at(source, *name_at, "invalid source reference contract")
+                        })?,
+                    )
                 }
                 tag if tag.starts_with("dictionary(") => crate::ReturnType::TypedDictionary(
                     crate::DictionaryType::parse(tag)
@@ -112,9 +116,13 @@ pub(crate) fn parse_ir_context(
                 types
                     .split(':')
                     .map(|t| match t {
-                        tag if tag.starts_with("source(") && tag.ends_with(')') => Ok(
-                            crate::ParameterType::SourceObject(tag[7..tag.len() - 1].into()),
-                        ),
+                        tag if tag.starts_with("source(") && tag.ends_with(')') => {
+                            Ok(crate::ParameterType::SourceObject(
+                                crate::SourceClass::parse(&tag[7..tag.len() - 1]).ok_or_else(
+                                    || fail(*name_at, "invalid source reference contract"),
+                                )?,
+                            ))
+                        }
                         tag if tag.starts_with("dictionary(") => crate::DictionaryType::parse(tag)
                             .map(crate::ParameterType::TypedDictionary)
                             .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract")),
@@ -1137,7 +1145,11 @@ fn call_contract(
                 crate::ReturnType::Array(crate::ArrayElement::Object(crate::NativeClass::View))
             }
             tag if tag.starts_with("source(") && tag.ends_with(')') => {
-                crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
+                crate::ReturnType::SourceObject(
+                    crate::SourceClass::parse(&tag[7..tag.len() - 1]).ok_or_else(|| {
+                        Diagnostic::at(text, offset, "invalid source reference contract")
+                    })?,
+                )
             }
             _ => return Err(Diagnostic::at(text, offset, "unsupported call result type")),
         };

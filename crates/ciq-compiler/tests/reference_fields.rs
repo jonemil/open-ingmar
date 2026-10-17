@@ -14,10 +14,13 @@ fn retained_references_and_constructor_arguments_preserve_complete_pipelines() {
     let unit = compile_sources(&[APP, CONTROLLER, VIEW, VIEWS]).unwrap();
     assert_eq!(
         unit.classes()[0].fields[0].kind,
-        FieldKind::SourceObject("ViewController".into())
+        FieldKind::SourceObject(ciq_compiler::SourceClass {
+            name: "ViewController".into(),
+            base: ciq_compiler::ClassBase::WatchUiView
+        })
     );
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-reference target HelloView"));
+    assert!(text.contains(".field-reference target HelloView@WatchUi.View"));
     let resumed = parse_unit_ir(&text).unwrap();
     assert_eq!(unit, resumed);
     let options = ConsoleApplication {
@@ -106,14 +109,17 @@ fn reference_initialization_and_assignment_are_checked_before_exposure() {
     let text = unit.to_ir_text();
     for changed in [
         text.replace(
-            ".field-reference target HelloView",
-            ".field-reference target Missing",
+            ".field-reference target HelloView@WatchUi.View",
+            ".field-reference target Missing@WatchUi.View",
         ),
         text.replace(
-            ".field-reference target HelloView",
+            ".field-reference target HelloView@WatchUi.View",
             ".field-number target 0",
         ),
-        text.replace("target result=source(HelloView)", "target result=integer"),
+        text.replace(
+            "target result=source(HelloView@WatchUi.View)",
+            "target result=integer",
+        ),
         text.lines()
             .filter(|line| !line.starts_with(".assign-self target"))
             .collect::<Vec<_>>()

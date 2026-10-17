@@ -84,7 +84,7 @@ fn native_object_import_and_hidden_constructor_survive_complete_saved_paths() {
                 }
             }
         }
-        assert_eq!(roots, 2);
+        assert_eq!(roots, 3);
         let asm = unit.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
@@ -104,8 +104,6 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
         "class C { function initialize() { return 1; } }",
         "class C { function value() { return 1; } } function f() { var c=new C(); }",
         "class C { function initialize(n) {} } function f() { var c=new C(); }",
-        "class C { function initialize() {} } function f(c as C) { return 1; }",
-        "class C { function initialize() {} } function f() as C { return new C(); }",
         "class C { function initialize() {} } class Holder { var value as C; function initialize() {} }",
         "class C { function initialize() {} } function f() { var c=new C(); var d=new Other(); c=d; } class Other { function initialize() {} }",
         "class C { function initialize() {} } function f() as Toybox.WatchUi.View { return new C(); }",
@@ -126,4 +124,80 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
     );
     assert!(bad != text);
     assert!(parse_unit_ir(&bad).is_err());
+}
+
+#[test]
+fn exact_references_resolve_across_files_without_erasing_native_bases() {
+    let classes = "class C { function initialize() {} function value() { return 7; } } class Holder { var target as C; function initialize(c as C) { self.target=c; } function get() as C { return self.target; } }";
+    let functions = "module M { function pass(c as C) as C { return c; } function make() as C { return new C(); } } function f() { var h=new Holder(M.pass(M.make())); return h.get().value(); }";
+    for sources in [[functions, classes], [classes, functions]] {
+        let unit = compile_sources(&sources).unwrap();
+        let text = unit.to_ir_text();
+        assert!(text.contains("parameter-types=source(C@Lang.Object)"));
+        assert!(text.contains("result=source(C@Lang.Object)"));
+        assert!(text.contains(".field-reference target C@Lang.Object"));
+        assert_eq!(unit, parse_unit_ir(&text).unwrap());
+        for changed in [
+            text.replace("C@Lang.Object", "C@WatchUi.View"),
+            text.replace("source(C@Lang.Object)", "source(Missing@Lang.Object)"),
+            text.replace(
+                ".field-reference target C@Lang.Object",
+                ".field-reference target C@WatchUi.View",
+            ),
+            text.replace(
+                "M make result=source(C@Lang.Object)",
+                "M make result=object",
+            ),
+        ] {
+            assert_ne!(text, changed);
+            assert!(parse_unit_ir(&changed).is_err(), "{changed}");
+        }
+    }
+    // Exact delegate references use the same model, without projecting to View.
+    let unit = compile_sources(&["class D extends Toybox.WatchUi.BehaviorDelegate { function initialize() { BehaviorDelegate.initialize(); } } module M { function pass(d as D) as D { return d; } } function f() as Toybox.WatchUi.BehaviorDelegate { return M.pass(new D()); }"]).unwrap();
+    assert!(
+        unit.to_ir_text()
+            .contains("source(D@WatchUi.BehaviorDelegate)")
+    );
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+}
+
+#[test]
+fn root_reference_contracts_reject_erasure_wrong_classes_and_early_exposure() {
+    let declarations = "class C { function initialize() {} } class Other { function initialize() {} } module M { function pass(c as C) as C { return c; } }";
+    for body in [
+        "function f(o as Toybox.Lang.Object) { M.pass(o); }",
+        "function f() { M.pass(new Other()); }",
+        "function f() { M.pass(null); }",
+        "function f(c as Other) as C { return c; }",
+        "function f(o as Toybox.Lang.Object) as C { return o; }",
+        "function f() as C { return new Other(); }",
+        "function f(c as Missing) { return 0; }",
+        "class H { var c as C; function initialize() {} }",
+        "class H { var c as C; function initialize(c as C) { self.c = new Other(); } }",
+        "class H { var c as C; function initialize(c as C) { var x=self.c; self.c=c; } }",
+        "class H { var c as C; function initialize(c as C) { var x=self; self.c=c; } }",
+        "class H { var c as C; function initialize(c as C) { System.exit(); self.c=c; } }",
+    ] {
+        assert!(compile_sources(&[body, declarations]).is_err(), "{body}");
+    }
+    for tag in [
+        "source(C)",
+        "source(@Lang.Object)",
+        "source(C@Application.AppBase)",
+        "source(C@Unknown)",
+        "source(C@Lang.Object@WatchUi.View)",
+    ] {
+        let text = format!(
+            "ciq-ir\n.function f parameters=1 parameter-types={tag} result={tag}\n.parameter %0 0\n.return %0\n.end\n"
+        );
+        assert!(parse_ir(&text).is_err(), "{tag}");
+    }
+}
+
+#[test]
+fn single_function_source_cannot_guess_an_unresolved_class_base() {
+    let source = "function f(c as C) as C { return c; }";
+    let error = ciq_compiler::compile(source).unwrap_err();
+    assert!(error.to_string().contains("compilation-unit declarations"));
 }

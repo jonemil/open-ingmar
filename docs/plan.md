@@ -12,10 +12,7 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Generalize exact source-reference
-parameters/results and fields beyond their View-specific projection. Keep class
-identity distinct from its native base in source and saved IR. Establish Object
-input refinement (`has`, `instanceof`, and checked casts) for numeric/object
+**Object and structural contracts.** Establish Object input refinement (`has`, `instanceof`, and checked casts) for numeric/object
 comparator bodies. Review Lang.Comparable and its
 `compareTo(Object) as Number` contract alongside those prerequisites. Keep
 general interface-typed parameters/results/storage separate from the exact
@@ -201,8 +198,7 @@ below are planned requirements, not claims that every encoding is understood.
   class/module receiver values, callback type syntax, lookup, and invocation
   through the shared type and core API contracts. Verify applicable VM/SDK
   argument and frame limits, including the hidden receiver.
-- **Classes and construction:** generalize source-reference signatures and fields
-  beyond View. Complete native-base projection, source superclass chains,
+- **Classes and construction:** complete source superclass chains,
   inherited fields/methods, overrides and signature rules, parent-qualified
   method/initializer calls, static members, and public/private/protected/hidden
   access. Resolve default/inherited initializer requirements against the SDK.

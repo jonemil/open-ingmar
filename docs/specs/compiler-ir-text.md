@@ -1257,18 +1257,19 @@ Statement calls define no semantic result. Standalone function parsing retains
 declaration-resolution obligations; it does not authorize arbitrary receiver
 casts. See the [source-call contract](compiler-classes.md#calls-on-constructed-source-objects).
 
-`source(ClassName)` is an exact non-null source View contract in
+`source(ClassName@Native.Base)` is an exact non-null source-class contract in
 `parameter-types=...` and function/call `result=...` fields. It occupies one
 parameter-list entry without a colon inside the tag. Source function results
 always serialize this tag; omission erases the exact class at the return boundary.
-Class names must be valid identifiers and resolve to source View declarations
-during unit validation. Return provenance and call arguments/results are checked
+Class names must be valid identifiers; native bases are `Lang.Object`,
+`WatchUi.View`, or `WatchUi.BehaviorDelegate`. Unit validation checks both against
+the actual source declaration. Return provenance and call arguments/results are checked
 through the [source signature rules](compiler-classes.md#source-class-signatures);
-the tag does not cast an arbitrary native View.
+the tag does not cast an erased native reference.
 
 Instance field operations are `.read-self %<result-id> <field-name>` and
 `.assign-self <field-name> %<value-id>`, with optional source spans. Reads define
-Number by default; `result=source(ClassName)` selects a source-reference read.
+Number by default; `result=source(ClassName@Native.Base)` selects a source-reference read.
 Writes consume Number or a source reference without a result. Both require an
 instance receiver
 and preserve observable order. Their symbolic field identities resolve through

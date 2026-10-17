@@ -176,8 +176,8 @@ pub enum FieldKind {
     /// A Number copied from class metadata into each new instance.
     Number(i32),
     /// A null reference slot that source initialize must fill with this exact
-    /// non-null source View class before reads, self calls, or return.
-    SourceObject(String),
+    /// non-null source class before reads, self calls, or return.
+    SourceObject(crate::SourceClass),
 }
 
 /// An instance field declaration with a checked initialization contract.
@@ -466,12 +466,14 @@ impl CompilationUnit {
                 .collect::<Vec<_>>();
             for target in &references {
                 if !self.classes.iter().any(|declaration| {
-                    declaration.name == **target && declaration.base == ClassBase::WatchUiView
+                    declaration.name == target.name
+                        && declaration.base == target.base
+                        && target.base.constructed_type().is_some()
                 }) {
                     return Err(fail(
                         Some(at),
                         None,
-                        "reference field class must resolve to a declared View subclass".into(),
+                        "reference field class and native base must match a constructible declaration".into(),
                     ));
                 }
             }
@@ -520,23 +522,23 @@ impl CompilationUnit {
                 .iter()
                 .filter_map(|ty| {
                     if let crate::ParameterType::SourceObject(class) = ty {
-                        Some(class.as_str())
+                        Some(class)
                     } else {
                         None
                     }
                 })
-                .chain(source_result.as_deref());
+                .chain(source_result.as_ref());
             for name in source_classes {
-                if !self
-                    .classes
-                    .iter()
-                    .any(|class| class.name == name && class.base == ClassBase::WatchUiView)
-                {
+                if !self.classes.iter().any(|class| {
+                    class.name == name.name
+                        && class.base == name.base
+                        && name.base.constructed_type().is_some()
+                }) {
                     return Err(fail(
                         Some(index),
                         None,
                         format!(
-                            "source signature class {name} must resolve to a declared View subclass"
+                            "source signature class {name} must match a constructible declaration and native base"
                         ),
                     ));
                 }
@@ -1113,13 +1115,62 @@ fn compile_sources_context(
     let mut classes = Vec::new();
     let mut origins = Vec::new();
     let mut class_origins = Vec::new();
-    let parsed_sources = sources
+    let mut parsed_sources = sources
         .iter()
         .enumerate()
         .map(|(source, text)| {
             parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let bases = parsed_sources
+        .iter()
+        .flat_map(|p| p.classes.iter())
+        .map(|class| (class.name.clone(), class.base))
+        .collect::<BTreeMap<_, _>>();
+    for (index, parsed) in parsed_sources.iter_mut().enumerate() {
+        let resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
+            reference.base = bases
+                .get(&reference.name)
+                .copied()
+                .filter(|base| base.constructed_type().is_some())
+                .ok_or_else(|| SourceDiagnostic {
+                    source: index,
+                    diagnostic: Diagnostic::at(
+                        sources[index],
+                        0,
+                        format!(
+                            "source reference {} must resolve to a constructible class",
+                            reference.name
+                        ),
+                    ),
+                })?;
+            Ok(())
+        };
+        for ast in parsed.functions.iter_mut().map(|(_, ast)| ast).chain(
+            parsed
+                .classes
+                .iter_mut()
+                .flat_map(|class| class.methods.iter_mut()),
+        ) {
+            for parameter in ast.parameter_types.iter_mut().flatten() {
+                if let crate::ParameterType::SourceObject(class) = parameter {
+                    resolve(class)?;
+                }
+            }
+            if let Some(ReturnType::SourceObject(class)) = &mut ast.result_type {
+                resolve(class)?;
+            }
+        }
+        for field in parsed
+            .classes
+            .iter_mut()
+            .flat_map(|class| class.fields.iter_mut())
+        {
+            if let FieldKind::SourceObject(class) = &mut field.kind {
+                resolve(class)?;
+            }
+        }
+    }
     let mut calls = source_ir::CallContext::new();
     for parsed in &parsed_sources {
         for (module, ast) in &parsed.functions {
@@ -1374,7 +1425,15 @@ fn parse_unit_ir_context(
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
                         } else {
-                            FieldKind::SourceObject(parts[2].clone())
+                            FieldKind::SourceObject(
+                                crate::SourceClass::parse(&parts[2]).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid source reference contract",
+                                    )
+                                })?,
+                            )
                         };
                         instance_fields.push(InstanceField {
                             name: parts[1].clone(),

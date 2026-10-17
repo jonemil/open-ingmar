@@ -35,7 +35,7 @@ impl Origins {
             Operation::ParameterRead { result, index } => {
                 if let Some(crate::ParameterType::SourceObject(class)) = self.parameters.get(*index)
                 {
-                    self.values.insert(*result, class.clone());
+                    self.values.insert(*result, class.name.clone());
                 }
             }
             Operation::SelfFieldRead {
@@ -58,7 +58,7 @@ impl Origins {
                 result_type: crate::ReturnType::SourceObject(class),
                 ..
             } => {
-                self.values.insert(*result, class.clone());
+                self.values.insert(*result, class.name.clone());
             }
             Operation::SourceNew { result, class, .. } => {
                 self.values.insert(*result, class.clone());

@@ -18,15 +18,21 @@ fn exact_source_contracts_survive_function_calls_and_complete_text_pipelines() {
         .unwrap();
     assert_eq!(
         pass.function.parameter_types(),
-        &[ParameterType::SourceObject("HelloView".into())]
+        &[ParameterType::SourceObject(ciq_compiler::SourceClass {
+            name: "HelloView".into(),
+            base: ciq_compiler::ClassBase::WatchUiView
+        })]
     );
     assert_eq!(
         pass.function.return_type(),
-        ReturnType::SourceObject("HelloView".into())
+        ReturnType::SourceObject(ciq_compiler::SourceClass {
+            name: "HelloView".into(),
+            base: ciq_compiler::ClassBase::WatchUiView
+        })
     );
     let text = unit.to_ir_text();
-    assert!(text.contains("parameter-types=source(HelloView)"));
-    assert!(text.contains("result=source(HelloView)"));
+    assert!(text.contains("parameter-types=source(HelloView@WatchUi.View)"));
+    assert!(text.contains("result=source(HelloView@WatchUi.View)"));
     let resumed = parse_unit_ir(&text).unwrap();
     assert_eq!(unit, resumed);
     let options = ConsoleApplication {
@@ -71,7 +77,7 @@ fn source_contracts_do_not_cast_generic_native_or_unrelated_references() {
     for text in [
         "ciq-ir\n.function f parameters=1 parameter-types=source()\n.return-void\n.end\n",
         "ciq-ir\n.function f result=source()\n.new-source %0 HelloView WatchUi.View\n.return %0\n.end\n",
-        "ciq-ir\n.function f parameters=1 parameter-types=view result=source(HelloView)\n.parameter %0 0\n.return %0\n.end\n",
+        "ciq-ir\n.function f parameters=1 parameter-types=view result=source(HelloView@WatchUi.View)\n.parameter %0 0\n.return %0\n.end\n",
         "ciq-ir\n.function f\n.call %0 M make result=source()\n.return %0\n.end\n",
     ] {
         assert!(parse_ir(text).is_err(), "{text}");
@@ -83,12 +89,18 @@ fn edited_call_and_signature_claims_are_revalidated_against_definitions() {
     let unit = compile_sources(&[APP, VIEW, VIEWS]).unwrap();
     let text = unit.to_ir_text();
     for changed in [
-        text.replace("parameter-types=source(HelloView)", "parameter-types=view"),
         text.replace(
-            "Views make result=source(HelloView)",
+            "parameter-types=source(HelloView@WatchUi.View)",
+            "parameter-types=view",
+        ),
+        text.replace(
+            "Views make result=source(HelloView@WatchUi.View)",
             "Views make result=view",
         ),
-        text.replace("source(HelloView)", "source(Missing)"),
+        text.replace(
+            "source(HelloView@WatchUi.View)",
+            "source(Missing@WatchUi.View)",
+        ),
     ] {
         assert_ne!(text, changed);
         assert!(parse_unit_ir(&changed).is_err(), "{changed}");

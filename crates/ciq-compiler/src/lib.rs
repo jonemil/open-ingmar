@@ -301,6 +301,47 @@ impl TupleShape {
     }
 }
 
+/// An exact source-class identity and its native API projection.
+/// Unit validation checks both fields against the class declaration; a native
+/// base alone cannot establish source-class assignability.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceClass {
+    /// Unqualified source identity, resolved against unit declarations.
+    pub name: String,
+    /// Native base used for API checking, independently of exact identity.
+    pub base: ClassBase,
+}
+
+impl SourceClass {
+    /// Return the unqualified source identity without its native projection.
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+
+    /// Parse the saved reference contract `Class@Native.Base`.
+    /// Reject malformed names and bases that cannot be source-constructed.
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        let (name, base) = text.split_once('@')?;
+        validate_call_names(None, name).ok()?;
+        let base = match base {
+            "Lang.Object" => ClassBase::LangObject,
+            "WatchUi.View" => ClassBase::WatchUiView,
+            "WatchUi.BehaviorDelegate" => ClassBase::WatchUiBehaviorDelegate,
+            _ => return None,
+        };
+        Some(Self {
+            name: name.into(),
+            base,
+        })
+    }
+}
+
+impl fmt::Display for SourceClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}@{}", self.name, self.base.text())
+    }
+}
+
 /// The supported function result contract, declared explicitly or inferred
 /// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
@@ -334,8 +375,8 @@ pub enum ReturnType {
     Boolean,
     Char,
     Object(NativeClass),
-    /// Exact non-null source View subclass, resolved within a compilation unit.
-    SourceObject(String),
+    /// Exact non-null source class, resolved within a compilation unit.
+    SourceObject(SourceClass),
     Tuple(TupleShape),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
@@ -373,8 +414,8 @@ pub enum ParameterType {
     Boolean,
     Char,
     Object(NativeClass),
-    /// Exact non-null source View subclass, resolved within a compilation unit.
-    SourceObject(String),
+    /// Exact non-null source class, resolved within a compilation unit.
+    SourceObject(SourceClass),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
@@ -383,8 +424,8 @@ pub enum ParameterType {
 
 impl ParameterType {
     /// Return the API type represented by this supported parameter contract.
-    /// Source objects map to their native View base for API checks; exact source
-    /// assignability is checked separately against unit declarations.
+    /// Source objects map to their declared native base for API checks; exact
+    /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
@@ -409,7 +450,7 @@ impl ParameterType {
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
-            Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
+            Self::SourceObject(class) => api::Type::named(class.base.api_name()),
             Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
@@ -418,7 +459,7 @@ impl ParameterType {
 
 impl ReturnType {
     /// Return the API type represented by this supported result contract.
-    /// Source objects map to their native View base without erasing their
+    /// Source objects map to their declared native base without erasing their
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
@@ -444,7 +485,7 @@ impl ReturnType {
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
-            Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
+            Self::SourceObject(class) => api::Type::named(class.base.api_name()),
             Self::Tuple(shape) => shape.api_type(),
             Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::Void => api::Type::Void,
@@ -1234,6 +1275,15 @@ impl Function {
             })?;
         }
         if parameter_types.iter().any(|ty| {
+            matches!(ty, ParameterType::SourceObject(class) if class.base.constructed_type().is_none())
+        }) || matches!(&declared_result, Some(ReturnType::SourceObject(class)) if class.base.constructed_type().is_none())
+        {
+            return Err(IrError {
+                operation: None,
+                message: "source reference requires a constructible native base".into(),
+            });
+        }
+        if parameter_types.iter().any(|ty| {
             matches!(
                 ty,
                 ParameterType::Array(ArrayElement::Object(class)) if *class != NativeClass::View
@@ -1604,11 +1654,10 @@ impl Function {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if !matches!(
-                        type_of(value),
-                        ValueType::Integer | ValueType::Object(NativeClass::View)
-                    ) {
-                        return Err(fail("instance fields require Number or source View values"));
+                    if type_of(value) != ValueType::Integer && origins.class(value).is_none() {
+                        return Err(fail(
+                            "instance fields require Number or exact source values",
+                        ));
                     }
                     (None, vec![value])
                 }
@@ -3030,7 +3079,8 @@ impl Function {
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
 /// Resolves supported leading native name declarations and their aliases
-/// before IR construction.
+/// before IR construction. Source-class annotations require `compile_sources`
+/// so the native base can be resolved from declarations.
 /// Resolves parameters and scoped locals, lowers conditions and while loops
 /// (including innermost break/continue) to blocks, and retains source spans.
 /// Value functions require a consistent typed return on every path;
@@ -3136,8 +3186,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
-            validate_call_names(None, &class)?;
-            Ok(ValueType::Object(NativeClass::View))
+            validate_call_names(None, class.as_str())?;
+            ValueType::from_api_type(&api::Type::named(class.base.api_name()))
+                .ok_or("source reference requires a constructible native base")
         }
         ReturnType::Tuple(shape) => Ok(ValueType::Tuple(shape)),
         ReturnType::Array(element) => Ok(ValueType::Array(element)),

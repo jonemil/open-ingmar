@@ -1,5 +1,7 @@
 use crate::{Diagnostic, Span};
 
+// SourceClass bases in parsed annotations are placeholders. Unit declaration
+// collection resolves them before signatures or bodies enter semantic IR.
 pub(crate) struct ParsedFunction {
     pub name: String,
     pub parameters: Vec<String>,
@@ -1809,7 +1811,10 @@ impl Parser<'_> {
                                     | "Void"
                             ) =>
                         {
-                            crate::ParameterType::SourceObject(name.into())
+                            crate::ParameterType::SourceObject(crate::SourceClass {
+                                name: name.into(),
+                                base: crate::ClassBase::LangObject,
+                            })
                         }
                         _ => return Err(self.error(at, "unsupported parameter type annotation")),
                     };
@@ -1881,7 +1886,10 @@ impl Parser<'_> {
                             | "Dc"
                     ) =>
                 {
-                    crate::ReturnType::SourceObject(name.into())
+                    crate::ReturnType::SourceObject(crate::SourceClass {
+                        name: name.into(),
+                        base: crate::ClassBase::LangObject,
+                    })
                 }
                 _ => return Err(self.error(at, "unsupported result type annotation")),
             };
@@ -2002,14 +2010,17 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                         if class.contains('.') {
                             return Err(parser.error(
                                 token.span.start,
-                                "reference field requires a source View class name",
+                                "reference field requires a source class name",
                             ));
                         }
                         parser.expect(
                             Kind::Punctuation(';'),
                             "';' after reference field declaration",
                         )?;
-                        crate::FieldKind::SourceObject(class)
+                        crate::FieldKind::SourceObject(crate::SourceClass {
+                            name: class,
+                            base: crate::ClassBase::LangObject,
+                        })
                     } else {
                         parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
                         let value = parser.expression(0)?;

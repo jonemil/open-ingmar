@@ -137,9 +137,8 @@ operator/type-system dependencies and sequencing belong to the
   applicable Object/argument domains of comparison and observers. Resolve
   literal/Unicode discrepancies and validate remaining boundaries. Existing
   own-method names largely have executable profiles.
-- **Object and source objects:** generalize exact signatures and fields beyond
-  View; complete source inheritance/overrides, member lookup, type tests and
-  refinement, and broader inherited-method dispatch.
+- **Object and source objects:** complete source inheritance/overrides, member
+  lookup, type tests and refinement, and broader inherited-method dispatch.
 - **Array:** dynamic-sized allocation, nested/heterogeneous/object/reference
   elements, remaining nullable storage/receivers and joins, and sorting and
   Comparable contracts outside the scalar profile.

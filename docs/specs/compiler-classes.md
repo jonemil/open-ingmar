@@ -117,9 +117,8 @@ separate bounded profile.
 The runtime value projects to opaque Object, while construction and locals
 retain the exact source identity for own-member calls and structural checking.
 It may pass through ordinary Object contracts, but erasure loses own-member
-access. Exact source annotations and reference-field targets still require a
-View subclass; Object-rooted classes cannot claim those contracts or a View
-result. Object-element Arrays, source superclass chains, and recovering the
+access. Exact source annotations and reference fields preserve the Object-rooted
+class and its native projection; they cannot claim a View result. Object-element Arrays, source superclass chains, and recovering the
 class from an opaque Object remain unsupported.
 
 Complete application DATA gives each class an Object base reference and a
@@ -132,37 +131,42 @@ no native Object allocation/initialization hook is invoked. See the
 ## Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
-an unqualified source View class name:
+an unqualified constructible source class name:
 
 ```text
 function pass(view as HelloView) as HelloView { return view; }
 ```
 
-The name must resolve to a declared WatchUi.View subclass in the unit, including
-forward or cross-file declarations. AppBase references, arbitrary native classes,
-nullable source references, Array<ClassName>, aliases, and qualified source-class
+The name must resolve to a declared Object-, View-, or BehaviorDelegate-derived
+class in the unit, including forward or cross-file declarations. AppBase
+references, arbitrary native classes, nullable source references, Array<ClassName>, aliases, and qualified source-class
 names are unsupported. Bare native type names such as Number remain unsupported;
 native annotations use their established canonical names.
 
 Source contracts are exact and non-null. Arguments and every value return must
 preserve the declared source class through construction, typed parameters,
-declared call results, or local copies. A different source View class, Null, or
-generic native View cannot satisfy the contract. The existing native View
-contract may accept a source instance while erasing its exact class identity.
+declared call results, or local copies. A different source class, Null, or an
+erased native reference cannot satisfy the contract. Native contracts may accept
+a source instance through its base while erasing its exact class identity.
 
 Module, self, and explicit object calls retain a declared source result, permitting
 subsequent source dispatch and same-class local assignment. Parameter reads also
 retain their declared class. Native callbacks keep their inherited signatures;
 source annotations cannot replace those contracts. No runtime cast is emitted.
 
-`ParameterType::SourceObject(String)` and `ReturnType::SourceObject(String)` carry
-the source name. Their native API projection is View; exact assignability is
-checked separately. Function validation checks names and return provenance, while
-unit validation checks class declarations, call arguments, and result claims.
+`ParameterType::SourceObject(SourceClass)` and
+`ReturnType::SourceObject(SourceClass)` carry the source name and native base
+separately. Source declaration collection resolves both across all input files
+before checking bodies. API checking projects to that base; exact source
+assignability is checked separately. Function validation checks names and return
+provenance, while unit validation checks both class identity and native base
+against declarations, call arguments, and result claims.
 Standalone typed/function IR retains its class/callee resolution obligations.
+Single-function source compilation rejects source-class annotations because it
+has no declarations from which to resolve their native bases.
 
-Saved parameter tags and function/call result tags use `source(ClassName)`.
-Result contracts must be explicit in saved function text to retain the source
+Saved parameter tags and function/call result tags use
+`source(ClassName@Native.Base)`. Result contracts must be explicit in saved function text to retain the source
 identity. See the [signature example](../../examples/compiler-source-signatures/README.md)
 and [runtime evidence](../investigations/compiler-source-signatures.md).
 
@@ -339,7 +343,8 @@ See the [counter example](../../examples/compiler-fields/README.md) and
 
 ## Source-reference fields
 
-`var target as HelloView;` declares an exact source View reference field.
+`var target as HelloView;` declares an exact source reference field for an
+Object-, View-, or BehaviorDelegate-derived class.
 The class must resolve across the unit, including forward declarations. The
 256-field limit and name/conflict rules above cover Number and reference fields
 together. Declaration initializers, Null unions, native reference fields, and
@@ -350,7 +355,7 @@ initialize method is required to establish the non-null field contract. It must
 assign every reference field before exposing `self` as an Object, binding a
 self callback, making a self call, branching, jumping, or returning. A
 reference read before that field's assignment is rejected. Assignment must use
-the exact declared source class; native View erasure, another class, and Null
+the exact declared source class; native erasure, another class, and Null
 cannot satisfy it. Requiring this straight-line initialization prefix is our
 bounded checking policy, not Garmin's complete definite-initialization rules.
 Calls that may request System.exit, including transitive source calls and
@@ -365,8 +370,9 @@ returns. Access remains limited to `self.<field>`; a getter can forward the
 reference to another caller. Reads/writes preserve the existing evaluation-order
 rules. These contracts apply to typed and saved IR as well as source.
 
-Unit text uses `.field-reference <name> <class>` before method documents.
-Function text reads it with `.read-self %<result> <name> result=source(<class>)`;
+Unit text uses `.field-reference <name> <class>@<native-base>` before methods.
+Function text reads it with
+`.read-self %<result> <name> result=source(<class>@<native-base>)`;
 the result claim must match the owning field declaration. Writes use the existing
 `.assign-self <name> %<value>` form. See the
 [retained View example](../../examples/compiler-reference-fields/README.md) and

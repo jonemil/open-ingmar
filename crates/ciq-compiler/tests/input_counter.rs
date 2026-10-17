@@ -136,12 +136,15 @@ fn selection_requires_its_member_api_and_delegate_types_do_not_become_views() {
     );
     let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 2, 0)).unwrap();
     unit.validate_api(context).unwrap();
-    for extra in [
-        "function f() as D { return new D(); }",
-        "function f(view as Toybox.WatchUi.View) {} function g() { f(new D()); }",
-    ] {
-        assert!(compile_sources(&[source, extra]).is_err());
-    }
+    let exact = compile_sources(&[source, "function f() as D { return new D(); }"]).unwrap();
+    assert_eq!(exact, parse_unit_ir(&exact.to_ir_text()).unwrap());
+    assert!(
+        compile_sources(&[
+            source,
+            "function f(view as Toybox.WatchUi.View) {} function g() { f(new D()); }",
+        ])
+        .is_err()
+    );
     let source = "function f(delegate as Toybox.WatchUi.BehaviorDelegate) as Toybox.WatchUi.BehaviorDelegate { return delegate; }";
     let unit = compile_sources(&[source]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());

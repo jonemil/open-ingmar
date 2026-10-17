@@ -1809,6 +1809,19 @@ pub(crate) fn build(
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
+    if ast
+        .parameter_types
+        .iter()
+        .flatten()
+        .any(|ty| matches!(ty, crate::ParameterType::SourceObject(_)))
+        || matches!(&ast.result_type, Some(crate::ReturnType::SourceObject(_)))
+    {
+        return Err(Diagnostic::at(
+            source,
+            ast.body_span.start,
+            "source-class annotations require compilation-unit declarations",
+        ));
+    }
     build_body(source, ast, None, context, &CallContext::new())
 }
 
