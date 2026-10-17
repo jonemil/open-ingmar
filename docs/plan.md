@@ -30,10 +30,9 @@ Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established. Dictionary
 callable and ordinary weak-reference methods belong to the shared Object work.
 
-Array sorting remains deferred until comparator/callable support. Inherited
-Array equality, hashing, and ordinary weak references need array-specific
-evidence in the Object-contract phase; the immutable weak specialization does
-not establish them.
+Array sorting remains deferred until comparator/callable support. Ordinary
+Array weak references need lifetime/get/clear evidence in the Object-contract
+phase; the immutable weak specialization does not establish them.
 
 A blocked method should lead to its core type/operator/callable prerequisite or
 another core class group. Retain explicit deferred-method inventories; declaring

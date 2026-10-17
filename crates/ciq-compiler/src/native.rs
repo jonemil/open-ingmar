@@ -176,7 +176,7 @@ pub(crate) fn value_call(
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
             | (
-                "Toybox.Lang.Dictionary",
+                "Toybox.Lang.Array" | "Toybox.Lang.Dictionary",
                 "Toybox.Lang.Object",
                 "equals" | "hashCode"
             )
@@ -309,10 +309,7 @@ pub(crate) fn value_call(
             return Err("Array.slice requires Number or Null bounds".into());
         }
     }
-    if member == "equals"
-        && !scalar_or_null(&arguments[0])
-        && !(class == "Toybox.Lang.Dictionary" && dictionary_or_null(&arguments[0]))
-    {
+    if member == "equals" && !equality_argument(&arguments[0]) {
         return Err(format!(
             "{class}.equals argument is outside its supported comparison profile"
         ));
@@ -320,17 +317,9 @@ pub(crate) fn value_call(
     Ok(signature.result)
 }
 
-fn dictionary_or_null(ty: &api::Type) -> bool {
-    match ty {
-        api::Type::Null => true,
-        api::Type::Named(name) => name == "Toybox.Lang.Dictionary",
-        api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),
-        api::Type::Union(types) => types.iter().all(dictionary_or_null),
-        _ => false,
-    }
-}
-
-fn scalar_or_null(ty: &api::Type) -> bool {
+/// Check the bounded scalar/container and Null arguments supported by native
+/// equality calls. Container comparison does not convert element contracts.
+fn equality_argument(ty: &api::Type) -> bool {
     match ty {
         api::Type::Null => true,
         api::Type::Named(name) => matches!(
@@ -342,8 +331,11 @@ fn scalar_or_null(ty: &api::Type) -> bool {
                 | "Toybox.Lang.String"
                 | "Toybox.Lang.Boolean"
                 | "Toybox.Lang.Char"
+                | "Toybox.Lang.Dictionary"
         ),
-        api::Type::Union(types) => types.iter().all(scalar_or_null),
+        api::Type::Array(element) => crate::ArrayElement::from_api_type(element).is_some(),
+        api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),
+        api::Type::Union(types) => types.iter().all(equality_argument),
         _ => false,
     }
 }

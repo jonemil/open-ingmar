@@ -857,8 +857,9 @@ guarantee or a rule to fold into generated code. See
 
 Inherited `hashCode()` returns Number, since 1.0.0; immutable `weak()` returns
 the effective receiver type since 1.2.0. Float inherits Object `equals` since
-1.0.0; Double overrides it since 1.3.0. Equality accepts the shared scalar/Null
-profile and distinguishes floating widths and integer classes. Do not infer a
+1.0.0; Double overrides it since 1.3.0. Equality accepts the
+[shared Object argument profile](#object-equality-and-container-observers)
+and distinguishes floating widths and integer classes. Do not infer a
 cross-instance Double hash contract from numeric equality. `compareTo` accepts
 non-null numeric/Boolean/Char arguments and returns Number since 5.0.0.
 String `toFloat()` returns Float or Null since 1.0.0; `toDouble()` returns Double
@@ -925,7 +926,7 @@ Long receivers support these native methods:
 | `toString()`, `format(String)` | String | 1.0.0 |
 | inherited `hashCode()` | Number | 1.0.0 |
 | inherited `weak()` | Long | 1.2.0 |
-| `equals(scalar or nullable scalar)` | Boolean | 1.3.0 |
+| `equals(other)` | Boolean | 1.3.0 |
 | `compareTo(numeric, Boolean, or Char)` | Number | 5.0.0 |
 
 `toNumber()` retains the low 32 bits as a signed Number. Number's `toLong()`
@@ -1012,20 +1013,8 @@ current contents and produces a String unaffected by later Dictionary mutation.
 Entry order is unspecified. Conversion uses ordinary native dispatch and String
 result contracts, including chaining and discarded results.
 
-Opaque and typed references also inherit `equals(other)` → Boolean and
-`hashCode()` → Number from Object, since API 1.0.0. Equality tests Dictionary
-identity, including across different key/value contracts; separate dictionaries
-with equal contents compare unequal. Supported arguments are bounded typed or
-opaque Dictionary references, numeric/String/Boolean/Char scalars, Null, and their
-supported nullable forms. Array and source/native object arguments remain outside this
-profile. Nullable callback Dictionary arguments need no guard; a nullable
-receiver requires a non-null proof.
-
-A Dictionary hash remains stable across mutations and agrees for shared
-references. The runtime supplies its value; distinct objects need not have
-different hashes. Both methods use ordinary native calls, preserve receiver then
-argument evaluation, and support discarded results. Scalar receivers retain
-[their own equality argument profile](#native-value-calls).
+Opaque and typed references also inherit the
+[Object equality and hash observers](#object-equality-and-container-observers).
 
 Typed references additionally support the following API 1.0.0 contracts:
 
@@ -1081,6 +1070,32 @@ contracts before acceptance. Object `method` and ordinary `weak` need callable/w
 contracts before accepting their results.
 
 
+## Object equality and container observers
+
+Supported numeric, String, Boolean, Char, Array, and Dictionary receivers accept
+`equals(other)` → Boolean. Its bounded argument profile includes those scalar
+types, all supported invariant Array contracts, opaque or typed Dictionary
+references, Null, and supported nullable forms. Comparing containers does not
+require matching element/key/value contracts and does not convert or erase
+their types. Nullable callback Dictionary arguments require no proof; nullable
+receivers still require a non-null proof. Arbitrary source/native object
+arguments, nested containers, and general Object-typed storage remain deferred.
+
+All supported Arrays and Dictionaries inherit `equals` and `hashCode()` →
+Number from Object, since API 1.0.0. Element/key/value availability is checked
+separately. Container equality tests reference identity: aliases compare equal,
+while separately allocated containers with equal contents compare unequal.
+Hashes remain stable across mutations and agree for aliases. The runtime
+supplies their values; distinct containers need not have different hashes.
+
+Both calls preserve receiver-before-argument evaluation and support discarded
+results. Native dispatch retains runtime semantics for scalar equality,
+including String content comparison and numeric class distinctions; no result
+or hash is folded. Scalar override/API requirements remain in their respective
+sections. This profile does not enable Array/Dictionary equality operators,
+Object callbacks, or ordinary weak-reference values. See the
+[observer evidence](../investigations/compiler-object-observers.md).
+
 ## Native value calls
 
 A Number-valued expression may receive these catalogue-resolved methods:
@@ -1093,15 +1108,14 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `toNumber()` | `Lang.Number` | Number |
 | `toLong()` | `Lang.Number` | Long |
 | `compareTo(numeric, Boolean, or Char)` | `Lang.Number` | Number |
-| `equals(scalar or nullable scalar)` | `Lang.Object` | Boolean |
+| `equals(other)` | `Lang.Object` | Boolean |
 | `hashCode()` | `Lang.Object` | Number |
 
 Number `compareTo` requires API 5.0.0; the other listed Number methods require
 1.0.0. Its declaration takes Object, but current lowering admits Number or
 Long, Float, Double, Boolean, or Char only. Unchecked nullable comparison arguments are rejected.
-`equals`
-accepts numeric, String, Boolean, Char, Null, or their nullable scalar forms;
-it returns Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
+`equals` uses the [shared argument profile](#object-equality-and-container-observers).
+Dictionary arguments to Number `compareTo` remain unsupported.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
 Comparison/equality/hash behavior is supplied by the runtime; comparison signs
@@ -1117,7 +1131,7 @@ the compiler does not evaluate these calls at compile time.
 String `compareTo(String)` returns Number and requires API 5.0.0. Its Object
 argument declaration is narrowed to String by the executable profile; unchecked
 nullable arguments are rejected. String `equals` returns Boolean and accepts
-the same scalar/nullable scalar arguments as Number equality, since API 1.0.0.
+the shared Object equality arguments, since API 1.0.0.
 `toNumberWithBase(Number)` returns Number or Null, since API 1.4.1, and follows
 the existing null-check rules. The base is 0 for prefix detection or 2..=36 for
 an explicit radix. Numeric ranges and conversion content are passed to the
@@ -1125,7 +1139,7 @@ runtime without compiler validation. See the
 [String group evidence][string-group].
 
 Boolean receivers support `toString()` returning String, `hashCode()` returning
-Number, and `equals` returning Boolean with the same scalar/nullable argument
+Number, and `equals` returning Boolean with the shared Object argument
 profile as Number/String equality. These inherited methods date from API 1.0.0.
 Boolean `compareTo` returns Number and accepts numeric/Boolean/Char arguments
 since API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
@@ -1136,7 +1150,7 @@ Char values originate from literals or Number's zero-argument `toChar()` and are
 from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
 returning Number, and `toString()` returning String. Char's direct `compareTo`
 returns Number for numeric/Boolean/Char arguments, since API 5.0.0. Inherited
-`equals` accepts the scalar/nullable scalar profile above and returns Boolean;
+`equals` accepts the shared Object argument profile and returns Boolean;
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
 returns, local initialization/assignment, printing, and chained calls retain
@@ -1255,7 +1269,7 @@ end, and out-of-range bounds are clipped. A start after the end returns an empty
 array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
-concatenation, comparisons, Boolean conditions, scalar equality methods, or
+concatenation, comparison operators, Boolean conditions, or
 console entry results. Native Array constructors, `sort`, and ordinary
 object weak references remain unsupported. Native Array calls may be values or
 statements that discard the result.
@@ -1402,8 +1416,8 @@ Non-null indexed updates/compounds follow scalar operator promotion and must
 retain the element type. For example, `Float += Number` is valid but
 `Float += Long` would produce Double and is rejected. Nullable elements cannot
 be compound targets without a supported direct non-null read contract.
-Sorting, ordinary Object methods, nested containers, nullable Array references,
-and whole-array expression joins outside the existing Number/Char profile
+Sorting, Object callbacks/weak references, nested containers, nullable Array
+references, and whole-array expression joins outside the existing Number/Char profile
 remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
 and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
 
@@ -1426,7 +1440,7 @@ String-array contract supplies the type of a direct `[]`.
 and `slice` use the existing Array contracts with String substituted for the
 element type. Search/removal compare String text. Array/String types,
 construction, indexing, `size`, and `toString` require API 1.0.0; the other
-methods require 1.3.0. Sort and inherited Object methods remain deferred.
+methods require 1.3.0. Sort and Object callbacks/weak references remain deferred.
 Arrays must be converted to String before printing.
 
 See the [example](../../examples/compiler-string-arrays/README.md) and
@@ -1444,7 +1458,7 @@ Literal-only arrays use `apush` constants; computed elements use ordered private
 construction, including conditional/short-circuit expressions. Copies share
 mutation; repeated constant loads are independently mutable. The supported
 Array methods and API levels match the String/Number profile. Sorting and
-inherited Object methods remain deferred. See the
+Object callbacks/weak references remain deferred. See the
 [example](../../examples/compiler-boolean-arrays/README.md) and
 [evidence](../investigations/compiler-boolean-arrays.md).
 

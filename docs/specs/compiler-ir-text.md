@@ -1300,6 +1300,13 @@ Function result categories are inferred from returns; those categories are not
 Nullable Array receivers and unsupported element types cannot be introduced
 by text edits.
 
+Native `equals` uses the shared
+[Object argument profile](compiler-subset.md#object-equality-and-container-observers),
+including supported scalar, Array, Dictionary, and nullable/Null arguments.
+An Array receiver's `equals` defines Boolean and `hashCode` defines Number;
+neither changes its invariant element contract. They use existing native call
+directives, including ordinary discard for unused results.
+
 Arithmetic and comparison directives enforce the same
 [operator contracts](compiler-subset.md#operator-contracts) as source, including
 mixed Char addition, String identity equality, and nullable restrictions.

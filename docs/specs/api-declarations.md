@@ -102,7 +102,8 @@ results remain in the linked investigations.
   [Boolean](../investigations/compiler-boolean-methods.md),
   [Char](../investigations/compiler-char-methods.md), and
   [weak-result evidence](../investigations/compiler-immutable-weak.md).
-- **Array:** sorting needs comparator/callable support. Inherited equality,
-  hashing, and weak references require array-specific evidence.
+- **Array:** sorting needs comparator/callable support. Ordinary weak references
+  need lifetime/get/clear evidence; equality and hashing use the
+  [shared observer profile](compiler-subset.md#object-equality-and-container-observers).
 
 [The plan](../plan.md) owns sequencing and newly discovered prerequisites.
