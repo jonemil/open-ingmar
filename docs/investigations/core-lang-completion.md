@@ -34,3 +34,25 @@ from unsupported valid language/API forms.
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
 [inventory]: ../specs/api-declarations.md#deferred-core-methods
 [gate]: ../plan.md#core-completion-gate
+
+## Language-scope reconciliation
+
+The retained official reference/functions, Objects and Memory, Monkey Types,
+annotations, and exception-guide snapshots under
+`scratch/official-docs/plan-review/` were re-read for language gaps. They expose
+requirements beyond operators and named Lang methods: declaration/initialization
+rules, loop/switch scopes, `me` and global `$.name`, nested modules/classes,
+visibility/static members, typedefs/interfaces/callback types, Any and changing
+local types, and annotation semantics. The exception guide includes typed and
+catch-all handlers, finally, and user Exception subclasses. Handler transfer,
+unwinding, cleanup, and abrupt exits still require our own runtime evidence.
+
+The corresponding [language worklist](../plan.md#core-language-worklist) owns
+these planned requirements. Current public guide requests returned navigation
+shells or inaccessible content through the browser tool; this reconciliation
+uses the retained article content from the earlier official-documentation
+review, not newly observed language behavior. The [reading map][reading] retains
+its source links and attribution. Recheck current guide content and controlled
+SDK acceptance when implementing each group.
+
+[reading]: official-garmin-documentation.md

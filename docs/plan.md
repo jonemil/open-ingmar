@@ -2,8 +2,8 @@
 
 ## Next work
 
-Keep implementation focused on operators and `Toybox.Lang` objects and their
-methods before returning to broader SDK classes. Reuse the existing console
+Finish the core Monkey C language, operators, and `Toybox.Lang` objects and
+their methods before returning to broader SDK classes. Reuse the existing console
 apps and [input counter](../examples/compiler-input-counter/README.md) to validate
 core changes. New UI classes, event objects, drawing APIs, and broader SDK
 modules belong to a later phase. Project/resource/package work stays in the
@@ -87,30 +87,20 @@ API definition parser is not a prerequisite for this core work.
 
 ## Core completion gate
 
-Finish the reviewed Monkey C operators and Toybox.Lang contracts before adding
-broader SDK classes/modules or resuming project/resource/package expansion.
-The [remaining core API inventory][core-gaps] covers named Lang classes,
+Finish the reviewed core Monkey C language and Toybox.Lang contracts before
+adding broader SDK classes/modules or resuming project/resource/package
+expansion. The [remaining core API inventory][core-gaps] covers named Lang classes,
 inherited methods, interfaces, module functions, and supporting constants/types.
 Existing names or successful narrow specimens do not establish full coverage.
 
-Remaining operator/language dependencies include:
+The [core language worklist](#core-language-worklist) owns remaining language
+syntax and semantics, including exceptions. It and the core API inventory are
+both prerequisites; completing only operators or named Lang methods is
+insufficient. An item deferred for a prerequisite remains inside this phase.
 
-- `has`, `instanceof`, casts, and the corresponding type/member/availability
-  proofs in source and saved IR.
-- Valid operand combinations, non-Boolean logical/truth-value behavior, general
-  unions/nullability, and remaining literal/Unicode discrepancies. Check the
-  SDK before widening a rule; its rejected Char operations and expression
-  increment/decrement forms are compatibility restrictions, not missing work.
-- Assignment and compound/update targets as the object/container types grow.
-  Verify expression-versus-statement forms instead of assuming C semantics.
-- Source signatures/fields independent of native base, source inheritance,
-  overriding/super dispatch, member/bare-call lookup, and the declaration and
-  control-flow constructs needed to exercise core objects fully. Keep constants,
-  enums, static/global storage, and exception syntax in this core phase.
-
-A core class/method is complete only when its documented applicable signatures,
-argument/result domains, inherited dispatch, API checks, and required storage
-forms work through the [whole toolchain](#toolchain-completion), with matching
+A core feature is complete only when its applicable syntax, semantics,
+signatures, argument/result domains, dispatch, API checks, and storage forms
+work through the [whole toolchain](#toolchain-completion), with matching
 SDK/generated behavior. Explicitly identify unknowns and unresolved failures;
 do not move a missing core contract into the later SDK backlog to close a class.
 Invalid/unavailable SDK uses should produce appropriate diagnostics. The
@@ -119,8 +109,9 @@ compiler emits runtime calls; it does not reimplement firmware method bodies.
 Reuse existing application scaffolding, and add only minimal native/resource
 fixtures needed to validate a core contract such as ResourceId. Those fixtures
 are not a reason to start broader UI or project/resource generation. Reconcile
-the reviewed public Lang inventory and operator tables once more before opening
-the later SDK phase; close any newly found gaps first.
+the reviewed language/reference-guide coverage, public Lang inventory, and
+operator tables once more before opening the later SDK phase; close newly
+found gaps first.
 
 ## Toolchain completion
 
@@ -183,54 +174,92 @@ Methods may be sequenced across core classes as dependencies require; the
   Revisit deferred methods when their core dependencies exist. Keep validation
   applications small and reusable while advancing the operator/Lang sequence.
 
-## Language and API backlog
+## Core language worklist
 
-The [official reading map][official-docs] identifies documented language features
-beyond our [supported subset][source]. These are work areas, not promises that
-all their encodings or runtime behavior are understood:
+Close the remaining gaps against the [official reading map][official-docs] and
+[current supported subset][source]. Existing partial support does not remove a
+feature from this worklist until its applicable contracts are covered. Items
+below are planned requirements, not claims that every encoding is understood.
 
-- **Values and expressions:** full signed Number literals, numeric widths and
-  conversions, Long/Float/Double/Char, Boolean/null values, symbols, unary,
-  arithmetic, relational, bitwise, logical/short-circuit, conditional, and
-  compound-assignment operators. Confirm precedence, overflow, evaluation order,
-  and immediate encodings with focused specimens.
-- **Declarations and lookup:** global/module variables and initialization,
-  the complete reserved-keyword set (including `alias` and `typedef`),
-  constants/enums, lexical/member lookup, bare calls (including the
-  [audited SDK examples](investigations/example-toolchain-audit.md#frontendproject-limits)),
-  qualified names,
-  `using` aliases and `import` type visibility. Add field/static initialization,
-  access modifiers, overriding, and source superclass dispatch as the object
-  model grows.
-- **Containers and control flow:** array allocation/indexing/writes, dictionary
-  literals/lookups/writes, general assignment targets, `for`, `do/while`,
-  `switch`, and their scopes and break targets. Native callbacks may first pass
-  an opaque dictionary without requiring all dictionary operations.
-- **Types and dynamic behavior:** `as` declarations/casts, `Any`, unions,
-  nullability, container/tuple/callback types, flow refinement, and changing
-  local types. Decide a checking policy explicitly; our fixed local types and
-bounded argument contracts are subset restrictions. Extend typed IR and text
-  together without making full gradual checking the first milestone.
-- **Exceptions and callbacks:** `throw`, typed/catch-all handlers, `finally`,
-  symbol-based method references, and callback invocation. Exception lowering
-  needs unwinding/stack/frame evidence even though table assembly exists.
-  Separate recoverable exceptions from fatal VM/API errors; investigate weak
-  references when object ownership or callback examples require them.
-- **Toybox compatibility:** grow native descriptors from public contracts and
-  controlled specimens: types/signatures, constants, inheritance, API levels,
-  supported devices/app types, and permissions. Distinguish source type checking
-  from executable binding. Add `has`/`instanceof`, runtime availability checks,
-  annotations, and execution scopes before relying on them in portable projects.
-  Implement API call compilation, not a replacement implementation of every API.
+- **Lexical forms and literals:** reconcile reserved identifiers, comments,
+  numeric bases/suffixes/ranges, escapes, Unicode String/Char forms, and named
+  special values such as NaN where accepted by the SDK. Distinguish reserved
+  but unused words such as `alias`/`native` from executable language features.
+- **Declarations and storage:** uninitialized/typed locals, multiple declaration
+  forms, constants, named/anonymous enums, instance/module/global/static fields,
+  and supported field value types. Establish default values, declaration versus
+  initialization order, dependency cycles, definite initialization, lifetime,
+  and access rules. Const reference bindings do not imply immutable contents.
+- **Namespaces and lookup:** nested/reopened modules, classes within modules,
+  qualified names, bare global/module/member calls, inherited lookup, static
+  lookup, `self`/`me`, and explicit global `$.name`. Complete `using` aliases,
+  `import` type visibility, lexical scope, shadowing, and cross-file resolution;
+  keep module behavior distinct from Object inheritance.
+- **Functions and calls:** untyped Any parameters/results, declared contracts,
+  implicit returns/fallthrough, Void consumers, recursion, argument evaluation,
+  and instance/static/module/global call forms. Complete Method construction,
+  class/module receiver values, callback type syntax, lookup, and invocation
+  through the shared type and core API contracts. Verify applicable VM/SDK
+  argument and frame limits, including the hidden receiver.
+- **Classes and construction:** generalize source-reference signatures and fields
+  beyond View. Complete native-base projection, source superclass chains,
+  inherited fields/methods, overrides and signature rules, parent-qualified
+  method/initializer calls, static members, and public/private/protected/hidden
+  access. Resolve default/inherited initializer requirements against the SDK.
+  Cover nested classes, outer-instance construction, and their distinct lookup
+  rules rather than assuming captured outer members.
+- **Expressions and operators:** finish valid unary/binary/conditional and
+  assignment/compound/update domains, lvalue forms, precedence, associativity,
+  short-circuiting, and single-evaluation/effect order. Include non-Boolean
+  truth-value and operand-returning logical behavior, nullability, `has`,
+  `instanceof`, and `as` casts with their proofs. Preserve SDK-rejected Char
+  operations and expression updates as diagnosed compatibility restrictions;
+  verify other forms rather than importing C semantics.
+- **Control flow and scopes:** finish accepted if/else and standalone block
+  forms; add `for` and `do/while`, their declaration/update scopes, and nested
+  break/continue targets. Add `switch`, value and `case instanceof` matching,
+  fall-through, default placement, case/block scopes, definite initialization,
+  and interaction with surrounding loops. Keep return/reachability analysis
+  consistent across every construct.
+- **Types and dynamic behavior:** support implicit Any, Void/Null distinctions,
+  general unions, changing local types and joins, casts/refinement, and guarded
+  member/API availability. Add typedefs, concrete class values, named/anonymous
+  structural interfaces with fields/methods, enum types, callback signatures,
+  general tuples, parameterized containers, and structured option Dictionaries.
+  Define assignability, ambiguity, override, and checking-policy rules shared
+  by source and saved IR; current fixed/integer defaults are subset policies.
+- **Containers and references:** complete dynamic-sized allocation, nested and
+  heterogeneous contents, object/reference/Symbol values and keys, nullable
+  references/receivers, indexing and member writes, and general contextual
+  construction. Close ownership, aliasing, weak-target recovery, and callback
+  retention contracts alongside the [remaining Lang API inventory][core-gaps].
+- **Exceptions:** implement `try`, `throw`, typed and catch-all `catch`,
+  multiple handlers, rethrowing caught exceptions, and `finally`. Define handler selection, exception variable
+  scope, propagation across calls, frame/stack unwinding and cleanup, and
+  finally behavior on normal completion, throw, return, break, and continue.
+  Cover throwing from handlers/finally, user subclasses of Lang.Exception, and
+  the applicable exception methods. Extend IR/CFG, lowering, VM/EXCEPTIONS
+  records, and structured reconstruction together. Fatal VM/API errors are
+  distinct from catchable exceptions and need separate negative specimens.
+- **Language annotations:** parse and preserve annotations at accepted
+  declaration/block sites, with semantics for type checking/initialization and
+  debug/release/test selection. Account for code-placement and optimizer-control
+  annotations where applicable, including extended-code target/layout contracts.
+  Do not silently discard annotations that affect behavior or availability.
+  Background/glance annotation representation belongs here; their application
+  registration, lifecycle APIs, and runtime profiles remain later SDK work.
 
-Validate the documented method-argument limit, hidden-receiver accounting, and
-SDK/target applicability before widening call/frame limits. Existing opcode
-support does not establish source-level semantics or acceptance at a boundary.
+The [core API inventory][core-gaps] owns individual Lang classes, methods,
+constants, aliases, and interfaces; do not duplicate that inventory here.
+Resolve reference/SDK discrepancies through focused authored specimens and
+record uncertainty. Overloading or other forms the SDK rejects need diagnostics,
+not an implementation copied from another language. Extend source and saved IR
+in the same increment and use the core completion gate for final reconciliation.
 
 ## Later SDK and project work
 
-Resume these areas after the operator/core-Lang phase; they are not the current
-implementation sequence. Existing application scaffolding remains available
+Resume these areas only after the core-language/Lang completion gate; they are
+not the current implementation sequence. Existing application scaffolding remains available
 for core-language validation throughout.
 
 1. **Extend native calls and callback values.** Use the declaration model for
@@ -238,8 +267,8 @@ for core-language validation throughout.
    slot-type and cardinality checks for View and View/delegate results through
    saved IR. Broaden contextual
    tuple construction beyond direct callback literals only when provenance and
-   shape remain provable. Extend object-reference, array, and nullable values as
-   required, retaining `Void` as a result contract. Compare new dispatch forms
+   shape remain provable. Reuse core object-reference, array, nullable, and Void
+   contracts; add SDK-specific shapes only as required. Compare new dispatch forms
    with focused specimens. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
