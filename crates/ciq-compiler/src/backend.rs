@@ -376,6 +376,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         Opcode::Getselfv,
                         vec![Operand::Symbol(
                             match base {
+                                crate::ClassBase::LangObject => {
+                                    unreachable!("Object has no native initializer")
+                                }
                                 crate::ClassBase::ApplicationAppBase => "__ciq_native_AppBase",
                                 crate::ClassBase::WatchUiView => "__ciq_native_View",
                                 crate::ClassBase::WatchUiBehaviorDelegate => {

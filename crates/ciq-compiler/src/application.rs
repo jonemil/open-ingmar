@@ -18,6 +18,8 @@ const STATICS: u32 = 0x00800002;
 const TOYBOX: u32 = 0x00800003;
 const SYSTEM: u32 = 0x00800005;
 const WATCH_UI: u32 = 0x00800011;
+const LANG: u32 = 0x00800007;
+const OBJECT: u32 = 0x0080004c;
 const APPLICATION: u32 = 0x00800015;
 const INIT: u32 = 0x00800018;
 const INITIALIZE: u32 = 0x0080005e;
@@ -344,6 +346,7 @@ pub fn build_console_application(
         ));
     }
     let mut ids = BTreeMap::from([
+        ("Object".into(), OBJECT),
         ("initialize".to_owned(), INITIALIZE),
         ("println".into(), PRINTLN),
         ("exit".into(), EXIT),
@@ -467,6 +470,7 @@ pub fn build_console_application(
         ("__ciq_native_clear".into(), 0x00800239),
         ("__ciq_native_drawText".into(), 0x00800246),
         ("__ciq_native_AppBase".into(), APP_BASE),
+        ("__ciq_native_Object".into(), OBJECT),
         ("__ciq_native_initialize".into(), INITIALIZE),
         ("__ciq_member_println".into(), PRINTLN),
         ("__ciq_native_exit".into(), EXIT),
@@ -569,8 +573,15 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base.constructed_class().is_some())
+        .filter(|class| class.base.constructed_type().is_some())
     {
+        if source_class.base == crate::ClassBase::LangObject {
+            items.extend([
+                Item::Label(format!("__ciq_ctor_{}", source_class.name)),
+                instruction(Opcode::Return, vec![]),
+            ]);
+            continue;
+        }
         items.extend([
             Item::Label(format!("__ciq_ctor_{}", source_class.name)),
             instruction(
@@ -617,7 +628,7 @@ pub fn build_console_application(
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base.constructed_class().is_some())
+        .filter(|class| class.base.constructed_type().is_some())
     {
         global_fields.push(field(
             ids[&source_class.name],
@@ -699,14 +710,24 @@ pub fn build_console_application(
             _ => unreachable!(),
         });
     }
+    let has_delegate = unit
+        .classes()
+        .iter()
+        .any(|class| class.base == crate::ClassBase::WatchUiBehaviorDelegate);
+    let has_object = unit
+        .classes()
+        .iter()
+        .any(|class| class.base == crate::ClassBase::LangObject);
+    let object_import = if has_delegate { 3 } else { 2 };
     let mut classes = vec![statics, globals, application];
     for source_class in unit
         .classes()
         .iter()
-        .filter(|class| class.base.constructed_class().is_some())
+        .filter(|class| class.base.constructed_type().is_some())
     {
         let ctor_label = format!("__ciq_ctor_{}", source_class.name);
         let (base_symbol, import_word) = match source_class.base {
+            crate::ClassBase::LangObject => (OBJECT, 0x40000000 | object_import),
             crate::ClassBase::WatchUiView => (VIEW, 0x40000001),
             crate::ClassBase::WatchUiBehaviorDelegate => (BEHAVIOR_DELEGATE, 0x40000002),
             crate::ClassBase::ApplicationAppBase => unreachable!("AppBase emitted separately"),
@@ -816,11 +837,7 @@ pub fn build_console_application(
     for word in [GLOBALS, 1, 0x82, 0x26, 1] {
         entry_points.extend(word.to_be_bytes());
     }
-    let has_delegate = unit
-        .classes()
-        .iter()
-        .any(|class| class.base == crate::ClassBase::WatchUiBehaviorDelegate);
-    let mut imports = (if has_delegate { 3u16 } else { 2u16 })
+    let mut imports = ((if has_delegate { 3u16 } else { 2u16 }) + u16::from(has_object))
         .to_be_bytes()
         .to_vec();
     for word in [APPLICATION, APP_BASE, WATCH_UI, VIEW] {
@@ -829,6 +846,10 @@ pub fn build_console_application(
     if has_delegate {
         imports.extend(WATCH_UI.to_be_bytes());
         imports.extend(BEHAVIOR_DELEGATE.to_be_bytes());
+    }
+    if has_object {
+        imports.extend(LANG.to_be_bytes());
+        imports.extend(OBJECT.to_be_bytes());
     }
     let mut sections = vec![
         (0xd000d00d, header),

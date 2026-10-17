@@ -382,7 +382,7 @@ fn emit_call(
                     arguments,
                 )
             } else if module == "self"
-                && member == "method"
+                && (member == "method" || calls.inherited_object_member("self", &member))
                 && calls.get(&(module.clone(), member.clone())).is_none()
             {
                 (
@@ -407,7 +407,8 @@ fn emit_call(
         crate::source_objects::class(operations, value, calls.parameter_types.clone())
     });
     let class = class.filter(|class| {
-        member != "method" || calls.get(&(class.clone(), member.clone())).is_some()
+        (member != "method" && !calls.inherited_object_member(class, &member))
+            || calls.get(&(class.clone(), member.clone())).is_some()
     });
     let arguments = arguments
         .into_iter()
@@ -1685,7 +1686,8 @@ impl Builder<'_> {
                     if locals.contains_key(&module)
                         || self.parameters.contains_key(&module)
                         || (module == "self"
-                            && member == "method"
+                            && (member == "method"
+                                || self.calls.inherited_object_member("self", &member))
                             && self.calls.get(&(module.clone(), member.clone())).is_none())
                     {
                         self.value_statement(
@@ -1831,6 +1833,14 @@ impl CallContext {
     pub(crate) fn insert(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.insert(key, signature);
     }
+    /// Resolve inherited Object members only when the source class has no override.
+    fn inherited_object_member(&self, class: &str, member: &str) -> bool {
+        self.class_bases.get(class) == Some(&crate::ClassBase::LangObject)
+            && crate::api::core()
+                .method("Toybox.Lang.Object", member)
+                .is_some()
+            && self.get(&(class.into(), member.into())).is_none()
+    }
     fn get(&self, key: &(String, String)) -> Option<&CallSignature> {
         self.signatures.get(key)
     }
@@ -1883,6 +1893,9 @@ fn build_body(
         });
     let mut body_calls = calls.clone();
     body_calls.parameter_types = candidate_parameters.clone();
+    if let Some(base) = method {
+        body_calls.class_bases.insert("self".into(), base);
+    }
     let mut builder = Builder {
         source,
         calls: &body_calls,

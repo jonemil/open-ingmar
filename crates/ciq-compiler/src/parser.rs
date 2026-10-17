@@ -402,6 +402,7 @@ impl<'a> Parser<'a> {
     fn reject_binding(&self, token: &Token<'_>) -> Result<(), Diagnostic> {
         if let Kind::Word(name) = token.kind {
             if self.names.bound(name)
+                || (self.native_base == Some(crate::ClassBase::LangObject) && name == "Object")
                 || (self.native_base == Some(crate::ClassBase::ApplicationAppBase)
                     && name == "AppBase")
                 || (self.native_base == Some(crate::ClassBase::WatchUiView) && name == "View")
@@ -1955,9 +1956,15 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             };
             let mut class_base = None;
             if is_class {
-                parser.expect(Kind::Word("extends"), "'extends Application.AppBase'")?;
-                let base = parser.path()?;
-                class_base = if parser.names.app_base(&base) {
+                let base = if parser.peek()? == Kind::Word("extends") {
+                    parser.token()?;
+                    parser.path()?
+                } else {
+                    "Toybox.Lang.Object".into()
+                };
+                class_base = if parser.names.object(&base) {
+                    Some(crate::ClassBase::LangObject)
+                } else if parser.names.app_base(&base) {
                     Some(crate::ClassBase::ApplicationAppBase)
                 } else if parser.names.view(&base) {
                     Some(crate::ClassBase::WatchUiView)

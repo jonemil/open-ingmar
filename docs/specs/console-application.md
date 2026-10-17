@@ -89,6 +89,8 @@ Fixed native symbol IDs in this profile:
 | substring | `0x008000bd` |
 | toLower | `0x008000be` |
 | toUpper | `0x008000bf` |
+| Object | `0x0080004c` |
+| Toybox_Lang (native import module) | `0x00800007` |
 | View | `0x0080019f` |
 | BehaviorDelegate | `0x00800064` |
 | requestUpdate | `0x008001a2` |
@@ -106,7 +108,7 @@ Fixed native symbol IDs in this profile:
 | globals | `0x008002e6` |
 
 DATA contains [version-2 records][classes] in this order: statics, globals,
-synthesized app class, source Views in declaration order, user modules in
+synthesized app class, constructible source classes in declaration order, user modules in
 lexicographic order, then CODE string/constant-array literals in assembly order.
 Positions are calculated from record lengths; no SDK
 DATA prefix or opaque spans are transplanted.
@@ -146,7 +148,11 @@ Unsigned sections, in order:
 5. IMPORTS (`0xc1a557b1`): u16 count `2` and two `(module-ID, member-ID)`
    u32 pairs, `Toybox_Application/AppBase` then `Toybox_WatchUi/View`.
    Source BehaviorDelegate subclasses add a third pair,
-   `Toybox_WatchUi/BehaviorDelegate`, with count `3`.
+   `Toybox_WatchUi/BehaviorDelegate`, with count `3`. Object-rooted source
+   classes append a `Toybox_Lang/Object` pair after those entries. Their base
+   reference selects that pair's index (2 without a delegate, 3 with one);
+   it is not the SDK reference's fixed index. Lang's native import module is
+   `0x00800007`, distinct from the short `Lang` symbol `0x00800020`.
 6. RESOURCES: u16 count zero and deterministic trailing zero padding.
 7. PERMISSIONS (`0x6000db01`): u16 count zero.
 8. EXCEPTIONS: u16 count zero.
@@ -197,7 +203,7 @@ exported and reconstructed through the existing section-project tools.
 ## Source class startup
 
 A unit containing [source classes](compiler-classes.md) must contain exactly one
-AppBase class, optionally with View/BehaviorDelegate subclasses, and select a zero-parameter
+AppBase class, optionally with Object/View/BehaviorDelegate subclasses, and select a zero-parameter
 startup method with `Class.method`,
 or select `Class.onStart` when the source supplies that native callback.
 The global application field and ENTRY_POINTS class identity remain symbol `1`,

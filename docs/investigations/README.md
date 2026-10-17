@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Object-rooted classes](compiler-root-objects.md): implicit/explicit bases,
+  return-only allocation hooks, native Object imports, and receiver state.
 - [Source comparators](compiler-comparators.md): exact structural signatures,
   runtime callback identity, stateful ordering, and rejected parameter variants.
 - [Default Array sorting](compiler-array-sort.md): comparable scalar types,

@@ -1,0 +1,12 @@
+5
+6
+10
+true
+false
+true
+true
+true
+10
+100
+[bb, b, a]
+true

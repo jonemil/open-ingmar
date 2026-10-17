@@ -12,9 +12,11 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Extend source construction to Object-rooted
-classes and establish Object input refinement (`has`, `instanceof`, and checked
-casts) for numeric/object comparator bodies. Review Lang.Comparable and its
+**Object and structural contracts.** Generalize exact source-reference
+parameters/results and fields beyond their View-specific projection. Keep class
+identity distinct from its native base in source and saved IR. Establish Object
+input refinement (`has`, `instanceof`, and checked casts) for numeric/object
+comparator bodies. Review Lang.Comparable and its
 `compareTo(Object) as Number` contract alongside those prerequisites. Keep
 general interface-typed parameters/results/storage separate from the exact
 source-class Comparator witness used by sorting. Nullable/object Array sorting

@@ -1477,6 +1477,7 @@ impl Function {
                     if !matches!(
                         type_of(receiver),
                         ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
+                            | ValueType::LangObject
                     ) {
                         return Err(fail(
                             "source object calls require a supported non-null object receiver",
@@ -1643,6 +1644,9 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::NativeBaseInitialize { base } => {
+                    if base == ClassBase::LangObject {
+                        return Err(fail("Object has no native initialize method"));
+                    }
                     if let Some(context) = context {
                         context
                             .method(api::core(), base.api_name(), "initialize")
@@ -1704,12 +1708,24 @@ impl Function {
                     ref arguments,
                 } => {
                     validate_call_names(None, class).map_err(fail)?;
-                    let native_class = base.constructed_class().ok_or_else(|| {
+                    let ty = base.constructed_type().ok_or_else(|| {
                         fail("native base has no supported source construction profile")
                     })?;
-                    native::constructor(native_class, context).map_err(|message| fail(&message))?;
+                    if base == ClassBase::LangObject {
+                        if let Some(context) = context {
+                            context
+                                .check_class(api::core(), base.api_name())
+                                .map_err(|message| fail(&message))?;
+                        }
+                    } else {
+                        native::constructor(
+                            NativeClass::from_name(base.api_name()).unwrap(),
+                            context,
+                        )
+                        .map_err(|message| fail(&message))?;
+                    }
                     validate_call_arguments(arguments, &types).map_err(fail)?;
-                    types.insert(result, ValueType::Object(native_class));
+                    types.insert(result, ValueType::from_api_type(&ty).unwrap());
                     (Some(result), arguments.clone())
                 }
                 Operation::NativeCallStatement {
@@ -3013,8 +3029,8 @@ impl Function {
 
 /// Parse one supported Monkey C function into validated semantic IR.
 ///
-/// Accepts leading native name declarations for Application and System and
-/// resolves their supported aliases before IR construction.
+/// Resolves supported leading native name declarations and their aliases
+/// before IR construction.
 /// Resolves parameters and scoped locals, lowers conditions and while loops
 /// (including innermost break/continue) to blocks, and retains source spans.
 /// Value functions require a consistent typed return on every path;

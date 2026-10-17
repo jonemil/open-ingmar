@@ -140,6 +140,7 @@ impl FunctionDeclaration {
 /// Supported native superclass identity, independent of an import-table index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassBase {
+    LangObject,
     ApplicationAppBase,
     WatchUiView,
     WatchUiBehaviorDelegate,
@@ -148,22 +149,20 @@ impl ClassBase {
     /// Return the canonical native API identity of this superclass.
     pub fn api_name(self) -> &'static str {
         match self {
+            Self::LangObject => "Toybox.Lang.Object",
             Self::ApplicationAppBase => "Toybox.Application.AppBase",
             Self::WatchUiView => "Toybox.WatchUi.View",
             Self::WatchUiBehaviorDelegate => "Toybox.WatchUi.BehaviorDelegate",
         }
     }
-    /// Return the native value type produced by supported source construction.
+    /// Return the API value type produced by supported source construction.
     /// AppBase is created by application startup, not by a source expression.
-    pub fn constructed_class(self) -> Option<crate::NativeClass> {
-        match self {
-            Self::ApplicationAppBase => None,
-            Self::WatchUiView => Some(crate::NativeClass::View),
-            Self::WatchUiBehaviorDelegate => Some(crate::NativeClass::BehaviorDelegate),
-        }
+    pub fn constructed_type(self) -> Option<crate::api::Type> {
+        (self != Self::ApplicationAppBase).then(|| crate::api::Type::named(self.api_name()))
     }
     pub(crate) fn text(self) -> &'static str {
         match self {
+            Self::LangObject => "Lang.Object",
             Self::ApplicationAppBase => "Application.AppBase",
             Self::WatchUiView => "WatchUi.View",
             Self::WatchUiBehaviorDelegate => "WatchUi.BehaviorDelegate",
@@ -395,6 +394,7 @@ impl CompilationUnit {
                         | "initialize"
                         | "println"
                         | "View"
+                        | "Object"
                         | "onStart"
                         | "getInitialView"
                 )
@@ -419,9 +419,19 @@ impl CompilationUnit {
                     "class exceeds 256 instance fields".into(),
                 ));
             }
+            if class.base == ClassBase::LangObject
+                && class.methods.iter().any(|method| method.name() == "Object")
+            {
+                return Err(fail(
+                    Some(at),
+                    None,
+                    "method conflicts with native Object base field".into(),
+                ));
+            }
             let mut field_names = BTreeSet::new();
             for field in &class.fields {
                 if !valid(&field.name)
+                    || (class.base == ClassBase::LangObject && field.name == "Object")
                     || reserved(&field.name)
                     || matches!(
                         field.name.as_str(),
@@ -578,13 +588,17 @@ impl CompilationUnit {
                     .iter()
                     .find(|class| owner == Owner::Class(class.name.as_str()))
                     .unwrap();
-                if (declaration.base == ClassBase::ApplicationAppBase && function.parameter_count() != 0)
+                if (declaration.base == ClassBase::ApplicationAppBase
+                    && function.parameter_count() != 0)
                     || function.return_type() != crate::ReturnType::Void
-                    || base_calls != 1
-                    || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == declaration.base))
+                    || (if declaration.base == ClassBase::LangObject {
+                        base_calls != 0
+                    } else {
+                        base_calls != 1 || !first.is_some_and(|op| matches!(op.operation, Operation::NativeBaseInitialize { base } if base == declaration.base))
+                    })
                 {
                     return Err(fail(Some(index), None,
-                        "source initialize requires a void result and one native base call first; AppBase initialize takes no parameters".into()));
+                        "source initialize requires Void; Object has no native base call, other bases require one first; AppBase takes no parameters".into()));
                 }
                 let mut pending = declaration
                     .fields
@@ -1311,9 +1325,14 @@ fn parse_unit_ir_context(
             [
                 ".class",
                 name,
-                base @ ("Application.AppBase" | "WatchUi.View" | "WatchUi.BehaviorDelegate"),
+                base @ ("Application.AppBase"
+                | "WatchUi.View"
+                | "WatchUi.BehaviorDelegate"
+                | "Lang.Object"),
             ] => {
-                let base = if *base == "Application.AppBase" {
+                let base = if *base == "Lang.Object" {
+                    ClassBase::LangObject
+                } else if *base == "Application.AppBase" {
                     ClassBase::ApplicationAppBase
                 } else if *base == "WatchUi.View" {
                     ClassBase::WatchUiView

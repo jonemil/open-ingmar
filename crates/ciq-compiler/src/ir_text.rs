@@ -462,6 +462,7 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 class: fields[2].clone(),
                 base: match fields[3].as_str() {
+                    "Lang.Object" => crate::ClassBase::LangObject,
                     "WatchUi.View" => crate::ClassBase::WatchUiView,
                     "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
                     "Application.AppBase" => crate::ClassBase::ApplicationAppBase,

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeModule {
+    Lang,
     Application,
     System,
     WatchUi,
@@ -13,6 +14,7 @@ impl NativeModule {
     /// Return the canonical module name used by the current semantic profile.
     pub fn name(self) -> &'static str {
         match self {
+            Self::Lang => "Lang",
             Self::Application => "Application",
             Self::System => "System",
             Self::WatchUi => "WatchUi",
@@ -26,6 +28,7 @@ impl NativeModule {
 #[derive(Clone, Default)]
 pub(crate) struct Names {
     bindings: BTreeMap<String, NativeModule>,
+    object: bool,
     app_base: bool,
     view: bool,
     behavior_delegate: bool,
@@ -36,6 +39,7 @@ impl Names {
     /// Reject unsupported modules and duplicate or reserved bindings.
     pub fn declare(&mut self, path: &str, alias: Option<&str>, import: bool) -> Result<(), String> {
         let module = match path {
+            "Toybox.Lang" => NativeModule::Lang,
             "Toybox.Application" => NativeModule::Application,
             "Toybox.System" => NativeModule::System,
             "Toybox.WatchUi" => NativeModule::WatchUi,
@@ -49,8 +53,9 @@ impl Names {
         let name = alias.unwrap_or(canonical_name);
         if matches!(
             name,
-            "self" | "Toybox" | "AppBase" | "View" | "BehaviorDelegate"
-        ) || (name == "Application" && module != NativeModule::Application)
+            "self" | "Toybox" | "AppBase" | "View" | "BehaviorDelegate" | "Object"
+        ) || (name == "Lang" && module != NativeModule::Lang)
+            || (name == "Application" && module != NativeModule::Application)
             || (name == "System" && module != NativeModule::System)
             || (name == "WatchUi" && module != NativeModule::WatchUi)
             || (name == "Graphics" && module != NativeModule::Graphics)
@@ -59,6 +64,7 @@ impl Names {
             return Err(format!("conflicting native binding {name:?}"));
         }
         self.bindings.insert(name.into(), module);
+        self.object |= import && module == NativeModule::Lang;
         self.app_base |= import && module == NativeModule::Application;
         self.view |= import && module == NativeModule::WatchUi;
         self.behavior_delegate |= import && module == NativeModule::WatchUi;
@@ -68,6 +74,7 @@ impl Names {
     /// Check explicit module/class bindings before accepting a declaration name.
     pub fn bound(&self, name: &str) -> bool {
         self.bindings.contains_key(name)
+            || (self.object && name == "Object")
             || (self.app_base && name == "AppBase")
             || (self.view && name == "View")
             || (self.behavior_delegate && name == "BehaviorDelegate")
@@ -76,11 +83,22 @@ impl Names {
     /// Resolve an alias or supported canonical module path to a native identity.
     pub fn module(&self, name: &str) -> Option<NativeModule> {
         self.bindings.get(name).copied().or(match name {
+            "Lang" | "Toybox.Lang" => Some(NativeModule::Lang),
             "System" | "Toybox.System" => Some(NativeModule::System),
             "Application" | "Toybox.Application" => Some(NativeModule::Application),
             "WatchUi" | "Toybox.WatchUi" => Some(NativeModule::WatchUi),
             "Graphics" | "Toybox.Graphics" => Some(NativeModule::Graphics),
             _ => None,
+        })
+    }
+
+    /// Resolve the Object base through Lang bindings or an imported bare name.
+    pub fn object(&self, path: &str) -> bool {
+        if path == "Object" {
+            return self.object;
+        }
+        path.rsplit_once('.').is_some_and(|(module, member)| {
+            member == "Object" && self.module(module) == Some(NativeModule::Lang)
         })
     }
 

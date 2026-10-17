@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-root-objects](compiler-root-objects/README.md): Object-rooted source
+  construction, independent fields, observers, callbacks, and comparators.
 - [compiler-comparators](compiler-comparators/README.md): checked source
   Comparator implementations, stateful runtime dispatch, and custom sorting.
 - [compiler-array-sort](compiler-array-sort/README.md): default scalar sorting,

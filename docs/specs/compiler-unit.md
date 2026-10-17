@@ -189,13 +189,14 @@ rules][void-source].
 
 ## Class extension
 
-[Source class rules](compiler-classes.md) add AppBase-derived classes, explicit
+[Source class rules](compiler-classes.md) define supported native bases, explicit
 instance receiver contracts, and self-call validation. `classes()` exposes
 ordered class declarations; `with_classes` validates them alongside ordinary
 functions. Existing `new` and `declarations()` retain their global/module roles.
 
-Unit IR permits `.class <name> Application.AppBase` containers ending at
-`.end-class`. Class bodies use receiver-bearing function IR. Canonical
+Unit IR permits `.class <name> <native-base>` containers ending at `.end-class`.
+The class specification defines accepted bases. Class bodies use
+receiver-bearing function IR. Canonical
 text places global/module records before class containers, preserving order
 within each group. Lowering follows that same grouped order, with distinct class
 CODE label prefixes. Error body indexes follow globals/modules, then methods.

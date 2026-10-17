@@ -469,12 +469,13 @@ class/module:
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
-              | "Toybox.Graphics"
+              | "Toybox.Graphics" | "Toybox.Lang"
 ```
 
 `using` introduces a module binding, optionally aliased. `import` introduces
 the module name and its supported class names: Application's `AppBase` and
-WatchUi's `View` and `BehaviorDelegate`. Therefore `import Toybox.Application;`
+WatchUi's `View` and `BehaviorDelegate`, and Lang's Object for base clauses.
+This does not expand type-annotation aliases. Therefore `import Toybox.Application;`
 permits `extends AppBase`,
 while `using Toybox.Application;` requires `extends Application.AppBase`.
 Aliased modules permit `extends App.AppBase` and `Sys.println(value)`.
@@ -1619,8 +1620,11 @@ Construction, aliases, exact source-class parameters/results, and source
 reference fields can supply a comparator while retaining class identity.
 Whole-unit validation resolves the class and rechecks the required method;
 an erased View/Object or Method cannot establish the structural contract.
-General interface-typed storage/annotations, nullable comparators, bare `self`
-as a comparator, and Object-rooted source construction remain unsupported.
+General interface-typed storage/annotations, nullable comparators, and bare
+`self` as a comparator remain unsupported. Object-rooted source classes support
+local construction and comparator use through their
+[class contract](compiler-classes.md#object-rooted-classes); exact source-class
+annotations still use the View-specific profile.
 The existing source class/base and constructor requirements still apply.
 
 Sort uses ordinary native-call lowering with receiver-before-argument order.

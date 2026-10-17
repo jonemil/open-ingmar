@@ -1279,13 +1279,16 @@ Reference declarations, result claims, and initializer safety follow the
 Standalone method parsing leaves that unit obligation unresolved.
 
 `.new-source %<result-id> <class-name> <native-base> [%<argument-id> ...]`
-allocates and initializes a source object. Supported bases are `WatchUi.View` and
-`WatchUi.BehaviorDelegate`;
+allocates and initializes a source object. Supported bases are `Lang.Object`,
+`WatchUi.View`, and `WatchUi.BehaviorDelegate`;
 for example, `.new-source %0 HelloView WatchUi.View %1` passes one argument.
-The base is required and defines the native value projection, currently a
-non-null View or BehaviorDelegate. Construction is order-sensitive. Function validation checks the
-identifier, supported construction profile, and native initializer availability
-(View: API 2.1.0; BehaviorDelegate: API 1.0.0). Unit validation requires the named
+The base is required and defines the native value projection: Object, View, or
+BehaviorDelegate. Source class identity remains separate from that projection.
+Construction is order-sensitive. Function validation checks the identifier,
+supported construction profile, and API availability (Object: 1.0.0; native
+View.initialize: 2.1.0; BehaviorDelegate.initialize: 1.0.0). Object has no native
+base-initialization operation. Unit text records `.class Name Lang.Object`;
+its explicit source initializer is Void and contains no native base call. Unit validation requires the named
 class's declared base to
 equal the operation's base, with a matching explicit
 initializer whose parameter contracts match the arguments. A standalone function

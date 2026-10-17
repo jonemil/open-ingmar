@@ -86,11 +86,7 @@ impl Types {
                     .ok()
                     .map(|(ty, _)| ty),
             ),
-            Operation::SourceNew { result, base, .. } => (
-                *result,
-                base.constructed_class()
-                    .map(|class| Type::named(class.name())),
-            ),
+            Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
             Operation::TupleNew { result, elements } => {
                 let shape = if elements.len() == 2 {
                     crate::TupleShape::ViewDelegate

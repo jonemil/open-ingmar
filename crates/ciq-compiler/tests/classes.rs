@@ -179,7 +179,6 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
 #[test]
 fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
     for source in [
-        "class C { function f() {} }",
         "class C extends Other { function f() {} }",
         "class C extends Application.AppBase {}",
         "class C extends Application.AppBase { var x = 1; }",

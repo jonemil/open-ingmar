@@ -1,17 +1,18 @@
 # Restricted source classes and receiver calls
 
-This profile adds AppBase-, View-, and BehaviorDelegate-derived classes to
+This profile adds Object-, AppBase-, View-, and BehaviorDelegate-derived classes to
 [compilation units][unit].
 Existing function parameter and result rules still apply. The
-[application builder][app] selects one AppBase class and binds additional Views/delegates.
+[application builder][app] selects one AppBase class and binds constructed source
+classes, including additional Views/delegates.
 See [runtime evidence][evidence].
 
 ## Source and ownership
 
 ```text
-class = "class" identifier "extends" native-base
+class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (number-field | reference-field | function)+ "}"
-native-base = recognized Application.AppBase, WatchUi.View, or
+native-base = recognized Lang.Object, Application.AppBase, WatchUi.View, or
               WatchUi.BehaviorDelegate identity
 number-field = "var" identifier "=" signed-number-literal ";"
 reference-field = "var" identifier "as" source-view-class-name ";"
@@ -20,7 +21,8 @@ receiver-call = "self" "." member "(" argument-list? ")"
 
 Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
-It accepts canonical/qualified, aliased, and imported AppBase/View/BehaviorDelegate spellings.
+It accepts canonical/qualified, aliased, and imported Object/AppBase/View/
+BehaviorDelegate spellings. An omitted base selects Lang.Object.
 Number/reference fields are supported below. Static methods, annotations, source
 superclass lookup, and nested/empty classes are unsupported. Classes require at
 least one method. Class names must be unique;
@@ -28,11 +30,11 @@ classes cannot be reopened. Reject class/module/global-function name collisions.
 
 Reserved class names include language keywords, `self`, `System`, `Application`,
 `AppBase`, `globals`, `statics`, `Toybox`, and the bootstrap's pinned native names:
-`initialize`, `println`, `View`, `onStart`, `getInitialView`. These restrictions
+`initialize`, `println`, `View`, `Object`, `onStart`, `getInitialView`. These restrictions
 belong to this constrained profile, not the general Monkey C language.
 
-`self` is reserved and may appear as a call receiver or a declared field receiver.
-It cannot be rebound or passed as a value. Bare member calls and class-name
+`self` is reserved and cannot be rebound. In an instance body it may be a call
+or declared-field receiver, or produce an opaque Object value. Bare member calls and class-name
 calls remain unsupported. Calls on constructed source objects follow the
 profile below. Module calls
 from methods retain their existing rules.
@@ -43,13 +45,14 @@ Arguments follow scalar/nullable assignability and result contracts must equal
 the callee's contract;
 counts must match exactly. Forward and recursive
 references are checked after collecting signatures. Self lookup never falls
-back to a global/module member or an inherited native method. Recursion is
+back to a global/module member. Object-rooted classes may use the supported
+inherited Object members described below; source declarations keep priority. Recursion is
 accepted but termination is not proven.
 
 ## Calls on constructed source objects
 
 `new ClassName(arguments)` establishes an exact constructor class alongside its
-native View or BehaviorDelegate value contract. Local initialization and copies
+native Object, View, or BehaviorDelegate value contract. Local initialization and copies
 preserve this identity.
 A local initialized from a source construction may subsequently receive only a
 reference with the same proven constructor class; assignments from another source
@@ -69,7 +72,8 @@ Empty Array arguments receive context from the selected source signature.
 
 Unit validation rejects missing methods, wrong argument/result contracts, and
 ordinary calls to native lifecycle callbacks, even through a different receiver.
-Lookup does not fall back to inherited native or source methods. Source inheritance,
+Object-rooted classes may resolve supported inherited Object members below.
+Other undeclared native/source inheritance remains unsupported. Source inheritance,
 arbitrary receiver field access, and general dynamic
 dispatch remain unsupported.
 
@@ -91,6 +95,39 @@ argument context when needed, invokes it, and discards statement results. Native
 and text paths use identical lowering and ordinary member-symbol binding. See
 the [object-call example](../../examples/compiler-object-calls/README.md) and
 [runtime evidence](../investigations/compiler-object-calls.md).
+
+## Object-rooted classes
+
+`class Counter { ... }` and `class Counter extends Lang.Object { ... }` declare
+Object-rooted source classes. The base also accepts `Toybox.Lang.Object`, Lang
+module aliases, and imported bare Object. Object construction requires API
+1.0.0. Each constructed class must declare a Void `initialize(arguments)`;
+it must not call a native base initializer. Declarations inside the class cannot shadow its
+reserved Object base binding. An automatic/default initializer
+and direct native `new Object()` are outside this profile.
+
+Number fields, supported constructor arguments, local aliases/reassignment,
+self calls, and calls on a proven source instance use the ordinary class rules.
+Inherited `toString`, `equals`, `hashCode`, and `method` dispatch through the
+runtime Object contract when no source override exists. Bound Methods retain
+the instance. A source class with the required `compare(Object, Object) as
+Number` method can serve as an Array comparator. Weak targets retain their
+separate bounded profile.
+
+The runtime value projects to opaque Object, while construction and locals
+retain the exact source identity for own-member calls and structural checking.
+It may pass through ordinary Object contracts, but erasure loses own-member
+access. Exact source annotations and reference-field targets still require a
+View subclass; Object-rooted classes cannot claim those contracts or a View
+result. Object-element Arrays, source superclass chains, and recovering the
+class from an opaque Object remain unsupported.
+
+Complete application DATA gives each class an Object base reference and a
+return-only hidden allocation constructor. Its user `initialize` runs through
+normal source construction. The [application profile][app] owns import binding;
+no native Object allocation/initialization hook is invoked. See the
+[example](../../examples/compiler-root-objects/README.md) and
+[evidence](../investigations/compiler-root-objects.md).
 
 ## Source-class signatures
 
@@ -181,7 +218,7 @@ indexes follow this layout order; serialized spans remain provenance only.
 ## Application and VM binding
 
 Complete PRG generation permits exactly one declared AppBase class plus optional
-WatchUi.View/BehaviorDelegate subclasses and requires
+Object-rooted classes or WatchUi.View/BehaviorDelegate subclasses and requires
 `--entry Class.method`. The selected method must have zero parameters, except
 source onStart follows the callback contract below. Value results are printed
 by generated onStart; void results are discarded. Class symbol `1` identifies
@@ -200,8 +237,9 @@ General object/native-call operations beyond the contracts below are unsupported
 
 ## Source initialization
 
-A declared class may supply `function initialize(...)`. It must return void and
-call the native base initializer exactly once as its first statement. AppBase
+A declared class may supply `function initialize(...)`. It must return Void.
+Object-rooted classes have no native base call; other classes call the native
+base initializer exactly once as their first statement. AppBase
 initializers take no parameters; View/delegate initializers accept the ordinary
 supported parameter contracts and limit. These are subset restrictions, not general
 language rules.
