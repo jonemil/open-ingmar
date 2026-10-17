@@ -1,7 +1,7 @@
 # API declarations and core types
 
 `ciq-compiler::api::core()` provides immutable runtime API declarations, populated
-in Rust. It owns module/class names, signatures, superclass paths, introduction
+in Rust. It owns module/class/interface names, signatures, superclass paths, introduction
 levels, callback flags, enum constants, generic parameters, and exact
 receiver-result overrides. It contains no runtime method bodies or VM bindings.
 No declaration-file grammar is defined. [Architecture](../architecture.md)
@@ -9,10 +9,22 @@ separates declaration lookup, compiler validation, and executable lowering.
 
 ## Declaration model
 
-Types represent named classes, Null, Void, unions, invariant Arrays and
+Types represent named classes/interfaces, Null, Void, unions, invariant Arrays and
 Dictionaries, positional tuples, and class type parameters. A declaration
 describes a runtime-provided API; compiler analysis state does not belong in it.
 `Lang.Object` is the root class. Modules are namespaces and do not inherit Object.
+
+Structural interfaces record required method signatures separately from classes.
+`Catalogue::interface()` resolves them without class inheritance or construction;
+`interface_level()` includes the interface and enclosing module introduction
+levels. Named interface types participate in `ApiContext::check_type()`.
+Recording an interface does not enable source annotations, structural
+assignability, or executable implementations.
+
+`Lang.Comparator` requires `compare(Object, Object) as Number` from API 5.0.0.
+Array `sort(Comparator or Null)` returns Void from 5.0.0. The executable
+[default sorting profile](compiler-subset.md#default-array-sorting) accepts
+Null only; this restriction does not narrow the API declaration itself.
 
 Method declarations have a fixed parameter prefix and an optional repeated
 argument type. Receiver instantiation substitutes both through generic

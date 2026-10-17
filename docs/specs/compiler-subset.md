@@ -1192,7 +1192,7 @@ receiver proofs are the same as in value contexts. A discarded result does not
 contribute to function return inference. Nullable results need no guard when
 discarded. Bare arithmetic, literals, and element reads are not source expression
 statements. Native Void methods still require their own supported statement
-contract; discarding does not enable `Array.sort` or unknown members. See the
+contract; discarding does not enable unsupported members or receiver profiles. See the
 [statement evidence](../investigations/compiler-native-statements.md).
 
 Null receivers remain unsupported; Dictionary receivers follow their bounded
@@ -1275,8 +1275,8 @@ Unqualified inherited `method(...)` lookup remains unsupported.
 Unlike the SDK checker, this erased lookup profile does not statically resolve
 a literal selector to a source target. A missing target or incompatible
 invocation remains a runtime/caller obligation even for literal selectors.
-Constructors, nullable Method contracts, typed signatures, and Array sorting
-remain deferred. See the
+Constructors, nullable Method contracts, and typed signatures remain deferred.
+Array sorting uses a separate Comparator interface, not a Method parameter. See the
 [binding/lifetime evidence](../investigations/compiler-methods.md).
 
 ## Ordinary weak references
@@ -1376,8 +1376,9 @@ array.
 
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparison operators, Boolean conditions, or
-console entry results. Native Array constructors, `sort`, and ordinary
-weak targets outside the bounded profile remain unsupported. Native Array
+console entry results. Native Array constructors and ordinary weak targets
+outside the bounded profile remain unsupported. Default sorting follows its
+[separate contract](#default-array-sorting). Native Array
 calls may be values or
 statements that discard the result.
 Guard nullable String receivers before conversion; that proof does not imply
@@ -1523,9 +1524,10 @@ Non-null indexed updates/compounds follow scalar operator promotion and must
 retain the element type. For example, `Float += Number` is valid but
 `Float += Long` would produce Double and is rejected. Nullable elements cannot
 be compound targets without a supported direct non-null read contract.
-Sorting, broader callback consumers, nested containers, nullable Array
-references, and whole-array expression joins outside the existing Number/Char profile
-remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
+Non-null elements support [default sorting](#default-array-sorting). Custom
+comparators, broader callback consumers, nested containers, nullable Array
+references, and whole-array expression joins outside the existing Number/Char
+profile remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
 and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
 
 ## String arrays
@@ -1547,7 +1549,8 @@ String-array contract supplies the type of a direct `[]`.
 and `slice` use the existing Array contracts with String substituted for the
 element type. Search/removal compare String text. Array/String types,
 construction, indexing, `size`, and `toString` require API 1.0.0; the other
-methods require 1.3.0. Sort and broader callback consumers remain deferred.
+methods require 1.3.0. [Default sorting](#default-array-sorting) requires 5.0.0.
+Custom comparators and broader callback consumers remain deferred.
 Arrays must be converted to String before printing.
 
 See the [example](../../examples/compiler-string-arrays/README.md) and
@@ -1564,10 +1567,36 @@ Typed parameters/results and direct contextual `[]` preserve the contract.
 Literal-only arrays use `apush` constants; computed elements use ordered private
 construction, including conditional/short-circuit expressions. Copies share
 mutation; repeated constant loads are independently mutable. The supported
-Array methods and API levels match the String/Number profile. Sorting and
+Array methods and API levels match the String/Number profile, including
+[default sorting](#default-array-sorting) from 5.0.0. Custom comparators and
 broader callback consumers remain deferred. See the
 [example](../../examples/compiler-boolean-arrays/README.md) and
 [evidence](../investigations/compiler-boolean-arrays.md).
+
+## Default Array sorting
+
+`array.sort(null)` sorts a non-null Array of Number, Long, Float, Double,
+Boolean, Char, or String elements in ascending order. It mutates the receiver,
+so aliases observe the new order; separately created copies retain their own
+contents. Empty/singleton Arrays are accepted, and duplicates are retained.
+The invariant element contract does not change. Sorting requires API 5.0.0.
+
+The result is Void: use a call statement, not an initializer, return expression,
+or chained value. Evaluate the receiver once before the Null argument, then
+invoke the runtime method and discard its VM result slot. The compiler does
+not implement a sorting algorithm or promise sort stability, NaN ordering,
+locale-sensitive String collation, or atomic behavior if comparison fails.
+
+Garmin's full parameter type is `Lang.Comparator or Null`. Comparator is a
+structural interface requiring `compare(Object, Object) as Number`; it is not
+Method or an instantiable native class. This executable profile accepts only
+Null, selecting the runtime default comparator. Custom comparator objects,
+nullable elements, and object elements remain unsupported even when a specific
+Array currently contains only comparable values. Those need separate checking
+and comparison contracts.
+
+See the [example](../../examples/compiler-array-sort/README.md) and
+[evidence](../investigations/compiler-array-sort.md).
 
 ## Nullable Array elements
 

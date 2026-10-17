@@ -95,8 +95,9 @@ impl ApiContext {
         self.require(path, catalogue.class_level(class))
     }
 
-    /// Check class introduction levels in a value or signature type, including
-    /// container parameters. Null/Void have no class level; unions require all alternatives.
+    /// Check class/interface introduction levels in a value or signature type,
+    /// including container parameters. Null/Void have no level; unions require
+    /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
             Type::Array(element) => {
@@ -116,6 +117,9 @@ impl ApiContext {
             }
             Type::Named(name) if catalogue.enums.contains_key(name) => {
                 self.require(name, catalogue.enum_level(name).unwrap())
+            }
+            Type::Named(name) if catalogue.interface(name).is_some() => {
+                self.require(name, catalogue.interface_level(name).unwrap())
             }
             Type::Named(name) => self.check_class(catalogue, name),
             Type::Parameter(name) => Err(format!(
@@ -278,6 +282,15 @@ pub struct Class {
     pub methods: Vec<Method>,
 }
 
+/// A structural API contract, distinct from an instantiable native class.
+/// Methods describe required members; executable structural checking is separate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Interface {
+    pub name: String,
+    pub since: ApiLevel,
+    pub methods: Vec<Method>,
+}
+
 /// An API namespace and its directly declared module functions.
 /// Modules do not inherit from Object.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,6 +336,7 @@ pub struct Catalogue {
     modules: BTreeMap<String, Module>,
     classes: BTreeMap<String, Class>,
     enums: BTreeMap<String, ApiLevel>,
+    interfaces: BTreeMap<String, Interface>,
     constants: BTreeMap<(String, String), Constant>,
 }
 
@@ -402,6 +416,25 @@ impl Catalogue {
     /// Look up a canonical class path without filtering its API availability.
     pub fn class(&self, path: &str) -> Option<&Class> {
         self.classes.get(path)
+    }
+
+    /// Look up a structural interface without claiming an executable class.
+    pub fn interface(&self, path: &str) -> Option<&Interface> {
+        self.interfaces.get(path)
+    }
+
+    /// Return an interface's introduction level, including enclosing namespaces.
+    pub fn interface_level(&self, path: &str) -> Option<ApiLevel> {
+        let interface = self.interface(path)?;
+        let mut level = interface.since;
+        let mut path = path;
+        while let Some((parent, _)) = path.rsplit_once('.') {
+            if let Some(module) = self.module(parent) {
+                level = level.max(module.since);
+            }
+            path = parent;
+        }
+        Some(level)
     }
 
     /// Resolve an instance method through the superclass chain, retaining its
@@ -747,6 +780,15 @@ fn build_core() -> Catalogue {
             Type::Array(Box::new(Type::Parameter("Element".into()))),
             char_initial,
         ),
+        method(
+            "sort",
+            vec![Type::Union(vec![
+                Type::named("Toybox.Lang.Comparator"),
+                Type::Null,
+            ])],
+            Type::Void,
+            ApiLevel(5, 0, 0),
+        ),
     ];
     classes.get_mut(string).unwrap().methods = vec![
         method(
@@ -953,6 +995,19 @@ fn build_core() -> Catalogue {
         .functions
         .push(method("requestUpdate", vec![], Type::Void, initial));
     Catalogue {
+        interfaces: BTreeMap::from([(
+            "Toybox.Lang.Comparator".into(),
+            Interface {
+                name: "Toybox.Lang.Comparator".into(),
+                since: ApiLevel(5, 0, 0),
+                methods: vec![method(
+                    "compare",
+                    vec![Type::named(object), Type::named(object)],
+                    Type::named(number),
+                    ApiLevel(5, 0, 0),
+                )],
+            },
+        )]),
         modules,
         classes,
         enums: BTreeMap::from([("Toybox.Graphics.FontDefinition".into(), initial)]),
@@ -1104,7 +1159,9 @@ mod tests {
                     check_type(api, value);
                 }
                 Type::Named(name) => assert!(
-                    api.class(name).is_some() || api.enum_level(name).is_some(),
+                    api.class(name).is_some()
+                        || api.enum_level(name).is_some()
+                        || api.interface(name).is_some(),
                     "unknown {name}"
                 ),
                 Type::Parameter(_) => {}
@@ -1130,6 +1187,7 @@ mod tests {
             .values()
             .flat_map(|c| &c.methods)
             .chain(api.modules.values().flat_map(|m| &m.functions))
+            .chain(api.interfaces.values().flat_map(|i| &i.methods))
         {
             check_type(api, &method.result);
             for (receiver, result) in &method.receiver_results {

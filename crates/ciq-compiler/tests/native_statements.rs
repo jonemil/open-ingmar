@@ -96,7 +96,7 @@ fn discarding_a_result_does_not_bypass_native_contract_or_null_proof_checks() {
     for source in [
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.remove(65); }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.addAll(null); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.sort(null); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.sort(1); }",
         "function f(n) { n.abs(1); }",
         "function f(s as Toybox.Lang.String or Null) { s.length(); }",
         "function f() { 1 + 2; }",

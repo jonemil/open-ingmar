@@ -233,6 +233,7 @@ pub(crate) fn value_call(
                     | "removeAll"
                     | "reverse"
                     | "slice"
+                    | "sort"
             )
             | (
                 "Toybox.Lang.Number",
@@ -329,6 +330,20 @@ pub(crate) fn value_call(
         && arguments != [api::Type::named("Toybox.Lang.String")]
     {
         return Err("String.compareTo lowering currently requires String".into());
+    }
+    if class == "Toybox.Lang.Array" && member == "sort" {
+        if arguments != [api::Type::Null] {
+            return Err("Array.sort currently requires the default comparator (Null)".into());
+        }
+        if !matches!(receiver, api::Type::Array(element) if matches!(
+            crate::ArrayElement::from_api_type(element),
+            Some(crate::ArrayElement::Number | crate::ArrayElement::Long
+                | crate::ArrayElement::Float | crate::ArrayElement::Double
+                | crate::ArrayElement::Boolean | crate::ArrayElement::Char
+                | crate::ArrayElement::String)
+        )) {
+            return Err("default Array.sort requires non-null comparable scalar elements".into());
+        }
     }
     if class == "Toybox.Lang.Array" && member == "slice" {
         let nullable_number = api::Type::Union(vec![

@@ -1346,6 +1346,12 @@ Function result categories are inferred from returns; those categories are not
 Nullable Array receivers and unsupported element types cannot be introduced
 by text edits.
 
+Array `sort` uses `.call-native` with one Null argument, a supported non-null
+scalar-element Array receiver, and a Void result consumed by `.discard`.
+Validation reapplies the [source sorting contract](compiler-subset.md#default-array-sorting),
+including API 5.0.0 and element restrictions; text IR cannot bypass them.
+Lowering uses existing member lookup and `invokem`, followed by `popv`.
+
 Native `equals` uses the shared
 [Object argument profile](compiler-subset.md#object-equality-and-container-observers),
 including supported scalar, Array, Dictionary, and nullable/Null arguments.

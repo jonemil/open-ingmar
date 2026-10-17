@@ -12,14 +12,20 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and callable/reference facilities.** Establish checked callback
-signatures where consumers need argument/result guarantees. Define signature
-syntax, source-target resolution, and validation for saved IR before enabling
-Array comparators. Unqualified inherited `method(...)` lookup remains separate
-from the supported explicit `self.method(...)` syntax. Erased Method invocation
-does not establish the target's API availability, arity, or concrete result
-type. Use these prerequisites to revisit other callback consumers.
-Plan `has`/`instanceof` and their checking/refinement rules.
+**Object and structural contracts.** Extend the declaration-only Lang.Comparator
+interface toward checked source implementations and custom Array sorting.
+Probe structural member matching, parameter/result requirements, and dispatch;
+establish the needed source Object construction and Object input refinement
+contracts before widening consumers. Review Lang.Comparable alongside it.
+These interfaces are distinct from Method callbacks; sorting does not require
+a typed Method syntax.
+
+Establish checked Method signatures when a concrete callback consumer needs
+argument/result guarantees. Keep source-target resolution and saved-IR checking
+consistent. Erased invocation does not establish a target's API availability,
+arity, or concrete result type. Unqualified inherited `method(...)` lookup
+remains separate from explicit `self.method(...)`. Plan `has`/`instanceof` and
+their checking/refinement rules.
 Nullable Symbols and Symbol Array/Dictionary elements need their own container
 and DATA contracts; ordinary Symbol values do not implicitly enable them.
 
@@ -36,8 +42,9 @@ Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established. Dictionary
 callable methods belong to the shared Object work.
 
-Array sorting remains deferred until comparator/callable support. Broader weak
-targets, nullable WeakReference storage, and concrete recovery from opaque
+Custom Array comparators and nullable-element sorting remain deferred until
+their comparison contracts are established. Broader weak targets, nullable
+WeakReference storage, and concrete recovery from opaque
 Object results need their own type/refinement contracts. Keep hidden temporary
 ownership explicit when adding new source staging paths.
 

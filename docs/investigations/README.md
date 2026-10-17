@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Default Array sorting](compiler-array-sort.md): comparable scalar types,
+  shared mutation, Void results, and Comparator interface declarations.
 - [Wider numeric Dictionaries](compiler-numeric-dictionaries.md): numeric
   keys/values, signed-zero keys, and separate NaN key evidence.
 - [Numeric boundaries](compiler-numeric-boundaries.md): isolated division

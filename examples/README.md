@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-array-sort](compiler-array-sort/README.md): default scalar sorting,
+  shared mutation, copies, and edge-sized inputs.
 - [compiler-source-methods](compiler-source-methods/README.md): source/self
   callbacks, shared fields, and retained receivers.
 - [compiler-numeric-dictionaries](compiler-numeric-dictionaries/README.md): wider
