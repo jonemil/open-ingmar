@@ -9,9 +9,18 @@ pub(crate) fn not_result(operand: &Type) -> Option<Type> {
     .then(|| operand.clone())
 }
 
-/// Resolve unary Number signs to Number without widening other or nullable types.
-pub(crate) fn number_unary_result(operand: &Type) -> Option<Type> {
+/// Resolve 32-bit Number complement without widening other or nullable types.
+pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
     (*operand == Type::named("Toybox.Lang.Number")).then(|| operand.clone())
+}
+
+/// Resolve unary signs without changing Number or Long width or admitting Null.
+pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+    integer(operand).then(|| operand.clone())
+}
+
+fn integer(ty: &Type) -> bool {
+    matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Long"))
 }
 
 /// Resolve a Number step or Char increment without coercion or concatenation.
@@ -22,8 +31,8 @@ pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
 }
 
 /// Resolve supported arithmetic operand types to their semantic result type.
-/// Number pairs support addition, subtraction, multiplication, division, and
-/// remainder, bitwise AND/OR/XOR, and left/arithmetic-right shifts. Addition of Char/Number in either
+/// Number/Long arithmetic promotes to Long when either operand is Long.
+/// Number pairs additionally support bitwise operations and shifts. Addition of Char/Number in either
 /// order returns Char; two Chars concatenate to String. An exact String operand
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
@@ -33,6 +42,18 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
                 || (*right == Type::named("Toybox.Lang.String") && string_operand(left, true)) =>
         {
             Some(Type::named("Toybox.Lang.String"))
+        }
+        BinaryOp::Add
+        | BinaryOp::Subtract
+        | BinaryOp::Multiply
+        | BinaryOp::Divide
+        | BinaryOp::Remainder
+            if integer(left)
+                && integer(right)
+                && (*left == Type::named("Toybox.Lang.Long")
+                    || *right == Type::named("Toybox.Lang.Long")) =>
+        {
+            Some(Type::named("Toybox.Lang.Long"))
         }
         BinaryOp::Add
         | BinaryOp::Subtract
@@ -65,12 +86,12 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality/inequality with Null; Boolean pairs support these two operators.
-/// Number/Char pairs support all six comparisons through numeric values.
+/// Number/Char pairs and Number/Long pairs support all six numeric comparisons.
 /// String equality uses object identity with supported String/Number/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     let numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
-    let numbers = numeric(left) && numeric(right);
+    let numbers = (numeric(left) && numeric(right)) || (integer(left) && integer(right));
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
@@ -125,6 +146,7 @@ mod tests {
     fn operator_rules_preserve_supported_types_and_reject_other_pairs() {
         let types = [
             ValueType::Integer,
+            ValueType::Long,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,
@@ -171,6 +193,20 @@ mod tests {
                             ) =>
                         {
                             Some(ValueType::String)
+                        }
+                        (
+                            BinaryOp::Add
+                            | BinaryOp::Subtract
+                            | BinaryOp::Multiply
+                            | BinaryOp::Divide
+                            | BinaryOp::Remainder,
+                            left,
+                            right,
+                        ) if matches!(left, ValueType::Integer | ValueType::Long)
+                            && matches!(right, ValueType::Integer | ValueType::Long)
+                            && (left == ValueType::Long || right == ValueType::Long) =>
+                        {
+                            Some(ValueType::Long)
                         }
                         (_, ValueType::Integer, ValueType::Integer) => Some(ValueType::Integer),
                         (BinaryOp::Add, ValueType::Char, ValueType::Char) => {
@@ -243,6 +279,8 @@ mod tests {
                         result.is_some(),
                         (matches!(left, ValueType::Integer | ValueType::Char)
                             && matches!(right, ValueType::Integer | ValueType::Char))
+                            || (matches!(left, ValueType::Integer | ValueType::Long)
+                                && matches!(right, ValueType::Integer | ValueType::Long))
                             || null_check
                             || strings
                             || (op.is_equality()
@@ -266,6 +304,7 @@ mod tests {
     fn subset_value_types_round_trip_through_known_api_identities() {
         for ty in [
             ValueType::Integer,
+            ValueType::Long,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,

@@ -203,6 +203,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         &definitions,
                         &slots,
                         &builders,
+                        &function.value_types,
                         &literal_aliases,
                         &mut items,
                     );
@@ -211,6 +212,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         &definitions,
                         &slots,
                         &builders,
+                        &function.value_types,
                         &literal_aliases,
                         &mut items,
                     );
@@ -253,6 +255,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -276,6 +279,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         &definitions,
                         &slots,
                         &builders,
+                        &function.value_types,
                         &literal_aliases,
                         &mut items,
                     );
@@ -310,6 +314,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -329,6 +334,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -393,6 +399,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -401,6 +408,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -409,6 +417,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -426,6 +435,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -448,6 +458,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -470,6 +481,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                             &definitions,
                             &slots,
                             &builders,
+                            &function.value_types,
                             &literal_aliases,
                             &mut items,
                         );
@@ -500,7 +512,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     member,
                     arguments,
                     &definitions,
-                    (&slots, &builders),
+                    (&slots, &builders, &function.value_types),
                     &literal_aliases,
                     &mut items,
                 );
@@ -515,7 +527,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     member,
                     arguments,
                     &definitions,
-                    (&slots, &builders),
+                    (&slots, &builders, &function.value_types),
                     &literal_aliases,
                     &mut items,
                 );
@@ -535,6 +547,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &definitions,
                     &slots,
                     &builders,
+                    &function.value_types,
                     &literal_aliases,
                     &mut items,
                 );
@@ -569,6 +582,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             &definitions,
             &slots,
             &builders,
+            &function.value_types,
             &literal_aliases,
             &mut items,
         );
@@ -582,6 +596,7 @@ fn expression(
     definitions: &BTreeMap<ValueId, &Operation>,
     slots: &BTreeMap<LocalId, u64>,
     builders: &BTreeMap<crate::BuilderId, u64>,
+    types: &BTreeMap<ValueId, crate::ValueType>,
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
@@ -803,7 +818,14 @@ fn expression(
                 }
                 Operation::Negate { operand, .. } => {
                     tasks.extend([Task::Negate, Task::Value(*operand)]);
-                    (Opcode::Ipushz, vec![])
+                    (
+                        if types[operand] == crate::ValueType::Long {
+                            Opcode::Lpushz
+                        } else {
+                            Opcode::Ipushz
+                        },
+                        vec![],
+                    )
                 }
                 Operation::Binary {
                     kind, left, right, ..
@@ -928,12 +950,18 @@ fn call_target(module: Option<&str>, member: &str) -> Item {
         instruction(Opcode::Getselfv, vec![member])
     }
 }
+type Frame<'a> = (
+    &'a BTreeMap<LocalId, u64>,
+    &'a BTreeMap<crate::BuilderId, u64>,
+    &'a BTreeMap<ValueId, crate::ValueType>,
+);
+
 fn statement_call(
     module: Option<&str>,
     member: &str,
     arguments: &[ValueId],
     definitions: &BTreeMap<ValueId, &Operation>,
-    frame: (&BTreeMap<LocalId, u64>, &BTreeMap<crate::BuilderId, u64>),
+    frame: Frame<'_>,
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
@@ -946,6 +974,7 @@ fn statement_call(
                 definitions,
                 frame.0,
                 frame.1,
+                frame.2,
                 literal_aliases,
                 items,
             );

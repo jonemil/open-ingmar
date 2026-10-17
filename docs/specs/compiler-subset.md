@@ -805,7 +805,7 @@ Decimal literals end in `l` or `L`; values must fit i64, including
 `-9223372036854775808l` and `9223372036854775807l`. An unsuffixed token retains
 Number's signed 32-bit limit. A minus immediately applied to a Long token forms
 a negative literal under the same spacing/postfix restrictions as Number.
-General Long unary operators are not enabled by this literal rule.
+Unary plus and negation also accept Long expressions, preserving their width.
 
 Explicit `Toybox.Lang.Long` parameters/results, local copies/reassignment,
 module/instance calls, discarded calls, repeated construction, and
@@ -813,7 +813,21 @@ module/instance calls, discarded calls, repeated construction, and
 implicitly convert. Unannotated source returns still require Number; inferred
 IR returns can carry Long.
 
-Arithmetic, comparison, promotion, native Long methods/conversions, nullable
+Long/Long and mixed Number/Long pairs support `+`, `-`, `*`, `/`, and `%`.
+Either Long operand makes the result Long; Number/Number keeps Number. Promotion
+belongs to these operators only: arguments, returns, and assignments still
+require their declared storage type. Long locals support the corresponding
+compound assignments with Number/Long right operands; a Number local cannot
+store a promoted Long result. Nullable Number operands require a non-null proof.
+
+These pairs also support all six numeric comparisons, returning Boolean. Long
+mixing with Char, Boolean, String, or Null remains unsupported. Unary plus
+preserves the value; unary minus, addition, subtraction, and multiplication
+wrap to signed 64-bit results. Integer division truncates toward zero, and
+remainder follows the dividend's sign. Zero division and minimum Long divided
+by or reduced modulo -1 remain unverified runtime boundaries.
+
+Bitwise operations, shifts, updates, native Long methods/conversions, nullable
 Long, Long Array/Dictionary elements, conditional Long joins, and Long fields
 remain deferred. Existing native scalar argument profiles remain bounded to
 their documented types. See the

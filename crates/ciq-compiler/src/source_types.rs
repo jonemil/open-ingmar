@@ -99,6 +99,7 @@ impl Types {
                 (*result, Some(shape.api_type()))
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
+            Operation::Long { result, .. } => (*result, Some(Type::named("Toybox.Lang.Long"))),
             Operation::Integer { result, .. } => (*result, Some(Type::named("Toybox.Lang.Number"))),
             Operation::Char { result, .. } => (*result, Some(Type::named("Toybox.Lang.Char"))),
             Operation::Boolean { result, .. } => {
@@ -233,13 +234,17 @@ impl Types {
                     .get(operand)
                     .and_then(|ty| operators::step_result(candidate(ty), *increment)),
             ),
-            Operation::Negate { result, operand }
-            | Operation::Positive { result, operand }
-            | Operation::Complement { result, operand } => (
+            Operation::Negate { result, operand } | Operation::Positive { result, operand } => (
                 *result,
                 self.values
                     .get(operand)
-                    .and_then(|ty| operators::number_unary_result(candidate(ty))),
+                    .and_then(|ty| operators::sign_result(candidate(ty))),
+            ),
+            Operation::Complement { result, operand } => (
+                *result,
+                self.values
+                    .get(operand)
+                    .and_then(|ty| operators::complement_result(candidate(ty))),
             ),
             _ => return,
         };

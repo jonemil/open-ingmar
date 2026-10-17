@@ -90,8 +90,8 @@ directly; it does not print/reparse text. `Function::assembly()` is convenience
 lowering plus assembly printing. This gives a native source → IR → assembly
 model → CODE encoder path and text stop/resume points at both IR and assembly.
 
-`.multiply`, `.divide`, and `.remainder` require two non-null Number operands
-and produce Number. Other types, including nullable Number without a proof,
+`.multiply`, `.divide`, and `.remainder` accept non-null Number/Long pairs,
+producing Long when either operand is Long and Number otherwise. Other types, including nullable Number without a proof,
 are rejected. Lowering selects `mulv`, `divv`, and `modv`; no constant folding
 or guard is emitted. Division/remainder may fail at runtime and therefore
 require expression evaluation order in IR, even without calls or assignments.
@@ -171,7 +171,7 @@ See the [value-result evidence](../investigations/compiler-logical-values.md).
 ## Number negation
 
 `.positive %<result-id> %<operand-id> [span=<start>:<end>]` consumes one
-non-null Number and defines an unchanged Number result. Nullable operands
+non-null Number or Long and defines an unchanged result of the same type. Nullable operands
 require a checked fresh read under a non-null proof; other types are rejected.
 Definitions, single-use rules, block boundaries, spans, and effect order apply
 as for other unary operations. Lowering emits the operand exactly once and no
@@ -181,7 +181,7 @@ leading plus; source `+1` uses `.integer 1` followed by `.positive`.
 See [unary-plus evidence](../investigations/compiler-number-plus.md).
 
 `.negate %<result-id> %<operand-id> [span=<start>:<end>]` consumes one Number
-and defines Number. String, Char, Boolean, Null, and unchecked nullable values
+or Long and defines the same scalar type. String, Char, Boolean, Null, and unchecked nullable values
 are rejected. Operands must be earlier definitions in the same block and obey
 ordinary one-use rules. Source and typed/text IR recompute the contract; fresh
 reads with a direct non-null proof may feed it. Effect traversal evaluates the
@@ -207,6 +207,14 @@ invalid. API checking uses `Toybox.Lang.Long`, since 1.0.0.
 Lower zero as `lpushz`; other values use `lpush` with one big-endian eight-byte
 operand containing the signed value's two's-complement bits. The semantic IR
 holds no split words or DATA address. Both source and saved IR use this lowering.
+
+Existing arithmetic and comparison directives accept the bounded Number/Long
+pairs from the [source contract](compiler-subset.md#long-values). They retain
+semantic `Binary`/`Compare` operations, choose Long results where required, and
+use the existing VM arithmetic/comparison instructions without conversion calls.
+Long-aware `.positive` preserves its operand; `.negate` uses `lpushz`, the
+operand, and `subv`. Validated value types drive zero selection. Number negation
+keeps `ipushz`. No arithmetic results or promotions are trusted from text tags.
 
 ## Char constants
 

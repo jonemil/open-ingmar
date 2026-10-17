@@ -674,13 +674,13 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
     },
-    /// Return a non-null Number operand unchanged after evaluating it once.
+    /// Return a non-null Number or Long operand unchanged after evaluating it once.
     /// Other operand types require a separate contract and are rejected.
     Positive {
         result: ValueId,
         operand: ValueId,
     },
-    /// Negate one Number value, preserving the runtime's signed 32-bit behavior.
+    /// Negate one Number or Long, preserving its width and runtime wrapping.
     /// Nullable values require a non-null proof before use.
     Negate {
         result: ValueId,
@@ -1746,23 +1746,23 @@ impl Function {
                     (Some(result), vec![operand])
                 }
                 Operation::Positive { result, operand } => {
-                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                    let result_type = operators::sign_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("unary plus requires a non-null Number"))?;
+                        .ok_or_else(|| fail("unary plus requires a non-null Number or Long"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
                 Operation::Complement { result, operand } => {
-                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                    let result_type = operators::complement_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail("complement requires a non-null Number"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
                 Operation::Negate { result, operand } => {
-                    let result_type = operators::number_unary_result(&type_of(operand).api_type())
+                    let result_type = operators::sign_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("negation requires a non-null Number"))?;
+                        .ok_or_else(|| fail("negation requires a non-null Number or Long"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
