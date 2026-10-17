@@ -139,6 +139,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
             | Operation::SourceNew { result, .. }
+            | Operation::Symbol { result, .. }
             | Operation::NativeConstant { result, .. }
             | Operation::TupleNew { result, .. }
             | Operation::Compare { result, .. }
@@ -746,6 +747,10 @@ fn expression(
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                ),
+                Operation::Symbol { name, .. } => (
+                    Opcode::Spush,
+                    vec![Operand::Symbol(format!("__ciq_symbol_{name}"))],
                 ),
                 Operation::Integer { value, .. } => integer(*value),
                 Operation::Float { bits: 0, .. } => (Opcode::Fpushz, vec![]),

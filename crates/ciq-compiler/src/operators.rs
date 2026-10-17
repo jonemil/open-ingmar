@@ -124,6 +124,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let numbers = (char_numeric(left) && char_numeric(right))
         || (numeric(left) && numeric(right))
         || char_equality;
+    let symbols = kind.is_equality() && *left == Type::named("Toybox.Lang.Symbol") && left == right;
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_object = Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]);
@@ -160,7 +161,8 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
             || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));
-    (numbers || booleans || null_check || strings).then(|| Type::named("Toybox.Lang.Boolean"))
+    (numbers || symbols || booleans || null_check || strings)
+        .then(|| Type::named("Toybox.Lang.Boolean"))
 }
 
 fn string_operand(ty: &Type, boolean: bool) -> bool {

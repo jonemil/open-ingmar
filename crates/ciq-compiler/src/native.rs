@@ -161,6 +161,7 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Double"
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.String"
+                | "Toybox.Lang.Symbol"
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Boolean"
                 | "Toybox.Lang.Array"
@@ -174,11 +175,16 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Double"
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.Boolean"
+                | "Toybox.Lang.Symbol"
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Object"
                 | "Toybox.Lang.WeakReference",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
+        ) | (
+            "Toybox.Lang.Symbol",
+            "Toybox.Lang.Symbol",
+            "toNumber" | "toString"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
             | (
                 "Toybox.Lang.WeakReference",
@@ -340,6 +346,7 @@ fn equality_argument(ty: &api::Type) -> bool {
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.String"
                 | "Toybox.Lang.Boolean"
+                | "Toybox.Lang.Symbol"
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Dictionary"
                 | "Toybox.Lang.Object"

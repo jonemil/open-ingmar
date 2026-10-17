@@ -1072,7 +1072,7 @@ ordinary `weak` follows the [bounded reference profile](#ordinary-weak-reference
 
 ## Object equality and container observers
 
-Supported numeric, String, Boolean, Char, Array, Dictionary, opaque Object,
+Supported numeric, String, Boolean, Char, Symbol, Array, Dictionary, opaque Object,
 and WeakReference receivers accept `equals(other)` → Boolean. Its bounded
 argument profile includes those scalar
 types, all supported invariant Array contracts, opaque or typed Dictionary
@@ -1212,6 +1212,31 @@ a String contains a valid format pattern.
 [Native call IR](compiler-ir-text.md#native-value-calls) preserves receiver/member
 identity separately from executable IDs. Runtime evidence and reproduction are
 in the [native call experiment](../investigations/compiler-native-calls.md).
+
+## Symbol values
+
+`:name` produces a non-null `Toybox.Lang.Symbol` since API 1.0.0. Names use
+the ASCII identifier grammar. A Symbol is distinct from Number and String;
+matching names denote the same identity within a build. Numeric IDs are assigned
+during application/assembly binding and need not agree between builds or
+toolchains. Do not treat them as persistent identifiers.
+
+Symbols support annotated parameters/results, exact local assignment, matching
+conditional arms, `==`/`!=` between Symbols, and the shared native `equals`
+argument profile. They support `toString()` → String, inherited `hashCode()` →
+Number and `equals` → Boolean since 1.0.0, immutable `weak()` → Symbol since
+1.2.0, and `toNumber()` → Number since 2.3.0. Equality and conversions remain
+native operations; no numeric ID or hash is folded into semantic IR.
+
+Complete applications retain names for literal Symbols in a SYMBOLS section,
+so their development `toString()` results use those names. This does not promise
+names for arbitrary runtime-created values or release builds without reflection
+metadata. Raw CODE output needs an explicit symbol source; it cannot allocate
+an independent identity space.
+
+Symbol arithmetic, ordering, truthiness, direct printing, nullable contracts,
+container elements/keys, and `Object.method`/Method values remain unsupported.
+See the [specimen and binding evidence](../investigations/compiler-symbols.md).
 
 ## Ordinary weak references
 

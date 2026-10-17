@@ -84,6 +84,7 @@ pub(crate) fn parse_ir_context(
                 "object" => crate::ReturnType::LangObject,
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
+                "symbol" => crate::ReturnType::Symbol,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
                     crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
                 }
@@ -134,6 +135,7 @@ pub(crate) fn parse_ir_context(
                         "object" => Ok(crate::ParameterType::LangObject),
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
+                        "symbol" => Ok(crate::ParameterType::Symbol),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
                         "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
                         "behavior-delegate" => Ok(crate::ParameterType::Object(
@@ -255,6 +257,7 @@ pub(crate) fn parse_ir_context(
             Some(".shift-right") => (54, 4),
             Some(".local") => (4, 3),
             Some(".read" | ".take") => (5, 3),
+            Some(".symbol") => (91, 3),
             Some(".call") => (
                 6,
                 fields.len()
@@ -947,6 +950,11 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 value: digits.parse().map_err(|_| fail(*at, "long exceeds i64"))?,
             }
+        } else if kind == 91 {
+            Operation::Symbol {
+                result: parse_value(&fields[1])?,
+                name: fields[2].clone(),
+            }
         } else if kind == 0 {
             let digits = &fields[2];
             let magnitude = digits.strip_prefix('-').unwrap_or(digits);
@@ -1088,6 +1096,7 @@ fn call_contract(
             "object" => crate::ReturnType::LangObject,
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
+            "symbol" => crate::ReturnType::Symbol,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),

@@ -119,6 +119,7 @@ pub(crate) struct Expression {
     pub span: Span,
 }
 pub(crate) enum ExpressionKind {
+    Symbol(String),
     DictionaryNew,
     DictionaryLiteral(Vec<(Expression, Expression)>),
     Conditional {
@@ -1238,6 +1239,19 @@ impl<'a> Parser<'a> {
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
+            Kind::Punctuation(':') => {
+                let word = self.identifier()?;
+                let Kind::Word(name) = word.kind else {
+                    unreachable!()
+                };
+                self.node(
+                    ExpressionKind::Symbol(name.into()),
+                    Span {
+                        start: token.span.start,
+                        end: word.span.end,
+                    },
+                )
+            }
             Kind::Char(value) => self.node(ExpressionKind::Char(value), token.span),
             Kind::String(literal) => {
                 let fields = ciq_prg::symbols::source::tokens(literal)
@@ -1754,6 +1768,7 @@ impl Parser<'_> {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.Object" => crate::ParameterType::LangObject,
                         "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
+                        "Toybox.Lang.Symbol" => crate::ParameterType::Symbol,
                         "Toybox.Lang.Long" => crate::ParameterType::Long,
                         "Toybox.Lang.Double" => crate::ParameterType::Double,
                         "Toybox.Lang.Float" => crate::ParameterType::Float,
@@ -1831,6 +1846,7 @@ impl Parser<'_> {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.Object" => crate::ReturnType::LangObject,
                 "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
+                "Toybox.Lang.Symbol" => crate::ReturnType::Symbol,
                 "Toybox.Lang.Long" => crate::ReturnType::Long,
                 "Toybox.Lang.Double" => crate::ReturnType::Double,
                 "Toybox.Lang.Float" => crate::ReturnType::Float,

@@ -456,6 +456,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.Array",
         "Toybox.Lang.Dictionary",
         "Toybox.Lang.WeakReference",
+        "Toybox.Lang.Symbol",
         "Toybox.Application.AppBase",
         "Toybox.WatchUi.View",
         "Toybox.WatchUi.InputDelegate",
@@ -555,8 +556,13 @@ fn build_core() -> Catalogue {
             ApiLevel(1, 2, 0),
         ),
     ];
+    classes.get_mut("Toybox.Lang.Symbol").unwrap().methods = vec![
+        method("toNumber", vec![], Type::named(number), ApiLevel(2, 3, 0)),
+        method("toString", vec![], Type::named(string), initial),
+    ];
     let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
     weak.receiver_results = [
+        "Toybox.Lang.Symbol",
         number,
         long,
         "Toybox.Lang.Float",

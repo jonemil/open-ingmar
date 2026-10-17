@@ -416,6 +416,20 @@ pub fn build_console_application(
         .chain(modules.iter().cloned())
         .chain(unit.classes().iter().map(|class| class.name.clone()))
         .chain(
+            unit.declarations()
+                .iter()
+                .map(|d| &d.function)
+                .chain(unit.classes().iter().flat_map(|c| &c.methods))
+                .flat_map(|f| f.operations())
+                .filter_map(|op| {
+                    if let crate::Operation::Symbol { name, .. } = &op.operation {
+                        Some(name.clone())
+                    } else {
+                        None
+                    }
+                }),
+        )
+        .chain(
             unit.classes()
                 .iter()
                 .flat_map(|class| class.fields.iter().map(|field| field.name.clone())),
@@ -504,6 +518,23 @@ pub fn build_console_application(
     }
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);
+    }
+    let literal_names: BTreeSet<_> = unit
+        .declarations()
+        .iter()
+        .map(|d| &d.function)
+        .chain(unit.classes().iter().flat_map(|c| &c.methods))
+        .flat_map(|f| f.operations())
+        .filter_map(|op| {
+            if let crate::Operation::Symbol { name, .. } = &op.operation {
+                Some(name.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    for name in &literal_names {
+        bindings.insert(format!("__ciq_symbol_{name}"), ids[name]);
     }
     for class in unit.classes() {
         bindings.insert(format!("__ciq_class_{}", class.name), ids[&class.name]);
@@ -798,6 +829,21 @@ pub fn build_console_application(
         (0x6000db01, vec![0, 0]),
         (ciq_prg::EXCEPTIONS, vec![0, 0]),
     ];
+    if !literal_names.is_empty() {
+        let symbols = ciq_prg::symbols::source::Source {
+            declarations: literal_names
+                .iter()
+                .map(|name| ciq_prg::symbols::source::Declaration {
+                    alias: name.clone(),
+                    name: name.clone(),
+                    id: ids[name],
+                    name_at: None,
+                    entry_index: None,
+                })
+                .collect(),
+        };
+        sections.push((ciq_prg::SYMBOLS, symbols.encode().map_err(error)?));
+    }
     // Deterministic trailing resource padding keeps the unsigned stream aligned.
     let length = sections.iter().map(|(_, b)| 8 + b.len()).sum::<usize>();
     sections[5].1.resize(2 + ((32 - length % 32) % 32), 0);

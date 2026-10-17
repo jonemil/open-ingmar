@@ -315,6 +315,8 @@ pub enum ReturnType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A symbol identity assigned a numeric ID during binding.
+    Symbol,
     Integer,
     Long,
     NullableLong,
@@ -350,6 +352,8 @@ pub enum ParameterType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A symbol identity assigned a numeric ID during binding.
+    Symbol,
     Integer,
     Long,
     NullableLong,
@@ -398,6 +402,7 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Array(element) => ValueType::Array(*element).api_type(),
@@ -431,6 +436,7 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Tuple(shape) => shape.api_type(),
@@ -450,6 +456,8 @@ enum ValueType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A symbol identity assigned a numeric ID during binding.
+    Symbol,
     Integer,
     Long,
     NullableLong,
@@ -531,6 +539,7 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
             Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
@@ -567,6 +576,7 @@ impl ValueType {
                 "Toybox.Lang.Dictionary" => Some(Self::Dictionary),
                 "Toybox.Lang.Object" => Some(Self::LangObject),
                 "Toybox.Lang.WeakReference" => Some(Self::WeakReference),
+                "Toybox.Lang.Symbol" => Some(Self::Symbol),
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
@@ -586,6 +596,11 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Push a named symbol; assembly/application binding supplies its ID.
+    Symbol {
+        result: ValueId,
+        name: String,
+    },
     /// Allocate a private Dictionary before evaluating its entries. Length is the
     /// source entry count passed to newd, not the final number of distinct keys.
     DictionaryBegin {
@@ -1588,6 +1603,13 @@ impl Function {
                     types.insert(result, ValueType::Long);
                     (Some(result), vec![])
                 }
+                Operation::Symbol { result, ref name } => {
+                    if !ciq_prg::symbols::source::valid_alias(name) {
+                        return Err(fail("symbol literal requires an identifier"));
+                    }
+                    types.insert(result, ValueType::Symbol);
+                    (Some(result), vec![])
+                }
                 Operation::Null { result } => {
                     types.insert(result, ValueType::Null);
                     (Some(result), vec![])
@@ -2159,6 +2181,7 @@ impl Function {
                             ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::LangObject => ReturnType::LangObject,
                             ValueType::WeakReference => ReturnType::WeakReference,
+                            ValueType::Symbol => ReturnType::Symbol,
                             ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Tuple(shape) => ReturnType::Tuple(shape),
                             ValueType::Array(element) => ReturnType::Array(element),
@@ -2492,6 +2515,7 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::Symbol => "symbol",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
                             ParameterType::Object(NativeClass::BehaviorDelegate) => {
@@ -2510,6 +2534,7 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::Symbol
             | ReturnType::Dictionary
             | ReturnType::TypedDictionary(_)
             | ReturnType::NullableInteger
@@ -2617,6 +2642,7 @@ impl Function {
                 Operation::SelfFieldAssign { ref field, value } => {
                     format!(".assign-self {field} %{}", value.0)
                 }
+                Operation::Symbol { result, ref name } => format!(".symbol %{} {name}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::Long { result, value } => format!(".long %{} {value}", result.0),
                 Operation::Double { result, bits } => {
@@ -3019,6 +3045,7 @@ fn validate_call_arguments(
                     | ValueType::LangObject
                     | ValueType::NullableObject
                     | ValueType::WeakReference
+                    | ValueType::Symbol
                     | ValueType::Dictionary
                     | ValueType::TypedDictionary(_)
                     | ValueType::Null
@@ -3061,6 +3088,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
             validate_call_names(None, &class)?;
@@ -3094,6 +3122,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::LangObject => " result=object",
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
+        ReturnType::Symbol => " result=symbol",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",
         ReturnType::Object(NativeClass::BehaviorDelegate) => " result=behavior-delegate",

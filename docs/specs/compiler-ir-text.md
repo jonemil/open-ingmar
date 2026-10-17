@@ -793,6 +793,7 @@ references. Compiler aliases `__ciq_module_<name>` / `__ciq_member_<name>`
 resolve by unique stored names `globals/<name>` / `<name>`, independently of the
 file's aliases. Missing/ambiguous names, duplicate aliases/IDs, conflicting
 generated bindings, and non-symbol items are errors before output creation.
+Literal aliases `__ciq_symbol_<name>` likewise resolve by the exact stored name.
 `--symbols` with IR/assembly emission is rejected; those stages remain symbolic.
 No DATA/SYMBOLS section is written by raw CODE encoding.
 
@@ -1296,6 +1297,18 @@ Dc parameter and Void; onShow/onHide require zero parameters and Void. Callback
 ownership and constructor resolution follow the [class rules](compiler-classes.md).
 
 ## Native value calls
+
+`.symbol %<result-id> <name> [span=<start>:<end>]` defines a non-null Symbol by
+ASCII identifier, without a numeric ID. Parameter, call-result, and matching
+conditional-edge contracts use `symbol`; explicit function `result=symbol`
+retains that result contract. Validation applies the
+[source Symbol profile](compiler-subset.md#symbol-values), including API checks.
+
+Lowering emits `spush @__ciq_symbol_<name>`. Raw CODE binding resolves that alias
+by a unique stored name in the supplied symbol source. Complete application
+generation allocates the name in the shared identity map and retains its
+development name in SYMBOLS. Known native member names reuse their pinned IDs.
+These are existing assembly/SYMBOLS formats, not a new bytecode encoding.
 
 `.call-native %<result-id> %<receiver-id> <member> [%<argument-id> ...]` invokes a
 runtime-provided method and defines its semantic result. The receiver and

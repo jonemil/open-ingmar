@@ -51,7 +51,9 @@ pub fn symbol_bindings(
             let Operand::Symbol(alias) = operand else {
                 continue;
             };
-            let name = if alias == "__ciq_sdk_System" {
+            let name = if let Some(name) = alias.strip_prefix("__ciq_symbol_") {
+                name.into()
+            } else if alias == "__ciq_sdk_System" {
                 "Toybox_System".to_string()
             } else if alias == "__ciq_sdk_WatchUi" {
                 "Toybox_WatchUi".to_string()

@@ -12,10 +12,13 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and callable/reference facilities.** Grow Symbol and Method
-values/invocation and shared Object contracts.
+**Object and callable/reference facilities.** Add Method values and invocation
+through `Object.method(Symbol)`. Establish bound-receiver ownership, argument
+arity, and result contracts before exposing general callbacks.
 Use these prerequisites to revisit deferred core methods, including Array
 comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+Nullable Symbols and Symbol Array/Dictionary elements need their own container
+and DATA contracts; ordinary Symbol values do not implicitly enable them.
 
 Keep SDK-rejected wider Char ordering and floating Char addition outside the
 operator profile. Further numeric boundary work should answer a concrete

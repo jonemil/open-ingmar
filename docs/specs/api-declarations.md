@@ -18,7 +18,8 @@ describes a runtime-provided API; compiler analysis state does not belong in it.
 effective result, and required API level. `Method.result` retains the generic
 signature; `ResolvedMethod.result` substitutes an exact receiver override.
 Overrides do not propagate to subclasses. `Object.weak` therefore resolves to
-Number, String, or Boolean for those exact immutable receivers, while other
+the verified numeric, String, Boolean, Char, and Symbol types for those exact
+immutable receivers, while other
 receivers retain WeakReference. Executable support follows the
 [bounded reference profile](compiler-subset.md#ordinary-weak-references).
 
@@ -100,8 +101,8 @@ These documented members lack executable prerequisites. Supported methods are
 listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
-- **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
-  Method values. Broader `weak` targets and Object-typed `weak` results need
+- **Inherited Object methods:** `method(Symbol)` (1.0.0) needs callable Method
+  values. Broader `weak` targets and Object-typed `weak` results need
   contracts beyond the bounded Array/Dictionary/WeakReference profile.
   The immutable numeric/String/Boolean/Char specialization does not establish
   this behavior.

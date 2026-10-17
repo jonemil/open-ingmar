@@ -45,8 +45,8 @@ precede application generation.
 ## Symbol and DATA layout
 
 Synthesized application-class symbol: `1`. Distinct user plain names, including
-module names and function names, receive IDs from `2` in ASCII lexicographic
-order. The following predefined member names reuse their native IDs:
+module names, function names, and literal Symbol names, receive IDs from `2`
+in ASCII lexicographic order. The following predefined member names reuse their native IDs:
 `initialize`, `println`, `View`, `AppBase`, `onStart`, `getInitialView`.
 Module lookup identities then receive separate IDs in module-name order. A
 module's plain field identity and its lookup identity are distinct.
@@ -133,7 +133,7 @@ still apply. Device memory budgets are not checked by this profile.
 
 ## Generated sections
 
-Eight unsigned sections, in order:
+Unsigned sections, in order:
 
 1. HEADER_VERSIONED (`0xd000d00d`): 33 bytes, big-endian stamp `0x00060002`
    followed by 29 zero bytes. Additional header fields are not authored.
@@ -150,6 +150,9 @@ Eight unsigned sections, in order:
 6. RESOURCES: u16 count zero and deterministic trailing zero padding.
 7. PERMISSIONS (`0x6000db01`): u16 count zero.
 8. EXCEPTIONS: u16 count zero.
+9. SYMBOLS, when Symbol literals occur: their names and bound IDs, using the
+   shared [symbol format](symbols.md). This retains development names for
+   runtime Symbol string conversion.
 
 The native `AppBase` class reference is `0x40000000`, selecting import index
 zero. The SDK reference's `0x40000119` selected index `0x119` in its larger
@@ -157,7 +160,7 @@ imports table; the reduced table and remapped base reference are runtime-tested.
 This does not establish every native-reference address space.
 
 RESOURCE padding aligns the unsigned section stream, excluding its final zero
-terminator, to a multiple of 32 bytes. No resource assets, debug/line/symbol
+terminator, to a multiple of 32 bytes. No resource assets, debug/line
 sections, settings, or signing material are generated. Ordinary PRG framing and
 its terminator use [the container format](prg-container.md). Signing is
 separate.

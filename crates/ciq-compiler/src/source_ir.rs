@@ -134,6 +134,10 @@ fn emit(
         | parser::ExpressionKind::Negate(_)) => {
             emit_unary(source, kind, locals, parameters, operations, calls)?
         }
+        parser::ExpressionKind::Symbol(name) => Operation::Symbol {
+            result: ValueId(operations.len() as u32),
+            name,
+        },
         parser::ExpressionKind::Char(value) => Operation::Char {
             result: ValueId(operations.len() as u32),
             value,
@@ -1913,6 +1917,7 @@ fn build_body(
                             | "Toybox.Lang.Double"
                             | "Toybox.Lang.String"
                             | "Toybox.Lang.Boolean"
+                            | "Toybox.Lang.Symbol"
                             | "Toybox.Lang.Char"
                     ),
                     crate::api::Type::Union(types) => types.iter().all(immutable),
