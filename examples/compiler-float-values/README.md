@@ -16,5 +16,5 @@ cargo run -p ciq-asm -- sign scratch/compiler-float-values/unsigned.prg scratch/
 sh scripts/run-simulator-container.sh --prg scratch/compiler-float-values/generated.prg
 ```
 
-Floating containers/fields and general union types remain deferred. See the
+Floating Dictionary elements, fields, and general union types remain deferred. See the
 [source contract](../../docs/specs/compiler-subset.md#floating-point-values).

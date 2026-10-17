@@ -154,7 +154,7 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         "function f() { return 1.25 + true; }",
         "function f() { var x = 1.25; x += 2l; }",
         "function f() as Toybox.Lang.Float { return true ? 1.0 : 1; }",
-        "function f() { var xs = [1.25]; }",
+        "function f() { var xs = [1.25, 1]; }",
         "function f() { var xs = {1 => 1.25}; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");

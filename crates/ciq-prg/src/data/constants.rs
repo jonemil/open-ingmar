@@ -10,11 +10,14 @@ pub(super) struct Record {
     pub end: usize,
 }
 
-/// Scalar in a flat Array or Dictionary record, retaining raw Number/Char bits.
+/// Scalar in a flat Array or Dictionary record, retaining exact numeric bits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
     Null,
     Number(u32),
+    Float(u32),
+    Long(u64),
+    Double(u64),
     Char(u32),
     Boolean(bool),
     /// Alias of a string in this record's local pool, not a DATA string alias.
@@ -44,10 +47,20 @@ impl Value {
         if bits.is_empty() || !bits.bytes().all(|c| c.is_ascii_hexdigit()) {
             return Err(Error("invalid constant bit pattern".into()));
         }
+        if matches!(kind, "long" | "double") {
+            let bits = u64::from_str_radix(bits, 16)
+                .map_err(|_| Error("constant scalar exceeds u64".into()))?;
+            return Ok(if kind == "long" {
+                Self::Long(bits)
+            } else {
+                Self::Double(bits)
+            });
+        }
         let bits = u32::from_str_radix(bits, 16)
             .map_err(|_| Error("constant scalar exceeds u32".into()))?;
         match kind {
             "number" => Ok(Self::Number(bits)),
+            "float" => Ok(Self::Float(bits)),
             "char" => Ok(Self::Char(bits)),
             _ => Err(Error("unsupported constant scalar".into())),
         }
@@ -57,6 +70,9 @@ impl Value {
             Self::Null => "null".into(),
             Self::Boolean(b) => format!("boolean={b}"),
             Self::Number(n) => format!("number=0x{n:08x}"),
+            Self::Float(n) => format!("float=0x{n:08x}"),
+            Self::Long(n) => format!("long=0x{n:016x}"),
+            Self::Double(n) => format!("double=0x{n:016x}"),
             Self::Char(n) => format!("char=0x{n:08x}"),
             Self::String(s) => format!("string=&{s}"),
         }
@@ -72,6 +88,18 @@ impl Value {
                     0x13
                 });
                 out.extend(n.to_be_bytes());
+            }
+            Self::Float(bits) => {
+                out.push(2);
+                out.extend(bits.to_be_bytes());
+            }
+            Self::Long(bits) | Self::Double(bits) => {
+                out.push(if matches!(self, Self::Long(_)) {
+                    0x0e
+                } else {
+                    0x0f
+                });
+                out.extend(bits.to_be_bytes());
             }
             Self::String(alias) => {
                 out.push(3);
@@ -111,6 +139,15 @@ impl<'a> Reader<'a> {
         Ok(match self.take(1)?[0] {
             0 => Value::Null,
             1 => Value::Number(self.word()?),
+            2 => Value::Float(self.word()?),
+            tag @ (0x0e | 0x0f) => {
+                let bits = u64::from_be_bytes(self.take(8)?.try_into().unwrap());
+                if tag == 0x0e {
+                    Value::Long(bits)
+                } else {
+                    Value::Double(bits)
+                }
+            }
             0x13 => Value::Char(self.word()?),
             9 => match self.take(1)?[0] {
                 0 => Value::Boolean(false),

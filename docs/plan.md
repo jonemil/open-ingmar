@@ -12,8 +12,8 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Numeric integration and boundaries.** Extend Long/Float/Double container
-   contracts when their consumers require them. Keep SDK-rejected wider Char
+1. **Numeric integration and boundaries.** Extend Long/Float/Double Dictionary
+   key/value contracts when their consumers require them. Keep SDK-rejected wider Char
    ordering and floating Char addition outside the operator profile.
    Isolate integer division failures and floating non-finite/out-of-range
    conversion boundaries with separate probes; do not infer portable behavior

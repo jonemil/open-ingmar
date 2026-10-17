@@ -455,12 +455,18 @@ effects and can fail there.
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
-non-null array. `element` is `char`, `number`, or `view`; typed construction uses
-`Operation::ArrayNew` with `ArrayElement::Char` or `ArrayElement::Number`.
-View uses `ArrayElement::Object(NativeClass::View)`. Other element contracts are
-rejected. Definition/use, block, and evaluation order checks apply to allocation
-even if its result is consumed later.
-API context requires 1.3.0 for Char, or 1.0.0 for Number, View, and Array.
+non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
+`char`, `boolean`, and `string`, each also accepting a `nullable-` prefix.
+`view` represents the supported native View contract. Typed construction uses
+`Operation::ArrayNew` with the corresponding `ArrayElement` variant.
+Other parsed element contracts are rejected. Definition/use, block, and effect
+checks apply even when the allocation result is consumed later. API checking
+requires the element class and Array: 1.3.0 for Char, otherwise 1.0.0.
+
+Parameter/user-call Array categories append `-array` to these element tags,
+for example `long-array`, `nullable-double-array`, or `view-array`. Nullability
+belongs to the element, not the Array reference. Function Array results are
+inferred from typed returns rather than a separate `.function result=` field.
 
 Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
 or uninitialized element contract is implied. Nonempty source literals use
@@ -478,18 +484,19 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 
 `.array-constant %<result> <element> <value>... [span=<start>:<end>]` defines a
 fresh mutable array.
-The element type is `number`, `char`, `boolean`, `string`, `nullable-number`,
-`nullable-string`, `nullable-boolean`, or `nullable-char`; at least one element
-is required. Number/Char values use `0x` followed by exactly eight hexadecimal
-digits, preserving their raw bits. String values are quoted text using the
+Element tags follow [Array allocation](#array-allocation), excluding View;
+at least one element is required. Number/Char/Float values use `0x` followed by
+exactly eight hexadecimal digits; Long/Double require sixteen. Values retain
+their raw bits, including signed floating zero and NaN payloads. String values are quoted text using the
 ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
 Boolean payloads use `true`/`false` or `ArrayConstantValue::Boolean`; numeric
 0/1 do not substitute for them; Null requires a nullable element contract.
-Typed IR uses `ArrayConstantValue::Bits` for Number/Char or `::String` for text;
+Typed IR uses `ArrayConstantValue::Bits` for Number/Char, `::Long`, `::Float`,
+or `::Double` for those exact bits, or `::String` for text;
 nullable contracts also permit `null` / `ArrayConstantValue::Null`. Every
 payload must match its element contract; other mixed types and nested
-containers are rejected. API checks require Array/Number/String/Boolean 1.0.0 or Char
-1.3.0.
+containers are rejected. API checks require Array and each element class, as
+for allocation.
 Definition/use and ordered-effect checks include this allocation.
 
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
@@ -516,8 +523,7 @@ they cannot be returned, copied, passed to calls, or read with `.read`.
 ```
 
 - `.array-begin &<builder> <element> <length>` allocates the final length.
-  Element contracts are `char`, `number`, `boolean`, `string`, `view`,
-  `nullable-number`, `nullable-string`, `nullable-boolean`, or `nullable-char`.
+  Element contracts follow [Array allocation](#array-allocation).
   Length is decimal, positive, and fits a nonnegative Number. Builder
   declarations are unique within a function. Allocation remains ordered and may fail before element effects.
 - `.array-fill &<builder> <index> %<value>` initializes the next slot.
@@ -551,7 +557,7 @@ The read result follows the receiver's element type, including native View.
 
 `.array-read %<result> %<array> %<index> [span=<start>:<end>]` consumes a
 non-null supported array and non-null Number index, and defines the element
-type: Char or Number. Shared validation
+type, including nullable scalar elements. Shared validation
 recomputes operand types, null proofs, block-local definitions, one-use rules,
 and evaluation order. No element/result type annotation is trusted. Array
 evaluates before index, once each; lowering emits those operands then `agetv`.
@@ -660,12 +666,11 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `long`, `nullable-long`, `float`, `double`,
-`nullable-float`, `nullable-double`, `string`, `boolean`, `char`, `char-array`,
-`number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
-`nullable-string-array`, `nullable-boolean-array`, `nullable-char-array`,
-`nullable-integer`, `nullable-string`, `nullable-boolean`, or
-`nullable-char`; omission means integer.
+Scalar result types are `integer`, `long`, `float`, `double`, `string`, `boolean`,
+and `char`, plus `nullable-integer`, `nullable-long`, `nullable-float`,
+`nullable-double`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
+Array results use the [element categories](#array-allocation). Omission means
+integer.
 Canonical text omits the integer default and writes noninteger contracts.
 Void is invalid in a value call. Names use ASCII identifier rules and remain
 symbolic. The optional span
@@ -1087,10 +1092,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 
 Instance-function metadata may include
 `parameter-types=...` with colon-separated scalar/Array contracts.
-Array categories include `char-array`, `number-array`, `boolean-array`,
-`string-array`,
-`nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
-`nullable-char-array`, and `view-array`.
+Array categories follow [Array allocation](#array-allocation).
 Ordinary signatures also accept `long`, `nullable-long`, `float`, `double`,
 `nullable-float`, `nullable-double`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
@@ -1285,11 +1287,8 @@ frontend metadata. Unknown or unsupported members, receivers, argument counts,
 and types are rejected. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
-Char and Array values use `char`, `char-array`, `number-array`, `boolean-array`,
-`string-array`,
-`nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
-`nullable-char-array`, or `view-array`
-in parameter/user-call metadata, with `result=<category>` for valued calls.
+Scalar and Array values use the same parameter/user-call categories described
+above, with `result=<category>` for valued calls.
 Function result categories are inferred from returns; those categories are not
 `.function result=` fields. Each chained call checks the preceding result's type.
 Nullable Array receivers and unsupported element types cannot be introduced

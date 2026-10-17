@@ -320,6 +320,9 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            "Toybox.Lang.Double" => crate::ArrayElement::Double,
+            "Toybox.Lang.Float" => crate::ArrayElement::Float,
+            "Toybox.Lang.Long" => crate::ArrayElement::Long,
             "Toybox.Lang.String" => crate::ArrayElement::String,
             "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),
             _ => return Err(self.error(at, "unsupported Array element annotation")),
@@ -329,6 +332,9 @@ impl<'a> Parser<'a> {
             self.expect(Kind::Word("Null"), "'Null'")?;
             element = match element {
                 crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
+                crate::ArrayElement::Double => crate::ArrayElement::NullableDouble,
+                crate::ArrayElement::Float => crate::ArrayElement::NullableFloat,
+                crate::ArrayElement::Long => crate::ArrayElement::NullableLong,
                 crate::ArrayElement::String => crate::ArrayElement::NullableString,
                 crate::ArrayElement::Char => crate::ArrayElement::NullableChar,
                 crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,

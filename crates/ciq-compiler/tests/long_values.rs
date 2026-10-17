@@ -100,9 +100,9 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f() { var value = 1; value = 1l; }",
         "function f(x as Toybox.Lang.Long or Null) as Toybox.Lang.Long { return x.abs(); }",
         "function f() { return 1l.toNumber(1); }",
-        "function f() { var values = [1l]; }",
+        "function f() { var values = [1l, 1]; }",
         "function f() { var values = {1 => 1l}; }",
-        "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) {}",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) { x.add(1); }",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) {}",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");

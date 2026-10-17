@@ -2,7 +2,9 @@
 
 [Arrays](data-arrays.md) and [Dictionaries](data-dictionaries.md) share the
 following framing, scalar tags, and record-local String pool. Nested containers,
-Symbol, Long, Float, Double, and other scalar tags remain unsupported.
+Symbol and other unlisted scalar tags remain unsupported. Wider numeric
+runtime evidence comes from [Array specimens](../investigations/compiler-numeric-arrays.md);
+structural codec support does not broaden compiler Dictionary contracts.
 
 ## Binary framing and scalars
 
@@ -31,11 +33,15 @@ codec; its runtime behavior has not been separately tested.
 |---|---|---|
 | `0x00` | none | Null |
 | `0x01` | 4 | Number bits |
+| `0x02` | 4 | IEEE 754 Float bits |
 | `0x03` | 4 | Local string-pool offset |
 | `0x09` | 1 | Boolean, exactly 0 or 1 |
+| `0x0e` | 8 | Long two's-complement bits |
+| `0x0f` | 8 | IEEE 754 Double bits |
 | `0x13` | 4 | Char bits |
 
-Number/Char bits are retained without Unicode or arithmetic conversion.
+Numeric/Char bits are retained without Unicode or arithmetic conversion.
+Floating signed zero, infinities, and NaN payloads remain exact bit patterns.
 Truncation, inconsistent lengths/counts, invalid UTF-8/terminators, unsupported
 tags, or references into a string's interior are errors. The complete DATA walk
 validates the optional pool and dispatches on the value-block root tag; pool

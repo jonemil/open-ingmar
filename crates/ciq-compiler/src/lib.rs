@@ -150,6 +150,12 @@ impl NativeClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
     Number,
+    Long,
+    NullableLong,
+    Float,
+    NullableFloat,
+    Double,
+    NullableDouble,
     NullableNumber,
     NullableChar,
     NullableBoolean,
@@ -165,6 +171,9 @@ impl ArrayElement {
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
+            Self::Double | Self::NullableDouble => "Toybox.Lang.Double",
+            Self::Float | Self::NullableFloat => "Toybox.Lang.Float",
+            Self::Long | Self::NullableLong => "Toybox.Lang.Long",
             Self::Char | Self::NullableChar => "Toybox.Lang.Char",
             Self::Boolean | Self::NullableBoolean => "Toybox.Lang.Boolean",
             Self::String | Self::NullableString => "Toybox.Lang.String",
@@ -180,6 +189,9 @@ impl ArrayElement {
     fn nullable_base(self) -> Option<Self> {
         match self {
             Self::NullableNumber => Some(Self::Number),
+            Self::NullableDouble => Some(Self::Double),
+            Self::NullableFloat => Some(Self::Float),
+            Self::NullableLong => Some(Self::Long),
             Self::NullableChar => Some(Self::Char),
             Self::NullableBoolean => Some(Self::Boolean),
             Self::NullableString => Some(Self::String),
@@ -191,6 +203,12 @@ impl ArrayElement {
         [
             Self::Number,
             Self::NullableNumber,
+            Self::Double,
+            Self::NullableDouble,
+            Self::Float,
+            Self::NullableFloat,
+            Self::Long,
+            Self::NullableLong,
             Self::NullableChar,
             Self::NullableBoolean,
             Self::Char,
@@ -206,6 +224,12 @@ impl ArrayElement {
     fn text(self) -> &'static str {
         match self {
             Self::Number => "number",
+            Self::Double => "double",
+            Self::NullableDouble => "nullable-double",
+            Self::Float => "float",
+            Self::NullableFloat => "nullable-float",
+            Self::Long => "long",
+            Self::NullableLong => "nullable-long",
             Self::NullableNumber => "nullable-number",
             Self::NullableChar => "nullable-char",
             Self::NullableBoolean => "nullable-boolean",
@@ -222,6 +246,12 @@ impl ArrayElement {
     fn array_text(self) -> &'static str {
         match self {
             Self::Number => "number-array",
+            Self::Double => "double-array",
+            Self::NullableDouble => "nullable-double-array",
+            Self::Float => "float-array",
+            Self::NullableFloat => "nullable-float-array",
+            Self::Long => "long-array",
+            Self::NullableLong => "nullable-long-array",
             Self::NullableNumber => "nullable-number-array",
             Self::NullableChar => "nullable-char-array",
             Self::NullableBoolean => "nullable-boolean-array",
@@ -237,12 +267,16 @@ impl ArrayElement {
 }
 
 /// Payload of a homogeneous Array constant. Bits are interpreted as Number or
-/// Char by the element contract; String contains text rather than a pool alias.
+/// Char by the element contract; Long/Float/Double retain their exact-width bits.
+/// String contains text rather than a pool alias.
 /// Boolean retains its logical value; Null requires a nullable element contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayConstantValue {
     Boolean(bool),
     Bits(u32),
+    Double(u64),
+    Float(u32),
+    Long(u64),
     String(String),
     Null,
 }
@@ -1676,10 +1710,22 @@ impl Function {
                                         | ArrayElement::NullableChar,
                                     ArrayConstantValue::Bits(_)
                                 ) | (
+                                    ArrayElement::Long | ArrayElement::NullableLong,
+                                    ArrayConstantValue::Long(_)
+                                ) | (
+                                    ArrayElement::Float | ArrayElement::NullableFloat,
+                                    ArrayConstantValue::Float(_)
+                                ) | (
+                                    ArrayElement::Double | ArrayElement::NullableDouble,
+                                    ArrayConstantValue::Double(_)
+                                ) | (
                                     ArrayElement::String | ArrayElement::NullableString,
                                     ArrayConstantValue::String(_)
                                 ) | (
                                     ArrayElement::NullableNumber
+                                        | ArrayElement::NullableFloat
+                                        | ArrayElement::NullableDouble
+                                        | ArrayElement::NullableLong
                                         | ArrayElement::NullableString
                                         | ArrayElement::NullableChar
                                         | ArrayElement::NullableBoolean,
@@ -2662,6 +2708,9 @@ impl Function {
                         .iter()
                         .map(|v| match v {
                             ArrayConstantValue::Bits(n) => format!(" 0x{n:08x}"),
+                            ArrayConstantValue::Double(n) => format!(" 0x{n:016x}"),
+                            ArrayConstantValue::Float(n) => format!(" 0x{n:08x}"),
+                            ArrayConstantValue::Long(n) => format!(" 0x{n:016x}"),
                             ArrayConstantValue::String(s) => format!(" {s:?}"),
                             ArrayConstantValue::Null => " null".into(),
                             ArrayConstantValue::Boolean(b) => format!(" {b}"),
@@ -2979,6 +3028,12 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Array(ArrayElement::Char) => " result=char-array",
         ReturnType::Array(ArrayElement::Boolean) => " result=boolean-array",
         ReturnType::Array(ArrayElement::Number) => " result=number-array",
+        ReturnType::Array(ArrayElement::Double) => " result=double-array",
+        ReturnType::Array(ArrayElement::NullableDouble) => " result=nullable-double-array",
+        ReturnType::Array(ArrayElement::Float) => " result=float-array",
+        ReturnType::Array(ArrayElement::NullableFloat) => " result=nullable-float-array",
+        ReturnType::Array(ArrayElement::Long) => " result=long-array",
+        ReturnType::Array(ArrayElement::NullableLong) => " result=nullable-long-array",
         ReturnType::Array(ArrayElement::NullableNumber) => " result=nullable-number-array",
         ReturnType::Array(ArrayElement::NullableChar) => " result=nullable-char-array",
         ReturnType::Array(ArrayElement::NullableBoolean) => " result=nullable-boolean-array",

@@ -34,11 +34,12 @@ value-type = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
            | nullable-scalar "or" "Null"
-           | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
+           | "Toybox.Lang.Array" "<" array-element ">"
            | "Toybox.Lang.Dictionary" "<" dictionary-key "," dictionary-value ">"
 nullable-scalar = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float"
                 | "Toybox.Lang.Double" | "Toybox.Lang.String"
                 | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+array-element = nullable-scalar ("or" "Null")? | "Toybox.WatchUi.View"
 dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
                | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
 dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") ("or" "Null")?
@@ -826,8 +827,8 @@ literal before calling a member, as for Number/Long.
 Explicit Float/Double parameters/results, local storage, module/instance calls,
 printing, conditional joins, and `or Null` contracts use the shared scalar rules.
 Assignments, arguments, returns, and conditional arms do not implicitly convert
-numeric widths. Array/Dictionary elements and source fields of these types are
-not supported yet. String concatenation accepts these widths; Char equality accepts them, while
+numeric widths. Arrays follow the numeric Array contracts below; Dictionary
+elements and source fields of these types are not supported yet. String concatenation accepts these widths; Char equality accepts them, while
 Char ordering/addition with floating values remain unsupported.
 
 The four arithmetic operators `+`, `-`, `*`, and `/` accept Number, Long, Float,
@@ -936,7 +937,8 @@ printing, or receiver dispatch. Matching Long arms join without conversion;
 mixed Number/Long conditional arms remain invalid.
 
 Long `toFloat()` and `toDouble()` are available since API 1.0.0, as described
-below. Long Array/Dictionary elements and fields remain deferred. See the
+below. Long arrays follow the numeric Array contracts; Dictionary elements and
+fields remain deferred. See the
 [example](../../examples/compiler-long-values/README.md) and
 [encoding/runtime evidence](../investigations/compiler-long-values.md).
 
@@ -1293,7 +1295,8 @@ Indexed compound targets follow the contract below. See [Number write evidence][
 
 ## Indexed compound assignment
 
-`array[index] op= rhs;` supports Number elements with all ten compound operators
+`array[index] op= rhs;` supports Number/Long elements with all ten compound
+operators, Float/Double elements with the four arithmetic operators, and
 Char elements with `+= Number/Long`, and String elements with `+=` using the
 shared String concatenation operands. Existing binary contracts and invariant
 array element types apply; View elements have no supported compound operator.
@@ -1358,6 +1361,39 @@ printing, and cannot be console entry results. See the
 
 [number-array-literals]: ../investigations/compiler-number-array-literals.md
 
+## Numeric arrays
+
+`Array<Long>`, `Array<Float>`, and `Array<Double>` use fully qualified scalar
+names in source and are invariant. Parameters/results, locals, reads/writes,
+empty construction, and the supported generic Array methods preserve the exact
+element contract. No Number/Long/Float/Double substitution or implicit widening
+is permitted at array boundaries. Indexes remain non-null Number.
+
+Each element also supports `or Null` under the shared nullable-element rules.
+Guard a saved nullable read before scalar use; guarding one read does not narrow
+a later read of the same array. Non-null arrays reject Null values/arguments.
+
+Literal-only homogeneous arrays use typed DATA constants, preserving signed
+Long and floating bit patterns. Nullable constants may contain Null. Computed
+literals use ordered private construction and may include branching elements;
+expected contracts reach empty and nullable literals. Repeated constant loads
+produce independent mutable arrays.
+
+`size`, `toString`, `indexOf`, `add`, `addAll`, `remove`, `removeAll`, `reverse`,
+and `slice` use the existing generic Array profile. `addAll` takes an invariant
+Array of the same element contract; `removeAll` takes an element. Native search
+and removal semantics remain runtime supplied. Allocation, indexing, `size`,
+and `toString` require API 1.0.0; the other listed methods require 1.3.0.
+
+Non-null indexed updates/compounds follow scalar operator promotion and must
+retain the element type. For example, `Float += Number` is valid but
+`Float += Long` would produce Double and is rejected. Nullable elements cannot
+be compound targets without a supported direct non-null read contract.
+Sorting, ordinary Object methods, nested containers, nullable Array references,
+and whole-array expression joins outside the existing Number/Char profile
+remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
+and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
+
 ## String arrays
 
 `Toybox.Lang.Array<Toybox.Lang.String>` is an invariant non-null String-element
@@ -1401,7 +1437,7 @@ inherited Object methods remain deferred. See the
 
 ## Nullable Array elements
 
-`Toybox.Lang.Array<T or Null>` supports Number, String, Boolean, or Char T
+`Toybox.Lang.Array<T or Null>` supports numeric, String, Boolean, or Char T
 with invariant element contracts and a non-null Array reference. Indexed reads produce the base type or Null. Stores and native
 `add`, `indexOf`, `remove`, and `removeAll` accept either alternative; `addAll`
 requires the same Array contract. `reverse` and `slice` retain it. API levels

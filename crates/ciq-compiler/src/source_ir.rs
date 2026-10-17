@@ -775,6 +775,18 @@ impl Builder<'_> {
                     Some(crate::ArrayElement::Number),
                     crate::ArrayConstantValue::Bits(n as u32),
                 )),
+                parser::ExpressionKind::Long(n) => Some((
+                    Some(crate::ArrayElement::Long),
+                    crate::ArrayConstantValue::Long(n as u64),
+                )),
+                parser::ExpressionKind::Float(n) => Some((
+                    Some(crate::ArrayElement::Float),
+                    crate::ArrayConstantValue::Float(n),
+                )),
+                parser::ExpressionKind::Double(n) => Some((
+                    Some(crate::ArrayElement::Double),
+                    crate::ArrayConstantValue::Double(n),
+                )),
                 parser::ExpressionKind::Char(c) => Some((
                     Some(crate::ArrayElement::Char),
                     crate::ArrayConstantValue::Bits(c),

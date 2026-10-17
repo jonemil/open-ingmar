@@ -2,7 +2,10 @@
 
 This profile covers flat Dictionary constants loaded by `hpush`, based on the
 [Dictionary experiments](../investigations/compiler-dictionary.md). Nested
-containers, Symbol, Long, Float, Double, and other value tags are unsupported.
+containers, Symbol, and unlisted value tags are unsupported. The shared codec
+retains Long/Float/Double tags structurally, with runtime evidence scoped to
+[Array constants](../investigations/compiler-numeric-arrays.md). The compiler
+does not yet accept these Dictionary key/value contracts.
 Entry order and string-pool identity are preserved; the codec does not enforce
 source-language key restrictions, uniqueness, hashing, or iteration order.
 
@@ -27,7 +30,8 @@ The header's `at=` pins the outer DATA tag. Strings follow the
 [local pool rules](data-constants.md#editable-local-pools).
 
 Each `.entry` takes exactly two scalars: `null`, `boolean=true|false`,
-`number=0x<bits>`, `char=0x<bits>`, or `string=&<local-alias>`. Reference order
+`number=0x<bits>`, `char=0x<bits>`, `float=0x<u32>`, `long=0x<u64>`,
+`double=0x<u64>`, or `string=&<local-alias>`. Reference order
 within the declaration is unrestricted; all strings resolve during encoding.
 The serializer derives lengths/counts and preserves declaration order. Outer
 placement follows the existing [DATA layout rules](data-strings.md).

@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-numeric-arrays](compiler-numeric-arrays/README.md): Long/Float/Double
+  constants, nullable elements, mutation, and generic Array methods.
 - [compiler-wide-operators](compiler-wide-operators/README.md): String/Char
   operators with wider numeric values and immutable Char weak results.
 - [compiler-float-values](compiler-float-values/README.md): Float/Double values,

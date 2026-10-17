@@ -155,6 +155,22 @@ pub(crate) fn parse_ir_context(
                         "string-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::String))
                         }
+                        "long-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Long)),
+                        "nullable-long-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableLong,
+                        )),
+                        "float-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Float))
+                        }
+                        "nullable-float-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableFloat,
+                        )),
+                        "double-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Double))
+                        }
+                        "nullable-double-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableDouble,
+                        )),
                         "number-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Number))
                         }
@@ -489,6 +505,12 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 element_type: match fields[2].as_str() {
                     "number" => crate::ArrayElement::Number,
+                    "double" => crate::ArrayElement::Double,
+                    "nullable-double" => crate::ArrayElement::NullableDouble,
+                    "float" => crate::ArrayElement::Float,
+                    "nullable-float" => crate::ArrayElement::NullableFloat,
+                    "long" => crate::ArrayElement::Long,
+                    "nullable-long" => crate::ArrayElement::NullableLong,
                     "nullable-number" => crate::ArrayElement::NullableNumber,
                     "char" => crate::ArrayElement::Char,
                     "boolean" => crate::ArrayElement::Boolean,
@@ -526,6 +548,35 @@ pub(crate) fn parse_ir_context(
                                     fail(*at, "String array constants require quoted text")
                                 });
                         }
+                        if matches!(
+                            fields[2].as_str(),
+                            "long"
+                                | "nullable-long"
+                                | "double"
+                                | "nullable-double"
+                                | "float"
+                                | "nullable-float"
+                        ) {
+                            let wide = !matches!(fields[2].as_str(), "float" | "nullable-float");
+                            let hex = s
+                                .strip_prefix("0x")
+                                .filter(|s| s.len() == if wide { 16 } else { 8 })
+                                .ok_or_else(|| {
+                                    fail(*at, "numeric array constant has wrong bit width")
+                                })?;
+                            if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                                return Err(fail(*at, "invalid numeric array constant bits"));
+                            }
+                            let bits = u64::from_str_radix(hex, 16)
+                                .map_err(|_| fail(*at, "invalid numeric array bits"))?;
+                            return Ok(match fields[2].as_str() {
+                                "long" | "nullable-long" => crate::ArrayConstantValue::Long(bits),
+                                "double" | "nullable-double" => {
+                                    crate::ArrayConstantValue::Double(bits)
+                                }
+                                _ => crate::ArrayConstantValue::Float(bits as u32),
+                            });
+                        }
                         let hex = s
                             .strip_prefix("0x")
                             .filter(|s| s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -543,6 +594,12 @@ pub(crate) fn parse_ir_context(
                     "char" => crate::ArrayElement::Char,
                     "boolean" => crate::ArrayElement::Boolean,
                     "number" => crate::ArrayElement::Number,
+                    "double" => crate::ArrayElement::Double,
+                    "nullable-double" => crate::ArrayElement::NullableDouble,
+                    "float" => crate::ArrayElement::Float,
+                    "nullable-float" => crate::ArrayElement::NullableFloat,
+                    "long" => crate::ArrayElement::Long,
+                    "nullable-long" => crate::ArrayElement::NullableLong,
                     "nullable-number" => crate::ArrayElement::NullableNumber,
                     "string" => crate::ArrayElement::String,
                     "nullable-string" => crate::ArrayElement::NullableString,
@@ -581,6 +638,12 @@ pub(crate) fn parse_ir_context(
                 "char" => crate::ArrayElement::Char,
                 "boolean" => crate::ArrayElement::Boolean,
                 "number" => crate::ArrayElement::Number,
+                "double" => crate::ArrayElement::Double,
+                "nullable-double" => crate::ArrayElement::NullableDouble,
+                "float" => crate::ArrayElement::Float,
+                "nullable-float" => crate::ArrayElement::NullableFloat,
+                "long" => crate::ArrayElement::Long,
+                "nullable-long" => crate::ArrayElement::NullableLong,
                 "nullable-number" => crate::ArrayElement::NullableNumber,
                 "string" => crate::ArrayElement::String,
                 "nullable-string" => crate::ArrayElement::NullableString,
@@ -1016,6 +1079,14 @@ fn call_contract(
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),
+            "double-array" => crate::ReturnType::Array(crate::ArrayElement::Double),
+            "nullable-double-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableDouble)
+            }
+            "float-array" => crate::ReturnType::Array(crate::ArrayElement::Float),
+            "nullable-float-array" => crate::ReturnType::Array(crate::ArrayElement::NullableFloat),
+            "long-array" => crate::ReturnType::Array(crate::ArrayElement::Long),
+            "nullable-long-array" => crate::ReturnType::Array(crate::ArrayElement::NullableLong),
             "nullable-char-array" => crate::ReturnType::Array(crate::ArrayElement::NullableChar),
             "nullable-boolean-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::NullableBoolean)

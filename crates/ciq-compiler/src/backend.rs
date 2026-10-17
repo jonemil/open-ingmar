@@ -82,6 +82,11 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                         ciq_prg::data::arrays::Value::Number(*n)
                     }
                     crate::ArrayConstantValue::Bits(n) => ciq_prg::data::arrays::Value::Char(*n),
+                    crate::ArrayConstantValue::Long(n) => ciq_prg::data::arrays::Value::Long(*n),
+                    crate::ArrayConstantValue::Float(n) => ciq_prg::data::arrays::Value::Float(*n),
+                    crate::ArrayConstantValue::Double(n) => {
+                        ciq_prg::data::arrays::Value::Double(*n)
+                    }
                     crate::ArrayConstantValue::Boolean(b) => {
                         ciq_prg::data::arrays::Value::Boolean(*b)
                     }

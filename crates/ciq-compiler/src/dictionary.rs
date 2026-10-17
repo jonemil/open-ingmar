@@ -299,6 +299,7 @@ pub(crate) fn record_entries(
     let scalar = |value: &Value| {
         Some(match value {
             Value::Null => DictionaryScalar::Null,
+            Value::Long(_) | Value::Float(_) | Value::Double(_) => return None,
             Value::Number(n) => DictionaryScalar::Number(*n),
             Value::Char(n) => DictionaryScalar::Char(*n),
             Value::Boolean(b) => DictionaryScalar::Boolean(*b),

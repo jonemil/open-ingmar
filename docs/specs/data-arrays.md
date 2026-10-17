@@ -2,7 +2,7 @@
 
 This profile covers flat constant arrays used by `apush`, based on
 [constant-array experiments](../investigations/constant-arrays.md). It does not
-cover nested containers, ByteArray, or other scalar types.
+cover nested containers, ByteArray, or unlisted scalar types.
 [Dictionary constants](data-dictionaries.md) have a separate profile.
 Unsupported framing or element tags stop the complete DATA walk.
 
@@ -24,12 +24,16 @@ focused `apush` runtime evidence covers nonempty arrays.
 .element null
 .element boolean=true
 .element char=0x00000061
+.element long=0x0000000100000001
+.element float=0x3fa00000
+.element double=0x4170000010000000
 .endarray
 ```
 
 `.array <alias> [at=0x...]` starts a declaration and `.endarray` closes it.
 Each `.element` has exactly one of `null`, `number=0x<u32>`, `char=0x<u32>`,
-`boolean=true`, `boolean=false`, or `string=&<local-alias>`. Values retain their
+`float=0x<u32>`, `long=0x<u64>`, `double=0x<u64>`, `boolean=true`,
+`boolean=false`, or `string=&<local-alias>`. Values retain their
 types and bit patterns; lengths and counts are derived during encoding.
 Whitespace/comments follow the
 shared [assembly grammar](bytecode-subset.md). Local `.string` and `.pool` fields
