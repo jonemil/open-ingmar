@@ -96,6 +96,10 @@ pub fn symbol_bindings(
                 "find".to_string()
             } else if alias == "__ciq_native_toNumber" {
                 "toNumber".to_string()
+            } else if alias == "__ciq_native_toFloat" {
+                "toFloat".into()
+            } else if alias == "__ciq_native_toDouble" {
+                "toDouble".into()
             } else if alias == "__ciq_native_toLong" {
                 "toLong".into()
             } else if alias == "__ciq_native_toLongWithBase" {

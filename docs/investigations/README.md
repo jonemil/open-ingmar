@@ -5,6 +5,9 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Float/Double values and methods](compiler-floating-values.md): floating
+  literals, promotion, conversion, nullable parsing, and instruction evidence.
+
 - [Example toolchain audit](example-toolchain-audit.md): coverage of all example
   projects, unsupported opcode/record groups, and reconstruction checks.
 

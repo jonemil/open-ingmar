@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-float-values](compiler-float-values/README.md): Float/Double values,
+  promotion, native methods, conversions, and nullable parsing.
 - [compiler-boolean-arrays](compiler-boolean-arrays/README.md): Boolean constants,
   typed mutation/native methods, and conditional construction.
 - [compiler-nullable-arrays](compiler-nullable-arrays/README.md): nullable Number

@@ -448,6 +448,8 @@ fn build_core() -> Catalogue {
         object,
         number,
         "Toybox.Lang.Long",
+        "Toybox.Lang.Float",
+        "Toybox.Lang.Double",
         string,
         "Toybox.Lang.Boolean",
         "Toybox.Lang.Char",
@@ -537,10 +539,17 @@ fn build_core() -> Catalogue {
     ];
     classes.get_mut("Toybox.Lang.WeakReference").unwrap().since = ApiLevel(1, 2, 0);
     let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
-    weak.receiver_results = [number, long, string, "Toybox.Lang.Boolean"]
-        .into_iter()
-        .map(|name| (name.into(), Type::named(name)))
-        .collect();
+    weak.receiver_results = [
+        number,
+        long,
+        "Toybox.Lang.Float",
+        "Toybox.Lang.Double",
+        string,
+        "Toybox.Lang.Boolean",
+    ]
+    .into_iter()
+    .map(|name| (name.into(), Type::named(name)))
+    .collect();
     let char_type = "Toybox.Lang.Char";
     let char_initial = ApiLevel(1, 3, 0);
     let char_class = classes.get_mut(char_type).unwrap();
@@ -557,6 +566,35 @@ fn build_core() -> Catalogue {
             ApiLevel(5, 0, 0),
         ),
     ];
+    for name in ["Toybox.Lang.Float", "Toybox.Lang.Double"] {
+        let mut methods = vec![
+            method("abs", vec![], Type::named(name), initial),
+            method(
+                "format",
+                vec![Type::named(string)],
+                Type::named(string),
+                initial,
+            ),
+            method("toNumber", vec![], Type::named(number), initial),
+            method("toLong", vec![], Type::named(long), initial),
+            method(
+                "compareTo",
+                vec![Type::named(object)],
+                Type::named(number),
+                ApiLevel(5, 0, 0),
+            ),
+        ];
+        if name == "Toybox.Lang.Double" {
+            methods.push(method("toString", vec![], Type::named(string), initial));
+            methods.push(method(
+                "equals",
+                vec![Type::Union(vec![Type::named(object), Type::Null])],
+                Type::named("Toybox.Lang.Boolean"),
+                ApiLevel(1, 3, 0),
+            ));
+        }
+        classes.get_mut(name).unwrap().methods = methods;
+    }
     classes.get_mut(long).unwrap().methods = vec![
         method("abs", vec![], Type::named(long), initial),
         method("toNumber", vec![], Type::named(number), initial),
@@ -800,6 +838,32 @@ fn build_core() -> Catalogue {
             initial,
         ),
     ];
+    for name in [number, long, "Toybox.Lang.Float", "Toybox.Lang.Double"] {
+        let methods = &mut classes.get_mut(name).unwrap().methods;
+        methods.push(method(
+            "toFloat",
+            vec![],
+            Type::named("Toybox.Lang.Float"),
+            initial,
+        ));
+        methods.push(method(
+            "toDouble",
+            vec![],
+            Type::named("Toybox.Lang.Double"),
+            initial,
+        ));
+    }
+    for (name, result, since) in [
+        ("toFloat", "Toybox.Lang.Float", initial),
+        ("toDouble", "Toybox.Lang.Double", ApiLevel(3, 1, 0)),
+    ] {
+        classes.get_mut(string).unwrap().methods.push(method(
+            name,
+            vec![],
+            Type::Union(vec![Type::named(result), Type::Null]),
+            since,
+        ));
+    }
     let mut modules = BTreeMap::new();
     for name in [
         "Toybox.Lang",

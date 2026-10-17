@@ -168,6 +168,8 @@ pub(crate) enum ExpressionKind {
     Boolean(bool),
     Integer(i32),
     Long(i64),
+    Double(u64),
+    Float(u32),
     String(String),
     Local(String),
     ModuleCall {
@@ -236,6 +238,7 @@ enum Kind<'a> {
     Word(&'a str),
     Integer(&'a str),
     Long(&'a str),
+    Real(&'a str, bool),
     String(&'a str),
     Punctuation(char),
     EqualEqual,
@@ -501,9 +504,43 @@ impl<'a> Parser<'a> {
                 Kind::String(&self.source[start..self.offset])
             }
             Some(c) if c.is_ascii_digit() => {
-                let length = rest.bytes().take_while(u8::is_ascii_digit).count();
+                let mut length = rest.bytes().take_while(u8::is_ascii_digit).count();
+                let mut real = false;
+                if rest.as_bytes().get(length) == Some(&b'.')
+                    && rest
+                        .as_bytes()
+                        .get(length + 1)
+                        .is_some_and(u8::is_ascii_digit)
+                {
+                    real = true;
+                    length += 1;
+                    length += rest[length..]
+                        .bytes()
+                        .take_while(u8::is_ascii_digit)
+                        .count();
+                }
+                if matches!(rest.as_bytes().get(length), Some(b'e' | b'E')) {
+                    real = true;
+                    length += 1;
+                    if matches!(rest.as_bytes().get(length), Some(b'+' | b'-')) {
+                        length += 1;
+                    }
+                    let digits = rest[length..]
+                        .bytes()
+                        .take_while(u8::is_ascii_digit)
+                        .count();
+                    if digits == 0 {
+                        return Err(self.error(start, "floating exponent requires digits"));
+                    }
+                    length += digits;
+                }
                 self.offset += length;
-                if matches!(rest.as_bytes().get(length), Some(b'l' | b'L')) {
+                if rest.as_bytes().get(length) == Some(&b'd') {
+                    self.offset += 1;
+                    Kind::Real(&rest[..length], true)
+                } else if real {
+                    Kind::Real(&rest[..length], false)
+                } else if matches!(rest.as_bytes().get(length), Some(b'l' | b'L')) {
                     self.offset += 1;
                     Kind::Long(&rest[..length])
                 } else {
@@ -859,6 +896,18 @@ impl<'a> Parser<'a> {
         if depth >= 64 {
             return Err(self.error(sign.span.start, "expression nesting exceeds 64 levels"));
         }
+        if let Kind::Real(digits, double) = self.peek()? {
+            let magnitude = self.token()?;
+            return self.real_literal(
+                digits,
+                double,
+                Span {
+                    start: sign.span.start,
+                    end: magnitude.span.end,
+                },
+                true,
+            );
+        }
         if let Kind::Long(digits) = self.peek()? {
             let magnitude = self.token()?;
             return self.long_literal(
@@ -1132,6 +1181,45 @@ impl<'a> Parser<'a> {
         self.node(ExpressionKind::Long(value), span)
     }
 
+    /// Parse a finite decimal Float/Double literal, retaining its rounded bits and sign.
+    fn real_literal(
+        &mut self,
+        digits: &str,
+        double: bool,
+        span: Span,
+        negative: bool,
+    ) -> Result<Expression, Diagnostic> {
+        if negative && self.peek()? == Kind::Punctuation('.') {
+            return Err(self.error(
+                span.start,
+                "parenthesize a negative literal before a member call",
+            ));
+        }
+        let text = if negative {
+            format!("-{digits}")
+        } else {
+            digits.to_owned()
+        };
+        let kind = if double {
+            let value = text
+                .parse::<f64>()
+                .map_err(|_| self.error(span.start, "invalid Double literal"))?;
+            if !value.is_finite() {
+                return Err(self.error(span.start, "Double literal exceeds finite range"));
+            }
+            ExpressionKind::Double(value.to_bits())
+        } else {
+            let value = text
+                .parse::<f32>()
+                .map_err(|_| self.error(span.start, "invalid Float literal"))?;
+            if !value.is_finite() {
+                return Err(self.error(span.start, "Float literal exceeds finite range"));
+            }
+            ExpressionKind::Float(value.to_bits())
+        };
+        self.node(kind, span)
+    }
+
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
@@ -1142,6 +1230,7 @@ impl<'a> Parser<'a> {
                 self.node(ExpressionKind::String(fields[0][1..].into()), token.span)
             }
             Kind::Long(digits) => self.long_literal(digits, token.span, false),
+            Kind::Real(digits, double) => self.real_literal(digits, double, token.span, false),
             Kind::Integer(digits) => {
                 let value = digits.parse::<i32>().map_err(|_| {
                     self.error(
@@ -1649,6 +1738,8 @@ impl Parser<'_> {
                     let ty = match self.path()?.as_str() {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.Long" => crate::ParameterType::Long,
+                        "Toybox.Lang.Double" => crate::ParameterType::Double,
+                        "Toybox.Lang.Float" => crate::ParameterType::Float,
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
@@ -1693,6 +1784,8 @@ impl Parser<'_> {
                         match ty {
                             crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
                             crate::ParameterType::Long => crate::ParameterType::NullableLong,
+                            crate::ParameterType::Double => crate::ParameterType::NullableDouble,
+                            crate::ParameterType::Float => crate::ParameterType::NullableFloat,
                             crate::ParameterType::String => crate::ParameterType::NullableString,
                             crate::ParameterType::Boolean => crate::ParameterType::NullableBoolean,
                             crate::ParameterType::Char => crate::ParameterType::NullableChar,
@@ -1717,6 +1810,8 @@ impl Parser<'_> {
             let ty = match self.path()?.as_str() {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.Long" => crate::ReturnType::Long,
+                "Toybox.Lang.Double" => crate::ReturnType::Double,
+                "Toybox.Lang.Float" => crate::ReturnType::Float,
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,
@@ -1754,6 +1849,8 @@ impl Parser<'_> {
                 match ty {
                     crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
                     crate::ReturnType::Long => crate::ReturnType::NullableLong,
+                    crate::ReturnType::Double => crate::ReturnType::NullableDouble,
+                    crate::ReturnType::Float => crate::ReturnType::NullableFloat,
                     crate::ReturnType::String => crate::ReturnType::NullableString,
                     crate::ReturnType::Boolean => crate::ReturnType::NullableBoolean,
                     crate::ReturnType::Char => crate::ReturnType::NullableChar,

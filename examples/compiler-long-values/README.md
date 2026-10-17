@@ -24,6 +24,7 @@ cargo run -p ciq-asm -- sign scratch/compiler-long-values/unsigned.prg scratch/c
 sh scripts/run-simulator-container.sh --prg scratch/compiler-long-values/generated.prg
 ```
 
-Float/Double conversions, Long container elements, and Long fields remain
+Floating conversions are covered by [the floating example](../compiler-float-values/README.md).
+Long container elements and Long fields remain
 deferred. See the
 [source contract](../../docs/specs/compiler-subset.md#long-values).

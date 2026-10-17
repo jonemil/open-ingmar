@@ -117,6 +117,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::String { result, .. }
             | Operation::Integer { result, .. }
             | Operation::Long { result, .. }
+            | Operation::Double { result, .. }
+            | Operation::Float { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
@@ -735,6 +737,12 @@ fn expression(
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
                 ),
                 Operation::Integer { value, .. } => integer(*value),
+                Operation::Float { bits: 0, .. } => (Opcode::Fpushz, vec![]),
+                Operation::Float { bits, .. } => {
+                    (Opcode::Fpush, vec![Operand::Bits(u64::from(*bits))])
+                }
+                Operation::Double { bits: 0, .. } => (Opcode::Dpushz, vec![]),
+                Operation::Double { bits, .. } => (Opcode::Dpush, vec![Operand::Bits(*bits)]),
                 Operation::Long { value: 0, .. } => (Opcode::Lpushz, vec![]),
                 Operation::Long { value, .. } => {
                     (Opcode::Lpush, vec![Operand::Bits(*value as u64)])
@@ -819,10 +827,11 @@ fn expression(
                 Operation::Negate { operand, .. } => {
                     tasks.extend([Task::Negate, Task::Value(*operand)]);
                     (
-                        if types[operand] == crate::ValueType::Long {
-                            Opcode::Lpushz
-                        } else {
-                            Opcode::Ipushz
+                        match types[operand] {
+                            crate::ValueType::Long => Opcode::Lpushz,
+                            crate::ValueType::Float => Opcode::Fpushz,
+                            crate::ValueType::Double => Opcode::Dpushz,
+                            _ => Opcode::Ipushz,
                         },
                         vec![],
                     )

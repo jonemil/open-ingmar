@@ -100,6 +100,8 @@ impl Types {
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
             Operation::Long { result, .. } => (*result, Some(Type::named("Toybox.Lang.Long"))),
+            Operation::Double { result, .. } => (*result, Some(Type::named("Toybox.Lang.Double"))),
+            Operation::Float { result, .. } => (*result, Some(Type::named("Toybox.Lang.Float"))),
             Operation::Integer { result, .. } => (*result, Some(Type::named("Toybox.Lang.Number"))),
             Operation::Char { result, .. } => (*result, Some(Type::named("Toybox.Lang.Char"))),
             Operation::Boolean { result, .. } => {

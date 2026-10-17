@@ -95,16 +95,10 @@ These documented members lack executable prerequisites. Supported methods are
 listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
-- **Number:** `toDouble`/`toFloat` (1.0.0) need their numeric types.
-  [Number evidence](../investigations/compiler-number-methods.md).
-- **String:** `toFloat` (1.0.0) and `toDouble` (3.1.0) need their numeric types.
-  [String evidence](../investigations/compiler-string-methods.md).
-- **Long:** `toFloat`/`toDouble` (1.0.0) need those numeric types.
-  [Long evidence](../investigations/compiler-long-values.md).
 - **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
   Method values. Ordinary `weak` (1.2.0), including Char receivers, needs
   WeakReference values/consumers; Char itself requires 1.3.0. The immutable
-  Number/Long/String/Boolean specialization does not establish this behavior.
+  numeric/String/Boolean specialization does not establish this behavior.
   [Boolean](../investigations/compiler-boolean-methods.md),
   [Char](../investigations/compiler-char-methods.md), and
   [weak-result evidence](../investigations/compiler-immutable-weak.md).

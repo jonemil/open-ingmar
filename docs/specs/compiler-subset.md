@@ -28,7 +28,8 @@ function = "function" identifier "(" parameter-list? ")" ("as" result-type)? blo
 block = "{" statement* "}"
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
-value-type = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.String"
+value-type = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float"
+           | "Toybox.Lang.Double" | "Toybox.Lang.String"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char" | "Toybox.Lang.Dictionary"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
@@ -151,7 +152,7 @@ postfix calls: `-value.abs()` means `-(value.abs())`; `(-value).abs()` calls
 repeated prefixes (`!!value`), and binds before comparisons:
 `!a == b` means `(!a) == b`. Integer complement `~` shares that unary
 precedence and allows repeated prefixes. Unary plus binds after postfix calls
-and before binary operators; it returns a non-null Number/Long unchanged
+and before binary operators; it returns a non-null numeric value unchanged
 after evaluating it once. It accepts literals, parameters, locals, calls, and
 grouped expressions. Repeated or mixed prefixes require grouping, as in
 `+(+n)`, `+(-n)`, and `+(~n)`; `+ +n`, `+-n`, and `+~n` are rejected.
@@ -170,8 +171,9 @@ remainder taken against, -1. This boundary does not establish a portable result
 or a catchable Monkey C exception. See [product evidence][products].
 
 Number-only bitwise operators use non-null signed 32-bit bit patterns.
-Mixed Long operations follow the [Long contracts](#long-values). Char, Boolean, String, and nullable operands without a proof are
-rejected. `>>` is an arithmetic right shift in the tested VM. Complement retains
+Mixed Long operations follow the [Long contracts](#long-values). Floating,
+Char, Boolean, String, and nullable operands without a proof are rejected by
+bitwise operations. `>>` is an arithmetic right shift in the tested VM. Complement retains
 a unary IR operation and lowers to `invv`, evaluating its operand once.
 
 For Number-only shifts, counts are non-null Numbers. Mixed Long shifts follow
@@ -184,8 +186,8 @@ not a portable guarantee for other runtimes. See [bitwise evidence][bits].
 
 Unary plus is retained as a checked identity operation in IR and emits no VM
 instruction. It does not parse text, convert types, or relax null proofs. The
-SDK probe passes other value types through too; those are deliberately outside
-our current Number-only profile. See [unary-plus evidence][positive].
+SDK probe passes other value types through too; non-numeric types remain outside
+our current profile. See [unary-plus evidence][positive].
 
 [positive]: ../investigations/compiler-number-plus.md
 
@@ -295,18 +297,19 @@ IDs need not be contiguous; their numeric values never select physical slots.
 ## Function type contracts
 
 Ordinary source parameters default to Number. `as` annotations accept the fully
-qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.String`,
+qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.Float`,
+`Toybox.Lang.Double`, `Toybox.Lang.String`,
 `Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
 `Void`. Native short names, module aliases in annotations, and general unions
 are outside this subset. Unqualified declared source View names additionally
 provide [exact source contracts](compiler-classes.md#source-class-signatures).
-Number, Long, String, Boolean, and Char annotations additionally accept `or Null`
+Numeric, String, Boolean, and Char annotations additionally accept `or Null`
 for both parameters and results. Reversed alternatives, parenthesized unions,
 and other type syntax remain unsupported. These declarations require no `using`
 statement.
 
 Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. Long, String, Boolean, Char, View, array, and
+value returns have a Void contract. Long, Float, Double, String, Boolean, Char, View, array, and
 nullable source results require explicit annotations. Each return must be
 assignable to its contract:
 a nullable result accepts its scalar type, Null, or the same union. Unrelated
@@ -394,7 +397,7 @@ escape syntax.
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
-initializations and accept one Number, Long, String, Boolean, or Char value.
+initializations and accept one Number, Long, Float, Double, String, Boolean, or Char value.
 String types
 propagate through locals and annotated function parameters/results; incompatible
 uses are rejected. Addition follows the operator table above, including Char
@@ -541,7 +544,8 @@ right. The condition must be Boolean. Evaluate it once, then evaluate only the
 selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
-Supported arm types match exactly: Number, Long, Char, Boolean, String, Null, or an
+Supported arm types match exactly: numeric scalars, Char, Boolean, String, Null,
+or an
 invariant Number/Char Array. Scalar alternatives may also join with Null
 or their existing nullable type, producing the corresponding scalar-or-Null. No
 Char-to-Number promotion, heterogeneous union, nullable Array, class join,
@@ -628,11 +632,11 @@ Assignment-containing IR uses the conservative schedule specified in
 
 ## Increment and decrement
 
-`target++;` and `++target;` add one to a Number, Long, or Char, preserving its type.
-`target--;` and `--target;` subtract one from a Number or Long; Char decrement
+`target++;` and `++target;` add one to a numeric scalar or Char, preserving its type.
+`target--;` and `--target;` subtract one from a numeric scalar; Char decrement
 is rejected.
 The two operator characters must be contiguous. Accepted targets are bare
-initialized Number/Long/Char locals, explicit `self` Number fields, and Number/Char
+initialized numeric/Char locals, explicit `self` Number fields, and Number/Char
 array elements. Char requires API 1.3.0, as for other Char expressions.
 Parameters, grouped local targets, other value/element types, and unknown or
 out-of-scope names are rejected. A nullable Number local needs an established
@@ -763,7 +767,7 @@ A void function may contain only its return, so the operation bound is now
 sequence and discard the VM result with `popv`.
 
 The [console application profile](console-application.md) prints a value entry's
-Number, Long, String, Boolean, or Char result and discards a Void entry's result.
+Number, Long, Float, Double, String, Boolean, or Char result and discards a Void entry's result.
 The [example][void-example] and
 [simulator evidence][void-evidence] verify both void return forms and caller
 continuation after discarded calls. Source class/receiver syntax follows the
@@ -800,6 +804,56 @@ supported native module statement: zero arguments, Void, API 1.0.0. It requests
 a redraw of the current View and follows the same alias/validation rules.
 Runtime exit invokes a supplied source `onStop` callback in the
 validated console app; its unguarded Dictionary-or-null state is not a user-call argument.
+
+## Floating-point values
+
+Float and Double are distinct numeric scalars, available since API 1.0.0.
+Decimal literals with a fractional part or decimal exponent default to Float;
+a lowercase `d` suffix selects Double, including an integer mantissa such as `1d`.
+A fractional part requires digits on both sides of the point; an exponent uses
+`e`/`E`, optional sign, and at least one digit. Literal parsing rounds to IEEE
+754 binary32/binary64. Values rounding to infinity are rejected; underflow may
+round to zero. A negative literal preserves signed zero. Parenthesize a negative
+literal before calling a member, as for Number/Long.
+
+Explicit Float/Double parameters/results, local storage, module/instance calls,
+printing, conditional joins, and `or Null` contracts use the shared scalar rules.
+Assignments, arguments, returns, and conditional arms do not implicitly convert
+numeric widths. Array/Dictionary elements and source fields of these types are
+not supported yet. String concatenation and Char/operator mixing retain their
+previous bounded profiles.
+
+The four arithmetic operators `+`, `-`, `*`, and `/` accept Number, Long, Float,
+and Double pairs. Double dominates; Long mixed with Float also produces Double;
+otherwise Float dominates integer operands. Integer-only pairs follow their
+existing rules. All six numeric comparison operators accept these pairs and
+return Boolean. Floating `%`, bitwise/shift operations, `!`, and `~` are rejected.
+Unary plus preserves type/value. Negation subtracts from a same-type positive
+zero; this differs from a negative-zero literal at zero. Statement `++`/`--`
+and arithmetic compound writes preserve the local's type under these promotion
+rules. Floating arithmetic and exceptional values are runtime operations;
+the compiler inserts no conversions or constant folding.
+
+Float/Double receivers support `abs()` returning the receiver type,
+`format(String)` and `toString()` returning String, and numeric conversions
+`toNumber()`, `toLong()`, `toFloat()`, and `toDouble()` returning their named
+scalar types, since API 1.0.0. Number and Long also support both floating
+conversions since 1.0.0. In-range floating-to-integer conversions truncate toward
+zero; conversion of non-finite or out-of-range values remains a runtime boundary
+without a compiler guarantee.
+
+Inherited `hashCode()` returns Number, since 1.0.0; immutable `weak()` returns
+the effective receiver type since 1.2.0. Float inherits Object `equals` since
+1.0.0; Double overrides it since 1.3.0. Equality accepts the shared scalar/Null
+profile and distinguishes floating widths and integer classes. Do not infer a
+cross-instance Double hash contract from numeric equality. `compareTo` accepts
+non-null numeric/Boolean/Char arguments and returns Number since 5.0.0.
+String `toFloat()` returns Float or Null since 1.0.0; `toDouble()` returns Double
+or Null since 3.1.0. Guard nullable results before scalar use. Conversion content
+and formatting are passed through to the runtime.
+
+See the [grouped example](../../examples/compiler-float-values/README.md) and
+[encoding/runtime evidence](../investigations/compiler-floating-values.md).
 
 ## Long values
 
@@ -855,7 +909,7 @@ Long receivers support these native methods:
 | inherited `hashCode()` | Number | 1.0.0 |
 | inherited `weak()` | Long | 1.2.0 |
 | `equals(scalar or nullable scalar)` | Boolean | 1.3.0 |
-| `compareTo(Number, Long, Boolean, or Char)` | Number | 5.0.0 |
+| `compareTo(numeric, Boolean, or Char)` | Number | 5.0.0 |
 
 `toNumber()` retains the low 32 bits as a signed Number. Number's `toLong()`
 sign-extends its value, since API 1.0.0. `abs()` of minimum Long wraps to minimum.
@@ -873,8 +927,8 @@ nullable rules. A direct non-null proof is required before numeric operations,
 printing, or receiver dispatch. Matching Long arms join without conversion;
 mixed Number/Long conditional arms remain invalid.
 
-Float/Double conversions, Long Array/Dictionary elements, and Long fields remain
-deferred. See the
+Long `toFloat()` and `toDouble()` are available since API 1.0.0, as described
+below. Long Array/Dictionary elements and fields remain deferred. See the
 [example](../../examples/compiler-long-values/README.md) and
 [encoding/runtime evidence](../investigations/compiler-long-values.md).
 
@@ -938,7 +992,7 @@ Opaque and typed references also inherit `equals(other)` → Boolean and
 `hashCode()` → Number from Object, since API 1.0.0. Equality tests Dictionary
 identity, including across different key/value contracts; separate dictionaries
 with equal contents compare unequal. Supported arguments are bounded typed or
-opaque Dictionary references, Number/Long/String/Boolean/Char, Null, and their
+opaque Dictionary references, numeric/String/Boolean/Char scalars, Null, and their
 supported nullable forms. Array and source/native object arguments remain outside this
 profile. Nullable callback Dictionary arguments need no guard; a nullable
 receiver requires a non-null proof.
@@ -1015,15 +1069,15 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `abs()` | `Lang.Number` | Number |
 | `toNumber()` | `Lang.Number` | Number |
 | `toLong()` | `Lang.Number` | Long |
-| `compareTo(Number, Long, Boolean, or Char)` | `Lang.Number` | Number |
+| `compareTo(numeric, Boolean, or Char)` | `Lang.Number` | Number |
 | `equals(scalar or nullable scalar)` | `Lang.Object` | Boolean |
 | `hashCode()` | `Lang.Object` | Number |
 
 Number `compareTo` requires API 5.0.0; the other listed Number methods require
 1.0.0. Its declaration takes Object, but current lowering admits Number or
-Long, Boolean, or Char only. Unchecked nullable comparison arguments are rejected.
+Long, Float, Double, Boolean, or Char only. Unchecked nullable comparison arguments are rejected.
 `equals`
-accepts Number, Long, String, Boolean, Char, Null, or their nullable scalar forms;
+accepts numeric, String, Boolean, Char, Null, or their nullable scalar forms;
 it returns Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
@@ -1050,7 +1104,7 @@ runtime without compiler validation. See the
 Boolean receivers support `toString()` returning String, `hashCode()` returning
 Number, and `equals` returning Boolean with the same scalar/nullable argument
 profile as Number/String equality. These inherited methods date from API 1.0.0.
-Boolean `compareTo` returns Number and accepts Number/Long/Boolean/Char arguments
+Boolean `compareTo` returns Number and accepts numeric/Boolean/Char arguments
 since API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
 does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
@@ -1058,7 +1112,7 @@ does not enable Boolean arithmetic or ordering operators. See the
 Char values originate from literals or Number's zero-argument `toChar()` and are distinct
 from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
 returning Number, and `toString()` returning String. Char's direct `compareTo`
-returns Number for Number/Long/Boolean/Char arguments, since API 5.0.0. Inherited
+returns Number for numeric/Boolean/Char arguments, since API 5.0.0. Inherited
 `equals` accepts the scalar/nullable scalar profile above and returns Boolean;
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
@@ -1069,7 +1123,7 @@ Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).
 
-Number, Long, String, and Boolean receivers also support zero-argument `weak()` since
+Numeric, String, and Boolean receivers also support zero-argument `weak()` since
 API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
 It remains an effectful native call; the compiler does not replace it with its
 receiver. Nullable scalar receivers require a direct non-null proof
@@ -1084,7 +1138,7 @@ Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, Number/Long/String/Boolean/Char parameter, and supported call-result receivers
+local, numeric/String/Boolean/Char parameter, and supported call-result receivers
 are accepted. Evaluate the receiver first, then arguments left to right, then invoke
 the member.
 
@@ -1478,7 +1532,7 @@ A direct `if (value == null)` or `if (null == value)` proves that parameter or
 local non-null on the false path. Direct `value != null` or `null != value`
 proves non-null on the true path. Boolean negation reverses this proof edge;
 `if (!(value == null))` proves non-null on the true path. Fresh reads there have
-the non-null Number, Long, String, Boolean, or Char type
+the non-null numeric, String, Boolean, or Char type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc

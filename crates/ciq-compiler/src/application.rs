@@ -32,6 +32,8 @@ const LENGTH: u32 = 0x008000bb;
 const SUBSTRING: u32 = 0x008000bd;
 const FIND: u32 = 0x008000bc;
 const TO_NUMBER: u32 = 0x008000a7;
+const TO_FLOAT: u32 = 0x008000a5;
+const TO_DOUBLE: u32 = 0x008000a8;
 const TO_LONG: u32 = 0x008000a9;
 const TO_LONG_WITH_BASE: u32 = 0x00800b1c;
 const TO_CHAR: u32 = 0x008004c6;
@@ -289,6 +291,8 @@ pub fn build_console_application(
         ReturnType::NullableInteger
             | ReturnType::NullableString
             | ReturnType::NullableLong
+            | ReturnType::NullableDouble
+            | ReturnType::NullableFloat
             | ReturnType::NullableBoolean
             | ReturnType::NullableChar
             | ReturnType::TypedDictionary(_)
@@ -350,6 +354,8 @@ pub fn build_console_application(
         ("find".into(), FIND),
         ("toNumber".into(), TO_NUMBER),
         ("toLong".into(), TO_LONG),
+        ("toFloat".into(), TO_FLOAT),
+        ("toDouble".into(), TO_DOUBLE),
         ("toLongWithBase".into(), TO_LONG_WITH_BASE),
         ("toChar".into(), TO_CHAR),
         ("toCharArray".into(), TO_CHAR_ARRAY),
@@ -452,6 +458,8 @@ pub fn build_console_application(
         ("__ciq_native_find".into(), FIND),
         ("__ciq_native_toNumber".into(), TO_NUMBER),
         ("__ciq_native_toLong".into(), TO_LONG),
+        ("__ciq_native_toFloat".into(), TO_FLOAT),
+        ("__ciq_native_toDouble".into(), TO_DOUBLE),
         ("__ciq_native_toLongWithBase".into(), TO_LONG_WITH_BASE),
         ("__ciq_native_toChar".into(), TO_CHAR),
         ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),

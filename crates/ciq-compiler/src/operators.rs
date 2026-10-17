@@ -12,27 +12,53 @@ pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
     integer(operand).then(|| operand.clone())
 }
 
-/// Resolve unary signs without changing Number or Long width or admitting Null.
+/// Resolve unary signs without changing numeric width or admitting Null.
 pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
-    integer(operand).then(|| operand.clone())
+    numeric(operand).then(|| operand.clone())
 }
 
 fn integer(ty: &Type) -> bool {
     matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Long"))
 }
 
-/// Resolve a Number/Long step or Char increment, preserving the operand type.
+fn numeric(ty: &Type) -> bool {
+    integer(ty)
+        || matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Float" | "Toybox.Lang.Double"))
+}
+
+/// Resolve a numeric step or Char increment, preserving the operand type.
 pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
-    (integer(operand) || (increment && *operand == Type::named("Toybox.Lang.Char")))
+    (numeric(operand) || (increment && *operand == Type::named("Toybox.Lang.Char")))
         .then(|| operand.clone())
 }
 
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number/Long arithmetic, bitwise operations, and shifts promote to Long when
 /// either operand is Long. Addition of Char/Number in either
-/// order returns Char; two Chars concatenate to String. An exact String operand
+/// order returns Char; two Chars concatenate to String. Floating arithmetic
+/// promotes to Double for Double operands or a Long/Float pair, otherwise Float.
+/// An exact String operand
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    if matches!(
+        kind,
+        BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide
+    ) && numeric(left)
+        && numeric(right)
+    {
+        let double = Type::named("Toybox.Lang.Double");
+        let float = Type::named("Toybox.Lang.Float");
+        let long = Type::named("Toybox.Lang.Long");
+        if left == &double
+            || right == &double
+            || ((left == &float && right == &long) || (left == &long && right == &float))
+        {
+            return Some(double);
+        }
+        if left == &float || right == &float {
+            return Some(float);
+        }
+    }
     match kind {
         BinaryOp::Add
             if (*left == Type::named("Toybox.Lang.String") && string_operand(right, true))
@@ -88,12 +114,12 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality/inequality with Null; Boolean pairs support these two operators.
-/// Number/Char pairs and Number/Long pairs support all six numeric comparisons.
+/// Numeric scalar pairs and Number/Char pairs support all six comparisons.
 /// String equality uses object identity with supported String/Number/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
-    let numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
-    let numbers = (numeric(left) && numeric(right)) || (integer(left) && integer(right));
+    let char_numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
+    let numbers = (char_numeric(left) && char_numeric(right)) || (numeric(left) && numeric(right));
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
@@ -101,6 +127,8 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
     let nullable_boolean = Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]);
     let nullable_char = Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]);
+    let nullable_float = Type::Union(vec![Type::named("Toybox.Lang.Float"), Type::Null]);
+    let nullable_double = Type::Union(vec![Type::named("Toybox.Lang.Double"), Type::Null]);
     let nullable_long = Type::Union(vec![Type::named("Toybox.Lang.Long"), Type::Null]);
     let null_check = kind.is_equality()
         && ((left == &Type::Null
@@ -110,12 +138,16 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || right == &nullable_string
                 || right == &nullable_boolean
                 || right == &nullable_char
+                || right == &nullable_float
+                || right == &nullable_double
                 || right == &nullable_long))
             || ((left == &nullable_dictionary
                 || left == &nullable_number
                 || left == &nullable_string
                 || left == &nullable_boolean
                 || left == &nullable_char
+                || left == &nullable_float
+                || left == &nullable_double
                 || left == &nullable_long)
                 && right == &Type::Null));
     let strings = kind.is_equality()

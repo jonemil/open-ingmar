@@ -7,6 +7,8 @@ recording source revisions, observed bytes, and limitations. The
 [encoding table and assembly grammar](bytecode-subset.md) remain the compact
 reference.
 
+Floating constants have [SDK encoding/runtime evidence](../investigations/compiler-floating-values.md).
+
 ## Scope and notation
 
 Encodings below occur in SDK 9.2.0, `fr265`, `-O 0` debug builds,
@@ -1011,3 +1013,33 @@ Procedures and runtime results belong in the investigations:
 [char-literals]: ../investigations/compiler-char-literals.md
 
 [number-literals]: ../investigations/compiler-number-literals.md
+
+## fpush
+
+Encoding: `26 <bits:u32>`, big-endian IEEE 754 binary32.
+Stack: `... → ... Float(bits)`.
+
+Push the exact floating value, preserving signed zero and NaN payloads.
+`fpush 0x3fa00000` pushes 1.25. The operand is a bit pattern, not an integer
+conversion or DATA offset. Positive zero may use `fpushz`.
+
+## fpushz
+
+Encoding: `3b`, no operands. Stack: `... → ... Float(+0)`.
+
+Push positive Float zero. Negative zero requires `fpush 0x80000000`.
+
+## dpush
+
+Encoding: `32 <bits:u64>`, big-endian IEEE 754 binary64.
+Stack: `... → ... Double(bits)`.
+
+Push the exact floating value. `dpush 0xc017000000000000` pushes -5.75.
+The operand preserves all 64 bits, including signed zero and NaN payloads;
+it is not a DATA offset. Positive zero may use `dpushz`.
+
+## dpushz
+
+Encoding: `3d`, no operands. Stack: `... → ... Double(+0)`.
+
+Push positive Double zero. Negative zero requires `dpush 0x8000000000000000`.

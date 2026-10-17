@@ -278,6 +278,10 @@ pub enum ReturnType {
     Integer,
     Long,
     NullableLong,
+    Float,
+    NullableFloat,
+    Double,
+    NullableDouble,
     NullableInteger,
     String,
     NullableString,
@@ -303,6 +307,10 @@ pub enum ParameterType {
     Integer,
     Long,
     NullableLong,
+    Float,
+    NullableFloat,
+    Double,
+    NullableDouble,
     NullableInteger,
     String,
     NullableString,
@@ -327,11 +335,15 @@ impl ParameterType {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
+            Self::NullableDouble => ValueType::NullableDouble.api_type(),
+            Self::NullableFloat => ValueType::NullableFloat.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::Long => ValueType::Long.api_type(),
+            Self::Double => ValueType::Double.api_type(),
+            Self::Float => ValueType::Float.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
@@ -353,11 +365,15 @@ impl ReturnType {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
+            Self::NullableDouble => ValueType::NullableDouble.api_type(),
+            Self::NullableFloat => ValueType::NullableFloat.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::Long => ValueType::Long.api_type(),
+            Self::Double => ValueType::Double.api_type(),
+            Self::Float => ValueType::Float.api_type(),
             Self::String => ValueType::String.api_type(),
             Self::Boolean => ValueType::Boolean.api_type(),
             Self::Char => ValueType::Char.api_type(),
@@ -379,6 +395,10 @@ enum ValueType {
     Integer,
     Long,
     NullableLong,
+    Float,
+    NullableFloat,
+    Double,
+    NullableDouble,
     NullableInteger,
     String,
     NullableString,
@@ -400,6 +420,8 @@ impl ValueType {
         match self {
             Self::NullableInteger => Self::Integer,
             Self::NullableLong => Self::Long,
+            Self::NullableDouble => Self::Double,
+            Self::NullableFloat => Self::Float,
             Self::NullableString => Self::String,
             Self::NullableBoolean => Self::Boolean,
             Self::NullableChar => Self::Char,
@@ -413,6 +435,15 @@ impl ValueType {
         match self {
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
             Self::Long => api::Type::named("Toybox.Lang.Long"),
+            Self::Double => api::Type::named("Toybox.Lang.Double"),
+            Self::NullableDouble => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Double"),
+                api::Type::Null,
+            ]),
+            Self::Float => api::Type::named("Toybox.Lang.Float"),
+            Self::NullableFloat => {
+                api::Type::Union(vec![api::Type::named("Toybox.Lang.Float"), api::Type::Null])
+            }
             Self::NullableLong => {
                 api::Type::Union(vec![api::Type::named("Toybox.Lang.Long"), api::Type::Null])
             }
@@ -464,6 +495,8 @@ impl ValueType {
                 "Toybox.Graphics.FontDefinition" => Some(Self::FontDefinition),
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.Long" => Some(Self::Long),
+                "Toybox.Lang.Double" => Some(Self::Double),
+                "Toybox.Lang.Float" => Some(Self::Float),
                 "Toybox.Lang.String" => Some(Self::String),
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
                 "Toybox.Lang.Char" => Some(Self::Char),
@@ -474,6 +507,8 @@ impl ValueType {
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
             _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
             _ if *ty == Self::NullableLong.api_type() => Some(Self::NullableLong),
+            _ if *ty == Self::NullableDouble.api_type() => Some(Self::NullableDouble),
+            _ if *ty == Self::NullableFloat.api_type() => Some(Self::NullableFloat),
             _ if *ty == Self::NullableString.api_type() => Some(Self::NullableString),
             _ if *ty == Self::NullableBoolean.api_type() => Some(Self::NullableBoolean),
             _ if *ty == Self::NullableChar.api_type() => Some(Self::NullableChar),
@@ -543,7 +578,7 @@ pub enum Operation {
         target: BlockId,
         value: ValueId,
     },
-    /// Step a Number/Long by one or increment a Char, preserving its type.
+    /// Step a numeric value by one or increment a Char, preserving its type.
     /// Nullable operands and Char decrement are rejected.
     /// Target capture and write-back are separate ordered IR operations.
     Step {
@@ -684,17 +719,29 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
     },
-    /// Return a non-null Number or Long operand unchanged after evaluating it once.
+    /// Return a non-null numeric operand unchanged after evaluating it once.
     /// Other operand types require a separate contract and are rejected.
     Positive {
         result: ValueId,
         operand: ValueId,
     },
-    /// Negate one Number or Long, preserving its width and runtime wrapping.
+    /// Negate one numeric operand with a same-type zero subtraction.
     /// Nullable values require a non-null proof before use.
     Negate {
         result: ValueId,
         operand: ValueId,
+    },
+    /// Produce a Float from exact IEEE 754 binary32 bits, preserving signed zero
+    /// and NaN payloads.
+    Float {
+        result: ValueId,
+        bits: u32,
+    },
+    /// Produce a Double from exact IEEE 754 binary64 bits, preserving signed zero
+    /// and NaN payloads.
+    Double {
+        result: ValueId,
+        bits: u64,
     },
     /// Produce a signed 64-bit Long without narrowing to a Number.
     Long {
@@ -856,8 +903,8 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals retain supported value types; printing accepts Number, Long, String,
-/// Boolean, or Char. Operator contracts determine arithmetic result types. User calls carry
+/// Locals retain supported value types; printing accepts non-null numeric,
+/// String, Boolean, or Char values. Operator contracts determine arithmetic result types. User calls carry
 /// result contracts; unit validation checks them against callee signatures.
 /// Native callback parameters may carry opaque nullable Dictionary state.
 /// Returns consistently produce one supported type or no value. Statement calls
@@ -1384,6 +1431,8 @@ impl Function {
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableChar
                                     | ValueType::NullableLong
+                                    | ValueType::NullableDouble
+                                    | ValueType::NullableFloat
                                     | ValueType::NullableDictionary),
                                 ) = declared
                                 {
@@ -1452,6 +1501,14 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::Integer { result, .. } => (Some(result), vec![]),
+                Operation::Float { result, .. } => {
+                    types.insert(result, ValueType::Float);
+                    (Some(result), vec![])
+                }
+                Operation::Double { result, .. } => {
+                    types.insert(result, ValueType::Double);
+                    (Some(result), vec![])
+                }
                 Operation::Long { result, .. } => {
                     types.insert(result, ValueType::Long);
                     (Some(result), vec![])
@@ -1493,6 +1550,8 @@ impl Function {
                             | ValueType::Boolean
                             | ValueType::Char
                             | ValueType::Long
+                            | ValueType::Float
+                            | ValueType::Double
                     ) {
                         return Err(fail("println requires a supported non-null scalar"));
                     }
@@ -1753,7 +1812,9 @@ impl Function {
                         operators::step_result(&type_of(operand).api_type(), increment)
                             .and_then(|ty| ValueType::from_api_type(&ty))
                             .ok_or_else(|| {
-                                fail("step requires a non-null Number/Long, or Char for increment")
+                                fail(
+                                    "step requires a non-null numeric value, or Char for increment",
+                                )
                             })?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
@@ -1761,7 +1822,7 @@ impl Function {
                 Operation::Positive { result, operand } => {
                     let result_type = operators::sign_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("unary plus requires a non-null Number or Long"))?;
+                        .ok_or_else(|| fail("unary plus requires a non-null numeric value"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
@@ -1775,7 +1836,7 @@ impl Function {
                 Operation::Negate { result, operand } => {
                     let result_type = operators::sign_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
-                        .ok_or_else(|| fail("negation requires a non-null Number or Long"))?;
+                        .ok_or_else(|| fail("negation requires a non-null numeric value"))?;
                     types.insert(result, result_type);
                     (Some(result), vec![operand])
                 }
@@ -1918,6 +1979,10 @@ impl Function {
                             && matches!(incoming, ValueType::TypedDictionary(_)))
                         && !(local_types[&local] == ValueType::NullableDictionary
                             && incoming == ValueType::Null)
+                        && !(local_types[&local] == ValueType::NullableFloat
+                            && matches!(incoming, ValueType::Float | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableDouble
+                            && matches!(incoming, ValueType::Double | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableLong
                             && matches!(incoming, ValueType::Long | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableInteger
@@ -1986,6 +2051,8 @@ impl Function {
                         match type_of(value) {
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
+                            ValueType::Double => ReturnType::Double,
+                            ValueType::Float => ReturnType::Float,
                             ValueType::String => ReturnType::String,
                             ValueType::Boolean => ReturnType::Boolean,
                             ValueType::Char => ReturnType::Char,
@@ -2306,11 +2373,15 @@ impl Function {
                             }
                             ParameterType::NullableInteger => "nullable-integer",
                             ParameterType::NullableLong => "nullable-long",
+                            ParameterType::NullableDouble => "nullable-double",
+                            ParameterType::NullableFloat => "nullable-float",
                             ParameterType::NullableString => "nullable-string",
                             ParameterType::NullableBoolean => "nullable-boolean",
                             ParameterType::NullableChar => "nullable-char",
                             ParameterType::Integer => "integer",
                             ParameterType::Long => "long",
+                            ParameterType::Double => "double",
+                            ParameterType::Float => "float",
                             ParameterType::String => "string",
                             ParameterType::Boolean => "boolean",
                             ParameterType::Char => "char",
@@ -2338,6 +2409,8 @@ impl Function {
             | ReturnType::NullableBoolean
             | ReturnType::NullableChar
             | ReturnType::NullableLong
+            | ReturnType::NullableDouble
+            | ReturnType::NullableFloat
             | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
             _ => String::new(),
         };
@@ -2438,6 +2511,10 @@ impl Function {
                 }
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::Long { result, value } => format!(".long %{} {value}", result.0),
+                Operation::Double { result, bits } => {
+                    format!(".double %{} 0x{bits:016x}", result.0)
+                }
+                Operation::Float { result, bits } => format!(".float %{} 0x{bits:08x}", result.0),
                 Operation::String { result, ref value } => {
                     format!(".string %{} {value:?}", result.0)
                 }
@@ -2821,6 +2898,8 @@ fn validate_call_arguments(
                     | ValueType::Boolean
                     | ValueType::Char
                     | ValueType::Long
+                    | ValueType::Float
+                    | ValueType::Double
                     | ValueType::Object(_)
                     | ValueType::Array(_)
                     | ValueType::Dictionary
@@ -2831,6 +2910,8 @@ fn validate_call_arguments(
                     | ValueType::NullableBoolean
                     | ValueType::NullableChar
                     | ValueType::NullableLong
+                    | ValueType::NullableDouble
+                    | ValueType::NullableFloat
             )
         })
     }) {
@@ -2846,11 +2927,15 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
         ReturnType::NullableInteger => Ok(ValueType::NullableInteger),
         ReturnType::NullableLong => Ok(ValueType::NullableLong),
+        ReturnType::NullableDouble => Ok(ValueType::NullableDouble),
+        ReturnType::NullableFloat => Ok(ValueType::NullableFloat),
         ReturnType::NullableString => Ok(ValueType::NullableString),
         ReturnType::NullableBoolean => Ok(ValueType::NullableBoolean),
         ReturnType::NullableChar => Ok(ValueType::NullableChar),
         ReturnType::Integer => Ok(ValueType::Integer),
         ReturnType::Long => Ok(ValueType::Long),
+        ReturnType::Double => Ok(ValueType::Double),
+        ReturnType::Float => Ok(ValueType::Float),
         ReturnType::String => Ok(ValueType::String),
         ReturnType::Boolean => Ok(ValueType::Boolean),
         ReturnType::Char => Ok(ValueType::Char),
@@ -2872,11 +2957,15 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::NullableInteger => " result=nullable-integer",
         ReturnType::NullableLong => " result=nullable-long",
+        ReturnType::NullableDouble => " result=nullable-double",
+        ReturnType::NullableFloat => " result=nullable-float",
         ReturnType::NullableString => " result=nullable-string",
         ReturnType::NullableBoolean => " result=nullable-boolean",
         ReturnType::NullableChar => " result=nullable-char",
         ReturnType::Integer => "",
         ReturnType::Long => " result=long",
+        ReturnType::Double => " result=double",
+        ReturnType::Float => " result=float",
         ReturnType::String => " result=string",
         ReturnType::Boolean => " result=boolean",
         ReturnType::Char => " result=char",

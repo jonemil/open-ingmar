@@ -283,7 +283,7 @@ fn native_ir_revalidates_receiver_member_and_effect_order() {
         .unwrap()
         .to_ir_text();
     for bad in [
-        valid.replace("toString", "toFloat"),
+        valid.replace("toString", "toFloat %0"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
         valid.replace(".parameter %0 0", ".null %0"),

@@ -90,6 +90,8 @@ pub(crate) fn parse_ir_context(
                 ),
                 "nullable-integer" => crate::ReturnType::NullableInteger,
                 "nullable-long" => crate::ReturnType::NullableLong,
+                "nullable-double" => crate::ReturnType::NullableDouble,
+                "nullable-float" => crate::ReturnType::NullableFloat,
                 "nullable-string" => crate::ReturnType::NullableString,
                 "nullable-boolean" => crate::ReturnType::NullableBoolean,
                 "nullable-char" => crate::ReturnType::NullableChar,
@@ -113,11 +115,15 @@ pub(crate) fn parse_ir_context(
                             .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract")),
                         "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
                         "nullable-long" => Ok(crate::ParameterType::NullableLong),
+                        "nullable-double" => Ok(crate::ParameterType::NullableDouble),
+                        "nullable-float" => Ok(crate::ParameterType::NullableFloat),
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "nullable-boolean" => Ok(crate::ParameterType::NullableBoolean),
                         "nullable-char" => Ok(crate::ParameterType::NullableChar),
                         "integer" => Ok(crate::ParameterType::Integer),
                         "long" => Ok(crate::ParameterType::Long),
+                        "double" => Ok(crate::ParameterType::Double),
+                        "float" => Ok(crate::ParameterType::Float),
                         "string" => Ok(crate::ParameterType::String),
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
@@ -201,6 +207,8 @@ pub(crate) fn parse_ir_context(
             Some(".boolean") => (23, 3),
             Some(".char") => (25, 3),
             Some(".long") => (74, 3),
+            Some(".float") => (75, 3),
+            Some(".double") => (76, 3),
             Some(".increment") => (62, 3),
             Some(".decrement") => (63, 3),
             Some(".positive") => (55, 3),
@@ -835,6 +843,28 @@ pub(crate) fn parse_ir_context(
             Operation::Println {
                 value: parse_value(&fields[1])?,
             }
+        } else if kind == 75 || kind == 76 {
+            let digits = fields[2]
+                .strip_prefix("0x")
+                .ok_or_else(|| fail(*at, "floating bits require 0x hexadecimal"))?;
+            let width = if kind == 75 { 8 } else { 16 };
+            if digits.len() != width || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(fail(
+                    *at,
+                    "floating bits require exactly 8 or 16 hexadecimal digits for their width",
+                ));
+            }
+            let bits =
+                u64::from_str_radix(digits, 16).map_err(|_| fail(*at, "invalid floating bits"))?;
+            let result = parse_value(&fields[1])?;
+            if kind == 75 {
+                Operation::Float {
+                    result,
+                    bits: bits as u32,
+                }
+            } else {
+                Operation::Double { result, bits }
+            }
         } else if kind == 74 {
             let digits = &fields[2];
             let magnitude = digits.strip_prefix('-').unwrap_or(digits);
@@ -970,11 +1000,15 @@ fn call_contract(
             }
             "nullable-integer" => crate::ReturnType::NullableInteger,
             "nullable-long" => crate::ReturnType::NullableLong,
+            "nullable-double" => crate::ReturnType::NullableDouble,
+            "nullable-float" => crate::ReturnType::NullableFloat,
             "nullable-string" => crate::ReturnType::NullableString,
             "nullable-boolean" => crate::ReturnType::NullableBoolean,
             "nullable-char" => crate::ReturnType::NullableChar,
             "integer" => crate::ReturnType::Integer,
             "long" => crate::ReturnType::Long,
+            "double" => crate::ReturnType::Double,
+            "float" => crate::ReturnType::Float,
             "string" => crate::ReturnType::String,
             "boolean" => crate::ReturnType::Boolean,
             "char" => crate::ReturnType::Char,

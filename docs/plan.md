@@ -12,11 +12,12 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Numeric types and deferred methods.** Add Float/Double values, operations,
-   and grouped native methods/conversions. Extend Long container contracts when
-   their consumers require them. Isolate unverified integer division boundaries
-   with SDK probes. Revisit Number/String/Boolean/Char methods as their required
-   value types become available.
+1. **Numeric integration and boundaries.** Extend Long/Float/Double container
+   contracts when their consumers require them. Review remaining String/Char
+   operator combinations with wider numeric types against SDK evidence.
+   Isolate integer division failures and floating non-finite/out-of-range
+   conversion boundaries with separate probes; do not infer portable behavior
+   from ordinary arithmetic specimens.
 2. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array

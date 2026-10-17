@@ -191,6 +191,26 @@ operand once and retains call order. Lowering emits zero, the operand, then
 wraps to the same i32 minimum in the tested runtime. See the
 [evidence](../investigations/compiler-number-negation.md).
 
+## Floating constants and values
+
+`.float %<result-id> 0x<8-hex-digits> [span=<start>:<end>]` and
+`.double %<result-id> 0x<16-hex-digits> [span=<start>:<end>]` produce Float/Double
+values from exact IEEE 754 bits. Width, prefix, and hexadecimal digits are
+mandatory. Native `Operation::Float`/`Double` hold u32/u64 bits, preserving signed
+zero, infinities, and NaN payloads through text, equality, and binary round trips.
+Saved IR accepts every bit pattern even though source literals must be finite.
+
+`float`/`double` are parameter, user-call result, and expression-join tags;
+`nullable-float`/`nullable-double` additionally serve as explicit function result
+contracts. Shared source/IR validation applies the
+[floating contracts](compiler-subset.md#floating-point-values), including numeric
+promotion, null proofs, native calls, and invariant storage types.
+
+Lower positive zero with `fpushz`/`dpushz`; all other bits, including negative
+zero, use `fpush`/`dpush`. These carry four/eight big-endian operand bytes.
+Arithmetic and comparisons use existing VM operations. Negation emits same-type
+positive zero followed by the operand and `subv`. No DATA constant is needed.
+
 ## Long constants and values
 
 `.long %<result-id> <signed-decimal-i64> [span=<start>:<end>]` produces a Long
@@ -640,7 +660,8 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `long`, `nullable-long`, `string`, `boolean`, `char`, `char-array`,
+The result type is `integer`, `long`, `nullable-long`, `float`, `double`,
+`nullable-float`, `nullable-double`, `string`, `boolean`, `char`, `char-array`,
 `number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
 `nullable-string-array`, `nullable-boolean-array`, `nullable-char-array`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, or
@@ -947,8 +968,9 @@ duplicate definitions, and unused/reused values are errors in native and text
 construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
-Type tags are `integer`, `long`, `char`, `boolean`, `string`, `null`,
-`nullable-integer`, `nullable-long`, `nullable-string`, `nullable-boolean`,
+Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`, `null`,
+`nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
+`nullable-string`, `nullable-boolean`,
 `nullable-char`, `array-number`, and `array-char`. They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
@@ -1069,7 +1091,8 @@ Array categories include `char-array`, `number-array`, `boolean-array`,
 `string-array`,
 `nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
 `nullable-char-array`, and `view-array`.
-Ordinary signatures also accept `long`, `nullable-long`,
+Ordinary signatures also accept `long`, `nullable-long`, `float`, `double`,
+`nullable-float`, `nullable-double`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
@@ -1303,7 +1326,8 @@ ciq-ir
 
 `.call-native` for String `find`, `toNumber`, and `toNumberWithBase` defines
 Number-or-Null according to its API contract; String `substring` defines
-String-or-Null. String `toLong` and `toLongWithBase` define Long-or-Null. Index API
+String-or-Null. String `toLong` and `toLongWithBase` define Long-or-Null;
+`toFloat`/`toDouble` define their corresponding scalar-or-Null. Index API
 requirements are the same as the [source contract][nullable-source]. The existing
 `.local`, `.read`, `.null`, `.equal`, `.not-equal`, and
 `.branch` forms carry this behavior; no assertion or unchecked cast operation
@@ -1341,7 +1365,8 @@ all facts; IR text carries no trusted narrowing metadata. See
 ## Nullable user signatures
 
 A function declaration may carry `result=nullable-integer`,
-`result=nullable-long`, `result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
+`result=nullable-long`, `result=nullable-float`, `result=nullable-double`,
+`result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
 Every value return must be Null, the corresponding scalar type, or the same
 union. A void return is invalid. The declared union is
 preserved even when all returns are scalar or all are Null; canonical text

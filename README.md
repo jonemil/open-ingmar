@@ -9,7 +9,7 @@ and a restricted Monkey C compiler.
 This is an independent project, unaffiliated with Garmin.
 
 The compiler uses semantic IR and symbolic assembly to generate complete console
-applications. Source classes, module/self calls, integer arithmetic, string
+applications. Source classes, module/self calls, numeric operations, string
 literals/printing, locals, conditions, and loops are supported within the
 [documented source subset](docs/specs/compiler-subset.md). General project/Jungle
 builds, resource generation, and broader application profiles remain planned.
