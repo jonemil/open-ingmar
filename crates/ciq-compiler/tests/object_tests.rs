@@ -50,7 +50,6 @@ fn qualified_names_aliases_and_api_requirements_remain_checked() {
         "function f(o as Toybox.Lang.Object) { return o has 1; }",
         "function f(o as Toybox.Lang.Object or Null) { return o has :toString; }",
         "function f() { return null has :toString; }",
-        "function f(o as Toybox.Lang.Object) { if (o instanceof Lang.Number) { return o+1; } else { return 0; } }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

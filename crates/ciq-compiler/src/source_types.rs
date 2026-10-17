@@ -13,9 +13,18 @@ pub(crate) struct Types {
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
     origins: crate::source_objects::Origins,
+    pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
 }
 
 impl Types {
+    /// Apply current candidate facts to a read's type, preserving the storage
+    /// declaration and types outside the supported refinement profile.
+    fn refined(&self, ty: Type, place: crate::type_flow::Place) -> Type {
+        crate::ValueType::from_api_type(&ty)
+            .map(|value| crate::type_flow::refine(value, place, &self.facts).api_type())
+            .unwrap_or(ty)
+    }
+
     pub(crate) fn new(parameters: Vec<ParameterType>) -> Self {
         Self {
             parameters: parameters.clone(),
@@ -24,6 +33,7 @@ impl Types {
             builders: BTreeMap::new(),
             dictionaries: BTreeMap::new(),
             origins: crate::source_objects::Origins::new(parameters),
+            facts: Default::default(),
         }
     }
 
@@ -119,16 +129,29 @@ impl Types {
                 *result,
                 Some(Type::Array(Box::new(element_type.api_type()))),
             ),
-            Operation::ParameterRead { result, index } => {
-                (*result, self.parameters.get(*index).map(|ty| ty.api_type()))
-            }
-            Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
-                (*result, self.locals.get(local).cloned())
-            }
+            Operation::ParameterRead { result, index } => (
+                *result,
+                self.parameters.get(*index).map(|ty| {
+                    self.refined(ty.api_type(), crate::type_flow::Place::Parameter(*index))
+                }),
+            ),
+            Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => (
+                *result,
+                self.locals
+                    .get(local)
+                    .map(|ty| self.refined(ty.clone(), crate::type_flow::Place::Local(*local))),
+            ),
             Operation::LocalInitialize { local, value } => {
+                self.facts
+                    .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));
                 if let Some(ty) = self.values.get(value) {
                     self.locals.insert(*local, ty.clone());
                 }
+                return;
+            }
+            Operation::LocalAssign { local, .. } => {
+                self.facts
+                    .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));
                 return;
             }
             Operation::SelfFieldRead {
@@ -309,7 +332,11 @@ pub(crate) fn value_type(
     parameters: Vec<ParameterType>,
 ) -> Option<Type> {
     let mut types = Types::new(parameters);
+    let inputs = crate::type_flow::prefix_inputs(operations);
     for op in operations {
+        if let Operation::Block { block } = op.operation {
+            types.facts = inputs.get(&block).cloned().unwrap_or_default();
+        }
         types.observe(&op.operation);
     }
     types.value_type(value).cloned()

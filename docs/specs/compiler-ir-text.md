@@ -1494,9 +1494,19 @@ Both operations define Boolean and accept optional source spans. `InstanceOf`
 records a canonical concrete runtime class independently of symbol IDs. Function
 validation checks the supported class and API level. `Has` requires a non-null
 receiver and a Symbol selector. Each operand has one semantic use; native and
-text input share these checks. Neither operation changes subsequent value types
-or establishes member/API availability. The [source profile][object-tests]
-owns supported targets, ordering, and restrictions.
+text input share these checks. A direct `.instanceof` of a `.read` or
+`.parameter` can establish a branch proof for fresh reads, including through
+`.not` and ordinary control-flow edges. The read, test, and branch must be in
+the same block with no intervening local write. Entry, join, write invalidation,
+and projection rules follow the [source profile][object-tests]. `.has` establishes
+no member-signature or API-availability proof.
+
+Both typed construction and text parsing recompute the complete CFG fixed point;
+text carries no trusted narrowing annotations. Source selection uses candidate
+facts from the prefix built so far, then submits the complete function to the
+same validation. Backedges and joins can invalidate those candidates. No cast
+or assertion operation is inserted. Narrowed value types guide existing native
+call checks and numeric instruction selection.
 
 Lowering evaluates the tested value, selects the runtime class with `getmv`,
 then emits `isa`. Lang class lookup binds the `Toybox_Lang` module identity,

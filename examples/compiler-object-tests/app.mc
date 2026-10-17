@@ -23,6 +23,7 @@ module Tests {
         System.println("selector"); return :length;
     }
     function run() as Void {
+        Refine.run();
         Tests.show(3); Tests.show("x"); Tests.absent(null); Tests.absent("x");
         System.println(Tests.member("x", :length));
         System.println(Tests.receiver() has Tests.selector());
@@ -58,4 +59,49 @@ class Probe {
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) { Tests.run(); System.exit(); }
+}
+
+module Refine {
+    function number(o as Toybox.Lang.Object or Null) as Toybox.Lang.Number {
+        if (o instanceof L.Number) { return o + 1; } else { return -1; }
+    }
+    function length(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+        if (o instanceof L.String) { return o.length(); } else { return 0; }
+    }
+    function positive(o as Toybox.Lang.Object) as Toybox.Lang.Boolean {
+        return o instanceof L.Number && o > 0;
+    }
+    function inverted(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+        if (!(o instanceof L.Number)) { return 0; } else { return o * 2; }
+    }
+    function loop(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+        var value = o;
+        var total = 0;
+        while (value instanceof L.Number) { total = total + value; value = "done"; }
+        return total;
+    }
+    function conditional(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+        return o instanceof L.String ? o.length() : 0;
+    }
+    function run() as Void {
+        System.println(Refine.number(7));
+        System.println(Refine.number(null));
+        System.println(Refine.length("hello"));
+        System.println(Refine.length(9));
+        System.println(Refine.positive(3));
+        System.println(Refine.positive("x"));
+        System.println(Refine.inverted(4));
+        System.println(Refine.loop(6));
+        System.println(Refine.conditional("abc"));
+        var values = [3, 1, 2];
+        values.sort(new NumberOrder());
+        System.println(values.toString());
+    }
+}
+class NumberOrder {
+    function initialize() {}
+    function compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as Toybox.Lang.Number {
+        if (a instanceof L.Number && b instanceof L.Number) { return a - b; }
+        else { return a.toString().compareTo(b.toString()); }
+    }
 }

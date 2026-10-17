@@ -1205,6 +1205,11 @@ impl Builder<'_> {
         Ok(())
     }
     fn push(&mut self, operation: Operation, span: Option<Span>) {
+        if let Operation::Block { block } = operation {
+            self.types.facts = crate::type_flow::prefix_inputs(&self.operations)
+                .remove(&block)
+                .unwrap_or_default();
+        }
         self.types.observe(&operation);
         self.operations.push(LocatedOperation { operation, span });
     }

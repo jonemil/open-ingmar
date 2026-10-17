@@ -1,13 +1,21 @@
 # Runtime object predicates
 
 2026-10-17, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
-Question: how do authored `instanceof` and `has` expressions execute and encode?
+Question: how do runtime predicates encode and support guarded Object uses?
 
-**Experimentally observed:** the [tracked specimen][example] matches all 35
+**Experimentally observed:** the [tracked specimen][example] matches all 45
 expected lines in SDK/generated runs. It tests all supported concrete Lang
 classes, source field/method existence, inherited observers, Symbol parameters,
 computed selectors, null guards, and Boolean short-circuiting. Computed operands
 print `receiver` before `selector`; each appears once.
+
+The SDK accepts positive class tests before Number arithmetic, String methods,
+negated early returns, AND operands, conditional arms, and loop bodies. The
+extended specimen narrows nullable Object inputs, changes an Object local after
+its loop guard, and sorts `[3, 1, 2]` to `[1, 2, 3]` with Number arithmetic in an
+Object-parameter comparator. The generated program matches these outcomes.
+Saved IR reconstructs the same program without additional assertion operations,
+VM opcodes, or DATA records.
 
 An initial SDK probe emits `lgetv 1; getmv 0x00800007 0x00800096; 21` for an
 Object argument tested against Number. String selects `0x0080009b`; member tests
@@ -22,8 +30,9 @@ with `Null Reference Error` at `null has :toString`. The accepted specimen guard
 the latter operation. Our non-null receiver requirement is a checking policy,
 not a claim that the SDK rejects nullable source expressions.
 
-**Limits:** these results establish predicates, not type refinement, casts,
-source-class tests, interface tests, or guarded API availability. A preliminary
+**Limits:** these tests establish concrete read refinement, not casts,
+source-class/interface tests, general union subtraction, or guarded API
+availability. A preliminary
 `1.0f` literal is SDK-accepted but unsupported by our parser; the final specimen
 uses unsuffixed Float syntax. The lexical gap remains in the plan.
 
@@ -34,7 +43,7 @@ The ignored `scratch/compiler-object-tests/monkey.jungle` selects the tracked
 source and shared native-names manifest/resources. Build through
 `scripts/build-example.sh`, then prepare and simulate `compiler-object-tests`.
 Accepted saved-stage, SDK/generated round-trip, and runtime artifacts are under
-`scratch/check-object-tests/`. The isolated nullable failure is under
+`scratch/check-object-refinement/`. The isolated nullable failure is under
 `scratch/object-tests-sdk-runtime-full/`; its source is the preliminary
 `scratch/compiler-object-tests/source/app.mc`.
 

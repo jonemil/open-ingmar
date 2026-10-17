@@ -3,7 +3,8 @@
 [app.mc](app.mc) checks `instanceof` against supported concrete Lang classes,
 `has` with literal and computed Symbols, source fields/methods, null handling,
 short-circuiting, and operand evaluation order. See [expected output](expected.txt).
-These predicates do not yet refine Object values to a tested class.
+Guarded Object reads support Number arithmetic, String methods, nullable inputs,
+conditional arms, loops, and numeric comparator sorting.
 
 From the repository root:
 

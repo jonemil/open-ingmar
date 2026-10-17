@@ -22,13 +22,13 @@ mod ir_text;
 mod joins;
 mod names;
 mod native;
-mod null_flow;
 mod operators;
 mod parser;
 mod runtime_types;
 mod source_ir;
 mod source_objects;
 mod source_types;
+mod type_flow;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
@@ -1372,8 +1372,8 @@ impl Function {
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
-        let non_null_inputs = null_flow::inputs(&structure, &operations);
-        let mut non_null = std::collections::BTreeSet::new();
+        let refinement_inputs = type_flow::inputs(&structure, &operations);
+        let mut refinements = std::collections::BTreeSet::new();
         let mut types = std::collections::BTreeMap::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
@@ -1567,7 +1567,7 @@ impl Function {
                 }
                 Operation::Block { block } => {
                     available_locals = local_inputs[&block].clone();
-                    non_null = non_null_inputs[&block].clone();
+                    refinements = refinement_inputs[&block].clone();
                     (None, vec![])
                 }
                 Operation::InstanceOf {
@@ -2111,11 +2111,7 @@ impl Function {
                         .expect("parameter contracts have supported value types");
                     types.insert(
                         result,
-                        if non_null.contains(&null_flow::Place::Parameter(index)) {
-                            ty.without_null()
-                        } else {
-                            ty
-                        },
+                        type_flow::refine(ty, type_flow::Place::Parameter(index), &refinements),
                     );
                     (Some(result), vec![])
                 }
@@ -2199,7 +2195,9 @@ impl Function {
                     (result, arguments.clone())
                 }
                 Operation::LocalInitialize { local, value } => {
-                    non_null.remove(&null_flow::Place::Local(local));
+                    refinements.retain(|fact: &type_flow::Fact| {
+                        fact.place() != type_flow::Place::Local(local)
+                    });
                     local_types.insert(local, type_of(value));
                     if !locals.insert(local) {
                         return Err(fail("duplicate local initialization"));
@@ -2249,7 +2247,9 @@ impl Function {
                     {
                         return Err(fail("assignment must preserve the local's value type"));
                     }
-                    non_null.remove(&null_flow::Place::Local(local));
+                    refinements.retain(|fact: &type_flow::Fact| {
+                        fact.place() != type_flow::Place::Local(local)
+                    });
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
@@ -2264,11 +2264,7 @@ impl Function {
                     let ty = local_types[&local];
                     types.insert(
                         result,
-                        if non_null.contains(&null_flow::Place::Local(local)) {
-                            ty.without_null()
-                        } else {
-                            ty
-                        },
+                        type_flow::refine(ty, type_flow::Place::Local(local), &refinements),
                     );
                     (Some(result), vec![])
                 }

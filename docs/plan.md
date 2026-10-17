@@ -12,11 +12,10 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Establish branch-sensitive Object refinement
-and checked casts for numeric/object comparator bodies. Reuse the supported
-runtime predicates; add source-class `instanceof`, imported bare class operands,
-member/signature proofs, and API guards through explicit contracts. Predicates
-alone do not establish these proofs. Review Lang.Comparable and its
+**Object and structural contracts.** Establish checked cast contracts and extend
+Object refinement beyond the supported concrete read proofs. Add source-class
+`instanceof`, imported bare class operands, member/signature proofs, and API
+guards through explicit contracts. Review Lang.Comparable and its
 `compareTo(Object) as Number` contract alongside those prerequisites. Keep
 general interface-typed parameters/results/storage separate from the exact
 source-class Comparator witness used by sorting. Nullable/object Array sorting
@@ -43,8 +42,8 @@ Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established. Dictionary
 callable methods belong to the shared Object work.
 
-Broader weak targets, nullable WeakReference storage, and concrete recovery
-from opaque Object results need their own type/refinement contracts. Keep hidden
+Broader weak targets, nullable WeakReference storage, and source-class/container
+recovery from opaque Object results need their own type/refinement contracts. Keep hidden
 temporary ownership explicit when adding new source staging paths.
 
 A blocked method should lead to its core type/operator/callable prerequisite or

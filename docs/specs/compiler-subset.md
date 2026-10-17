@@ -321,10 +321,42 @@ Source fields/methods and inherited native methods can be tested.
 
 Both predicates have the existing comparison precedence below arithmetic and
 above logical AND/OR; chained comparisons are unsupported. Ordinary short-circuit
-and conditional evaluation rules apply. A true result currently introduces no
-new class, member-signature, or API-availability proof. Object narrowing,
-source-class tests, guarded newer APIs, and `as` casts remain planned.
-See [runtime evidence](../investigations/compiler-object-tests.md).
+and conditional evaluation rules apply. `has` establishes no member-signature
+or API-availability proof. Source-class tests, guarded newer APIs, general union
+refinement, and `as` casts remain planned.
+
+### Object refinement
+
+A positive `instanceof` branch refines fresh reads of the tested local or
+parameter. Object and Object-or-Null can narrow to the supported concrete scalar,
+Dictionary, Method, Symbol, or WeakReference contract. An Object test establishes
+non-nullness. An Array test also establishes non-nullness, but cannot infer an
+Array element contract or enable indexed access on an erased Object. Existing
+concrete storage contracts retain their types, with Null removed when proven.
+
+```text
+using Toybox.Lang;
+function length(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+    if (o instanceof Lang.String) { return o.length(); }
+    else { return 0; }
+}
+```
+
+The tested read and predicate must directly feed the branch in the same block.
+Boolean negation reverses the proof edge; AND/OR and conditional expressions
+carry facts through their emitted branches. False tests do not subtract types.
+Entry has no facts. Joins retain only facts shared by every incoming edge;
+loops include their entry and backedges. A local write invalidates its facts,
+including a write between the tested read and branch. Unrelated writes and
+calls preserve facts about local/parameter reference values.
+
+Aliases and stored Boolean conditions do not transport proofs. New copies made
+inside a proven branch receive the narrowed value type; storage that existed
+before the test keeps its original assignment contract. Fields and arbitrary
+expressions are not proof-bearing storage locations. Source superclass identity,
+container elements, method signatures, and API guards require separate contracts.
+Source and saved IR share these rules. See
+[runtime evidence](../investigations/compiler-object-tests.md).
 
 ## Function type contracts
 
