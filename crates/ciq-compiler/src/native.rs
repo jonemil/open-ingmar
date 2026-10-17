@@ -156,11 +156,14 @@ pub(crate) fn value_call(
     let supported = matches!(
         (class, resolved.declaring_class.name.as_str(), member),
         (
-            "Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean",
+            "Toybox.Lang.Number"
+                | "Toybox.Lang.Long"
+                | "Toybox.Lang.String"
+                | "Toybox.Lang.Boolean",
             "Toybox.Lang.Object",
             "weak"
         ) | (
-            "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char",
+            "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
@@ -198,7 +201,12 @@ pub(crate) fn value_call(
             | (
                 "Toybox.Lang.Number",
                 "Toybox.Lang.Number",
-                "format" | "abs" | "toNumber" | "toChar" | "compareTo"
+                "format" | "abs" | "toNumber" | "toLong" | "toChar" | "compareTo"
+            )
+            | (
+                "Toybox.Lang.Long",
+                "Toybox.Lang.Long",
+                "abs" | "format" | "toLong" | "toNumber" | "toString" | "equals" | "compareTo"
             )
             | (
                 "Toybox.Lang.Char",
@@ -219,6 +227,8 @@ pub(crate) fn value_call(
                     | "equals"
                     | "hashCode"
                     | "toNumberWithBase"
+                    | "toLong"
+                    | "toLongWithBase"
                     | "toCharArray"
                     | "toUtf8Array"
             )
@@ -230,12 +240,12 @@ pub(crate) fn value_call(
     }
     if matches!(
         class,
-        "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
+        "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
     ) && member == "compareTo"
-        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"))
+        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"))
     {
         return Err(format!(
-            "{class}.compareTo lowering currently requires Number, Boolean, or Char"
+            "{class}.compareTo lowering currently requires Number, Long, Boolean, or Char"
         ));
     }
     if class == "Toybox.Lang.String"
@@ -283,6 +293,7 @@ fn scalar_or_null(ty: &api::Type) -> bool {
         api::Type::Named(name) => matches!(
             name.as_str(),
             "Toybox.Lang.Number"
+                | "Toybox.Lang.Long"
                 | "Toybox.Lang.String"
                 | "Toybox.Lang.Boolean"
                 | "Toybox.Lang.Char"

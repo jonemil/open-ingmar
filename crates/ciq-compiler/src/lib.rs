@@ -277,6 +277,7 @@ pub enum ReturnType {
     Dictionary,
     Integer,
     Long,
+    NullableLong,
     NullableInteger,
     String,
     NullableString,
@@ -301,6 +302,7 @@ pub enum ParameterType {
     Dictionary,
     Integer,
     Long,
+    NullableLong,
     NullableInteger,
     String,
     NullableString,
@@ -324,6 +326,7 @@ impl ParameterType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
+            Self::NullableLong => ValueType::NullableLong.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
@@ -349,6 +352,7 @@ impl ReturnType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
+            Self::NullableLong => ValueType::NullableLong.api_type(),
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
@@ -374,6 +378,7 @@ enum ValueType {
     Dictionary,
     Integer,
     Long,
+    NullableLong,
     NullableInteger,
     String,
     NullableString,
@@ -394,6 +399,7 @@ impl ValueType {
     fn without_null(self) -> Self {
         match self {
             Self::NullableInteger => Self::Integer,
+            Self::NullableLong => Self::Long,
             Self::NullableString => Self::String,
             Self::NullableBoolean => Self::Boolean,
             Self::NullableChar => Self::Char,
@@ -407,6 +413,9 @@ impl ValueType {
         match self {
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
             Self::Long => api::Type::named("Toybox.Lang.Long"),
+            Self::NullableLong => {
+                api::Type::Union(vec![api::Type::named("Toybox.Lang.Long"), api::Type::Null])
+            }
             Self::NullableInteger => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Number"),
                 api::Type::Null,
@@ -464,6 +473,7 @@ impl ValueType {
             api::Type::Null => Some(Self::Null),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
             _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
+            _ if *ty == Self::NullableLong.api_type() => Some(Self::NullableLong),
             _ if *ty == Self::NullableString.api_type() => Some(Self::NullableString),
             _ if *ty == Self::NullableBoolean.api_type() => Some(Self::NullableBoolean),
             _ if *ty == Self::NullableChar.api_type() => Some(Self::NullableChar),
@@ -846,8 +856,8 @@ impl std::error::Error for IrError {}
 /// retain each local's initializer type. Calls, prints, and assignments require
 /// operations in expression evaluation order. Operations cannot be mutated
 /// after validation; VM frame slots are assigned during lowering.
-/// Locals retain supported value types; printing accepts Number, String, Boolean,
-/// or Char. Operator contracts determine arithmetic result types. User calls carry
+/// Locals retain supported value types; printing accepts Number, Long, String,
+/// Boolean, or Char. Operator contracts determine arithmetic result types. User calls carry
 /// result contracts; unit validation checks them against callee signatures.
 /// Native callback parameters may carry opaque nullable Dictionary state.
 /// Returns consistently produce one supported type or no value. Statement calls
@@ -1373,6 +1383,7 @@ impl Function {
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableChar
+                                    | ValueType::NullableLong
                                     | ValueType::NullableDictionary),
                                 ) = declared
                                 {
@@ -1907,6 +1918,8 @@ impl Function {
                             && matches!(incoming, ValueType::TypedDictionary(_)))
                         && !(local_types[&local] == ValueType::NullableDictionary
                             && incoming == ValueType::Null)
+                        && !(local_types[&local] == ValueType::NullableLong
+                            && matches!(incoming, ValueType::Long | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableInteger
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableBoolean
@@ -2292,6 +2305,7 @@ impl Function {
                                 return format!("source({class})");
                             }
                             ParameterType::NullableInteger => "nullable-integer",
+                            ParameterType::NullableLong => "nullable-long",
                             ParameterType::NullableString => "nullable-string",
                             ParameterType::NullableBoolean => "nullable-boolean",
                             ParameterType::NullableChar => "nullable-char",
@@ -2323,6 +2337,7 @@ impl Function {
             | ReturnType::NullableString
             | ReturnType::NullableBoolean
             | ReturnType::NullableChar
+            | ReturnType::NullableLong
             | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
             _ => String::new(),
         };
@@ -2815,6 +2830,7 @@ fn validate_call_arguments(
                     | ValueType::NullableString
                     | ValueType::NullableBoolean
                     | ValueType::NullableChar
+                    | ValueType::NullableLong
             )
         })
     }) {
@@ -2829,6 +2845,7 @@ fn validate_call_arguments(
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
         ReturnType::NullableInteger => Ok(ValueType::NullableInteger),
+        ReturnType::NullableLong => Ok(ValueType::NullableLong),
         ReturnType::NullableString => Ok(ValueType::NullableString),
         ReturnType::NullableBoolean => Ok(ValueType::NullableBoolean),
         ReturnType::NullableChar => Ok(ValueType::NullableChar),
@@ -2854,6 +2871,7 @@ fn call_type_text(result: &ReturnType) -> String {
     match result {
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::NullableInteger => " result=nullable-integer",
+        ReturnType::NullableLong => " result=nullable-long",
         ReturnType::NullableString => " result=nullable-string",
         ReturnType::NullableBoolean => " result=nullable-boolean",
         ReturnType::NullableChar => " result=nullable-char",

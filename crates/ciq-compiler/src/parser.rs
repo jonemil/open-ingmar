@@ -1692,6 +1692,7 @@ impl Parser<'_> {
                         self.expect(Kind::Word("Null"), "'Null'")?;
                         match ty {
                             crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
+                            crate::ParameterType::Long => crate::ParameterType::NullableLong,
                             crate::ParameterType::String => crate::ParameterType::NullableString,
                             crate::ParameterType::Boolean => crate::ParameterType::NullableBoolean,
                             crate::ParameterType::Char => crate::ParameterType::NullableChar,
@@ -1752,6 +1753,7 @@ impl Parser<'_> {
                 self.expect(Kind::Word("Null"), "'Null'")?;
                 match ty {
                     crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
+                    crate::ReturnType::Long => crate::ReturnType::NullableLong,
                     crate::ReturnType::String => crate::ReturnType::NullableString,
                     crate::ReturnType::Boolean => crate::ReturnType::NullableBoolean,
                     crate::ReturnType::Char => crate::ReturnType::NullableChar,

@@ -89,6 +89,7 @@ pub(crate) fn parse_ir_context(
                         .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract"))?,
                 ),
                 "nullable-integer" => crate::ReturnType::NullableInteger,
+                "nullable-long" => crate::ReturnType::NullableLong,
                 "nullable-string" => crate::ReturnType::NullableString,
                 "nullable-boolean" => crate::ReturnType::NullableBoolean,
                 "nullable-char" => crate::ReturnType::NullableChar,
@@ -111,6 +112,7 @@ pub(crate) fn parse_ir_context(
                             .map(crate::ParameterType::TypedDictionary)
                             .ok_or_else(|| fail(*name_at, "unsupported Dictionary contract")),
                         "nullable-integer" => Ok(crate::ParameterType::NullableInteger),
+                        "nullable-long" => Ok(crate::ParameterType::NullableLong),
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "nullable-boolean" => Ok(crate::ParameterType::NullableBoolean),
                         "nullable-char" => Ok(crate::ParameterType::NullableChar),
@@ -967,6 +969,7 @@ fn call_contract(
                 )?)
             }
             "nullable-integer" => crate::ReturnType::NullableInteger,
+            "nullable-long" => crate::ReturnType::NullableLong,
             "nullable-string" => crate::ReturnType::NullableString,
             "nullable-boolean" => crate::ReturnType::NullableBoolean,
             "nullable-char" => crate::ReturnType::NullableChar,

@@ -1,4 +1,4 @@
-# Long literals, value transport, and arithmetic
+# Long values, operators, and native methods
 
 2026-10-16, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
 
@@ -59,9 +59,46 @@ match the full expected output, with structured reconstruction and stable
 re-export. The VM already supplies these operations; no new encoding is needed.
 Artifacts: `scratch/check-long-bits/`.
 
-Conversions, nullable/container values, and native Long methods were not
-established by this specimen. See the
-[current contract](../specs/compiler-subset.md#long-values) for accepted scope.
+## Native methods and nullable conversions
 
+**Observed (2026-10-17):** the grouped SDK 9.2.0 / fr265 specimen exercises
+Long `abs`, `format`, `toLong`, `toNumber`, `toString`, `equals`, `compareTo`,
+inherited `hashCode`/`weak`, Number `toLong`, and String
+`toLong`/`toLongWithBase`. SDK/generated consoles match all 194 expected lines;
+both programs reconstruct through structured sections and stable re-export.
+Artifacts: `scratch/check-long-methods/`.
+
+Long narrowing retains signed low 32 bits; Number widening sign-extends.
+Minimum Long `abs` wraps to minimum. Equality distinguishes Long from equal
+Number/Boolean/Char/String values in both receiver orders. Numeric comparisons
+have the expected sign across these numeric classes and signed extrema.
+Hash checks establish repeatability and equality consistency, not a fixed hash.
+Effect markers confirm receiver-before-argument dispatch, including discarded
+calls.
+
+String conversions accept numeric prefixes (`"42tail"` gives 42, `"3.14"` gives
+3), reject invalid prefixes and signed overflow with Null, and accept bases
+0, 2, 16, and 36. Nullable parameters/results, copies, conditional joins, retry
+loops, and direct guards retain Long values across saved IR and application
+assembly. These observations do not establish arbitrary String parsing syntax
+or all invalid-base behavior.
+
+The public [Object weak contract][object] includes immutable Long among values
+returned directly. The SDK statically types `Long.weak()` as
+`WeakReference<Long>` and rejects chaining Long-only `toLong`/`toNumber` methods.
+Using inherited `equals`/`toString` instead confirms the returned value behaves
+as the original Long, including maximum Long. Our effective Long specialization
+follows that runtime result; it does not claim the SDK's static type is Long.
+
+SDK symbols identify `toLong` as `0x008000a9` and `toLongWithBase` as
+`0x00800b1c`. Existing native dispatch instructions suffice; no opcode or DATA
+record extension is required. Public method introductions are checked separately
+in source and saved-IR tests, including Long's own `equals` since 1.3.0 rather
+than the inherited Object 1.0.0 declaration.
+
+Float/Double conversions and Long container/field storage remain outside this
+probe. See the [current contract](../specs/compiler-subset.md#long-values).
+
+[object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html#weak-instance_function
 [api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Long.html
 [example]: ../../examples/compiler-long-values/README.md

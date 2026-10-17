@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 pub(crate) fn parse_type(tag: &str) -> Option<Type> {
     Some(match tag {
         "integer" => Type::named("Toybox.Lang.Number"),
+        "long" => Type::named("Toybox.Lang.Long"),
+        "nullable-long" => Type::Union(vec![Type::named("Toybox.Lang.Long"), Type::Null]),
         "char" => Type::named("Toybox.Lang.Char"),
         "boolean" => Type::named("Toybox.Lang.Boolean"),
         "string" => Type::named("Toybox.Lang.String"),
@@ -24,11 +26,13 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
 pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     [
         "integer",
+        "long",
         "char",
         "boolean",
         "string",
         "null",
         "nullable-integer",
+        "nullable-long",
         "nullable-string",
         "nullable-boolean",
         "nullable-char",
@@ -46,6 +50,7 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     }
     for tag in [
         "nullable-integer",
+        "nullable-long",
         "nullable-string",
         "nullable-boolean",
         "nullable-char",

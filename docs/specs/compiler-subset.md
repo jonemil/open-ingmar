@@ -300,7 +300,7 @@ qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.String`,
 `Void`. Native short names, module aliases in annotations, and general unions
 are outside this subset. Unqualified declared source View names additionally
 provide [exact source contracts](compiler-classes.md#source-class-signatures).
-Number, String, Boolean, and Char annotations additionally accept `or Null`
+Number, Long, String, Boolean, and Char annotations additionally accept `or Null`
 for both parameters and results. Reversed alternatives, parenthesized unions,
 and other type syntax remain unsupported. These declarations require no `using`
 statement.
@@ -394,7 +394,8 @@ escape syntax.
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply
 `System.println(expression);`. Print statements may occur between local
-initializations and accept one Number, String, Boolean, or Char value. String types
+initializations and accept one Number, Long, String, Boolean, or Char value.
+String types
 propagate through locals and annotated function parameters/results; incompatible
 uses are rejected. Addition follows the operator table above, including Char
 concatenation and supported scalar conversions. Arbitrary
@@ -540,7 +541,7 @@ right. The condition must be Boolean. Evaluate it once, then evaluate only the
 selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
-Supported arm types match exactly: Number, Char, Boolean, String, Null, or an
+Supported arm types match exactly: Number, Long, Char, Boolean, String, Null, or an
 invariant Number/Char Array. Scalar alternatives may also join with Null
 or their existing nullable type, producing the corresponding scalar-or-Null. No
 Char-to-Number promotion, heterogeneous union, nullable Array, class join,
@@ -762,7 +763,7 @@ A void function may contain only its return, so the operation bound is now
 sequence and discard the VM result with `popv`.
 
 The [console application profile](console-application.md) prints a value entry's
-Number, String, Boolean, or Char result and discards a Void entry's result.
+Number, Long, String, Boolean, or Char result and discards a Void entry's result.
 The [example][void-example] and
 [simulator evidence][void-evidence] verify both void return forms and caller
 continuation after discarded calls. Source class/receiver syntax follows the
@@ -820,10 +821,11 @@ Either Long operand makes the result Long; Number/Number keeps Number. Promotion
 belongs to these operators only: arguments, returns, and assignments still
 require their declared storage type. Long locals support the corresponding
 compound assignments with Number/Long right operands; a Number local cannot
-store a promoted Long result. Nullable Number operands require a non-null proof.
+store a promoted Long result. Nullable numeric operands require a non-null proof.
 
 These pairs also support all six numeric comparisons, returning Boolean. Long
-mixing with Char, Boolean, String, or Null remains unsupported. Unary plus
+mixing with Char, Boolean, String, or Null remains unsupported for operators;
+nullable Long equality with Null supports branch proofs. Unary plus
 preserves the value; unary minus, addition, subtraction, and multiplication
 wrap to signed 64-bit results. Integer division truncates toward zero, and
 remainder follows the dividend's sign. Zero division and minimum Long divided
@@ -843,9 +845,36 @@ Long into Boolean; conditions still require Boolean. Prefix/postfix `++` and
 boundaries. Bitwise/shift compound assignments follow operator promotion and
 must preserve the local's storage type. Updates remain invalid as expressions.
 
-Native Long methods/conversions, nullable Long, Long Array/Dictionary elements, conditional Long joins, and Long fields
-remain deferred. Existing native scalar argument profiles remain bounded to
-their documented types. See the
+Long receivers support these native methods:
+
+| Method | Result | Since API |
+|---|---|---|
+| `abs()`, `toLong()` | Long | 1.0.0 |
+| `toNumber()` | Number | 1.0.0 |
+| `toString()`, `format(String)` | String | 1.0.0 |
+| inherited `hashCode()` | Number | 1.0.0 |
+| inherited `weak()` | Long | 1.2.0 |
+| `equals(scalar or nullable scalar)` | Boolean | 1.3.0 |
+| `compareTo(Number, Long, Boolean, or Char)` | Number | 5.0.0 |
+
+`toNumber()` retains the low 32 bits as a signed Number. Number's `toLong()`
+sign-extends its value, since API 1.0.0. `abs()` of minimum Long wraps to minimum.
+Equality does not equate Long and Number values; comparison supports numeric
+cross-types. Native argument profiles and null-proof requirements follow the
+[shared rules](#native-value-calls).
+
+String `toLong()` and `toLongWithBase(Number)` return Long or Null, since API
+3.1.0. The runtime parses a numeric prefix and returns Null for an invalid prefix
+or signed 64-bit overflow. Base 0 detects prefixes; 2..=36 specifies a radix.
+The compiler passes conversion content and bases through without validation.
+
+`Long or Null` parameters/results, locals, and conditional joins use the shared
+nullable rules. A direct non-null proof is required before numeric operations,
+printing, or receiver dispatch. Matching Long arms join without conversion;
+mixed Number/Long conditional arms remain invalid.
+
+Float/Double conversions, Long Array/Dictionary elements, and Long fields remain
+deferred. See the
 [example](../../examples/compiler-long-values/README.md) and
 [encoding/runtime evidence](../investigations/compiler-long-values.md).
 
@@ -909,8 +938,8 @@ Opaque and typed references also inherit `equals(other)` → Boolean and
 `hashCode()` → Number from Object, since API 1.0.0. Equality tests Dictionary
 identity, including across different key/value contracts; separate dictionaries
 with equal contents compare unequal. Supported arguments are bounded typed or
-opaque Dictionary references, Number/String/Boolean/Char, Null, and their supported
-nullable forms. Array and source/native object arguments remain outside this
+opaque Dictionary references, Number/Long/String/Boolean/Char, Null, and their
+supported nullable forms. Array and source/native object arguments remain outside this
 profile. Nullable callback Dictionary arguments need no guard; a nullable
 receiver requires a non-null proof.
 
@@ -985,15 +1014,16 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `format(String)` | `Lang.Number` | String |
 | `abs()` | `Lang.Number` | Number |
 | `toNumber()` | `Lang.Number` | Number |
-| `compareTo(Number, Boolean, or Char)` | `Lang.Number` | Number |
+| `toLong()` | `Lang.Number` | Long |
+| `compareTo(Number, Long, Boolean, or Char)` | `Lang.Number` | Number |
 | `equals(scalar or nullable scalar)` | `Lang.Object` | Boolean |
 | `hashCode()` | `Lang.Object` | Number |
 
 Number `compareTo` requires API 5.0.0; the other listed Number methods require
 1.0.0. Its declaration takes Object, but current lowering admits Number or
-Boolean or Char only. Unchecked nullable comparison arguments are rejected.
+Long, Boolean, or Char only. Unchecked nullable comparison arguments are rejected.
 `equals`
-accepts Number, String, Boolean, Char, Null, or their nullable scalar forms;
+accepts Number, Long, String, Boolean, Char, Null, or their nullable scalar forms;
 it returns Boolean. Dictionary arguments to Number `compareTo` remain unsupported.
 Object arguments use catalogue-declared inheritance, not implicit conversions
 or acceptance of unknown classes. Scalar user-function contracts remain exact.
@@ -1020,7 +1050,7 @@ runtime without compiler validation. See the
 Boolean receivers support `toString()` returning String, `hashCode()` returning
 Number, and `equals` returning Boolean with the same scalar/nullable argument
 profile as Number/String equality. These inherited methods date from API 1.0.0.
-Boolean `compareTo` returns Number and accepts Number/Boolean/Char arguments
+Boolean `compareTo` returns Number and accepts Number/Long/Boolean/Char arguments
 since API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
 does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
@@ -1028,7 +1058,7 @@ does not enable Boolean arithmetic or ordering operators. See the
 Char values originate from literals or Number's zero-argument `toChar()` and are distinct
 from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
 returning Number, and `toString()` returning String. Char's direct `compareTo`
-returns Number for Number/Boolean/Char arguments, since API 5.0.0. Inherited
+returns Number for Number/Long/Boolean/Char arguments, since API 5.0.0. Inherited
 `equals` accepts the scalar/nullable scalar profile above and returns Boolean;
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
@@ -1039,7 +1069,7 @@ Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).
 
-Number, String, and Boolean receivers also support zero-argument `weak()` since
+Number, Long, String, and Boolean receivers also support zero-argument `weak()` since
 API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
 It remains an effectful native call; the compiler does not replace it with its
 receiver. Nullable scalar receivers require a direct non-null proof
@@ -1054,7 +1084,7 @@ Existing user-call arguments and return restrictions remain unchanged.
 
 Postfix calls bind more tightly than addition/subtraction; parenthesize a
 computed arithmetic receiver, for example `(n + 1).format("%03d")`. Literal,
-local, Number/String/Boolean/Char parameter, and supported call-result receivers
+local, Number/Long/String/Boolean/Char parameter, and supported call-result receivers
 are accepted. Evaluate the receiver first, then arguments left to right, then invoke
 the member.
 
@@ -1440,13 +1470,15 @@ declarations are unsupported. See [evidence](../investigations/compiler-visible-
 
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return
-Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1. String `substring` and user calls may also return nullable
-values. Compare nullable parameters or stored results with null.
+Number or Null; `toNumberWithBase(Number)` has the same result since 1.4.1.
+String `toLong()`/`toLongWithBase(Number)` return Long or Null since 3.1.0.
+String `substring` and user calls may also return nullable values. Compare
+nullable parameters or stored results with null.
 A direct `if (value == null)` or `if (null == value)` proves that parameter or
 local non-null on the false path. Direct `value != null` or `null != value`
 proves non-null on the true path. Boolean negation reverses this proof edge;
 `if (!(value == null))` proves non-null on the true path. Fresh reads there have
-the non-null Number, String, Boolean, or Char type
+the non-null Number, Long, String, Boolean, or Char type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc

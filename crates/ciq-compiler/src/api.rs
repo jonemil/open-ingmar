@@ -440,6 +440,7 @@ fn build_core() -> Catalogue {
     let initial = ApiLevel(1, 0, 0);
     let object = "Toybox.Lang.Object";
     let number = "Toybox.Lang.Number";
+    let long = "Toybox.Lang.Long";
     let string = "Toybox.Lang.String";
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let mut classes = BTreeMap::new();
@@ -536,7 +537,7 @@ fn build_core() -> Catalogue {
     ];
     classes.get_mut("Toybox.Lang.WeakReference").unwrap().since = ApiLevel(1, 2, 0);
     let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
-    weak.receiver_results = [number, string, "Toybox.Lang.Boolean"]
+    weak.receiver_results = [number, long, string, "Toybox.Lang.Boolean"]
         .into_iter()
         .map(|name| (name.into(), Type::named(name)))
         .collect();
@@ -556,7 +557,32 @@ fn build_core() -> Catalogue {
             ApiLevel(5, 0, 0),
         ),
     ];
+    classes.get_mut(long).unwrap().methods = vec![
+        method("abs", vec![], Type::named(long), initial),
+        method("toNumber", vec![], Type::named(number), initial),
+        method("toLong", vec![], Type::named(long), initial),
+        method("toString", vec![], Type::named(string), initial),
+        method(
+            "format",
+            vec![Type::named(string)],
+            Type::named(string),
+            initial,
+        ),
+        method(
+            "equals",
+            vec![Type::Union(vec![Type::named(object), Type::Null])],
+            Type::named("Toybox.Lang.Boolean"),
+            ApiLevel(1, 3, 0),
+        ),
+        method(
+            "compareTo",
+            vec![Type::named(object)],
+            Type::named(number),
+            ApiLevel(5, 0, 0),
+        ),
+    ];
     classes.get_mut(number).unwrap().methods = vec![
+        method("toLong", vec![], Type::named(long), initial),
         method("abs", vec![], Type::named(number), initial),
         method("toNumber", vec![], Type::named(number), initial),
         method(
@@ -634,6 +660,18 @@ fn build_core() -> Catalogue {
         ),
     ];
     classes.get_mut(string).unwrap().methods = vec![
+        method(
+            "toLong",
+            vec![],
+            Type::Union(vec![Type::named(long), Type::Null]),
+            ApiLevel(3, 1, 0),
+        ),
+        method(
+            "toLongWithBase",
+            vec![Type::named(number)],
+            Type::Union(vec![Type::named(long), Type::Null]),
+            ApiLevel(3, 1, 0),
+        ),
         method(
             "toUtf8Array",
             vec![],

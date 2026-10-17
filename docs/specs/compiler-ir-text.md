@@ -199,11 +199,13 @@ source suffixes, leading plus, hexadecimal text, and values outside i64 are
 invalid. `Operation::Long` holds i64; text/native construction share the same
 scalar type and value-use checks.
 
-`long` is a parameter and user-call result tag. Functions may infer uniform Long
+`long` and `nullable-long` are parameter and user-call result tags. Functions may infer uniform Long
 returns; `.function result=long` is not a separate field. Unit calls must match
 callee signatures exactly, including Long versus Number. Locals and printing
 retain the Long type; unsupported scalar operators and container forms remain
 invalid. API checking uses `Toybox.Lang.Long`, since 1.0.0.
+Explicit nullable returns use `.function result=nullable-long`; native Long
+methods and String conversions use the shared `.call-native` representation.
 
 Lower zero as `lpushz`; other values use `lpush` with one big-endian eight-byte
 operand containing the signed value's two's-complement bits. The semantic IR
@@ -638,7 +640,7 @@ ciq-ir
 
 `.call %<result-id> <module> <member> [result=<type>] [%<argument-id> ...]`
 defines the result of a positional-argument call to a top-level user module.
-The result type is `integer`, `long`, `string`, `boolean`, `char`, `char-array`,
+The result type is `integer`, `long`, `nullable-long`, `string`, `boolean`, `char`, `char-array`,
 `number-array`, `boolean-array`, `string-array`, `nullable-number-array`,
 `nullable-string-array`, `nullable-boolean-array`, `nullable-char-array`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, or
@@ -945,9 +947,10 @@ duplicate definitions, and unused/reused values are errors in native and text
 construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
-Type tags are `integer`, `char`, `boolean`, `string`, `null`, `nullable-integer`,
-`nullable-string`, `nullable-boolean`, `nullable-char`, `array-number`, and
-`array-char`. They map to the existing core/nullable/invariant Array contracts. Availability checks apply to the
+Type tags are `integer`, `long`, `char`, `boolean`, `string`, `null`,
+`nullable-integer`, `nullable-long`, `nullable-string`, `nullable-boolean`,
+`nullable-char`, `array-number`, and `array-char`. They map to the existing
+core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 Lower a value edge to its operand and `goto`; the parameter emits no load, copy,
@@ -1066,7 +1069,7 @@ Array categories include `char-array`, `number-array`, `boolean-array`,
 `string-array`,
 `nullable-number-array`, `nullable-string-array`, `nullable-boolean-array`,
 `nullable-char-array`, and `view-array`.
-Ordinary signatures also accept `long`,
+Ordinary signatures also accept `long`, `nullable-long`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
@@ -1300,7 +1303,7 @@ ciq-ir
 
 `.call-native` for String `find`, `toNumber`, and `toNumberWithBase` defines
 Number-or-Null according to its API contract; String `substring` defines
-String-or-Null. Index API
+String-or-Null. String `toLong` and `toLongWithBase` define Long-or-Null. Index API
 requirements are the same as the [source contract][nullable-source]. The existing
 `.local`, `.read`, `.null`, `.equal`, `.not-equal`, and
 `.branch` forms carry this behavior; no assertion or unchecked cast operation
@@ -1338,7 +1341,7 @@ all facts; IR text carries no trusted narrowing metadata. See
 ## Nullable user signatures
 
 A function declaration may carry `result=nullable-integer`,
-`result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
+`result=nullable-long`, `result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
 Every value return must be Null, the corresponding scalar type, or the same
 union. A void return is invalid. The declared union is
 preserved even when all returns are scalar or all are Null; canonical text

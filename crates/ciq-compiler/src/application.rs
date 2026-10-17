@@ -32,6 +32,8 @@ const LENGTH: u32 = 0x008000bb;
 const SUBSTRING: u32 = 0x008000bd;
 const FIND: u32 = 0x008000bc;
 const TO_NUMBER: u32 = 0x008000a7;
+const TO_LONG: u32 = 0x008000a9;
+const TO_LONG_WITH_BASE: u32 = 0x00800b1c;
 const TO_CHAR: u32 = 0x008004c6;
 const TO_CHAR_ARRAY: u32 = 0x008004c4;
 const TO_UTF8_ARRAY: u32 = 0x008004c5;
@@ -286,6 +288,7 @@ pub fn build_console_application(
         entry.return_type(),
         ReturnType::NullableInteger
             | ReturnType::NullableString
+            | ReturnType::NullableLong
             | ReturnType::NullableBoolean
             | ReturnType::NullableChar
             | ReturnType::TypedDictionary(_)
@@ -346,6 +349,8 @@ pub fn build_console_application(
         ("substring".into(), SUBSTRING),
         ("find".into(), FIND),
         ("toNumber".into(), TO_NUMBER),
+        ("toLong".into(), TO_LONG),
+        ("toLongWithBase".into(), TO_LONG_WITH_BASE),
         ("toChar".into(), TO_CHAR),
         ("toCharArray".into(), TO_CHAR_ARRAY),
         ("toUtf8Array".into(), TO_UTF8_ARRAY),
@@ -446,6 +451,8 @@ pub fn build_console_application(
         ("__ciq_native_substring".into(), SUBSTRING),
         ("__ciq_native_find".into(), FIND),
         ("__ciq_native_toNumber".into(), TO_NUMBER),
+        ("__ciq_native_toLong".into(), TO_LONG),
+        ("__ciq_native_toLongWithBase".into(), TO_LONG_WITH_BASE),
         ("__ciq_native_toChar".into(), TO_CHAR),
         ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),
         ("__ciq_native_toUtf8Array".into(), TO_UTF8_ARRAY),

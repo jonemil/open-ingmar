@@ -101,6 +101,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
     let nullable_boolean = Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]);
     let nullable_char = Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]);
+    let nullable_long = Type::Union(vec![Type::named("Toybox.Lang.Long"), Type::Null]);
     let null_check = kind.is_equality()
         && ((left == &Type::Null
             && (right == &Type::Null
@@ -108,12 +109,14 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || right == &nullable_number
                 || right == &nullable_string
                 || right == &nullable_boolean
-                || right == &nullable_char))
+                || right == &nullable_char
+                || right == &nullable_long))
             || ((left == &nullable_dictionary
                 || left == &nullable_number
                 || left == &nullable_string
                 || left == &nullable_boolean
-                || left == &nullable_char)
+                || left == &nullable_char
+                || left == &nullable_long)
                 && right == &Type::Null));
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
@@ -149,6 +152,7 @@ mod tests {
         let types = [
             ValueType::Integer,
             ValueType::Long,
+            ValueType::NullableLong,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,
@@ -239,12 +243,14 @@ mod tests {
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableChar
+                                    | ValueType::NullableLong
                             ) | (
                                 ValueType::NullableDictionary
                                     | ValueType::NullableInteger
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
-                                    | ValueType::NullableChar,
+                                    | ValueType::NullableChar
+                                    | ValueType::NullableLong,
                                 ValueType::Null
                             )
                         );
@@ -300,6 +306,7 @@ mod tests {
         for ty in [
             ValueType::Integer,
             ValueType::Long,
+            ValueType::NullableLong,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,

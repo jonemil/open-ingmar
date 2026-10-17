@@ -84,7 +84,7 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Long { return 1l << false; }",
         "function f() as Toybox.Lang.Long { var value = 1l; return value++; }",
         "function f() { if (1l) { return 1; } return 0; }",
-        "function f() as Toybox.Lang.Long { return true ? 1l : 2l; }",
+        "function f() as Toybox.Lang.Long { return true ? 1l : 2; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

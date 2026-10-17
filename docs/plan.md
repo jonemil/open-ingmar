@@ -12,13 +12,11 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Numeric types and deferred methods.** Implement bounded native Long
-   methods and conversions using the existing integer contracts. Add nullable
-   Long when conversion consumers require it. Isolate unverified division
-   boundaries with SDK probes. Then
-   add Float/Double values and their operations. Grow nullable/container Long
-   contracts as their consumers require them. Revisit Number/String/Boolean/Char
-   methods as their required value types become available.
+1. **Numeric types and deferred methods.** Add Float/Double values, operations,
+   and grouped native methods/conversions. Extend Long container contracts when
+   their consumers require them. Isolate unverified integer division boundaries
+   with SDK probes. Revisit Number/String/Boolean/Char methods as their required
+   value types become available.
 2. **Object and callable/reference facilities.** Grow shared Object contracts,
    Symbol and Method values/invocation, and ordinary WeakReference consumers.
    Use these prerequisites to revisit deferred core methods, including Array
@@ -112,8 +110,11 @@ while preserving that behavior and our own reconstruction guarantees.
 
 ## Native Lang strategy
 
-Organize native Lang work around one class at a time. The compiler implements
-contracts, availability checks, and dispatch; the runtime supplies method bodies.
+Organize native Lang work around one class at a time. Batch methods that fit
+the available types, including closely related prerequisites when practical,
+to share a complete-app specimen and final validation run. The compiler
+implements contracts, availability checks, and dispatch; the runtime supplies
+method bodies.
 Completing every method of a class is not a prerequisite for moving on.
 
 - Review the class's methods, including inherited members, together. Record
