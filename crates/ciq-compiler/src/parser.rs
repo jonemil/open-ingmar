@@ -1752,6 +1752,8 @@ impl Parser<'_> {
                     let at = self.offset;
                     let ty = match self.path()?.as_str() {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
+                        "Toybox.Lang.Object" => crate::ParameterType::LangObject,
+                        "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
                         "Toybox.Lang.Long" => crate::ParameterType::Long,
                         "Toybox.Lang.Double" => crate::ParameterType::Double,
                         "Toybox.Lang.Float" => crate::ParameterType::Float,
@@ -1798,6 +1800,9 @@ impl Parser<'_> {
                         self.expect(Kind::Word("Null"), "'Null'")?;
                         match ty {
                             crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
+                            crate::ParameterType::LangObject => {
+                                crate::ParameterType::NullableObject
+                            }
                             crate::ParameterType::Long => crate::ParameterType::NullableLong,
                             crate::ParameterType::Double => crate::ParameterType::NullableDouble,
                             crate::ParameterType::Float => crate::ParameterType::NullableFloat,
@@ -1824,6 +1829,8 @@ impl Parser<'_> {
             let at = self.offset;
             let ty = match self.path()?.as_str() {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
+                "Toybox.Lang.Object" => crate::ReturnType::LangObject,
+                "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
                 "Toybox.Lang.Long" => crate::ReturnType::Long,
                 "Toybox.Lang.Double" => crate::ReturnType::Double,
                 "Toybox.Lang.Float" => crate::ReturnType::Float,
@@ -1863,6 +1870,7 @@ impl Parser<'_> {
                 self.expect(Kind::Word("Null"), "'Null'")?;
                 match ty {
                     crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
+                    crate::ReturnType::LangObject => crate::ReturnType::NullableObject,
                     crate::ReturnType::Long => crate::ReturnType::NullableLong,
                     crate::ReturnType::Double => crate::ReturnType::NullableDouble,
                     crate::ReturnType::Float => crate::ReturnType::NullableFloat,

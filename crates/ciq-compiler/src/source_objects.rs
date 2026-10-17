@@ -75,7 +75,7 @@ impl Origins {
                     }
                 }
             }
-            Operation::LocalRead { result, local } => {
+            Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
                 if let Some(Some(class)) = self.locals.get(local) {
                     self.values.insert(*result, class.clone());
                 }

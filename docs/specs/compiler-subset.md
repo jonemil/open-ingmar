@@ -1066,20 +1066,23 @@ contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Object `method` and ordinary `weak` need callable/weak-reference
-contracts before accepting their results.
+contracts before acceptance. Object `method` needs Symbol/callable contracts;
+ordinary `weak` follows the [bounded reference profile](#ordinary-weak-references).
 
 
 ## Object equality and container observers
 
-Supported numeric, String, Boolean, Char, Array, and Dictionary receivers accept
-`equals(other)` → Boolean. Its bounded argument profile includes those scalar
+Supported numeric, String, Boolean, Char, Array, Dictionary, opaque Object,
+and WeakReference receivers accept `equals(other)` → Boolean. Its bounded
+argument profile includes those scalar
 types, all supported invariant Array contracts, opaque or typed Dictionary
-references, Null, and supported nullable forms. Comparing containers does not
-require matching element/key/value contracts and does not convert or erase
+references, opaque Object/WeakReference values, Null, and supported nullable
+forms. Comparing containers does not require matching element/key/value
+contracts and does not convert or erase
 their types. Nullable callback Dictionary arguments require no proof; nullable
 receivers still require a non-null proof. Arbitrary source/native object
-arguments, nested containers, and general Object-typed storage remain deferred.
+arguments and nested containers remain deferred. Opaque Object storage and its
+limits follow the [weak-reference contracts](#ordinary-weak-references).
 
 All supported Arrays and Dictionaries inherit `equals` and `hashCode()` →
 Number from Object, since API 1.0.0. Element/key/value availability is checked
@@ -1093,7 +1096,7 @@ results. Native dispatch retains runtime semantics for scalar equality,
 including String content comparison and numeric class distinctions; no result
 or hash is folded. Scalar override/API requirements remain in their respective
 sections. This profile does not enable Array/Dictionary equality operators,
-Object callbacks, or ordinary weak-reference values. See the
+or Object callbacks. See the
 [observer evidence](../investigations/compiler-object-observers.md).
 
 ## Native value calls
@@ -1165,8 +1168,8 @@ API 1.2.0, with Char receivers additionally requiring 1.3.0. Its effective resul
 is the exact receiver type, not WeakReference.
 It remains an effectful native call; the compiler does not replace it with its
 receiver. Nullable scalar receivers require a direct non-null proof
-before the call. Other classes and ordinary object weak references are outside
-this lowering profile. See the [weak-result evidence][weak-evidence].
+before the call. Ordinary references follow the separate profile below.
+See the [weak-result evidence][weak-evidence].
 
 String results may initialize/replace a String local or be printed. Number
 results support integer locals, arithmetic, comparisons, user-call
@@ -1209,6 +1212,43 @@ a String contains a valid format pattern.
 [Native call IR](compiler-ir-text.md#native-value-calls) preserves receiver/member
 identity separately from executable IDs. Runtime evidence and reproduction are
 in the [native call experiment](../investigations/compiler-native-calls.md).
+
+## Ordinary weak references
+
+Supported Arrays, opaque/typed Dictionaries, and WeakReference receivers support
+`weak()` → `Toybox.Lang.WeakReference`, since API 1.2.0. WeakReference is a
+non-null value with `get()` → `Toybox.Lang.Object or Null` and `stillAlive()` →
+Boolean, both since 1.2.0. It also inherits `toString`, `equals`, and `hashCode`;
+calls retain runtime behavior rather than synthesizing wrapper identity.
+There is no `clear()` method. Release a strong reference through assignment or
+frame exit; the runtime determines when the target ceases to exist.
+
+Source signatures accept `Toybox.Lang.WeakReference`, `Toybox.Lang.Object`, and
+`Toybox.Lang.Object or Null`. They survive locals, function calls/results, saved
+IR, and ordinary branch/loop null proofs. A retrieved Object is a strong value;
+saving it can keep the target alive. Save and guard that value before calling
+its supported Object methods (`toString`, `equals`, `hashCode`). Neither
+`stillAlive()` nor testing a separate `get()` call proves a later result non-null.
+
+Object contracts erase concrete type information without changing runtime
+values. Compatible values may pass to Object parameters/results and replace
+opaque Object locals; a nullable Object local also accepts Null. Erasure cannot
+be reversed into a typed Array/Dictionary or a scalar. Object joins accept
+matching opaque contracts and Object/Null alternatives; matching WeakReference
+arms also join. These rules do not introduce heterogeneous container joins.
+
+The declared Object type does not establish a WeakReference result from
+`Object.weak()`: the runtime value might be an immutable scalar. That receiver
+path, other native/source weak targets, nullable WeakReference contracts,
+constructors, casts, and concrete recovery remain deferred. The new types do
+not acquire arithmetic, truthiness, direct printing, or general equality
+operators; nullable Object/Null tests use the existing proof rules.
+
+Hidden reference temporaries transfer ownership on their final read using IR
+`.take`; private container builders release their frame reference on finish.
+Source locals retain their assignment/frame lifetimes. Backend staging must not
+silently extend a target's strong lifetime. See the
+[lifetime specimen and evidence](../investigations/compiler-weak-references.md).
 
 ## Char arrays
 
@@ -1271,7 +1311,8 @@ array.
 Convert arrays to String before printing. Arrays cannot feed arithmetic,
 concatenation, comparison operators, Boolean conditions, or
 console entry results. Native Array constructors, `sort`, and ordinary
-object weak references remain unsupported. Native Array calls may be values or
+weak targets outside the bounded profile remain unsupported. Native Array
+calls may be values or
 statements that discard the result.
 Guard nullable String receivers before conversion; that proof does not imply
 support for nullable Array results. See the
@@ -1416,7 +1457,7 @@ Non-null indexed updates/compounds follow scalar operator promotion and must
 retain the element type. For example, `Float += Number` is valid but
 `Float += Long` would produce Double and is rejected. Nullable elements cannot
 be compound targets without a supported direct non-null read contract.
-Sorting, Object callbacks/weak references, nested containers, nullable Array
+Sorting, Object callbacks, nested containers, nullable Array
 references, and whole-array expression joins outside the existing Number/Char profile
 remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
 and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
@@ -1440,7 +1481,7 @@ String-array contract supplies the type of a direct `[]`.
 and `slice` use the existing Array contracts with String substituted for the
 element type. Search/removal compare String text. Array/String types,
 construction, indexing, `size`, and `toString` require API 1.0.0; the other
-methods require 1.3.0. Sort and Object callbacks/weak references remain deferred.
+methods require 1.3.0. Sort and Object callbacks remain deferred.
 Arrays must be converted to String before printing.
 
 See the [example](../../examples/compiler-string-arrays/README.md) and
@@ -1458,7 +1499,7 @@ Literal-only arrays use `apush` constants; computed elements use ordered private
 construction, including conditional/short-circuit expressions. Copies share
 mutation; repeated constant loads are independently mutable. The supported
 Array methods and API levels match the String/Number profile. Sorting and
-Object callbacks/weak references remain deferred. See the
+Object callbacks remain deferred. See the
 [example](../../examples/compiler-boolean-arrays/README.md) and
 [evidence](../investigations/compiler-boolean-arrays.md).
 

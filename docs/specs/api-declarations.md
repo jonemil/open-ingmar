@@ -19,7 +19,8 @@ effective result, and required API level. `Method.result` retains the generic
 signature; `ResolvedMethod.result` substitutes an exact receiver override.
 Overrides do not propagate to subclasses. `Object.weak` therefore resolves to
 Number, String, or Boolean for those exact immutable receivers, while other
-receivers retain WeakReference. This does not enable ordinary weak references.
+receivers retain WeakReference. Executable support follows the
+[bounded reference profile](compiler-subset.md#ordinary-weak-references).
 
 Assignability follows declared superclass paths without implicit conversion or
 acceptance of unknown classes. Every alternative of an actual union must satisfy
@@ -46,13 +47,17 @@ support specialization and invariant contracts. The compiler still uses the
 [bounded executable Dictionary profile](compiler-subset.md#dictionary-values),
 including typed source/saved IR, lookup/mutation, typed `keys`/`values` Arrays,
 Dictionary's own `toString` dispatch, and inherited Object `equals`/`hashCode`
-with Dictionary-specific argument/equality contracts.
+with shared argument and Dictionary identity contracts.
 
 Declaration availability, assignability, and executable support are separate
 checks. A broad Object parameter can have a narrower executable profile.
 Enum constants retain their declared types even if VM encoding uses a Number.
 Source class identity and native projection follow the
 [class specification](compiler-classes.md).
+
+WeakReference `get()` returns Object or Null and `stillAlive()` returns Boolean;
+both members and their class require API 1.2.0. Opaque Object results do not
+recover the target's concrete container or scalar contract.
 
 ## Availability
 
@@ -96,14 +101,14 @@ listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
 - **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
-  Method values. Ordinary `weak` (1.2.0) needs WeakReference values/consumers.
+  Method values. Broader `weak` targets and Object-typed `weak` results need
+  contracts beyond the bounded Array/Dictionary/WeakReference profile.
   The immutable numeric/String/Boolean/Char specialization does not establish
   this behavior.
   [Boolean](../investigations/compiler-boolean-methods.md),
   [Char](../investigations/compiler-char-methods.md), and
   [weak-result evidence](../investigations/compiler-immutable-weak.md).
-- **Array:** sorting needs comparator/callable support. Ordinary weak references
-  need lifetime/get/clear evidence; equality and hashing use the
+- **Array:** sorting needs comparator/callable support. Equality and hashing use the
   [shared observer profile](compiler-subset.md#object-equality-and-container-observers).
 
 [The plan](../plan.md) owns sequencing and newly discovered prerequisites.

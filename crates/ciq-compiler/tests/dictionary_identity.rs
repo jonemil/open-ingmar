@@ -94,7 +94,7 @@ fn dictionary_identity_does_not_enable_unrelated_object_or_operator_profiles() {
         "return d.equals(d, d);",
         "return d.equals(new Toybox.WatchUi.View());",
         "return d == d;",
-        "return d.weak();",
+        "return d.weak(1);",
     ] {
         let source =
             format!("function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Boolean {{ {body} }}");

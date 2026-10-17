@@ -12,8 +12,8 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and callable/reference facilities.** Grow shared Object contracts,
-Symbol and Method values/invocation, and ordinary WeakReference consumers.
+**Object and callable/reference facilities.** Grow Symbol and Method
+values/invocation and shared Object contracts.
 Use these prerequisites to revisit deferred core methods, including Array
 comparators. Plan `has`/`instanceof` and their checking/refinement rules.
 
@@ -28,11 +28,12 @@ Keep heterogeneous Dictionary values, Null keys, and nested containers deferred
 under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established. Dictionary
-callable and ordinary weak-reference methods belong to the shared Object work.
+callable methods belong to the shared Object work.
 
-Array sorting remains deferred until comparator/callable support. Ordinary
-Array weak references need lifetime/get/clear evidence in the Object-contract
-phase; the immutable weak specialization does not establish them.
+Array sorting remains deferred until comparator/callable support. Broader weak
+targets, nullable WeakReference storage, and concrete recovery from opaque
+Object results need their own type/refinement contracts. Keep hidden temporary
+ownership explicit when adding new source staging paths.
 
 A blocked method should lead to its core type/operator/callable prerequisite or
 another core class group. Retain explicit deferred-method inventories; declaring
@@ -49,7 +50,7 @@ and extend numeric update contracts alongside their value types.
 Keep generic signatures, invariant container elements, assignability, and
 nullable branch proofs shared across source and saved IR. Extend constructor
 and object-reference contracts as core classes need them. Comparator calls and
-ordinary object weak references need their own dispatch/lifetime evidence;
+broader object weak targets need their own dispatch/lifetime evidence;
 keep them distinct from the verified [immutable weak specialization][weak-results].
 Keep semantic operations explicit enough to select established VM instructions,
 following the [lowering review](investigations/natural-lowering.md). Preserve

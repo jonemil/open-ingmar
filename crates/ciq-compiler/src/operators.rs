@@ -126,6 +126,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
         || char_equality;
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
+    let nullable_object = Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]);
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
     let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
     let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
@@ -137,6 +138,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let null_check = kind.is_equality()
         && ((left == &Type::Null
             && (right == &Type::Null
+                || right == &nullable_object
                 || right == &nullable_dictionary
                 || right == &nullable_number
                 || right == &nullable_string
@@ -145,7 +147,8 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || right == &nullable_float
                 || right == &nullable_double
                 || right == &nullable_long))
-            || ((left == &nullable_dictionary
+            || ((left == &nullable_object
+                || left == &nullable_dictionary
                 || left == &nullable_number
                 || left == &nullable_string
                 || left == &nullable_boolean
@@ -433,7 +436,7 @@ mod tests {
         assert_eq!(ValueType::from_api_type(&Type::Void), None);
         assert_eq!(
             ValueType::from_api_type(&Type::named("Toybox.Lang.Object")),
-            None
+            Some(ValueType::LangObject)
         );
     }
 }

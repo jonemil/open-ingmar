@@ -444,6 +444,7 @@ struct Builder<'a> {
     operations: Vec<LocatedOperation>,
     types: crate::source_types::Types,
     next_local: u32,
+    named_locals: std::collections::BTreeSet<LocalId>,
     next_block: u32,
     loops: Vec<(BlockId, BlockId)>,
 }
@@ -1591,6 +1592,7 @@ impl Builder<'_> {
                     let value = self.value(local.initializer, locals)?;
                     let id = self.local_id(span)?;
                     self.push(Operation::LocalInitialize { local: id, value }, Some(span));
+                    self.named_locals.insert(id);
                     locals.insert(local.name, id);
                 }
                 parser::Statement::Println { argument, .. } => {
@@ -1866,6 +1868,7 @@ fn build_body(
         operations: Vec::new(),
         types: crate::source_types::Types::new(candidate_parameters),
         next_local: 0,
+        named_locals: std::collections::BTreeSet::new(),
         next_block: 1,
         loops: Vec::new(),
     };
@@ -1893,6 +1896,40 @@ fn build_body(
                 end: ast.body_span.end,
             }),
         );
+    }
+    // Hidden expression owners transfer on their final read. Named locals keep
+    // source lifetimes, even if their last syntactic use occurs earlier.
+    let mut final_reads = BTreeMap::new();
+    for (at, op) in builder.operations.iter().enumerate() {
+        if let Operation::LocalRead { local, result } = op.operation {
+            fn immutable(ty: &crate::api::Type) -> bool {
+                match ty {
+                    crate::api::Type::Null => true,
+                    crate::api::Type::Named(name) => matches!(
+                        name.as_str(),
+                        "Toybox.Lang.Number"
+                            | "Toybox.Lang.Long"
+                            | "Toybox.Lang.Float"
+                            | "Toybox.Lang.Double"
+                            | "Toybox.Lang.String"
+                            | "Toybox.Lang.Boolean"
+                            | "Toybox.Lang.Char"
+                    ),
+                    crate::api::Type::Union(types) => types.iter().all(immutable),
+                    _ => false,
+                }
+            }
+            if !builder.named_locals.contains(&local)
+                && !builder.types.value_type(result).is_some_and(immutable)
+            {
+                final_reads.insert(local, at);
+            }
+        }
+    }
+    for at in final_reads.into_values() {
+        if let Operation::LocalRead { result, local } = builder.operations[at].operation {
+            builder.operations[at].operation = Operation::LocalTake { result, local };
+        }
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
     let parameter_types = if let Some(signature) = &callback {

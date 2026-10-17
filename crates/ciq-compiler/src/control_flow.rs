@@ -151,7 +151,20 @@ pub(crate) fn local_inputs(
                 available.retain(|local| outputs[predecessor].contains(local));
             }
             let mut outgoing = available.clone();
-            outgoing.extend(&generated[block]);
+            for (at, op) in operations.iter().enumerate() {
+                if structure.blocks[at] != *block {
+                    continue;
+                }
+                match op.operation {
+                    Operation::LocalInitialize { local, .. } => {
+                        outgoing.insert(local);
+                    }
+                    Operation::LocalTake { local, .. } => {
+                        outgoing.remove(&local);
+                    }
+                    _ => {}
+                }
+            }
             changed |= inputs[block] != available || outputs[block] != outgoing;
             inputs.insert(*block, available);
             outputs.insert(*block, outgoing);

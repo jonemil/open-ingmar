@@ -437,7 +437,8 @@ writes. Finish consumes the completed builder and produces its typed Dictionary.
 
 Begin lowers to a Number push, `newd`, and private frame storage before entry
 effects. A fill evaluates/stores each pair before the next; non-final pairs use
-`aputvdup`, and the last uses `aputv`. Finish reads the private reference. Source
+`aputvdup`, and the last uses `aputv`. Finish transfers the private reference and
+clears its frame slot using `lgetv; npush; lputv`. Source
 control flow stages key/value operands into locals and emits separate fill
 groups, preserving empty-stack ordinary edges and incoming-value consumption.
 Candidate inference is provisional; final IR checking validates each entry and
@@ -457,6 +458,8 @@ Builders reserve frame slots alongside parameters and ordinary locals under the
 shared 255-slot limit. They are not semantic values or ordinary local IDs; only
 finish exposes a usable reference. Allocation remains ordered before entry
 effects and can fail there.
+Finishing either builder kind clears its private strong reference; a completed
+container is owned by the produced value and its subsequent consumers.
 
 ## Array allocation
 
@@ -647,6 +650,19 @@ unique IDs; reads before initialization, reinitialization, and parameters plus
 locals exceeding 255 are rejected. Unread locals are accepted: their initializer
 still executes. Source names are resolved by the frontend and are not stored in
 this provisional IR.
+
+`.take %<result-id> $<local-id>` defines the same typed value as `.read` but
+transfers ownership out of the local. The local becomes unavailable on that CFG
+path; later reads, takes, or assignments fail until its initialization executes
+again (for example, on another loop iteration). Joins require availability on
+every incoming edge. A take is ordered with other effects and cannot move
+across writes or calls. Each resulting value still has exactly one use.
+
+Lowering uses `lgetv <slot>; npush; lputv <slot>`: the value remains on the
+expression stack while the slot releases its reference. Source-generated hidden
+reference temporaries use this transfer on their final read; source locals keep
+ordinary assignment/frame lifetimes. This is ownership scheduling, not early
+destruction of named locals based on last use.
 
 Local IDs are semantic identities, independent of their numeric value or VM
 slot. The backend assigns local slots after parameters in initialization order
@@ -1312,6 +1328,14 @@ Arithmetic and comparison directives enforce the same
 mixed Char addition, String identity equality, and nullable restrictions.
 Native `weak` remains a call whose exact immutable receiver determines its
 specialized result; it is not erased or rewritten as a copy.
+
+Ordinary WeakReference values use `weak-reference` for parameter, call-result,
+and conditional-edge tags. Opaque Object values use `object` and
+`nullable-object`. Explicit function `result=` contracts retain these tags,
+including nullable Object results even if all returns happen to be non-null.
+`get` and `stillAlive` use existing `.call-native` operations, with result types
+recomputed as Object-or-Null and Boolean. Availability, erasure, joins, and null
+proofs follow the [source reference contracts](compiler-subset.md#ordinary-weak-references).
 
 Native calls are effectful: receiver evaluation precedes arguments and
 invocation, and their operation order must agree with dependency traversal at

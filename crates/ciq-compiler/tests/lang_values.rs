@@ -150,7 +150,7 @@ fn annotated_returns_remain_uniform_and_callback_contracts_remain_separate() {
         "function f(s as Toybox.Lang.String) { return s + 1; }",
         "function f(s as Toybox.Lang.String) { if (s) { return 1; } else { return 2; } }",
         "function f(s as Toybox.Lang.Boolean) { return s + 1; }",
-        "function f(s as Toybox.Lang.Object) { return 1; }",
+        "function f(s as Toybox.Lang.Unknown) { return 1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

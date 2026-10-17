@@ -37,7 +37,7 @@ cargo run -p ciq-asm -- sign scratch/compiler-dictionary/unsigned.prg scratch/co
 sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generated.prg
 ```
 
-Object callable/weak-reference methods and wider numeric value groups remain
+Object callable methods and wider numeric value groups remain
 planned. See
 [the source profile](../../docs/specs/compiler-subset.md#dictionary-values) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).

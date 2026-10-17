@@ -124,7 +124,9 @@ impl Types {
             Operation::ParameterRead { result, index } => {
                 (*result, self.parameters.get(*index).map(|ty| ty.api_type()))
             }
-            Operation::LocalRead { result, local } => (*result, self.locals.get(local).cloned()),
+            Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
+                (*result, self.locals.get(local).cloned())
+            }
             Operation::LocalInitialize { local, value } => {
                 if let Some(ty) = self.values.get(value) {
                     self.locals.insert(*local, ty.clone());

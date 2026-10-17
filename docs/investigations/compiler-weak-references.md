@@ -1,0 +1,59 @@
+# Ordinary weak references and hidden ownership
+
+2026-10-17, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+
+**Officially documented:** [WeakReference][weak] and `get()`/`stillAlive()`
+require API 1.2.0. `get()` returns Object or Null after the target loses its
+strong references. There is no explicit clear method. [Object.weak()][object]
+distinguishes ordinary weak results from immutable scalar values.
+
+**Observed:** the [authored specimen][example] retrieves live Array/Dictionary
+objects, sees mutations through the retrieved reference, and compares them with
+the original target. A saved `get()` result keeps the target alive after the
+original local is replaced. Clearing that retrieved local lets the weak result
+expire. Results returned from functions that retain no other target reference
+are expired after the function returns. `stillAlive()` is false and `get()` is
+Null for those cases. These are simulator observations, not collection timing
+guarantees for every device.
+
+Aliases and repeated weak results for the same live target compare equal, with
+matching hashes in the tested calls. `toString()` is repeatable within the
+probe; no representation or hash algorithm is inferred. Calling `weak()` on the
+expired weak result produces another expired result in this specimen, so it
+must not be modeled as constructing a strong wrapper around that WeakReference.
+Keep native dispatch; do not assume wrapper identity semantics.
+
+## Lifetime discrepancy
+
+An initial generated program retained the Array after both source owners were
+replaced. Its IR exposed an extra hidden local for the constant literal; the
+backend kept that strong reference until frame exit. The SDK program expired
+the target. This establishes a semantic ownership issue, rather than a need to
+change the expected output or insert a weak-reference-specific guard.
+
+The retained specimen also exercises a compound write with a branching RHS,
+computed Array/Dictionary builders, nullable retrieval joins, opaque Object
+parameters/results, and function-frame exit. Explicit temporary transfers and
+builder publication release hidden owners; named locals retain their normal
+lifetimes. The source and saved-IR pipelines must preserve those operations.
+
+## Encoding and reproduction
+
+Compile the tracked source with an ignored Jungle and the shared native-names
+manifest/resources. Use the
+[console checker](../../scripts/README.md#console-specimen-check) for saved-stage
+parity, structured SDK/generated reconstruction, own-key signing, and simulator
+comparison. Both programs match all 26 expected console lines. Artifacts:
+`scratch/check-weak-references-final/`.
+
+SDK symbols use `weak` = `0x00800418`, `stillAlive` = `0x00800417`, and
+`get` = `0x008000b5` (already used by Dictionary). Existing member invocation,
+local reads/writes, and `npush` suffice. No VM opcode or PRG record is added;
+`.take` is a semantic IR ownership operation lowered to these instructions.
+
+Other native/source weak targets, casts or concrete target recovery, nullable
+WeakReference storage, and callback interactions are not established here.
+
+[weak]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/WeakReference.html
+[object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+[example]: ../../examples/compiler-weak-references/README.md

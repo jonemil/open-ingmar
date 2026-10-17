@@ -144,6 +144,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
+            | Operation::LocalTake { result, .. }
             | Operation::ModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
             | Operation::ObjectCall { result, .. }
@@ -703,7 +704,12 @@ fn expression(
                 }
                 Operation::DictionaryFinish { builder, .. }
                 | Operation::ArrayFinish { builder, .. } => {
-                    (Opcode::Lgetv, vec![Operand::Bits(builders[builder])])
+                    items.push(instruction(
+                        Opcode::Lgetv,
+                        vec![Operand::Bits(builders[builder])],
+                    ));
+                    items.push(instruction(Opcode::Npush, vec![]));
+                    (Opcode::Lputv, vec![Operand::Bits(builders[builder])])
                 }
                 Operation::DictionaryConstant { result, .. } => (
                     Opcode::Hpush,
@@ -805,6 +811,14 @@ fn expression(
                 }
                 Operation::LocalRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
+                }
+                Operation::LocalTake { local, .. } => {
+                    items.push(instruction(
+                        Opcode::Lgetv,
+                        vec![Operand::Bits(slots[local])],
+                    ));
+                    items.push(instruction(Opcode::Npush, vec![]));
+                    (Opcode::Lputv, vec![Operand::Bits(slots[local])])
                 }
                 Operation::DictionaryRead {
                     dictionary: array,

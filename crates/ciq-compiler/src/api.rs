@@ -538,6 +538,23 @@ fn build_core() -> Catalogue {
         ),
     ];
     classes.get_mut("Toybox.Lang.WeakReference").unwrap().since = ApiLevel(1, 2, 0);
+    classes
+        .get_mut("Toybox.Lang.WeakReference")
+        .unwrap()
+        .methods = vec![
+        method(
+            "get",
+            vec![],
+            Type::Union(vec![Type::named(object), Type::Null]),
+            ApiLevel(1, 2, 0),
+        ),
+        method(
+            "stillAlive",
+            vec![],
+            Type::named("Toybox.Lang.Boolean"),
+            ApiLevel(1, 2, 0),
+        ),
+    ];
     let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
     weak.receiver_results = [
         number,

@@ -17,6 +17,6 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-numeric-arrays/gene
 ```
 
 The native mutation/search/slice/reverse methods require API 1.3.0. These arrays
-retain the existing restrictions on sorting, Object callbacks/weak references,
+retain the existing restrictions on sorting, Object callbacks,
 nested containers, and whole-array conditional joins. See the
 [source contracts](../../docs/specs/compiler-subset.md#numeric-arrays).

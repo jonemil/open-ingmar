@@ -45,4 +45,5 @@ Garmin's type checker retains a WeakReference result for these calls. The
 [investigation](../../docs/investigations/compiler-immutable-weak.md) records
 the initial casted probe and SDK comparison with checking disabled. Our
 specialized contract follows the documented immutable-value exception and
-observed runtime behavior. This does not enable ordinary object weak references.
+observed runtime behavior. Ordinary object weak references use
+[a separate profile](../compiler-weak-references/README.md).

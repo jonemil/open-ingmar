@@ -81,6 +81,9 @@ pub(crate) fn parse_ir_context(
             }
             result_type = Some(match result {
                 "dictionary" => crate::ReturnType::Dictionary,
+                "object" => crate::ReturnType::LangObject,
+                "nullable-object" => crate::ReturnType::NullableObject,
+                "weak-reference" => crate::ReturnType::WeakReference,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
                     crate::ReturnType::SourceObject(tag[7..tag.len() - 1].into())
                 }
@@ -128,6 +131,9 @@ pub(crate) fn parse_ir_context(
                         "boolean" => Ok(crate::ParameterType::Boolean),
                         "char" => Ok(crate::ParameterType::Char),
                         "dictionary" => Ok(crate::ParameterType::Dictionary),
+                        "object" => Ok(crate::ParameterType::LangObject),
+                        "nullable-object" => Ok(crate::ParameterType::NullableObject),
+                        "weak-reference" => Ok(crate::ParameterType::WeakReference),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
                         "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
                         "behavior-delegate" => Ok(crate::ParameterType::Object(
@@ -248,7 +254,7 @@ pub(crate) fn parse_ir_context(
             Some(".shift-left") => (53, 4),
             Some(".shift-right") => (54, 4),
             Some(".local") => (4, 3),
-            Some(".read") => (5, 3),
+            Some(".read" | ".take") => (5, 3),
             Some(".call") => (
                 6,
                 fields.len()
@@ -966,9 +972,12 @@ pub(crate) fn parse_ir_context(
                 value: parse_value(&fields[2])?,
             }
         } else if kind == 5 {
-            Operation::LocalRead {
-                result: parse_value(&fields[1])?,
-                local: parse_local(&fields[2])?,
+            let result = parse_value(&fields[1])?;
+            let local = parse_local(&fields[2])?;
+            if fields[0] == ".take" {
+                Operation::LocalTake { result, local }
+            } else {
+                Operation::LocalRead { result, local }
             }
         } else if kind == 6 {
             let (result_type, arguments_at) = call_contract(fields, 4, *at, source)?;
@@ -1076,6 +1085,9 @@ fn call_contract(
             "boolean" => crate::ReturnType::Boolean,
             "char" => crate::ReturnType::Char,
             "dictionary" => crate::ReturnType::Dictionary,
+            "object" => crate::ReturnType::LangObject,
+            "nullable-object" => crate::ReturnType::NullableObject,
+            "weak-reference" => crate::ReturnType::WeakReference,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),

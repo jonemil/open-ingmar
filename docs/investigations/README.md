@@ -11,6 +11,8 @@ SDK/version and scope; they are not current feature inventories. Use
   failures and floating-to-integer conversion limits.
 - [Object observers](compiler-object-observers.md): Array identity/hashes,
   scalar/container comparisons, and native dispatch order.
+- [Ordinary weak references](compiler-weak-references.md): retrieval, expiration,
+  opaque Object results, and hidden temporary ownership.
 - [Wider numeric arrays](compiler-numeric-arrays.md): Long/Float/Double DATA
   records, nullable elements, construction, and native methods.
 - [Wider String/Char operators](compiler-wide-operators.md): numeric operand

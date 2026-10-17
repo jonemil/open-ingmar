@@ -162,7 +162,10 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.String"
                 | "Toybox.Lang.Char"
-                | "Toybox.Lang.Boolean",
+                | "Toybox.Lang.Boolean"
+                | "Toybox.Lang.Array"
+                | "Toybox.Lang.Dictionary"
+                | "Toybox.Lang.WeakReference",
             "Toybox.Lang.Object",
             "weak"
         ) | (
@@ -171,10 +174,17 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Double"
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.Boolean"
-                | "Toybox.Lang.Char",
+                | "Toybox.Lang.Char"
+                | "Toybox.Lang.Object"
+                | "Toybox.Lang.WeakReference",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
         ) | ("Toybox.Lang.Boolean", "Toybox.Lang.Boolean", "compareTo")
+            | (
+                "Toybox.Lang.WeakReference",
+                "Toybox.Lang.WeakReference",
+                "get" | "stillAlive"
+            )
             | (
                 "Toybox.Lang.Array" | "Toybox.Lang.Dictionary",
                 "Toybox.Lang.Object",
@@ -332,6 +342,8 @@ fn equality_argument(ty: &api::Type) -> bool {
                 | "Toybox.Lang.Boolean"
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Dictionary"
+                | "Toybox.Lang.Object"
+                | "Toybox.Lang.WeakReference"
         ),
         api::Type::Array(element) => crate::ArrayElement::from_api_type(element).is_some(),
         api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),
@@ -473,15 +485,13 @@ mod tests {
     }
 
     #[test]
-    fn weak_reference_declaration_does_not_enable_object_lowering() {
-        for class in ["Object", "Dictionary", "WeakReference"] {
-            let receiver = api::Type::named(format!("Toybox.Lang.{class}"));
-            assert!(
-                value_call(&receiver, "weak", &[], None)
-                    .unwrap_err()
-                    .contains("no supported lowering")
-            );
-        }
+    fn opaque_object_weak_result_stays_unsupported() {
+        let receiver = api::Type::named("Toybox.Lang.Object");
+        assert!(
+            value_call(&receiver, "weak", &[], None)
+                .unwrap_err()
+                .contains("no supported lowering")
+        );
     }
 
     #[test]

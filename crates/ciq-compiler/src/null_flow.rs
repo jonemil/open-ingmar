@@ -38,6 +38,7 @@ pub(crate) fn inputs(
         match located.operation {
             Operation::Null { result }
             | Operation::LocalRead { result, .. }
+            | Operation::LocalTake { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::Not { result, .. }
             | Operation::Compare { result, .. } => {

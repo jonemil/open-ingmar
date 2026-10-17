@@ -309,6 +309,12 @@ pub enum ReturnType {
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
+    /// An opaque Lang.Object value; concrete members require a narrower contract.
+    LangObject,
+    /// An opaque Lang.Object value or Null, as returned by WeakReference.get.
+    NullableObject,
+    /// A non-null ordinary WeakReference, distinct from immutable weak results.
+    WeakReference,
     Integer,
     Long,
     NullableLong,
@@ -338,6 +344,12 @@ pub enum ParameterType {
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
+    /// An opaque Lang.Object value; concrete members require a narrower contract.
+    LangObject,
+    /// An opaque Lang.Object value or Null, as returned by WeakReference.get.
+    NullableObject,
+    /// A non-null ordinary WeakReference, distinct from immutable weak results.
+    WeakReference,
     Integer,
     Long,
     NullableLong,
@@ -383,6 +395,9 @@ impl ParameterType {
             Self::Char => ValueType::Char.api_type(),
             Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => ValueType::Dictionary.api_type(),
+            Self::LangObject => ValueType::LangObject.api_type(),
+            Self::NullableObject => ValueType::NullableObject.api_type(),
+            Self::WeakReference => ValueType::WeakReference.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Array(element) => ValueType::Array(*element).api_type(),
@@ -413,6 +428,9 @@ impl ReturnType {
             Self::Char => ValueType::Char.api_type(),
             Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => ValueType::Dictionary.api_type(),
+            Self::LangObject => ValueType::LangObject.api_type(),
+            Self::NullableObject => ValueType::NullableObject.api_type(),
+            Self::WeakReference => ValueType::WeakReference.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
             Self::Tuple(shape) => shape.api_type(),
@@ -426,6 +444,12 @@ impl ReturnType {
 enum ValueType {
     TypedDictionary(DictionaryType),
     Dictionary,
+    /// An opaque Lang.Object value; concrete members require a narrower contract.
+    LangObject,
+    /// An opaque Lang.Object value or Null, as returned by WeakReference.get.
+    NullableObject,
+    /// A non-null ordinary WeakReference, distinct from immutable weak results.
+    WeakReference,
     Integer,
     Long,
     NullableLong,
@@ -459,6 +483,7 @@ impl ValueType {
             Self::NullableString => Self::String,
             Self::NullableBoolean => Self::Boolean,
             Self::NullableChar => Self::Char,
+            Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
             _ => self,
         }
@@ -501,6 +526,11 @@ impl ValueType {
             Self::Char => api::Type::named("Toybox.Lang.Char"),
             Self::TypedDictionary(ty) => ty.api_type(),
             Self::Dictionary => api::Type::named("Toybox.Lang.Dictionary"),
+            Self::LangObject => api::Type::named("Toybox.Lang.Object"),
+            Self::NullableObject => {
+                api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
+            }
+            Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
             Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
@@ -535,9 +565,12 @@ impl ValueType {
                 "Toybox.Lang.Boolean" => Some(Self::Boolean),
                 "Toybox.Lang.Char" => Some(Self::Char),
                 "Toybox.Lang.Dictionary" => Some(Self::Dictionary),
+                "Toybox.Lang.Object" => Some(Self::LangObject),
+                "Toybox.Lang.WeakReference" => Some(Self::WeakReference),
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
+            _ if *ty == Self::NullableObject.api_type() => Some(Self::NullableObject),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
             _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
             _ if *ty == Self::NullableLong.api_type() => Some(Self::NullableLong),
@@ -900,6 +933,12 @@ pub enum Operation {
         value: ValueId,
     },
     LocalRead {
+        result: ValueId,
+        local: LocalId,
+    },
+    /// Move a local value onto its consuming expression and empty the slot.
+    /// Subsequent reads require a new initialization; used to release hidden owners.
+    LocalTake {
         result: ValueId,
         local: LocalId,
     },
@@ -1451,7 +1490,8 @@ impl Function {
                         {
                             if let Some(&at) = definitions.get(&value) {
                                 let declared = match operations[at].operation {
-                                    Operation::LocalRead { local, .. } => {
+                                    Operation::LocalRead { local, .. }
+                                    | Operation::LocalTake { local, .. } => {
                                         local_types.get(&local).copied()
                                     }
                                     Operation::ParameterRead { index, .. } => parameter_types
@@ -1467,6 +1507,7 @@ impl Function {
                                     | ValueType::NullableLong
                                     | ValueType::NullableDouble
                                     | ValueType::NullableFloat
+                                    | ValueType::NullableObject
                                     | ValueType::NullableDictionary),
                                 ) = declared
                                 {
@@ -1675,7 +1716,9 @@ impl Function {
                         definitions.get(value).is_some_and(|at| {
                             matches!(
                                 operations[*at].operation,
-                                Operation::LocalRead { .. } | Operation::ParameterRead { .. }
+                                Operation::LocalRead { .. }
+                                    | Operation::LocalTake { .. }
+                                    | Operation::ParameterRead { .. }
                             )
                         })
                     }) {
@@ -2021,6 +2064,13 @@ impl Function {
                     }
                     let incoming = type_of(value);
                     if local_types[&local] != incoming
+                        && !(matches!(
+                            local_types[&local],
+                            ValueType::LangObject | ValueType::NullableObject
+                        ) && native::accepts(
+                            &local_types[&local].api_type(),
+                            &incoming.api_type(),
+                        ))
                         && !(local_types[&local] == ValueType::Dictionary
                             && matches!(incoming, ValueType::TypedDictionary(_)))
                         && !(local_types[&local] == ValueType::NullableDictionary
@@ -2045,11 +2095,14 @@ impl Function {
                     non_null.remove(&null_flow::Place::Local(local));
                     (None, vec![value])
                 }
-                Operation::LocalRead { result, local } => {
+                Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
                     if !locals.contains(&local) || !available_locals.contains(&local) {
                         return Err(fail(
                             "local read must refer to an earlier initialized local",
                         ));
+                    }
+                    if matches!(located.operation, Operation::LocalTake { .. }) {
+                        available_locals.remove(&local);
                     }
                     let ty = local_types[&local];
                     types.insert(
@@ -2104,6 +2157,8 @@ impl Function {
                             ValueType::Char => ReturnType::Char,
                             ValueType::TypedDictionary(ty) => ReturnType::TypedDictionary(ty),
                             ValueType::Dictionary => ReturnType::Dictionary,
+                            ValueType::LangObject => ReturnType::LangObject,
+                            ValueType::WeakReference => ReturnType::WeakReference,
                             ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Tuple(shape) => ReturnType::Tuple(shape),
                             ValueType::Array(element) => ReturnType::Array(element),
@@ -2191,6 +2246,7 @@ impl Function {
             matches!(
                 located.operation,
                 Operation::BlockParameter { .. }
+                    | Operation::LocalTake { .. }
                     | Operation::DictionaryNew { .. }
                     | Operation::ModuleCall { .. }
                     | Operation::Binary {
@@ -2433,6 +2489,9 @@ impl Function {
                             ParameterType::Char => "char",
                             ParameterType::TypedDictionary(ty) => return ty.text(),
                             ParameterType::Dictionary => "dictionary",
+                            ParameterType::LangObject => "object",
+                            ParameterType::NullableObject => "nullable-object",
+                            ParameterType::WeakReference => "weak-reference",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
                             ParameterType::Object(NativeClass::BehaviorDelegate) => {
@@ -2448,7 +2507,10 @@ impl Function {
             )
         };
         let result = match self.return_type {
-            ReturnType::Dictionary
+            ReturnType::LangObject
+            | ReturnType::NullableObject
+            | ReturnType::WeakReference
+            | ReturnType::Dictionary
             | ReturnType::TypedDictionary(_)
             | ReturnType::NullableInteger
             | ReturnType::NullableString
@@ -2881,6 +2943,9 @@ impl Function {
                 Operation::LocalRead { result, local } => {
                     format!(".read %{} ${}", result.0, local.0)
                 }
+                Operation::LocalTake { result, local } => {
+                    format!(".take %{} ${}", result.0, local.0)
+                }
                 Operation::Return { value } => format!(".return %{}", value.0),
             });
             if let Some(span) = operation.span {
@@ -2951,6 +3016,9 @@ fn validate_call_arguments(
                     | ValueType::Double
                     | ValueType::Object(_)
                     | ValueType::Array(_)
+                    | ValueType::LangObject
+                    | ValueType::NullableObject
+                    | ValueType::WeakReference
                     | ValueType::Dictionary
                     | ValueType::TypedDictionary(_)
                     | ValueType::Null
@@ -2990,6 +3058,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Char => Ok(ValueType::Char),
         ReturnType::TypedDictionary(ty) => Ok(ValueType::TypedDictionary(ty)),
         ReturnType::Dictionary => Ok(ValueType::Dictionary),
+        ReturnType::LangObject => Ok(ValueType::LangObject),
+        ReturnType::NullableObject => Ok(ValueType::NullableObject),
+        ReturnType::WeakReference => Ok(ValueType::WeakReference),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
             validate_call_names(None, &class)?;
@@ -3020,6 +3091,9 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Char => " result=char",
         ReturnType::TypedDictionary(ty) => return format!(" result={}", ty.text()),
         ReturnType::Dictionary => " result=dictionary",
+        ReturnType::LangObject => " result=object",
+        ReturnType::NullableObject => " result=nullable-object",
+        ReturnType::WeakReference => " result=weak-reference",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",
         ReturnType::Object(NativeClass::BehaviorDelegate) => " result=behavior-delegate",

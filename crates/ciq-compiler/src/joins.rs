@@ -5,6 +5,9 @@ use std::collections::BTreeMap;
 /// Parse an exact text tag for a supported incoming stack-value contract.
 pub(crate) fn parse_type(tag: &str) -> Option<Type> {
     Some(match tag {
+        "object" => Type::named("Toybox.Lang.Object"),
+        "nullable-object" => Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]),
+        "weak-reference" => Type::named("Toybox.Lang.WeakReference"),
         "integer" => Type::named("Toybox.Lang.Number"),
         "long" => Type::named("Toybox.Lang.Long"),
         "double" => Type::named("Toybox.Lang.Double"),
@@ -29,6 +32,9 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
 /// Return the canonical text tag, rejecting types outside the join profile.
 pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     [
+        "object",
+        "nullable-object",
+        "weak-reference",
         "integer",
         "long",
         "double",
@@ -55,6 +61,15 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
 pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     if left == right && type_tag(left).is_some() {
         return Some(left.clone());
+    }
+    let object = parse_type("object").unwrap();
+    let nullable_object = parse_type("nullable-object").unwrap();
+    if ((left == &object || left == &nullable_object) && right == &Type::Null)
+        || ((right == &object || right == &nullable_object) && left == &Type::Null)
+        || ((left == &object || left == &nullable_object)
+            && (right == &object || right == &nullable_object))
+    {
+        return Some(nullable_object);
     }
     for tag in [
         "nullable-integer",

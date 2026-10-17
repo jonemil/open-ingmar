@@ -17,4 +17,5 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-object-observers/ge
 The inherited observers require API 1.0.0; this specimen also uses native Array
 mutation/slice/reverse methods from 1.3.0 and nullable slice bounds. See the
 [shared equality contracts](../../docs/specs/compiler-subset.md#object-equality-and-container-observers).
-Ordinary weak references, method callbacks, and sorting remain deferred.
+Method callbacks and sorting remain deferred; ordinary weak references have
+[a separate specimen](../compiler-weak-references/README.md).
