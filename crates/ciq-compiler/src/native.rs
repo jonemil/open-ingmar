@@ -304,7 +304,7 @@ pub(crate) fn value_call(
     let supported = supported
         || (member == "method"
             && resolved.declaring_class.name == "Toybox.Lang.Object"
-            && equality_argument(receiver)
+            && (equality_argument(receiver) || crate::NativeClass::from_name(class).is_some())
             && !matches!(receiver, api::Type::Null | api::Type::Union(_)));
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());

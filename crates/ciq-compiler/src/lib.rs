@@ -728,6 +728,10 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Read the current instance as an opaque Object; requires an instance function.
+    SelfValue {
+        result: ValueId,
+    },
     /// Read a Number or non-null source reference on the current instance.
     /// Unit validation checks the claimed result against the field declaration
     /// and prevents reference reads before constructor initialization.
@@ -1567,6 +1571,13 @@ impl Function {
                 }
                 Operation::Boolean { result, .. } => {
                     types.insert(result, ValueType::Boolean);
+                    (Some(result), vec![])
+                }
+                Operation::SelfValue { result } => {
+                    if !instance_method {
+                        return Err(fail("self values require an instance receiver"));
+                    }
+                    types.insert(result, ValueType::LangObject);
                     (Some(result), vec![])
                 }
                 Operation::SelfFieldRead {
@@ -2655,6 +2666,7 @@ impl Function {
                 Operation::SelfFieldAssign { ref field, value } => {
                     format!(".assign-self {field} %{}", value.0)
                 }
+                Operation::SelfValue { result } => format!(".self %{}", result.0),
                 Operation::Symbol { result, ref name } => format!(".symbol %{} {name}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::Long { result, value } => format!(".long %{} {value}", result.0),

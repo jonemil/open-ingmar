@@ -1243,8 +1243,9 @@ See the [specimen and binding evidence](../investigations/compiler-symbols.md).
 ## Method values and invocation
 
 Supported scalar, Array, Dictionary, opaque Object, WeakReference, and Method
-values support `method(Symbol)` → non-null `Toybox.Lang.Method`, since API
-1.0.0. Method lookup and missing-member errors remain runtime operations.
+values and supported native/source-class receivers support `method(Symbol)` →
+non-null `Toybox.Lang.Method`, since API 1.0.0. Receiver class availability and
+construction retain their own API requirements. Method lookup and missing-member errors remain runtime operations.
 The Method retains its bound receiver; replacing the original variable does
 not release that receiver while a Method still owns it.
 
@@ -1264,9 +1265,18 @@ Receiver evaluation precedes arguments, left to right, and each runs once.
 The compiler checks the Method API and VM argument-count limit. The target's
 existence, arity, accepted types, introduction level, and result behavior remain
 runtime/caller obligations; dynamic lookup does not recover its signature.
-Direct source-instance/self callback syntax, constructors, nullable Method
-contracts, typed signatures, and Array sorting remain deferred. Opaque Object
-dispatch does not establish those higher-level contracts. See the
+Source instances support `instance.method(selector)` and instance bodies support
+explicit `self.method(selector)`. A declared source member named `method` keeps
+ordinary source-call priority. Bare `self` produces opaque Object and requires
+an instance body; it does not recover a source-class type or concrete callback
+signature. Existing `self.member(...)` source calls retain checked signatures.
+Unqualified inherited `method(...)` lookup remains unsupported.
+
+Unlike the SDK checker, this erased lookup profile does not statically resolve
+a literal selector to a source target. A missing target or incompatible
+invocation remains a runtime/caller obligation even for literal selectors.
+Constructors, nullable Method contracts, typed signatures, and Array sorting
+remain deferred. See the
 [binding/lifetime evidence](../investigations/compiler-methods.md).
 
 ## Ordinary weak references

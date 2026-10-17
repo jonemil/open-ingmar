@@ -1151,7 +1151,12 @@ appear before or after `parameters=<count>`; duplicate or unknown fields are
 rejected. Every instance method requires receiver metadata, even without self
 calls. The receiver is the hidden context, not an explicit parameter/value ID.
 
-Two additional directives require an instance method:
+`.self %<result> [span=<start>:<end>]` defines the current receiver as opaque
+Object. It requires `receiver=instance` and lowers to `getself`. It does not
+claim an exact source class. Reflective `self.method(selector)` uses this value
+with ordinary `.call-native`; its Method result remains erased.
+
+Two call directives also require an instance method:
 
 - `.call-self %<result> <member> [result=<type>] [%<argument> ...] [span=<start>:<end>]`:
   define a value under the same result contract rules as `.call`.

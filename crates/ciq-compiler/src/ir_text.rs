@@ -260,6 +260,7 @@ pub(crate) fn parse_ir_context(
             Some(".local") => (4, 3),
             Some(".read" | ".take") => (5, 3),
             Some(".symbol") => (91, 3),
+            Some(".self") => (92, 2),
             Some(".call") => (
                 6,
                 fields.len()
@@ -951,6 +952,10 @@ pub(crate) fn parse_ir_context(
             Operation::Long {
                 result: parse_value(&fields[1])?,
                 value: digits.parse().map_err(|_| fail(*at, "long exceeds i64"))?,
+            }
+        } else if kind == 92 {
+            Operation::SelfValue {
+                result: parse_value(&fields[1])?,
             }
         } else if kind == 91 {
             Operation::Symbol {

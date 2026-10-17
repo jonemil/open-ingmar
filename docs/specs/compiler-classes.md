@@ -309,7 +309,8 @@ other field kinds are unsupported.
 
 Metadata creates a null slot (key bits zero, type `0x00`, value zero). A source
 initialize method is required to establish the non-null field contract. It must
-assign every reference field before a self call, branch, jump, or return. A
+assign every reference field before exposing `self` as an Object, binding a
+self callback, making a self call, branching, jumping, or returning. A
 reference read before that field's assignment is rejected. Assignment must use
 the exact declared source class; native View erasure, another class, and Null
 cannot satisfy it. Requiring this straight-line initialization prefix is our

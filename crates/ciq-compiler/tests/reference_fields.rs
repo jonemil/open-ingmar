@@ -60,6 +60,14 @@ fn reference_initialization_and_assignment_are_checked_before_exposure() {
         CONTROLLER.replace("self.target = view;", "self.current(); self.target = view;"),
         CONTROLLER.replace(
             "self.target = view;",
+            "var receiver = self; self.target = view;",
+        ),
+        CONTROLLER.replace(
+            "self.target = view;",
+            "self.method(:current); self.target = view;",
+        ),
+        CONTROLLER.replace(
+            "self.target = view;",
             "if (true) { self.target = view; } else { self.target = view; }",
         ),
         CONTROLLER.replace("self.target = view;", "self.target = null;"),

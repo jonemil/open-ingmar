@@ -134,6 +134,7 @@ pub(crate) enum ExpressionKind {
         operand: Box<Expression>,
         increment: bool,
     },
+    SelfValue,
     SelfField(String),
     SourceNew {
         class: String,
@@ -1372,7 +1373,7 @@ impl<'a> Parser<'a> {
                         },
                     )
                 } else if name == "self" {
-                    Err(self.error(token.span.start, "self is supported only in receiver calls"))
+                    self.node(ExpressionKind::SelfValue, token.span)
                 } else {
                     self.node(ExpressionKind::Local(name.into()), token.span)
                 }

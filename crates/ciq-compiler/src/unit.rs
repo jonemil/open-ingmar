@@ -571,6 +571,7 @@ impl CompilationUnit {
                         ));
                     }
                     match &located.operation {
+                        Operation::SelfValue { .. } if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all reference fields before exposing self".into())),
                         Operation::SelfFieldRead { field, .. } if pending.contains(field.as_str()) => return Err(fail(Some(index), Some(operation), "reference field read before initialization".into())),
                         Operation::SelfFieldAssign { field, .. } => { pending.remove(field.as_str()); }
                         Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } | Operation::Branch { .. } | Operation::Jump { .. } | Operation::ReturnVoid if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all reference fields before self calls, control flow, or return".into())),

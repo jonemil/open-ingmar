@@ -134,6 +134,9 @@ fn emit(
         | parser::ExpressionKind::Negate(_)) => {
             emit_unary(source, kind, locals, parameters, operations, calls)?
         }
+        parser::ExpressionKind::SelfValue => Operation::SelfValue {
+            result: ValueId(operations.len() as u32),
+        },
         parser::ExpressionKind::Symbol(name) => Operation::Symbol {
             result: ValueId(operations.len() as u32),
             name,
@@ -378,6 +381,19 @@ fn emit_call(
                     member,
                     arguments,
                 )
+            } else if module == "self"
+                && member == "method"
+                && calls.get(&(module.clone(), member.clone())).is_none()
+            {
+                (
+                    Some(parser::Expression {
+                        kind: parser::ExpressionKind::SelfValue,
+                        span,
+                    }),
+                    None,
+                    member,
+                    arguments,
+                )
             } else {
                 (None, Some(module), member, arguments)
             }
@@ -389,6 +405,9 @@ fn emit_call(
         .transpose()?;
     let class = receiver.and_then(|value| {
         crate::source_objects::class(operations, value, calls.parameter_types.clone())
+    });
+    let class = class.filter(|class| {
+        member != "method" || calls.get(&(class.clone(), member.clone())).is_some()
     });
     let arguments = arguments
         .into_iter()
@@ -1663,7 +1682,12 @@ impl Builder<'_> {
                     arguments,
                     ..
                 } => {
-                    if locals.contains_key(&module) || self.parameters.contains_key(&module) {
+                    if locals.contains_key(&module)
+                        || self.parameters.contains_key(&module)
+                        || (module == "self"
+                            && member == "method"
+                            && self.calls.get(&(module.clone(), member.clone())).is_none())
+                    {
                         self.value_statement(
                             parser::Expression {
                                 kind: parser::ExpressionKind::ModuleCall {

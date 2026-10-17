@@ -50,9 +50,28 @@ Existing member lookup, invocation, and local ownership transfers suffice;
 no opcode or PRG record is added. Tests cover the 254-argument encoding bound
 and raw-CODE symbol binding, including the earlier `stillAlive` alias.
 
-Direct source/self callback creation, Method constructors, checked signatures,
-nullable Method storage, and Array comparator contracts remain outside this
-specimen. The [plan](../plan.md) owns their sequencing.
+## Source receivers
+
+The [source callback specimen](../../examples/compiler-source-methods/README.md)
+binds a source View method directly, inside the View through `self.method`,
+and through an opaque Object with a dynamic Symbol parameter. All bindings
+mutate the same instance: results are `2`, `5`, `9`. After replacing the source
+variable, its bound Method still reaches the original instance (`10`), while
+the replacement starts at `0`. An AppBase `self` callback updates its own field
+to `15`. Bare `self` can be returned as Object. SDK/generated programs match
+all six lines; both have structured CODE/DATA and lossless reconstruction.
+Artifacts: `scratch/check-source-methods-2/`.
+
+The SDK rejects `view.owner().method(:add)` when `owner` declares Object:
+`Could not find method 'add' on object '$.Toybox.Lang.Object'`. Passing the
+selector through a Symbol parameter permits the runtime binding. Our erased
+lookup profile does not yet perform that SDK literal-target check; checked
+signatures remain a separate prerequisite.
+
+Current-receiver capture uses existing `getself`; no opcode/record extension
+is needed. Method constructors, checked signatures, nullable Method storage,
+and Array comparator contracts remain deferred. The [plan](../plan.md) owns
+their sequencing.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [method]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Method.html

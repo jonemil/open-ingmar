@@ -12,11 +12,13 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and callable/reference facilities.** Add direct source-instance/self
-callback creation and establish checked callback signatures where consumers
-need argument/result guarantees. Erased Method invocation does not establish
-the target's API availability, arity, or concrete result type. Use these
-prerequisites to revisit Array comparators and other callback consumers.
+**Object and callable/reference facilities.** Establish checked callback
+signatures where consumers need argument/result guarantees. Define signature
+syntax, source-target resolution, and validation for saved IR before enabling
+Array comparators. Unqualified inherited `method(...)` lookup remains separate
+from the supported explicit `self.method(...)` syntax. Erased Method invocation
+does not establish the target's API availability, arity, or concrete result
+type. Use these prerequisites to revisit other callback consumers.
 Plan `has`/`instanceof` and their checking/refinement rules.
 Nullable Symbols and Symbol Array/Dictionary elements need their own container
 and DATA contracts; ordinary Symbol values do not implicitly enable them.

@@ -124,6 +124,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Long { result, .. }
             | Operation::Double { result, .. }
             | Operation::Float { result, .. }
+            | Operation::SelfValue { result }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
@@ -744,6 +745,7 @@ fn expression(
                         literal_aliases[&LiteralKey::String(value.clone())].clone(),
                     )],
                 ),
+                Operation::SelfValue { .. } => (Opcode::Getself, vec![]),
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
