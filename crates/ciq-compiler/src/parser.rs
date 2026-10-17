@@ -191,6 +191,14 @@ pub(crate) enum ExpressionKind {
         left: Box<Expression>,
         right: Box<Expression>,
     },
+    InstanceOf {
+        operand: Box<Expression>,
+        class: String,
+    },
+    Has {
+        receiver: Box<Expression>,
+        symbol: Box<Expression>,
+    },
     Compare {
         kind: crate::ComparisonOp,
         left: Box<Expression>,
@@ -207,12 +215,18 @@ impl Expression {
             | ExpressionKind::ArrayLiteral(_)
             | ExpressionKind::DictionaryNew
             | ExpressionKind::DictionaryLiteral(_) => true,
-            ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
+            ExpressionKind::InstanceOf { operand, .. } | ExpressionKind::Step { operand, .. } => {
+                operand.needs_materialization()
+            }
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
             | ExpressionKind::Positive(operand)
             | ExpressionKind::Negate(operand) => operand.needs_materialization(),
             ExpressionKind::Binary { left, right, .. }
+            | ExpressionKind::Has {
+                receiver: left,
+                symbol: right,
+            }
             | ExpressionKind::Compare { left, right, .. } => {
                 left.needs_materialization() || right.needs_materialization()
             }
@@ -770,6 +784,47 @@ impl<'a> Parser<'a> {
     }
     fn comparison(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let left = self.arithmetic(depth)?;
+        if self.peek()? == Kind::Word("instanceof") {
+            self.token()?;
+            let at = self.offset;
+            let path = self.path()?;
+            let class = path
+                .rsplit_once('.')
+                .and_then(|(module, name)| {
+                    (self.names.module(module) == Some(crate::names::NativeModule::Lang))
+                        .then(|| format!("Toybox.Lang.{name}"))
+                })
+                .filter(|class| crate::runtime_types::symbol(class).is_some())
+                .ok_or_else(|| {
+                    self.error(at, "instanceof requires a supported qualified Lang class")
+                })?;
+            let span = Span {
+                start: left.span.start,
+                end: self.offset,
+            };
+            return self.node(
+                ExpressionKind::InstanceOf {
+                    operand: Box::new(left),
+                    class,
+                },
+                span,
+            );
+        }
+        if self.peek()? == Kind::Word("has") {
+            self.token()?;
+            let right = self.arithmetic(depth)?;
+            let span = Span {
+                start: left.span.start,
+                end: right.span.end,
+            };
+            return self.node(
+                ExpressionKind::Has {
+                    receiver: Box::new(left),
+                    symbol: Box::new(right),
+                },
+                span,
+            );
+        }
         let kind = match self.peek()? {
             Kind::EqualEqual => crate::ComparisonOp::Equal,
             Kind::NotEqual => crate::ComparisonOp::NotEqual,

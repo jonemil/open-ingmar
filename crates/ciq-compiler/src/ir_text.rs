@@ -249,6 +249,8 @@ pub(crate) fn parse_ir_context(
             Some(".complement") => (56, 3),
             Some(".negate") => (26, 3),
             Some(".not") => (27, 3),
+            Some(".instanceof") => (93, 4),
+            Some(".has") => (94, 4),
             Some(".array-read") => (28, 4),
             Some(".dictionary-read") => (68, 4),
             Some(".dictionary-write") => (69, 4),
@@ -406,7 +408,19 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 40 {
+        let operation = if kind == 93 {
+            Operation::InstanceOf {
+                result: parse_value(&fields[1])?,
+                operand: parse_value(&fields[2])?,
+                class: fields[3].clone(),
+            }
+        } else if kind == 94 {
+            Operation::Has {
+                result: parse_value(&fields[1])?,
+                receiver: parse_value(&fields[2])?,
+                symbol: parse_value(&fields[3])?,
+            }
+        } else if kind == 40 {
             if width < 5 {
                 return Err(fail(
                     *at,

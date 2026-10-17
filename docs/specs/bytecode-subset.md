@@ -55,6 +55,8 @@ resolution occur in assembly, without stack interpretation.
 | `1e` | `gte` | none |
 | `1f` | `ne` | none |
 | `20` | `isnull` | none |
+| `21` | `isa` | none |
+| `22` | `hasv` | none |
 | `23` | `jsr` | 2 |
 | `25` | `ipush4` | 4 |
 | `26` | `fpush` | 4 |

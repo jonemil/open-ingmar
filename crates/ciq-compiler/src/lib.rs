@@ -25,6 +25,7 @@ mod native;
 mod null_flow;
 mod operators;
 mod parser;
+mod runtime_types;
 mod source_ir;
 mod source_objects;
 mod source_types;
@@ -908,6 +909,18 @@ pub enum Operation {
         block: BlockId,
     },
     /// Compare supported operands, defining a Boolean in this block.
+    /// Test the runtime class of a value without changing its semantic type.
+    InstanceOf {
+        result: ValueId,
+        operand: ValueId,
+        class: String,
+    },
+    /// Test member existence on a value using a non-null Symbol selector.
+    Has {
+        result: ValueId,
+        receiver: ValueId,
+        symbol: ValueId,
+    },
     Compare {
         result: ValueId,
         kind: ComparisonOp,
@@ -1556,6 +1569,40 @@ impl Function {
                     available_locals = local_inputs[&block].clone();
                     non_null = non_null_inputs[&block].clone();
                     (None, vec![])
+                }
+                Operation::InstanceOf {
+                    result,
+                    operand,
+                    ref class,
+                } => {
+                    if runtime_types::symbol(class).is_none() {
+                        return Err(fail("unsupported runtime class test"));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), class)
+                            .map_err(|message| IrError {
+                                operation: Some(index),
+                                message,
+                            })?;
+                    }
+                    types.insert(result, ValueType::Boolean);
+                    (Some(result), vec![operand])
+                }
+                Operation::Has {
+                    result,
+                    receiver,
+                    symbol,
+                } => {
+                    let ty = type_of(receiver);
+                    if ty == ValueType::Null || ty.without_null() != ty {
+                        return Err(fail("has requires a non-null receiver"));
+                    }
+                    if type_of(symbol) != ValueType::Symbol {
+                        return Err(fail("has requires a non-null Symbol selector"));
+                    }
+                    types.insert(result, ValueType::Boolean);
+                    (Some(result), vec![receiver, symbol])
                 }
                 Operation::Compare {
                     result,
@@ -2466,6 +2513,7 @@ impl Function {
                                 | Operation::Positive { operand, .. }
                                 | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
+                                | Operation::InstanceOf { operand, .. }
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
                                 }
@@ -2480,6 +2528,11 @@ impl Function {
                                     ..
                                 }
                                 | Operation::Binary { left, right, .. }
+                                | Operation::Has {
+                                    receiver: left,
+                                    symbol: right,
+                                    ..
+                                }
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
@@ -2705,6 +2758,16 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::InstanceOf {
+                    result,
+                    operand,
+                    ref class,
+                } => format!(".instanceof %{} %{} {class}", result.0, operand.0),
+                Operation::Has {
+                    result,
+                    receiver,
+                    symbol,
+                } => format!(".has %{} %{} %{}", result.0, receiver.0, symbol.0),
                 Operation::Null { result } => format!(".null %{}", result.0),
                 Operation::NativeModuleCallStatement {
                     ref module,

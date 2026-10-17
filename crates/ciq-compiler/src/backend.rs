@@ -131,6 +131,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Positive { result, .. }
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
+            | Operation::InstanceOf { result, .. }
+            | Operation::Has { result, .. }
             | Operation::Not { result, .. }
             | Operation::DictionaryRead { result, .. }
             | Operation::ArrayRead { result, .. }
@@ -616,6 +618,8 @@ fn expression(
     enum Task {
         Value(ValueId),
         Binary(BinaryOp),
+        InstanceOf(String),
+        Has,
         Negate,
         Step(bool),
         Invert,
@@ -865,6 +869,16 @@ fn expression(
                         vec![],
                     )
                 }
+                Operation::InstanceOf { operand, class, .. } => {
+                    tasks.extend([Task::InstanceOf(class.clone()), Task::Value(*operand)]);
+                    continue;
+                }
+                Operation::Has {
+                    receiver, symbol, ..
+                } => {
+                    tasks.extend([Task::Has, Task::Value(*symbol), Task::Value(*receiver)]);
+                    continue;
+                }
                 Operation::Binary {
                     kind, left, right, ..
                 } => {
@@ -957,6 +971,20 @@ fn expression(
                 continue;
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
+            Task::InstanceOf(class) => {
+                items.push(instruction(
+                    Opcode::Getmv,
+                    vec![
+                        Operand::Symbol("__ciq_sdk_Lang".into()),
+                        Operand::Symbol(format!(
+                            "__ciq_type_{}",
+                            class.strip_prefix("Toybox.Lang.").unwrap()
+                        )),
+                    ],
+                ));
+                (Opcode::Isa, vec![])
+            }
+            Task::Has => (Opcode::Hasv, vec![]),
             Task::Binary(kind) => (
                 match kind {
                     BinaryOp::Add => Opcode::Addv,

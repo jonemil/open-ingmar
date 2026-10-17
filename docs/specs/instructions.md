@@ -45,6 +45,8 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`popv`](#popv): discard the top value.
 - [`npush`](#npush): push null.
 - [`isnull`](#isnull): test whether a value is null.
+- [`isa`](#isa): test runtime class membership.
+- [`hasv`](#hasv): test member existence by Symbol.
 - [`isnotnull`](#isnotnull): test whether a value is non-null.
 - [`invv`](#invv): complement a Number or negate a Boolean.
 - [`addv`](#addv): add two values.
@@ -1043,3 +1045,23 @@ it is not a DATA offset. Positive zero may use `dpushz`.
 Encoding: `3d`, no operands. Stack: `... → ... Double(+0)`.
 
 Push positive Double zero. Negative zero requires `dpush 0x8000000000000000`.
+
+## `isa`
+
+Opcode `0x21`, no immediate operands, length one byte. Abstract stack:
+`[..., value, class] -> [..., Boolean]`. It tests runtime class membership,
+including inheritance; a Null value produces false. The class operand is a
+runtime class object, commonly selected by preceding `getmv`. Symbol IDs alone
+are not class objects. Lexical interfaces have no corresponding runtime class.
+
+## `hasv`
+
+Opcode `0x22`, no immediate operands, length one byte. Abstract stack:
+`[..., receiver, symbol] -> [..., Boolean]`. It tests whether the receiver has
+that member without invoking it. Source fields/methods and inherited native
+methods can be found. Null receivers fail at runtime in the observed profile.
+
+Both encodings and operand order have
+[authored-specimen evidence](../investigations/compiler-object-tests.md), including
+SDK/generated simulator behavior and structured reconstruction. General invalid
+class/selector operands and arbitrary device API guards remain unverified.

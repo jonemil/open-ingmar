@@ -301,6 +301,31 @@ IR text represents locals with `.local $<decimal-u32-id> %<value-id>` and
 `.read %<result-id> $<local-id>`, each with an optional span. Semantic
 IDs need not be contiguous; their numeric values never select physical slots.
 
+## Runtime object predicates
+
+`value instanceof Lang.Class` produces Boolean for supported concrete classes:
+Object, Number, Long, Float, Double, Boolean, Char, String, Array, Dictionary,
+Symbol, Method, and WeakReference. Canonical `Toybox.Lang.Class` and Lang module
+aliases also work. The class must satisfy the selected API requirements.
+Bare imported class names, source classes, interfaces, unions, and parameterized
+class operands remain outside this profile. Null is not an instance of these
+classes. This is a runtime identity/inheritance test, not a conversion or an
+exact source-class assertion.
+
+`receiver has selector` produces Boolean for member existence. The receiver
+must be non-null; a preceding supported null guard can establish that fact.
+The selector must be a non-null Symbol, including a parameter or computed result.
+Its identity is shared with ordinary field/method binding. The receiver is
+computed before the selector, once each. The tested member is not invoked.
+Source fields/methods and inherited native methods can be tested.
+
+Both predicates have the existing comparison precedence below arithmetic and
+above logical AND/OR; chained comparisons are unsupported. Ordinary short-circuit
+and conditional evaluation rules apply. A true result currently introduces no
+new class, member-signature, or API-availability proof. Object narrowing,
+source-class tests, guarded newer APIs, and `as` casts remain planned.
+See [runtime evidence](../investigations/compiler-object-tests.md).
+
 ## Function type contracts
 
 Ordinary source parameters default to Number. `as` annotations accept the fully

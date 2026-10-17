@@ -210,6 +210,9 @@ impl Types {
                         operators::binary_result(*kind, candidate(left), candidate(right))
                     }),
             ),
+            Operation::InstanceOf { result, .. } | Operation::Has { result, .. } => {
+                (*result, Some(Type::named("Toybox.Lang.Boolean")))
+            }
             Operation::Compare {
                 result,
                 kind,

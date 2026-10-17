@@ -1,0 +1,61 @@
+using Toybox.Application;
+using Toybox.System;
+using Toybox.Lang as L;
+module Tests {
+    function show(o as Toybox.Lang.Object) as Void {
+        System.println(o instanceof L.Number);
+        System.println(o instanceof L.String);
+        System.println(o has :toString);
+        System.println(o has :missing);
+    }
+    function absent(o as Toybox.Lang.Object or Null) as Void {
+        System.println(o instanceof L.Number);
+        if (o != null) { System.println(o has :toString); }
+        else { System.println(false); }
+    }
+    function member(o as Toybox.Lang.Object, s as Toybox.Lang.Symbol) as Toybox.Lang.Boolean {
+        return o has s;
+    }
+    function receiver() as Toybox.Lang.Object {
+        System.println("receiver"); return "x";
+    }
+    function selector() as Toybox.Lang.Symbol {
+        System.println("selector"); return :length;
+    }
+    function run() as Void {
+        Tests.show(3); Tests.show("x"); Tests.absent(null); Tests.absent("x");
+        System.println(Tests.member("x", :length));
+        System.println(Tests.receiver() has Tests.selector());
+        System.println(3l instanceof L.Long);
+        System.println(1.0 instanceof L.Float);
+        System.println(1.0d instanceof L.Double);
+        System.println(true instanceof L.Boolean);
+        System.println('a' instanceof L.Char);
+        var a = [1];
+        System.println(a instanceof L.Array);
+        System.println(a.weak() instanceof L.WeakReference);
+        var d = {1 => 2};
+        System.println(d instanceof L.Dictionary);
+        System.println(:length instanceof L.Symbol);
+        System.println("x".method(:toString) instanceof L.Method);
+        System.println("x" instanceof L.Object);
+        System.println(null instanceof L.Object);
+        System.println(!(3 instanceof L.String));
+        System.println(3 instanceof L.Number && "x" has :length);
+        System.println(3 instanceof L.String || "x" has :length);
+        var p = new Probe();
+        System.println(p instanceof L.Object);
+        System.println(p has :field);
+        System.println(p has :value);
+        System.println(p has :missing);
+    }
+}
+class Probe {
+    var field = 1;
+    function initialize() {}
+    function value() { return self.field; }
+}
+class MinimalConsoleApp extends Application.AppBase {
+    function initialize() { AppBase.initialize(); }
+    function onStart(state) { Tests.run(); System.exit(); }
+}

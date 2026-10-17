@@ -624,7 +624,8 @@ later than the application's minimum API. Errors distinguish unknown members,
 target unavailability, an insufficient minimum, and unsupported lowering.
 For example, Number's `toChar` requires 1.3.0: target 1.0.0 reports unavailable;
 target 1.3.0 with minimum 1.0.0 reports an insufficient minimum; both at 1.3.0
-permit the conversion. The current subset has no guarded `has` calls.
+permit the conversion. A `has` predicate does not yet establish an API guard; calls remain subject to
+these introduction-level checks.
 
 ```sh
 cargo run -p ciq-compiler -- --target-api 1.0.0 --min-api 1.0.0 \
@@ -1481,3 +1482,26 @@ No casts or new VM instructions are introduced. See the
 [complete example](../../examples/compiler-nullable-contracts/README.md).
 
 [products]: compiler-subset.md#arithmetic-and-lowering-contract
+
+## Runtime object predicates
+
+```text
+.instanceof %<result> %<operand> Toybox.Lang.Number
+.has %<result> %<receiver> %<symbol>
+```
+
+Both operations define Boolean and accept optional source spans. `InstanceOf`
+records a canonical concrete runtime class independently of symbol IDs. Function
+validation checks the supported class and API level. `Has` requires a non-null
+receiver and a Symbol selector. Each operand has one semantic use; native and
+text input share these checks. Neither operation changes subsequent value types
+or establishes member/API availability. The [source profile][object-tests]
+owns supported targets, ordering, and restrictions.
+
+Lowering evaluates the tested value, selects the runtime class with `getmv`,
+then emits `isa`. Lang class lookup binds the `Toybox_Lang` module identity,
+independently of PRG import-table placement. `Has` evaluates receiver then
+selector and emits `hasv`. No section offsets or native symbol IDs are stored
+in semantic IR.
+
+[object-tests]: compiler-subset.md#runtime-object-predicates

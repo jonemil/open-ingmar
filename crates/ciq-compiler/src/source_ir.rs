@@ -215,6 +215,23 @@ fn emit(
                 calls,
             );
         }
+        parser::ExpressionKind::InstanceOf { operand, class } => {
+            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
+            Operation::InstanceOf {
+                result: ValueId(operations.len() as u32),
+                operand,
+                class,
+            }
+        }
+        parser::ExpressionKind::Has { receiver, symbol } => {
+            let receiver = emit(source, *receiver, locals, parameters, operations, calls)?;
+            let symbol = emit(source, *symbol, locals, parameters, operations, calls)?;
+            Operation::Has {
+                result: ValueId(operations.len() as u32),
+                receiver,
+                symbol,
+            }
+        }
         parser::ExpressionKind::Compare { kind, left, right } => {
             let left = emit(source, *left, locals, parameters, operations, calls)?;
             let right = emit(source, *right, locals, parameters, operations, calls)?;
@@ -1001,6 +1018,14 @@ impl Builder<'_> {
                 kind,
                 left: Box::new(self.snapshot(*left, locals)?),
                 right: Box::new(self.snapshot(*right, locals)?),
+            },
+            E::InstanceOf { operand, class } => E::InstanceOf {
+                operand: Box::new(self.prepare(*operand, locals)?),
+                class,
+            },
+            E::Has { receiver, symbol } => E::Has {
+                receiver: Box::new(self.snapshot(*receiver, locals)?),
+                symbol: Box::new(self.snapshot(*symbol, locals)?),
             },
             E::Compare { kind, left, right } => E::Compare {
                 kind,

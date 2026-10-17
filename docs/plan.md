@@ -12,8 +12,11 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Establish Object input refinement (`has`, `instanceof`, and checked casts) for numeric/object
-comparator bodies. Review Lang.Comparable and its
+**Object and structural contracts.** Establish branch-sensitive Object refinement
+and checked casts for numeric/object comparator bodies. Reuse the supported
+runtime predicates; add source-class `instanceof`, imported bare class operands,
+member/signature proofs, and API guards through explicit contracts. Predicates
+alone do not establish these proofs. Review Lang.Comparable and its
 `compareTo(Object) as Number` contract alongside those prerequisites. Keep
 general interface-typed parameters/results/storage separate from the exact
 source-class Comparator witness used by sorting. Nullable/object Array sorting
@@ -179,7 +182,8 @@ feature from this worklist until its applicable contracts are covered. Items
 below are planned requirements, not claims that every encoding is understood.
 
 - **Lexical forms and literals:** reconcile reserved identifiers, comments,
-  numeric bases/suffixes/ranges, escapes, Unicode String/Char forms, and named
+  numeric bases/suffixes/ranges (including the SDK-accepted Float `f` suffix),
+  escapes, Unicode String/Char forms, and named
   special values such as NaN where accepted by the SDK. Distinguish reserved
   but unused words such as `alias`/`native` from executable language features.
 - **Declarations and storage:** uninitialized/typed locals, multiple declaration

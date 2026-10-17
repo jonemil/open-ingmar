@@ -58,6 +58,8 @@ opcodes! {
     Gte = 0x1e, "gte", [];
     Ne = 0x1f, "ne", [];
     Isnull = 0x20, "isnull", [];
+    Isa = 0x21, "isa", [];
+    Hasv = 0x22, "hasv", [];
     Jsr = 0x23, "jsr", [2];
     Ipush4 = 0x25, "ipush4", [4];
     Fpush = 0x26, "fpush", [4];

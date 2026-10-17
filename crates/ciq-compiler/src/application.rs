@@ -461,6 +461,7 @@ pub fn build_console_application(
     }
     let mut bindings = BTreeMap::from([
         ("__ciq_sdk_System".into(), SYSTEM),
+        ("__ciq_sdk_Lang".into(), LANG),
         ("__ciq_sdk_WatchUi".into(), WATCH_UI),
         ("__ciq_native_View".into(), VIEW),
         ("__ciq_native_BehaviorDelegate".into(), BEHAVIOR_DELEGATE),
@@ -520,6 +521,27 @@ pub fn build_console_application(
         ("__ciq_app_watch_ui".into(), WATCH_UI),
         ("__ciq_app_view".into(), VIEW),
     ]);
+    for name in [
+        "Object",
+        "Number",
+        "Long",
+        "Float",
+        "Double",
+        "Boolean",
+        "Char",
+        "String",
+        "Array",
+        "Dictionary",
+        "Symbol",
+        "Method",
+        "WeakReference",
+    ] {
+        bindings.insert(
+            format!("__ciq_type_{name}"),
+            crate::runtime_types::symbol(&format!("Toybox.Lang.{name}")).unwrap(),
+        );
+    }
+
     for function in unit
         .declarations()
         .iter()
