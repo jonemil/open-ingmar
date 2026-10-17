@@ -3,8 +3,8 @@
 [Arrays](data-arrays.md) and [Dictionaries](data-dictionaries.md) share the
 following framing, scalar tags, and record-local String pool. Nested containers,
 Symbol and other unlisted scalar tags remain unsupported. Wider numeric
-runtime evidence comes from [Array specimens](../investigations/compiler-numeric-arrays.md);
-structural codec support does not broaden compiler Dictionary contracts.
+runtime evidence comes from [Array](../investigations/compiler-numeric-arrays.md)
+and [Dictionary](../investigations/compiler-numeric-dictionaries.md) specimens.
 
 ## Binary framing and scalars
 

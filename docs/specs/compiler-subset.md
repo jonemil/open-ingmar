@@ -40,9 +40,8 @@ nullable-scalar = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float
                 | "Toybox.Lang.Double" | "Toybox.Lang.String"
                 | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
 array-element = nullable-scalar ("or" "Null")? | "Toybox.WatchUi.View"
-dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
-               | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
-dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") ("or" "Null")?
+dictionary-key = nullable-scalar
+dictionary-value = nullable-scalar ("or" "Null")?
 result-type = value-type | "Void"
 argument-list = expression ("," expression)*
 statement = "var" identifier "=" expression ";"
@@ -827,9 +826,10 @@ literal before calling a member, as for Number/Long.
 Explicit Float/Double parameters/results, local storage, module/instance calls,
 printing, conditional joins, and `or Null` contracts use the shared scalar rules.
 Assignments, arguments, returns, and conditional arms do not implicitly convert
-numeric widths. Arrays follow the numeric Array contracts below; Dictionary
-elements and source fields of these types are not supported yet. String concatenation accepts these widths; Char equality accepts them, while
-Char ordering/addition with floating values remain unsupported.
+numeric widths. Arrays and Dictionaries follow their shared scalar contracts;
+source fields of these types are not supported yet. String concatenation and
+Char equality accept these widths; Char ordering/addition with floating values
+remain unsupported.
 
 The four arithmetic operators `+`, `-`, `*`, and `/` accept Number, Long, Float,
 and Double pairs. Double dominates; Long mixed with Float also produces Double;
@@ -840,7 +840,9 @@ Unary plus preserves type/value. Negation subtracts from a same-type positive
 zero; this differs from a negative-zero literal at zero. Statement `++`/`--`
 and arithmetic compound writes preserve the local's type under these promotion
 rules. Floating arithmetic and exceptional values are runtime operations;
-the compiler inserts no conversions or constant folding.
+the compiler inserts no conversions or constant folding. The tested SDK 9.2.0 /
+fr265 runtime rejects Float zero divided by zero with `Invalid Value`; it does
+not produce a NaN through that operation.
 
 Float/Double receivers support `abs()` returning the receiver type,
 `format(String)` and `toString()` returning String, and numeric conversions
@@ -888,8 +890,8 @@ store a promoted Long result. Nullable numeric operands require a non-null proof
 These pairs also support all six numeric comparisons, returning Boolean. Long
 mixing with Char admits equality/inequality and addition returning Char; ordering
 remains unsupported. String mixing follows the shared String profile. Boolean
-mixing remains unsupported; nullable Long equality with Null supports proofs. Unary plus
-preserves the value; unary minus, addition, subtraction, and multiplication
+mixing remains unsupported; nullable Long equality with Null supports proofs.
+Unary plus preserves the value; unary minus, addition, subtraction, and multiplication
 wrap to signed 64-bit results. Integer division truncates toward zero, and
 remainder follows the dividend's sign. Zero division and minimum Long divided
 by or reduced modulo -1 remain unverified runtime boundaries.
@@ -937,8 +939,8 @@ printing, or receiver dispatch. Matching Long arms join without conversion;
 mixed Number/Long conditional arms remain invalid.
 
 Long `toFloat()` and `toDouble()` are available since API 1.0.0, as described
-below. Long arrays follow the numeric Array contracts; Dictionary elements and
-fields remain deferred. See the
+below. Long arrays and Dictionaries follow their shared scalar contracts; fields
+remain deferred. See the
 [example](../../examples/compiler-long-values/README.md) and
 [encoding/runtime evidence](../investigations/compiler-long-values.md).
 
@@ -950,7 +952,7 @@ replace Dictionary locals and pass through explicitly annotated non-null
 Dictionary parameters/results. Copies preserve reference identity; reassignment
 does not copy contents. Calls and construction retain source evaluation order.
 
-`Toybox.Lang.Dictionary<K, V>` also accepts invariant non-null Number, String,
+`Toybox.Lang.Dictionary<K, V>` accepts invariant non-null numeric, String,
 Boolean, or Char keys and values of those scalar types, optionally `or Null`.
 The Dictionary itself is non-null. Char keys or values require API 1.3.0;
 the other contracts require 1.0.0. `DictionaryType` carries the bounded contracts through source,
@@ -963,7 +965,7 @@ contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
 Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
-Number, String, Boolean, or Char keys and homogeneous scalar values with optional
+numeric, String, Boolean, or Char keys and homogeneous scalar values with optional
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
@@ -975,7 +977,13 @@ reads may produce scalar entries.
 Literal-only entries use `hpush` and a [scalar DATA constant](data-dictionaries.md).
 Signed Number tokens use the existing 32-bit range. Constant strings are UTF-8;
 their local pool length, including the zero terminator, must fit u16. Every entry
-is type-checked before equal scalar keys retain their last value. Parentheses
+is type-checked before repeated scalar keys retain their last value. Numeric
+constant keys match exact class and bits: signed zeros stay distinct, and
+Double NaN keys never coalesce. String keys match text. These rules preserve
+the tested Dictionary behavior rather than ordinary numeric operator equality.
+Runtime hashing/lookups remain native operations; no key conversions are emitted.
+See [wider numeric key evidence](../investigations/compiler-numeric-dictionaries.md).
+Parentheses
 around literals do not introduce effects or require computed construction.
 
 Computed literals allocate a private Dictionary before entry expressions. Each
@@ -1063,8 +1071,7 @@ contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Wider numeric values follow their core type
-prerequisites. Object `method` and ordinary `weak` need callable/weak-reference
+contracts before acceptance. Object `method` and ordinary `weak` need callable/weak-reference
 contracts before accepting their results.
 
 

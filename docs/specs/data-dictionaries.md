@@ -3,9 +3,8 @@
 This profile covers flat Dictionary constants loaded by `hpush`, based on the
 [Dictionary experiments](../investigations/compiler-dictionary.md). Nested
 containers, Symbol, and unlisted value tags are unsupported. The shared codec
-retains Long/Float/Double tags structurally, with runtime evidence scoped to
-[Array constants](../investigations/compiler-numeric-arrays.md). The compiler
-does not yet accept these Dictionary key/value contracts.
+retains Long/Float/Double tags with
+[Dictionary runtime evidence](../investigations/compiler-numeric-dictionaries.md).
 Entry order and string-pool identity are preserved; the codec does not enforce
 source-language key restrictions, uniqueness, hashing, or iteration order.
 

@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Wider numeric Dictionaries](compiler-numeric-dictionaries.md): numeric
+  keys/values, signed-zero keys, and separate NaN key evidence.
 - [Wider numeric arrays](compiler-numeric-arrays.md): Long/Float/Double DATA
   records, nullable elements, construction, and native methods.
 - [Wider String/Char operators](compiler-wide-operators.md): numeric operand

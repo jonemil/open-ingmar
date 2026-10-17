@@ -25,6 +25,5 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-long-values/generat
 ```
 
 Floating conversions are covered by [the floating example](../compiler-float-values/README.md).
-Long Dictionary elements and fields remain
-deferred. See the
+Long fields remain deferred. See the
 [source contract](../../docs/specs/compiler-subset.md#long-values).

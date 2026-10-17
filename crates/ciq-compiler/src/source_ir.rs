@@ -635,6 +635,9 @@ impl Builder<'_> {
             use parser::ExpressionKind as E;
             Some(match &expression.kind {
                 E::Integer(n) => S::Number(*n as u32),
+                E::Long(n) => S::Long(*n as u64),
+                E::Float(n) => S::Float(*n),
+                E::Double(n) => S::Double(*n),
                 E::String(s) => S::String(s.clone()),
                 E::Char(c) => S::Char(*c),
                 E::Boolean(b) => S::Boolean(*b),

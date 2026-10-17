@@ -335,8 +335,8 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary` is the opaque parameter-type and value-call result tag.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
-`integer`, `string`, `boolean`, or `char`; values are those scalar tags or
-`nullable-integer`, `nullable-string`, `nullable-boolean`, or `nullable-char`. Other tags, nested containers, and
+`integer`, `long`, `float`, `double`, `string`, `boolean`, or `char`;
+values use those tags or their `nullable-` counterparts. Other tags, nested containers, and
 heterogeneous unions are rejected. For example:
 
 ```text
@@ -410,6 +410,12 @@ provided DATA by matching alias and ordered scalar contents, or otherwise by a
 unique content match. Local pool aliases resolve to text for comparison. Missing,
 ambiguous, incompatible, or conflicting bindings fail. See
 [DATA constants](data-dictionaries.md) and [assembly](assembly.md).
+
+Long/Double scalar payloads use u64 hexadecimal bits; Float uses u32, alongside
+the existing Number/Char/Boolean/String/Null payloads. Exact class/bits survive
+text and DATA binding. Constant-key coalescing follows the
+[source rules](compiler-subset.md#dictionary-values), including distinct signed
+zeros and non-coalescing Double NaNs.
 
 ## Computed Dictionary construction
 

@@ -280,6 +280,9 @@ impl<'a> Parser<'a> {
         let at = self.offset;
         let key = match self.path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryKey::Number,
+            "Toybox.Lang.Double" => crate::DictionaryKey::Double,
+            "Toybox.Lang.Float" => crate::DictionaryKey::Float,
+            "Toybox.Lang.Long" => crate::DictionaryKey::Long,
             "Toybox.Lang.String" => crate::DictionaryKey::String,
             "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryKey::Char,
@@ -288,6 +291,9 @@ impl<'a> Parser<'a> {
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
         let mut value = match self.path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryValue::Number,
+            "Toybox.Lang.Double" => crate::DictionaryValue::Double,
+            "Toybox.Lang.Float" => crate::DictionaryValue::Float,
+            "Toybox.Lang.Long" => crate::DictionaryValue::Long,
             "Toybox.Lang.String" => crate::DictionaryValue::String,
             "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryValue::Char,
@@ -303,6 +309,9 @@ impl<'a> Parser<'a> {
             self.expect(Kind::Word("Null"), "'Null'")?;
             value = match value {
                 crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
+                crate::DictionaryValue::Double => crate::DictionaryValue::NullableDouble,
+                crate::DictionaryValue::Float => crate::DictionaryValue::NullableFloat,
+                crate::DictionaryValue::Long => crate::DictionaryValue::NullableLong,
                 crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
                 crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
                 crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,

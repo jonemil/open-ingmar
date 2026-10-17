@@ -1,11 +1,14 @@
 //! Bounded Dictionary contracts shared by source checking and semantic IR.
 use crate::api::Type;
 
-/// A scalar token stored in a flat Dictionary constant. Number/Char values retain
-/// their VM bits; String values contain text, not DATA addresses or pool aliases.
+/// A scalar token stored in a flat Dictionary constant. Numeric/Char values retain
+/// their exact VM bits; String values contain text, not DATA addresses or pool aliases.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryScalar {
     Number(u32),
+    Double(u64),
+    Float(u32),
+    Long(u64),
     String(String),
     Boolean(bool),
     Char(u32),
@@ -16,6 +19,9 @@ impl DictionaryScalar {
     fn api_type(&self) -> Type {
         match self {
             Self::Number(_) => Type::named("Toybox.Lang.Number"),
+            Self::Double(_) => Type::named("Toybox.Lang.Double"),
+            Self::Float(_) => Type::named("Toybox.Lang.Float"),
+            Self::Long(_) => Type::named("Toybox.Lang.Long"),
             Self::String(_) => Type::named("Toybox.Lang.String"),
             Self::Boolean(_) => Type::named("Toybox.Lang.Boolean"),
             Self::Char(_) => Type::named("Toybox.Lang.Char"),
@@ -26,6 +32,9 @@ impl DictionaryScalar {
     pub(crate) fn text(&self) -> String {
         match self {
             Self::Number(n) => format!("number 0x{n:08x}"),
+            Self::Double(n) => format!("double 0x{n:016x}"),
+            Self::Float(n) => format!("float 0x{n:08x}"),
+            Self::Long(n) => format!("long 0x{n:016x}"),
             Self::Char(n) => format!("char 0x{n:08x}"),
             Self::Boolean(b) => format!("boolean {b}"),
             Self::String(s) => format!("string {s:?}"),
@@ -43,6 +52,9 @@ impl DictionaryScalar {
         *at += 1;
         Some(match kind.as_str() {
             "number" => Self::Number(u32::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
+            "long" => Self::Long(u64::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
+            "float" => Self::Float(u32::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
+            "double" => Self::Double(u64::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
             "char" => Self::Char(u32::from_str_radix(value.strip_prefix("0x")?, 16).ok()?),
             "boolean" => Self::Boolean(match value.as_str() {
                 "true" => true,
@@ -110,7 +122,11 @@ pub(crate) fn constant_record(
     };
     let mut unique: Vec<&(DictionaryScalar, DictionaryScalar)> = Vec::new();
     for entry in entries {
-        if let Some(position) = unique.iter().position(|old| old.0 == entry.0) {
+        // Double NaN never matches a Dictionary key, even itself. Keep these
+        // entries distinct; all other supported constant keys compare by bits/text.
+        let repeatable =
+            !matches!(&entry.0, DictionaryScalar::Double(bits) if f64::from_bits(*bits).is_nan());
+        if let Some(position) = unique.iter().position(|old| repeatable && old.0 == entry.0) {
             unique[position] = entry;
         } else {
             unique.push(entry);
@@ -120,6 +136,9 @@ pub(crate) fn constant_record(
     let mut scalar = |value: &DictionaryScalar| match value {
         DictionaryScalar::Null => Value::Null,
         DictionaryScalar::Number(n) => Value::Number(*n),
+        DictionaryScalar::Double(n) => Value::Double(*n),
+        DictionaryScalar::Float(n) => Value::Float(*n),
+        DictionaryScalar::Long(n) => Value::Long(*n),
         DictionaryScalar::Char(n) => Value::Char(*n),
         DictionaryScalar::Boolean(b) => Value::Boolean(*b),
         DictionaryScalar::String(s) => {
@@ -153,6 +172,9 @@ pub(crate) fn constant_record(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryKey {
     Number,
+    Double,
+    Float,
+    Long,
     String,
     Boolean,
     Char,
@@ -162,6 +184,12 @@ pub enum DictionaryKey {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
     Number,
+    Double,
+    NullableDouble,
+    Float,
+    NullableFloat,
+    Long,
+    NullableLong,
     NullableNumber,
     String,
     NullableString,
@@ -184,12 +212,21 @@ impl DictionaryType {
     pub fn api_type(self) -> Type {
         let key = match self.key {
             DictionaryKey::Number => "Number",
+            DictionaryKey::Double => "Double",
+            DictionaryKey::Float => "Float",
+            DictionaryKey::Long => "Long",
             DictionaryKey::String => "String",
             DictionaryKey::Boolean => "Boolean",
             DictionaryKey::Char => "Char",
         };
         let (value, nullable) = match self.value {
             DictionaryValue::Number => ("Number", false),
+            DictionaryValue::Double => ("Double", false),
+            DictionaryValue::NullableDouble => ("Double", true),
+            DictionaryValue::Float => ("Float", false),
+            DictionaryValue::NullableFloat => ("Float", true),
+            DictionaryValue::Long => ("Long", false),
+            DictionaryValue::NullableLong => ("Long", true),
             DictionaryValue::NullableNumber => ("Number", true),
             DictionaryValue::String => ("String", false),
             DictionaryValue::NullableString => ("String", true),
@@ -216,6 +253,9 @@ impl DictionaryType {
         let key = match key.as_ref() {
             Type::Named(name) => match name.as_str() {
                 "Toybox.Lang.Number" => DictionaryKey::Number,
+                "Toybox.Lang.Double" => DictionaryKey::Double,
+                "Toybox.Lang.Float" => DictionaryKey::Float,
+                "Toybox.Lang.Long" => DictionaryKey::Long,
                 "Toybox.Lang.String" => DictionaryKey::String,
                 "Toybox.Lang.Boolean" => DictionaryKey::Boolean,
                 "Toybox.Lang.Char" => DictionaryKey::Char,
@@ -225,6 +265,12 @@ impl DictionaryType {
         };
         for value_kind in [
             DictionaryValue::Number,
+            DictionaryValue::Double,
+            DictionaryValue::NullableDouble,
+            DictionaryValue::Float,
+            DictionaryValue::NullableFloat,
+            DictionaryValue::Long,
+            DictionaryValue::NullableLong,
             DictionaryValue::NullableNumber,
             DictionaryValue::String,
             DictionaryValue::NullableString,
@@ -247,12 +293,21 @@ impl DictionaryType {
     pub(crate) fn text(self) -> String {
         let key = match self.key {
             DictionaryKey::Number => "integer",
+            DictionaryKey::Double => "double",
+            DictionaryKey::Float => "float",
+            DictionaryKey::Long => "long",
             DictionaryKey::String => "string",
             DictionaryKey::Boolean => "boolean",
             DictionaryKey::Char => "char",
         };
         let value = match self.value {
             DictionaryValue::Number => "integer",
+            DictionaryValue::Double => "double",
+            DictionaryValue::NullableDouble => "nullable-double",
+            DictionaryValue::Float => "float",
+            DictionaryValue::NullableFloat => "nullable-float",
+            DictionaryValue::Long => "long",
+            DictionaryValue::NullableLong => "nullable-long",
             DictionaryValue::NullableNumber => "nullable-integer",
             DictionaryValue::String => "string",
             DictionaryValue::NullableString => "nullable-string",
@@ -272,6 +327,9 @@ impl DictionaryType {
         Some(Self {
             key: match key {
                 "integer" => DictionaryKey::Number,
+                "double" => DictionaryKey::Double,
+                "float" => DictionaryKey::Float,
+                "long" => DictionaryKey::Long,
                 "string" => DictionaryKey::String,
                 "boolean" => DictionaryKey::Boolean,
                 "char" => DictionaryKey::Char,
@@ -279,6 +337,12 @@ impl DictionaryType {
             },
             value: match value {
                 "integer" => DictionaryValue::Number,
+                "double" => DictionaryValue::Double,
+                "nullable-double" => DictionaryValue::NullableDouble,
+                "float" => DictionaryValue::Float,
+                "nullable-float" => DictionaryValue::NullableFloat,
+                "long" => DictionaryValue::Long,
+                "nullable-long" => DictionaryValue::NullableLong,
                 "nullable-integer" => DictionaryValue::NullableNumber,
                 "string" => DictionaryValue::String,
                 "nullable-string" => DictionaryValue::NullableString,
@@ -299,8 +363,10 @@ pub(crate) fn record_entries(
     let scalar = |value: &Value| {
         Some(match value {
             Value::Null => DictionaryScalar::Null,
-            Value::Long(_) | Value::Float(_) | Value::Double(_) => return None,
             Value::Number(n) => DictionaryScalar::Number(*n),
+            Value::Double(n) => DictionaryScalar::Double(*n),
+            Value::Float(n) => DictionaryScalar::Float(*n),
+            Value::Long(n) => DictionaryScalar::Long(*n),
             Value::Char(n) => DictionaryScalar::Char(*n),
             Value::Boolean(b) => DictionaryScalar::Boolean(*b),
             Value::String(alias) => DictionaryScalar::String(
