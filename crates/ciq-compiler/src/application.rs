@@ -28,6 +28,8 @@ const EQUALS: u32 = 0x008000b3;
 const HASH_CODE: u32 = 0x008000ad;
 const WEAK: u32 = 0x00800418;
 const STILL_ALIVE: u32 = 0x00800417;
+const METHOD: u32 = 0x008000b2;
+const INVOKE: u32 = 0x008000ac;
 const COMPARE_TO: u32 = 0x00800e50;
 const LENGTH: u32 = 0x008000bb;
 const SUBSTRING: u32 = 0x008000bd;
@@ -350,6 +352,8 @@ pub fn build_console_application(
         ("hashCode".into(), HASH_CODE),
         ("weak".into(), WEAK),
         ("stillAlive".into(), STILL_ALIVE),
+        ("method".into(), METHOD),
+        ("invoke".into(), INVOKE),
         ("compareTo".into(), COMPARE_TO),
         ("length".into(), LENGTH),
         ("substring".into(), SUBSTRING),
@@ -469,6 +473,8 @@ pub fn build_console_application(
         ("__ciq_native_hashCode".into(), HASH_CODE),
         ("__ciq_native_weak".into(), WEAK),
         ("__ciq_native_stillAlive".into(), STILL_ALIVE),
+        ("__ciq_native_method".into(), METHOD),
+        ("__ciq_native_invoke".into(), INVOKE),
         ("__ciq_native_compareTo".into(), COMPARE_TO),
         ("__ciq_native_length".into(), LENGTH),
         ("__ciq_native_substring".into(), SUBSTRING),

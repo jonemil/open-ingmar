@@ -14,6 +14,19 @@ Dictionaries, positional tuples, and class type parameters. A declaration
 describes a runtime-provided API; compiler analysis state does not belong in it.
 `Lang.Object` is the root class. Modules are namespaces and do not inherit Object.
 
+Method declarations have a fixed parameter prefix and an optional repeated
+argument type. Receiver instantiation substitutes both through generic
+container bindings. Fixed declarations still require exact arity; variadic
+declarations check the prefix and each additional argument. Only the supported
+native-value call profiles authorize execution.
+
+Object `method(Symbol)` returns Method since API 1.0.0. Method declares
+`hashCode()` and variadic `invoke` from 1.0.0. Its declared invocation result is
+Object; the exact Method receiver uses a conservative Object-or-Null result
+because erased callbacks can return Void or Null. Repeated arguments accept
+Object or Null. This does not recover a target signature or validate its
+introduction level; see the [executable contracts](compiler-subset.md#method-values-and-invocation).
+
 `Catalogue::method()` follows superclass paths and returns the declaring class,
 effective result, and required API level. `Method.result` retains the generic
 signature; `ResolvedMethod.result` substitutes an exact receiver override.
@@ -101,9 +114,10 @@ These documented members lack executable prerequisites. Supported methods are
 listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
-- **Inherited Object methods:** `method(Symbol)` (1.0.0) needs callable Method
-  values. Broader `weak` targets and Object-typed `weak` results need
-  contracts beyond the bounded Array/Dictionary/WeakReference profile.
+- **Inherited Object methods:** direct source/self callback creation needs
+  receiver contracts beyond the bounded native Method profile. Broader `weak`
+  targets and Object-typed `weak` results need contracts beyond the supported
+  Array/Dictionary/WeakReference/Method profile.
   The immutable numeric/String/Boolean/Char specialization does not establish
   this behavior.
   [Boolean](../investigations/compiler-boolean-methods.md),

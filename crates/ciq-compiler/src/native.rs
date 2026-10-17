@@ -132,15 +132,21 @@ pub(crate) fn value_call(
     let signature = api::core()
         .method_for_type(receiver, member)
         .ok_or("native member requires concrete container parameters")?;
-    if signature.parameters.len() != arguments.len() {
+    if arguments.len() > crate::MAX_PARAMETERS {
+        return Err("native call exceeds 254-argument limit".into());
+    }
+    if arguments.len() < signature.parameters.len()
+        || (signature.variadic.is_none() && signature.parameters.len() != arguments.len())
+    {
         return Err("native call argument count does not match its API contract".into());
     }
-    if !signature
-        .parameters
-        .iter()
-        .zip(arguments)
-        .all(|(expected, actual)| accepts(expected, actual))
-    {
+    if !arguments.iter().enumerate().all(|(index, actual)| {
+        signature
+            .parameters
+            .get(index)
+            .or(signature.variadic.as_ref())
+            .is_some_and(|expected| accepts(expected, actual))
+    }) {
         return Err("native call argument types do not match its API contract".into());
     }
     if class == "Toybox.Lang.String"
@@ -166,6 +172,7 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Boolean"
                 | "Toybox.Lang.Array"
                 | "Toybox.Lang.Dictionary"
+                | "Toybox.Lang.Method"
                 | "Toybox.Lang.WeakReference",
             "Toybox.Lang.Object",
             "weak"
@@ -178,9 +185,14 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Symbol"
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Object"
+                | "Toybox.Lang.Method"
                 | "Toybox.Lang.WeakReference",
             "Toybox.Lang.Object",
             "toString" | "equals" | "hashCode"
+        ) | (
+            "Toybox.Lang.Method",
+            "Toybox.Lang.Method",
+            "invoke" | "hashCode"
         ) | (
             "Toybox.Lang.Symbol",
             "Toybox.Lang.Symbol",
@@ -289,6 +301,11 @@ pub(crate) fn value_call(
     );
     let supported = supported
         || (class == "Toybox.Graphics.Dc" && matches!(member, "clear" | "setColor" | "drawText"));
+    let supported = supported
+        || (member == "method"
+            && resolved.declaring_class.name == "Toybox.Lang.Object"
+            && equality_argument(receiver)
+            && !matches!(receiver, api::Type::Null | api::Type::Union(_)));
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
@@ -350,6 +367,7 @@ fn equality_argument(ty: &api::Type) -> bool {
                 | "Toybox.Lang.Char"
                 | "Toybox.Lang.Dictionary"
                 | "Toybox.Lang.Object"
+                | "Toybox.Lang.Method"
                 | "Toybox.Lang.WeakReference"
         ),
         api::Type::Array(element) => crate::ArrayElement::from_api_type(element).is_some(),

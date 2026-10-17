@@ -256,6 +256,8 @@ fn substitute_parameters(ty: &Type, bindings: &[(&str, &Type)]) -> Option<Type> 
 pub struct Method {
     pub name: String,
     pub parameters: Vec<Type>,
+    /// Optional repeated argument type after the fixed parameter prefix.
+    pub variadic: Option<Type>,
     /// Generic declared result, before exact receiver specialization.
     pub result: Type,
     /// Exact canonical receiver paths with specialized results. Other receivers
@@ -302,6 +304,8 @@ pub struct ResolvedMethod<'a> {
 pub struct InstantiatedMethod<'a> {
     pub declaration: ResolvedMethod<'a>,
     pub parameters: Vec<Type>,
+    /// Optional repeated argument type after the fixed parameter prefix.
+    pub variadic: Option<Type>,
     pub result: Type,
 }
 
@@ -360,6 +364,10 @@ impl Catalogue {
         Some(InstantiatedMethod {
             declaration,
             parameters,
+            variadic: match &declaration.method.variadic {
+                Some(ty) => Some(substitute_parameters(ty, substitutions)?),
+                None => None,
+            },
             result,
         })
     }
@@ -429,6 +437,7 @@ fn method(name: &str, parameters: Vec<Type>, result: Type, since: ApiLevel) -> M
     Method {
         name: name.into(),
         parameters,
+        variadic: None,
         result,
         receiver_results: BTreeMap::new(),
         since,
@@ -456,6 +465,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.Array",
         "Toybox.Lang.Dictionary",
         "Toybox.Lang.WeakReference",
+        "Toybox.Lang.Method",
         "Toybox.Lang.Symbol",
         "Toybox.Application.AppBase",
         "Toybox.WatchUi.View",
@@ -530,6 +540,12 @@ fn build_core() -> Catalogue {
             Type::named("Toybox.Lang.Boolean"),
             initial,
         ),
+        method(
+            "method",
+            vec![Type::named("Toybox.Lang.Symbol")],
+            Type::named("Toybox.Lang.Method"),
+            initial,
+        ),
         method("hashCode", vec![], Type::named(number), initial),
         method(
             "weak",
@@ -559,6 +575,17 @@ fn build_core() -> Catalogue {
     classes.get_mut("Toybox.Lang.Symbol").unwrap().methods = vec![
         method("toNumber", vec![], Type::named(number), ApiLevel(2, 3, 0)),
         method("toString", vec![], Type::named(string), initial),
+    ];
+    let mut invoke = method("invoke", vec![], Type::named(object), initial);
+    invoke.variadic = Some(Type::Union(vec![Type::named(object), Type::Null]));
+    // Erased calls can target Void/nullable methods; preserve that possibility.
+    invoke.receiver_results.insert(
+        "Toybox.Lang.Method".into(),
+        Type::Union(vec![Type::named(object), Type::Null]),
+    );
+    classes.get_mut("Toybox.Lang.Method").unwrap().methods = vec![
+        invoke,
+        method("hashCode", vec![], Type::named(number), initial),
     ];
     let weak = classes.get_mut(object).unwrap().methods.last_mut().unwrap();
     weak.receiver_results = [

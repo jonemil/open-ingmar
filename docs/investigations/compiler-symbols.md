@@ -41,7 +41,8 @@ This does not establish release-mode reflection behavior for our generator.
 The initial SDK probe also calls `[1].method(:size).invoke()` and prints 1.
 That establishes a minimal accepted callback path, not Method ownership,
 variadic arity/result contracts, Void callbacks, or constructor semantics.
-Those questions precede executable Method support and Array comparator work.
+[Method evidence](compiler-methods.md) extends that probe to ownership and erased
+invocation. Array comparator contracts remain separate.
 Nullable Symbols and Symbol containers were not tested here.
 
 [symbol]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Symbol.html

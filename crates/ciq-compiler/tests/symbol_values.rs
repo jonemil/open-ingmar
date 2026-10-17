@@ -72,7 +72,7 @@ fn symbol_contracts_keep_api_boundaries_user_calls_joins_and_native_methods() {
 }
 
 #[test]
-fn symbols_reject_numeric_operators_containers_and_unimplemented_method_values() {
+fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
     for expression in [
         ":alpha+1",
         ":alpha==1",
@@ -82,7 +82,7 @@ fn symbols_reject_numeric_operators_containers_and_unimplemented_method_values()
         ":alpha.toNumber(1)",
         ":alpha.compareTo(:beta)",
         "1.compareTo(:alpha)",
-        ":alpha.method(:toNumber)",
+        ":alpha.method(:toNumber, :size)",
     ] {
         assert!(
             compile(&format!("function f() {{ return {expression}; }}")).is_err(),

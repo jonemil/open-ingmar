@@ -1066,17 +1066,18 @@ contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
 General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Object `method` needs Symbol/callable contracts;
+contracts before acceptance. Object `method` follows the
+[bounded Method profile](#method-values-and-invocation);
 ordinary `weak` follows the [bounded reference profile](#ordinary-weak-references).
 
 
 ## Object equality and container observers
 
 Supported numeric, String, Boolean, Char, Symbol, Array, Dictionary, opaque Object,
-and WeakReference receivers accept `equals(other)` → Boolean. Its bounded
+Method, and WeakReference receivers accept `equals(other)` → Boolean. Its bounded
 argument profile includes those scalar
 types, all supported invariant Array contracts, opaque or typed Dictionary
-references, opaque Object/WeakReference values, Null, and supported nullable
+references, opaque Object/Method/WeakReference values, Null, and supported nullable
 forms. Comparing containers does not require matching element/key/value
 contracts and does not convert or erase
 their types. Nullable callback Dictionary arguments require no proof; nullable
@@ -1096,7 +1097,7 @@ results. Native dispatch retains runtime semantics for scalar equality,
 including String content comparison and numeric class distinctions; no result
 or hash is folded. Scalar override/API requirements remain in their respective
 sections. This profile does not enable Array/Dictionary equality operators,
-or Object callbacks. See the
+or general callback consumers. See the
 [observer evidence](../investigations/compiler-object-observers.md).
 
 ## Native value calls
@@ -1235,12 +1236,42 @@ metadata. Raw CODE output needs an explicit symbol source; it cannot allocate
 an independent identity space.
 
 Symbol arithmetic, ordering, truthiness, direct printing, nullable contracts,
-container elements/keys, and `Object.method`/Method values remain unsupported.
+and container elements/keys remain unsupported. Method lookup follows its
+separate contract below.
 See the [specimen and binding evidence](../investigations/compiler-symbols.md).
+
+## Method values and invocation
+
+Supported scalar, Array, Dictionary, opaque Object, WeakReference, and Method
+values support `method(Symbol)` → non-null `Toybox.Lang.Method`, since API
+1.0.0. Method lookup and missing-member errors remain runtime operations.
+The Method retains its bound receiver; replacing the original variable does
+not release that receiver while a Method still owns it.
+
+Method supports annotated parameters/results, local storage/assignment,
+matching conditional arms, and inherited `toString`/`equals` plus its own
+`hashCode`, since 1.0.0. `weak()` returns WeakReference from 1.2.0. Native
+observers retain runtime identity/hash behavior: repeated bindings need not
+compare equal even for the same target/member.
+
+`invoke(arguments...)` accepts up to 254 supported Object/Null values and
+returns opaque `Object or Null`. This erased result covers scalar/container
+values, nullable returns, and Void callbacks. Save and guard it before Object
+member calls; it cannot become a Number, typed container, or Method without a
+separate refinement contract. Statement invocation discards the result.
+Receiver evaluation precedes arguments, left to right, and each runs once.
+
+The compiler checks the Method API and VM argument-count limit. The target's
+existence, arity, accepted types, introduction level, and result behavior remain
+runtime/caller obligations; dynamic lookup does not recover its signature.
+Direct source-instance/self callback syntax, constructors, nullable Method
+contracts, typed signatures, and Array sorting remain deferred. Opaque Object
+dispatch does not establish those higher-level contracts. See the
+[binding/lifetime evidence](../investigations/compiler-methods.md).
 
 ## Ordinary weak references
 
-Supported Arrays, opaque/typed Dictionaries, and WeakReference receivers support
+Supported Arrays, opaque/typed Dictionaries, Method, and WeakReference receivers support
 `weak()` → `Toybox.Lang.WeakReference`, since API 1.2.0. WeakReference is a
 non-null value with `get()` → `Toybox.Lang.Object or Null` and `stillAlive()` →
 Boolean, both since 1.2.0. It also inherits `toString`, `equals`, and `hashCode`;
@@ -1482,7 +1513,7 @@ Non-null indexed updates/compounds follow scalar operator promotion and must
 retain the element type. For example, `Float += Number` is valid but
 `Float += Long` would produce Double and is rejected. Nullable elements cannot
 be compound targets without a supported direct non-null read contract.
-Sorting, Object callbacks, nested containers, nullable Array
+Sorting, broader callback consumers, nested containers, nullable Array
 references, and whole-array expression joins outside the existing Number/Char profile
 remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
 and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
@@ -1506,7 +1537,7 @@ String-array contract supplies the type of a direct `[]`.
 and `slice` use the existing Array contracts with String substituted for the
 element type. Search/removal compare String text. Array/String types,
 construction, indexing, `size`, and `toString` require API 1.0.0; the other
-methods require 1.3.0. Sort and Object callbacks remain deferred.
+methods require 1.3.0. Sort and broader callback consumers remain deferred.
 Arrays must be converted to String before printing.
 
 See the [example](../../examples/compiler-string-arrays/README.md) and
@@ -1524,7 +1555,7 @@ Literal-only arrays use `apush` constants; computed elements use ordered private
 construction, including conditional/short-circuit expressions. Copies share
 mutation; repeated constant loads are independently mutable. The supported
 Array methods and API levels match the String/Number profile. Sorting and
-Object callbacks remain deferred. See the
+broader callback consumers remain deferred. See the
 [example](../../examples/compiler-boolean-arrays/README.md) and
 [evidence](../investigations/compiler-boolean-arrays.md).
 

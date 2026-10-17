@@ -1,0 +1,59 @@
+# Bound Method values and erased invocation
+
+2026-10-17, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+
+**Officially documented:** [Object.method(Symbol)][object] returns a bound
+[Method][method], whose variadic `invoke` calls the target. Binding, invocation,
+and Method `hashCode` date from API 1.0.0. The published invocation result is
+Object; it does not describe a concrete target signature.
+
+**Observed:** the [authored specimen][example] binds native Array, Dictionary,
+and Number methods, then invokes zero/one/two-argument targets. Binding retains
+the receiver: after replacing the original Array variable, its weak reference
+remains live and bound mutation/size calls still reach the original Array.
+Replacing every retained Method lets that target expire. A weak Method result
+is live while its Method owner remains, and retrieved aliases compare equal.
+
+Method aliases compare equal and have matching hashes. Separate bindings of the
+same receiver/member compare unequal in this probe. String conversion is
+repeatable within the probe; no representation or hash algorithm is inferred.
+Receiver/argument markers execute once, in that order, for discarded invocation.
+
+## Results and errors
+
+Invoking Dictionary `put` through an erased Method parameter produces Null;
+Dictionary `get` can also produce Null. Valued invocations produce Number or
+Array objects. The compiler therefore preserves Object-or-Null, independently
+of observations at one call site. Source tests reject unguarded consumers and
+concrete recovery. The SDK checker knows a directly bound `put` returns Void
+and rejects assigning that invocation; the specimen uses an ordinary Method
+parameter to exercise the erased result without casts.
+
+An isolated SDK app prints `before`, then calls a helper that binds
+`:missingMember` on `Array<Number>`. Binding reports `Invalid Value` before
+returning: neither `created` nor the later invocation executes. Artifacts:
+`scratch/method-missing/`. This establishes one lookup failure, not portable
+error text or exception recovery. Target argument mismatches and introduction
+levels are not statically established by an erased Method contract.
+
+## Encoding and reproduction
+
+Build the tracked source with an ignored Jungle and the shared native-names
+manifest/resources. Use the
+[console checker](../../scripts/README.md#console-specimen-check) for saved-stage
+parity, structured CODE/DATA/SYMBOLS reconstruction, signing, and runtime checks.
+SDK/generated programs match all 18 expected lines. Artifacts:
+`scratch/check-methods-final/`.
+
+SDK symbols bind `method` to `0x008000b2` and `invoke` to `0x008000ac`.
+Existing member lookup, invocation, and local ownership transfers suffice;
+no opcode or PRG record is added. Tests cover the 254-argument encoding bound
+and raw-CODE symbol binding, including the earlier `stillAlive` alias.
+
+Direct source/self callback creation, Method constructors, checked signatures,
+nullable Method storage, and Array comparator contracts remain outside this
+specimen. The [plan](../plan.md) owns their sequencing.
+
+[object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
+[method]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Method.html
+[example]: ../../examples/compiler-methods/README.md

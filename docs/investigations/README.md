@@ -15,6 +15,8 @@ SDK/version and scope; they are not current feature inventories. Use
   opaque Object results, and hidden temporary ownership.
 - [Symbols](compiler-symbols.md): value identity, native methods, name binding,
   and development reflection metadata.
+- [Methods](compiler-methods.md): bound-receiver ownership, erased invocation,
+  nullable/Void results, and runtime lookup failures.
 - [Wider numeric arrays](compiler-numeric-arrays.md): Long/Float/Double DATA
   records, nullable elements, construction, and native methods.
 - [Wider String/Char operators](compiler-wide-operators.md): numeric operand

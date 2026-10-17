@@ -12,11 +12,12 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and callable/reference facilities.** Add Method values and invocation
-through `Object.method(Symbol)`. Establish bound-receiver ownership, argument
-arity, and result contracts before exposing general callbacks.
-Use these prerequisites to revisit deferred core methods, including Array
-comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+**Object and callable/reference facilities.** Add direct source-instance/self
+callback creation and establish checked callback signatures where consumers
+need argument/result guarantees. Erased Method invocation does not establish
+the target's API availability, arity, or concrete result type. Use these
+prerequisites to revisit Array comparators and other callback consumers.
+Plan `has`/`instanceof` and their checking/refinement rules.
 Nullable Symbols and Symbol Array/Dictionary elements need their own container
 and DATA contracts; ordinary Symbol values do not implicitly enable them.
 

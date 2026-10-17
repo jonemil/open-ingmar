@@ -794,6 +794,8 @@ resolve by unique stored names `globals/<name>` / `<name>`, independently of the
 file's aliases. Missing/ambiguous names, duplicate aliases/IDs, conflicting
 generated bindings, and non-symbol items are errors before output creation.
 Literal aliases `__ciq_symbol_<name>` likewise resolve by the exact stored name.
+Native aliases `__ciq_native_<name>` follow that same short-name rule; method
+authorization belongs to IR validation rather than a second binding whitelist.
 `--symbols` with IR/assembly emission is rejected; those stages remain symbolic.
 No DATA/SYMBOLS section is written by raw CODE encoding.
 
@@ -1297,6 +1299,16 @@ Dc parameter and Void; onShow/onHide require zero parameters and Void. Callback
 ownership and constructor resolution follow the [class rules](compiler-classes.md).
 
 ## Native value calls
+
+Method parameters, call results, and matching conditional-edge values use the
+`method` tag, retained by explicit function `result=method` contracts. Creation
+uses ordinary `.call-native ... method %<symbol>`; invocation uses
+`.call-native ... invoke [%<argument> ...]`. No separate callback instruction
+or target-signature annotation is inferred. Result validation recomputes
+Object-or-Null for invocation, including when all observed results were non-null.
+Native API declarations carry a repeated argument type for `invoke`; ordinary
+fixed-arity methods remain fixed. The existing 254-argument VM limit applies.
+See [source Method contracts](compiler-subset.md#method-values-and-invocation).
 
 `.symbol %<result-id> <name> [span=<start>:<end>]` defines a non-null Symbol by
 ASCII identifier, without a numeric ID. Parameter, call-result, and matching

@@ -88,7 +88,7 @@ fn observers_do_not_enable_object_erasure_weak_callbacks_or_equality_operators()
         "return a.equals(new Toybox.WatchUi.View());",
         "return a == a;",
         "return a.weak(1);",
-        "return a.method(:size);",
+        "return a.method(1);",
         "return a.sort(null);",
     ] {
         assert!(

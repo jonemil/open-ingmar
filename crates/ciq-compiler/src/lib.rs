@@ -315,6 +315,8 @@ pub enum ReturnType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null bound Method with erased argument and result contracts.
+    Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     Integer,
@@ -352,6 +354,8 @@ pub enum ParameterType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null bound Method with erased argument and result contracts.
+    Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     Integer,
@@ -402,6 +406,7 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
@@ -436,6 +441,7 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(_) => ValueType::Object(NativeClass::View).api_type(),
@@ -456,6 +462,8 @@ enum ValueType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null bound Method with erased argument and result contracts.
+    Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     Integer,
@@ -539,6 +547,7 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::Method => api::Type::named("Toybox.Lang.Method"),
             Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
@@ -576,6 +585,7 @@ impl ValueType {
                 "Toybox.Lang.Dictionary" => Some(Self::Dictionary),
                 "Toybox.Lang.Object" => Some(Self::LangObject),
                 "Toybox.Lang.WeakReference" => Some(Self::WeakReference),
+                "Toybox.Lang.Method" => Some(Self::Method),
                 "Toybox.Lang.Symbol" => Some(Self::Symbol),
                 name => NativeClass::from_name(name).map(Self::Object),
             },
@@ -2181,6 +2191,7 @@ impl Function {
                             ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::LangObject => ReturnType::LangObject,
                             ValueType::WeakReference => ReturnType::WeakReference,
+                            ValueType::Method => ReturnType::Method,
                             ValueType::Symbol => ReturnType::Symbol,
                             ValueType::Object(class) => ReturnType::Object(class),
                             ValueType::Tuple(shape) => ReturnType::Tuple(shape),
@@ -2515,6 +2526,7 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::Method => "method",
                             ParameterType::Symbol => "symbol",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
@@ -2534,6 +2546,7 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::Method
             | ReturnType::Symbol
             | ReturnType::Dictionary
             | ReturnType::TypedDictionary(_)
@@ -3045,6 +3058,7 @@ fn validate_call_arguments(
                     | ValueType::LangObject
                     | ValueType::NullableObject
                     | ValueType::WeakReference
+                    | ValueType::Method
                     | ValueType::Symbol
                     | ValueType::Dictionary
                     | ValueType::TypedDictionary(_)
@@ -3088,6 +3102,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::Method => Ok(ValueType::Method),
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
@@ -3122,6 +3137,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::LangObject => " result=object",
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
+        ReturnType::Method => " result=method",
         ReturnType::Symbol => " result=symbol",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",

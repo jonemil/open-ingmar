@@ -16,6 +16,6 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-symbols/generated.p
 ```
 
 Symbol requires API 1.0.0; `weak()` requires 1.2.0 and `toNumber()` requires
-2.3.0. Nullable Symbols, Symbol containers, and Method values/invocation remain
-outside this specimen. See the
+2.3.0. Nullable Symbols and Symbol containers remain outside this specimen.
+[Method values/invocation](../compiler-methods/README.md) have a separate specimen. See the
 [source contracts](../../docs/specs/compiler-subset.md#symbol-values).
