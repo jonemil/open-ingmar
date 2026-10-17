@@ -71,8 +71,8 @@ constants for scalar literals. Baseline instruction selection should preserve
 evaluation order and failure behavior without optimization or requiring the
 SDK's exact layout. Validate native/text paths and structured reconstruction.
 
-Revisit deferred [Number][number-methods], [String][string-methods], and
-[Boolean][boolean-methods] methods as their prerequisites become available.
+Close the remaining [core API contracts][core-gaps] as their prerequisites
+become available.
 Read the language reference alongside each Lang contract. Probe sign syntax,
 conversion ranges, overflow, promotion, and evaluation order independently;
 resolve the [negative-literal postfix][negation] and
@@ -84,6 +84,43 @@ device capacity distinct. Grow the [API declarations][api-design] through
 core contracts; broader device/app/permission inputs and Application/System
 integration belong to the later project/SDK phase. A Jungle driver or complete
 API definition parser is not a prerequisite for this core work.
+
+## Core completion gate
+
+Finish the reviewed Monkey C operators and Toybox.Lang contracts before adding
+broader SDK classes/modules or resuming project/resource/package expansion.
+The [remaining core API inventory][core-gaps] covers named Lang classes,
+inherited methods, interfaces, module functions, and supporting constants/types.
+Existing names or successful narrow specimens do not establish full coverage.
+
+Remaining operator/language dependencies include:
+
+- `has`, `instanceof`, casts, and the corresponding type/member/availability
+  proofs in source and saved IR.
+- Valid operand combinations, non-Boolean logical/truth-value behavior, general
+  unions/nullability, and remaining literal/Unicode discrepancies. Check the
+  SDK before widening a rule; its rejected Char operations and expression
+  increment/decrement forms are compatibility restrictions, not missing work.
+- Assignment and compound/update targets as the object/container types grow.
+  Verify expression-versus-statement forms instead of assuming C semantics.
+- Source signatures/fields independent of native base, source inheritance,
+  overriding/super dispatch, member/bare-call lookup, and the declaration and
+  control-flow constructs needed to exercise core objects fully. Keep constants,
+  enums, static/global storage, and exception syntax in this core phase.
+
+A core class/method is complete only when its documented applicable signatures,
+argument/result domains, inherited dispatch, API checks, and required storage
+forms work through the [whole toolchain](#toolchain-completion), with matching
+SDK/generated behavior. Explicitly identify unknowns and unresolved failures;
+do not move a missing core contract into the later SDK backlog to close a class.
+Invalid/unavailable SDK uses should produce appropriate diagnostics. The
+compiler emits runtime calls; it does not reimplement firmware method bodies.
+
+Reuse existing application scaffolding, and add only minimal native/resource
+fixtures needed to validate a core contract such as ResourceId. Those fixtures
+are not a reason to start broader UI or project/resource generation. Reconcile
+the reviewed public Lang inventory and operator tables once more before opening
+the later SDK phase; close any newly found gaps first.
 
 ## Toolchain completion
 
@@ -126,7 +163,8 @@ the available types, including closely related prerequisites when practical,
 to share a complete-app specimen and final validation run. The compiler
 implements contracts, availability checks, and dispatch; the runtime supplies
 method bodies.
-Completing every method of a class is not a prerequisite for moving on.
+Methods may be sequenced across core classes as dependencies require; the
+[core completion gate](#core-completion-gate) still blocks broader SDK work.
 
 - Review the class's methods, including inherited members, together. Record
   argument/result contracts, API constraints, evidence, and unknowns in a focused
@@ -171,7 +209,7 @@ all their encodings or runtime behavior are understood:
 - **Types and dynamic behavior:** `as` declarations/casts, `Any`, unions,
   nullability, container/tuple/callback types, flow refinement, and changing
   local types. Decide a checking policy explicitly; our fixed local types and
-  integer-only arguments are subset restrictions. Extend typed IR and text
+bounded argument contracts are subset restrictions. Extend typed IR and text
   together without making full gradual checking the first milestone.
 - **Exceptions and callbacks:** `throw`, typed/catch-all handlers, `finally`,
   symbol-based method references, and callback invocation. Exception lowering
@@ -206,9 +244,8 @@ for core-language validation throughout.
    an intent example is available; null-state startup does not establish it.
    Keep the console bootstrap's selected method distinct from manifest entry.
 2. **Resume UI profiles after the core language phase.** Keep the input counter
-   bounded while expanding core Lang support. Widen named source signatures and
-   reference-field targets beyond View only with checked native-base projection
-   and assignability through saved IR. Source inheritance and other input
+   bounded while expanding core Lang support. Reuse the established core source
+   inheritance, reference projection, and assignability rules. Other input
    callbacks/event objects need separate contracts and runtime evidence.
    Later, probe View transitions to verify onHide dispatch; the exit-from-update
    specimen only establishes onStop. Extend drawing methods/constants and
@@ -312,11 +349,7 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 
 [api-design]: specs/api-declarations.md
 
-[number-methods]: specs/api-declarations.md#deferred-core-methods
-
-[string-methods]: specs/api-declarations.md#deferred-core-methods
-
-[boolean-methods]: specs/api-declarations.md#deferred-core-methods
+[core-gaps]: specs/api-declarations.md#deferred-core-methods
 
 [weak-results]: investigations/compiler-immutable-weak.md
 

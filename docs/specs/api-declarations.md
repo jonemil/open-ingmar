@@ -126,20 +126,52 @@ implementations without coupling the catalogue to VM storage.
 
 ## Deferred core methods
 
-These documented members lack executable prerequisites. Supported methods are
-listed only in the source specification. Public API attribution and runtime
-results remain in the linked investigations.
+This inventory covers outstanding Lang contracts, not just missing method names.
+The [source specification](compiler-subset.md) owns implemented behavior and its
+bounded argument/storage profiles. Compare each class's own and inherited
+members against the reviewed public API before marking it complete. Remaining
+operator/type-system dependencies and sequencing belong to the
+[core completion gate](../plan.md#core-completion-gate).
 
-- **Inherited Object methods:** direct source/self callback creation needs
-  receiver contracts beyond the bounded native Method profile. Broader `weak`
-  targets and Object-typed `weak` results need contracts beyond the supported
-  Array/Dictionary/WeakReference/Method profile.
-  The immutable numeric/String/Boolean/Char specialization does not establish
-  this behavior.
-  [Boolean](../investigations/compiler-boolean-methods.md),
-  [Char](../investigations/compiler-char-methods.md), and
-  [weak-result evidence](../investigations/compiler-immutable-weak.md).
-- **Array:** sorting needs comparator/callable support. Equality and hashing use the
-  [shared observer profile](compiler-subset.md#object-equality-and-container-observers).
+- **Number, Long, Float, Double, Boolean, Char, String:** close the full
+  applicable Object/argument domains of comparison and observers. Resolve
+  literal/Unicode discrepancies and validate remaining boundaries. Existing
+  own-method names largely have executable profiles.
+- **Object and source objects:** generalize exact signatures and fields beyond
+  View; complete source inheritance/overrides, member lookup, type tests and
+  refinement, and broader inherited-method dispatch.
+- **Array:** dynamic-sized allocation, nested/heterogeneous/object/reference
+  elements, remaining nullable storage/receivers and joins, and sorting and
+  Comparable contracts outside the scalar profile.
+- **Dictionary:** Object/Symbol/reference keys and values, heterogeneous/nested
+  containers, general nullable storage, and typed keys/values Arrays for those
+  domains.
+- **Symbol:** nullable values, fields/container elements and keys, and full
+  selector/member-resolution contracts.
+- **Method:** constructor and class/module receiver values, unqualified method
+  lookup, known-selector checks, nullable storage, and concrete callback
+  signature/refinement rules where required by consumers.
+- **WeakReference and Object.weak:** broader source/Object targets, nullable
+  storage, and safe concrete recovery from get(); preserve exact immutable
+  weak-result behavior.
+- **ByteArray:** value/literal/allocation/indexing contracts and all own/inherited
+  methods, including numeric encoding/decoding options.
+- **Exception family:** exception construction, message/stack methods, source
+  subclassing, and throw/try/catch/finally lowering and unwinding. Distinguish
+  fatal runtime errors.
+- **ResourceId:** resource-reference value/binding contracts and own/inherited
+  methods, using minimal fixtures before broader resource generation.
+- **Lang module and supporting types:** Lang.format; NumberFormat/Endian
+  constants; Comparable and general Comparator interface use;
+  Integer/Numeric/Decimal aliases and needed union/structural option types.
 
-[The plan](../plan.md) owns sequencing and newly discovered prerequisites.
+Array default sorting and checked source Comparator instances are implemented
+within their [documented profile](compiler-subset.md#source-comparators).
+Direct source-instance/self Method binding is likewise implemented; remaining
+Method work concerns construction and broader contracts. Neither closes all
+container or callable requirements.
+
+This compiler provides checking, binding, and invocation of runtime methods.
+Completion does not require implementing native firmware method bodies. The
+[public API review](../investigations/core-lang-completion.md) records inventory
+provenance; future discoveries amend this list and the plan.
