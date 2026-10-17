@@ -12,16 +12,17 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-1. **Numeric boundaries.** Keep SDK-rejected wider Char
-   ordering and floating Char addition outside the operator profile.
-   Isolate integer division failures and floating non-finite/out-of-range
-   conversion boundaries with separate probes. Extend NaN key evidence beyond
-   the tested quiet patterns when needed; do not infer portable behavior
-   from ordinary arithmetic specimens.
-2. **Object and callable/reference facilities.** Grow shared Object contracts,
-   Symbol and Method values/invocation, and ordinary WeakReference consumers.
-   Use these prerequisites to revisit deferred core methods, including Array
-   comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+**Object and callable/reference facilities.** Grow shared Object contracts,
+Symbol and Method values/invocation, and ordinary WeakReference consumers.
+Use these prerequisites to revisit deferred core methods, including Array
+comparators. Plan `has`/`instanceof` and their checking/refinement rules.
+
+Keep SDK-rejected wider Char ordering and floating Char addition outside the
+operator profile. Further numeric boundary work should answer a concrete
+consumer need: exception recovery, other runtime targets, additional NaN key
+patterns, or conversion thresholds. The isolated
+[boundary probes](investigations/compiler-numeric-boundaries.md) establish
+simulator observations, not portable failure/recovery or conversion guarantees.
 
 Keep heterogeneous Dictionary values, Null keys, and nested containers deferred
 under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
@@ -38,9 +39,6 @@ A blocked method should lead to its core type/operator/callable prerequisite or
 another core class group. Retain explicit deferred-method inventories; declaring
 an API member does not establish executable support. Reassess remaining core
 gaps before changing focus to the later SDK/project work below.
-
-Investigate the simulator process failure for minimum Number / -1 and % -1
-separately before claiming portable boundary behavior or exception recovery.
 
 ### Core contracts and evidence
 

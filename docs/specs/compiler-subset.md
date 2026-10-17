@@ -841,16 +841,19 @@ zero; this differs from a negative-zero literal at zero. Statement `++`/`--`
 and arithmetic compound writes preserve the local's type under these promotion
 rules. Floating arithmetic and exceptional values are runtime operations;
 the compiler inserts no conversions or constant folding. The tested SDK 9.2.0 /
-fr265 runtime rejects Float zero divided by zero with `Invalid Value`; it does
-not produce a NaN through that operation.
+fr265 runtime rejects the tested Float/Double zero-divisor cases with
+`Invalid Value`; these operations do not supply infinity or NaN values.
+See [isolated boundary evidence][numeric-boundaries].
 
 Float/Double receivers support `abs()` returning the receiver type,
 `format(String)` and `toString()` returning String, and numeric conversions
 `toNumber()`, `toLong()`, `toFloat()`, and `toDouble()` returning their named
 scalar types, since API 1.0.0. Number and Long also support both floating
 conversions since 1.0.0. In-range floating-to-integer conversions truncate toward
-zero; conversion of non-finite or out-of-range values remains a runtime boundary
-without a compiler guarantee.
+zero. Tested extreme finite and non-finite values convert to the minimum signed
+Number/Long on the SDK 9.2.0 / fr265 simulator; this is not a portable conversion
+guarantee or a rule to fold into generated code. See
+[inputs and limits][numeric-boundaries].
 
 Inherited `hashCode()` returns Number, since 1.0.0; immutable `weak()` returns
 the effective receiver type since 1.2.0. Float inherits Object `equals` since
@@ -893,8 +896,11 @@ remains unsupported. String mixing follows the shared String profile. Boolean
 mixing remains unsupported; nullable Long equality with Null supports proofs.
 Unary plus preserves the value; unary minus, addition, subtraction, and multiplication
 wrap to signed 64-bit results. Integer division truncates toward zero, and
-remainder follows the dividend's sign. Zero division and minimum Long divided
-by or reduced modulo -1 remain unverified runtime boundaries.
+remainder follows the dividend's sign. On the SDK 9.2.0 / fr265 simulator,
+zero divisors report `Invalid Value`; minimum Long divided by or reduced modulo
+-1 terminates the simulator process. No portable boundary result or exception
+recovery is established. Keep native instructions without guards or folding;
+see [isolated boundary evidence][numeric-boundaries].
 
 Long/Long and mixed Number/Long pairs also support `&`, `|`, `^`, `<<`, and
 `>>`, producing Long whenever either operand is Long. This includes a Number
@@ -1633,5 +1639,7 @@ a runtime obligation; the declared result remains nullable.
 [weak-evidence]: ../investigations/compiler-immutable-weak.md
 
 [products]: ../investigations/compiler-number-products.md
+
+[numeric-boundaries]: ../investigations/compiler-numeric-boundaries.md
 
 [comparisons]: ../investigations/compiler-number-comparisons.md

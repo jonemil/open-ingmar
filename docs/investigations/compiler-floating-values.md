@@ -20,8 +20,9 @@ Arithmetic accepts Number/Float pairs as Float and Long/Float pairs as Double;
 a typed SDK helper checks the latter result. Double dominates other numeric
 operands. The four arithmetic operators and six comparisons execute directly;
 SDK floating `%` and `%=` are rejected. Compound writes and statement updates
-retain floating values; markers check receiver/operand order. These tests do not
-establish non-finite arithmetic or out-of-range conversion behavior.
+retain floating values; markers check receiver/operand order. Separate
+[boundary probes](compiler-numeric-boundaries.md) isolate zero divisors and
+non-finite/out-of-range integer conversions.
 
 The native group covers `abs`, `format`, `toString`, all four numeric conversions,
 `equals`, `compareTo`, inherited `hashCode`, and immutable `weak`. Numeric

@@ -7,6 +7,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 - [Wider numeric Dictionaries](compiler-numeric-dictionaries.md): numeric
   keys/values, signed-zero keys, and separate NaN key evidence.
+- [Numeric boundaries](compiler-numeric-boundaries.md): isolated division
+  failures and floating-to-integer conversion limits.
 - [Wider numeric arrays](compiler-numeric-arrays.md): Long/Float/Double DATA
   records, nullable elements, construction, and native methods.
 - [Wider String/Char operators](compiler-wide-operators.md): numeric operand

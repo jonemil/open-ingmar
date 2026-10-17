@@ -37,8 +37,9 @@ including an operand staged before a branching expression.
 Maximum plus one and minimum minus one wrap across signed 64-bit boundaries,
 including Number right operands. `4611686018427387904l * 4l` produces zero;
 negating minimum produces minimum. These are SDK 9.2.0 / fr265 observations,
-not evidence for every runtime or arithmetic boundary. Minimum / -1, % -1, and
-zero divisors were not run. Source/storage narrowing is not inferred from
+not evidence for every runtime or arithmetic boundary. The separate
+[boundary probes](compiler-numeric-boundaries.md) cover minimum / -1, % -1,
+and zero divisors. Source/storage narrowing is not inferred from
 operator promotion. SDK/generated structured CODE/DATA round trips remain exact.
 Artifacts: `scratch/check-long-arithmetic/`.
 
