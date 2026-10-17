@@ -36,9 +36,10 @@ Do not fold equal-content literal equality to true or merge String allocations
 without establishing that identity is unobservable. No physical pointer layout
 or intern-table behavior is inferred here.
 
-The executable profile requires one exact String operand for these mixed
-operators. Concatenation accepts Number/String/Boolean/Char/Null and supported
-nullable Number/String alternatives. Equality excludes Boolean alternatives.
+These probes establish mixed operators with one exact String operand,
+including Number/String/Boolean/Char/Null concatenation and nullable
+Number/String alternatives. [Wider numeric probes](compiler-wide-operators.md)
+extend that evidence to Long/Float/Double. Equality excludes Boolean alternatives.
 Neither operation establishes a non-null proof about the other operand. Two
 unchecked nullable operands are not admitted merely because one might be String.
 Objects, containers, String subtraction, and String ordering remain unsupported.

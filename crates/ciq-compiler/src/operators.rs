@@ -34,7 +34,7 @@ pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
 
 /// Resolve supported arithmetic operand types to their semantic result type.
 /// Number/Long arithmetic, bitwise operations, and shifts promote to Long when
-/// either operand is Long. Addition of Char/Number in either
+/// either operand is Long. Addition of Char/integer in either
 /// order returns Char; two Chars concatenate to String. Floating arithmetic
 /// promotes to Double for Double operands or a Long/Float pair, otherwise Float.
 /// An exact String operand
@@ -101,10 +101,8 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
             Some(Type::named("Toybox.Lang.String"))
         }
         BinaryOp::Add
-            if (*left == Type::named("Toybox.Lang.Char")
-                && *right == Type::named("Toybox.Lang.Number"))
-                || (*left == Type::named("Toybox.Lang.Number")
-                    && *right == Type::named("Toybox.Lang.Char")) =>
+            if (*left == Type::named("Toybox.Lang.Char") && integer(right))
+                || (integer(left) && *right == Type::named("Toybox.Lang.Char")) =>
         {
             Some(Type::named("Toybox.Lang.Char"))
         }
@@ -115,11 +113,17 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 /// Resolve supported comparison types to Boolean. Number/String/Dictionary-or-null values
 /// support equality/inequality with Null; Boolean pairs support these two operators.
 /// Numeric scalar pairs and Number/Char pairs support all six comparisons.
-/// String equality uses object identity with supported String/Number/Char/null
+/// Char pairs with wider numeric types support equality only.
+/// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     let char_numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
-    let numbers = (char_numeric(left) && char_numeric(right)) || (numeric(left) && numeric(right));
+    let char_equality = kind.is_equality()
+        && ((*left == Type::named("Toybox.Lang.Char") && numeric(right))
+            || (numeric(left) && *right == Type::named("Toybox.Lang.Char")));
+    let numbers = (char_numeric(left) && char_numeric(right))
+        || (numeric(left) && numeric(right))
+        || char_equality;
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
     let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
@@ -162,7 +166,12 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         Type::Named(name) => {
             matches!(
                 name.as_str(),
-                "Toybox.Lang.String" | "Toybox.Lang.Number" | "Toybox.Lang.Char"
+                "Toybox.Lang.String"
+                    | "Toybox.Lang.Number"
+                    | "Toybox.Lang.Long"
+                    | "Toybox.Lang.Float"
+                    | "Toybox.Lang.Double"
+                    | "Toybox.Lang.Char"
             ) || (boolean && name == "Toybox.Lang.Boolean")
         }
         Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
@@ -185,6 +194,10 @@ mod tests {
             ValueType::Integer,
             ValueType::Long,
             ValueType::NullableLong,
+            ValueType::Float,
+            ValueType::NullableFloat,
+            ValueType::Double,
+            ValueType::NullableDouble,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,
@@ -197,6 +210,14 @@ mod tests {
             ValueType::Null,
             ValueType::NullableDictionary,
         ];
+        let numeric_types = [
+            ValueType::Integer,
+            ValueType::Long,
+            ValueType::Float,
+            ValueType::Double,
+        ];
+        use ValueType::{Double as D, Float as F, Integer as N, Long as L};
+        let promotion = [[N, L, F, D], [L, L, D, D], [F, D, F, D], [D, D, D, D]];
         for left in types {
             for right in types {
                 let lhs = left.api_type();
@@ -220,6 +241,12 @@ mod tests {
                             if matches!(
                                 other,
                                 ValueType::Integer
+                                    | ValueType::Long
+                                    | ValueType::Float
+                                    | ValueType::Double
+                                    | ValueType::NullableLong
+                                    | ValueType::NullableFloat
+                                    | ValueType::NullableDouble
                                     | ValueType::NullableInteger
                                     | ValueType::String
                                     | ValueType::NullableString
@@ -232,6 +259,18 @@ mod tests {
                         {
                             Some(ValueType::String)
                         }
+                        (
+                            BinaryOp::Add
+                            | BinaryOp::Subtract
+                            | BinaryOp::Multiply
+                            | BinaryOp::Divide,
+                            left,
+                            right,
+                        ) if numeric_types.contains(&left) && numeric_types.contains(&right) => {
+                            let l = numeric_types.iter().position(|ty| *ty == left).unwrap();
+                            let r = numeric_types.iter().position(|ty| *ty == right).unwrap();
+                            Some(promotion[l][r])
+                        }
                         (_, left, right)
                             if matches!(left, ValueType::Integer | ValueType::Long)
                                 && matches!(right, ValueType::Integer | ValueType::Long)
@@ -243,8 +282,8 @@ mod tests {
                         (BinaryOp::Add, ValueType::Char, ValueType::Char) => {
                             Some(ValueType::String)
                         }
-                        (BinaryOp::Add, ValueType::Integer, ValueType::Char)
-                        | (BinaryOp::Add, ValueType::Char, ValueType::Integer) => {
+                        (BinaryOp::Add, ValueType::Integer | ValueType::Long, ValueType::Char)
+                        | (BinaryOp::Add, ValueType::Char, ValueType::Integer | ValueType::Long) => {
                             Some(ValueType::Char)
                         }
                         _ => None,
@@ -275,6 +314,8 @@ mod tests {
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableChar
+                                    | ValueType::NullableFloat
+                                    | ValueType::NullableDouble
                                     | ValueType::NullableLong
                             ) | (
                                 ValueType::NullableDictionary
@@ -282,6 +323,8 @@ mod tests {
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableChar
+                                    | ValueType::NullableFloat
+                                    | ValueType::NullableDouble
                                     | ValueType::NullableLong,
                                 ValueType::Null
                             )
@@ -292,6 +335,12 @@ mod tests {
                             (
                                 ValueType::String,
                                 ValueType::Integer
+                                    | ValueType::Long
+                                    | ValueType::Float
+                                    | ValueType::Double
+                                    | ValueType::NullableLong
+                                    | ValueType::NullableFloat
+                                    | ValueType::NullableDouble
                                     | ValueType::NullableInteger
                                     | ValueType::String
                                     | ValueType::NullableString
@@ -300,6 +349,12 @@ mod tests {
                                     | ValueType::Null
                             ) | (
                                 ValueType::Integer
+                                    | ValueType::Long
+                                    | ValueType::Float
+                                    | ValueType::Double
+                                    | ValueType::NullableLong
+                                    | ValueType::NullableFloat
+                                    | ValueType::NullableDouble
                                     | ValueType::NullableInteger
                                     | ValueType::NullableString
                                     | ValueType::NullableChar
@@ -312,8 +367,11 @@ mod tests {
                         result.is_some(),
                         (matches!(left, ValueType::Integer | ValueType::Char)
                             && matches!(right, ValueType::Integer | ValueType::Char))
-                            || (matches!(left, ValueType::Integer | ValueType::Long)
-                                && matches!(right, ValueType::Integer | ValueType::Long))
+                            || (numeric_types.contains(&left) && numeric_types.contains(&right))
+                            || (op.is_equality()
+                                && ((left == ValueType::Char && numeric_types.contains(&right))
+                                    || (right == ValueType::Char
+                                        && numeric_types.contains(&left))))
                             || null_check
                             || strings
                             || (op.is_equality()
@@ -339,6 +397,10 @@ mod tests {
             ValueType::Integer,
             ValueType::Long,
             ValueType::NullableLong,
+            ValueType::Float,
+            ValueType::NullableFloat,
+            ValueType::Double,
+            ValueType::NullableDouble,
             ValueType::NullableInteger,
             ValueType::String,
             ValueType::NullableString,

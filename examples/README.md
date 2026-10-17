@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-wide-operators](compiler-wide-operators/README.md): String/Char
+  operators with wider numeric values and immutable Char weak results.
 - [compiler-float-values](compiler-float-values/README.md): Float/Double values,
   promotion, native methods, conversions, and nullable parsing.
 - [compiler-boolean-arrays](compiler-boolean-arrays/README.md): Boolean constants,

@@ -79,7 +79,7 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Boolean { return 1l < 'A'; }",
         "function f() as Toybox.Lang.Long { return 1l + true; }",
         "function f() as Toybox.Lang.Long { return 1l + null; }",
-        "function f() as Toybox.Lang.String { return \"value\" + 1l; }",
+        "function f() as Toybox.Lang.String { return \"value\" - 1l; }",
         "function f() as Toybox.Lang.Long { return 1l & false; }",
         "function f() as Toybox.Lang.Long { return 1l << false; }",
         "function f() as Toybox.Lang.Long { var value = 1l; return value++; }",

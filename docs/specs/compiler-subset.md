@@ -33,9 +33,12 @@ value-type = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float"
            | "Toybox.Lang.Boolean" | "Toybox.Lang.Char" | "Toybox.Lang.Dictionary"
            | "Toybox.WatchUi.View" | "Toybox.WatchUi.BehaviorDelegate"
            | source-view-class-name
-           | ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") "or" "Null"
+           | nullable-scalar "or" "Null"
            | "Toybox.Lang.Array" "<" ("Toybox.Lang.Char" | "Toybox.Lang.Number" | "Toybox.WatchUi.View") ">"
            | "Toybox.Lang.Dictionary" "<" dictionary-key "," dictionary-value ">"
+nullable-scalar = "Toybox.Lang.Number" | "Toybox.Lang.Long" | "Toybox.Lang.Float"
+                | "Toybox.Lang.Double" | "Toybox.Lang.String"
+                | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
 dictionary-key = "Toybox.Lang.Number" | "Toybox.Lang.String"
                | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"
 dictionary-value = ("Toybox.Lang.Number" | "Toybox.Lang.String" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char") ("or" "Null")?
@@ -200,26 +203,30 @@ Validation resolves operand API types to these result contracts:
 | Number / Number | `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>` | Number |
 | Number | unary `+`, `-`, `~`, `!` | Number |
 | Boolean | unary `!` | Boolean |
-| Char / Number, Number / Char | `+` | Char |
+| Char / Number or Long, either order | `+` | Char |
 | Char / Char | `+` | String |
 | Exact String / supported scalar or null, either order | `+` | String |
 | Number / Number, Char / Char, Number / Char, Char / Number | `==`, `!=`, `<`, `<=`, `>`, `>=` | Boolean |
 | Boolean / Boolean | `==`, `!=` | Boolean |
-| Exact String / String, Number, Char, or Null, either order | `==`, `!=` | Boolean |
+| Char / Long, Float, or Double, either order | `==`, `!=` | Boolean |
+| Exact String / String, numeric, Char, or Null, either order | `==`, `!=` | Boolean |
 
-Mixed Char/Number addition changes the numeric character value, including
-negative Number offsets. Char + Char concatenates the two characters.
+Mixed Char/integer addition changes the numeric character value, including
+negative Number/Long offsets. Char + Char concatenates the two characters.
 Comparison uses numeric values: `'A' == 65` is true on the validated profile,
-while `'A'.equals(65)` is false. Subtraction involving Char is unsupported.
-With one exact String operand, concatenation accepts Number, String, Boolean,
-Char, Null, or their nullable scalar forms, returning String. The VM supplies scalar
+while `'A'.equals(65)` is false. Char ordering with Long/Float/Double is
+unsupported, as is Char addition with Float/Double and all Char subtraction.
+With one exact String operand, concatenation accepts numeric scalars, String,
+Boolean, Char, Null, or their nullable scalar forms, returning String. The VM
+supplies scalar
 conversion and formats Null as `null`. Equality accepts the same profile except
 Boolean (including Boolean-or-Null), using String identity: copied references
 compare true, while separately created equal-content strings compare false. Use `.equals()` for content.
 Nullable alternatives are accepted only with an exact String on the other side;
 this does not establish a non-null proof for subsequent use. String ordering,
 subtraction, and other object/container operands are unsupported. See the
-[String operator evidence](../investigations/compiler-string-operators.md).
+[String operator evidence](../investigations/compiler-string-operators.md) and
+[wider operand evidence](../investigations/compiler-wide-operators.md).
 Unchecked nullable operands require a non-null proof before numeric use.
 Result contracts remain exact in assignments, calls, and returns. Overflow and
 invalid Unicode ranges are runtime responsibilities. See the
@@ -516,9 +523,9 @@ return. Arms may also contain local declarations, print statements, and nested
 conditions, as
 described below. Loop syntax is specified separately below.
 
-All six comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) accept Number/Char
-expressions and produce Booleans. Equality/inequality also accept Boolean pairs
-and the String identity profile above; `!=` negates the existing equality
+Comparisons follow the operand table above and numeric-width contracts below,
+producing Boolean results. Equality/inequality also accept Boolean pairs and
+the String identity profile; `!=` negates the existing equality
 contract, not String content equality. Dictionary/null checks follow the
 callback rules below.
 Arithmetic has higher precedence, so `value + 1 > 2` compares the sum. At most
@@ -667,7 +674,7 @@ corresponding supported binary operator, then writes the result to the existing
 slot. The whole RHS is parsed before applying the implicit operator:
 `n *= 1 + 2` means `n = n * (1 + 2)`. Existing binary contracts and fixed local
 types apply: all ten operators accept non-null Number pairs; String `+=`
-uses supported scalar concatenation, and Char `+=` accepts Number. Number
+uses supported scalar concatenation, and Char `+=` accepts Number/Long. Number
 `+= Char` and Char `+= Char` fail because their results change the local type.
 No new coercion, folding, or runtime guard is introduced.
 
@@ -820,8 +827,8 @@ Explicit Float/Double parameters/results, local storage, module/instance calls,
 printing, conditional joins, and `or Null` contracts use the shared scalar rules.
 Assignments, arguments, returns, and conditional arms do not implicitly convert
 numeric widths. Array/Dictionary elements and source fields of these types are
-not supported yet. String concatenation and Char/operator mixing retain their
-previous bounded profiles.
+not supported yet. String concatenation accepts these widths; Char equality accepts them, while
+Char ordering/addition with floating values remain unsupported.
 
 The four arithmetic operators `+`, `-`, `*`, and `/` accept Number, Long, Float,
 and Double pairs. Double dominates; Long mixed with Float also produces Double;
@@ -878,8 +885,9 @@ compound assignments with Number/Long right operands; a Number local cannot
 store a promoted Long result. Nullable numeric operands require a non-null proof.
 
 These pairs also support all six numeric comparisons, returning Boolean. Long
-mixing with Char, Boolean, String, or Null remains unsupported for operators;
-nullable Long equality with Null supports branch proofs. Unary plus
+mixing with Char admits equality/inequality and addition returning Char; ordering
+remains unsupported. String mixing follows the shared String profile. Boolean
+mixing remains unsupported; nullable Long equality with Null supports proofs. Unary plus
 preserves the value; unary minus, addition, subtraction, and multiplication
 wrap to signed 64-bit results. Integer division truncates toward zero, and
 remainder follows the dividend's sign. Zero division and minimum Long divided
@@ -1123,8 +1131,9 @@ Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../investigations/compiler-char-methods.md).
 
-Numeric, String, and Boolean receivers also support zero-argument `weak()` since
-API 1.2.0. Its effective result is the exact receiver type, not WeakReference.
+Numeric, String, Boolean, and Char receivers also support zero-argument `weak()` since
+API 1.2.0, with Char receivers additionally requiring 1.3.0. Its effective result
+is the exact receiver type, not WeakReference.
 It remains an effectful native call; the compiler does not replace it with its
 receiver. Nullable scalar receivers require a direct non-null proof
 before the call. Other classes and ordinary object weak references are outside
@@ -1285,7 +1294,8 @@ Indexed compound targets follow the contract below. See [Number write evidence][
 ## Indexed compound assignment
 
 `array[index] op= rhs;` supports Number elements with all ten compound operators
-and Char elements with `+= Number`. Existing binary contracts and invariant
+Char elements with `+= Number/Long`, and String elements with `+=` using the
+shared String concatenation operands. Existing binary contracts and invariant
 array element types apply; View elements have no supported compound operator.
 The index must be non-null Number, including a fresh guarded nullable read.
 String/dictionary receivers, nested arrays, and assignment expressions remain

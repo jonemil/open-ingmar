@@ -161,6 +161,7 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Double"
                 | "Toybox.Lang.Long"
                 | "Toybox.Lang.String"
+                | "Toybox.Lang.Char"
                 | "Toybox.Lang.Boolean",
             "Toybox.Lang.Object",
             "weak"
@@ -481,7 +482,7 @@ mod tests {
 
     #[test]
     fn weak_reference_declaration_does_not_enable_object_lowering() {
-        for class in ["Object", "Dictionary", "Char", "WeakReference"] {
+        for class in ["Object", "Dictionary", "WeakReference"] {
             let receiver = api::Type::named(format!("Toybox.Lang.{class}"));
             assert!(
                 value_call(&receiver, "weak", &[], None)

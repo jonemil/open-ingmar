@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Wider String/Char operators](compiler-wide-operators.md): numeric operand
+  rules, indexed compounds, and immutable Char weak results.
 - [Float/Double values and methods](compiler-floating-values.md): floating
   literals, promotion, conversion, nullable parsing, and instruction evidence.
 

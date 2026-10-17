@@ -13,7 +13,8 @@ Comparing its arithmetic, relational, logical, bitwise, assignment, and ternary
 operator tables with our [source contract](../specs/compiler-subset.md) identified
 missing keyword spellings and Number `!`. Existing type restrictions remain
 intentional; this review is not an exhaustive operand-pair compatibility claim.
-Long/Float/Double need their value-type work. Runtime `has`/`instanceof` need
+Wider numeric combinations have [separate evidence](compiler-wide-operators.md).
+Runtime `has`/`instanceof` need
 class/symbol contracts; general truthiness and unions remain deferred in the
 [plan](../plan.md#next-work).
 

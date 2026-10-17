@@ -97,7 +97,9 @@ fn weak_contracts_reject_nullable_receivers_wrong_arity_and_consumers() {
 #[test]
 fn weak_declared_and_effective_results_remain_distinct_and_versioned() {
     let catalogue = ciq_compiler::api::core();
-    for name in ["Number", "String", "Boolean"] {
+    for name in [
+        "Number", "Long", "Float", "Double", "String", "Boolean", "Char",
+    ] {
         let class = format!("Toybox.Lang.{name}");
         let resolved = catalogue.method(&class, "weak").unwrap();
         assert_eq!(resolved.declaring_class.name, "Toybox.Lang.Object");
@@ -107,7 +109,7 @@ fn weak_declared_and_effective_results_remain_distinct_and_versioned() {
         );
         assert_eq!(*resolved.result, Type::named(class));
     }
-    for name in ["Object", "Dictionary", "Char"] {
+    for name in ["Object", "Dictionary"] {
         assert_eq!(
             *catalogue
                 .method(&format!("Toybox.Lang.{name}"), "weak")

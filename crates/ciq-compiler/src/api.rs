@@ -544,6 +544,7 @@ fn build_core() -> Catalogue {
         long,
         "Toybox.Lang.Float",
         "Toybox.Lang.Double",
+        "Toybox.Lang.Char",
         string,
         "Toybox.Lang.Boolean",
     ]

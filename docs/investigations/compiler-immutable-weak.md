@@ -8,8 +8,11 @@ SDK/compiler/simulator 9.2.0, fr265, optimization disabled.
 says Number, Float, Long, Double, Boolean, and String return their values.
 **Observed:** Number, String, and Boolean results behave as their original value
 types in the simulator. **Design interpretation:** preserve the generic result
-and specialize these three exact receiver paths. Other numeric types and object
-weak references remain untested and unsupported by executable lowering.
+and specialize these three exact receiver paths. Separate probes extend that
+evidence to [Long](compiler-long-values.md),
+[Float/Double](compiler-floating-values.md), and
+[Char](compiler-wide-operators.md). Ordinary object weak references are not
+established by these immutable-value probes.
 
 ## Static-checker discrepancy
 

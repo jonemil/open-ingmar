@@ -38,11 +38,11 @@ sh scripts/run-simulator-container.sh \
 
 **Observed:** operator equality compares Char/Number numerically. It differs
 from `Object.equals`: `'A'.equals(65)` is false in the complete example.
-**Design decision:** support only the tested Char/Number comparison pairs,
-mixed addition returning Char, and Char/Char addition returning String.
-Boolean/String/Null mixed operators and Char subtraction stay outside this
-profile. The public native `compareTo` contract does not justify widening
-operator types without separate evidence.
+The probe establishes Char/Number comparisons and addition, and Char/Char
+concatenation. [Wider numeric probes](compiler-wide-operators.md) separately
+establish Long addition and numeric equality while retaining SDK ordering
+restrictions. Native `compareTo` signatures alone do not establish operator
+acceptance.
 
 ## Complete comparison and lowering
 
@@ -69,7 +69,7 @@ Contract checks reject changed operand types, changed operators, incompatible
 result consumers, and unchecked nullable operands. Earlier negative IR checks
 now require a Number-only consumer because Char + Number is supported.
 
-Overflow, raw invalid Char ranges, supplementary results, other numeric types,
+Overflow, raw invalid Char ranges, supplementary results,
 other firmware/devices, and execution on an API 1.3.0 runtime remain unverified.
 The compiler's minimum check follows known Char introductions; it is distinct
 from proving instruction support on older VMs.

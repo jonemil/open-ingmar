@@ -96,9 +96,9 @@ listed only in the source specification. Public API attribution and runtime
 results remain in the linked investigations.
 
 - **Inherited Object methods:** `method(Symbol)` (1.0.0) needs Symbol and callable
-  Method values. Ordinary `weak` (1.2.0), including Char receivers, needs
-  WeakReference values/consumers; Char itself requires 1.3.0. The immutable
-  numeric/String/Boolean specialization does not establish this behavior.
+  Method values. Ordinary `weak` (1.2.0) needs WeakReference values/consumers.
+  The immutable numeric/String/Boolean/Char specialization does not establish
+  this behavior.
   [Boolean](../investigations/compiler-boolean-methods.md),
   [Char](../investigations/compiler-char-methods.md), and
   [weak-result evidence](../investigations/compiler-immutable-weak.md).
