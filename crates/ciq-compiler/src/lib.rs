@@ -1717,10 +1717,11 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
-                    let arguments_types = arguments
-                        .iter()
-                        .map(|v| type_of(*v).api_type())
-                        .collect::<Vec<_>>();
+                    let arguments_types = origins.native_arguments(
+                        &type_of(receiver).api_type(),
+                        member,
+                        arguments.iter().map(|v| (*v, type_of(*v).api_type())),
+                    );
                     let result = native::value_call(
                         &type_of(receiver).api_type(),
                         member,
@@ -2013,10 +2014,11 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
-                    let argument_types = arguments
-                        .iter()
-                        .map(|v| type_of(*v).api_type())
-                        .collect::<Vec<_>>();
+                    let argument_types = origins.native_arguments(
+                        &type_of(receiver).api_type(),
+                        member,
+                        arguments.iter().map(|v| (*v, type_of(*v).api_type())),
+                    );
                     let result_type = native::value_call(
                         &type_of(receiver).api_type(),
                         member,

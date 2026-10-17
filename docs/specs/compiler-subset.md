@@ -1276,7 +1276,7 @@ Unlike the SDK checker, this erased lookup profile does not statically resolve
 a literal selector to a source target. A missing target or incompatible
 invocation remains a runtime/caller obligation even for literal selectors.
 Constructors, nullable Method contracts, and typed signatures remain deferred.
-Array sorting uses a separate Comparator interface, not a Method parameter. See the
+Array sorting uses a [separate Comparator contract](#source-comparators). See the
 [binding/lifetime evidence](../investigations/compiler-methods.md).
 
 ## Ordinary weak references
@@ -1524,10 +1524,10 @@ Non-null indexed updates/compounds follow scalar operator promotion and must
 retain the element type. For example, `Float += Number` is valid but
 `Float += Long` would produce Double and is rejected. Nullable elements cannot
 be compound targets without a supported direct non-null read contract.
-Non-null elements support [default sorting](#default-array-sorting). Custom
-comparators, broader callback consumers, nested containers, nullable Array
-references, and whole-array expression joins outside the existing Number/Char
-profile remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
+Non-null elements support [default sorting](#default-array-sorting) and
+[source comparators](#source-comparators). Broader callback consumers, nested
+containers, nullable Array references, and whole-array expression joins outside
+the existing Number/Char profile remain deferred. See the [example](../../examples/compiler-numeric-arrays/README.md)
 and [record/runtime evidence](../investigations/compiler-numeric-arrays.md).
 
 ## String arrays
@@ -1550,7 +1550,8 @@ and `slice` use the existing Array contracts with String substituted for the
 element type. Search/removal compare String text. Array/String types,
 construction, indexing, `size`, and `toString` require API 1.0.0; the other
 methods require 1.3.0. [Default sorting](#default-array-sorting) requires 5.0.0.
-Custom comparators and broader callback consumers remain deferred.
+Source comparators follow their [separate contract](#source-comparators);
+broader callback consumers remain deferred.
 Arrays must be converted to String before printing.
 
 See the [example](../../examples/compiler-string-arrays/README.md) and
@@ -1568,8 +1569,8 @@ Literal-only arrays use `apush` constants; computed elements use ordered private
 construction, including conditional/short-circuit expressions. Copies share
 mutation; repeated constant loads are independently mutable. The supported
 Array methods and API levels match the String/Number profile, including
-[default sorting](#default-array-sorting) from 5.0.0. Custom comparators and
-broader callback consumers remain deferred. See the
+[default sorting](#default-array-sorting) from 5.0.0. Source comparators follow their
+[separate contract](#source-comparators); broader callback consumers remain deferred. See the
 [example](../../examples/compiler-boolean-arrays/README.md) and
 [evidence](../investigations/compiler-boolean-arrays.md).
 
@@ -1589,14 +1590,48 @@ locale-sensitive String collation, or atomic behavior if comparison fails.
 
 Garmin's full parameter type is `Lang.Comparator or Null`. Comparator is a
 structural interface requiring `compare(Object, Object) as Number`; it is not
-Method or an instantiable native class. This executable profile accepts only
-Null, selecting the runtime default comparator. Custom comparator objects,
-nullable elements, and object elements remain unsupported even when a specific
-Array currently contains only comparable values. Those need separate checking
-and comparison contracts.
+Method or an instantiable native class. Null selects default sorting; supported
+source comparator instances follow the contract below. Nullable/object elements
+remain unsupported, even if current contents happen to be comparable.
 
 See the [example](../../examples/compiler-array-sort/README.md) and
 [evidence](../investigations/compiler-array-sort.md).
+
+## Source comparators
+
+`array.sort(comparator)` accepts an instance of a declared source class that
+supplies `compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as
+Toybox.Lang.Number`. Both parameter types, arity, and result must exactly match
+the interface declaration. Narrower scalar parameters, nullable Object
+parameters/results, and missing/extra parameters are rejected. Untyped source
+parameters still infer Number and therefore do not establish this interface.
+Matching is structural: no Comparator superclass or `implements` syntax is used.
+
+The same non-null scalar-element Array and API 5.0.0 requirements as default
+sorting apply. A negative/zero/positive Number orders the first element before,
+equal to, or after the second. The runtime calls the source `compare` body on
+the supplied instance, preserving its fields. It controls comparison count and
+order; callers must supply a consistent ordering and must not depend on a
+particular sorting algorithm. Custom comparators may choose an order different
+from the default, including ordering Object string conversions.
+
+Construction, aliases, exact source-class parameters/results, and source
+reference fields can supply a comparator while retaining class identity.
+Whole-unit validation resolves the class and rechecks the required method;
+an erased View/Object or Method cannot establish the structural contract.
+General interface-typed storage/annotations, nullable comparators, bare `self`
+as a comparator, and Object-rooted source construction remain unsupported.
+The existing source class/base and constructor requirements still apply.
+
+Sort uses ordinary native-call lowering with receiver-before-argument order.
+The runtime callback member `compare` uses its pinned symbol ID; it remains a
+source method body. Constructor checks propagate known comparator shutdown
+requests through sort and source wrappers, rejecting them while reference fields
+are pending. These checks do not prove callback termination, exception safety,
+or comparator consistency.
+
+See the [example](../../examples/compiler-comparators/README.md) and
+[evidence](../investigations/compiler-comparators.md).
 
 ## Nullable Array elements
 

@@ -84,6 +84,31 @@ impl Origins {
         }
         Ok(())
     }
+    /// Project a source comparator argument to its interface type for call
+    /// checking. Unit validation must still resolve its class and required members;
+    /// erased native references cannot claim that obligation.
+    pub(crate) fn native_arguments(
+        &self,
+        receiver: &crate::api::Type,
+        member: &str,
+        arguments: impl IntoIterator<Item = (ValueId, crate::api::Type)>,
+    ) -> Vec<crate::api::Type> {
+        let arguments = arguments.into_iter().collect::<Vec<_>>();
+        let comparator = matches!(receiver, crate::api::Type::Array(_))
+            && member == "sort"
+            && arguments.len() == 1;
+        arguments
+            .into_iter()
+            .map(|(value, ty)| {
+                if comparator && self.class(value).is_some() {
+                    crate::api::Type::named("Toybox.Lang.Comparator")
+                } else {
+                    ty
+                }
+            })
+            .collect()
+    }
+
     /// Return an exact source-class identity, if the value retains one.
     pub(crate) fn class(&self, value: ValueId) -> Option<&str> {
         self.values.get(&value).map(String::as_str)

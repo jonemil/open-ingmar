@@ -1,0 +1,9 @@
+array
+comparator
+[bb, b, aa, a, a]
+true
+[a, a, aa, b, bb]
+true
+[2, 10, 1]
+0
+only

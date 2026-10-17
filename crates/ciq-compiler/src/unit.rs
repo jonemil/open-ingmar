@@ -45,6 +45,44 @@ fn requests_exit(operation: &Operation) -> bool {
     matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
 }
 
+/// Resolve a checked sort callback to its source body for effect propagation.
+/// The runtime selects the same pinned compare member checked by the unit.
+fn comparator_callee<'a>(
+    function: &Function,
+    operation: &Operation,
+    bodies: &[(Owner<'a>, &'a Function)],
+) -> Option<(Owner<'a>, &'a str)> {
+    let (receiver, arguments) = match operation {
+        Operation::NativeCall {
+            receiver,
+            member,
+            arguments,
+            ..
+        }
+        | Operation::NativeCallStatement {
+            receiver,
+            member,
+            arguments,
+        } if member == "sort" => (*receiver, arguments),
+        _ => return None,
+    };
+    if !matches!(function.value_types[&receiver], crate::ValueType::Array(_)) {
+        return None;
+    }
+    let [argument] = arguments.as_slice() else {
+        return None;
+    };
+    let class = crate::source_objects::class(
+        function.operations(),
+        *argument,
+        function.parameter_types().to_vec(),
+    )?;
+    bodies.iter().find_map(|&(owner, method)| {
+        (owner == Owner::Class(&class) && method.name() == "compare")
+            .then_some((owner, method.name()))
+    })
+}
+
 /// Find bodies that can request shutdown, including through recursive source
 /// calls. Conservatively include conditional calls; this does not prove safety
 /// against runtime failures or unknown native callback effects.
@@ -56,6 +94,8 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || source_callee(owner, &located.operation)
+                        .is_some_and(|key| exits.contains(&key))
+                    || comparator_callee(function, &located.operation, bodies)
                         .is_some_and(|key| exits.contains(&key))
             }) {
                 changed |= exits.insert((owner, function.name()));
@@ -561,6 +601,8 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || source_callee(owner, &located.operation)
+                                .is_some_and(|key| exit_callers.contains(&key))
+                            || comparator_callee(function, &located.operation, &bodies)
                                 .is_some_and(|key| exit_callers.contains(&key)))
                     {
                         return Err(fail(
@@ -676,6 +718,31 @@ impl CompilationUnit {
                             }
                         }
                         _ => {}
+                    }
+                }
+                if let Operation::NativeCall {
+                    receiver,
+                    member,
+                    arguments,
+                    ..
+                }
+                | Operation::NativeCallStatement {
+                    receiver,
+                    member,
+                    arguments,
+                } = &located.operation
+                {
+                    if member == "sort"
+                        && matches!(function.value_types[receiver], crate::ValueType::Array(_))
+                    {
+                        if let [argument] = arguments.as_slice() {
+                            if let Some(class) = origins.class(*argument) {
+                                self.check_interface(class, "Toybox.Lang.Comparator")
+                                    .map_err(|message| {
+                                        fail(Some(index), Some(operation), message)
+                                    })?;
+                            }
+                        }
                     }
                 }
                 if let Operation::SourceNew { class, base, .. } = &located.operation {
@@ -868,6 +935,46 @@ impl CompilationUnit {
                         ),
                     ));
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// Check that a declared source class supplies every required interface
+    /// member with exactly matching parameter and result types. This does not add an inheritance relationship.
+    fn check_interface(&self, class: &str, interface: &str) -> Result<(), String> {
+        let declaration = self
+            .classes
+            .iter()
+            .find(|c| c.name == class)
+            .ok_or_else(|| format!("unresolved source interface implementation {class}"))?;
+        let interface = crate::api::core()
+            .interface(interface)
+            .ok_or_else(|| format!("unknown structural interface {interface}"))?;
+        for required in &interface.methods {
+            let implementation = declaration
+                .methods
+                .iter()
+                .find(|m| m.name() == required.name)
+                .ok_or_else(|| {
+                    format!(
+                        "{class} does not implement {}.{}",
+                        interface.name, required.name
+                    )
+                })?;
+            if required.variadic.is_some()
+                || implementation.parameter_types().len() != required.parameters.len()
+                || !implementation
+                    .parameter_types()
+                    .iter()
+                    .zip(&required.parameters)
+                    .all(|(actual, expected)| &actual.api_type() == expected)
+                || required.result != implementation.return_type().api_type()
+            {
+                return Err(format!(
+                    "{class}.{} does not satisfy the {} signature",
+                    required.name, interface.name
+                ));
             }
         }
         Ok(())

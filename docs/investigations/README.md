@@ -5,6 +5,8 @@ SDK/version and scope; they are not current feature inventories. Use
 [the plan](../plan.md) for upcoming work and
 [research conventions](../research.md) when recording evidence.
 
+- [Source comparators](compiler-comparators.md): exact structural signatures,
+  runtime callback identity, stateful ordering, and rejected parameter variants.
 - [Default Array sorting](compiler-array-sort.md): comparable scalar types,
   shared mutation, Void results, and Comparator interface declarations.
 - [Wider numeric Dictionaries](compiler-numeric-dictionaries.md): numeric

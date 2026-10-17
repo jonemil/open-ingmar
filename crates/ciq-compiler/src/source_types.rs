@@ -182,14 +182,18 @@ impl Types {
                 arguments,
             } => {
                 let ty = self.values.get(receiver).and_then(|receiver| {
-                    let arguments: Option<Vec<_>> = arguments
+                    let argument_types: Option<Vec<_>> = arguments
                         .iter()
-                        .map(|id| self.values.get(id).map(candidate))
+                        .map(|id| self.values.get(id).map(|ty| (*id, candidate(ty).clone())))
                         .collect();
                     native::value_call(
                         candidate(receiver),
                         member,
-                        &arguments?.into_iter().cloned().collect::<Vec<_>>(),
+                        &self.origins.native_arguments(
+                            candidate(receiver),
+                            member,
+                            argument_types?,
+                        ),
                         None,
                     )
                     .ok()

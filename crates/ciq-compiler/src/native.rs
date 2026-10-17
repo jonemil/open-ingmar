@@ -332,8 +332,10 @@ pub(crate) fn value_call(
         return Err("String.compareTo lowering currently requires String".into());
     }
     if class == "Toybox.Lang.Array" && member == "sort" {
-        if arguments != [api::Type::Null] {
-            return Err("Array.sort currently requires the default comparator (Null)".into());
+        if arguments != [api::Type::Null]
+            && arguments != [api::Type::named("Toybox.Lang.Comparator")]
+        {
+            return Err("Array.sort requires Null or a checked source Comparator".into());
         }
         if !matches!(receiver, api::Type::Array(element) if matches!(
             crate::ArrayElement::from_api_type(element),
@@ -342,7 +344,7 @@ pub(crate) fn value_call(
                 | crate::ArrayElement::Boolean | crate::ArrayElement::Char
                 | crate::ArrayElement::String)
         )) {
-            return Err("default Array.sort requires non-null comparable scalar elements".into());
+            return Err("Array.sort currently requires non-null comparable scalar elements".into());
         }
     }
     if class == "Toybox.Lang.Array" && member == "slice" {

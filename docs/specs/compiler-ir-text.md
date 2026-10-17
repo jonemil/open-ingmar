@@ -1346,11 +1346,17 @@ Function result categories are inferred from returns; those categories are not
 Nullable Array receivers and unsupported element types cannot be introduced
 by text edits.
 
-Array `sort` uses `.call-native` with one Null argument, a supported non-null
-scalar-element Array receiver, and a Void result consumed by `.discard`.
-Validation reapplies the [source sorting contract](compiler-subset.md#default-array-sorting),
-including API 5.0.0 and element restrictions; text IR cannot bypass them.
-Lowering uses existing member lookup and `invokem`, followed by `popv`.
+Array `sort` uses a native call with one Null or exact source-comparator
+argument and a supported non-null scalar-element Array receiver. Its Void
+result is consumed by `.discard`, or the call uses `.call-native-discard`.
+Validation reapplies the [sorting contract](compiler-subset.md#source-comparators),
+including API 5.0.0 and element restrictions. Source identity is reconstructed
+from construction, typed source parameters/calls/fields, and locals; no text
+claim can turn an erased View/Object into a Comparator. Standalone function IR
+retains a class/member resolution obligation, which unit parsing must discharge
+against the recorded `compare` declaration. Source and parsed units share this
+check. Lowering uses existing member lookup and `invokem`, followed by `popv`;
+application DATA binds `compare` to the runtime callback symbol.
 
 Native `equals` uses the shared
 [Object argument profile](compiler-subset.md#object-equality-and-container-observers),

@@ -57,6 +57,7 @@ const ARRAY_REMOVE_ALL: u32 = 0x008004c0;
 const REVERSE: u32 = 0x008004c1;
 const SLICE: u32 = 0x008004c2;
 const SORT: u32 = 0x00800e51;
+const COMPARE: u32 = 0x00800150;
 const TO_NUMBER_WITH_BASE: u32 = 0x008004c3;
 const TO_LOWER: u32 = 0x008000be;
 const TO_UPPER: u32 = 0x008000bf;
@@ -382,6 +383,7 @@ pub fn build_console_application(
         ("reverse".into(), REVERSE),
         ("slice".into(), SLICE),
         ("sort".into(), SORT),
+        ("compare".into(), COMPARE),
         ("toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
         ("toLower".into(), TO_LOWER),
         ("toUpper".into(), TO_UPPER),

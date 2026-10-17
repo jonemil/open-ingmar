@@ -316,7 +316,8 @@ the exact declared source class; native View erasure, another class, and Null
 cannot satisfy it. Requiring this straight-line initialization prefix is our
 bounded checking policy, not Garmin's complete definite-initialization rules.
 Calls that may request System.exit, including transitive source calls and
-constructors, are also rejected until all reference fields are established.
+constructors and source comparator callbacks reached through Array sorting,
+are also rejected until all reference fields are established.
 This conservative call-graph check includes conditional exits; runtime failures
 and additional native callback effects are not proven safe by it.
 

@@ -1,0 +1,23 @@
+# Source Comparator implementations
+
+[ordering.mc](ordering.mc) supplies `compare(Object, Object) as Number` through
+an existing source View class. It orders Object string conversions and retains
+per-instance direction and call-count state. [app.mc](app.mc) checks callback
+dispatch, typed source forwarding, shared mutation, receiver/argument order,
+and empty/singleton inputs. The [expected output](expected.txt) matches
+SDK/generated `fr265` programs.
+
+From the repository root:
+
+```sh
+mkdir -p scratch/compiler-comparators
+cargo run -p ciq-compiler -- --unit --emit prg --target-api 5.2.0 --min-api 5.0.0 --app-id 949ff3758b28492cb54821459b9c90fa --entry MinimalConsoleApp.onStart examples/compiler-comparators/app.mc examples/compiler-comparators/ordering.mc scratch/compiler-comparators/unsigned.prg
+cargo run -p ciq-asm -- sign scratch/compiler-comparators/unsigned.prg scratch/compiler-comparators/generated.prg -y keys/developer_key.der
+sh scripts/run-simulator-container.sh --prg scratch/compiler-comparators/generated.prg
+```
+
+The structural contract requires exact Object inputs and a non-null Number
+result. Source callbacks need no Comparator superclass. This profile retains
+exact source-class identity; general interface-typed storage and erased Object
+comparators remain unsupported. See the
+[sorting contract](../../docs/specs/compiler-subset.md#source-comparators).

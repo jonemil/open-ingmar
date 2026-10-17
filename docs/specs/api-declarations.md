@@ -18,13 +18,17 @@ Structural interfaces record required method signatures separately from classes.
 `Catalogue::interface()` resolves them without class inheritance or construction;
 `interface_level()` includes the interface and enclosing module introduction
 levels. Named interface types participate in `ApiContext::check_type()`.
-Recording an interface does not enable source annotations, structural
-assignability, or executable implementations.
+Recording an interface alone does not enable source annotations or executable
+implementations. Consumer-specific structural checks must establish the
+required members before native-call checking can use that interface type.
 
 `Lang.Comparator` requires `compare(Object, Object) as Number` from API 5.0.0.
 Array `sort(Comparator or Null)` returns Void from 5.0.0. The executable
-[default sorting profile](compiler-subset.md#default-array-sorting) accepts
-Null only; this restriction does not narrow the API declaration itself.
+[sorting profile](compiler-subset.md#source-comparators) accepts Null or an
+exact source-class witness. Unit validation requires a declared `compare`
+with exactly matching Object parameters and Number result, following the SDK
+checks. The witness is local to the consumer; it does not establish general
+interface assignability, inheritance, or interface-typed storage.
 
 Method declarations have a fixed parameter prefix and an optional repeated
 argument type. Receiver instantiation substitutes both through generic
