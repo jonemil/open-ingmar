@@ -12,12 +12,13 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**ByteArray.** Build the source/IR value and storage contracts on the
-[verified binary representation](specs/data-byte-arrays.md). Implement literal
-and sized construction, Number indexing/writes, and the mutation/observer group
-together. Keep Number/Char byte range checks as runtime obligations until
-independent evidence justifies compile-time rejection. Numeric encoding/decoding
-then needs NumberFormat/Endian constants and structural option contracts.
+**ByteArray.** Add constant and effectful byte literals on the
+[verified binary representation](specs/data-byte-arrays.md), preserving private
+initialization and allocation-before-element effects. Extend nullable references,
+fields/container storage, and concrete Object recovery under explicit contracts.
+Keep Number/Char byte range checks as runtime obligations until independent
+evidence justifies compile-time rejection. Numeric encoding/decoding needs
+NumberFormat/Endian constants and structural option contracts.
 
 **Object and structural contracts.** Establish member/signature proofs and API
 guards through explicit contracts. Extend source

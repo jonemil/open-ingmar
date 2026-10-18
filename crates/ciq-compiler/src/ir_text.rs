@@ -84,6 +84,7 @@ pub(crate) fn parse_ir_context(
                 "object" => crate::ReturnType::LangObject,
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
+                "byte-array" => crate::ReturnType::ByteArray,
                 "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
                 "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
                 "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
@@ -156,6 +157,7 @@ pub(crate) fn parse_ir_context(
                         "object" => Ok(crate::ParameterType::LangObject),
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
+                        "byte-array" => Ok(crate::ParameterType::ByteArray),
                         "nullable-weak-reference" => {
                             Ok(crate::ParameterType::NullableWeakReference)
                         }
@@ -350,6 +352,7 @@ pub(crate) fn parse_ir_context(
             Some(".array-constant") => (61, call_width()),
             Some(".array-new") => (30, 3),
             Some(".array-allocate") => (96, 4),
+            Some(".byte-array-new") => (97, 3),
             Some(".dictionary-begin") => (70, 4),
             Some(".dictionary-fill") => (71, call_width()),
             Some(".dictionary-finish") => (72, 3),
@@ -831,6 +834,11 @@ pub(crate) fn parse_ir_context(
             Operation::ArrayFinish {
                 result: parse_value(&fields[1])?,
                 builder: parse_builder(&fields[2])?,
+            }
+        } else if kind == 97 {
+            Operation::ByteArrayAllocate {
+                result: parse_value(&fields[1])?,
+                length: parse_value(&fields[2])?,
             }
         } else if kind == 30 || kind == 96 {
             let element_type = match fields[2].as_str() {
@@ -1314,6 +1322,7 @@ fn call_contract(
             "object" => crate::ReturnType::LangObject,
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
+            "byte-array" => crate::ReturnType::ByteArray,
             "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
             "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
             "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),

@@ -2,7 +2,8 @@
 
 Compact ByteArray constants are loaded by `bpush`, independently of scalar
 Arrays loaded by `apush`. This binary/assembly profile is established by the
-[SDK specimen](../investigations/byte-arrays.md); it does not imply executable
+[SDK specimen](../investigations/byte-arrays.md). The
+[source profile](compiler-subset.md#bytearrays) separately defines executable
 ByteArray support in the Monkey C frontend.
 
 ## Binary record

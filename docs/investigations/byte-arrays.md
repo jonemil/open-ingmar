@@ -71,3 +71,33 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 [fixture]: ../../crates/ciq-dis/tests/fixtures/byte-arrays.mc
 [expected]: ../../crates/ciq-dis/tests/fixtures/byte-arrays.expected
 [api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/ByteArray.html
+
+## Source and IR profile
+
+**Experimentally observed (2026-10-18):** the
+[compiler example](../../examples/compiler-byte-arrays/README.md), using the
+same SDK/target and `-O 0`, agrees with the independent compiler on all 30
+expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
+and native/text pipeline checks. Artifacts: `scratch/check-byte-arrays-source/`.
+
+The specimen allocates with `new[n]b`, writes Number and Char values, performs
+an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
+and homogeneous Number/Char Arrays. Saved aliases retain the old object after
+reassignment; writes through reverse/slice results leave the source unchanged.
+Method invocation returns the current size; a live weak reference retrieves an
+Object equal to the source. Conditional allocation prints only the selected
+size helper, and a conditional length evaluates its chosen branch once.
+
+Byte literals are deliberately absent from this compiler specimen; the binary
+fixture above remains their SDK encoding evidence. Invalid byte ranges, fatal
+bounds errors, weak expiry, and numeric encoding options were not executed here.
+Negative/oversized constant inputs remain runtime obligations in compiler tests,
+not observed portable exception guarantees.
+
+For SDK comparison, use the minimal-console manifest/resources and the
+[shared console wrapper](compiler-boolean-negation.md#reference-and-specimen).
+Set `base.sourcePath` to `../../examples/compiler-byte-arrays;sdk.mc` in
+`scratch/compiler-byte-arrays/monkey.jungle`, with the wrapper as `sdk.mc`.
+Build with `scripts/build-example.sh`, then use `scripts/check-example.py`
+`prepare compiler-byte-arrays --sdk-prg <SDK PRG> --output <fresh directory>`
+and `simulate <prepared directory>` in the Rust/SDK environments respectively.

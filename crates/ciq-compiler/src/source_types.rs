@@ -42,6 +42,9 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
+            Operation::ByteArrayAllocate { result, .. } => {
+                (*result, Some(Type::named("Toybox.Lang.ByteArray")))
+            }
             Operation::Symbol { result, .. } => (*result, Some(Type::named("Toybox.Lang.Symbol"))),
             Operation::DictionaryBegin {
                 builder,
@@ -209,6 +212,9 @@ impl Types {
                 *result,
                 self.values.get(array).and_then(|ty| match ty {
                     Type::Array(element) => Some((**element).clone()),
+                    Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
+                        Some(Type::named("Toybox.Lang.Number"))
+                    }
                     _ => None,
                 }),
             ),

@@ -58,6 +58,7 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         return Some(Type::Array(Box::new(element.api_type())));
     }
     Some(match tag {
+        "byte-array" => Type::named("Toybox.Lang.ByteArray"),
         "object" => Type::named("Toybox.Lang.Object"),
         "nullable-object" => Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]),
         "weak-reference" => Type::named("Toybox.Lang.WeakReference"),
@@ -100,6 +101,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
             .map(|(tag, _)| *tag);
     }
     [
+        "byte-array",
         "object",
         "nullable-object",
         "weak-reference",
@@ -282,6 +284,7 @@ pub(crate) fn validate_stack_uses(
                 }
                 Operation::SourceCast { result, .. }
                 | Operation::ArrayAllocate { result, .. }
+                | Operation::ByteArrayAllocate { result, .. }
                 | Operation::Cast { result, .. }
                 | Operation::Not { result, .. }
                 | Operation::Positive { result, .. }

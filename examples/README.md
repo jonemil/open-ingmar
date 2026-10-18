@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   Comparator implementations, stateful runtime dispatch, and custom sorting.
 - [compiler-array-sort](compiler-array-sort/README.md): default scalar sorting,
   shared mutation, copies, and edge-sized inputs.
+- [compiler-byte-arrays](compiler-byte-arrays/README.md): zero-filled allocation,
+  byte indexing, mutation, observers, callbacks, and lazy allocation choices.
 - [compiler-source-methods](compiler-source-methods/README.md): source/self
   callbacks, shared fields, and retained receivers.
 - [compiler-numeric-dictionaries](compiler-numeric-dictionaries/README.md): wider

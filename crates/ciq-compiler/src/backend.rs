@@ -131,6 +131,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayRead { result, .. }
             | Operation::ArrayNew { result, .. }
             | Operation::ArrayAllocate { result, .. }
+            | Operation::ByteArrayAllocate { result, .. }
             | Operation::ArrayConstant { result, .. }
             | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
@@ -622,6 +623,7 @@ fn expression(
         NullCheck(bool),
         ArrayRead,
         NewArray,
+        NewByteArray,
         Compare(ComparisonOp),
         Invoke(usize),
         Context,
@@ -741,6 +743,10 @@ fn expression(
                 Operation::ArrayNew { .. } => {
                     items.push(instruction(Opcode::Ipushz, vec![]));
                     (Opcode::Newa, vec![])
+                }
+                Operation::ByteArrayAllocate { length, .. } => {
+                    tasks.extend([Task::NewByteArray, Task::Value(*length)]);
+                    continue;
                 }
                 Operation::ArrayAllocate { length, .. } => {
                     tasks.extend([Task::NewArray, Task::Value(*length)]);
@@ -949,6 +955,7 @@ fn expression(
             Task::NullCheck(true) => (Opcode::Isnotnull, vec![]),
             Task::ArrayRead => (Opcode::Agetv, vec![]),
             Task::NewArray => (Opcode::Newa, vec![]),
+            Task::NewByteArray => (Opcode::Newba, vec![]),
             Task::Invoke(0) => (Opcode::Invokemz, vec![]),
             Task::Invoke(count) => (Opcode::Invokem, vec![Operand::Bits(count as u64 + 1)]),
             Task::Context => (Opcode::Frpush, vec![]),

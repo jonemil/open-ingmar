@@ -159,6 +159,7 @@ pub(crate) enum ExpressionKind {
     },
     ArrayLiteral(Vec<Expression>),
     ArrayAllocate(Box<Expression>),
+    ByteArrayAllocate(Box<Expression>),
     ArrayRead {
         array: Box<Expression>,
         index: Box<Expression>,
@@ -226,6 +227,7 @@ impl Expression {
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
             | ExpressionKind::ArrayAllocate(_)
+            | ExpressionKind::ByteArrayAllocate(_)
             | ExpressionKind::DictionaryNew
             | ExpressionKind::DictionaryLiteral(_) => true,
             ExpressionKind::Cast { operand, .. }
@@ -1199,11 +1201,21 @@ impl<'a> Parser<'a> {
             }
             let length = self.expression(depth + 1)?;
             let close = self.expect(Kind::Punctuation(']'), "']'")?;
+            let byte_array = self.peek()? == Kind::Word("b");
+            let end = if byte_array {
+                self.token()?.span.end
+            } else {
+                close.span.end
+            };
             return self.node(
-                ExpressionKind::ArrayAllocate(Box::new(length)),
+                if byte_array {
+                    ExpressionKind::ByteArrayAllocate(Box::new(length))
+                } else {
+                    ExpressionKind::ArrayAllocate(Box::new(length))
+                },
                 Span {
                     start: open.span.start,
-                    end: close.span.end,
+                    end,
                 },
             );
         }
@@ -1982,6 +1994,7 @@ impl Parser<'_> {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.Object" => crate::ParameterType::LangObject,
                         "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
+                        "Toybox.Lang.ByteArray" => crate::ParameterType::ByteArray,
                         "Toybox.Lang.Comparable" => {
                             crate::ParameterType::Interface(crate::InterfaceType::Comparable)
                         }
@@ -2078,6 +2091,7 @@ impl Parser<'_> {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.Object" => crate::ReturnType::LangObject,
                 "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
+                "Toybox.Lang.ByteArray" => crate::ReturnType::ByteArray,
                 "Toybox.Lang.Comparable" => {
                     crate::ReturnType::Interface(crate::InterfaceType::Comparable)
                 }

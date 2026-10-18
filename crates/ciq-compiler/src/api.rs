@@ -498,6 +498,7 @@ fn build_core() -> Catalogue {
         "Toybox.Lang.Array",
         "Toybox.Lang.Dictionary",
         "Toybox.Lang.WeakReference",
+        "Toybox.Lang.ByteArray",
         "Toybox.Lang.Method",
         "Toybox.Lang.Symbol",
         "Toybox.Application.AppBase",
@@ -516,6 +517,61 @@ fn build_core() -> Catalogue {
             },
         );
     }
+    let bytes = "Toybox.Lang.ByteArray";
+    let byte_api = ApiLevel(3, 0, 0);
+    let byte_argument = Type::Union(vec![Type::named(number), Type::named("Toybox.Lang.Char")]);
+    classes.get_mut(bytes).unwrap().since = byte_api;
+    classes.get_mut(bytes).unwrap().methods = vec![
+        method("size", vec![], Type::named(number), byte_api),
+        method("toString", vec![], Type::named(string), byte_api),
+        method(
+            "equals",
+            vec![Type::Union(vec![Type::named(object), Type::Null])],
+            Type::named("Toybox.Lang.Boolean"),
+            byte_api,
+        ),
+        method("hashCode", vec![], Type::named(number), byte_api),
+        method(
+            "add",
+            vec![byte_argument.clone()],
+            Type::named(bytes),
+            byte_api,
+        ),
+        method(
+            "addAll",
+            vec![Type::Union(vec![
+                Type::named("Toybox.Lang.Array"),
+                Type::named(bytes),
+            ])],
+            Type::named(bytes),
+            byte_api,
+        ),
+        method(
+            "indexOf",
+            vec![byte_argument.clone()],
+            Type::named(number),
+            byte_api,
+        ),
+        method(
+            "remove",
+            vec![byte_argument.clone()],
+            Type::named("Toybox.Lang.Boolean"),
+            byte_api,
+        ),
+        method(
+            "removeAll",
+            vec![byte_argument],
+            Type::named("Toybox.Lang.Boolean"),
+            byte_api,
+        ),
+        method("reverse", vec![], Type::named(bytes), byte_api),
+        method(
+            "slice",
+            vec![Type::Union(vec![Type::named(number), Type::Null]); 2],
+            Type::named(bytes),
+            byte_api,
+        ),
+    ];
     classes.get_mut("Toybox.Lang.Dictionary").unwrap().methods = vec![
         method(
             "get",

@@ -2177,6 +2177,53 @@ its earlier value. Reassigning that scalar invalidates its null proof.
 See the [example](../../examples/compiler-nullable-arrays/README.md) and
 [evidence](../investigations/compiler-nullable-arrays.md).
 
+## ByteArrays
+
+`Toybox.Lang.ByteArray` is a non-null mutable reference, separate from
+`Array<Number>`. Canonical names, imported types, and Lang aliases work in
+parameters/results. Locals, reassignment, and matching conditional arms preserve
+the selected reference; aliases observe its mutations. API minimum: 3.0.0.
+
+`new[length]b` allocates a fresh zero-filled ByteArray without expected element
+context. Evaluate its non-null Number length once before allocation. Conditional
+lengths and allocation arms retain lazy evaluation and effect order. Invalid
+sizes and allocation failures remain runtime concerns.
+
+Index reads require a non-null Number and return an unsigned Number byte.
+Writes accept Number/Char, including indexed compounds whose result matches
+that contract. Evaluate receiver, index, then value once, preserving runtime
+bounds/range checks. The compiler does not mask or clamp values; a stored `-1`
+reads back as `255` in the verified simulator.
+
+Supported native calls use ordinary value-call lowering and API checking:
+
+| Calls | Arguments and result |
+|---|---|
+| `size()`, `toString()`, `hashCode()` | Number, String, Number respectively |
+| `equals(value)` | Supported Object-or-Null value; Boolean result |
+| `add(byte)` | Number/Char; ByteArray result |
+| `addAll(bytes)` | ByteArray or Number/Char Array; ByteArray result |
+| `indexOf(byte)` | Number/Char; Number index or `-1` |
+| `remove(byte)`, `removeAll(byte)` | Number/Char; Boolean result |
+| `reverse()` | Independent ByteArray with reversed elements |
+| `slice(start, end)` | Number-or-Null indexes; independent ByteArray |
+
+Both append methods mutate the receiver. Bulk Array inputs retain their
+invariant non-null Number/Char element contract.
+
+`method(Symbol)` and `weak()` use the existing inherited binding/lifetime
+profiles. Weak retrieval remains Object-or-Null. Direct arguments to `addAll`
+need an established Array element contract; ambiguous empty Array inference
+does not choose Number or Char automatically.
+
+Byte literals (`[values]b`), nullable ByteArray references, fields/container
+elements, casts/runtime class recovery, and numeric encoding/decoding options
+remain unsupported. These gaps do not authorize lowering byte literals through
+append loops or exposing partially initialized storage. See the
+[example](../../examples/compiler-byte-arrays/README.md),
+[IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and
+[evidence](../investigations/byte-arrays.md#source-and-ir-profile).
+
 ## Empty array literals
 
 A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,

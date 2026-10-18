@@ -206,7 +206,8 @@ pub(crate) fn value_call(
                 | "Toybox.Lang.Array"
                 | "Toybox.Lang.Dictionary"
                 | "Toybox.Lang.Method"
-                | "Toybox.Lang.WeakReference",
+                | "Toybox.Lang.WeakReference"
+                | "Toybox.Lang.ByteArray",
             "Toybox.Lang.Object",
             "weak"
         ) | (
@@ -253,6 +254,21 @@ pub(crate) fn value_call(
                     | "toString"
                     | "keys"
                     | "values"
+            )
+            | (
+                "Toybox.Lang.ByteArray",
+                "Toybox.Lang.ByteArray",
+                "size"
+                    | "toString"
+                    | "equals"
+                    | "hashCode"
+                    | "add"
+                    | "addAll"
+                    | "indexOf"
+                    | "remove"
+                    | "removeAll"
+                    | "reverse"
+                    | "slice"
             )
             | (
                 "Toybox.Lang.Array",
@@ -340,6 +356,15 @@ pub(crate) fn value_call(
             && resolved.declaring_class.name == "Toybox.Lang.Object"
             && (equality_argument(receiver) || crate::NativeClass::from_name(class).is_some())
             && !matches!(receiver, api::Type::Null | api::Type::Union(_)));
+    if class == "Toybox.Lang.ByteArray"
+        && member == "addAll"
+        && !matches!(arguments, [api::Type::Named(name)] if name == class)
+        && !matches!(arguments, [api::Type::Array(element)] if matches!(element.as_ref(), api::Type::Named(name) if name == "Toybox.Lang.Number" || name == "Toybox.Lang.Char"))
+    {
+        return Err(
+            "ByteArray.addAll requires ByteArray or an Array of non-null Numbers or Chars".into(),
+        );
+    }
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
     }
@@ -432,6 +457,7 @@ fn equality_argument(ty: &api::Type) -> bool {
                 | "Toybox.Lang.Object"
                 | "Toybox.Lang.Method"
                 | "Toybox.Lang.WeakReference"
+                | "Toybox.Lang.ByteArray"
         ),
         api::Type::Array(element) => crate::ArrayElement::from_api_type(element).is_some(),
         api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),

@@ -483,6 +483,28 @@ effects and can fail there.
 Finishing either builder kind clears its private strong reference; a completed
 container is owned by the produced value and its subsequent consumers.
 
+## ByteArray values and allocation
+
+`byte-array` denotes a non-null `Toybox.Lang.ByteArray` in parameter, function
+result, call-result, and conditional-edge tags. It is distinct from
+`number-array`; no conversion or element-nullability inference connects them.
+Local assignment and matching conditional arms retain the ByteArray reference.
+Null alternatives, fields, and container element contracts are unsupported.
+
+`.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
+zero-filled ByteArray. Length must be an earlier same-block non-null Number
+value. Validate API 3.0.0, single-use/block locality, and allocation effect order;
+negative/oversized lengths and allocation failure remain VM obligations.
+Lower the length once followed by `newba`, with no DATA binding or initializer
+call. A direct incoming block parameter can supply the length without staging.
+
+Existing `.array-read` and `.array-write` operations also accept ByteArrays.
+Reads produce Number; writes accept Number/Char. Preserve evaluation order,
+runtime index bounds and byte range checks, and unsigned readback. No masking,
+clamping, or expansion is emitted by the compiler. Native calls reuse the
+catalogue and ordinary value-call lowering under the
+[source method profile](compiler-subset.md#bytearrays).
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
@@ -1081,6 +1103,7 @@ construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
 Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`, `null`,
+`byte-array`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,

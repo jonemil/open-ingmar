@@ -441,6 +441,8 @@ pub enum ReturnType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null mutable ByteArray, distinct from an Array of Numbers.
+    ByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -490,6 +492,8 @@ pub enum ParameterType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null mutable ByteArray, distinct from an Array of Numbers.
+    ByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -549,6 +553,7 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
@@ -589,6 +594,7 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
@@ -617,6 +623,8 @@ enum ValueType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// A non-null mutable ByteArray, distinct from an Array of Numbers.
+    ByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -712,6 +720,7 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::ByteArray => api::Type::named("Toybox.Lang.ByteArray"),
             Self::NullableWeakReference => {
                 api::Type::Union(vec![Self::WeakReference.api_type(), api::Type::Null])
             }
@@ -762,6 +771,7 @@ impl ValueType {
                 "Toybox.Lang.Dictionary" => Some(Self::Dictionary),
                 "Toybox.Lang.Object" => Some(Self::LangObject),
                 "Toybox.Lang.WeakReference" => Some(Self::WeakReference),
+                "Toybox.Lang.ByteArray" => Some(Self::ByteArray),
                 "Toybox.Lang.Method" => Some(Self::Method),
                 "Toybox.Lang.Symbol" => Some(Self::Symbol),
                 name if InterfaceType::from_name(name).is_some() => {
@@ -988,9 +998,15 @@ pub enum Operation {
         element_type: ArrayElement,
         length: ValueId,
     },
-    /// Read one element from a non-null typed array using a non-null Number index.
-    /// Evaluate array before index, once each. Runtime bounds failures remain
-    /// observable; indexes are not clamped or adjusted by the compiler.
+    /// Allocate a fresh zero-filled ByteArray from a non-null Number length.
+    /// Evaluate length once; invalid sizes and allocation failures reach the VM.
+    ByteArrayAllocate {
+        result: ValueId,
+        length: ValueId,
+    },
+    /// Read an Array element or an unsigned Number byte from a ByteArray.
+    /// Evaluate receiver before the non-null Number index, once each. Preserve
+    /// runtime bounds failures without clamping or adjusting the index.
     ArrayRead {
         result: ValueId,
         array: ValueId,
@@ -998,6 +1014,7 @@ pub enum Operation {
     },
     /// Replace a supported array element without producing a value or resizing.
     /// Require a non-null Number index and a value matching the element type.
+    /// ByteArrays accept Number/Char bytes; range checks belong to the VM.
     /// Evaluate receiver, index, and value once in that order;
     /// runtime bounds checks occur at the write, after operand effects.
     ArrayWrite {
@@ -2197,6 +2214,18 @@ impl Function {
                     types.insert(result, ty);
                     (Some(result), vec![])
                 }
+                Operation::ByteArrayAllocate { result, length } => {
+                    if type_of(length) != ValueType::Integer {
+                        return Err(fail("ByteArray length must be a non-null Number"));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.ByteArray")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ValueType::ByteArray);
+                    (Some(result), vec![length])
+                }
                 Operation::ArrayNew {
                     result,
                     element_type,
@@ -2288,8 +2317,14 @@ impl Function {
                     array,
                     index,
                 } => {
-                    let ValueType::Array(element) = type_of(array) else {
-                        return Err(fail("array reads require a supported array receiver"));
+                    let element = match type_of(array) {
+                        ValueType::Array(element) => element,
+                        ValueType::ByteArray => ArrayElement::Number,
+                        _ => {
+                            return Err(fail(
+                                "indexed reads require an Array or ByteArray receiver",
+                            ));
+                        }
                     };
                     if type_of(index) != ValueType::Integer {
                         return Err(fail("array reads require a non-null Number index"));
@@ -2305,14 +2340,23 @@ impl Function {
                     index,
                     value,
                 } => {
-                    let ValueType::Array(element) = type_of(array) else {
-                        return Err(fail("array writes require a supported array receiver"));
+                    let element = match type_of(array) {
+                        ValueType::Array(element) => element.api_type(),
+                        ValueType::ByteArray => api::Type::Union(vec![
+                            api::Type::named("Toybox.Lang.Number"),
+                            api::Type::named("Toybox.Lang.Char"),
+                        ]),
+                        _ => {
+                            return Err(fail(
+                                "indexed writes require an Array or ByteArray receiver",
+                            ));
+                        }
                     };
                     if type_of(index) != ValueType::Integer {
                         return Err(fail("array writes require a non-null Number index"));
                     }
-                    if !native::accepts(&element.api_type(), &type_of(value).api_type())
-                        && !origins.deferred_interface(&element.api_type(), value)
+                    if !native::accepts(&element, &type_of(value).api_type())
+                        && !origins.deferred_interface(&element, value)
                     {
                         return Err(fail(
                             "array write value must match the receiver's element type",
@@ -2613,6 +2657,7 @@ impl Function {
                             ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::LangObject => ReturnType::LangObject,
                             ValueType::WeakReference => ReturnType::WeakReference,
+                            ValueType::ByteArray => ReturnType::ByteArray,
                             ValueType::Interface(interface) => ReturnType::Interface(interface),
                             ValueType::Method => ReturnType::Method,
                             ValueType::Symbol => ReturnType::Symbol,
@@ -2716,6 +2761,7 @@ impl Function {
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
                     | Operation::ArrayAllocate { .. }
+                    | Operation::ByteArrayAllocate { .. }
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
                     | Operation::DictionaryBegin { .. }
@@ -2809,7 +2855,10 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::ArrayAllocate {
+                                Operation::ByteArrayAllocate {
+                                    length: operand, ..
+                                }
+                                | Operation::ArrayAllocate {
                                     length: operand, ..
                                 }
                                 | Operation::Step { operand, .. }
@@ -2964,6 +3013,7 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::ByteArray => "byte-array",
                             ParameterType::NullableWeakReference => "nullable-weak-reference",
                             ParameterType::Interface(interface) => interface.tag(),
                             ParameterType::NullableInterface(InterfaceType::Comparable) => {
@@ -2993,6 +3043,7 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::ByteArray
             | ReturnType::NullableWeakReference
             | ReturnType::Interface(_)
             | ReturnType::NullableInterface(_)
@@ -3322,6 +3373,9 @@ impl Function {
                     result,
                     element_type,
                 } => format!(".array-new %{} {}", result.0, element_type.text()),
+                Operation::ByteArrayAllocate { result, length } => {
+                    format!(".byte-array-new %{} %{}", result.0, length.0)
+                }
                 Operation::ArrayAllocate {
                     result,
                     element_type,
@@ -3566,6 +3620,7 @@ fn validate_call_arguments(
                     | ValueType::LangObject
                     | ValueType::NullableObject
                     | ValueType::WeakReference
+                    | ValueType::ByteArray
                     | ValueType::NullableWeakReference
                     | ValueType::Interface(_)
                     | ValueType::NullableInterface(_)
@@ -3616,6 +3671,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::ByteArray => Ok(ValueType::ByteArray),
         ReturnType::NullableWeakReference => Ok(ValueType::NullableWeakReference),
         ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
         ReturnType::NullableInterface(interface) => Ok(ValueType::NullableInterface(interface)),
@@ -3664,6 +3720,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::LangObject => " result=object",
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
+        ReturnType::ByteArray => " result=byte-array",
         ReturnType::NullableWeakReference => " result=nullable-weak-reference",
         ReturnType::Method => " result=method",
         ReturnType::NullableMethod => " result=nullable-method",

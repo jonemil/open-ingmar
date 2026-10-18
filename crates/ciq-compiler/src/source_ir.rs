@@ -229,7 +229,8 @@ fn emit_non_call(
         )?,
         parser::ExpressionKind::DictionaryLiteral(_)
         | parser::ExpressionKind::ArrayLiteral(_)
-        | parser::ExpressionKind::ArrayAllocate(_) => {
+        | parser::ExpressionKind::ArrayAllocate(_)
+        | parser::ExpressionKind::ByteArrayAllocate(_) => {
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
@@ -1167,6 +1168,9 @@ impl Builder<'_> {
             span,
         )?;
         let kind = match kind {
+            kind @ E::ByteArrayAllocate(_) => {
+                return self.snapshot(parser::Expression { kind, span }, locals);
+            }
             E::ArrayAllocate(_) => {
                 return Err(Diagnostic::at(
                     self.source,
@@ -1520,6 +1524,15 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        if let parser::ExpressionKind::ByteArrayAllocate(length) = expression.kind {
+            let length = self.value(*length, locals)?;
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::ByteArrayAllocate { result, length },
+                Some(expression.span),
+            );
+            return Ok(result);
+        }
         if let parser::ExpressionKind::ArrayAllocate(length) = expression.kind {
             let Some(ConstructionType::Array(element_type)) = expected else {
                 return Err(Diagnostic::at(
