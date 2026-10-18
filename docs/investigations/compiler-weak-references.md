@@ -87,8 +87,39 @@ enumerate as nullable WeakReferences, and literal markers run once in order
 Source/IR validation rejects contract widening, unguarded nullable element use,
 scalar payloads under weak constant contracts, and API declarations below 1.2.0.
 Structured SDK/generated reconstruction needs no new opcode or DATA record.
-Other native/source weak targets, checked concrete recovery, Dictionary weak
-keys, and broader callback interactions remain open.
+Other native/source weak targets, checked concrete recovery, and broader callback
+interactions remain open.
+
+## Dictionary key rejection
+
+2026-10-18, SDK/compiler/simulator 9.2.0, `fr265`, debug `-O 0`.
+
+**Observed:** SDK compilation accepts both a Dictionary literal with weak keys
+and ordinary `put()` calls. Both generated programs crash on the first weak-key
+insertion with `Unexpected Type Error` / `Failed invoking <symbol>`. A control
+in the same Dictionary inserts and retrieves Number key `1` successfully before
+the failure; `w.stillAlive()` immediately before insertion prints true.
+
+Minimal insertion sequence inside an ordinary application function:
+
+```monkeyc
+var owner = [1];
+var w = owner.weak();
+var d = {};
+d.put(1, 10);
+System.println(w.stillAlive()); // true
+d.put(w, 20);                  // runtime failure
+```
+
+The literal form `{w => 10}` fails likewise. Successful weak `equals`/`hashCode`
+calls before insertion do not establish Dictionary key support. Neither probe
+reaches target expiry, so hashing/equality after expiry remains unestablished.
+The compiler keeps weak keys outside its supported profile; no universal VM
+restriction or cause inside Garmin's implementation is inferred.
+
+Artifacts: `scratch/weak-key-probe/`, with literal capture `runtime/`, explicit
+insertion capture `put-runtime/`, and live-target/Number-key control capture
+`control-runtime/`. The initial literal source is retained as `literal-source.txt`.
 
 [weak]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/WeakReference.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

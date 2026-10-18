@@ -1581,7 +1581,9 @@ silently extend a target's strong lifetime. See the
 WeakReference/nullable-WeakReference values require API 1.2.0. Array elements and
 both Dictionary parameters remain invariant. Existing native container methods
 retain their API requirements. WeakReference Dictionary keys remain unsupported
-pending hash/equality evidence across target expiry.
+following an [insertion failure](../investigations/compiler-weak-references.md#dictionary-key-rejection)
+in SDK 9.2.0 programs on the `fr265` simulator, including live targets. This is
+a bounded compatibility decision, not a claim about every Garmin runtime.
 
 Weak-bearing literals allocate privately and evaluate entries in source order.
 Homogeneous weak handles may infer a contract; empty and Null-only literals need

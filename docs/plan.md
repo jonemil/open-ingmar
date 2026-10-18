@@ -37,7 +37,11 @@ Symbol-bearing container literals use runtime construction; pooled Symbol payloa
 independent encoding/relocation evidence before adding a DATA representation.
 
 Keep SDK-rejected wider Char ordering and floating Char addition outside the
-operator profile. Further numeric boundary work should answer a concrete
+operator profile. WeakReference Dictionary keys also stay outside the supported
+profile following the
+[SDK/simulator insertion failure](investigations/compiler-weak-references.md#dictionary-key-rejection);
+revisit that decision when new target/runtime evidence warrants it.
+Further numeric boundary work should answer a concrete
 consumer need: exception recovery, other runtime targets, additional NaN key
 patterns, or conversion thresholds. The isolated
 [boundary probes](investigations/compiler-numeric-boundaries.md) establish
@@ -48,7 +52,7 @@ under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.
 
-Broader weak targets, WeakReference Dictionary keys, and container recovery from
+Broader weak targets and container recovery from
 opaque Object results need their own type/refinement contracts. Keep hidden
 temporary ownership explicit when adding new source staging paths.
 
