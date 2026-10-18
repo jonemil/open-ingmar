@@ -18,14 +18,16 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Extend comparison-interface storage as concrete uses require. Container elements
-need their own contracts. Further interface refinement
+Complete comparison-interface containers through Array sorting and Dictionary
+contracts. Ordering interface-valued Arrays needs comparison-domain and callback
+evidence; nullable/object sorting remains separate. Pool emission for interface
+Array literals needs a tag-preserving Number/Char payload before replacing
+private construction. Further interface refinement
 should preserve both structural members and concrete class facts where needed.
 Preserve exact source identities until unit
 checking can establish required members; an erased Object or a runtime `has`
 test alone cannot prove a signature. Keep interface storage distinct from the
 exact source-class Comparator witness used by sorting.
-Nullable/object Array sorting needs its own argument and comparison contracts.
 
 Establish checked Method signatures when a concrete callback consumer needs
 argument/result guarantees. Keep source-target resolution and saved-IR checking

@@ -348,6 +348,12 @@ impl<'a> Parser<'a> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
         let mut element = match self.type_path()?.as_str() {
+            "Toybox.Lang.Comparable" => {
+                crate::ArrayElement::Interface(crate::InterfaceType::Comparable)
+            }
+            "Toybox.Lang.Comparator" => {
+                crate::ArrayElement::Interface(crate::InterfaceType::Comparator)
+            }
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
@@ -362,6 +368,9 @@ impl<'a> Parser<'a> {
             self.token()?;
             self.expect(Kind::Word("Null"), "'Null'")?;
             element = match element {
+                crate::ArrayElement::Interface(interface) => {
+                    crate::ArrayElement::NullableInterface(interface)
+                }
                 crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
                 crate::ArrayElement::Double => crate::ArrayElement::NullableDouble,
                 crate::ArrayElement::Float => crate::ArrayElement::NullableFloat,

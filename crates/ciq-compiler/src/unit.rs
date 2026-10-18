@@ -45,9 +45,9 @@ fn requests_exit(operation: &Operation) -> bool {
     matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
 }
 
-/// Treat erased comparison dispatch as a possible shutdown request; no exact
-/// callback body remains available for the reference-initialization proof.
-fn erased_comparison(function: &Function, operation: &Operation) -> bool {
+/// Treat erased comparison/element callbacks as possible shutdown requests.
+/// No exact body remains available for the reference-initialization proof.
+fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
     match operation {
         Operation::NativeCall {
             receiver,
@@ -70,6 +70,9 @@ fn erased_comparison(function: &Function, operation: &Operation) -> bool {
                         crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
                     )
                 }))
+                || matches!(function.value_types[receiver], crate::ValueType::Array(
+                    crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
+                    if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
         }
         _ => false,
     }
@@ -123,7 +126,7 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
         for &(owner, function) in bodies {
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
-                    || erased_comparison(function, &located.operation)
+                    || erased_callbacks(function, &located.operation)
                     || source_callee(owner, &located.operation)
                         .is_some_and(|key| exits.contains(&key))
                     || comparator_callee(function, &located.operation, bodies)
@@ -695,7 +698,7 @@ impl CompilationUnit {
                 for (operation, located) in function.operations().iter().enumerate() {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
-                            || erased_comparison(function, &located.operation)
+                            || erased_callbacks(function, &located.operation)
                             || source_callee(owner, &located.operation)
                                 .is_some_and(|key| exit_callers.contains(&key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -755,6 +758,22 @@ impl CompilationUnit {
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut origins =
                 crate::source_objects::Origins::new(function.parameter_types().to_vec());
+            let array_builders = function
+                .operations()
+                .iter()
+                .filter_map(|located| {
+                    if let Operation::ArrayBegin {
+                        builder,
+                        element_type,
+                        ..
+                    } = located.operation
+                    {
+                        Some((builder, element_type))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
             let interface_locals = function
                 .operations()
                 .iter()
@@ -780,6 +799,66 @@ impl CompilationUnit {
                     .map_err(|message| fail(Some(index), None, message.into()))?;
             }
             for (operation, located) in function.operations().iter().enumerate() {
+                let check_element = |element: crate::ArrayElement,
+                                     value: crate::ValueId|
+                 -> Result<(), UnitError> {
+                    if let crate::ArrayElement::Interface(interface)
+                    | crate::ArrayElement::NullableInterface(interface) = element
+                    {
+                        self.check_interface_value(
+                            function,
+                            &origins,
+                            value,
+                            interface,
+                            matches!(element, crate::ArrayElement::NullableInterface(_)),
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                    Ok(())
+                };
+                match &located.operation {
+                    Operation::ArrayFill { builder, value, .. } => {
+                        check_element(array_builders[builder], *value)?
+                    }
+                    Operation::ArrayFillMany {
+                        builder, values, ..
+                    } => {
+                        for value in values {
+                            check_element(array_builders[builder], *value)?;
+                        }
+                    }
+                    Operation::ArrayWrite { array, value, .. } => {
+                        if let crate::ValueType::Array(element) = function.value_types[array] {
+                            check_element(element, *value)?;
+                        }
+                    }
+                    Operation::NativeCall {
+                        receiver,
+                        member,
+                        arguments,
+                        ..
+                    }
+                    | Operation::NativeCallStatement {
+                        receiver,
+                        member,
+                        arguments,
+                    } => {
+                        if matches!(function.value_types[receiver], crate::ValueType::Array(_)) {
+                            let parameters = crate::native::value_parameters(
+                                &function.value_types[receiver].api_type(),
+                                member,
+                            )
+                            .unwrap_or_default();
+                            for (value, expected) in arguments.iter().zip(parameters) {
+                                if let Some(element) = crate::ArrayElement::from_api_type(&expected)
+                                {
+                                    check_element(element, *value)?;
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
                 if let Operation::Return { value } = &located.operation {
                     if let ReturnType::Interface(interface)
                     | ReturnType::NullableInterface(interface) = function.return_type()
@@ -873,31 +952,6 @@ impl CompilationUnit {
                             }
                         }
                         _ => {}
-                    }
-                }
-                if let Operation::NativeCall {
-                    receiver,
-                    member,
-                    arguments,
-                    ..
-                }
-                | Operation::NativeCallStatement {
-                    receiver,
-                    member,
-                    arguments,
-                } = &located.operation
-                {
-                    if member == "sort"
-                        && matches!(function.value_types[receiver], crate::ValueType::Array(_))
-                    {
-                        if let [argument] = arguments.as_slice() {
-                            if let Some(class) = origins.class(*argument) {
-                                self.check_interface_signature(class, "Toybox.Lang.Comparator")
-                                    .map_err(|message| {
-                                        fail(Some(index), Some(operation), message)
-                                    })?;
-                            }
-                        }
                     }
                 }
                 if let Operation::SourceCast { class, .. }

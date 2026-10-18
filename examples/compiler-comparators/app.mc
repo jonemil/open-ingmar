@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceArrays.run();
         InterfaceFields.run();
         NullableInterfaces.run();
         NativeComparables.run();
@@ -39,6 +40,48 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceArrays {
+    function values() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return [new TextOrder(), 3, "a"]; }
+    function nullable() as Toybox.Lang.Array<Toybox.Lang.Comparable or Null> { return [null, new TextOrder(), 1]; }
+    function orders() as Toybox.Lang.Array<Toybox.Lang.Comparator> { return [new Ordering(-1)]; }
+    function optionalOrders() as Toybox.Lang.Array<Toybox.Lang.Comparator or Null> { return [null, new Ordering(1)]; }
+    function empty() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return []; }
+    function run() as Void {
+        var values = InterfaceArrays.values();
+        System.println(values[0].compareTo("b") == 0);
+        var shared = values;
+        values[0] = new TextOrder();
+        System.println(values.indexOf(values[0]) == 0);
+        values.add(new TextOrder());
+        values.addAll([true, 'a', 1l, 1.0, 1.0d]);
+        System.println(shared.size());
+        System.println(values[5] instanceof Toybox.Lang.Char);
+        System.println(values.remove(values[3]));
+        values.reverse();
+        System.println(values.slice(0, 2).size());
+        var object = new TextOrder();
+        var empty = InterfaceArrays.empty();
+        empty.add(object);
+        empty.add(object);
+        System.println(empty.indexOf(object) == 0);
+        System.println(empty.removeAll(object));
+        System.println(empty.size());
+        var optional = InterfaceArrays.nullable();
+        optional[1] = null;
+        System.println(optional[1] == null);
+        optional.add(new TextOrder());
+        var item = optional[3];
+        if (item != null) { System.println(item.compareTo("b") == 0); }
+        var orders = InterfaceArrays.orders();
+        System.println(orders[0].compare("a", "b") > 0);
+        orders[0] = new Ordering(1);
+        System.println(orders[0].compare("a", "b") < 0);
+        var optionalOrders = InterfaceArrays.optionalOrders();
+        var names = ["b", "a"];
+        names.sort(optionalOrders[0]);
+        System.println(names.toString());
     }
 }
 module InterfaceFields {

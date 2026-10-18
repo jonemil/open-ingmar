@@ -153,7 +153,7 @@ operator/type-system dependencies and sequencing belong to the
 - **Object and source objects:** complete source inheritance/overrides, member
   lookup, source-inheritance/general-union type tests and refinement, and broader
   inherited-method dispatch.
-- **Array:** dynamic-sized allocation, nested/heterogeneous/object/reference
+- **Array:** dynamic-sized allocation, general nested/heterogeneous/Object/reference
   elements, remaining nullable storage/receivers and joins, and sorting and
   Comparable contracts outside the scalar profile.
 - **Dictionary:** Object/Symbol/reference keys and values, heterogeneous/nested
@@ -175,7 +175,7 @@ operator/type-system dependencies and sequencing belong to the
 - **ResourceId:** resource-reference value/binding contracts and own/inherited
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
-  constants; interface container contracts;
+  constants; Dictionary interface contracts;
   Integer/Numeric/Decimal aliases and needed union/structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

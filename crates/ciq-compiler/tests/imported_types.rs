@@ -24,6 +24,10 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Dictionary",
         "$Array<$Number>",
         "$Array<$String or Null>",
+        "$Array<$Comparable>",
+        "$Array<$Comparator>",
+        "$Array<$Comparable or Null>",
+        "$Array<$Comparator or Null>",
         "$Dictionary<$String, $Number>",
         "$Dictionary<$String, $String or Null>",
     ] {

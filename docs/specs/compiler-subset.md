@@ -1820,7 +1820,8 @@ and a non-null instance supplies custom ordering. This does not permit calling
 `compare` on a nullable receiver without a non-null proof.
 
 Source classes also support [comparison-interface fields](compiler-classes.md#comparison-interface-fields)
-with the same write contracts and checked initialization. Interface container
+with the same write contracts and checked initialization. Arrays follow the
+[interface element contract](#comparison-interface-arrays). Dictionary interface
 elements, unchecked `as` assertions, and interface runtime type targets remain
 unsupported. A non-null interface can widen to
 Object without proving additional members. A nullable interface can widen to
@@ -1831,6 +1832,45 @@ Erased comparison calls, including sorting through a Comparator value, may
 request shutdown. Constructor checks conservatively propagate that effect
 through source wrappers and require reference fields to be initialized first.
 This does not establish exception safety or callback termination.
+
+## Comparison interface Arrays
+
+Non-null Arrays support Comparable and Comparator elements, optionally `or Null`,
+from API 5.0.0. Parameter/result annotations use `Array<Toybox.Lang.Comparable>`
+and the corresponding Comparator/nullable forms. Array contracts stay invariant:
+`Array<Number>` cannot widen to `Array<Comparable>`, and non-null element Arrays
+cannot widen to nullable-element Arrays.
+
+An expected Array annotation or argument contract supplies literal element
+typing, including empty and mixed native/source literals. Otherwise the first
+element must already establish a supported element contract; arbitrary mixtures
+do not infer an interface. Literals allocate privately before evaluating and
+filling elements in order. Interface literals use this path even for scalar
+tokens, preserving Number/Char distinctions and each native runtime tag. The
+current homogeneous constant payload cannot express those distinctions under
+an interface contract; interface `.array-constant` records remain unsupported.
+
+Indexed reads retain the declared interface, including Null where allowed;
+they do not recover an exact source class. Member calls on nullable elements
+require a guarded local snapshot. A test of one indexed read does not refine
+another read. Writes, private literal fills, and typed native element arguments
+accept compatible native/interface values or an exact source witness. Unit
+validation checks required source members at every such ingress after IR reload.
+Opaque Object values and incompatible signatures cannot bypass that proof.
+
+The existing `size`, `toString`, `add`, `addAll`, `indexOf`, `remove`, `removeAll`,
+`reverse`, and `slice` profiles apply; reverse/slice preserve the element type.
+`addAll` requires the same invariant Array contract, though a direct argument
+literal can receive that context. Inherited Object methods retain their existing
+profiles. Collection operations that may call erased element methods
+(`toString`, lookup, and removal) conservatively propagate possible shutdown
+effects through constructor checking.
+
+Sorting these Arrays, nested/general Object containers, Array field declarations,
+and Dictionary interface elements remain outside this profile. Comparator values
+read from an Array can still sort supported scalar Arrays. See the
+[example](../../examples/compiler-comparators/README.md) and
+[evidence](../investigations/compiler-comparators.md#interface-arrays).
 
 ## Nullable Array elements
 

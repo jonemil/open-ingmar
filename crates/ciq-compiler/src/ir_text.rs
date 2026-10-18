@@ -174,6 +174,22 @@ pub(crate) fn parse_ir_context(
                         "view-array" => Ok(crate::ParameterType::Array(
                             crate::ArrayElement::Object(crate::NativeClass::View),
                         )),
+                        "comparable-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
+                        )),
+                        "nullable-comparable-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableInterface(
+                                crate::InterfaceType::Comparable,
+                            ),
+                        )),
+                        "comparator-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::Interface(crate::InterfaceType::Comparator),
+                        )),
+                        "nullable-comparator-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableInterface(
+                                crate::InterfaceType::Comparator,
+                            ),
+                        )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
                         "boolean-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Boolean))
@@ -597,6 +613,18 @@ pub(crate) fn parse_ir_context(
                     "long" => crate::ArrayElement::Long,
                     "nullable-long" => crate::ArrayElement::NullableLong,
                     "nullable-number" => crate::ArrayElement::NullableNumber,
+                    "comparable" => {
+                        crate::ArrayElement::Interface(crate::InterfaceType::Comparable)
+                    }
+                    "nullable-comparable" => {
+                        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparable)
+                    }
+                    "comparator" => {
+                        crate::ArrayElement::Interface(crate::InterfaceType::Comparator)
+                    }
+                    "nullable-comparator" => {
+                        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
+                    }
                     "char" => crate::ArrayElement::Char,
                     "boolean" => crate::ArrayElement::Boolean,
                     "string" => crate::ArrayElement::String,
@@ -676,6 +704,18 @@ pub(crate) fn parse_ir_context(
             Operation::ArrayBegin {
                 builder: parse_builder(&fields[1])?,
                 element_type: match fields[2].as_str() {
+                    "comparable" => {
+                        crate::ArrayElement::Interface(crate::InterfaceType::Comparable)
+                    }
+                    "nullable-comparable" => {
+                        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparable)
+                    }
+                    "comparator" => {
+                        crate::ArrayElement::Interface(crate::InterfaceType::Comparator)
+                    }
+                    "nullable-comparator" => {
+                        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
+                    }
                     "char" => crate::ArrayElement::Char,
                     "boolean" => crate::ArrayElement::Boolean,
                     "number" => crate::ArrayElement::Number,
@@ -720,6 +760,14 @@ pub(crate) fn parse_ir_context(
             }
         } else if kind == 30 {
             let element_type = match fields[2].as_str() {
+                "comparable" => crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
+                "nullable-comparable" => {
+                    crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparable)
+                }
+                "comparator" => crate::ArrayElement::Interface(crate::InterfaceType::Comparator),
+                "nullable-comparator" => {
+                    crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
+                }
                 "char" => crate::ArrayElement::Char,
                 "boolean" => crate::ArrayElement::Boolean,
                 "number" => crate::ArrayElement::Number,
@@ -1186,6 +1234,18 @@ fn call_contract(
             }
             "method" => crate::ReturnType::Method,
             "symbol" => crate::ReturnType::Symbol,
+            "comparable-array" => crate::ReturnType::Array(crate::ArrayElement::Interface(
+                crate::InterfaceType::Comparable,
+            )),
+            "nullable-comparable-array" => crate::ReturnType::Array(
+                crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparable),
+            ),
+            "comparator-array" => crate::ReturnType::Array(crate::ArrayElement::Interface(
+                crate::InterfaceType::Comparator,
+            )),
+            "nullable-comparator-array" => crate::ReturnType::Array(
+                crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator),
+            ),
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),
             "boolean-array" => crate::ReturnType::Array(crate::ArrayElement::Boolean),
             "number-array" => crate::ReturnType::Array(crate::ArrayElement::Number),

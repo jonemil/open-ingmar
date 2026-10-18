@@ -151,6 +151,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
+    Interface(InterfaceType),
+    NullableInterface(InterfaceType),
     Number,
     Long,
     NullableLong,
@@ -172,6 +174,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
             Self::Double | Self::NullableDouble => "Toybox.Lang.Double",
             Self::Float | Self::NullableFloat => "Toybox.Lang.Float",
@@ -190,6 +193,7 @@ impl ArrayElement {
 
     fn nullable_base(self) -> Option<Self> {
         match self {
+            Self::NullableInterface(interface) => Some(Self::Interface(interface)),
             Self::NullableNumber => Some(Self::Number),
             Self::NullableDouble => Some(Self::Double),
             Self::NullableFloat => Some(Self::Float),
@@ -203,6 +207,10 @@ impl ArrayElement {
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         [
+            Self::Interface(InterfaceType::Comparable),
+            Self::Interface(InterfaceType::Comparator),
+            Self::NullableInterface(InterfaceType::Comparable),
+            Self::NullableInterface(InterfaceType::Comparator),
             Self::Number,
             Self::NullableNumber,
             Self::Double,
@@ -225,6 +233,10 @@ impl ArrayElement {
 
     fn text(self) -> &'static str {
         match self {
+            Self::Interface(InterfaceType::Comparable) => "comparable",
+            Self::Interface(InterfaceType::Comparator) => "comparator",
+            Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable",
+            Self::NullableInterface(InterfaceType::Comparator) => "nullable-comparator",
             Self::Number => "number",
             Self::Double => "double",
             Self::NullableDouble => "nullable-double",
@@ -247,6 +259,10 @@ impl ArrayElement {
 
     fn array_text(self) -> &'static str {
         match self {
+            Self::Interface(InterfaceType::Comparable) => "comparable-array",
+            Self::Interface(InterfaceType::Comparator) => "comparator-array",
+            Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable-array",
+            Self::NullableInterface(InterfaceType::Comparator) => "nullable-comparator-array",
             Self::Number => "number-array",
             Self::Double => "double-array",
             Self::NullableDouble => "nullable-double-array",
@@ -1577,7 +1593,9 @@ impl Function {
                         .array()
                         .expect("validated Array builder")
                         .api_type();
-                    if !native::accepts(&expected, &type_of(value).api_type()) {
+                    if !native::accepts(&expected, &type_of(value).api_type())
+                        && !origins.deferred_interface(&expected, value)
+                    {
                         return Err(fail("array builder element must match its declared type"));
                     }
                     (None, vec![value])
@@ -1592,10 +1610,10 @@ impl Function {
                         .array()
                         .expect("validated Array builder")
                         .api_type();
-                    if values
-                        .iter()
-                        .any(|v| !native::accepts(&expected, &type_of(*v).api_type()))
-                    {
+                    if values.iter().any(|v| {
+                        !native::accepts(&expected, &type_of(*v).api_type())
+                            && !origins.deferred_interface(&expected, *v)
+                    }) {
                         return Err(fail(
                             "array builder elements must match their declared type",
                         ));
@@ -2192,7 +2210,9 @@ impl Function {
                     if type_of(index) != ValueType::Integer {
                         return Err(fail("array writes require a non-null Number index"));
                     }
-                    if !native::accepts(&element.api_type(), &type_of(value).api_type()) {
+                    if !native::accepts(&element.api_type(), &type_of(value).api_type())
+                        && !origins.deferred_interface(&element.api_type(), value)
+                    {
                         return Err(fail(
                             "array write value must match the receiver's element type",
                         ));
@@ -3468,6 +3488,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
 
 fn call_type_text(result: &ReturnType) -> String {
     match result {
+        ReturnType::Array(
+            element @ (ArrayElement::Interface(_) | ArrayElement::NullableInterface(_)),
+        ) => return format!(" result={}", element.array_text()),
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),
         ReturnType::NullableInterface(interface) => {

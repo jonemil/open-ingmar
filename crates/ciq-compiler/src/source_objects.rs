@@ -108,8 +108,17 @@ impl Origins {
         }
         Ok(())
     }
-    /// Project a source comparator argument to its interface type for call
-    /// checking. Unit validation must still resolve its class and required members;
+    /// Report a source witness that requires a unit-level interface proof.
+    pub(crate) fn deferred_interface(&self, expected: &crate::api::Type, value: ValueId) -> bool {
+        self.class(value).is_some()
+            && matches!(
+                crate::ValueType::from_api_type(expected),
+                Some(crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_))
+            )
+    }
+
+    /// Project source arguments to their expected interface types for call
+    /// checking. Unit validation must still resolve their classes and required members;
     /// erased native references cannot claim that obligation.
     pub(crate) fn native_arguments(
         &self,
@@ -118,14 +127,16 @@ impl Origins {
         arguments: impl IntoIterator<Item = (ValueId, crate::api::Type)>,
     ) -> Vec<crate::api::Type> {
         let arguments = arguments.into_iter().collect::<Vec<_>>();
-        let comparator = matches!(receiver, crate::api::Type::Array(_))
-            && member == "sort"
-            && arguments.len() == 1;
+        let parameters = crate::native::value_parameters(receiver, member).unwrap_or_default();
         arguments
             .into_iter()
-            .map(|(value, ty)| {
-                if comparator && self.class(value).is_some() {
-                    crate::api::Type::named("Toybox.Lang.Comparator")
+            .enumerate()
+            .map(|(index, (value, ty))| {
+                if let Some(expected) = parameters
+                    .get(index)
+                    .filter(|expected| self.deferred_interface(expected, value))
+                {
+                    expected.clone()
                 } else {
                     ty
                 }

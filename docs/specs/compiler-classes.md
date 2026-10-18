@@ -436,7 +436,7 @@ a local snapshot and null guard for member calls: testing one field read does
 not refine another mutable field read. Clearing or replacing the field does not
 change a previously captured local value. Nullable Comparator reads can supply
 Array.sort directly. These rules do not add field/class intersection proofs,
-general native field types, or interface container storage.
+general native field types, or container field declarations.
 
 Unit IR uses `.field-interface <name> <tag>` before methods. Tags are
 `comparable`, `comparator`, `nullable-comparable`, or `nullable-comparator`.

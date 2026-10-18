@@ -466,11 +466,14 @@ container is owned by the produced value and its subsequent consumers.
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
 non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
 `char`, `boolean`, and `string`, each also accepting a `nullable-` prefix.
-`view` represents the supported native View contract. Typed construction uses
+`view` represents the supported native View contract. `comparable`, `comparator`,
+`nullable-comparable`, and `nullable-comparator` retain comparison-interface
+element contracts. Typed construction uses
 `Operation::ArrayNew` with the corresponding `ArrayElement` variant.
 Other parsed element contracts are rejected. Definition/use, block, and effect
 checks apply even when the allocation result is consumed later. API checking
-requires the element class and Array: 1.3.0 for Char, otherwise 1.0.0.
+requires Array and the element type: 5.0.0 for comparison interfaces, 1.3.0 for
+Char, otherwise 1.0.0 within this profile.
 
 Parameter/user-call Array categories append `-array` to these element tags,
 for example `long-array`, `nullable-double-array`, or `view-array`. Nullability
@@ -485,6 +488,10 @@ typing. See [nonempty construction](../investigations/compiler-array-literals.md
 and [empty construction](../investigations/compiler-empty-arrays.md).
 
 ## Constant arrays
+
+Comparison-interface elements use private construction instead of these
+homogeneous constant payloads. `.array-constant` rejects interface tags even
+when its scalar values could individually satisfy the interface.
 
 ```text
 .array-constant %0 number 0x0000000a 0x00000014
@@ -1137,7 +1144,8 @@ contracts, including scalar Comparable witnesses at returns, local assignments,
 and incoming block values. User-call arguments use the same witness rules.
 No coercion operation is serialized; the declared storage/edge/call contract
 retains the interface while the scalar keeps its runtime representation.
-Source witnesses at arguments, returns, and local/field assignments remain unit
+Source witnesses at arguments, returns, local/field assignments, Array fills,
+indexed writes, and native element arguments remain unit
 obligations;
 unit validation resolves their exact classes and checks required members after
 text reload. A forged call result or a changed implementation signature cannot

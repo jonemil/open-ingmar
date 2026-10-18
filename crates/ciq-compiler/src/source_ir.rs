@@ -901,6 +901,12 @@ impl Builder<'_> {
         if let Some(values) = constant {
             let element_type = expected.or(values[0].0);
             if let Some(element_type) = element_type.filter(|element| {
+                if matches!(
+                    element,
+                    crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_)
+                ) {
+                    return false; // Bits payloads cannot distinguish Number from Char here.
+                }
                 values.iter().all(|v| {
                     let actual =
                         v.0.map(|ty| ty.api_type())
@@ -1444,7 +1450,9 @@ impl Builder<'_> {
                     span,
                 },
                 Some(ConstructionType::Array(element)),
-            ) if element.nullable_base().is_some() => {
+            ) if element.nullable_base().is_some()
+                || matches!(element, crate::ArrayElement::Interface(_)) =>
+            {
                 self.array_literal(elements, Some(element), span, locals)?
             }
             (expression, _) if expression.needs_materialization() => {
