@@ -64,7 +64,65 @@ module References {
         if (gotWeak != null) { System.println(gotWeak.equals(w)); }
     }
 }
+class WeakStore {
+    var fixed as Toybox.Lang.WeakReference;
+    var maybe as Toybox.Lang.WeakReference or Null = null;
+    function initialize(w as Toybox.Lang.WeakReference) { self.fixed = w; }
+    function required() as Toybox.Lang.WeakReference { return self.fixed; }
+    function set(w as Toybox.Lang.WeakReference or Null) as Void { self.maybe = w; }
+    function snapshot() as Toybox.Lang.WeakReference or Null { return self.maybe; }
+}
+module NullableReferences {
+    function choose(w as Toybox.Lang.WeakReference, present as Toybox.Lang.Boolean) as Toybox.Lang.WeakReference or Null { return present ? w : null; }
+    function forward(w as Toybox.Lang.WeakReference or Null) as Toybox.Lang.WeakReference or Null { return w; }
+    function run() as Void {
+        var owner = [10, 20];
+        var w = owner.weak();
+        var candidate = NullableReferences.choose(w, true);
+        var store = new WeakStore(w);
+        System.println(store.snapshot() == null);
+        store.set(candidate);
+        candidate = null;
+        var saved = store.snapshot();
+        store.set(null);
+        if (saved != null) {
+            System.println(saved.stillAlive());
+            var got = saved.get();
+            System.println(got != null);
+            owner = [0];
+            System.println(saved.stillAlive());
+            got = null;
+            System.println(saved.stillAlive());
+            System.println(saved.get() == null);
+        }
+        System.println(store.required().stillAlive());
+        saved = null;
+        System.println(saved == null);
+        var none = NullableReferences.choose(w, false);
+        System.println(none == null);
+        candidate = NullableReferences.forward(w);
+        while (candidate != null) {
+            System.println(candidate.stillAlive());
+            candidate = null;
+        }
+        System.println(candidate == null);
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
+    var startup as Toybox.Lang.WeakReference or Null;
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { References.run(); System.exit(); }
+    function onStart(state) {
+        References.run();
+        NullableReferences.run();
+        var owner = [4];
+        self.startup = owner.weak();
+        var saved = self.startup;
+        self.startup = null;
+        if (saved != null) {
+            System.println(saved.stillAlive());
+            owner = [0];
+            System.println(saved.stillAlive());
+        }
+        System.exit();
+    }
 }

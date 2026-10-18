@@ -84,6 +84,7 @@ pub(crate) fn parse_ir_context(
                 "object" => crate::ReturnType::LangObject,
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
+                "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
                 "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
                 "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
                 "nullable-comparable" => {
@@ -155,6 +156,9 @@ pub(crate) fn parse_ir_context(
                         "object" => Ok(crate::ParameterType::LangObject),
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
+                        "nullable-weak-reference" => {
+                            Ok(crate::ParameterType::NullableWeakReference)
+                        }
                         "comparable" => Ok(crate::ParameterType::Interface(
                             crate::InterfaceType::Comparable,
                         )),
@@ -1282,6 +1286,7 @@ fn call_contract(
             "object" => crate::ReturnType::LangObject,
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
+            "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
             "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
             "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
             "nullable-comparable" => {

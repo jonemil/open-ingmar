@@ -43,16 +43,33 @@ Compile the tracked source with an ignored Jungle and the shared native-names
 manifest/resources. Use the
 [console checker](../../scripts/README.md#console-specimen-check) for saved-stage
 parity, structured SDK/generated reconstruction, own-key signing, and simulator
-comparison. Both programs match all 26 expected console lines. Artifacts:
-`scratch/check-weak-references-final/`.
+comparison. Both programs match all 39 expected console lines. Artifacts:
+`scratch/check-nullable-weak/`.
 
 SDK symbols use `weak` = `0x00800418`, `stillAlive` = `0x00800417`, and
 `get` = `0x008000b5` (already used by Dictionary). Existing member invocation,
 local reads/writes, and `npush` suffice. No VM opcode or PRG record is added;
 `.take` is a semantic IR ownership operation lowered to these instructions.
 
-Other native/source weak targets, casts or concrete target recovery, nullable
-WeakReference storage, and callback interactions are not established here.
+## Nullable handles and fields
+
+2026-10-18, same SDK/simulator and target.
+
+**Observed:** nullable WeakReference parameters, results, conditional joins,
+locals, and `WeakStore`/AppBase fields retain a usable weak handle after another
+slot is cleared. Its target expires while non-null handles remain stored. An
+Object retrieved before replacing the original owner keeps the target alive;
+clearing that Object expires it. A Null handle and an expired handle therefore
+remain distinct even though neither produces a live target.
+
+Required/nullable field metadata uses the existing Null slots. Saved IR and
+structured section reconstruction preserve the specimen's behavior without
+new opcodes or PRG records. API checks reject declarations below 1.2.0, including
+unused nullable fields after IR reload. Lexical assertions are checked only as
+unchanged-value lowering; they establish no runtime type or liveness proof.
+
+Other native/source weak targets, checked concrete recovery, container storage,
+and broader callback interactions are not established here.
 
 [weak]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/WeakReference.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

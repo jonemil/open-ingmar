@@ -48,7 +48,7 @@ under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.
 
-Broader weak targets, nullable WeakReference storage, and container recovery from
+Broader weak targets, WeakReference container storage, and container recovery from
 opaque Object results need their own type/refinement contracts. Keep hidden
 temporary ownership explicit when adding new source staging paths.
 

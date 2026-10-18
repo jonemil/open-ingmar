@@ -259,6 +259,9 @@ pub enum FieldKind {
     /// A Null-initialized bound Method slot. Non-null fields must be filled by
     /// source initialize before reads, self exposure, control flow, or return.
     Method { nullable: bool },
+    /// A Null-initialized ordinary WeakReference slot. Non-null fields require
+    /// source initialization; storing the reference does not own its target.
+    WeakReference { nullable: bool },
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
@@ -276,6 +279,7 @@ impl FieldKind {
             self,
             Self::SourceObject(_)
                 | Self::Method { nullable: false }
+                | Self::WeakReference { nullable: false }
                 | Self::Symbol {
                     initial: None,
                     nullable: false
@@ -309,6 +313,13 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::WeakReference { nullable } => {
+                if *nullable {
+                    ReturnType::NullableWeakReference
+                } else {
+                    ReturnType::WeakReference
+                }
+            }
             FieldKind::Method { nullable } => {
                 if *nullable {
                     ReturnType::NullableMethod
@@ -1492,6 +1503,11 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::WeakReference { nullable } => format!(
+                        ".field-weak-reference {} {}weak-reference\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" }
+                    ),
                     FieldKind::Method { nullable } => format!(
                         ".field-method {} {}method\n",
                         field.name,
@@ -1889,6 +1905,7 @@ fn parse_unit_ir_context(
                                 | ".field-interface"
                                 | ".field-symbol"
                                 | ".field-method"
+                                | ".field-weak-reference"
                         )
                     }) {
                         if (parts.len() != 3 && !(parts[0] == ".field-symbol" && parts.len() == 4))
@@ -1905,6 +1922,20 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-weak-reference" {
+                            FieldKind::WeakReference {
+                                nullable: match parts[2].as_str() {
+                                    "weak-reference" => false,
+                                    "nullable-weak-reference" => true,
+                                    _ => {
+                                        return Err(Diagnostic::at(
+                                            text,
+                                            method_at,
+                                            "invalid WeakReference field contract",
+                                        ));
+                                    }
+                                },
+                            }
                         } else if parts[0] == ".field-method" {
                             FieldKind::Method {
                                 nullable: match parts[2].as_str() {

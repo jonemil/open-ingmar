@@ -2,7 +2,9 @@
 
 [app.mc](app.mc) exercises Array/Dictionary weak references, live and expired
 retrieval, temporary strong references, aliases, native observers, and function
-arguments/results. The [expected output](expected.txt) matches SDK/generated
+arguments/results. `WeakStore` and AppBase fields also exercise required/nullable
+handle storage, guarded snapshots, and target expiry while handles remain stored.
+The [expected output](expected.txt) matches SDK/generated
 `fr265` programs. `get()` produces `Object or Null`; guarded Object values keep
 their targets alive until their strong references are released.
 

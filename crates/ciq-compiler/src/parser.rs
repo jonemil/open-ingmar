@@ -2018,6 +2018,9 @@ impl Parser<'_> {
                             crate::ParameterType::Char => crate::ParameterType::NullableChar,
                             crate::ParameterType::Symbol => crate::ParameterType::NullableSymbol,
                             crate::ParameterType::Method => crate::ParameterType::NullableMethod,
+                            crate::ParameterType::WeakReference => {
+                                crate::ParameterType::NullableWeakReference
+                            }
                             _ => return Err(self.error(at, "unsupported nullable parameter type")),
                         }
                     } else {
@@ -2102,6 +2105,7 @@ impl Parser<'_> {
                     crate::ReturnType::Char => crate::ReturnType::NullableChar,
                     crate::ReturnType::Symbol => crate::ReturnType::NullableSymbol,
                     crate::ReturnType::Method => crate::ReturnType::NullableMethod,
+                    crate::ReturnType::WeakReference => crate::ReturnType::NullableWeakReference,
                     _ => return Err(self.error(at, "unsupported nullable result type")),
                 }
             } else {
@@ -2229,6 +2233,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                             )?;
                             crate::FieldKind::Symbol { initial, nullable }
                         } else if class == "Toybox.Lang.Method"
+                            || class == "Toybox.Lang.WeakReference"
                             || crate::InterfaceType::from_name(&class).is_some()
                         {
                             let nullable = if parser.peek()? == Kind::Word("or") {
@@ -2255,6 +2260,8 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                             )?;
                             if class == "Toybox.Lang.Method" {
                                 crate::FieldKind::Method { nullable }
+                            } else if class == "Toybox.Lang.WeakReference" {
+                                crate::FieldKind::WeakReference { nullable }
                             } else {
                                 crate::FieldKind::Interface {
                                     interface: crate::InterfaceType::from_name(&class).unwrap(),

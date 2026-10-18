@@ -1057,6 +1057,7 @@ Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,
+`weak-reference`, `nullable-weak-reference`,
 `array-number`, `array-char`, `array-method`, and `array-nullable-method`.
 They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
@@ -1481,8 +1482,10 @@ mixed Char addition, String identity equality, and nullable restrictions.
 Native `weak` remains a call whose exact immutable receiver determines its
 specialized result; it is not erased or rewritten as a copy.
 
-Ordinary WeakReference values use `weak-reference` for parameter, call-result,
-and conditional-edge tags. Opaque Object values use `object` and
+Ordinary WeakReference values use `weak-reference` or `nullable-weak-reference`
+for parameter, call-result, and conditional-edge tags. Class fields use
+[`.field-weak-reference`](compiler-classes.md#weakreference-fields).
+Opaque Object values use `object` and
 `nullable-object`. Explicit function `result=` contracts retain these tags,
 including nullable Object results even if all returns happen to be non-null.
 `get` and `stillAlive` use existing `.call-native` operations, with result types
@@ -1560,7 +1563,8 @@ Every value return must be Null, the corresponding scalar type, or the same
 union. A void return is invalid. The declared union is
 preserved even when all returns are scalar or all are Null; canonical text
 always writes it. Omitted result metadata infers a uniform scalar/Void contract
-and rejects nullable/Null returns. Other function result fields are unsupported.
+and rejects nullable/Null returns. Reference result tags follow the
+[native value contracts](#native-value-calls). Unsupported result tags are errors.
 Parameter lists independently accept the same nullable type names.
 
 ```text

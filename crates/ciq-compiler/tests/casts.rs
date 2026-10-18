@@ -67,7 +67,6 @@ fn unsupported_targets_and_newer_api_types_are_rejected() {
         "Lang.Array",
         "Lang.Comparator",
         "Lang.String or Lang.Number",
-        "Lang.WeakReference or Null",
     ] {
         let source =
             format!("function f(o as Toybox.Lang.Object) {{ var value = o as {target}; }}");

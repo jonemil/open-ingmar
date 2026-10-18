@@ -431,6 +431,8 @@ pub enum ReturnType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// Ordinary WeakReference or Null; members require a non-null proof.
+    NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
     /// Bound Method or Null; invocation and members require a non-null proof.
@@ -478,6 +480,8 @@ pub enum ParameterType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// Ordinary WeakReference or Null; members require a non-null proof.
+    NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
     /// Bound Method or Null; invocation and members require a non-null proof.
@@ -535,6 +539,7 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
@@ -574,6 +579,7 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
@@ -601,6 +607,8 @@ enum ValueType {
     NullableObject,
     /// A non-null ordinary WeakReference, distinct from immutable weak results.
     WeakReference,
+    /// Ordinary WeakReference or Null; members require a non-null proof.
+    NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
     /// Bound Method or Null; invocation and members require a non-null proof.
@@ -645,6 +653,7 @@ impl ValueType {
             Self::NullableChar => Self::Char,
             Self::NullableSymbol => Self::Symbol,
             Self::NullableMethod => Self::Method,
+            Self::NullableWeakReference => Self::WeakReference,
             Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
             _ => self,
@@ -693,6 +702,9 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::NullableWeakReference => {
+                api::Type::Union(vec![Self::WeakReference.api_type(), api::Type::Null])
+            }
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => api::Type::named("Toybox.Lang.Method"),
@@ -765,6 +777,7 @@ impl ValueType {
             _ if *ty == Self::NullableChar.api_type() => Some(Self::NullableChar),
             _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
             _ if *ty == Self::NullableMethod.api_type() => Some(Self::NullableMethod),
+            _ if *ty == Self::NullableWeakReference.api_type() => Some(Self::NullableWeakReference),
             _ => None,
         }
     }
@@ -1840,6 +1853,7 @@ impl Function {
                                     ty @ (ValueType::NullableInteger
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
+                                    | ValueType::NullableWeakReference
                                     | ValueType::NullableMethod
                                     | ValueType::NullableSymbol
                                     | ValueType::NullableChar
@@ -1906,6 +1920,8 @@ impl Function {
                             | ReturnType::Symbol
                             | ReturnType::NullableSymbol
                             | ReturnType::Method
+                            | ReturnType::WeakReference
+                            | ReturnType::NullableWeakReference
                             | ReturnType::NullableMethod
                             | ReturnType::Interface(_)
                             | ReturnType::NullableInterface(_)
@@ -1929,6 +1945,8 @@ impl Function {
                                 | ValueType::Symbol
                                 | ValueType::NullableSymbol
                                 | ValueType::Method
+                                | ValueType::WeakReference
+                                | ValueType::NullableWeakReference
                                 | ValueType::NullableMethod
                         )
                         && !native::accepts(
@@ -2462,6 +2480,8 @@ impl Function {
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableBoolean
                             && matches!(incoming, ValueType::Boolean | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableWeakReference
+                            && matches!(incoming, ValueType::WeakReference | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableMethod
                             && matches!(incoming, ValueType::Method | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableSymbol
@@ -2890,6 +2910,7 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::NullableWeakReference => "nullable-weak-reference",
                             ParameterType::Interface(interface) => interface.tag(),
                             ParameterType::NullableInterface(InterfaceType::Comparable) => {
                                 "nullable-comparable"
@@ -2918,6 +2939,7 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::NullableWeakReference
             | ReturnType::Interface(_)
             | ReturnType::NullableInterface(_)
             | ReturnType::Method
@@ -3477,6 +3499,7 @@ fn validate_call_arguments(
                     | ValueType::LangObject
                     | ValueType::NullableObject
                     | ValueType::WeakReference
+                    | ValueType::NullableWeakReference
                     | ValueType::Interface(_)
                     | ValueType::NullableInterface(_)
                     | ValueType::Method
@@ -3526,6 +3549,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::NullableWeakReference => Ok(ValueType::NullableWeakReference),
         ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
         ReturnType::NullableInterface(interface) => Ok(ValueType::NullableInterface(interface)),
         ReturnType::Method => Ok(ValueType::Method),
@@ -3573,6 +3597,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::LangObject => " result=object",
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
+        ReturnType::NullableWeakReference => " result=nullable-weak-reference",
         ReturnType::Method => " result=method",
         ReturnType::NullableMethod => " result=nullable-method",
         ReturnType::Symbol => " result=symbol",

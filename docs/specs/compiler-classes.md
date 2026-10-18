@@ -490,6 +490,29 @@ Existing field load/store instructions and DATA framing suffice. See the
 [specimen](../../examples/compiler-methods/README.md) and
 [ownership evidence](../investigations/compiler-methods.md#nullable-ownership).
 
+## WeakReference fields
+
+All supported source class bases accept annotated `Toybox.Lang.WeakReference`
+and `WeakReference or Null` fields from API 1.2.0, including unused declarations.
+Canonical, imported, and aliased type names are accepted. Both slots start as
+Null metadata (type `0x00`, value zero). Non-null fields require assignment in
+source `initialize`, with the existing required-field prefix and self-exposure
+rules. Nullable fields may omit initialization or use literal `null`; computed
+defaults are unsupported.
+
+Reads and writes preserve declared nullability. Nullable field members need a
+guarded local snapshot; a test of one mutable field read cannot refine another.
+Stored weak references and their aliases do not retain the target. A saved
+`get()` Object result is a separate strong reference, governed by the
+[ordinary weak-reference contract](compiler-subset.md#ordinary-weak-references).
+Immutable scalar `weak()` results cannot satisfy an ordinary WeakReference field.
+
+Unit IR uses `.field-weak-reference <name> weak-reference|nullable-weak-reference`
+before methods, with no default operand. `.read-self` claims the matching result
+tag; unit validation checks declarations, writes, initialization, and API
+availability after reload. Existing field instructions and DATA framing suffice.
+See the [specimen](../../examples/compiler-weak-references/README.md).
+
 ## Symbol fields
 
 All supported source class bases accept Symbol fields from API 1.0.0:

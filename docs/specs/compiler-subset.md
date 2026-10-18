@@ -1539,12 +1539,21 @@ calls retain runtime behavior rather than synthesizing wrapper identity.
 There is no `clear()` method. Release a strong reference through assignment or
 frame exit; the runtime determines when the target ceases to exist.
 
-Source signatures accept `Toybox.Lang.WeakReference`, `Toybox.Lang.Object`, and
-`Toybox.Lang.Object or Null`. They survive locals, function calls/results, saved
-IR, and ordinary branch/loop null proofs. A retrieved Object is a strong value;
+Source signatures accept `Toybox.Lang.WeakReference`, `WeakReference or Null`,
+`Toybox.Lang.Object`, and `Object or Null`. They survive locals, function
+calls/results, saved IR, and ordinary branch/loop null proofs. A retrieved Object is a strong value;
 saving it can keep the target alive. Save and guard that value before calling
 its supported Object methods (`toString`, `equals`, `hashCode`). Neither
 `stillAlive()` nor testing a separate `get()` call proves a later result non-null.
+
+Nullable WeakReference locals retain their union through assignment and joins
+with WeakReference/Null alternatives, since API 1.2.0. A fresh non-null proof
+permits handle members; it proves neither target liveness nor a non-null `get()`
+result. Writes invalidate local proofs; aliases and stored Boolean tests do not
+transfer them. Lexical `as WeakReference or Null` asserts a type without runtime
+checking, conversion, or ownership changes. Required/nullable
+[WeakReference fields](compiler-classes.md#weakreference-fields) preserve these
+contracts. Null storage and an expired non-null WeakReference are distinct states.
 
 Object contracts erase concrete type information without changing runtime
 values. Compatible values may pass to Object parameters/results and replace
@@ -1555,8 +1564,8 @@ arms also join. These rules do not introduce heterogeneous container joins.
 
 The declared Object type does not establish a WeakReference result from
 `Object.weak()`: the runtime value might be an immutable scalar. That receiver
-path, other native/source weak targets, nullable WeakReference contracts,
-constructors, casts, and concrete recovery remain deferred. The new types do
+path, other native/source weak targets, container storage,
+constructors, and safe concrete recovery remain deferred. The new types do
 not acquire arithmetic, truthiness, direct printing, or general equality
 operators; nullable Object/Null tests use the existing proof rules.
 

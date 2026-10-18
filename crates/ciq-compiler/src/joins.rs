@@ -8,6 +8,9 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "object" => Type::named("Toybox.Lang.Object"),
         "nullable-object" => Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]),
         "weak-reference" => Type::named("Toybox.Lang.WeakReference"),
+        "nullable-weak-reference" => {
+            Type::Union(vec![Type::named("Toybox.Lang.WeakReference"), Type::Null])
+        }
         "method" => Type::named("Toybox.Lang.Method"),
         "nullable-method" => Type::Union(vec![Type::named("Toybox.Lang.Method"), Type::Null]),
         "comparable" => Type::named("Toybox.Lang.Comparable"),
@@ -70,6 +73,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "nullable-char",
         "nullable-symbol",
         "nullable-method",
+        "nullable-weak-reference",
         "array-number",
         "array-char",
         "array-method",
@@ -119,6 +123,7 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
         "nullable-char",
         "nullable-symbol",
         "nullable-method",
+        "nullable-weak-reference",
     ] {
         let ty = parse_type(tag).unwrap();
         if crate::native::accepts(&ty, left) && crate::native::accepts(&ty, right) {
