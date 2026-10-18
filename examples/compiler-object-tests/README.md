@@ -1,10 +1,12 @@
-# Runtime object predicates
+# Runtime object typing
 
 [app.mc](app.mc) checks `instanceof` against supported concrete Lang classes,
 `has` with literal and computed Symbols, source fields/methods, null handling,
 short-circuiting, and operand evaluation order. See [expected output](expected.txt).
 Guarded Object reads support Number arithmetic, String methods, nullable inputs,
-conditional arms, loops, and numeric comparator sorting.
+conditional arms, loops, and numeric comparator sorting. Lexical casts cover
+scalar/reference assertions, nullable targets, erasure/recovery, runtime identity,
+and one-time operand effects.
 
 From the repository root:
 

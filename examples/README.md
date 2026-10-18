@@ -6,7 +6,7 @@ instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
 - [compiler-object-tests](compiler-object-tests/README.md): runtime class and
-  member predicates, Symbol selectors, null guards, and evaluation order.
+  member predicates, refinement, lexical casts, and evaluation order.
 - [compiler-root-objects](compiler-root-objects/README.md): Object-rooted source
   construction, independent fields, observers, callbacks, and comparators.
 - [compiler-comparators](compiler-comparators/README.md): checked source

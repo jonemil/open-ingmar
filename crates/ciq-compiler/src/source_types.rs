@@ -233,6 +233,7 @@ impl Types {
                         operators::binary_result(*kind, candidate(left), candidate(right))
                     }),
             ),
+            Operation::Cast { result, target, .. } => (*result, Some(target.clone())),
             Operation::InstanceOf { result, .. } | Operation::Has { result, .. } => {
                 (*result, Some(Type::named("Toybox.Lang.Boolean")))
             }

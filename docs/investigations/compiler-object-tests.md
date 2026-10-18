@@ -3,7 +3,7 @@
 2026-10-17, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
 Question: how do runtime predicates encode and support guarded Object uses?
 
-**Experimentally observed:** the [tracked specimen][example] matches all 45
+**Experimentally observed:** the [tracked specimen][example] matches all 62
 expected lines in SDK/generated runs. It tests all supported concrete Lang
 classes, source field/method existence, inherited observers, Symbol parameters,
 computed selectors, null guards, and Boolean short-circuiting. Computed operands
@@ -30,11 +30,32 @@ with `Null Reference Error` at `null has :toString`. The accepted specimen guard
 the latter operation. Our non-null receiver requirement is a checking policy,
 not a claim that the SDK rejects nullable source expressions.
 
-**Limits:** these tests establish concrete read refinement, not casts,
-source-class/interface tests, general union subtraction, or guarded API
-availability. A preliminary
+**Limits:** source-class/interface tests, parameterized-container casts,
+general union subtraction, and guarded API availability remain unverified. A preliminary
 `1.0f` literal is SDK-accepted but unsupported by our parser; the final specimen
 uses unsuffixed Float syntax. The lexical gap remains in the plan.
+
+## Lexical casts
+
+**Officially documented:** [Monkey Types][types] describes `as` casts as lexical,
+with no runtime changes. The earlier plan's phrase "checked cast" did not
+establish a runtime check.
+
+**Experimentally observed:** the SDK accepts `o as Number + 1` and
+`1 + o as Number` for an Object operand. `-o as Number` is rejected because unary
+negation still sees Object; `-(o as Number)` is accepted. Its authored probe
+returns `4`, `4`, and `-3` from these accepted forms. Number asserted as String
+still passes `instanceof Number`, and Number asserted as Double remains Number.
+Null asserted as String remains null. The probe and runtime capture are in
+`scratch/compiler-cast-probe/` and `scratch/cast-probe-sdk-runtime/`.
+
+The tracked example additionally checks scalar/nullable assertions, opaque
+Object erasure/recovery, Symbol selectors, Method invocation, WeakReference and
+opaque Dictionary methods, conditional values, and one-time operand effects
+(`cast-effect`). SDK/generated output matches all expected lines. Both programs
+export and reconstruct without new instructions or DATA records. Casts alone
+require no emitted VM operations; this does not establish safe uses of falsely
+asserted values.
 
 ## Reproduction
 
@@ -43,10 +64,12 @@ The ignored `scratch/compiler-object-tests/monkey.jungle` selects the tracked
 source and shared native-names manifest/resources. Build through
 `scripts/build-example.sh`, then prepare and simulate `compiler-object-tests`.
 Accepted saved-stage, SDK/generated round-trip, and runtime artifacts are under
-`scratch/check-object-refinement/`. The isolated nullable failure is under
+`scratch/check-lexical-casts/`. The isolated nullable failure is under
 `scratch/object-tests-sdk-runtime-full/`; its source is the preliminary
 `scratch/compiler-object-tests/source/app.mc`.
 
 [example]: ../../examples/compiler-object-tests/README.md
 [check]: ../../scripts/README.md#console-specimen-check
 [roots]: compiler-root-objects.md#import-identity
+
+[types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

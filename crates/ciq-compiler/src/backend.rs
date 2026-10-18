@@ -131,6 +131,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Positive { result, .. }
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
+            | Operation::Cast { result, .. }
             | Operation::InstanceOf { result, .. }
             | Operation::Has { result, .. }
             | Operation::Not { result, .. }
@@ -868,6 +869,10 @@ fn expression(
                         },
                         vec![],
                     )
+                }
+                Operation::Cast { operand, .. } => {
+                    tasks.push(Task::Value(*operand));
+                    continue;
                 }
                 Operation::InstanceOf { operand, class, .. } => {
                     tasks.extend([Task::InstanceOf(class.clone()), Task::Value(*operand)]);

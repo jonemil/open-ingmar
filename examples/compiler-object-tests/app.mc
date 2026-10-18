@@ -23,6 +23,7 @@ module Tests {
         System.println("selector"); return :length;
     }
     function run() as Void {
+        Lexical.run();
         Refine.run();
         Tests.show(3); Tests.show("x"); Tests.absent(null); Tests.absent("x");
         System.println(Tests.member("x", :length));
@@ -103,5 +104,41 @@ class NumberOrder {
     function compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as Toybox.Lang.Number {
         if (a instanceof L.Number && b instanceof L.Number) { return a - b; }
         else { return a.toString().compareTo(b.toString()); }
+    }
+}
+
+module Lexical {
+    function number(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+        return o as L.Number + 1;
+    }
+    function nullable(o as Toybox.Lang.Object or Null) as Toybox.Lang.String or Null {
+        return o as L.String or Null;
+    }
+    function effect() as Toybox.Lang.Object { System.println("cast-effect"); return "abc"; }
+    function run() as Void {
+        System.println(Lexical.number(3));
+        System.println(1 + 3 as L.Object as L.Number);
+        System.println((3 as L.String) instanceof L.Number);
+        System.println((null as L.String) instanceof L.String);
+        System.println((3 as L.Double) instanceof L.Number);
+        System.println(Lexical.nullable("x") as L.String);
+        System.println(Lexical.nullable(null) == null);
+        var erased = "hello" as L.Object;
+        System.println((erased as L.String).length());
+        System.println((true ? 1 : 2) as L.Number);
+        System.println((Lexical.effect() as L.String).length());
+        var array = [1];
+        var weak = array.weak() as L.Object;
+        System.println((weak as L.WeakReference).stillAlive());
+        var dictionary = {1 => 2};
+        System.println((dictionary as L.Object as L.Dictionary).size());
+        var selector = :length as L.Object;
+        System.println("x" has (selector as L.Symbol));
+        var callback = "abc".method(:length) as L.Object;
+        var result = (callback as L.Method).invoke();
+        if (result != null) { System.println(result.toString()); }
+        var maybe = 3 as L.Number or Null;
+        if (maybe != null) { System.println(maybe + 2); }
+        System.println(-(3 as L.Object as L.Number));
     }
 }

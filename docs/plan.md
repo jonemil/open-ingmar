@@ -12,10 +12,12 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Establish checked cast contracts and extend
-Object refinement beyond the supported concrete read proofs. Add source-class
-`instanceof`, imported bare class operands, member/signature proofs, and API
-guards through explicit contracts. Review Lang.Comparable and its
+**Object and structural contracts.** Extend Object refinement and lexical casts
+to source-class identities; add source-class `instanceof`, imported bare type
+operands, member/signature proofs, and API guards through explicit contracts.
+Keep lexical `as` assertions separate from runtime tests and conversions.
+Parameterized-container and general-union casts need their own type contracts.
+Review Lang.Comparable and its
 `compareTo(Object) as Number` contract alongside those prerequisites. Keep
 general interface-typed parameters/results/storage separate from the exact
 source-class Comparator witness used by sorting. Nullable/object Array sorting
@@ -211,7 +213,7 @@ below are planned requirements, not claims that every encoding is understood.
   assignment/compound/update domains, lvalue forms, precedence, associativity,
   short-circuiting, and single-evaluation/effect order. Include non-Boolean
   truth-value and operand-returning logical behavior, nullability, `has`,
-  `instanceof`, and `as` casts with their proofs. Preserve SDK-rejected Char
+  `instanceof`, and lexical `as` casts with their distinct contracts. Preserve SDK-rejected Char
   operations and expression updates as diagnosed compatibility restrictions;
   verify other forms rather than importing C semantics.
 - **Control flow and scopes:** finish accepted if/else and standalone block

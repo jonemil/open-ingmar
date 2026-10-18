@@ -1502,7 +1502,7 @@ and projection rules follow the [source profile][object-tests]. `.has` establish
 no member-signature or API-availability proof.
 
 Both typed construction and text parsing recompute the complete CFG fixed point;
-text carries no trusted narrowing annotations. Source selection uses candidate
+branch proofs carry no trusted text annotations. Source selection uses candidate
 facts from the prefix built so far, then submits the complete function to the
 same validation. Backedges and joins can invalidate those candidates. No cast
 or assertion operation is inserted. Narrowed value types guide existing native
@@ -1515,3 +1515,26 @@ selector and emits `hasv`. No section offsets or native symbol IDs are stored
 in semantic IR.
 
 [object-tests]: compiler-subset.md#runtime-object-predicates
+
+## Lexical casts
+
+```text
+.cast %<result> %<operand> <target-tag> [span=<start>:<end>]
+```
+
+`Cast { result, operand, target }` consumes one value and defines a value with
+an explicitly asserted API type. Native construction and text parsing check the
+supported target and its API availability; they do not require assignability
+from the operand or a branch proof. This explicit assertion is separate from
+recomputed control-flow facts.
+
+Target tags are `integer`, `long`, `float`, `double`, `boolean`, `char`, `string`,
+`object`, `symbol`, `method`, `weak-reference`, and `dictionary`. Supported
+nullable targets use `nullable-` tags. Types and their source obligations follow
+the [source cast contract](compiler-subset.md#lexical-casts).
+
+Lowering emits only the operand. There is no cast opcode, runtime class test,
+conversion, or new PRG record. Assertions preserve one-use and effect-order
+rules and may consume an incoming stack value directly without setup. Their
+result type participates in subsequent native calls and instruction selection;
+source-class provenance does not pass through an opaque native assertion.

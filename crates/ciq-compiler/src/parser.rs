@@ -191,6 +191,10 @@ pub(crate) enum ExpressionKind {
         left: Box<Expression>,
         right: Box<Expression>,
     },
+    Cast {
+        operand: Box<Expression>,
+        target: crate::api::Type,
+    },
     InstanceOf {
         operand: Box<Expression>,
         class: String,
@@ -215,9 +219,9 @@ impl Expression {
             | ExpressionKind::ArrayLiteral(_)
             | ExpressionKind::DictionaryNew
             | ExpressionKind::DictionaryLiteral(_) => true,
-            ExpressionKind::InstanceOf { operand, .. } | ExpressionKind::Step { operand, .. } => {
-                operand.needs_materialization()
-            }
+            ExpressionKind::Cast { operand, .. }
+            | ExpressionKind::InstanceOf { operand, .. }
+            | ExpressionKind::Step { operand, .. } => operand.needs_materialization(),
             ExpressionKind::Not(operand)
             | ExpressionKind::Complement(operand)
             | ExpressionKind::Positive(operand)
@@ -855,6 +859,10 @@ impl<'a> Parser<'a> {
         let mut values = vec![self.unary(depth)?];
         let mut operators = Vec::<(crate::BinaryOp, u8)>::new();
         loop {
+            if self.peek()? == Kind::Word("as") {
+                let operand = values.pop().unwrap();
+                values.push(self.cast_tail(operand, depth)?);
+            }
             let (kind, precedence) = match self.peek()? {
                 Kind::Punctuation('+') => (crate::BinaryOp::Add, 1),
                 Kind::Punctuation('-') => (crate::BinaryOp::Subtract, 1),
@@ -883,6 +891,61 @@ impl<'a> Parser<'a> {
             self.reduce_arithmetic(&mut values, kind)?;
         }
         Ok(values.pop().unwrap())
+    }
+
+    /// Parse lexical assertions below unary/postfix and above binary operators.
+    /// Cast targets are qualified supported Lang types, optionally unioned with Null.
+    fn cast_tail(
+        &mut self,
+        mut expression: Expression,
+        depth: usize,
+    ) -> Result<Expression, Diagnostic> {
+        let mut casts = depth;
+        while self.peek()? == Kind::Word("as") {
+            if casts >= 64 {
+                return Err(self.error(
+                    expression.span.start,
+                    "expression nesting exceeds 64 levels",
+                ));
+            }
+            casts += 1;
+            let at = self.token()?.span.start;
+            let path = self.path()?;
+            let class = path
+                .rsplit_once('.')
+                .and_then(|(module, name)| {
+                    (self.names.module(module) == Some(crate::names::NativeModule::Lang))
+                        .then(|| format!("Toybox.Lang.{name}"))
+                })
+                .ok_or_else(|| self.error(at, "cast requires a supported qualified Lang type"))?;
+            let mut target = crate::api::Type::named(class);
+            if self.peek()? == Kind::Word("or") {
+                // Leave logical OR available unless its next token is Null.
+                let saved = self.token()?.span.start;
+                if self.peek()? == Kind::Word("Null") {
+                    self.token()?;
+                    target = crate::api::Type::Union(vec![target, crate::api::Type::Null]);
+                } else {
+                    self.offset = saved;
+                    self.lookahead = None;
+                }
+            }
+            if crate::casts::type_tag(&target).is_none() {
+                return Err(self.error(at, "unsupported lexical cast target"));
+            }
+            let span = Span {
+                start: expression.span.start,
+                end: self.offset,
+            };
+            expression = self.node(
+                ExpressionKind::Cast {
+                    operand: Box::new(expression),
+                    target,
+                },
+                span,
+            )?;
+        }
+        Ok(expression)
     }
 
     /// Combine the last two parsed operands into a spanned binary expression.

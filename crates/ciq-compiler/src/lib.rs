@@ -14,6 +14,7 @@ pub mod application;
 pub mod backend;
 mod bindings;
 mod builders;
+mod casts;
 mod control_flow;
 mod dictionary;
 pub use bindings::{array_bindings, dictionary_bindings, string_bindings, symbol_bindings};
@@ -909,6 +910,13 @@ pub enum Operation {
         block: BlockId,
     },
     /// Compare supported operands, defining a Boolean in this block.
+    /// Assert an expression's lexical type without converting or checking its
+    /// runtime value. The caller is responsible for the asserted contract.
+    Cast {
+        result: ValueId,
+        operand: ValueId,
+        target: api::Type,
+    },
     /// Test the runtime class of a value without changing its semantic type.
     InstanceOf {
         result: ValueId,
@@ -1569,6 +1577,28 @@ impl Function {
                     available_locals = local_inputs[&block].clone();
                     refinements = refinement_inputs[&block].clone();
                     (None, vec![])
+                }
+                Operation::Cast {
+                    result,
+                    operand,
+                    ref target,
+                } => {
+                    if casts::type_tag(target).is_none() {
+                        return Err(fail("unsupported lexical cast target"));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), target)
+                            .map_err(|message| IrError {
+                                operation: Some(index),
+                                message,
+                            })?;
+                    }
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(target).expect("supported cast target"),
+                    );
+                    (Some(result), vec![operand])
                 }
                 Operation::InstanceOf {
                     result,
@@ -2509,6 +2539,7 @@ impl Function {
                                 | Operation::Positive { operand, .. }
                                 | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
+                                | Operation::Cast { operand, .. }
                                 | Operation::InstanceOf { operand, .. }
                                 | Operation::Not { operand, .. } => {
                                     tasks.push(Task::Value(*operand))
@@ -2753,6 +2784,16 @@ impl Function {
                     result.0,
                     left.0,
                     right.0
+                ),
+                Operation::Cast {
+                    result,
+                    operand,
+                    ref target,
+                } => format!(
+                    ".cast %{} %{} {}",
+                    result.0,
+                    operand.0,
+                    casts::type_tag(target).expect("validated cast target")
                 ),
                 Operation::InstanceOf {
                     result,

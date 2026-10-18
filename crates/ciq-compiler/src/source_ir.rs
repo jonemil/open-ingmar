@@ -215,6 +215,14 @@ fn emit(
                 calls,
             );
         }
+        parser::ExpressionKind::Cast { operand, target } => {
+            let operand = emit(source, *operand, locals, parameters, operations, calls)?;
+            Operation::Cast {
+                result: ValueId(operations.len() as u32),
+                operand,
+                target,
+            }
+        }
         parser::ExpressionKind::InstanceOf { operand, class } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             Operation::InstanceOf {
@@ -1018,6 +1026,10 @@ impl Builder<'_> {
                 kind,
                 left: Box::new(self.snapshot(*left, locals)?),
                 right: Box::new(self.snapshot(*right, locals)?),
+            },
+            E::Cast { operand, target } => E::Cast {
+                operand: Box::new(self.prepare(*operand, locals)?),
+                target,
             },
             E::InstanceOf { operand, class } => E::InstanceOf {
                 operand: Box::new(self.prepare(*operand, locals)?),

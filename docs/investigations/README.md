@@ -7,8 +7,8 @@ SDK/version and scope; they are not current feature inventories. Use
 
 - [Core Lang completion](core-lang-completion.md): remaining contract inventory
   and the boundary before broader SDK expansion.
-- [Runtime object predicates](compiler-object-tests.md): concrete Lang tests,
-  member-existence encoding, operand order, and nullable receiver failure.
+- [Runtime object typing](compiler-object-tests.md): class/member predicates,
+  branch refinement, lexical casts, and nullable receiver failure.
 - [Object-rooted classes](compiler-root-objects.md): implicit/explicit bases,
   return-only allocation hooks, native Object imports, and receiver state.
 - [Source comparators](compiler-comparators.md): exact structural signatures,

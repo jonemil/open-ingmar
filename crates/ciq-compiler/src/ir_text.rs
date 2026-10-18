@@ -251,6 +251,7 @@ pub(crate) fn parse_ir_context(
             Some(".not") => (27, 3),
             Some(".instanceof") => (93, 4),
             Some(".has") => (94, 4),
+            Some(".cast") => (95, 4),
             Some(".array-read") => (28, 4),
             Some(".dictionary-read") => (68, 4),
             Some(".dictionary-write") => (69, 4),
@@ -408,7 +409,14 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 93 {
+        let operation = if kind == 95 {
+            Operation::Cast {
+                result: parse_value(&fields[1])?,
+                operand: parse_value(&fields[2])?,
+                target: crate::casts::parse_type(&fields[3])
+                    .ok_or_else(|| fail(*at, "unsupported lexical cast target"))?,
+            }
+        } else if kind == 93 {
             Operation::InstanceOf {
                 result: parse_value(&fields[1])?,
                 operand: parse_value(&fields[2])?,

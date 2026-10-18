@@ -323,7 +323,7 @@ Both predicates have the existing comparison precedence below arithmetic and
 above logical AND/OR; chained comparisons are unsupported. Ordinary short-circuit
 and conditional evaluation rules apply. `has` establishes no member-signature
 or API-availability proof. Source-class tests, guarded newer APIs, general union
-refinement, and `as` casts remain planned.
+refinement, and broader cast targets remain planned.
 
 ### Object refinement
 
@@ -357,6 +357,42 @@ expressions are not proof-bearing storage locations. Source superclass identity,
 container elements, method signatures, and API guards require separate contracts.
 Source and saved IR share these rules. See
 [runtime evidence](../investigations/compiler-object-tests.md).
+
+## Lexical casts
+
+`expression as Lang.Type` explicitly asserts a value's static type. Supported
+targets are Number, Long, Float, Double, Boolean, Char, String, Object, Symbol,
+Method, WeakReference, and opaque Dictionary. Canonical `Toybox.Lang.Type` and
+Lang module aliases are accepted. Number, Long, Float, Double, Boolean, Char,
+String, and Object targets can include `or Null`. Target types still satisfy
+selected API introduction requirements.
+Bare imported types, source classes, parameterized containers, interfaces,
+general unions, Void, and Null alone remain outside this profile.
+
+```text
+using Toybox.Lang;
+function length(o as Toybox.Lang.Object) as Toybox.Lang.Number {
+    return (o as Lang.String).length();
+}
+```
+
+The operand is evaluated once. The assertion produces the same runtime value,
+without conversion, allocation, class lookup, or a check. It can remove Null or
+assert a type unrelated to the operand's static type. The caller is responsible
+for that assertion; a falsely asserted value can fail when subsequently used.
+Runtime `instanceof` still sees the original value's class. A source object's
+assertion to an opaque native type erases exact source-class provenance.
+
+Casts bind below unary/member/index operations and above binary arithmetic and
+comparisons. Chains associate left to right and share the 64-level expression
+nesting limit. `o as Lang.Number + 1` asserts the left arithmetic operand;
+negating an Object requires `-(o as Lang.Number)`. Parenthesize a cast before
+member/index access. `or Null` belongs to its target; other `or` expressions use
+ordinary logical precedence. Assertions in conditional arms, staged operands,
+and native/user call arguments preserve existing evaluation and ownership rules.
+A cast does not change a storage declaration or establish a branch/API proof.
+
+See [SDK/runtime evidence](../investigations/compiler-object-tests.md#lexical-casts).
 
 ## Function type contracts
 
