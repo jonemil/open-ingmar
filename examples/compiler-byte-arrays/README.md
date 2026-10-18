@@ -5,6 +5,8 @@ compound updates, aliases, mutations, search, slicing, reversal, equality,
 hashing, Method binding, and live weak references. Constant, empty, and computed
 byte literals check fresh mutable results and ordered element effects.
 Conditional elements/allocations check lazy branches and single evaluation.
+Nullable calls, guarded indexing, short-circuit/loop checks, and weak expiry
+exercise nullable reference flow and ownership through the last alias.
 
 API minimum: 3.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
@@ -26,6 +28,6 @@ Compare the complete console with [expected.txt](expected.txt). See the
 [source contract](../../docs/specs/compiler-subset.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
-Nullable ByteArray references, fields/container elements,
+ByteArray fields/container elements,
 numeric encoding options, and recovery from erased Object results remain
 outside this example's supported profile.

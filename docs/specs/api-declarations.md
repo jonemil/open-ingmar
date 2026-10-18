@@ -167,9 +167,9 @@ operator/type-system dependencies and sequencing belong to the
 - **WeakReference and Object.weak:** broader source/Object targets
   and safe concrete recovery from get(); preserve exact
   immutable weak-result behavior.
-- **ByteArray:** nullable references, field/container
+- **ByteArray:** field/container
   storage, casts/type-test recovery, and numeric encoding/decoding options. The
-  [bounded executable profile](compiler-subset.md#bytearrays) covers non-null
+  [bounded executable profile](compiler-subset.md#bytearrays) covers nullable
   values, constant/computed literals, sized allocation, indexing, and
   mutation/observer methods.
 - **Exception family:** exception construction, message/stack methods, source

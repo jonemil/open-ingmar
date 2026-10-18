@@ -220,7 +220,7 @@ impl Types {
             ),
             Operation::ArrayRead { result, array, .. } => (
                 *result,
-                self.values.get(array).and_then(|ty| match ty {
+                self.values.get(array).and_then(|ty| match candidate(ty) {
                     Type::Array(element) => Some((**element).clone()),
                     Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
                         Some(Type::named("Toybox.Lang.Number"))

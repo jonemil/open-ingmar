@@ -2179,10 +2179,24 @@ See the [example](../../examples/compiler-nullable-arrays/README.md) and
 
 ## ByteArrays
 
-`Toybox.Lang.ByteArray` is a non-null mutable reference, separate from
+`Toybox.Lang.ByteArray` is a mutable reference, separate from
 `Array<Number>`. Canonical names, imported types, and Lang aliases work in
 parameters/results. Locals, reassignment, and matching conditional arms preserve
 the selected reference; aliases observe its mutations. API minimum: 3.0.0.
+
+`ByteArray or Null` is supported in parameters/results, conditional joins, and
+inferred locals. ByteArray/Null alternatives join without allocation or
+conversion. Nullable locals retain that contract when assigned either value.
+Direct null checks on fresh local/parameter reads establish non-null use in
+branches, short-circuit expressions, conditional arms, and loops. Early returns
+can exclude Null from a following path. Methods, indexing, and non-null typed
+calls require that proof; reassignment invalidates it. An alias or a saved
+Boolean does not inherit another read's proof. API availability applies even
+to unused nullable declarations or Null-only results.
+
+Nullable storage holds an ordinary strong reference while present. Clearing
+one alias leaves the object alive through any remaining strong reference;
+clearing the last one allows an existing weak reference to expire.
 
 `new[length]b` allocates a fresh zero-filled ByteArray without expected element
 context. Evaluate its non-null Number length once before allocation. Conditional
@@ -2229,7 +2243,7 @@ profiles. Weak retrieval remains Object-or-Null. Direct arguments to `addAll`
 need an established Array element contract; ambiguous empty Array inference
 does not choose Number or Char automatically.
 
-Nullable ByteArray references, fields/container elements, casts/runtime class
+ByteArray fields/container elements, casts/runtime class
 recovery, and numeric encoding/decoding options remain unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and

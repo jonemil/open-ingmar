@@ -15,6 +15,19 @@ module Bytes {
     function computed(n) as Lang.ByteArray {
         return [Bytes.effect(n), true ? Bytes.effect(n + 1) : Bytes.effect(99), 'Z']b;
     }
+    function optional(flag as Lang.Boolean) as Lang.ByteArray or Null {
+        return flag ? [7, 8]b : null;
+    }
+    function echoOptional(b as Lang.ByteArray or Null) as Lang.ByteArray or Null {
+        return b;
+    }
+    function required(b as Lang.ByteArray) { return b.size(); }
+    function describe(b as Lang.ByteArray or Null) as Void {
+        if (b == null) { System.println("no bytes"); return; }
+        b[0] += 1;
+        System.println(b[0]);
+        System.println(Bytes.required(b));
+    }
 }
 function start() {
     var a = Bytes.make(Bytes.effect(3));
@@ -80,5 +93,25 @@ function start() {
     System.println(b.size());
     var picked = true ? [Bytes.effect(3)]b : [Bytes.effect(9)]b;
     System.println(picked.toString());
+    Bytes.describe(Bytes.echoOptional(Bytes.optional(true)));
+    Bytes.describe(Bytes.optional(false));
+    var maybe = Bytes.optional(true);
+    System.println(maybe != null && maybe.size() > 0);
+    System.println(maybe != null ? maybe[1] : 0);
+    var saved = Bytes.echoOptional(maybe);
+    if (maybe != null) {
+        var watched = maybe.weak();
+        System.println(watched.stillAlive());
+        maybe = null;
+        System.println(watched.stillAlive());
+        saved = null;
+        System.println(watched.stillAlive());
+    }
+    maybe = Bytes.optional(true);
+    while (maybe != null) {
+        System.println(Bytes.required(maybe));
+        maybe = null;
+    }
+    System.println(maybe == null);
     System.exit();
 }

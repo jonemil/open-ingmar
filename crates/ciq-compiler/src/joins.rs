@@ -59,6 +59,9 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
     }
     Some(match tag {
         "byte-array" => Type::named("Toybox.Lang.ByteArray"),
+        "nullable-byte-array" => {
+            Type::Union(vec![Type::named("Toybox.Lang.ByteArray"), Type::Null])
+        }
         "object" => Type::named("Toybox.Lang.Object"),
         "nullable-object" => Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]),
         "weak-reference" => Type::named("Toybox.Lang.WeakReference"),
@@ -129,6 +132,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "nullable-symbol",
         "nullable-method",
         "nullable-weak-reference",
+        "nullable-byte-array",
     ]
     .into_iter()
     .find(|tag| parse_type(tag).as_ref() == Some(ty))
@@ -175,6 +179,7 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
         "nullable-symbol",
         "nullable-method",
         "nullable-weak-reference",
+        "nullable-byte-array",
     ] {
         let ty = parse_type(tag).unwrap();
         if crate::native::accepts(&ty, left) && crate::native::accepts(&ty, right) {

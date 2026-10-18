@@ -12,6 +12,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     if matches!(
         value,
         ValueType::ByteArray
+            | ValueType::NullableByteArray
             | ValueType::Null
             | ValueType::Array(_)
             | ValueType::Object(_)

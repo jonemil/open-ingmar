@@ -485,11 +485,15 @@ container is owned by the produced value and its subsequent consumers.
 
 ## ByteArray values and allocation
 
-`byte-array` denotes a non-null `Toybox.Lang.ByteArray` in parameter, function
-result, call-result, and conditional-edge tags. It is distinct from
+`byte-array` denotes a non-null `Toybox.Lang.ByteArray`; `nullable-byte-array`
+adds Null. Both are parameter, function-result, call-result, and
+conditional-edge tags. ByteArray is distinct from
 `number-array`; no conversion or element-nullability inference connects them.
 Local assignment and matching conditional arms retain the ByteArray reference.
-Null alternatives, fields, and container element contracts are unsupported.
+ByteArray/Null joins retain either runtime value without conversion. Reuse the
+[source null-proof rules](compiler-subset.md#bytearrays) in native and saved IR;
+annotations do not assert a proof. API 3.0.0 also applies to nullable contracts
+without an allocation. Fields and container element contracts are unsupported.
 
 `.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
 zero-filled ByteArray. Length must be an earlier same-block non-null Number
@@ -1121,7 +1125,7 @@ construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
 Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`, `null`,
-`byte-array`,
+`byte-array`, `nullable-byte-array`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,

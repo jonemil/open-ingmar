@@ -135,6 +135,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let nullable_char = Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]);
     let nullable_symbol = Type::Union(vec![Type::named("Toybox.Lang.Symbol"), Type::Null]);
     let nullable_method = Type::Union(vec![Type::named("Toybox.Lang.Method"), Type::Null]);
+    let nullable_byte_array = Type::Union(vec![Type::named("Toybox.Lang.ByteArray"), Type::Null]);
     let nullable_weak_reference =
         Type::Union(vec![Type::named("Toybox.Lang.WeakReference"), Type::Null]);
     let nullable_float = Type::Union(vec![Type::named("Toybox.Lang.Float"), Type::Null]);
@@ -157,6 +158,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || right == &nullable_string
                 || right == &nullable_boolean
                 || right == &nullable_weak_reference
+                || right == &nullable_byte_array
                 || right == &nullable_method
                 || right == &nullable_symbol
                 || right == &nullable_char
@@ -169,6 +171,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 || left == &nullable_string
                 || left == &nullable_boolean
                 || left == &nullable_weak_reference
+                || left == &nullable_byte_array
                 || left == &nullable_method
                 || left == &nullable_symbol
                 || left == &nullable_char

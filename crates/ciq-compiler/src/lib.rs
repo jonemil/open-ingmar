@@ -445,6 +445,8 @@ pub enum ReturnType {
     WeakReference,
     /// A non-null mutable ByteArray, distinct from an Array of Numbers.
     ByteArray,
+    /// A ByteArray reference or Null; concrete use requires a non-null proof.
+    NullableByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -496,6 +498,8 @@ pub enum ParameterType {
     WeakReference,
     /// A non-null mutable ByteArray, distinct from an Array of Numbers.
     ByteArray,
+    /// A ByteArray reference or Null; concrete use requires a non-null proof.
+    NullableByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -556,6 +560,7 @@ impl ParameterType {
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
+            Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
@@ -597,6 +602,7 @@ impl ReturnType {
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
+            Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
@@ -627,6 +633,8 @@ enum ValueType {
     WeakReference,
     /// A non-null mutable ByteArray, distinct from an Array of Numbers.
     ByteArray,
+    /// A ByteArray reference or Null; concrete use requires a non-null proof.
+    NullableByteArray,
     /// Ordinary WeakReference or Null; members require a non-null proof.
     NullableWeakReference,
     /// A non-null bound Method with erased argument and result contracts.
@@ -674,6 +682,7 @@ impl ValueType {
             Self::NullableSymbol => Self::Symbol,
             Self::NullableMethod => Self::Method,
             Self::NullableWeakReference => Self::WeakReference,
+            Self::NullableByteArray => Self::ByteArray,
             Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
             _ => self,
@@ -723,6 +732,9 @@ impl ValueType {
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
             Self::ByteArray => api::Type::named("Toybox.Lang.ByteArray"),
+            Self::NullableByteArray => {
+                api::Type::Union(vec![Self::ByteArray.api_type(), api::Type::Null])
+            }
             Self::NullableWeakReference => {
                 api::Type::Union(vec![Self::WeakReference.api_type(), api::Type::Null])
             }
@@ -800,6 +812,7 @@ impl ValueType {
             _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
             _ if *ty == Self::NullableMethod.api_type() => Some(Self::NullableMethod),
             _ if *ty == Self::NullableWeakReference.api_type() => Some(Self::NullableWeakReference),
+            _ if *ty == Self::NullableByteArray.api_type() => Some(Self::NullableByteArray),
             _ => None,
         }
     }
@@ -1913,6 +1926,7 @@ impl Function {
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableWeakReference
+                                    | ValueType::NullableByteArray
                                     | ValueType::NullableMethod
                                     | ValueType::NullableSymbol
                                     | ValueType::NullableChar
@@ -2601,6 +2615,8 @@ impl Function {
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableBoolean
                             && matches!(incoming, ValueType::Boolean | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableByteArray
+                            && matches!(incoming, ValueType::ByteArray | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableWeakReference
                             && matches!(incoming, ValueType::WeakReference | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableMethod
@@ -2686,6 +2702,7 @@ impl Function {
                             ValueType::LangObject => ReturnType::LangObject,
                             ValueType::WeakReference => ReturnType::WeakReference,
                             ValueType::ByteArray => ReturnType::ByteArray,
+                            ValueType::NullableByteArray => ReturnType::NullableByteArray,
                             ValueType::Interface(interface) => ReturnType::Interface(interface),
                             ValueType::Method => ReturnType::Method,
                             ValueType::Symbol => ReturnType::Symbol,
@@ -3046,6 +3063,7 @@ impl Function {
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
                             ParameterType::ByteArray => "byte-array",
+                            ParameterType::NullableByteArray => "nullable-byte-array",
                             ParameterType::NullableWeakReference => "nullable-weak-reference",
                             ParameterType::Interface(interface) => interface.tag(),
                             ParameterType::NullableInterface(InterfaceType::Comparable) => {
@@ -3076,6 +3094,7 @@ impl Function {
             | ReturnType::NullableObject
             | ReturnType::WeakReference
             | ReturnType::ByteArray
+            | ReturnType::NullableByteArray
             | ReturnType::NullableWeakReference
             | ReturnType::Interface(_)
             | ReturnType::NullableInterface(_)
@@ -3663,6 +3682,7 @@ fn validate_call_arguments(
                     | ValueType::NullableObject
                     | ValueType::WeakReference
                     | ValueType::ByteArray
+                    | ValueType::NullableByteArray
                     | ValueType::NullableWeakReference
                     | ValueType::Interface(_)
                     | ValueType::NullableInterface(_)
@@ -3714,6 +3734,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
         ReturnType::ByteArray => Ok(ValueType::ByteArray),
+        ReturnType::NullableByteArray => Ok(ValueType::NullableByteArray),
         ReturnType::NullableWeakReference => Ok(ValueType::NullableWeakReference),
         ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
         ReturnType::NullableInterface(interface) => Ok(ValueType::NullableInterface(interface)),
@@ -3763,6 +3784,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
         ReturnType::ByteArray => " result=byte-array",
+        ReturnType::NullableByteArray => " result=nullable-byte-array",
         ReturnType::NullableWeakReference => " result=nullable-weak-reference",
         ReturnType::Method => " result=method",
         ReturnType::NullableMethod => " result=nullable-method",

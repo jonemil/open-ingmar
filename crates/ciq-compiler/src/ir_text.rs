@@ -85,6 +85,7 @@ pub(crate) fn parse_ir_context(
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
                 "byte-array" => crate::ReturnType::ByteArray,
+                "nullable-byte-array" => crate::ReturnType::NullableByteArray,
                 "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
                 "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
                 "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
@@ -158,6 +159,7 @@ pub(crate) fn parse_ir_context(
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
                         "byte-array" => Ok(crate::ParameterType::ByteArray),
+                        "nullable-byte-array" => Ok(crate::ParameterType::NullableByteArray),
                         "nullable-weak-reference" => {
                             Ok(crate::ParameterType::NullableWeakReference)
                         }
@@ -1344,6 +1346,7 @@ fn call_contract(
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
             "byte-array" => crate::ReturnType::ByteArray,
+            "nullable-byte-array" => crate::ReturnType::NullableByteArray,
             "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
             "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
             "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),

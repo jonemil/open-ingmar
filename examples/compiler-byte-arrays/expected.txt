@@ -39,3 +39,13 @@ true
 5
 3
 [3]
+8
+2
+no bytes
+true
+8
+true
+true
+false
+2
+true

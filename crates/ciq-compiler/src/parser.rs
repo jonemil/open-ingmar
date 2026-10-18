@@ -2078,6 +2078,9 @@ impl Parser<'_> {
                             crate::ParameterType::Char => crate::ParameterType::NullableChar,
                             crate::ParameterType::Symbol => crate::ParameterType::NullableSymbol,
                             crate::ParameterType::Method => crate::ParameterType::NullableMethod,
+                            crate::ParameterType::ByteArray => {
+                                crate::ParameterType::NullableByteArray
+                            }
                             crate::ParameterType::WeakReference => {
                                 crate::ParameterType::NullableWeakReference
                             }
@@ -2166,6 +2169,7 @@ impl Parser<'_> {
                     crate::ReturnType::Char => crate::ReturnType::NullableChar,
                     crate::ReturnType::Symbol => crate::ReturnType::NullableSymbol,
                     crate::ReturnType::Method => crate::ReturnType::NullableMethod,
+                    crate::ReturnType::ByteArray => crate::ReturnType::NullableByteArray,
                     crate::ReturnType::WeakReference => crate::ReturnType::NullableWeakReference,
                     _ => return Err(self.error(at, "unsupported nullable result type")),
                 }
