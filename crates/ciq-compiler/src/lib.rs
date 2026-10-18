@@ -423,6 +423,8 @@ pub enum ReturnType {
     WeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
+    /// Bound Method or Null; invocation and members require a non-null proof.
+    NullableMethod,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     /// Symbol identity or Null; member/selector use requires a non-null proof.
@@ -468,6 +470,8 @@ pub enum ParameterType {
     WeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
+    /// Bound Method or Null; invocation and members require a non-null proof.
+    NullableMethod,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     /// Symbol identity or Null; member/selector use requires a non-null proof.
@@ -524,6 +528,7 @@ impl ParameterType {
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
+            Self::NullableMethod => ValueType::NullableMethod.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
@@ -562,6 +567,7 @@ impl ReturnType {
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
+            Self::NullableMethod => ValueType::NullableMethod.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
@@ -587,6 +593,8 @@ enum ValueType {
     WeakReference,
     /// A non-null bound Method with erased argument and result contracts.
     Method,
+    /// Bound Method or Null; invocation and members require a non-null proof.
+    NullableMethod,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
     /// Symbol identity or Null; member/selector use requires a non-null proof.
@@ -626,6 +634,7 @@ impl ValueType {
             Self::NullableBoolean => Self::Boolean,
             Self::NullableChar => Self::Char,
             Self::NullableSymbol => Self::Symbol,
+            Self::NullableMethod => Self::Method,
             Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
             _ => self,
@@ -677,6 +686,9 @@ impl ValueType {
             Self::Interface(interface) => interface.api_type(false),
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => api::Type::named("Toybox.Lang.Method"),
+            Self::NullableMethod => {
+                api::Type::Union(vec![Self::Method.api_type(), api::Type::Null])
+            }
             Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
             Self::NullableSymbol => api::Type::Union(vec![
                 api::Type::named("Toybox.Lang.Symbol"),
@@ -742,6 +754,7 @@ impl ValueType {
             _ if *ty == Self::NullableBoolean.api_type() => Some(Self::NullableBoolean),
             _ if *ty == Self::NullableChar.api_type() => Some(Self::NullableChar),
             _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
+            _ if *ty == Self::NullableMethod.api_type() => Some(Self::NullableMethod),
             _ => None,
         }
     }
@@ -1817,6 +1830,7 @@ impl Function {
                                     ty @ (ValueType::NullableInteger
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
+                                    | ValueType::NullableMethod
                                     | ValueType::NullableSymbol
                                     | ValueType::NullableChar
                                     | ValueType::NullableLong
@@ -2434,6 +2448,8 @@ impl Function {
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableBoolean
                             && matches!(incoming, ValueType::Boolean | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableMethod
+                            && matches!(incoming, ValueType::Method | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableSymbol
                             && matches!(incoming, ValueType::Symbol | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableChar
@@ -2868,6 +2884,7 @@ impl Function {
                                 "nullable-comparator"
                             }
                             ParameterType::Method => "method",
+                            ParameterType::NullableMethod => "nullable-method",
                             ParameterType::Symbol => "symbol",
                             ParameterType::Object(NativeClass::View) => "view",
                             ParameterType::Object(NativeClass::Dc) => "dc",
@@ -2890,6 +2907,7 @@ impl Function {
             | ReturnType::Interface(_)
             | ReturnType::NullableInterface(_)
             | ReturnType::Method
+            | ReturnType::NullableMethod
             | ReturnType::Symbol
             | ReturnType::Dictionary
             | ReturnType::TypedDictionary(_)
@@ -3448,6 +3466,7 @@ fn validate_call_arguments(
                     | ValueType::Interface(_)
                     | ValueType::NullableInterface(_)
                     | ValueType::Method
+                    | ValueType::NullableMethod
                     | ValueType::Symbol
                     | ValueType::Dictionary
                     | ValueType::TypedDictionary(_)
@@ -3496,6 +3515,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
         ReturnType::NullableInterface(interface) => Ok(ValueType::NullableInterface(interface)),
         ReturnType::Method => Ok(ValueType::Method),
+        ReturnType::NullableMethod => Ok(ValueType::NullableMethod),
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
         ReturnType::SourceObject(class) => {
@@ -3540,6 +3560,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
         ReturnType::Method => " result=method",
+        ReturnType::NullableMethod => " result=nullable-method",
         ReturnType::Symbol => " result=symbol",
         ReturnType::Object(NativeClass::View) => " result=view",
         ReturnType::Object(NativeClass::Dc) => " result=dc",

@@ -1428,6 +1428,16 @@ matching conditional arms, and inherited `toString`/`equals` plus its own
 observers retain runtime identity/hash behavior: repeated bindings need not
 compare equal even for the same target/member.
 
+`Method or Null` supports explicit parameter/result contracts, locals,
+assignment, and conditional joins with Method or Null alternatives. Nullable
+locals retain their declared union when assigned a Method or Null. Equality
+and inequality with literal Null establish proofs for fresh reads of that
+storage; invocation and every Method member require a non-null proof. Writes
+invalidate local proofs; aliases and stored Boolean tests do not transfer them.
+Releasing the last Method alias also releases its bound receiver. Lexical
+`as Method or Null` is an unchecked type assertion, with no runtime conversion
+or signature recovery. Method fields and container elements remain unsupported.
+
 `invoke(arguments...)` accepts up to 254 supported Object/Null values and
 returns opaque `Object or Null`. This erased result covers scalar/container
 values, nullable returns, and Void callbacks. Save and guard it before Object
@@ -1454,7 +1464,7 @@ still requires all required instance fields to be initialized.
 Unlike the SDK checker, this erased lookup profile does not statically resolve
 a literal selector to a source target. A missing target or incompatible
 invocation remains a runtime/caller obligation even for literal selectors.
-Constructors, nullable Method contracts, and typed signatures remain deferred.
+Constructors and typed signatures remain deferred.
 Array sorting uses a [separate Comparator contract](#source-comparators). See the
 [binding/lifetime evidence](../investigations/compiler-methods.md).
 

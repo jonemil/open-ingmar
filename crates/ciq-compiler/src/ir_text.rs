@@ -93,6 +93,7 @@ pub(crate) fn parse_ir_context(
                     crate::ReturnType::NullableInterface(crate::InterfaceType::Comparator)
                 }
                 "method" => crate::ReturnType::Method,
+                "nullable-method" => crate::ReturnType::NullableMethod,
                 "symbol" => crate::ReturnType::Symbol,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
                     crate::ReturnType::SourceObject(
@@ -167,6 +168,7 @@ pub(crate) fn parse_ir_context(
                             crate::InterfaceType::Comparator,
                         )),
                         "method" => Ok(crate::ParameterType::Method),
+                        "nullable-method" => Ok(crate::ParameterType::NullableMethod),
                         "symbol" => Ok(crate::ParameterType::Symbol),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
                         "dc" => Ok(crate::ParameterType::Object(crate::NativeClass::Dc)),
@@ -1277,6 +1279,7 @@ fn call_contract(
                 crate::ReturnType::NullableInterface(crate::InterfaceType::Comparator)
             }
             "method" => crate::ReturnType::Method,
+            "nullable-method" => crate::ReturnType::NullableMethod,
             "symbol" => crate::ReturnType::Symbol,
             "comparable-array" => crate::ReturnType::Array(crate::ArrayElement::Interface(
                 crate::InterfaceType::Comparable,

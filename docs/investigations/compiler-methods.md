@@ -42,8 +42,6 @@ Build the tracked source with an ignored Jungle and the shared native-names
 manifest/resources. Use the
 [console checker](../../scripts/README.md#console-specimen-check) for saved-stage
 parity, structured CODE/DATA/SYMBOLS reconstruction, signing, and runtime checks.
-SDK/generated programs match all 18 expected lines. Artifacts:
-`scratch/check-methods-final/`.
 
 SDK symbols bind `method` to `0x008000b2` and `invoke` to `0x008000ac`.
 Existing member lookup, invocation, and local ownership transfers suffice;
@@ -74,9 +72,23 @@ lookup profile does not yet perform that SDK literal-target check; checked
 signatures remain a separate prerequisite.
 
 Current-receiver capture uses existing `getself`; no opcode/record extension
-is needed. Method constructors, checked signatures, nullable Method storage,
-and Array comparator contracts remain deferred. The [plan](../plan.md) owns
-their sequencing.
+is needed.
+
+## Nullable ownership
+
+2026-10-18, SDK/compiler/simulator 9.2.0, `fr265`, debug `-O 0`.
+
+**Observed:** the native Method specimen passes Method-or-Null through a
+conditional result, an ordinary parameter/result pair, locals, and a loop.
+After replacing the source Array and its direct Method variable, a nullable
+alias keeps the old receiver alive. Copying that alias, then clearing the
+original, retains the receiver; clearing the last alias expires its weak
+reference. Guarded invocation still returns its original size (`2`).
+
+Both SDK/generated programs match all 28 expected lines, including Null checks,
+guarded hash/weak calls, and a loop that clears its Method. Structured section
+reconstruction passes for both. Artifacts: `scratch/check-nullable-methods/`.
+No callable signature or concrete recovery from an erased result is inferred.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [method]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Method.html

@@ -54,7 +54,42 @@ module Methods {
         Methods.show(reverse.invoke());
     }
 }
+module NullableMethods {
+    function choose(m as Toybox.Lang.Method, present as Toybox.Lang.Boolean) as Toybox.Lang.Method or Null {
+        return present ? m : null;
+    }
+    function forward(m as Toybox.Lang.Method or Null) as Toybox.Lang.Method or Null { return m; }
+    function run() as Void {
+        var owner = [7, 8];
+        var weak = owner.weak();
+        var bound = owner.method(:size);
+        var maybe = NullableMethods.choose(bound, true);
+        owner = [0];
+        bound = owner.method(:size);
+        System.println(weak.stillAlive());
+        var retained = NullableMethods.forward(maybe);
+        maybe = null;
+        System.println(weak.stillAlive());
+        if (retained != null) { Methods.show(retained.invoke()); }
+        retained = null;
+        System.println(weak.stillAlive());
+        var empty = NullableMethods.choose(bound, false);
+        System.println(empty == null);
+        var picked = false ? empty : NullableMethods.forward(bound);
+        System.println(picked != null && picked.hashCode() == bound.hashCode());
+        if (null != picked) {
+            var methodWeak = picked.weak();
+            System.println(methodWeak.stillAlive());
+        }
+        while (picked != null) {
+            Methods.show(picked.invoke());
+            picked = null;
+        }
+        System.println(picked == null);
+        System.println(empty != null && empty.equals(bound));
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { Methods.run(); System.exit(); }
+    function onStart(state) { Methods.run(); NullableMethods.run(); System.exit(); }
 }

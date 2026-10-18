@@ -735,6 +735,7 @@ Scalar result types are `integer`, `long`, `float`, `double`, `string`, `boolean
 and `char`, plus `nullable-integer`, `nullable-long`, `nullable-float`,
 `nullable-double`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Symbol calls use `symbol` or `nullable-symbol`.
+Method calls use `method` or `nullable-method`.
 Array results use the [element categories](#array-allocation). Omission means
 integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1045,7 +1046,8 @@ value ID does not cross the edge.
 Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`, `null`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
-`nullable-char`, `symbol`, `nullable-symbol`, `array-number`, and `array-char`.
+`nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,
+`array-number`, and `array-char`.
 They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
@@ -1205,6 +1207,7 @@ Ordinary signatures also accept `long`, `nullable-long`, `float`, `double`,
 `nullable-float`, `nullable-double`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
 Symbol signatures use `symbol` or `nullable-symbol`.
+Method signatures use `method` or `nullable-method`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
 also accepted; unit validation restricts it to native AppBase.onStart/onStop
@@ -1396,7 +1399,10 @@ ownership and constructor resolution follow the [class rules](compiler-classes.m
 ## Native value calls
 
 Method parameters, call results, and matching conditional-edge values use the
-`method` tag, retained by explicit function `result=method` contracts. Creation
+`method` or `nullable-method` tag, retained by explicit function result contracts.
+`nullable-method` means Method or Null; reads after a proven null test use the
+existing storage refinement rules. No new runtime representation is introduced.
+Creation
 uses ordinary `.call-native ... method %<symbol>`; invocation uses
 `.call-native ... invoke [%<argument> ...]`. No separate callback instruction
 or target-signature annotation is inferred. Result validation recomputes
