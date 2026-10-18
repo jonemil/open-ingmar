@@ -1,9 +1,9 @@
 # Runtime object predicates
 
-2026-10-17, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+2026-10-17 to 2026-10-18, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
 Question: how do runtime predicates encode and support guarded Object uses?
 
-**Experimentally observed:** the [tracked specimen][example] matches all 62
+**Experimentally observed:** the [tracked specimen][example] matches all 75
 expected lines in SDK/generated runs. It tests all supported concrete Lang
 classes, source field/method existence, inherited observers, Symbol parameters,
 computed selectors, null guards, and Boolean short-circuiting. Computed operands
@@ -30,7 +30,7 @@ with `Null Reference Error` at `null has :toString`. The accepted specimen guard
 the latter operation. Our non-null receiver requirement is a checking policy,
 not a claim that the SDK rejects nullable source expressions.
 
-**Limits:** source-class/interface tests, parameterized-container casts,
+**Limits:** source inheritance, interface tests, parameterized-container casts,
 general union subtraction, and guarded API availability remain unverified. A preliminary
 `1.0f` literal is SDK-accepted but unsupported by our parser; the final specimen
 uses unsuffixed Float syntax. The lexical gap remains in the plan.
@@ -57,6 +57,23 @@ export and reconstruct without new instructions or DATA records. Casts alone
 require no emitted VM operations; this does not establish safe uses of falsely
 asserted values.
 
+## Source-class targets
+
+**Experimentally observed:** the [two-file specimen][source-types] accepts
+source-class tests and casts across file boundaries. An Object-rooted Probe
+matches itself and rejects another Object-rooted class and Null. Positive tests
+permit own-method calls on Object/nullable Object reads, including through a loop
+whose local is later reassigned. Explicit assertions recover exact source return
+contracts and native-base projections for View/BehaviorDelegate classes.
+
+A false Number-to-Probe assertion still passes `instanceof Number`; Null asserted
+as Probe still fails `instanceof Probe`. Casts introduce no runtime validation.
+SDK/generated output matches the complete expected console, and both PRGs export
+CODE/DATA structurally, rebuild exactly, and re-export identically. The source
+tests use existing `getmv`/`isa` encoding; no new instruction or record was found.
+These cases do not establish source inheritance, nullable source signatures,
+dynamic class operands, or qualified/nested source lookup.
+
 ## Reproduction
 
 Use the example's compiler command and the shared [console checker][check].
@@ -64,7 +81,7 @@ The ignored `scratch/compiler-object-tests/monkey.jungle` selects the tracked
 source and shared native-names manifest/resources. Build through
 `scripts/build-example.sh`, then prepare and simulate `compiler-object-tests`.
 Accepted saved-stage, SDK/generated round-trip, and runtime artifacts are under
-`scratch/check-lexical-casts/`. The isolated nullable failure is under
+`scratch/check-source-types/`. The isolated nullable failure is under
 `scratch/object-tests-sdk-runtime-full/`; its source is the preliminary
 `scratch/compiler-object-tests/source/app.mc`.
 
@@ -73,3 +90,5 @@ Accepted saved-stage, SDK/generated round-trip, and runtime artifacts are under
 [roots]: compiler-root-objects.md#import-identity
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
+
+[source-types]: ../../examples/compiler-object-tests/source-types.mc

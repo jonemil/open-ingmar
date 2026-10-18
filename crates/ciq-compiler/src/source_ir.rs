@@ -217,18 +217,60 @@ fn emit(
         }
         parser::ExpressionKind::Cast { operand, target } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::Cast {
-                result: ValueId(operations.len() as u32),
-                operand,
-                target,
+            if let crate::api::Type::Named(name) = &target {
+                if !name.contains('.') {
+                    if locals.contains_key(name) || parameters.contains_key(name) {
+                        return Err(Diagnostic::at(
+                            source,
+                            expression.span.start,
+                            "source cast target is shadowed by a local or parameter",
+                        ));
+                    }
+                    Operation::SourceCast {
+                        result: ValueId(operations.len() as u32),
+                        operand,
+                        class: calls.source_class(name).map_err(|message| {
+                            Diagnostic::at(source, expression.span.start, message)
+                        })?,
+                    }
+                } else {
+                    Operation::Cast {
+                        result: ValueId(operations.len() as u32),
+                        operand,
+                        target,
+                    }
+                }
+            } else {
+                Operation::Cast {
+                    result: ValueId(operations.len() as u32),
+                    operand,
+                    target,
+                }
             }
         }
         parser::ExpressionKind::InstanceOf { operand, class } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            Operation::InstanceOf {
-                result: ValueId(operations.len() as u32),
-                operand,
-                class,
+            if !class.contains('.') {
+                if locals.contains_key(&class) || parameters.contains_key(&class) {
+                    return Err(Diagnostic::at(
+                        source,
+                        expression.span.start,
+                        "source class-test target is shadowed by a local or parameter",
+                    ));
+                }
+                Operation::SourceInstanceOf {
+                    result: ValueId(operations.len() as u32),
+                    operand,
+                    class: calls.source_class(&class).map_err(|message| {
+                        Diagnostic::at(source, expression.span.start, message)
+                    })?,
+                }
+            } else {
+                Operation::InstanceOf {
+                    result: ValueId(operations.len() as u32),
+                    operand,
+                    class,
+                }
             }
         }
         parser::ExpressionKind::Has { receiver, symbol } => {
@@ -1884,6 +1926,19 @@ pub(crate) struct CallContext {
 impl CallContext {
     pub(crate) fn new() -> Self {
         Self::default()
+    }
+    /// Resolve an expression's source type target before emitting semantic IR.
+    fn source_class(&self, name: &str) -> Result<crate::SourceClass, String> {
+        let base = self
+            .class_bases
+            .get(name)
+            .copied()
+            .filter(|base| base.constructed_type().is_some())
+            .ok_or_else(|| format!("unresolved or unsupported source type {name}"))?;
+        Ok(crate::SourceClass {
+            name: name.into(),
+            base,
+        })
     }
     pub(crate) fn insert(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.insert(key, signature);

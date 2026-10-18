@@ -138,7 +138,7 @@ impl FunctionDeclaration {
 }
 
 /// Supported native superclass identity, independent of an import-table index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ClassBase {
     LangObject,
     ApplicationAppBase,
@@ -675,9 +675,12 @@ impl CompilationUnit {
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut origins =
                 crate::source_objects::Origins::new(function.parameter_types().to_vec());
+            let inputs = crate::type_flow::prefix_inputs(function.operations());
+            let mut facts = Default::default();
             for located in function.operations() {
+                crate::type_flow::update(&mut facts, &inputs, &located.operation);
                 origins
-                    .observe(&located.operation)
+                    .observe(&located.operation, &facts)
                     .map_err(|message| fail(Some(index), None, message.into()))?;
             }
             for (operation, located) in function.operations().iter().enumerate() {
@@ -759,6 +762,20 @@ impl CompilationUnit {
                                     })?;
                             }
                         }
+                    }
+                }
+                if let Operation::SourceCast { class, .. }
+                | Operation::SourceInstanceOf { class, .. } = &located.operation
+                {
+                    if !self.classes.iter().any(|declaration| {
+                        declaration.name == class.name && declaration.base == class.base
+                    }) {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "source type target and native base must match a unit declaration"
+                                .into(),
+                        ));
                     }
                 }
                 if let Operation::SourceNew { class, base, .. } = &located.operation {

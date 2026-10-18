@@ -190,7 +190,8 @@ pub(crate) fn validate_stack_uses(
                 | Operation::Compare { result, left, .. } if left == value => {
                     value = result;
                 }
-                Operation::Cast { result, .. }
+                Operation::SourceCast { result, .. }
+                | Operation::Cast { result, .. }
                 | Operation::Not { result, .. }
                 | Operation::Positive { result, .. }
                 | Operation::Negate { result, .. }

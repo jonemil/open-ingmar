@@ -12,11 +12,18 @@ pub(crate) enum Place {
     Parameter(usize),
 }
 
+/// Runtime class identities used by branch facts, without text serialization.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ClassTarget {
+    Native(String),
+    Source(crate::SourceClass),
+}
+
 /// A branch fact about a storage location, independent of its declared type.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Fact {
     NonNull(Place),
-    Class(Place, String),
+    Class(Place, ClassTarget),
 }
 impl Fact {
     /// Return the local or parameter described by this fact.
@@ -27,19 +34,32 @@ impl Fact {
     }
 }
 
-/// Refine an Object read using a proven concrete class, or remove Null from a
-/// supported nullable read. Container element contracts and source-class identity
-/// are never inferred from a runtime class alone.
+/// Return an exact source identity established for this storage by a class test.
+/// The fact retains its native projection independently of its source name.
+pub(crate) fn source_class(place: Place, facts: &BTreeSet<Fact>) -> Option<crate::SourceClass> {
+    facts.iter().find_map(|fact| match fact {
+        Fact::Class(at, ClassTarget::Source(class)) if *at == place => Some(class.clone()),
+        _ => None,
+    })
+}
+
+/// Project a proven source/native class read to its value type, or remove Null
+/// from a supported nullable read. Exact source identity uses the same facts;
+/// runtime class tests do not infer container element contracts.
 pub(crate) fn refine(
     ty: crate::ValueType,
     place: Place,
     facts: &BTreeSet<Fact>,
 ) -> crate::ValueType {
+    if let Some(class) = source_class(place, facts) {
+        return crate::ValueType::from_api_type(&crate::api::Type::named(class.base.api_name()))
+            .expect("source class base has a value projection");
+    }
     let non_null = facts.contains(&Fact::NonNull(place));
     let ty = if non_null { ty.without_null() } else { ty };
     if ty == crate::ValueType::LangObject {
         for fact in facts {
-            if let Fact::Class(at, class) = fact {
+            if let Fact::Class(at, ClassTarget::Native(class)) = fact {
                 if *at == place && class != "Toybox.Lang.Object" {
                     if let Some(ty) =
                         crate::ValueType::from_api_type(&crate::api::Type::named(class))
@@ -53,16 +73,34 @@ pub(crate) fn refine(
     ty
 }
 
+/// Enter a block's facts or invalidate writes while replaying candidate/unit IR.
+/// Validation separately checks the complete graph and its storage operations.
+pub(crate) fn update(
+    facts: &mut BTreeSet<Fact>,
+    inputs: &BTreeMap<BlockId, BTreeSet<Fact>>,
+    operation: &Operation,
+) {
+    match operation {
+        Operation::Block { block } => *facts = inputs.get(block).cloned().unwrap_or_default(),
+        Operation::LocalInitialize { local, .. } | Operation::LocalAssign { local, .. } => {
+            facts.retain(|fact| fact.place() != Place::Local(*local))
+        }
+        _ => (),
+    }
+}
+
 /// Compute refinements for a source prefix whose final block may still be open.
 /// These are candidate types only; final IR checking uses the validated CFG and
 /// recomputes all facts, including loop backedges and joins.
 pub(crate) fn prefix_inputs(operations: &[LocatedOperation]) -> BTreeMap<BlockId, BTreeSet<Fact>> {
     // Nullable candidates already use their non-null alternative during source
     // selection. Only instanceof needs additional class facts before validation.
-    if !operations
-        .iter()
-        .any(|op| matches!(op.operation, Operation::InstanceOf { .. }))
-    {
+    if !operations.iter().any(|op| {
+        matches!(
+            op.operation,
+            Operation::InstanceOf { .. } | Operation::SourceInstanceOf { .. }
+        )
+    }) {
         return BTreeMap::new();
     }
     let mut blocks = Vec::new();
@@ -127,6 +165,7 @@ pub(crate) fn inputs(
             | Operation::LocalTake { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::Not { result, .. }
+            | Operation::SourceInstanceOf { result, .. }
             | Operation::InstanceOf { result, .. }
             | Operation::Compare { result, .. } => {
                 definitions.insert(result, at);
@@ -221,7 +260,7 @@ fn guard_place(
     structure: &Structure,
     operations: &[LocatedOperation],
     definitions: &BTreeMap<ValueId, usize>,
-) -> Option<(Place, bool, Option<String>)> {
+) -> Option<(Place, bool, Option<ClassTarget>)> {
     let mut comparison = *definitions.get(&condition)?;
     let mut non_null = false;
     let mut consumer = branch;
@@ -234,9 +273,19 @@ fn guard_place(
         non_null = !non_null;
     }
     let (read, class) = match &operations[comparison].operation {
+        Operation::SourceInstanceOf { operand, class, .. } => {
+            non_null = !non_null;
+            (
+                *definitions.get(operand)?,
+                Some(ClassTarget::Source(class.clone())),
+            )
+        }
         Operation::InstanceOf { operand, class, .. } => {
             non_null = !non_null;
-            (*definitions.get(operand)?, Some(class.clone()))
+            (
+                *definitions.get(operand)?,
+                Some(ClassTarget::Native(class.clone())),
+            )
         }
         Operation::Compare {
             kind, left, right, ..

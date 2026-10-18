@@ -118,8 +118,9 @@ The runtime value projects to opaque Object, while construction and locals
 retain the exact source identity for own-member calls and structural checking.
 It may pass through ordinary Object contracts, but erasure loses own-member
 access. Exact source annotations and reference fields preserve the Object-rooted
-class and its native projection; they cannot claim a View result. Object-element Arrays, source superclass chains, and recovering the
-class from an opaque Object remain unsupported.
+class and its Object projection. Source tests/assertions can recover exact
+identity after erasure. Object-element Arrays and source superclass chains
+remain unsupported.
 
 Complete application DATA gives each class an Object base reference and a
 return-only hidden allocation constructor. Its user `initialize` runs through
@@ -144,8 +145,10 @@ names are unsupported. Bare native type names such as Number remain unsupported;
 native annotations use their established canonical names.
 
 Source contracts are exact and non-null. Arguments and every value return must
-preserve the declared source class through construction, typed parameters,
-declared call results, or local copies. A different source class, Null, or an
+retain the declared source class through construction, typed parameters,
+declared results, local copies, positive source-class tests, or explicit source
+assertions. The [source-target contract](compiler-subset.md#source-class-targets)
+distinguishes runtime proofs from caller assertions. A different source class, Null, or an
 erased native reference cannot satisfy the contract. Native contracts may accept
 a source instance through its base while erasing its exact class identity.
 
@@ -166,8 +169,8 @@ Single-function source compilation rejects source-class annotations because it
 has no declarations from which to resolve their native bases.
 
 Saved parameter tags and function/call result tags use
-`source(ClassName@Native.Base)`. Result contracts must be explicit in saved function text to retain the source
-identity. See the [signature example](../../examples/compiler-source-signatures/README.md)
+`source(ClassName@Native.Base)`. Result contracts must be explicit in saved
+function text to retain the source identity. See the [signature example](../../examples/compiler-source-signatures/README.md)
 and [runtime evidence](../investigations/compiler-source-signatures.md).
 
 ## Native and textual IR

@@ -86,8 +86,9 @@ Source class identity and native projection follow the
 [class specification](compiler-classes.md).
 
 WeakReference `get()` returns Object or Null and `stillAlive()` returns Boolean;
-both members and their class require API 1.2.0. Opaque Object results do not
-recover the target's concrete container or scalar contract.
+both members and their class require API 1.2.0. Opaque Object results retain no
+concrete contract automatically; callers can apply the supported type tests or
+lexical assertions. Parameterized-container recovery remains unsupported.
 
 ## Availability
 
@@ -138,7 +139,7 @@ operator/type-system dependencies and sequencing belong to the
   literal/Unicode discrepancies and validate remaining boundaries. Existing
   own-method names largely have executable profiles.
 - **Object and source objects:** complete source inheritance/overrides, member
-  lookup, source-class/general-union type tests and refinement, and broader
+  lookup, source-inheritance/general-union type tests and refinement, and broader
   inherited-method dispatch.
 - **Array:** dynamic-sized allocation, nested/heterogeneous/object/reference
   elements, remaining nullable storage/receivers and joins, and sorting and

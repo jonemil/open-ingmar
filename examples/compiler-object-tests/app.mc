@@ -23,6 +23,7 @@ module Tests {
         System.println("selector"); return :length;
     }
     function run() as Void {
+        SourceTests.run();
         Lexical.run();
         Refine.run();
         Tests.show(3); Tests.show("x"); Tests.absent(null); Tests.absent("x");

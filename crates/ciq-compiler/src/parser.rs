@@ -792,16 +792,19 @@ impl<'a> Parser<'a> {
             self.token()?;
             let at = self.offset;
             let path = self.path()?;
-            let class = path
-                .rsplit_once('.')
-                .and_then(|(module, name)| {
-                    (self.names.module(module) == Some(crate::names::NativeModule::Lang))
-                        .then(|| format!("Toybox.Lang.{name}"))
-                })
-                .filter(|class| crate::runtime_types::symbol(class).is_some())
-                .ok_or_else(|| {
-                    self.error(at, "instanceof requires a supported qualified Lang class")
-                })?;
+            let class = if !path.contains('.') {
+                path
+            } else {
+                path.rsplit_once('.')
+                    .and_then(|(module, name)| {
+                        (self.names.module(module) == Some(crate::names::NativeModule::Lang))
+                            .then(|| format!("Toybox.Lang.{name}"))
+                    })
+                    .filter(|class| crate::runtime_types::symbol(class).is_some())
+                    .ok_or_else(|| {
+                        self.error(at, "instanceof requires a supported runtime class")
+                    })?
+            };
             let span = Span {
                 start: left.span.start,
                 end: self.offset,
@@ -911,13 +914,18 @@ impl<'a> Parser<'a> {
             casts += 1;
             let at = self.token()?.span.start;
             let path = self.path()?;
-            let class = path
-                .rsplit_once('.')
-                .and_then(|(module, name)| {
-                    (self.names.module(module) == Some(crate::names::NativeModule::Lang))
-                        .then(|| format!("Toybox.Lang.{name}"))
-                })
-                .ok_or_else(|| self.error(at, "cast requires a supported qualified Lang type"))?;
+            let class = if !path.contains('.') {
+                path
+            } else {
+                path.rsplit_once('.')
+                    .and_then(|(module, name)| {
+                        (self.names.module(module) == Some(crate::names::NativeModule::Lang))
+                            .then(|| format!("Toybox.Lang.{name}"))
+                    })
+                    .ok_or_else(|| {
+                        self.error(at, "cast requires a supported Lang or source type")
+                    })?
+            };
             let mut target = crate::api::Type::named(class);
             if self.peek()? == Kind::Word("or") {
                 // Leave logical OR available unless its next token is Null.
@@ -930,7 +938,9 @@ impl<'a> Parser<'a> {
                     self.lookahead = None;
                 }
             }
-            if crate::casts::type_tag(&target).is_none() {
+            if crate::casts::type_tag(&target).is_none()
+                && !matches!(&target, crate::api::Type::Named(name) if !name.contains('.'))
+            {
                 return Err(self.error(at, "unsupported lexical cast target"));
             }
             let span = Span {

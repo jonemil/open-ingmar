@@ -12,9 +12,10 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Extend Object refinement and lexical casts
-to source-class identities; add source-class `instanceof`, imported bare type
-operands, member/signature proofs, and API guards through explicit contracts.
+**Object and structural contracts.** Add imported bare native type operands,
+member/signature proofs, and API guards through explicit contracts. Extend source
+type targets alongside nested names, source superclass chains, and nullable
+source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
 Review Lang.Comparable and its
@@ -44,8 +45,8 @@ Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established. Dictionary
 callable methods belong to the shared Object work.
 
-Broader weak targets, nullable WeakReference storage, and source-class/container
-recovery from opaque Object results need their own type/refinement contracts. Keep hidden
+Broader weak targets, nullable WeakReference storage, and container recovery from
+opaque Object results need their own type/refinement contracts. Keep hidden
 temporary ownership explicit when adding new source staging paths.
 
 A blocked method should lead to its core type/operator/callable prerequisite or

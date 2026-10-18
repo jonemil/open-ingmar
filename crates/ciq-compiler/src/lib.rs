@@ -306,7 +306,7 @@ impl TupleShape {
 /// An exact source-class identity and its native API projection.
 /// Unit validation checks both fields against the class declaration; a native
 /// base alone cannot establish source-class assignability.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SourceClass {
     /// Unqualified source identity, resolved against unit declarations.
     pub name: String,
@@ -917,6 +917,19 @@ pub enum Operation {
         operand: ValueId,
         target: api::Type,
     },
+    /// Assert an exact source identity and native projection without a runtime
+    /// conversion or check. Unit checking resolves the target declaration.
+    SourceCast {
+        result: ValueId,
+        operand: ValueId,
+        class: SourceClass,
+    },
+    /// Test a value against a unit-resolved source class's runtime class object.
+    SourceInstanceOf {
+        result: ValueId,
+        operand: ValueId,
+        class: SourceClass,
+    },
     /// Test the runtime class of a value without changing its semantic type.
     InstanceOf {
         result: ValueId,
@@ -1397,7 +1410,9 @@ impl Function {
                 return Err(fail("source span ends before it starts"));
             }
             let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
-            origins.observe(&located.operation).map_err(fail)?;
+            origins
+                .observe(&located.operation, &refinements)
+                .map_err(fail)?;
             let (result, operands) = match located.operation {
                 Operation::BlockParameter {
                     result,
@@ -1577,6 +1592,39 @@ impl Function {
                     available_locals = local_inputs[&block].clone();
                     refinements = refinement_inputs[&block].clone();
                     (None, vec![])
+                }
+                Operation::SourceCast {
+                    result,
+                    operand,
+                    ref class,
+                }
+                | Operation::SourceInstanceOf {
+                    result,
+                    operand,
+                    ref class,
+                } => {
+                    let projection =
+                        call_result_type(ReturnType::SourceObject(class.clone())).map_err(fail)?;
+                    if class.base.constructed_type().is_none() {
+                        return Err(fail(
+                            "source type target requires a constructible class base",
+                        ));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), class.base.api_name())
+                            .map_err(|message| IrError {
+                                operation: Some(index),
+                                message,
+                            })?;
+                    }
+                    let ty = if matches!(located.operation, Operation::SourceInstanceOf { .. }) {
+                        ValueType::Boolean
+                    } else {
+                        projection
+                    };
+                    types.insert(result, ty);
+                    (Some(result), vec![operand])
                 }
                 Operation::Cast {
                     result,
@@ -2539,6 +2587,8 @@ impl Function {
                                 | Operation::Positive { operand, .. }
                                 | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
+                                | Operation::SourceCast { operand, .. }
+                                | Operation::SourceInstanceOf { operand, .. }
                                 | Operation::Cast { operand, .. }
                                 | Operation::InstanceOf { operand, .. }
                                 | Operation::Not { operand, .. } => {
@@ -2785,6 +2835,16 @@ impl Function {
                     left.0,
                     right.0
                 ),
+                Operation::SourceCast {
+                    result,
+                    operand,
+                    ref class,
+                } => format!(".cast %{} %{} source({class})", result.0, operand.0),
+                Operation::SourceInstanceOf {
+                    result,
+                    operand,
+                    ref class,
+                } => format!(".instanceof %{} %{} source({class})", result.0, operand.0),
                 Operation::Cast {
                     result,
                     operand,

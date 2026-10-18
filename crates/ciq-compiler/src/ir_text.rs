@@ -409,7 +409,29 @@ pub(crate) fn parse_ir_context(
         } else {
             None
         };
-        let operation = if kind == 95 {
+        let operation = if matches!(kind, 93 | 95)
+            && fields[3].starts_with("source(")
+            && fields[3].ends_with(')')
+        {
+            let tag = &fields[3];
+            let class = crate::SourceClass::parse(&tag[7..tag.len() - 1])
+                .ok_or_else(|| fail(*at, "invalid source type target"))?;
+            let result = parse_value(&fields[1])?;
+            let operand = parse_value(&fields[2])?;
+            if kind == 93 {
+                Operation::SourceInstanceOf {
+                    result,
+                    operand,
+                    class,
+                }
+            } else {
+                Operation::SourceCast {
+                    result,
+                    operand,
+                    class,
+                }
+            }
+        } else if kind == 95 {
             Operation::Cast {
                 result: parse_value(&fields[1])?,
                 operand: parse_value(&fields[2])?,

@@ -131,6 +131,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Positive { result, .. }
             | Operation::Complement { result, .. }
             | Operation::Negate { result, .. }
+            | Operation::SourceCast { result, .. }
+            | Operation::SourceInstanceOf { result, .. }
             | Operation::Cast { result, .. }
             | Operation::InstanceOf { result, .. }
             | Operation::Has { result, .. }
@@ -620,6 +622,7 @@ fn expression(
         Value(ValueId),
         Binary(BinaryOp),
         InstanceOf(String),
+        SourceInstanceOf(String),
         Has,
         Negate,
         Step(bool),
@@ -870,8 +873,15 @@ fn expression(
                         vec![],
                     )
                 }
-                Operation::Cast { operand, .. } => {
+                Operation::Cast { operand, .. } | Operation::SourceCast { operand, .. } => {
                     tasks.push(Task::Value(*operand));
+                    continue;
+                }
+                Operation::SourceInstanceOf { operand, class, .. } => {
+                    tasks.extend([
+                        Task::SourceInstanceOf(class.name.clone()),
+                        Task::Value(*operand),
+                    ]);
                     continue;
                 }
                 Operation::InstanceOf { operand, class, .. } => {
@@ -976,6 +986,16 @@ fn expression(
                 continue;
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
+            Task::SourceInstanceOf(class) => {
+                items.push(instruction(
+                    Opcode::Getmv,
+                    vec![
+                        Operand::Symbol("__ciq_source_globals".into()),
+                        Operand::Symbol(format!("__ciq_class_{class}")),
+                    ],
+                ));
+                (Opcode::Isa, vec![])
+            }
             Task::InstanceOf(class) => {
                 items.push(instruction(
                     Opcode::Getmv,

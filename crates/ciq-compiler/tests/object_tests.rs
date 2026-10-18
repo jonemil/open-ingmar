@@ -4,11 +4,12 @@ use ciq_compiler::{
     compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
 };
 
+const SOURCE_TYPES: &str = include_str!("../../../examples/compiler-object-tests/source-types.mc");
 const APP: &str = include_str!("../../../examples/compiler-object-tests/app.mc");
 
 #[test]
 fn predicates_survive_saved_ir_assembly_and_complete_app_paths() {
-    let unit = compile_sources(&[APP]).unwrap();
+    let unit = compile_sources(&[APP, SOURCE_TYPES]).unwrap();
     let text = unit.to_ir_text();
     assert!(text.contains(".instanceof"));
     assert!(text.contains("Toybox.Lang.Number"));
@@ -57,7 +58,7 @@ fn qualified_names_aliases_and_api_requirements_remain_checked() {
 
 #[test]
 fn saved_ir_cannot_claim_unknown_runtime_classes_or_non_symbol_selectors() {
-    let unit = compile_sources(&[APP]).unwrap();
+    let unit = compile_sources(&[APP, SOURCE_TYPES]).unwrap();
     let text = unit.to_ir_text();
     for changed in [
         text.replace("Toybox.Lang.Number", "Toybox.Lang.Comparator"),

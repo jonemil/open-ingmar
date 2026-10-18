@@ -17,9 +17,14 @@ impl Origins {
             ..Default::default()
         }
     }
-    /// Track exact source classes through typed parameters, calls, and locals,
-    /// rejecting writes that invalidate an established source-class contract.
-    pub(crate) fn observe(&mut self, operation: &Operation) -> Result<(), &'static str> {
+    /// Track exact classes through signatures, assertions, calls, and locals.
+    /// Apply the caller's current CFG facts to reads, rejecting writes that
+    /// invalidate an established source-class storage contract.
+    pub(crate) fn observe(
+        &mut self,
+        operation: &Operation,
+        facts: &std::collections::BTreeSet<crate::type_flow::Fact>,
+    ) -> Result<(), &'static str> {
         if let Operation::ObjectCall {
             receiver, class, ..
         }
@@ -32,6 +37,9 @@ impl Origins {
             }
         }
         match operation {
+            Operation::SourceCast { result, class, .. } => {
+                self.values.insert(*result, class.name.clone());
+            }
             Operation::ParameterRead { result, index } => {
                 if let Some(crate::ParameterType::SourceObject(class)) = self.parameters.get(*index)
                 {
@@ -82,6 +90,22 @@ impl Origins {
             }
             _ => {}
         }
+        let place = if let Operation::LocalTake { local, .. } = operation {
+            Some(crate::type_flow::Place::Local(*local))
+        } else {
+            crate::type_flow::read_place(operation)
+        };
+        if let Some(place) = place {
+            if let Some(class) = crate::type_flow::source_class(place, facts) {
+                let result = match operation {
+                    Operation::ParameterRead { result, .. }
+                    | Operation::LocalRead { result, .. }
+                    | Operation::LocalTake { result, .. } => *result,
+                    _ => unreachable!(),
+                };
+                self.values.insert(result, class.name);
+            }
+        }
         Ok(())
     }
     /// Project a source comparator argument to its interface type for call
@@ -127,8 +151,11 @@ pub(crate) fn class(
     parameters: Vec<crate::ParameterType>,
 ) -> Option<String> {
     let mut origins = Origins::new(parameters);
+    let inputs = crate::type_flow::prefix_inputs(operations);
+    let mut facts = Default::default();
     for located in operations {
-        let _ = origins.observe(&located.operation);
+        crate::type_flow::update(&mut facts, &inputs, &located.operation);
+        let _ = origins.observe(&located.operation, &facts);
     }
     origins.class(value).map(str::to_owned)
 }

@@ -40,7 +40,7 @@ impl Types {
     /// Record a candidate result using shared operator and native contracts.
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
-        let _ = self.origins.observe(operation);
+        let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
             Operation::Symbol { result, .. } => (*result, Some(Type::named("Toybox.Lang.Symbol"))),
             Operation::DictionaryBegin {
@@ -233,10 +233,11 @@ impl Types {
                         operators::binary_result(*kind, candidate(left), candidate(right))
                     }),
             ),
+            Operation::SourceCast { result, class, .. } => (*result, class.base.constructed_type()),
             Operation::Cast { result, target, .. } => (*result, Some(target.clone())),
-            Operation::InstanceOf { result, .. } | Operation::Has { result, .. } => {
-                (*result, Some(Type::named("Toybox.Lang.Boolean")))
-            }
+            Operation::SourceInstanceOf { result, .. }
+            | Operation::InstanceOf { result, .. }
+            | Operation::Has { result, .. } => (*result, Some(Type::named("Toybox.Lang.Boolean"))),
             Operation::Compare {
                 result,
                 kind,

@@ -307,8 +307,8 @@ IDs need not be contiguous; their numeric values never select physical slots.
 Object, Number, Long, Float, Double, Boolean, Char, String, Array, Dictionary,
 Symbol, Method, and WeakReference. Canonical `Toybox.Lang.Class` and Lang module
 aliases also work. The class must satisfy the selected API requirements.
-Bare imported class names, source classes, interfaces, unions, and parameterized
-class operands remain outside this profile. Null is not an instance of these
+Bare imported native class names, interfaces, unions, and parameterized class
+operands remain outside this profile. Null is not an instance of these
 classes. This is a runtime identity/inheritance test, not a conversion or an
 exact source-class assertion.
 
@@ -322,8 +322,8 @@ Source fields/methods and inherited native methods can be tested.
 Both predicates have the existing comparison precedence below arithmetic and
 above logical AND/OR; chained comparisons are unsupported. Ordinary short-circuit
 and conditional evaluation rules apply. `has` establishes no member-signature
-or API-availability proof. Source-class tests, guarded newer APIs, general union
-refinement, and broader cast targets remain planned.
+or API-availability proof. Guarded newer APIs, general union refinement, and
+broader cast targets remain planned.
 
 ### Object refinement
 
@@ -353,10 +353,33 @@ calls preserve facts about local/parameter reference values.
 Aliases and stored Boolean conditions do not transport proofs. New copies made
 inside a proven branch receive the narrowed value type; storage that existed
 before the test keeps its original assignment contract. Fields and arbitrary
-expressions are not proof-bearing storage locations. Source superclass identity,
+expressions are not proof-bearing storage locations. Source superclass chains,
 container elements, method signatures, and API guards require separate contracts.
 Source and saved IR share these rules. See
 [runtime evidence](../investigations/compiler-object-tests.md).
+
+### Source-class targets
+
+`value instanceof ClassName` tests against a declared Object-, View-, or
+BehaviorDelegate-derived source class. Targets resolve across all unit input
+files, independently of declaration order. A successful test gives fresh reads
+of the tested local/parameter the exact source identity and its native projection,
+using the same branch, join, and write-invalidation rules above. This enables
+source calls, exact signature/field contracts, and structural comparator checking.
+Different classes sharing a native base remain distinct. Null does not match.
+
+`value as ClassName` is a lexical assertion of that same exact identity and
+projection. It needs no proof and leaves runtime identity unchanged, including
+for false assertions. A copy initialized from a proven/asserted source value
+retains its exact class requirement. An opaque Object local narrowed only for a
+branch keeps its original assignment contract; a later write invalidates its
+proof.
+
+Class operands are named declarations, not dynamic class values. The bounded
+profile rejects local/parameter shadowing of a source target. Qualified/nested
+source names, source inheritance, AppBase targets, and nullable source-class
+assertions remain unsupported. Unit validation checks target identity and base;
+standalone function IR retains that declaration-resolution obligation.
 
 ## Lexical casts
 
@@ -366,8 +389,9 @@ Method, WeakReference, and opaque Dictionary. Canonical `Toybox.Lang.Type` and
 Lang module aliases are accepted. Number, Long, Float, Double, Boolean, Char,
 String, and Object targets can include `or Null`. Target types still satisfy
 selected API introduction requirements.
-Bare imported types, source classes, parameterized containers, interfaces,
-general unions, Void, and Null alone remain outside this profile.
+[Source-class targets](#source-class-targets) additionally retain exact identity.
+Bare imported native types, parameterized containers, interfaces, general unions,
+Void, and Null alone remain outside this profile.
 
 ```text
 using Toybox.Lang;

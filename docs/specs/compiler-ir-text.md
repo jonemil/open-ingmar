@@ -1249,8 +1249,8 @@ Source instance calls use:
 ```
 
 Optional spans follow the existing syntax; omitted result types mean Integer.
-The receiver's exact source class must be proven through construction, typed source
-parameters/results, or local operations, independently of the class written in
+The receiver's exact source class must follow construction, source signatures,
+local operations, a positive source-class test, or an explicit source assertion, independently of the class written in
 the call. Unit validation
 checks the selected class method's arity, parameter/result types, and callback
 restrictions. Both forms preserve receiver-before-argument evaluation order.
@@ -1538,3 +1538,29 @@ conversion, or new PRG record. Assertions preserve one-use and effect-order
 rules and may consume an incoming stack value directly without setup. Their
 result type participates in subsequent native calls and instruction selection;
 source-class provenance does not pass through an opaque native assertion.
+
+## Source-class tests and casts
+
+```text
+.instanceof %<result> %<operand> source(ClassName@Native.Base)
+.cast %<result> %<operand> source(ClassName@Native.Base)
+```
+
+`SourceInstanceOf` and `SourceCast` carry a typed `SourceClass` target with
+separate name and base fields. Function validation checks target syntax, native
+projection, and API requirements. Unit validation resolves the declaration and
+requires both identity and base to match. Forward and cross-file targets work.
+Standalone parsing retains that unit obligation; text cannot provide trusted
+branch facts or bypass declaration/base checks.
+
+Positive source-class tests participate in the same CFG fixed point as native
+class tests. Fresh reads retain both the native value type and exact source
+provenance. Casts establish the explicitly asserted source identity without a
+proof. The [source contract](compiler-subset.md#source-class-targets) owns scope,
+assignability, and caller obligations. Class facts stay typed in memory; text is
+only the save/resume representation.
+
+Lowering a source test evaluates its operand, uses `getmv` with the unit's global
+class binding, and emits `isa`. The target is the emitted source class object,
+not its native base or a symbol ID alone. Source casts emit only their operand,
+like native lexical casts. No new VM instruction or DATA record is required.
