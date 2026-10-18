@@ -194,7 +194,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             } else {
                 Default::default()
             };
-            let (strings, arrays, dictionaries) = if let Some(path) = data_path {
+            let (strings, arrays, dictionaries, byte_arrays) = if let Some(path) = data_path {
                 let data_source = fs::read_to_string(&path)?;
                 let data = ciq_prg::data::Source::parse_layout(&data_source)
                     .map_err(|error| format!("{}: {error}", path.to_string_lossy()))?;
@@ -202,11 +202,18 @@ fn run() -> Result<(), Box<dyn Error>> {
                     ciq_compiler::string_bindings(&assembly, &data)?,
                     ciq_compiler::array_bindings(&assembly, &data)?,
                     ciq_compiler::dictionary_bindings(&assembly, &data)?,
+                    ciq_compiler::byte_array_bindings(&assembly, &data)?,
                 )
             } else {
                 Default::default()
             };
-            assembly.encode_with_data_references(&symbols, &strings, &arrays, &dictionaries)?
+            assembly.encode_with_byte_arrays(
+                &symbols,
+                &strings,
+                &arrays,
+                &dictionaries,
+                &byte_arrays,
+            )?
         }
     };
     let mut output = OpenOptions::new()

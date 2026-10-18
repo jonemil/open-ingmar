@@ -12,6 +12,7 @@ fn instruction(opcode: Opcode, operands: Vec<Operand>) -> Item {
 enum LiteralKey {
     String(String),
     Array(crate::ValueId),
+    ByteArray(crate::ValueId),
     Dictionary(crate::ValueId),
 }
 
@@ -60,6 +61,16 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             literals.push(Item::Dictionary(crate::dictionary::constant_record(
                 alias, entries,
             )));
+        }
+        if let Operation::ByteArrayConstant { result, values } = &located.operation {
+            let alias = format!("__ciq_byte_array_{}_{}", label, result.0);
+            literal_aliases.insert(LiteralKey::ByteArray(*result), alias.clone());
+            literals.push(Item::ByteArray(ciq_prg::data::byte_arrays::Declaration {
+                alias,
+                at: None,
+                pool: None,
+                values: values.clone(),
+            }));
         }
         if let Operation::ArrayConstant { result, values, .. } = &located.operation {
             let alias = format!("__ciq_array_{}_{}", label, result.0);
@@ -133,6 +144,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ArrayAllocate { result, .. }
             | Operation::ByteArrayAllocate { result, .. }
             | Operation::ArrayConstant { result, .. }
+            | Operation::ByteArrayConstant { result, .. }
             | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
@@ -157,7 +169,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
                 );
             }
-            Operation::DictionaryBegin { builder, .. } | Operation::ArrayBegin { builder, .. } => {
+            Operation::DictionaryBegin { builder, .. }
+            | Operation::ArrayBegin { builder, .. }
+            | Operation::ByteArrayBegin { builder, .. } => {
                 builders.insert(
                     *builder,
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
@@ -237,10 +251,18 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             }
             Operation::ArrayBegin {
                 builder, length, ..
-            } => {
+            }
+            | Operation::ByteArrayBegin { builder, length } => {
                 let (opcode, operands) = integer(length as i32);
                 items.push(instruction(opcode, operands));
-                items.push(instruction(Opcode::Newa, vec![]));
+                items.push(instruction(
+                    if matches!(located.operation, Operation::ByteArrayBegin { .. }) {
+                        Opcode::Newba
+                    } else {
+                        Opcode::Newa
+                    },
+                    vec![],
+                ));
                 items.push(instruction(
                     Opcode::Lputv,
                     vec![Operand::Bits(builders[&builder])],
@@ -728,6 +750,12 @@ fn expression(
                     Opcode::Hpush,
                     vec![Operand::Dictionary(
                         literal_aliases[&LiteralKey::Dictionary(*result)].clone(),
+                    )],
+                ),
+                Operation::ByteArrayConstant { result, .. } => (
+                    Opcode::Bpush,
+                    vec![Operand::ByteArray(
+                        literal_aliases[&LiteralKey::ByteArray(*result)].clone(),
                     )],
                 ),
                 Operation::ArrayConstant { result, .. } => (

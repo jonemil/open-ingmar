@@ -229,6 +229,7 @@ fn emit_non_call(
         )?,
         parser::ExpressionKind::DictionaryLiteral(_)
         | parser::ExpressionKind::ArrayLiteral(_)
+        | parser::ExpressionKind::ByteArrayLiteral(_)
         | parser::ExpressionKind::ArrayAllocate(_)
         | parser::ExpressionKind::ByteArrayAllocate(_) => {
             return Err(Diagnostic::at(
@@ -1150,6 +1151,85 @@ impl Builder<'_> {
         })
     }
 
+    /// Build a byte literal using exact DATA bytes or a private ordered initializer.
+    /// Out-of-range Number/Char tokens keep the indexed-store runtime check.
+    fn byte_array_literal(
+        &mut self,
+        elements: Vec<parser::Expression>,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let constant = elements
+            .iter()
+            .map(|e| match e.kind {
+                parser::ExpressionKind::Integer(n) if (-128..=255).contains(&n) => Some(n as u8),
+                parser::ExpressionKind::Char(c) if c <= 127 => Some(c as u8),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>();
+        let result = if let Some(values) = constant {
+            let result = ValueId(self.operations.len() as u32);
+            self.push(Operation::ByteArrayConstant { result, values }, Some(span));
+            result
+        } else {
+            let builder = crate::BuilderId(self.local_id(span)?.0);
+            let grouped = elements.iter().all(|e| !e.needs_materialization());
+            self.push(
+                Operation::ByteArrayBegin {
+                    builder,
+                    length: elements.len() as u32,
+                },
+                Some(span),
+            );
+            let mut values = Vec::new();
+            for (index, expression) in elements.into_iter().enumerate() {
+                let element_span = expression.span;
+                let value = if grouped {
+                    self.value(expression, locals)?
+                } else {
+                    self.value_for_setup(expression, locals)?
+                };
+                if grouped {
+                    values.push(value);
+                } else {
+                    self.push(
+                        Operation::ArrayFill {
+                            builder,
+                            index: index as u32,
+                            value,
+                        },
+                        Some(element_span),
+                    );
+                }
+            }
+            if grouped {
+                self.push(
+                    Operation::ArrayFillMany {
+                        builder,
+                        start: 0,
+                        values,
+                    },
+                    Some(span),
+                );
+            }
+            let result = ValueId(self.operations.len() as u32);
+            self.push(Operation::ArrayFinish { result, builder }, Some(span));
+            result
+        };
+        let array = self.local_id(span)?;
+        self.push(
+            Operation::LocalInitialize {
+                local: array,
+                value: result,
+            },
+            Some(span),
+        );
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Temporary(array),
+            span,
+        })
+    }
+
     /// Prepare children needing flow or construction in source order, snapshotting
     /// operands before emitting their parent in the final block.
     fn prepare(
@@ -1185,6 +1265,9 @@ impl Builder<'_> {
                 return self.dictionary_literal(entries, None, span, locals);
             }
             E::ArrayLiteral(elements) => return self.array_literal(elements, None, span, locals),
+            E::ByteArrayLiteral(elements) => {
+                return self.byte_array_literal(elements, span, locals);
+            }
             kind @ E::Logical { .. } => {
                 return self.logical_value(parser::Expression { kind, span }, locals);
             }

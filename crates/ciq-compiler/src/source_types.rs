@@ -11,6 +11,7 @@ pub(crate) struct Types {
     values: BTreeMap<ValueId, Type>,
     locals: BTreeMap<LocalId, Type>,
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
+    byte_arrays: std::collections::BTreeSet<crate::BuilderId>,
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
     origins: crate::source_objects::Origins,
     pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
@@ -31,6 +32,7 @@ impl Types {
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
             builders: BTreeMap::new(),
+            byte_arrays: Default::default(),
             dictionaries: BTreeMap::new(),
             origins: crate::source_objects::Origins::new(parameters),
             facts: Default::default(),
@@ -42,7 +44,12 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
-            Operation::ByteArrayAllocate { result, .. } => {
+            Operation::ByteArrayBegin { builder, .. } => {
+                self.byte_arrays.insert(*builder);
+                return;
+            }
+            Operation::ByteArrayConstant { result, .. }
+            | Operation::ByteArrayAllocate { result, .. } => {
                 (*result, Some(Type::named("Toybox.Lang.ByteArray")))
             }
             Operation::Symbol { result, .. } => (*result, Some(Type::named("Toybox.Lang.Symbol"))),
@@ -82,6 +89,9 @@ impl Types {
             } => {
                 self.builders.insert(*builder, *element_type);
                 return;
+            }
+            Operation::ArrayFinish { result, builder } if self.byte_arrays.contains(builder) => {
+                (*result, Some(Type::named("Toybox.Lang.ByteArray")))
             }
             Operation::ArrayFinish { result, builder } => (
                 *result,

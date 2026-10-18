@@ -1002,13 +1002,17 @@ impl CompilationUnit {
                         }
                     }
                     Operation::ArrayFill { builder, value, .. } => {
-                        check_element(array_builders[builder], *value)?
+                        if let Some(element) = array_builders.get(builder) {
+                            check_element(*element, *value)?;
+                        }
                     }
                     Operation::ArrayFillMany {
                         builder, values, ..
                     } => {
-                        for value in values {
-                            check_element(array_builders[builder], *value)?;
+                        if let Some(element) = array_builders.get(builder) {
+                            for value in values {
+                                check_element(*element, *value)?;
+                            }
                         }
                     }
                     Operation::ArrayWrite { array, value, .. } => {

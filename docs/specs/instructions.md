@@ -463,8 +463,10 @@ bindings currently support zero-prefix DATA addresses only. No universal
 24-bit capacity limit follows from that binding profile.
 
 The [SDK specimen](../investigations/byte-arrays.md) loads a seven-byte constant;
-editing its first DATA byte changes the corresponding runtime value. Deep-copy
-behavior, invalid addresses, and other address prefixes remain unverified.
+editing its first DATA byte changes the corresponding runtime value. Repeated
+loads of one constant produce independently mutable ByteArrays, including
+empty constants, in the [compiler example](../../examples/compiler-byte-arrays/README.md).
+Invalid addresses and other address prefixes remain unverified.
 
 ## aputvdup
 

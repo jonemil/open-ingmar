@@ -49,6 +49,8 @@ pub enum Item {
     String(StringDeclaration),
     /// A constant-array literal requirement, materialized separately in DATA.
     Array(ciq_prg::data::arrays::Declaration),
+    /// A compact ByteArray literal requirement, materialized separately in DATA.
+    ByteArray(ciq_prg::data::byte_arrays::Declaration),
     /// A Dictionary literal requirement, materialized separately in DATA.
     Dictionary(ciq_prg::data::dictionaries::Declaration),
 }
@@ -104,6 +106,7 @@ impl Program {
             lines: Vec::new(),
         };
         let mut array = None::<ciq_prg::data::arrays::Declaration>;
+        let mut byte_array = None::<ciq_prg::data::byte_arrays::Declaration>;
         let mut dictionary = None::<ciq_prg::data::dictionaries::Declaration>;
         for (index, line) in text.lines().enumerate() {
             let fail = |message: String| Error {
@@ -114,6 +117,26 @@ impl Program {
             let Some(first) = fields.first() else {
                 continue;
             };
+            if let Some(active) = &mut byte_array {
+                if first == ".endbytearray" && fields.len() == 1 {
+                    program
+                        .items
+                        .push(Item::ByteArray(byte_array.take().unwrap()));
+                    program.lines.push(index + 1);
+                } else {
+                    active
+                        .push_field(&fields)
+                        .map_err(|e| fail(e.to_string()))?;
+                }
+                continue;
+            }
+            if first == ".bytearray" && array.is_none() && dictionary.is_none() {
+                byte_array = Some(
+                    ciq_prg::data::byte_arrays::Declaration::parse_header(&fields)
+                        .map_err(|e| fail(e.to_string()))?,
+                );
+                continue;
+            }
             if let Some(active) = &mut dictionary {
                 if first == ".enddictionary" && fields.len() == 1 {
                     program
@@ -203,7 +226,7 @@ impl Program {
             program.items.push(item);
             program.lines.push(index + 1);
         }
-        if array.is_some() || dictionary.is_some() {
+        if array.is_some() || dictionary.is_some() || byte_array.is_some() {
             return Err(Error {
                 line: text.lines().count(),
                 message: "unterminated container declaration".into(),
@@ -214,6 +237,7 @@ impl Program {
     }
     fn validate(&self) -> Result<(), Error> {
         let mut array_aliases = std::collections::BTreeSet::new();
+        let mut byte_array_aliases = std::collections::BTreeSet::new();
         let mut dictionary_aliases = std::collections::BTreeSet::new();
         let mut string_aliases = std::collections::BTreeSet::new();
         for (index, item) in self.items.iter().enumerate() {
@@ -247,6 +271,19 @@ impl Program {
                     }
                     if declaration.at.is_some_and(|at| at >= 0x1000000) {
                         return Err(fail("inline code array placement exceeds 24 bits"));
+                    }
+                    declaration
+                        .encoded_length()
+                        .map_err(|e| self.error(index, e.to_string()))?;
+                }
+                Item::ByteArray(declaration) => {
+                    if !valid_alias(&declaration.alias)
+                        || !byte_array_aliases.insert(&declaration.alias)
+                    {
+                        return Err(fail("invalid or duplicate ByteArray alias"));
+                    }
+                    if declaration.at.is_some_and(|at| at >= 0x1000000) {
+                        return Err(fail("inline ByteArray placement exceeds 24 bits"));
                     }
                     declaration
                         .encoded_length()
@@ -376,6 +413,7 @@ impl Program {
                 ),
                 Item::String(d) => text.push_str(&d.to_text()),
                 Item::Array(d) => text.push_str(&d.to_text()),
+                Item::ByteArray(d) => text.push_str(&d.to_text()),
                 Item::Dictionary(d) => text.push_str(&d.to_text()),
                 Item::Instruction { opcode, operands } => {
                     text.push_str(opcode.mnemonic());
@@ -462,7 +500,8 @@ impl Program {
 
     /// Encode CODE with separately typed symbol and literal binding maps.
     /// ByteArray aliases resolve only for `bpush`, using zero-prefix DATA offsets.
-    /// Declarations belong in DATA; missing bindings or out-of-range offsets fail.
+    /// Inline declarations require separate DATA materialization. Missing
+    /// bindings, duplicate aliases, or out-of-range offsets fail.
     pub fn encode_with_byte_arrays(
         &self,
         external: &BTreeMap<String, u32>,
@@ -485,6 +524,7 @@ impl Program {
         let mut declarations = Source::default();
         let mut strings = external_strings.clone();
         let mut arrays = external_arrays.clone();
+        let mut byte_arrays = external_byte_arrays.clone();
         let mut dictionaries = external_dictionaries.clone();
         for (index, item) in self.items.iter().enumerate() {
             match item {
@@ -502,6 +542,15 @@ impl Program {
                         if arrays.insert(d.alias.clone(), at).is_some() {
                             return Err(
                                 self.error(index, format!("duplicate array alias {}", d.alias))
+                            );
+                        }
+                    }
+                }
+                Item::ByteArray(d) => {
+                    if let Some(at) = d.at {
+                        if byte_arrays.insert(d.alias.clone(), at).is_some() {
+                            return Err(
+                                self.error(index, format!("duplicate ByteArray alias {}", d.alias))
                             );
                         }
                     }
@@ -591,7 +640,7 @@ impl Program {
                         at as u64
                     }
                     Operand::ByteArray(alias) => {
-                        let at = *external_byte_arrays.get(alias).ok_or_else(|| {
+                        let at = *byte_arrays.get(alias).ok_or_else(|| {
                             self.error(index, format!("undefined ByteArray alias {alias}"))
                         })?;
                         if at >= 0x1000000 {

@@ -76,9 +76,10 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 **Experimentally observed (2026-10-18):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 30
+same SDK/target and `-O 0`, agrees with the independent compiler on all 41
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
-and native/text pipeline checks. Artifacts: `scratch/check-byte-arrays-source/`.
+and native/text pipeline checks. Artifacts:
+`scratch/check-byte-array-literals-final/`.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -88,9 +89,16 @@ Method invocation returns the current size; a live weak reference retrieves an
 Object equal to the source. Conditional allocation prints only the selected
 size helper, and a conditional length evaluates its chosen branch once.
 
-Byte literals are deliberately absent from this compiler specimen; the binary
-fixture above remains their SDK encoding evidence. Invalid byte ranges, fatal
-bounds errors, weak expiry, and numeric encoding options were not executed here.
+Constant literals include signed bytes and ASCII Char; their emitted compact
+payloads retain unsigned bytes. Repeated calls through one literal load return
+independent mutable values, including empty constants. Computed literals use
+private `newba` initialization with retaining/indexed stores. Both straight-line
+and branching elements retain order: the branching example prints `10`, then
+`11`, then `[10, 11, 90]`, without evaluating the unselected helper. A selected
+literal arm likewise executes only its own element helper.
+
+Invalid byte ranges, fatal bounds errors, weak expiry, and numeric encoding
+options were not executed here.
 Negative/oversized constant inputs remain runtime obligations in compiler tests,
 not observed portable exception guarantees.
 

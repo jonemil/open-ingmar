@@ -7,6 +7,14 @@ module Bytes {
     function choose(flag as Lang.Boolean) as Lang.ByteArray {
         return flag ? new[Bytes.effect(2)]b : new[Bytes.effect(4)]b;
     }
+    function literal() as Lang.ByteArray {
+        return [0, 1, 127, 128, 255, -1, -128, 'A']b;
+    }
+    function empty() as Lang.ByteArray { return []b; }
+    function straight(n) as Lang.ByteArray { return [n, n + 1]b; }
+    function computed(n) as Lang.ByteArray {
+        return [Bytes.effect(n), true ? Bytes.effect(n + 1) : Bytes.effect(99), 'Z']b;
+    }
 }
 function start() {
     var a = Bytes.make(Bytes.effect(3));
@@ -56,5 +64,21 @@ function start() {
     a = new[true ? Bytes.effect(1) : Bytes.effect(9)]b;
     System.println(a.size());
     System.println(shared.toString());
+    System.println(Bytes.literal().toString());
+    var first = Bytes.literal();
+    var second = Bytes.literal();
+    first[0] = 42;
+    System.println(second[0]);
+    var empty = Bytes.empty();
+    var anotherEmpty = Bytes.empty();
+    empty.add(7);
+    System.println(anotherEmpty.size());
+    System.println(Bytes.straight(4).toString());
+    System.println(Bytes.computed(10).toString());
+    System.println(Bytes.echo([-1, 'A']b).toString());
+    b.addAll([]b);
+    System.println(b.size());
+    var picked = true ? [Bytes.effect(3)]b : [Bytes.effect(9)]b;
+    System.println(picked.toString());
     System.exit();
 }

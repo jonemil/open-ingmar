@@ -158,6 +158,7 @@ pub(crate) enum ExpressionKind {
         qualifier: String,
     },
     ArrayLiteral(Vec<Expression>),
+    ByteArrayLiteral(Vec<Expression>),
     ArrayAllocate(Box<Expression>),
     ByteArrayAllocate(Box<Expression>),
     ArrayRead {
@@ -226,6 +227,7 @@ impl Expression {
             ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
+            | ExpressionKind::ByteArrayLiteral(_)
             | ExpressionKind::ArrayAllocate(_)
             | ExpressionKind::ByteArrayAllocate(_)
             | ExpressionKind::DictionaryNew
@@ -1280,11 +1282,21 @@ impl<'a> Parser<'a> {
                 elements.push(self.expression(depth + 1)?);
             }
             let close = self.expect(Kind::Punctuation(']'), "']'")?;
+            let bytes = self.peek()? == Kind::Word("b");
+            let end = if bytes {
+                self.token()?.span.end
+            } else {
+                close.span.end
+            };
             self.node(
-                ExpressionKind::ArrayLiteral(elements),
+                if bytes {
+                    ExpressionKind::ByteArrayLiteral(elements)
+                } else {
+                    ExpressionKind::ArrayLiteral(elements)
+                },
                 Span {
                     start: open.span.start,
-                    end: close.span.end,
+                    end,
                 },
             )?
         } else if self.peek()? == Kind::Word("new") {

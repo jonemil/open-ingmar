@@ -103,9 +103,10 @@ def main():
                    if line.startswith("section ")]
         result["raw_sections"] = [entry[1] for entry in entries if entry[3] == "raw"]
         result["code_structured"] = any(int(e[1], 16) == 0xc0debabe and e[3] == "assembly" for e in entries)
+        # Opaque DATA spans have pins; ByteArray payload .bytes lines do not.
         result["data_structured"] = any(
             int(e[1], 16) == 0xda7ababe and e[3] == "data" and
-            not any(line.lstrip().startswith(".bytes ") for line in
+            not any(line.lstrip().startswith(".bytes at=") for line in
                     (manifest.parent / e[4]).read_text().splitlines())
             for e in entries)
         rebuilt = destination / "rebuilt.prg"

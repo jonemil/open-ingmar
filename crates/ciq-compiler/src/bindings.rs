@@ -301,3 +301,57 @@ pub fn dictionary_bindings(
     }
     Ok(bindings)
 }
+
+/// Match ByteArray literal requirements to unique DATA records by exact bytes.
+/// Respect pinned offsets and keep their inline bindings out of the returned map.
+/// Missing/ambiguous payloads and conflicting aliases are errors; pools do not
+/// change the ByteArray's semantic bytes and are validated by DATA layout.
+pub fn byte_array_bindings(
+    program: &ciq_assembly::Program,
+    data: &ciq_prg::data::Source,
+) -> Result<BTreeMap<String, u32>, Error> {
+    use ciq_assembly::Item;
+    use ciq_prg::data::Fragment;
+    let fail = |message: String| Error { line: 0, message };
+    let offsets = data
+        .byte_array_bindings()
+        .map_err(|e| fail(e.to_string()))?;
+    let mut bindings = offsets.clone();
+    for item in program.items() {
+        let Item::ByteArray(literal) = item else {
+            continue;
+        };
+        let matches = data
+            .fragments
+            .iter()
+            .filter_map(|fragment| {
+                let Fragment::ByteArray(record) = fragment else {
+                    return None;
+                };
+                let at = offsets[&record.alias];
+                (literal.values == record.values && literal.at.is_none_or(|pin| pin == at))
+                    .then_some(at)
+            })
+            .collect::<Vec<_>>();
+        if matches.len() != 1 {
+            return Err(fail(format!(
+                "expected one DATA ByteArray matching &{}; found {}",
+                literal.alias,
+                matches.len()
+            )));
+        }
+        if bindings
+            .insert(literal.alias.clone(), matches[0])
+            .is_some_and(|old| old != matches[0])
+        {
+            return Err(fail(format!(
+                "conflicting DATA ByteArray binding for &{}",
+                literal.alias
+            )));
+        }
+        if literal.at.is_some() {
+            bindings.remove(&literal.alias);
+        }
+    }
+    Ok(bindings)
+}

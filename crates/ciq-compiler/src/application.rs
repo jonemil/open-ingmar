@@ -855,6 +855,7 @@ pub fn build_console_application(
     fragments.extend(assembly.items().iter().filter_map(|i| match i {
         Item::String(s) => Some(Fragment::String(s.clone())),
         Item::Array(a) => Some(Fragment::Array(a.clone())),
+        Item::ByteArray(a) => Some(Fragment::ByteArray(a.clone())),
         Item::Dictionary(d) => Some(Fragment::Dictionary(d.clone())),
         _ => None,
     }));
@@ -862,8 +863,9 @@ pub fn build_console_application(
     let strings = data.string_bindings().map_err(error)?;
     let arrays = data.array_bindings().map_err(error)?;
     let dictionaries = data.dictionary_bindings().map_err(error)?;
+    let byte_arrays = data.byte_array_bindings().map_err(error)?;
     let code = assembly
-        .encode_with_data_references(&bindings, &strings, &arrays, &dictionaries)
+        .encode_with_byte_arrays(&bindings, &strings, &arrays, &dictionaries, &byte_arrays)
         .map_err(error)?;
     let data = data
         .encode_with_references(&BTreeMap::new(), &labels)

@@ -73,6 +73,10 @@ inline CODE requirements remain rejected there, as for Arrays/Strings.
 
 ByteArray constants use `bpush &alias` and the separate ByteArray map in
 `Program::encode_with_byte_arrays`. Their `.bytearray` declarations belong in
-[DATA](data-byte-arrays.md); inline CODE declarations are unsupported. Numeric
-operands retain raw bits. Typed references must resolve in their own namespace
-and within the current zero-prefix DATA address profile.
+[DATA](data-byte-arrays.md). Standalone programs also accept `Item::ByteArray`
+and inline `.bytearray` requirements; these do not emit CODE bytes or allocate
+DATA. Pins bind inline offsets; unplaced requirements need external bindings.
+The compiler's `byte_array_bindings` matches exact bytes against a unique DATA
+record, respecting pins and rejecting missing, ambiguous, or conflicting matches.
+Section projects still require authoritative declarations in DATA. Numeric
+operands retain raw bits; typed references use the zero-prefix DATA profile.

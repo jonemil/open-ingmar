@@ -2189,6 +2189,19 @@ context. Evaluate its non-null Number length once before allocation. Conditional
 lengths and allocation arms retain lazy evaluation and effect order. Invalid
 sizes and allocation failures remain runtime concerns.
 
+`[elements]b`, including `[]b`, creates a fresh ByteArray with Number/Char
+elements. Valid literal Number tokens in `-128..=255` and ASCII Char tokens use
+compact DATA constants, normalizing valid signed bytes to their unsigned bits.
+Arithmetic and calls are not folded into constants. Computed literals allocate
+their final length before evaluating elements left-to-right, storing each value
+before evaluating the next. Conditional elements evaluate only their chosen
+arm. Private construction cannot escape before every slot has been filled.
+
+Out-of-range Number/Char tokens use indexed stores rather than truncation in a
+constant payload, retaining the runtime range check. Other element types are
+rejected. Repeated loads of a constant, including an empty constant, produce
+independently mutable ByteArrays. No expected element context is required.
+
 Index reads require a non-null Number and return an unsigned Number byte.
 Writes accept Number/Char, including indexed compounds whose result matches
 that contract. Evaluate receiver, index, then value once, preserving runtime
@@ -2216,10 +2229,8 @@ profiles. Weak retrieval remains Object-or-Null. Direct arguments to `addAll`
 need an established Array element contract; ambiguous empty Array inference
 does not choose Number or Char automatically.
 
-Byte literals (`[values]b`), nullable ByteArray references, fields/container
-elements, casts/runtime class recovery, and numeric encoding/decoding options
-remain unsupported. These gaps do not authorize lowering byte literals through
-append loops or exposing partially initialized storage. See the
+Nullable ByteArray references, fields/container elements, casts/runtime class
+recovery, and numeric encoding/decoding options remain unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and
 [evidence](../investigations/byte-arrays.md#source-and-ir-profile).

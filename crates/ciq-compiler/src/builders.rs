@@ -8,14 +8,18 @@ use std::collections::{BTreeMap, VecDeque};
 #[derive(Clone, Copy)]
 pub(crate) enum Contract {
     Array(ArrayElement),
+    ByteArray,
     Dictionary(DictionaryType),
 }
 impl Contract {
-    pub(crate) fn array(self) -> Option<ArrayElement> {
-        if let Self::Array(element) = self {
-            Some(element)
-        } else {
-            None
+    pub(crate) fn element_type(self) -> Option<crate::api::Type> {
+        match self {
+            Self::Array(element) => Some(element.api_type()),
+            Self::ByteArray => Some(crate::api::Type::Union(vec![
+                crate::api::Type::named("Toybox.Lang.Number"),
+                crate::api::Type::named("Toybox.Lang.Char"),
+            ])),
+            Self::Dictionary(_) => None,
         }
     }
     pub(crate) fn dictionary(self) -> Option<DictionaryType> {
@@ -57,6 +61,22 @@ pub(crate) fn validate(
                 .is_some()
             {
                 return Err(fail(index, "duplicate array builder declaration"));
+            }
+        }
+    }
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::ByteArrayBegin { builder, length } = op.operation {
+            if length == 0 || length > i32::MAX as u32 {
+                return Err(fail(
+                    index,
+                    "ByteArray builder length requires a positive Number",
+                ));
+            }
+            if declarations
+                .insert(builder, (Contract::ByteArray, length))
+                .is_some()
+            {
+                return Err(fail(index, "duplicate container builder declaration"));
             }
         }
     }
@@ -108,7 +128,8 @@ pub(crate) fn validate(
         for &index in &blocks[&block] {
             match operations[index].operation {
                 Operation::DictionaryBegin { builder, .. }
-                | Operation::ArrayBegin { builder, .. } => {
+                | Operation::ArrayBegin { builder, .. }
+                | Operation::ByteArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
                         return Err(fail(index, "container builder restarted before completion"));
                     }
@@ -120,7 +141,7 @@ pub(crate) fn validate(
                 } => {
                     if declarations
                         .get(&builder)
-                        .is_none_or(|(contract, _)| contract.array().is_none())
+                        .is_none_or(|(contract, _)| contract.element_type().is_none())
                     {
                         return Err(fail(index, "array fill requires an Array builder"));
                     }
@@ -138,7 +159,7 @@ pub(crate) fn validate(
                 Operation::ArrayFinish { builder, .. } => {
                     if declarations
                         .get(&builder)
-                        .is_none_or(|(contract, _)| contract.array().is_none())
+                        .is_none_or(|(contract, _)| contract.element_type().is_none())
                     {
                         return Err(fail(index, "array finish requires an Array builder"));
                     }
@@ -159,7 +180,7 @@ pub(crate) fn validate(
                 } => {
                     if declarations
                         .get(&builder)
-                        .is_none_or(|(contract, _)| contract.array().is_none())
+                        .is_none_or(|(contract, _)| contract.element_type().is_none())
                     {
                         return Err(fail(index, "array fill requires an Array builder"));
                     }

@@ -12,10 +12,9 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**ByteArray.** Add constant and effectful byte literals on the
-[verified binary representation](specs/data-byte-arrays.md), preserving private
-initialization and allocation-before-element effects. Extend nullable references,
-fields/container storage, and concrete Object recovery under explicit contracts.
+**ByteArray.** Extend nullable references, fields/container storage, and concrete
+Object recovery under explicit contracts. Preserve private initialization and
+allocation-before-element effects when adding new literal/storage paths.
 Keep Number/Char byte range checks as runtime obligations until independent
 evidence justifies compile-time rejection. Numeric encoding/decoding needs
 NumberFormat/Endian constants and structural option contracts.

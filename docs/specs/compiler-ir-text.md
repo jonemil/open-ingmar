@@ -505,6 +505,24 @@ clamping, or expansion is emitted by the compiler. Native calls reuse the
 catalogue and ordinary value-call lowering under the
 [source method profile](compiler-subset.md#bytearrays).
 
+`.byte-array-constant %<result> 0x<hex-pairs> [span=<start>:<end>]` contains exact
+unsigned bytes; bare `0x` denotes an empty payload. Hex digits must occur in
+pairs. API and ordered-effect checks still apply. Lower to a ByteArray literal
+requirement and `bpush`, using a separate DATA binding namespace. Source signed
+byte normalization happens before this IR operation; readers never truncate
+wider numbers or reinterpret the payload as scalar tags.
+
+`.byte-array-begin &<builder> <length> [span=<start>:<end>]` allocates a private
+ByteArray of a positive constant Number length with `newba`. It shares
+`.array-fill`, `.array-fill-many`, and `.array-finish` with indexed Array
+construction, retaining a distinct ByteArray contract. Values must be non-null
+Number/Char; bounds remain runtime checks. Existing builder validation requires
+complete, ordered, exactly-once initialization on every CFG path, forbids early
+escape/restart, and counts private slots toward the common frame limit.
+Grouped fills use retaining stores; branching elements stage incoming values
+before builder/index setup. Finish produces ByteArray and clears the builder's
+hidden ownership. No append loop or intermediate Array is emitted.
+
 ## Array allocation
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty

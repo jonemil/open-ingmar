@@ -15,8 +15,8 @@ The body length is `M = 5 + count`; without a pool, the outer length is
 `N = 13 + count` and total record size is `19 + count`.
 
 The codec validates all lengths, count, optional local String pool, and final
-zero terminator. It preserves empty records and unused/empty pools, although
-those forms have not been separately exercised in the simulator. Unknown roots,
+zero terminator. Empty records are covered by literal runtime checks;
+unused/empty pools are preserved but remain untested in the simulator. Unknown roots,
 truncation, and trailing bytes stop the record walk; no scanning is performed.
 Nested containers and scalar tags have no meaning inside the byte payload.
 

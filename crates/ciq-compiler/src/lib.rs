@@ -17,7 +17,9 @@ mod builders;
 mod casts;
 mod control_flow;
 mod dictionary;
-pub use bindings::{array_bindings, dictionary_bindings, string_bindings, symbol_bindings};
+pub use bindings::{
+    array_bindings, byte_array_bindings, dictionary_bindings, string_bindings, symbol_bindings,
+};
 pub use dictionary::{DictionaryKey, DictionaryScalar, DictionaryType, DictionaryValue};
 mod ir_text;
 mod joins;
@@ -892,7 +894,7 @@ pub enum Operation {
         element_type: ArrayElement,
         length: u32,
     },
-    /// Initialize the next builder element from one checked value.
+    /// Initialize the next private Array/ByteArray slot from one checked value.
     ArrayFill {
         builder: BuilderId,
         index: u32,
@@ -905,7 +907,7 @@ pub enum Operation {
         start: u32,
         values: Vec<ValueId>,
     },
-    /// Expose a completed builder as a typed array value, consuming the builder.
+    /// Expose a completed Array/ByteArray value, consuming the private builder.
     ArrayFinish {
         result: ValueId,
         builder: BuilderId,
@@ -997,6 +999,18 @@ pub enum Operation {
         result: ValueId,
         element_type: ArrayElement,
         length: ValueId,
+    },
+    /// Load a fresh ByteArray from exact unsigned bytes in a DATA constant.
+    /// Payloads are already validated bytes; this operation performs no truncation.
+    ByteArrayConstant {
+        result: ValueId,
+        values: Vec<u8>,
+    },
+    /// Allocate a private ByteArray before evaluating its literal elements.
+    /// Finish only after ordered fills initialize every slot; no partial value escapes.
+    ByteArrayBegin {
+        builder: BuilderId,
+        length: u32,
     },
     /// Allocate a fresh zero-filled ByteArray from a non-null Number length.
     /// Evaluate length once; invalid sizes and allocation failures reach the VM.
@@ -1639,6 +1653,14 @@ impl Function {
                     );
                     (Some(result), vec![])
                 }
+                Operation::ByteArrayBegin { .. } => {
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.ByteArray")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    (None, vec![])
+                }
                 Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::DictionaryFill {
                     builder,
@@ -1688,9 +1710,8 @@ impl Function {
                 Operation::ArrayFill { builder, value, .. } => {
                     let expected = builders[&builder]
                         .0
-                        .array()
-                        .expect("validated Array builder")
-                        .api_type();
+                        .element_type()
+                        .expect("validated indexed builder");
                     if !native::accepts(&expected, &type_of(value).api_type())
                         && !origins.deferred_interface(&expected, value)
                     {
@@ -1705,9 +1726,8 @@ impl Function {
                 } => {
                     let expected = builders[&builder]
                         .0
-                        .array()
-                        .expect("validated Array builder")
-                        .api_type();
+                        .element_type()
+                        .expect("validated indexed builder");
                     if values.iter().any(|v| {
                         !native::accepts(&expected, &type_of(*v).api_type())
                             && !origins.deferred_interface(&expected, *v)
@@ -1721,12 +1741,11 @@ impl Function {
                 Operation::ArrayFinish { result, builder } => {
                     types.insert(
                         result,
-                        ValueType::Array(
-                            builders[&builder]
-                                .0
-                                .array()
-                                .expect("validated Array builder"),
-                        ),
+                        match builders[&builder].0 {
+                            builders::Contract::ByteArray => ValueType::ByteArray,
+                            builders::Contract::Array(element) => ValueType::Array(element),
+                            _ => unreachable!("validated indexed builder"),
+                        },
                     );
                     (Some(result), vec![])
                 }
@@ -2212,6 +2231,15 @@ impl Function {
                             .map_err(|message| fail(&message))?;
                     }
                     types.insert(result, ty);
+                    (Some(result), vec![])
+                }
+                Operation::ByteArrayConstant { result, .. } => {
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.ByteArray")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ValueType::ByteArray);
                     (Some(result), vec![])
                 }
                 Operation::ByteArrayAllocate { result, length } => {
@@ -2762,6 +2790,8 @@ impl Function {
                     | Operation::ArrayNew { .. }
                     | Operation::ArrayAllocate { .. }
                     | Operation::ByteArrayAllocate { .. }
+                    | Operation::ByteArrayConstant { .. }
+                    | Operation::ByteArrayBegin { .. }
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
                     | Operation::DictionaryBegin { .. }
@@ -2808,7 +2838,9 @@ impl Function {
                         index,
                         value,
                     } => vec![*array, *index, *value],
-                    Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => vec![],
+                    Operation::DictionaryBegin { .. }
+                    | Operation::ArrayBegin { .. }
+                    | Operation::ByteArrayBegin { .. } => vec![],
                     Operation::DictionaryFill { entries, .. } => entries
                         .iter()
                         .flat_map(|(key, value)| [*key, *value])
@@ -2950,7 +2982,7 @@ impl Function {
     /// and member aliases remain unresolved for later binding. Deduplicated
     /// string declarations carry content without DATA placement; bind them with
     /// [`string_bindings`]. Container declarations use [`array_bindings`] or
-    /// [`dictionary_bindings`]; declarations retain separate identities until
+    /// [`byte_array_bindings`] or [`dictionary_bindings`]; declarations retain separate identities until
     /// CODE encoding. Output is not a complete PRG.
     pub fn lower(&self) -> ciq_assembly::Program {
         backend::lower(self)
@@ -3373,6 +3405,16 @@ impl Function {
                     result,
                     element_type,
                 } => format!(".array-new %{} {}", result.0, element_type.text()),
+                Operation::ByteArrayConstant { result, ref values } => {
+                    let bytes = values
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<String>();
+                    format!(".byte-array-constant %{} 0x{}", result.0, bytes)
+                }
+                Operation::ByteArrayBegin { builder, length } => {
+                    format!(".byte-array-begin &{} {}", builder.0, length)
+                }
                 Operation::ByteArrayAllocate { result, length } => {
                     format!(".byte-array-new %{} %{}", result.0, length.0)
                 }

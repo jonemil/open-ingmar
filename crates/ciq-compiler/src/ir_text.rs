@@ -353,6 +353,8 @@ pub(crate) fn parse_ir_context(
             Some(".array-new") => (30, 3),
             Some(".array-allocate") => (96, 4),
             Some(".byte-array-new") => (97, 3),
+            Some(".byte-array-constant") => (98, 3),
+            Some(".byte-array-begin") => (99, 3),
             Some(".dictionary-begin") => (70, 4),
             Some(".dictionary-fill") => (71, call_width()),
             Some(".dictionary-finish") => (72, 3),
@@ -834,6 +836,25 @@ pub(crate) fn parse_ir_context(
             Operation::ArrayFinish {
                 result: parse_value(&fields[1])?,
                 builder: parse_builder(&fields[2])?,
+            }
+        } else if kind == 98 {
+            let hex = fields[2]
+                .strip_prefix("0x")
+                .ok_or_else(|| fail(*at, "ByteArray payload requires 0x hex pairs"))?;
+            if hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(fail(*at, "ByteArray payload requires hex pairs"));
+            }
+            Operation::ByteArrayConstant {
+                result: parse_value(&fields[1])?,
+                values: (0..hex.len())
+                    .step_by(2)
+                    .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+                    .collect(),
+            }
+        } else if kind == 99 {
+            Operation::ByteArrayBegin {
+                builder: parse_builder(&fields[1])?,
+                length: parse_count(&fields[2])?,
             }
         } else if kind == 97 {
             Operation::ByteArrayAllocate {
