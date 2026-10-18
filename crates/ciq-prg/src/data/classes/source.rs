@@ -241,10 +241,12 @@ impl Declaration {
                 Reference::Raw(_) => {}
                 Reference::Class(_) if f.kind == 7 => {}
                 Reference::String(_) if f.kind == 3 => {}
+                Reference::Symbol(_) if f.kind == 8 => {}
                 Reference::Code(_) if f.kind == 6 => {}
                 _ => {
                     return Err(Error(
-                        "typed field value does not match class/string field type".into(),
+                        "typed field value does not match its class, string, Symbol, or CODE type"
+                            .into(),
                     ));
                 }
             }

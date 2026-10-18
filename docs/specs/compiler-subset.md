@@ -1381,8 +1381,9 @@ Symbol consumer without proof. Native `equals` arguments explicitly permitting
 Null retain their shared argument profile. Method API requirements still apply
 after a guard, including 2.3.0 for `toNumber`.
 
-Symbol arithmetic, ordering, truthiness, direct printing, and fields remain
-unsupported. Method lookup follows its
+Symbol arithmetic, ordering, truthiness, and direct printing remain unsupported.
+Classes follow the [Symbol field contract](compiler-classes.md#symbol-fields).
+Method lookup follows its
 separate contract below.
 See the [specimen and binding evidence](../investigations/compiler-symbols.md).
 
@@ -1410,7 +1411,7 @@ applications share the normal name/ID map, including pinned native member IDs.
 No numeric Symbol ID is placed in semantic IR or treated as Number. Flat DATA
 constants do not accept Symbol tokens. A Null-only payload under a nullable
 Symbol element/value contract can still use the existing Null constant encoding.
-Pooled Symbol encodings and Symbol fields require separate evidence/contracts.
+Pooled Symbol encodings require separate evidence/contracts.
 
 ## Method values and invocation
 

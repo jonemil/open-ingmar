@@ -11,11 +11,12 @@ See [runtime evidence][evidence].
 
 ```text
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (number-field | reference-field | function)+ "}"
+        "{" native-declaration* (field | function)+ "}"
 native-base = recognized Lang.Object, Application.AppBase, WatchUi.View, or
               WatchUi.BehaviorDelegate identity
 number-field = "var" identifier "=" signed-number-literal ";"
-reference-field = "var" identifier "as" source-class-name ";"
+field = number-field | source-reference-field | interface-field | symbol-field
+source-reference-field = "var" identifier "as" source-class-name ";"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
@@ -23,7 +24,7 @@ Classes are top-level declarations. The base is a recognized native identity,
 resolved through the [native name profile](compiler-subset.md#native-name-declarations).
 It accepts canonical/qualified, aliased, and imported Object/AppBase/View/
 BehaviorDelegate spellings. An omitted base selects Lang.Object.
-Number/reference fields are supported below. Static methods, annotations, source
+Supported field contracts are defined below. Static methods, annotations, source
 superclass lookup, and nested/empty classes are unsupported. Classes require at
 least one method. Class names must be unique;
 classes cannot be reopened. Reject class/module/global-function name collisions.
@@ -453,6 +454,48 @@ Reads use `.read-self %<result> <name> result=<tag>`; writes use the existing
 encoding for AppBase fields and other source classes, with ordinary field and
 invocation instructions. See the [comparison example](../../examples/compiler-comparators/README.md)
 and [evidence](../investigations/compiler-comparators.md#interface-fields).
+
+## Symbol fields
+
+All supported source class bases accept Symbol fields from API 1.0.0:
+
+```monkeyc
+var required as Toybox.Lang.Symbol;
+var maybe as Toybox.Lang.Symbol or Null;
+var optional as Toybox.Lang.Symbol or Null = null;
+var preset as Toybox.Lang.Symbol = :alpha;
+var inferred = :size;
+```
+
+Annotations accept canonical, imported, and aliased Symbol names. Literal Symbol
+defaults are permitted with either nullability; an omitted type infers non-null
+Symbol. Nullable fields default to Null when no Symbol is supplied. Non-null
+fields without defaults must be assigned in source `initialize`, using the same
+straight-line prefix and exposure/callback restrictions as required reference
+fields. A literal default already satisfies initialization. Null requires an
+explicit nullable declaration; other/computed defaults remain unsupported.
+
+Reads retain the declared Symbol/nullability type, including when a nullable
+field has a Symbol default. Writes must satisfy that contract. Nullable reads
+need guarded local snapshots for members and selectors; a test of one mutable
+field read does not refine another read. Replacing the field does not change a
+saved local value. Field names, count limits, assignment order, and instance
+isolation follow the existing class rules.
+
+Metadata defaults use type `0x08` with a Symbol ID; other slots use Null type
+`0x00` and value zero. Application generation resolves default names in the
+shared Symbol map and retains development names even when no CODE literal
+mentions them. Native names reuse pinned IDs. AppBase and constructed classes
+share this encoding. Reads/writes use existing field instructions.
+
+Unit IR uses `.field-symbol <name> symbol|nullable-symbol [default=:name]` before
+methods. No default denotes a required non-null field or a nullable Null slot.
+Defaults retain names, not IDs. Field reads claim `result=symbol` or
+`result=nullable-symbol`; unit validation rechecks declarations and writes after
+IR reload. Complete DATA assembly supports
+[Symbol default references](data-classes.md#field-and-reference-interpretation).
+See the [specimen](../../examples/compiler-symbols/README.md) and
+[evidence](../investigations/compiler-symbols.md#symbol-fields).
 
 ## Source initial View callback
 

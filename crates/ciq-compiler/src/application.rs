@@ -121,6 +121,25 @@ fn field(id: u32, flags: u8, kind: u8, value: Reference) -> FieldDeclaration {
         value,
     }
 }
+
+/// Encode a field's literal default using the application's shared Symbol IDs.
+/// Fields requiring source initialization and nullable defaults use Null slots.
+fn instance_field(
+    declaration: &crate::InstanceField,
+    ids: &BTreeMap<String, u32>,
+) -> FieldDeclaration {
+    let (kind, value) = match &declaration.kind {
+        crate::FieldKind::Number(initial) => (1, *initial as u32),
+        crate::FieldKind::Symbol {
+            initial: Some(name),
+            ..
+        } => (8, ids[name]),
+        crate::FieldKind::Symbol { initial: None, .. }
+        | crate::FieldKind::SourceObject(_)
+        | crate::FieldKind::Interface { .. } => (0, 0),
+    };
+    field(ids[&declaration.name], 0, kind, Reference::Raw(value))
+}
 fn method(id: u32, flags: u8, label: &str) -> FieldDeclaration {
     field(id, flags, 6, Reference::Code(label.into()))
 }
@@ -446,6 +465,12 @@ pub fn build_console_application(
                 .iter()
                 .flat_map(|class| class.fields.iter().map(|field| field.name.clone())),
         )
+        .chain(
+            unit.classes()
+                .iter()
+                .flat_map(|class| &class.fields)
+                .filter_map(|field| field.kind.symbol_default().map(str::to_owned)),
+        )
         .collect();
     let mut next = 2; // Symbol 1 is the synthesized application class.
     for name in names {
@@ -571,6 +596,12 @@ pub fn build_console_application(
                 None
             }
         })
+        .chain(
+            unit.classes()
+                .iter()
+                .flat_map(|class| &class.fields)
+                .filter_map(|field| field.kind.symbol_default().map(str::to_owned)),
+        )
         .collect();
     for name in &literal_names {
         bindings.insert(format!("__ciq_symbol_{name}"), ids[name]);
@@ -683,23 +714,12 @@ pub fn build_console_application(
         ],
     );
     if let Some(source_class) = app_class {
-        application
-            .fields
-            .extend(source_class.fields.iter().map(|declaration| {
-                field(
-                    ids[&declaration.name],
-                    0,
-                    if matches!(declaration.kind, crate::FieldKind::Number(_)) {
-                        1
-                    } else {
-                        0
-                    },
-                    Reference::Raw(match declaration.kind {
-                        crate::FieldKind::Number(initial) => initial as u32,
-                        crate::FieldKind::SourceObject(_) | crate::FieldKind::Interface { .. } => 0,
-                    }),
-                )
-            }));
+        application.fields.extend(
+            source_class
+                .fields
+                .iter()
+                .map(|declaration| instance_field(declaration, &ids)),
+        );
         if source_class
             .methods
             .iter()
@@ -760,21 +780,12 @@ pub fn build_console_application(
             method(INIT, 0x30, &ctor_label),
             field(base_symbol, 0x70, 7, Reference::Raw(import_word)),
         ];
-        fields.extend(source_class.fields.iter().map(|declaration| {
-            field(
-                ids[&declaration.name],
-                0,
-                if matches!(declaration.kind, crate::FieldKind::Number(_)) {
-                    1
-                } else {
-                    0
-                },
-                Reference::Raw(match declaration.kind {
-                    crate::FieldKind::Number(initial) => initial as u32,
-                    crate::FieldKind::SourceObject(_) | crate::FieldKind::Interface { .. } => 0,
-                }),
-            )
-        }));
+        fields.extend(
+            source_class
+                .fields
+                .iter()
+                .map(|declaration| instance_field(declaration, &ids)),
+        );
         fields.extend(
             source_class
                 .methods

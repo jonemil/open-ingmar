@@ -2171,7 +2171,31 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     let kind = if parser.peek()? == Kind::Word("as") {
                         parser.token()?;
                         let class = parser.type_path()?;
-                        if let Some(interface) = crate::InterfaceType::from_name(&class) {
+                        if class == "Toybox.Lang.Symbol" {
+                            let nullable = if parser.peek()? == Kind::Word("or") {
+                                parser.token()?;
+                                parser.expect(Kind::Word("Null"), "'Null'")?;
+                                true
+                            } else {
+                                false
+                            };
+                            let initial = if parser.peek()? == Kind::Punctuation('=') {
+                                parser.token()?;
+                                let value = parser.expression(0)?;
+                                match value.kind {
+                                    ExpressionKind::Symbol(name) => Some(name),
+                                    ExpressionKind::Null if nullable => None,
+                                    _ => return Err(parser.error(value.span.start, "Symbol fields require a literal Symbol or permitted null default")),
+                                }
+                            } else {
+                                None
+                            };
+                            parser.expect(
+                                Kind::Punctuation(';'),
+                                "';' after Symbol field declaration",
+                            )?;
+                            crate::FieldKind::Symbol { initial, nullable }
+                        } else if let Some(interface) = crate::InterfaceType::from_name(&class) {
                             let nullable = if parser.peek()? == Kind::Word("or") {
                                 parser.token()?;
                                 parser.expect(Kind::Word("Null"), "'Null'")?;
@@ -2217,14 +2241,19 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     } else {
                         parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
                         let value = parser.expression(0)?;
-                        let ExpressionKind::Integer(initial) = value.kind else {
-                            return Err(parser.error(
+                        let kind = match value.kind {
+                            ExpressionKind::Integer(initial) => crate::FieldKind::Number(initial),
+                            ExpressionKind::Symbol(name) => crate::FieldKind::Symbol {
+                                initial: Some(name),
+                                nullable: false,
+                            },
+                            _ => return Err(parser.error(
                                 value.span.start,
-                                "instance fields require a Number literal initializer",
-                            ));
+                                "instance fields require a Number or Symbol literal initializer",
+                            )),
                         };
                         parser.expect(Kind::Punctuation(';'), "';'")?;
-                        crate::FieldKind::Number(initial)
+                        kind
                     };
                     fields.push(crate::InstanceField {
                         name: name.into(),

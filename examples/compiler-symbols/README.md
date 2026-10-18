@@ -11,6 +11,9 @@ snapshots retained after reassignment.
 `SymbolContainers` checks nullable/non-null Arrays, Symbol Dictionary keys and
 values, mutation, collection methods, enumeration snapshots, and bound native
 member identities. Symbol-bearing literals use runtime construction.
+`SymbolStore` checks required/nullable fields, Symbol and Null defaults, instance
+isolation, mutable snapshots, and a stored selector. Metadata-only names are
+retained for development reflection in both Object-rooted and AppBase fields.
 
 From the repository root, using fresh output paths:
 
@@ -23,6 +26,6 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-symbols/generated.p
 
 Symbol requires API 1.0.0; `weak()` requires 1.2.0 and `toNumber()` requires
 2.3.0. Nullable Symbol and container storage retain these method requirements.
-Symbol fields and pooled Symbol payloads remain outside this specimen.
+Pooled Symbol container payloads remain outside this specimen.
 [Method values/invocation](../compiler-methods/README.md) have a separate specimen. See the
 [source contracts](../../docs/specs/compiler-subset.md#symbol-values).

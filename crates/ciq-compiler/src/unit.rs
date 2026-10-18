@@ -248,6 +248,12 @@ impl ClassBase {
 pub enum FieldKind {
     /// A Number copied from class metadata into each new instance.
     Number(i32),
+    /// A Symbol slot with an optional literal metadata default. Nullable slots
+    /// otherwise default to Null; non-null slots require source initialization.
+    Symbol {
+        initial: Option<String>,
+        nullable: bool,
+    },
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
@@ -264,11 +270,24 @@ impl FieldKind {
         matches!(
             self,
             Self::SourceObject(_)
+                | Self::Symbol {
+                    initial: None,
+                    nullable: false
+                }
                 | Self::Interface {
                     nullable: false,
                     ..
                 }
         )
+    }
+
+    /// Return the literal Symbol name that application binding must resolve.
+    pub(crate) fn symbol_default(&self) -> Option<&str> {
+        if let Self::Symbol { initial, .. } = self {
+            initial.as_deref()
+        } else {
+            None
+        }
     }
 }
 
@@ -284,6 +303,13 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::Symbol { nullable, .. } => {
+                if *nullable {
+                    ReturnType::NullableSymbol
+                } else {
+                    ReturnType::Symbol
+                }
+            }
             FieldKind::SourceObject(class) => ReturnType::SourceObject(class.clone()),
             FieldKind::Interface {
                 interface,
@@ -307,7 +333,7 @@ pub struct ClassDeclaration {
     pub name: String,
     /// Native superclass identity resolved by application generation.
     pub base: ClassBase,
-    /// Number/reference fields in declaration order.
+    /// Instance fields in declaration order.
     pub fields: Vec<InstanceField>,
     /// Instance-method IR bodies, checked together during unit construction.
     pub methods: Vec<Function>,
@@ -571,6 +597,17 @@ impl CompilationUnit {
             }
             let mut field_names = BTreeSet::new();
             for field in &class.fields {
+                if field
+                    .kind
+                    .symbol_default()
+                    .is_some_and(|name| !ciq_prg::symbols::source::valid_alias(name))
+                {
+                    return Err(fail(
+                        Some(at),
+                        None,
+                        "Symbol field defaults require an identifier".into(),
+                    ));
+                }
                 if !valid(&field.name)
                     || (class.base == ClassBase::LangObject && field.name == "Object")
                     || reserved(&field.name)
@@ -630,7 +667,7 @@ impl CompilationUnit {
                 return Err(fail(
                     Some(at),
                     None,
-                    "reference fields require a source initializer".into(),
+                    "required fields require a source initializer".into(),
                 ));
             }
             if class.methods.is_empty() {
@@ -769,15 +806,15 @@ impl CompilationUnit {
                         return Err(fail(
                             Some(index),
                             Some(operation),
-                            "initialize reference fields before calls that may request shutdown"
+                            "initialize required fields before calls that may request shutdown"
                                 .into(),
                         ));
                     }
                     match &located.operation {
-                        Operation::SelfValue { .. } if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all reference fields before exposing self".into())),
-                        Operation::SelfFieldRead { field, .. } if pending.contains(field.as_str()) => return Err(fail(Some(index), Some(operation), "reference field read before initialization".into())),
+                        Operation::SelfValue { .. } if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all required fields before exposing self".into())),
+                        Operation::SelfFieldRead { field, .. } if pending.contains(field.as_str()) => return Err(fail(Some(index), Some(operation), "required field read before initialization".into())),
                         Operation::SelfFieldAssign { field, .. } => { pending.remove(field.as_str()); }
-                        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } | Operation::Branch { .. } | Operation::Jump { .. } | Operation::ReturnVoid if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all reference fields before self calls, control flow, or return".into())),
+                        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. } | Operation::Branch { .. } | Operation::Jump { .. } | Operation::ReturnVoid if !pending.is_empty() => return Err(fail(Some(index), Some(operation), "initialize all required fields before self calls, control flow, or return".into())),
                         _ => {}
                     }
                 }
@@ -1442,6 +1479,19 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::Symbol { initial, nullable } => format!(
+                        ".field-symbol {} {}{}\n",
+                        field.name,
+                        if *nullable {
+                            "nullable-symbol"
+                        } else {
+                            "symbol"
+                        },
+                        initial
+                            .as_ref()
+                            .map(|name| format!(" default=:{name}"))
+                            .unwrap_or_default()
+                    ),
                     FieldKind::SourceObject(class) => {
                         format!(".field-reference {} {class}\n", field.name)
                     }
@@ -1816,10 +1866,16 @@ fn parse_unit_ir_context(
                     if parts.first().is_some_and(|part| {
                         matches!(
                             part.as_str(),
-                            ".field-number" | ".field-reference" | ".field-interface"
+                            ".field-number"
+                                | ".field-reference"
+                                | ".field-interface"
+                                | ".field-symbol"
                         )
                     }) {
-                        if parts.len() != 3 || !methods.is_empty() || instance_fields.len() >= 256 {
+                        if (parts.len() != 3 && !(parts[0] == ".field-symbol" && parts.len() == 4))
+                            || !methods.is_empty()
+                            || instance_fields.len() >= 256
+                        {
                             return Err(Diagnostic::at(
                                 text,
                                 method_at,
@@ -1830,6 +1886,35 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-symbol" {
+                            let nullable = match parts[2].as_str() {
+                                "symbol" => false,
+                                "nullable-symbol" => true,
+                                _ => {
+                                    return Err(Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid Symbol field contract",
+                                    ));
+                                }
+                            };
+                            let initial = parts
+                                .get(3)
+                                .map(|value| {
+                                    value
+                                        .strip_prefix("default=:")
+                                        .filter(|name| ciq_prg::symbols::source::valid_alias(name))
+                                        .map(str::to_owned)
+                                        .ok_or_else(|| {
+                                            Diagnostic::at(
+                                                text,
+                                                method_at,
+                                                "Symbol field defaults require default=:name",
+                                            )
+                                        })
+                                })
+                                .transpose()?;
+                            FieldKind::Symbol { initial, nullable }
                         } else if parts[0] == ".field-interface" {
                             let (tag, nullable) = parts[2]
                                 .strip_prefix("nullable-")

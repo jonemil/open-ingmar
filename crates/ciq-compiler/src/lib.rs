@@ -1879,6 +1879,8 @@ impl Function {
                         result_type,
                         ReturnType::Integer
                             | ReturnType::SourceObject(_)
+                            | ReturnType::Symbol
+                            | ReturnType::NullableSymbol
                             | ReturnType::Interface(_)
                             | ReturnType::NullableInterface(_)
                     ) {
@@ -1896,7 +1898,10 @@ impl Function {
                         && origins.class(value).is_none()
                         && !matches!(
                             type_of(value),
-                            ValueType::Interface(_) | ValueType::NullableInterface(_)
+                            ValueType::Interface(_)
+                                | ValueType::NullableInterface(_)
+                                | ValueType::Symbol
+                                | ValueType::NullableSymbol
                         )
                         && !native::accepts(
                             &InterfaceType::Comparable.api_type(true),

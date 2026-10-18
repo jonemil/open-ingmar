@@ -371,6 +371,10 @@ impl Source {
                         if let Some(alias) = strings.get(&target) {
                             field.value = Reference::String(alias.clone());
                         }
+                    } else if field.kind == 8 && named_symbols {
+                        if let Some(alias) = symbol_alias(target) {
+                            field.value = Reference::Symbol(alias);
+                        }
                     }
                 }
             }
@@ -826,6 +830,49 @@ mod named_class_tests {
         };
         assert!(matches!(c.fields[0].key, Key::Symbol { .. }));
         assert!(matches!(c.fields[0].value, Reference::Class(_)));
+    }
+
+    #[test]
+    fn symbol_defaults_can_be_named_and_rebound_only_for_type_eight() {
+        let symbol_bytes =
+            SymbolSource::parse(".symbol alpha \"alpha\" id=0x81\n.symbol value \"value\" id=0x82")
+                .unwrap()
+                .encode()
+                .unwrap();
+        let symbols = Symbols::parse(&symbol_bytes).unwrap();
+        let mut bindings = SymbolSource::from_symbols(&symbols).bindings().unwrap();
+        let numeric = format!(
+            ".class root {HEADER}\n.field key=0x8200 type=0x08 value=0x81\n.field key=0x8300 type=0x08 value=0x99\n.field key=0x8400 type=0xff value=0x81\n.endclass\n"
+        );
+        let bytes = Source::parse(&numeric).unwrap().encode().unwrap().0;
+        let mut source = Source::from_records(&bytes).unwrap();
+        source.name_classes(Some(&symbols), true).unwrap();
+        let text = source.to_text();
+        assert!(text.contains("type=0x08 value=@alpha"));
+        assert!(text.contains("type=0x08 value=0x00000099"));
+        assert!(text.contains("type=0xff value=0x00000081"));
+        let resumed = Source::parse_with_symbols(&text, &bindings).unwrap();
+        assert_eq!(resumed.encode_with_symbols(&bindings).unwrap().0, bytes);
+        bindings.insert("alpha".into(), 0x91);
+        let rebound = resumed.encode_with_symbols(&bindings).unwrap().0;
+        let records = classes::records(&rebound).unwrap();
+        let classes::Record::Class(class) = &records[0] else {
+            panic!()
+        };
+        assert_eq!(class.fields[0].value, 0x91);
+        assert_eq!(class.fields[2].value, 0x81);
+        assert!(
+            Source::parse_with_symbols(
+                &text.replace("type=0x08 value=@alpha", "type=0x01 value=@alpha"),
+                &bindings
+            )
+            .is_err()
+        );
+        assert!(resumed.encode_with_symbols(&BTreeMap::new()).is_err());
+        let mut raw = Source::from_records(&bytes).unwrap();
+        raw.name_classes(Some(&symbols), false).unwrap();
+        assert!(!raw.to_text().contains("value=@alpha"));
+        assert_eq!(raw.encode().unwrap().0, bytes);
     }
 }
 

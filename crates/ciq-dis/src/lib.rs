@@ -555,6 +555,13 @@ pub fn classes(prg: &Prg) -> Result<String, Box<dyn StdError>> {
                 if let Some(value) = strings.get(&(field.value as usize)) {
                     write!(text, " -> DATA+0x{:08x} {:?}", field.value, value)?;
                 }
+            } else if field.kind == 8 {
+                if let Some(symbol) = symbols
+                    .as_ref()
+                    .and_then(|symbols| symbols.get(field.value))
+                {
+                    write!(text, " -> Symbol {:?}", symbol.name)?;
+                }
             }
             text.push('\n');
         }
@@ -895,5 +902,20 @@ mod tests {
             disassemble(&[0x46, 2, 0, 0x80, 0, 5, 0x16]).unwrap(),
             "getlocalv 0x02 0x00800005 # CODE+0x000000\nreturn # CODE+0x000006\n"
         );
+    }
+
+    #[test]
+    fn class_listings_resolve_symbol_defaults_without_guessing_other_types() {
+        let data = ciq_prg::data::Source::parse(".class root version=0x02 extends=none statics=none parent=none module=none app_flags=0x0\n.field key=0x100 type=0x08 value=0x81\n.field key=0x200 type=0x01 value=0x81\n.endclass").unwrap().encode().unwrap().0;
+        let symbols = ciq_prg::symbols::source::Source::parse(".symbol alpha \"alpha\" id=0x81")
+            .unwrap()
+            .encode()
+            .unwrap();
+        let prg = Prg::from_sections(vec![
+            ciq_prg::Section::new(ciq_prg::DATA, data).unwrap(),
+            ciq_prg::Section::new(ciq_prg::SYMBOLS, symbols).unwrap(),
+        ]);
+        let text = classes(&prg).unwrap();
+        assert_eq!(text.matches("-> Symbol \"alpha\"").count(), 1);
     }
 }

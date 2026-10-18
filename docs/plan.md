@@ -34,8 +34,7 @@ argument/result guarantees. Keep source-target resolution and saved-IR checking
 consistent. Erased invocation does not establish a target's API availability,
 arity, or concrete result type. Unqualified inherited `method(...)` lookup
 remains separate from explicit `self.method(...)`.
-Symbol fields need initialization, DATA, and binding contracts. Symbol-bearing
-container literals use runtime construction; pooled Symbol payloads need
+Symbol-bearing container literals use runtime construction; pooled Symbol payloads need
 independent encoding/relocation evidence before adding a DATA representation.
 
 Keep SDK-rejected wider Char ordering and floating Char addition outside the

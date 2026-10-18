@@ -3,6 +3,7 @@ using Toybox.System;
 module Symbols {
     function echo(s as Toybox.Lang.Symbol) as Toybox.Lang.Symbol { return s; }
     function run() as Void {
+        SymbolFieldChecks.run();
         SymbolContainers.run();
         NullableSymbols.run();
         var a = :alpha;
@@ -63,8 +64,9 @@ module NullableSymbols {
     }
 }
 class MinimalConsoleApp extends Application.AppBase {
+    var startupSymbol as Toybox.Lang.Symbol = :appMetadataOnly;
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { Symbols.run(); System.exit(); }
+    function onStart(state) {System.println(self.startupSymbol.toString()); Symbols.run(); System.exit();}
 }
 
 module SymbolContainers {
@@ -132,5 +134,53 @@ module SymbolContainers {
         var counts=SymbolContainers.counts();
         var count=counts[:beta];
         if(count!=null){System.println(count);}
+    }
+}
+
+class SymbolStore {
+    var required as Toybox.Lang.Symbol;
+    var maybe as Toybox.Lang.Symbol or Null;
+    var explicitNull as Toybox.Lang.Symbol or Null = null;
+    var preset as Toybox.Lang.Symbol = :metadataOnly;
+    var optionalPreset as Toybox.Lang.Symbol or Null = :optionalMetadata;
+    var selector = :size;
+    function initialize(value as Toybox.Lang.Symbol) {self.required=value;}
+    function read() as Toybox.Lang.Symbol {return self.required;}
+    function replace(value as Toybox.Lang.Symbol) as Void {self.required=value;}
+    function select(value as Toybox.Lang.Symbol or Null) as Void {self.maybe=value;}
+    function isEmpty() as Toybox.Lang.Boolean {return self.maybe==null;}
+    function nullDefault() as Toybox.Lang.Boolean {return self.explicitNull==null;}
+    function presetName() as Toybox.Lang.String {return self.preset.toString();}
+    function optionalName() as Toybox.Lang.String {
+        var value=self.optionalPreset;
+        if(value!=null){return value.toString();}
+        return "missing";
+    }
+    function take() as Toybox.Lang.Symbol or Null {
+        var value=self.maybe;
+        self.maybe=null;
+        return value;
+    }
+    function hasSize(value as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Boolean {return value has self.selector;}
+}
+module SymbolFieldChecks {
+    function run() as Void {
+        var first=new SymbolStore(:alpha);
+        var second=new SymbolStore(:beta);
+        System.println(first.read().equals(:alpha));
+        System.println(first.isEmpty());
+        System.println(first.nullDefault());
+        System.println(first.presetName());
+        System.println(first.optionalName());
+        System.println(first.hasSize([1]));
+        first.replace(:size);
+        System.println(first.read().equals(:size));
+        System.println(second.read().equals(:beta));
+        first.select(:alpha);
+        System.println(!first.isEmpty());
+        var saved=first.take();
+        System.println(first.isEmpty());
+        if(saved!=null){System.println(saved.equals(:alpha));}
+        System.println(first.take()==null);
     }
 }

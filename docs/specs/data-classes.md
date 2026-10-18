@@ -49,8 +49,16 @@ Type `0x07` values are annotated as DATA class references only when they exactly
 match a parsed class record's offset. Type `0x03` values are annotated as DATA
 strings only when they exactly match a parsed string record's offset. The parser
 does not interpret every field value as an address or discover targets by
-scanning for tag bytes. Module values and remaining types stay numeric in this
-initial implementation.
+scanning for tag bytes.
+
+Type `0x08` holds a Symbol default: the value word is a Symbol ID, not a DATA
+address or Number. Listings annotate known names. With named-symbol export,
+editable DATA uses `value=@alias` when the PRG symbol table resolves that ID;
+assembly resolves it through the supplied symbol map. Unknown IDs and raw-symbol
+export remain numeric. Symbol value references are valid only with type `0x08`;
+Null defaults retain type `0x00` and value zero. See
+[field evidence](../investigations/compiler-symbols.md#symbol-fields). Module
+values and other unclassified types stay numeric.
 
 Parent/module header values receive symbol names when the PRG's own symbol table
 resolves them. Extends/statics stay raw: in the specimens, `extends=0x40000119`

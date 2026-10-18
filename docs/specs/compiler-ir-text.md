@@ -1361,6 +1361,8 @@ the enclosing unit class's
 [field declarations](compiler-classes.md#number-instance-fields).
 Reference declarations, result claims, and initializer safety follow the
 [reference-field contract](compiler-classes.md#source-reference-fields).
+Symbol fields use [`.field-symbol`](compiler-classes.md#symbol-fields), retaining
+literal default names and explicit Symbol/nullability read contracts.
 Standalone method parsing leaves that unit obligation unresolved.
 
 `.new-source %<result-id> <class-name> <native-base> [%<argument-id> ...]`

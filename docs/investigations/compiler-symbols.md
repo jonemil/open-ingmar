@@ -27,8 +27,8 @@ Select the tracked source with an ignored Jungle and the shared native-names
 manifest/resources. Use the
 [console checker](../../scripts/README.md#console-specimen-check) for source and
 saved-stage parity, structured CODE/DATA/SYMBOLS reconstruction, signing, and
-runtime comparison. SDK/generated output matches all 62 expected lines.
-Artifacts: `scratch/check-symbol-containers-final/`; the isolated probe remains under
+runtime comparison. SDK/generated output matches all 75 expected lines.
+Artifacts: `scratch/check-symbol-fields-named/`; the isolated probe remains under
 `scratch/compiler-symbols/`.
 
 Symbol literals use the existing `spush` opcode (`0x27`) with a big-endian u32
@@ -84,7 +84,29 @@ CODE/DATA/SYMBOLS reconstruction, and signing pass. Existing `spush`, private
 container construction, and dispatch suffice; no new opcode or binary record
 was encountered. Null-only nullable payloads need only the existing Null tag.
 No pooled Symbol tag or relocation format is inferred from these results.
-Symbol fields, arbitrary Object containers, and Symbol sorting remain separate.
+Arbitrary Object containers and Symbol sorting remain separate.
+
+## Symbol fields
+
+**Experimentally observed:** SDK `scratch/symbol-field-probe/` emits literal
+Symbol defaults as class fields with type `0x08` and the Symbol ID as value.
+Uninitialized fields use type `0x00`, value zero. Source `initialize` assigns the
+required Symbol through ordinary field instructions. Structured export identifies
+native `:size` as `0x008000ae` in the preset slot.
+
+The tracked `SymbolStore` covers required, nullable, explicit Null, literal, and
+inferred Symbol defaults. Replacement affects only the selected instance. A
+local from a nullable field retains its Symbol after clearing the field. A
+stored selector works with `has`. Object-rooted defaults `metadataOnly` and
+`optionalMetadata`, plus AppBase default `appMetadataOnly`, print their names
+despite those names appearing only in metadata declarations.
+
+SDK/generated programs match all 75 expected lines through the console checker
+above; SDK build log: `scratch/symbol-fields-sdk-build.log`. Saved IR,
+structured CODE/DATA/SYMBOLS export, named default references, reconstruction,
+signing, and runtime checks pass. Existing class type `0x08` and field opcodes
+suffice; no new framing or VM opcode was encountered. These results do not
+establish Symbol container-pool tags or general initializer expressions.
 
 [symbol]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Symbol.html
 [method]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Method.html
