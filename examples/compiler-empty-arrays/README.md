@@ -1,8 +1,9 @@
-# Contextual empty arrays
+# Contextual array allocation
 
 [app.mc](app.mc) creates Number and Char arrays through typed returns,
-user/native arguments, and local reassignment. It checks alias preservation and
-argument evaluation order. API minimum: 1.3.0; target: 5.2.0; runtime: SDK 9.2.0
+user/native arguments, and local reassignment. Sized nullable Number arrays
+check Null initialization, writes, aliases, and length evaluation order.
+API minimum: 1.3.0; target: 5.2.0; runtime: SDK 9.2.0
 / fr265.
 
 From the repository root, using unused output paths:
@@ -34,10 +35,22 @@ Expected output:
 10
 20
 30
+3
+[null, null, null]
+true
+[null, null]
+[null, 7, null]
+0
+0
+1
+1
+true
 ```
 
 `var a = []` remains ambiguous. A direct literal can receive its element type
-from a declared return/argument or an established local. See the
+from a declared return/argument or an established local. `new[size]` uses the
+same contexts but requires nullable elements, including when size is zero.
+See the
 [source contract][source] and [evidence][evidence].
 
 [source]: ../../docs/specs/compiler-subset.md#empty-array-literals

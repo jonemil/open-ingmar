@@ -238,6 +238,7 @@ pub(crate) fn validate_stack_uses(
                     value = result;
                 }
                 Operation::SourceCast { result, .. }
+                | Operation::ArrayAllocate { result, .. }
                 | Operation::Cast { result, .. }
                 | Operation::Not { result, .. }
                 | Operation::Positive { result, .. }

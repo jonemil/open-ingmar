@@ -980,6 +980,14 @@ pub enum Operation {
         result: ValueId,
         element_type: ArrayElement,
     },
+    /// Allocate a fresh Null-filled array using a non-null Number length.
+    /// Require a nullable element contract and evaluate length once before
+    /// allocation. Invalid lengths and allocation failures belong to the VM.
+    ArrayAllocate {
+        result: ValueId,
+        element_type: ArrayElement,
+        length: ValueId,
+    },
     /// Read one element from a non-null typed array using a non-null Number index.
     /// Evaluate array before index, once each. Runtime bounds failures remain
     /// observable; indexes are not clamped or adjusted by the compiler.
@@ -2192,7 +2200,24 @@ impl Function {
                 Operation::ArrayNew {
                     result,
                     element_type,
+                }
+                | Operation::ArrayAllocate {
+                    result,
+                    element_type,
+                    ..
                 } => {
+                    let inputs = if let Operation::ArrayAllocate { length, .. } = located.operation
+                    {
+                        if element_type.nullable_base().is_none() {
+                            return Err(fail("sized Array allocation requires nullable elements"));
+                        }
+                        if type_of(length) != ValueType::Integer {
+                            return Err(fail("Array length must be a non-null Number"));
+                        }
+                        vec![length]
+                    } else {
+                        vec![]
+                    };
                     if matches!(element_type, ArrayElement::Object(class) if class != NativeClass::View)
                     {
                         return Err(fail("object arrays support only the View element contract"));
@@ -2204,7 +2229,7 @@ impl Function {
                             .map_err(|message| fail(&message))?;
                     }
                     types.insert(result, ty);
-                    (Some(result), vec![])
+                    (Some(result), inputs)
                 }
                 Operation::DictionaryRead {
                     result,
@@ -2690,6 +2715,7 @@ impl Function {
                     | Operation::ArrayRead { .. }
                     | Operation::ArrayWrite { .. }
                     | Operation::ArrayNew { .. }
+                    | Operation::ArrayAllocate { .. }
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
                     | Operation::DictionaryBegin { .. }
@@ -2783,7 +2809,10 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
-                                Operation::Step { operand, .. }
+                                Operation::ArrayAllocate {
+                                    length: operand, ..
+                                }
+                                | Operation::Step { operand, .. }
                                 | Operation::Positive { operand, .. }
                                 | Operation::Complement { operand, .. }
                                 | Operation::Negate { operand, .. }
@@ -3293,6 +3322,16 @@ impl Function {
                     result,
                     element_type,
                 } => format!(".array-new %{} {}", result.0, element_type.text()),
+                Operation::ArrayAllocate {
+                    result,
+                    element_type,
+                    length,
+                } => format!(
+                    ".array-allocate %{} {} %{}",
+                    result.0,
+                    element_type.text(),
+                    length.0
+                ),
                 Operation::DictionaryRead {
                     result,
                     dictionary,

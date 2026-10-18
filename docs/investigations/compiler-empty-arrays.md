@@ -1,9 +1,10 @@
 # Contextual empty array construction
 
-SDK 9.2.0 and independently generated fr265 applications agree on all twelve
-lines in [the example][example], checked 2026-10-13. The specimen asks whether
+SDK 9.2.0 and independently generated fr265 applications agree on all 22
+lines in [the example][example], checked 2026-10-18. The specimen asks whether
 empty arrays supplied to typed returns, arguments, and assignments remain
-usable without defaulting to Char or relaxing element contracts.
+usable without defaulting to Char or relaxing element contracts, and how sized
+allocation initializes its elements.
 
 ## Observations and limits
 
@@ -60,3 +61,26 @@ logs with the expected output. Retained SDK/generated captures are under
 
 [example]: ../../examples/compiler-empty-arrays/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
+
+## Sized allocation
+
+**Experimentally observed (2026-10-18):** SDK/compiler/simulator 9.2.0, fr265,
+`-O 0` accepts `return new[n]` under `Array<Number or Null>`. Length three
+produces `[null, null, null]`; replacing index one produces `[null, 7, null]`.
+Zero length produces an empty array. An effectful size helper executes once.
+The isolated authored probe and captures are in `scratch/sized-array-probe/`;
+`runtime-long/monkeydo.log` holds the complete six-line positive result.
+
+The [tracked example][example] also checks reassignment aliases, typed argument
+context, and a conditional length with only the selected helper executing. Use
+its existing SDK wrapper/Jungle and the console specimen checker to compare
+SDK/generated execution and structured reconstruction. Both programs match all
+22 expected lines, with structured CODE/DATA reconstruction passing. Captures
+are in `scratch/check-sized-arrays/`. Sized allocation lowers
+to the existing `newa` instruction; no additional DATA payload is required.
+
+**Contract choice:** require nullable elements for all sized allocations,
+including zero length, because allocation supplies Null slots. This is our
+bounded safety rule, not a claim that the SDK rejects non-null element
+annotations. Negative/oversized lengths and allocation failure recovery were
+not characterized; no portable limit or error class follows from this probe.

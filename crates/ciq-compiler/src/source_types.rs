@@ -128,6 +128,11 @@ impl Types {
             | Operation::ArrayNew {
                 result,
                 element_type,
+            }
+            | Operation::ArrayAllocate {
+                result,
+                element_type,
+                ..
             } => (
                 *result,
                 Some(Type::Array(Box::new(element_type.api_type()))),

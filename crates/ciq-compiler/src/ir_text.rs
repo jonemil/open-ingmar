@@ -349,6 +349,7 @@ pub(crate) fn parse_ir_context(
             Some(".discard") => (29, 2),
             Some(".array-constant") => (61, call_width()),
             Some(".array-new") => (30, 3),
+            Some(".array-allocate") => (96, 4),
             Some(".dictionary-begin") => (70, 4),
             Some(".dictionary-fill") => (71, call_width()),
             Some(".dictionary-finish") => (72, 3),
@@ -831,7 +832,7 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 builder: parse_builder(&fields[2])?,
             }
-        } else if kind == 30 {
+        } else if kind == 30 || kind == 96 {
             let element_type = match fields[2].as_str() {
                 "comparable" => crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
                 "nullable-comparable" => {
@@ -864,9 +865,18 @@ pub(crate) fn parse_ir_context(
                 "view" => crate::ArrayElement::Object(crate::NativeClass::View),
                 _ => return Err(fail(*at, "unsupported array element type")),
             };
-            Operation::ArrayNew {
-                result: parse_value(&fields[1])?,
-                element_type,
+            let result = parse_value(&fields[1])?;
+            if kind == 96 {
+                Operation::ArrayAllocate {
+                    result,
+                    element_type,
+                    length: parse_value(&fields[3])?,
+                }
+            } else {
+                Operation::ArrayNew {
+                    result,
+                    element_type,
+                }
             }
         } else if kind == 29 {
             Operation::Discard {

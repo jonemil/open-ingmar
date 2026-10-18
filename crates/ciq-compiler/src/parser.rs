@@ -158,6 +158,7 @@ pub(crate) enum ExpressionKind {
         qualifier: String,
     },
     ArrayLiteral(Vec<Expression>),
+    ArrayAllocate(Box<Expression>),
     ArrayRead {
         array: Box<Expression>,
         index: Box<Expression>,
@@ -224,6 +225,7 @@ impl Expression {
             ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
+            | ExpressionKind::ArrayAllocate(_)
             | ExpressionKind::DictionaryNew
             | ExpressionKind::DictionaryLiteral(_) => true,
             ExpressionKind::Cast { operand, .. }
@@ -1190,6 +1192,21 @@ impl<'a> Parser<'a> {
     /// calls retain the supported expression-depth budget on the default stack.
     fn construct(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let open = self.token()?;
+        if self.peek()? == Kind::Punctuation('[') {
+            self.token()?;
+            if depth >= 64 {
+                return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
+            }
+            let length = self.expression(depth + 1)?;
+            let close = self.expect(Kind::Punctuation(']'), "']'")?;
+            return self.node(
+                ExpressionKind::ArrayAllocate(Box::new(length)),
+                Span {
+                    start: open.span.start,
+                    end: close.span.end,
+                },
+            );
+        }
         let path = self.path()?;
         let weak = self.names.type_name(&path).ok().flatten().as_deref()
             == Some("Toybox.Lang.WeakReference");

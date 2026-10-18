@@ -490,24 +490,34 @@ non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
 `char`, `boolean`, `string`, and `symbol`, each also accepting a `nullable-` prefix.
 `view` represents the supported native View contract. `comparable`, `comparator`,
 `nullable-comparable`, and `nullable-comparator` retain comparison-interface
-element contracts. Typed construction uses
+element contracts. `method`, `weak-reference`, and their `nullable-` forms
+retain callable/weak-handle contracts. Typed construction uses
 `Operation::ArrayNew` with the corresponding `ArrayElement` variant.
 Other parsed element contracts are rejected. Definition/use, block, and effect
 checks apply even when the allocation result is consumed later. API checking
 requires Array and the element type: 5.0.0 for comparison interfaces, 1.3.0 for
-Char, otherwise 1.0.0 within this profile.
+Char, 1.2.0 for WeakReference, otherwise 1.0.0 within this profile.
 
 Parameter/user-call Array categories append `-array` to these element tags,
 for example `long-array`, `nullable-double-array`, or `view-array`. Nullability
 belongs to the element, not the Array reference. Function Array results are
 inferred from typed returns rather than a separate `.function result=` field.
 
-Lowering emits `ipushz; newa`, with no symbol or DATA binding. No nonzero length
-or uninitialized element contract is implied. Nonempty source literals use
-constant loads or the private construction operations below.
+Lowering emits `ipushz; newa`, with no symbol or DATA binding. Nonempty source
+literals use constant loads or the private construction operations below.
 The explicit IR element type preserves empty allocation after source contextual
 typing. See [nonempty construction](../investigations/compiler-array-literals.md)
 and [empty construction](../investigations/compiler-empty-arrays.md).
+
+`.array-allocate %<result> <nullable-element> %<length> [span=<start>:<end>]`
+allocates a fresh Null-filled Array. Length is an earlier same-block non-null
+Number value, consumed once before `newa`. Only nullable element tags from the
+allocation profile above are accepted. Lengths are not clamped or validated
+against a compile-time size limit; VM failures remain observable. Validation
+rechecks type availability, definition/use rules, and allocation effect order.
+An incoming block parameter can supply length directly: `newa` consumes it
+without inserting stack setup. The result retains its invariant nullable
+element type even for a constant zero length.
 
 ## Constant arrays
 

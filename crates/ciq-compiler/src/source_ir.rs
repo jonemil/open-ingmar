@@ -227,7 +227,9 @@ fn emit_non_call(
             parameters,
             ValueId(operations.len() as u32),
         )?,
-        parser::ExpressionKind::DictionaryLiteral(_) | parser::ExpressionKind::ArrayLiteral(_) => {
+        parser::ExpressionKind::DictionaryLiteral(_)
+        | parser::ExpressionKind::ArrayLiteral(_)
+        | parser::ExpressionKind::ArrayAllocate(_) => {
             return Err(Diagnostic::at(
                 source,
                 expression.span.start,
@@ -1165,6 +1167,13 @@ impl Builder<'_> {
             span,
         )?;
         let kind = match kind {
+            E::ArrayAllocate(_) => {
+                return Err(Diagnostic::at(
+                    self.source,
+                    span.start,
+                    "sized Array allocation requires a concrete expected nullable Array element type",
+                ));
+            }
             kind @ E::Conditional { .. } => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
@@ -1511,6 +1520,33 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        if let parser::ExpressionKind::ArrayAllocate(length) = expression.kind {
+            let Some(ConstructionType::Array(element_type)) = expected else {
+                return Err(Diagnostic::at(
+                    self.source,
+                    expression.span.start,
+                    "sized Array allocation requires a concrete expected nullable Array element type",
+                ));
+            };
+            if element_type.nullable_base().is_none() {
+                return Err(Diagnostic::at(
+                    self.source,
+                    expression.span.start,
+                    "sized Array allocation requires nullable elements",
+                ));
+            }
+            let length = self.value(*length, locals)?;
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::ArrayAllocate {
+                    result,
+                    element_type,
+                    length,
+                },
+                Some(expression.span),
+            );
+            return Ok(result);
+        }
         if let parser::ExpressionKind::DictionaryLiteral(entries) = expression.kind {
             let expression = self.dictionary_literal(entries, expected, expression.span, locals)?;
             return emit(

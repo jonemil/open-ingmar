@@ -153,7 +153,7 @@ operator/type-system dependencies and sequencing belong to the
 - **Object and source objects:** complete source inheritance/overrides, member
   lookup, source-inheritance/general-union type tests and refinement, and broader
   inherited-method dispatch.
-- **Array:** dynamic-sized allocation, general nested/heterogeneous/Object/reference
+- **Array:** general nested/heterogeneous/Object/reference
   elements, remaining nullable storage/receivers and joins, and sorting and
   Comparable contracts outside the checked comparison profiles.
 - **Dictionary:** general Object/reference keys and values, heterogeneous/nested

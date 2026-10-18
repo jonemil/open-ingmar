@@ -2203,6 +2203,36 @@ Saved IR records the concrete allocation type and rechecks all uses. See the
 [empty-example]: ../../examples/compiler-empty-arrays/README.md
 [empty-evidence]: ../investigations/compiler-empty-arrays.md
 
+## Sized array allocation
+
+`new[length]` creates a fresh non-null Array with Null in every slot. It needs
+a direct expected Array contract with supported nullable elements, supplied by
+a typed return/argument or an established local. Existing supported conditional
+result contracts pass that context into their arms. For example:
+
+```monkeyc
+function allocate(n as Toybox.Lang.Number)
+    as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
+    return new[n];
+}
+```
+
+Evaluate the non-null Number length once before allocation. Conditional lengths
+retain their branch effects. No clamping, element conversion, or initialization
+loop is inserted; invalid sizes and allocation failures remain runtime concerns.
+Reads preserve the nullable element contract after writes. Reassignment replaces
+the reference while aliases retain the previous array.
+
+An untyped `var a = new[n]`, non-null element contracts (even `new[0]`), nested
+arrays, and inference from later writes remain unsupported. Allocation does
+not extend the existing whole-Array conditional-result profile; for example,
+a conditional Number length works, but a choice between nullable Number arrays
+remains unsupported. Type availability is checked independently of Array
+methods: nullable Number allocation requires
+API 1.0.0, while nullable Char requires 1.3.0. See
+[IR allocation](compiler-ir-text.md#array-allocation) and
+[runtime evidence](../investigations/compiler-empty-arrays.md#sized-allocation).
+
 ## Native delegates
 
 `new Toybox.WatchUi.BehaviorDelegate()` constructs a non-null delegate with no
