@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceKeys.run();
         InterfaceDictionaries.run();
         InterfaceSorting.run();
         InterfaceArrays.run();
@@ -42,6 +43,81 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceKeys {
+    function values(key as Toybox.Lang.Comparable) as Toybox.Lang.Dictionary<Toybox.Lang.Comparable,Toybox.Lang.Number> {
+        return {key => 10};
+    }
+    function orders(key as Toybox.Lang.Comparator) as Toybox.Lang.Dictionary<Toybox.Lang.Comparator,Toybox.Lang.Comparable or Null> {
+        return {key => new TextOrder()};
+    }
+    function empty() as Toybox.Lang.Dictionary<Toybox.Lang.Comparable,Toybox.Lang.Number> {return {};}
+    function nativeKeys() as Toybox.Lang.Dictionary<Toybox.Lang.Comparable,Toybox.Lang.Number> {
+        var keys = InterfaceKeys.empty();
+        keys.put(97, 1);
+        keys.put('a', 2);
+        keys.put("a", 3);
+        keys.put(true, 4);
+        keys.put(1l, 5);
+        keys.put(1.0, 6);
+        keys.put(1.0d, 7);
+        return keys;
+    }
+    function run() as Void {
+        var first = new HashKey(1);
+        var equal = new HashKey(1);
+        var different = new HashKey(2);
+        var values = InterfaceKeys.values(first);
+        var initial = values[first];
+        if (initial != null) { System.println(initial); }
+        var matched = values[equal];
+        if (matched != null) { System.println(matched); }
+        values.put(equal, 20);
+        System.println(values.size());
+        var replaced = values.get(first);
+        if (replaced != null) { System.println(replaced); }
+        values[different] = 30;
+        System.println(values.size());
+        System.println(values.hasKey(new HashKey(2)));
+        System.println(values.hasKey(new HashKey(3)));
+        System.println(first.hashCalls() > 0);
+        System.println(first.equalCalls() + equal.equalCalls() + different.equalCalls() > 0);
+        System.println(first.comparisonCalls());
+        System.println(equal.comparisonCalls());
+        var keys = values.keys();
+        System.println(keys.size());
+        System.println(keys[0] instanceof HashKey);
+        values.remove(new HashKey(1));
+        System.println(values.hasKey(first));
+        System.println(keys.size());
+        var orders = InterfaceKeys.orders(first);
+        var found = orders[equal];
+        if (found != null) { System.println(found.compareTo("b") == 0); }
+        orders.put(equal, null);
+        System.println(orders.size());
+        System.println(orders[first] == null);
+        var plainKey = new TextOrder();
+        var plain = InterfaceKeys.values(plainKey);
+        System.println(plain.hasKey(plainKey));
+        System.println(!plain.hasKey(new TextOrder()));
+        var plainOrder = new Ordering(1);
+        var plainOrders = InterfaceKeys.orders(plainOrder);
+        System.println(plainOrders.hasKey(plainOrder));
+        System.println(!plainOrders.hasKey(new Ordering(1)));
+        var nativeKeys = InterfaceKeys.nativeKeys();
+        System.println(nativeKeys.size());
+        System.println(nativeKeys.hasKey(97));
+        System.println(nativeKeys.hasKey('a'));
+        System.println(nativeKeys.hasKey("a"));
+        System.println(nativeKeys.hasKey(true));
+        System.println(nativeKeys.hasKey(1l));
+        System.println(nativeKeys.hasKey(1.0));
+        System.println(nativeKeys.hasKey(1.0d));
+        var number = nativeKeys[97];
+        if (number != null) {System.println(number);}
+        var character = nativeKeys['a'];
+        if (character != null) {System.println(character);}
     }
 }
 module InterfaceDictionaries {

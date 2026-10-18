@@ -293,7 +293,7 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     /// Parse invariant Dictionary key/value annotations after its canonical path.
-    /// Keys are non-null scalars; values may include Null or comparison interfaces.
+    /// Keys are non-null; scalar/interface values may also include Null.
     fn dictionary_annotation(&mut self) -> Result<Option<crate::DictionaryType>, Diagnostic> {
         if self.peek()? != Kind::Punctuation('<') {
             return Ok(None);
@@ -308,6 +308,12 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.String" => crate::DictionaryKey::String,
             "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryKey::Char,
+            "Toybox.Lang.Comparable" => {
+                crate::DictionaryKey::Interface(crate::InterfaceType::Comparable)
+            }
+            "Toybox.Lang.Comparator" => {
+                crate::DictionaryKey::Interface(crate::InterfaceType::Comparator)
+            }
             _ => return Err(self.error(at, "unsupported Dictionary key contract")),
         };
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;

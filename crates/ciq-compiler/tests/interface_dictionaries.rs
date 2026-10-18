@@ -94,7 +94,8 @@ fn dictionaries_preserve_invariance_missing_key_null_and_api_requirements() {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{interface},Toybox.Lang.Number>) {{return d.size();}}"
         );
-        assert!(compile(&source).is_err());
+        let function = compile(&source).unwrap();
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
     }
 }
 

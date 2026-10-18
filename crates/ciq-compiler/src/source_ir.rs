@@ -749,21 +749,35 @@ impl Builder<'_> {
             .map(|(key, value)| Some((scalar(key)?, scalar(value)?)))
             .collect::<Option<Vec<_>>>()
         {
-            let dictionary_type = crate::dictionary::constant_type(&constants, expected)
-                .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-            let result = ValueId(self.operations.len() as u32);
-            self.push(
-                Operation::DictionaryConstant {
-                    result,
-                    dictionary_type,
-                    entries: constants,
-                },
-                Some(span),
-            );
-            return Ok(parser::Expression {
-                kind: parser::ExpressionKind::Joined(result),
-                span,
-            });
+            if expected.is_some_and(|ty| matches!(ty.key, crate::DictionaryKey::Interface(_))) {
+                if constants.first().is_some_and(|(first, _)| {
+                    constants.iter().any(|(key, _)| {
+                        std::mem::discriminant(key) != std::mem::discriminant(first)
+                    })
+                }) {
+                    return Err(Diagnostic::at(
+                        self.source,
+                        span.start,
+                        "mixed scalar-token interface keys require runtime insertion",
+                    ));
+                }
+            } else {
+                let dictionary_type = crate::dictionary::constant_type(&constants, expected)
+                    .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                let result = ValueId(self.operations.len() as u32);
+                self.push(
+                    Operation::DictionaryConstant {
+                        result,
+                        dictionary_type,
+                        entries: constants,
+                    },
+                    Some(span),
+                );
+                return Ok(parser::Expression {
+                    kind: parser::ExpressionKind::Joined(result),
+                    span,
+                });
+            }
         }
         let grouped = entries
             .iter()

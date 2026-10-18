@@ -98,6 +98,9 @@ pub(crate) fn constant_type(
         DictionaryType::from_api_type(&Type::dictionary(first.api_type(), value))
             .ok_or_else(fail)?
     };
+    if matches!(ty.key, DictionaryKey::Interface(_)) {
+        return Err("interface Dictionary keys require runtime construction".into());
+    }
     let Type::Dictionary { key, value } = ty.api_type() else {
         unreachable!()
     };
@@ -171,9 +174,10 @@ pub(crate) fn constant_record(
     }
 }
 
-/// Supported non-null scalar Dictionary key contracts.
+/// Supported non-null scalar and comparison-interface Dictionary key contracts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryKey {
+    Interface(crate::InterfaceType),
     Number,
     Double,
     Float,
@@ -217,6 +221,8 @@ impl DictionaryType {
     /// Return the generic API type without erasing either mutable parameter.
     pub fn api_type(self) -> Type {
         let key = match self.key {
+            DictionaryKey::Interface(crate::InterfaceType::Comparable) => "Comparable",
+            DictionaryKey::Interface(crate::InterfaceType::Comparator) => "Comparator",
             DictionaryKey::Number => "Number",
             DictionaryKey::Double => "Double",
             DictionaryKey::Float => "Float",
@@ -266,6 +272,12 @@ impl DictionaryType {
         };
         let key = match key.as_ref() {
             Type::Named(name) => match name.as_str() {
+                "Toybox.Lang.Comparable" => {
+                    DictionaryKey::Interface(crate::InterfaceType::Comparable)
+                }
+                "Toybox.Lang.Comparator" => {
+                    DictionaryKey::Interface(crate::InterfaceType::Comparator)
+                }
                 "Toybox.Lang.Number" => DictionaryKey::Number,
                 "Toybox.Lang.Double" => DictionaryKey::Double,
                 "Toybox.Lang.Float" => DictionaryKey::Float,
@@ -310,6 +322,8 @@ impl DictionaryType {
 
     pub(crate) fn text(self) -> String {
         let key = match self.key {
+            DictionaryKey::Interface(crate::InterfaceType::Comparable) => "comparable",
+            DictionaryKey::Interface(crate::InterfaceType::Comparator) => "comparator",
             DictionaryKey::Number => "integer",
             DictionaryKey::Double => "double",
             DictionaryKey::Float => "float",
@@ -352,6 +366,8 @@ impl DictionaryType {
             .split_once("=>")?;
         Some(Self {
             key: match key {
+                "comparable" => DictionaryKey::Interface(crate::InterfaceType::Comparable),
+                "comparator" => DictionaryKey::Interface(crate::InterfaceType::Comparator),
                 "integer" => DictionaryKey::Number,
                 "double" => DictionaryKey::Double,
                 "float" => DictionaryKey::Float,

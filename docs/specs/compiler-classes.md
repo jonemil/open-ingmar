@@ -114,6 +114,14 @@ the instance. A source class with the required `compare(Object, Object) as
 Number` method can serve as an Array comparator. Weak targets retain their
 separate bounded profile.
 
+Source `hashCode` and `equals` overrides must exactly match the native Object
+signatures: `hashCode() as Number` and `equals(Object or Null) as Boolean`.
+Unit validation checks declarations even when unused, so interface/Object
+erasure cannot hide an invalid method reached by Dictionary dispatch. Inherited
+implementations need no declaration. This proves call compatibility, not stable
+hashes or consistency between equality and hashing. Other native override
+families retain their existing restrictions.
+
 The runtime value projects to opaque Object, while construction and locals
 retain the exact source identity for own-member calls and structural checking.
 It may pass through ordinary Object contracts, but erasure loses own-member

@@ -175,7 +175,7 @@ operator/type-system dependencies and sequencing belong to the
 - **ResourceId:** resource-reference value/binding contracts and own/inherited
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
-  constants; interface Dictionary key contracts;
+  constants;
   Integer/Numeric/Decimal aliases and needed union/structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

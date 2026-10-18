@@ -2159,7 +2159,11 @@ impl Function {
                     let ty = native::value_call(
                         &type_of(dictionary).api_type(),
                         "get",
-                        &[type_of(key).api_type()],
+                        &origins.native_arguments(
+                            &type_of(dictionary).api_type(),
+                            "get",
+                            [(key, type_of(key).api_type())],
+                        ),
                         context,
                     )
                     .map_err(|e| fail(&e))?;

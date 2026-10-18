@@ -8,6 +8,22 @@ use std::{
 
 pub(crate) const MAX_FUNCTIONS: usize = 256;
 
+/// Match a source method's arity, parameter contracts, and result against a
+/// fixed native signature. Exact source identities cannot stand in for Object.
+fn signature_matches(implementation: &Function, required: &crate::api::Method) -> bool {
+    required.variadic.is_none()
+        && implementation.parameter_types().len() == required.parameters.len()
+        && implementation
+            .parameter_types()
+            .iter()
+            .zip(&required.parameters)
+            .all(|(actual, expected)| {
+                !matches!(actual, crate::ParameterType::SourceObject(_))
+                    && &actual.api_type() == expected
+            })
+        && required.result == implementation.return_type().api_type()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Owner<'a> {
     Global,
@@ -48,7 +64,22 @@ fn requests_exit(operation: &Operation) -> bool {
 /// Treat erased comparison/element callbacks as possible shutdown requests.
 /// No exact body remains available for the reference-initialization proof.
 fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
+    let interface_keys = |ty| {
+        matches!(
+            ty,
+            crate::ValueType::TypedDictionary(crate::DictionaryType {
+                key: crate::DictionaryKey::Interface(_),
+                ..
+            })
+        )
+    };
     match operation {
+        Operation::DictionaryRead { dictionary, .. }
+        | Operation::DictionaryWrite { dictionary, .. } => interface_keys(function.value_types[dictionary]),
+        Operation::DictionaryFill { builder, .. } => function.operations().iter().any(|located| {
+            matches!(located.operation, Operation::DictionaryBegin { builder: id, dictionary_type, .. }
+                if id == *builder && matches!(dictionary_type.key, crate::DictionaryKey::Interface(_)))
+        }),
         Operation::NativeCall {
             receiver,
             member,
@@ -76,6 +107,8 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(function.value_types[receiver], crate::ValueType::TypedDictionary(
                     crate::DictionaryType {value: crate::DictionaryValue::Interface(_) | crate::DictionaryValue::NullableInterface(_), ..})
                     if member == "toString")
+                || (interface_keys(function.value_types[receiver])
+                    && matches!(member.as_str(), "get" | "put" | "hasKey" | "remove" | "toString"))
                 || matches!(function.value_types[receiver], crate::ValueType::Dictionary
                     | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
                     | crate::ValueType::NullableObject if member == "toString")
@@ -504,6 +537,29 @@ impl CompilationUnit {
                     "class exceeds 256 instance fields".into(),
                 ));
             }
+            // Dictionary dispatch can reach these methods after interface or
+            // Object erasure, so validate overrides at the class declaration.
+            let object = crate::api::core().class("Toybox.Lang.Object").unwrap();
+            for required in object
+                .methods
+                .iter()
+                .filter(|m| matches!(m.name.as_str(), "hashCode" | "equals"))
+            {
+                if let Some(implementation) =
+                    class.methods.iter().find(|m| m.name() == required.name)
+                {
+                    if !signature_matches(implementation, required) {
+                        return Err(fail(
+                            Some(at),
+                            None,
+                            format!(
+                                "{}.{} must match the native Object signature",
+                                class.name, required.name
+                            ),
+                        ));
+                    }
+                }
+            }
             if class.base == ClassBase::LangObject
                 && class.methods.iter().any(|method| method.name() == "Object")
             {
@@ -848,21 +904,40 @@ impl CompilationUnit {
                         }
                         _ => Ok(()),
                     };
+                let check_dictionary_key = |dictionary: crate::DictionaryType, value| {
+                    if let crate::DictionaryKey::Interface(interface) = dictionary.key {
+                        check_element(crate::ArrayElement::Interface(interface), value)?;
+                    }
+                    Ok(())
+                };
                 match &located.operation {
                     Operation::DictionaryFill {
                         builder, entries, ..
                     } => {
-                        for (_, value) in entries {
+                        for (key, value) in entries {
+                            check_dictionary_key(dictionary_builders[builder], *key)?;
                             check_dictionary_value(dictionary_builders[builder], *value)?;
                         }
                     }
                     Operation::DictionaryWrite {
-                        dictionary, value, ..
+                        dictionary,
+                        key,
+                        value,
                     } => {
                         if let crate::ValueType::TypedDictionary(dictionary) =
                             function.value_types[dictionary]
                         {
+                            check_dictionary_key(dictionary, *key)?;
                             check_dictionary_value(dictionary, *value)?;
+                        }
+                    }
+                    Operation::DictionaryRead {
+                        dictionary, key, ..
+                    } => {
+                        if let crate::ValueType::TypedDictionary(dictionary) =
+                            function.value_types[dictionary]
+                        {
+                            check_dictionary_key(dictionary, *key)?;
                         }
                     }
                     Operation::ArrayFill { builder, value, .. } => {
@@ -1301,18 +1376,7 @@ impl CompilationUnit {
                         interface.name, required.name
                     )
                 })?;
-            if required.variadic.is_some()
-                || implementation.parameter_types().len() != required.parameters.len()
-                || !implementation
-                    .parameter_types()
-                    .iter()
-                    .zip(&required.parameters)
-                    .all(|(actual, expected)| {
-                        !matches!(actual, crate::ParameterType::SourceObject(_))
-                            && &actual.api_type() == expected
-                    })
-                || required.result != implementation.return_type().api_type()
-            {
+            if !signature_matches(implementation, required) {
                 return Err(format!(
                     "{class}.{} does not satisfy the {} signature",
                     required.name, interface.name

@@ -34,6 +34,10 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Dictionary<$String, $Comparable or Null>",
         "$Dictionary<$String, $Comparator>",
         "$Dictionary<$String, $Comparator or Null>",
+        "$Dictionary<$Comparable, $Number>",
+        "$Dictionary<$Comparator, $Number>",
+        "$Dictionary<$Comparable, $Comparator or Null>",
+        "$Dictionary<$Comparator, $Comparable>",
     ] {
         let canonical = template.replace('$', "Toybox.Lang.");
         let reference = compile(&format!(

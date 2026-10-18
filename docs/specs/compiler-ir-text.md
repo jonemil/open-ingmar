@@ -335,7 +335,8 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary` is the opaque parameter-type and value-call result tag.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
-`integer`, `long`, `float`, `double`, `string`, `boolean`, or `char`;
+`integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `comparable`,
+or `comparator`;
 values use those tags, `comparable`, `comparator`, or their `nullable-`
 counterparts. Interface value contracts require API 5.0.0. Other tags, nested
 containers, and heterogeneous unions are rejected. For example:
@@ -402,6 +403,10 @@ token retains its VM tag. Source/interface references use private construction
 instead; they cannot be represented as scalar constant tokens. Private fills,
 indexed writes, and native `put` share the
 [source/unit interface proof](compiler-subset.md#comparison-interface-dictionaries).
+Interface keys require runtime construction, even with scalar contents; this
+constant operation rejects those key contracts. Private fills, indexed reads and
+writes, and native key arguments retain the
+[key witness obligation](compiler-subset.md#interface-dictionary-keys).
 
 The [source contracts](compiler-subset.md#dictionary-values) govern supported
 key/value kinds, nullability, and entry typing. Missing pairs, empty entry lists,

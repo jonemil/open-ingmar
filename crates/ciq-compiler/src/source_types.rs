@@ -183,8 +183,18 @@ impl Types {
                 self.values
                     .get(dictionary)
                     .zip(self.values.get(key))
-                    .and_then(|(receiver, key)| {
-                        native::value_call(receiver, "get", &[candidate(key).clone()], None).ok()
+                    .and_then(|(receiver, key_type)| {
+                        native::value_call(
+                            receiver,
+                            "get",
+                            &self.origins.native_arguments(
+                                receiver,
+                                "get",
+                                [(*key, candidate(key_type).clone())],
+                            ),
+                            None,
+                        )
+                        .ok()
                     }),
             ),
             Operation::ArrayRead { result, array, .. } => (

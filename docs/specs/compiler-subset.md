@@ -1091,7 +1091,7 @@ does not copy contents. Calls and construction retain source evaluation order.
 
 `Toybox.Lang.Dictionary<K, V>` accepts invariant non-null numeric, String,
 Boolean, or Char keys and values of those scalar types, optionally `or Null`.
-It also accepts [comparison-interface values](#comparison-interface-dictionaries).
+It also accepts [comparison-interface keys and values](#comparison-interface-dictionaries).
 The Dictionary itself is non-null. Char keys or values require API 1.3.0;
 the other contracts require 1.0.0. `DictionaryType` carries the bounded contracts through source,
 semantic IR, locals, function arguments/results, and API checks.
@@ -1107,7 +1107,8 @@ numeric, String, Boolean, or Char keys and homogeneous scalar values with option
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed key kinds, mixed non-null scalar value kinds without an expected
+Null keys, mixed key kinds without an expected interface contract,
+mixed non-null scalar value kinds without an expected
 interface contract, container-valued entries,
 and trailing commas are unsupported. Nested Dictionary literal syntax is also
 unsupported, including inside entry call arguments. Ordinary calls and Array
@@ -1898,10 +1899,10 @@ Comparator values read from an Array can supply an ordering callback. See the
 ## Comparison interface Dictionaries
 
 `Dictionary<K, Comparable>` and `Dictionary<K, Comparator>`, optionally `or Null`
-on the value type, support the existing non-null scalar key contracts. Interfaces
+on the value type, support scalar keys and the interface-key profile below. Interfaces
 require API 5.0.0. Key/value parameters stay invariant across assignments and
 calls; scalar-valued Dictionaries do not widen to interface-valued ones.
-Interface keys and general Object values remain unsupported.
+General Object values remain unsupported.
 
 An expected Dictionary contract types direct literals and empty construction.
 Values accept compatible native/interface witnesses or exact source instances;
@@ -1917,7 +1918,7 @@ contract. Calls require a guarded local snapshot; `hasKey` or a guard on another
 read does not refine the lookup. Indexed writes and `put` accept Null only for
 nullable value contracts. `values()` returns `Array<V>`, preserving value
 nullability without adding lookup's missing-key Null. `keys()` retains the
-scalar key contract. Enumeration snapshots membership, sharing element references
+key contract. Enumeration snapshots membership, sharing element references
 under the existing [Dictionary rules](#dictionary-values).
 
 Other supported Dictionary methods retain their profiles. Formatting may call
@@ -1929,6 +1930,39 @@ sequence, exception recovery, or element string representations follow.
 
 See the [example](../../examples/compiler-comparators/README.md) and
 [evidence](../investigations/compiler-comparators.md#interface-dictionaries).
+
+### Interface Dictionary keys
+
+`Dictionary<Comparable, V>` and `Dictionary<Comparator, V>` support non-null
+interface keys from API 5.0.0, combined with any supported scalar/interface value
+contract. Container parameters remain invariant. `keys()` produces an Array of
+the declared interface; lookup's result type and missing-key Null are unchanged.
+Nullable or general Object key contracts remain unsupported. A nullable key
+argument requires a fresh non-null proof.
+
+Every literal fill, indexed read/write, and native `get`, `put`, `hasKey`, or
+`remove` argument requires an interface witness. Unit validation checks exact
+source members after IR reload as well as source compilation. Key identity uses
+runtime hashing/equality, not `compareTo` or `compare`. Source instances may use
+inherited identity or compatible [Object overrides](compiler-classes.md#object-rooted-classes).
+Callers must keep key hashes stable while stored and make equal keys hash
+consistently; signature checking does not establish these behavioral laws.
+
+Interface-key literals use private runtime construction and ordered insertion.
+They do not become Dictionary DATA constants, even with scalar-token contents;
+saved IR rejects `.dictionary-constant` with interface keys. All-scalar-token
+literals require a single key token kind. Mixed scalar-token literals are
+rejected because SDK constant construction can conflate Number and Char keys
+that runtime insertion distinguishes. Heterogeneous native witnesses can enter
+through explicit `put` calls or computed/runtime key operands. No compile-time
+key normalization or deduplication is applied to this path.
+
+Construction fills and key lookups/writes/removal may invoke erased key methods.
+Constructor checking conservatively propagates possible shutdown through those
+operations and source wrappers while reference fields are pending. Formatting
+may also invoke key methods. Enumeration does not itself compare keys.
+Callback count/order, mutation during callbacks, and exception recovery are
+not guaranteed. See [evidence](../investigations/compiler-comparators.md#interface-keys).
 
 ## Nullable Array elements
 

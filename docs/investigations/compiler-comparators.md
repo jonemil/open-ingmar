@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 100 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 132 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-interface-dictionaries/`. Existing compareTo binding/instructions
+in `scratch/check-interface-keys-runtime/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -108,7 +108,7 @@ The shared console checker above verifies saved stages and structured
 reconstruction with existing Null, comparison, branch, and invocation encodings;
 no new opcode or DATA record was encountered. Source assignments still need
 exact member proofs; successful runtime cases do not establish broader source
-inheritance, interface Dictionary keys, or exception recovery.
+inheritance or exception recovery.
 
 ## Interface fields
 
@@ -127,7 +127,7 @@ SDK/generated simulator text matches the expected output. The shared console
 checker above covers saved stages, structured CODE/DATA, and reconstruction.
 Ordinary Null field slots and existing field/invocation instructions suffice;
 no new opcode or DATA record was encountered. Direct repeated-field guard
-refinement, general native field types, and interface Dictionary keys remain
+refinement and general native field types remain
 outside the supported contract.
 
 ## Interface Arrays
@@ -180,13 +180,54 @@ writes/removal; a `values()` Array retains its original membership after removal
 or explicit ordering for scalar Arrays. A flat Comparable constant retains
 distinct Number and Char runtime tags.
 
-SDK/generated output matches all 100 lines in the shared console checker above.
-Artifacts: `scratch/check-interface-dictionaries/`; SDK build log:
-`scratch/interface-dictionary-sdk-build.log`. Structured CODE/DATA reconstruction
+SDK/generated output matches the expected text through the console checker
+above. Structured CODE/DATA reconstruction
 and saved stages pass with existing dictionary constants, private builders,
 lookup/write instructions, and native dispatch. No new opcode or DATA record
-was encountered. These observations do not establish interface-key hashing or
-equality, general Object containers, formatting callback order, or exceptions.
+was encountered. These observations do not establish general Object containers,
+formatting callback order, or exceptions.
+
+## Interface keys
+
+**Experimentally observed:** `InterfaceKeys` stores Comparable and Comparator
+source instances as keys. `HashKey` returns a constant hash to force collisions
+and compares its rank in `equals(Object or Null)`. Distinct equal instances
+replace one entry; a different rank remains separate. `get`, indexed reads and
+writes, `put`, `hasKey`, and `remove` work through source and interface keys.
+Hash/equality counters show callback activity; ordering counters remain zero.
+Enumeration returns interface keys whose array membership survives later removal.
+TextOrder and Ordering keys without overrides use inherited identity.
+
+Native Comparable keys inserted with explicit `put` calls retain Number, Char,
+String, Boolean, Long, Float, and Double identities in this specimen. Number 97
+and Char 'a' occupy separate entries and retrieve values 1 and 2. SDK/generated
+programs match all 132 expected lines; artifacts:
+`scratch/check-interface-keys-runtime/`, SDK build log:
+`scratch/interface-keys-sdk-build.log`. Structured reconstruction and saved
+stages pass with existing dictionary, hash/equality, class, and invocation
+encodings. No new opcode or DATA record was encountered.
+
+**SDK constant-literal discrepancy:** an earlier `nativeKeys()` used
+`return {97=>1, 'a'=>2, "a"=>3, true=>4, 1l=>5, 1.0=>6, 1.0d=>7};` under the same
+`Dictionary<Comparable, Number>` return annotation. The SDK program reports six
+entries, finds Number 97 with value 2, and does not find Char 'a'. Our private
+runtime insertion reports seven entries and retains both keys. Captures and
+diff: `scratch/check-interface-keys/runtime/`; the original SDK PRG is retained
+in that preparation directory. Replacing the literal with the tracked explicit
+`put` sequence makes both programs agree. This distinguishes constant
+construction from runtime insertion; it does not establish a portable
+cross-kind normalization rule. Mixed scalar-token interface-key constants are
+therefore outside the supported source profile, and interface-key DATA constant
+emission remains deferred.
+
+**SDK rejected overrides:** copies of the specimen in
+`scratch/interface-key-overrides/` change `hashCode` to accept a Number argument,
+then separately change `equals` to accept Number with a constant false body.
+The SDK rejects these as incompatible native Object overrides. Diagnostics:
+`scratch/interface-key-bad-hash-sdk.log` and
+`scratch/interface-key-bad-equals-sdk.log`. Our declaration checks preserve the
+native signatures even after erasure; they do not prove behavioral hash laws,
+callback ordering, mutation safety, or exception recovery.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

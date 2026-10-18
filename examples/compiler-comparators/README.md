@@ -15,7 +15,7 @@ API levels; see [API contracts](../../docs/specs/api-declarations.md#declaration
 locals, calls their declared methods, and sorts through a Comparator value.
 Receiver/argument markers check evaluation order. See the
 [interface profile](../../docs/specs/compiler-subset.md#comparison-interface-values)
-for remaining limits, including interface Dictionary keys and general Object Arrays.
+for remaining limits, including mixed scalar-token key constants and general Object Arrays.
 `NativeComparables` checks all seven supported scalar witnesses, typed returns,
 scalar assignments, mixed interface/scalar conditional arms, and a Number guard.
 `NullableInterfaces` checks guarded calls, early returns, loops, nullable sorting,
@@ -32,6 +32,11 @@ native witnesses, and Comparator-element Arrays with an explicit callback.
 `InterfaceDictionaries` checks nullable/non-null interface values, source writes,
 missing-key guards, shared mutation, enumeration snapshots, scalar constant tags,
 and retrieved Comparators used for sorting.
+`InterfaceKeys` checks hashing/equality overrides, collisions, equivalent source
+keys, inherited identity, native witnesses inserted at runtime, key enumeration,
+and removal. Comparison counters verify that hashing does not use the ordering
+methods. Mixed scalar-token key constants remain deferred; see the
+[key contract](../../docs/specs/compiler-subset.md#interface-dictionary-keys).
 
 From the repository root:
 

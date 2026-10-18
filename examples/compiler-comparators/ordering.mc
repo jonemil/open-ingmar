@@ -80,3 +80,29 @@ class InterfaceHolder {
         return values.toString();
     }
 }
+
+class HashKey {
+    var rank = 0;
+    var hashes = 0;
+    var equalities = 0;
+    var comparisons = 0;
+    function initialize(rank as Toybox.Lang.Number) {self.rank = rank;}
+    function value() as Toybox.Lang.Number {return self.rank;}
+    function hashCode() as Toybox.Lang.Number {self.hashes = self.hashes + 1; return 7;}
+    function equals(other as Toybox.Lang.Object or Null) as Toybox.Lang.Boolean {
+        self.equalities = self.equalities + 1;
+        if (other instanceof HashKey) {return self.rank == (other as HashKey).value();}
+        return false;
+    }
+    function compareTo(other as Toybox.Lang.Object) as Toybox.Lang.Number {
+        self.comparisons = self.comparisons + 1;
+        return self.rank - (other as HashKey).value();
+    }
+    function compare(a as Toybox.Lang.Object,b as Toybox.Lang.Object) as Toybox.Lang.Number {
+        self.comparisons = self.comparisons + 1;
+        return (a as HashKey).value() - (b as HashKey).value();
+    }
+    function hashCalls() as Toybox.Lang.Number {return self.hashes;}
+    function equalCalls() as Toybox.Lang.Number {return self.equalities;}
+    function comparisonCalls() as Toybox.Lang.Number {return self.comparisons;}
+}

@@ -18,8 +18,9 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Interface Dictionary keys need hashing/equality and callback evidence before
-extending the scalar key contracts; interface value storage is separate.
+Resolve SDK constant-literal Number/Char key conflation before accepting mixed
+scalar-token interface-key constants. Interface-key pool emission also needs a
+hash/equality-preserving materialization contract.
 Nullable/object Array sorting needs its own element/callback contracts and
 evidence. Pool emission for interface
 Array literals needs a tag-preserving Number/Char payload before replacing
