@@ -1118,6 +1118,9 @@ Source, typed, and text paths use the same operation and VM lowering.
 
 `comparable` and `comparator` are non-null parameter/result tags for the
 [source interface profile](compiler-subset.md#comparison-interface-values).
+`nullable-comparable` and `nullable-comparator` add Null to those contracts.
+They retain API 5.0.0 availability and require non-null branch proofs for member
+calls. Nullable result contracts must be explicit, as for other nullable types.
 They occur in `parameter-types=`, function `result=`, user-call `result=`, and
 interface block-parameter tags. Calls use `.call-native` with `compareTo`
 or `compare`; Comparator values also supply the ordinary native `sort` call.
@@ -1134,11 +1137,16 @@ contracts, including scalar Comparable witnesses at returns, local assignments,
 and incoming block values. User-call arguments use the same witness rules.
 No coercion operation is serialized; the declared storage/edge/call contract
 retains the interface while the scalar keeps its runtime representation.
-Source witnesses at arguments/returns remain unit obligations;
+Source witnesses at arguments, returns, and local assignments remain unit
+obligations;
 unit validation resolves their exact classes and checks required members after
 text reload. A forged call result or a changed implementation signature cannot
 bypass that check. Erased calls retain conservative constructor effects.
 The backend selects the existing comparison symbols and invocation instructions.
+No new opcode or field representation is introduced for nullable interface
+storage. Ordinary Null values, branches, and frame slots retain their existing
+encodings. Sorting accepts a nullable Comparator argument without a receiver
+refinement; compare member calls still require one.
 
 ## Nullable callback state
 

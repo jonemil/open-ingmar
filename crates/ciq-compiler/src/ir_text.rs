@@ -86,6 +86,12 @@ pub(crate) fn parse_ir_context(
                 "weak-reference" => crate::ReturnType::WeakReference,
                 "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
                 "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
+                "nullable-comparable" => {
+                    crate::ReturnType::NullableInterface(crate::InterfaceType::Comparable)
+                }
+                "nullable-comparator" => {
+                    crate::ReturnType::NullableInterface(crate::InterfaceType::Comparator)
+                }
                 "method" => crate::ReturnType::Method,
                 "symbol" => crate::ReturnType::Symbol,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
@@ -150,6 +156,12 @@ pub(crate) fn parse_ir_context(
                             crate::InterfaceType::Comparable,
                         )),
                         "comparator" => Ok(crate::ParameterType::Interface(
+                            crate::InterfaceType::Comparator,
+                        )),
+                        "nullable-comparable" => Ok(crate::ParameterType::NullableInterface(
+                            crate::InterfaceType::Comparable,
+                        )),
+                        "nullable-comparator" => Ok(crate::ParameterType::NullableInterface(
                             crate::InterfaceType::Comparator,
                         )),
                         "method" => Ok(crate::ParameterType::Method),
@@ -1166,6 +1178,12 @@ fn call_contract(
             "weak-reference" => crate::ReturnType::WeakReference,
             "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
             "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
+            "nullable-comparable" => {
+                crate::ReturnType::NullableInterface(crate::InterfaceType::Comparable)
+            }
+            "nullable-comparator" => {
+                crate::ReturnType::NullableInterface(crate::InterfaceType::Comparator)
+            }
             "method" => crate::ReturnType::Method,
             "symbol" => crate::ReturnType::Symbol,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),

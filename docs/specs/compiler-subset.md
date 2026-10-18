@@ -1750,9 +1750,9 @@ reference fields can supply a comparator while retaining class identity.
 Whole-unit validation resolves the class and rechecks the required method;
 an erased View/Object or Method cannot establish the structural contract.
 The [comparison-interface profile](#comparison-interface-values) also accepts
-non-null Comparator parameters/results and locals. Nullable comparators and bare
-`self` as a comparator remain unsupported. Object-rooted source classes support
-construction, exact source signatures/reference fields, and comparator use
+Comparator parameters/results and locals, including Comparator-or-Null values.
+Bare `self` as a comparator remains unsupported. Object-rooted source classes
+support construction, exact source signatures/reference fields, and comparator use
 through their [class contract](compiler-classes.md#object-rooted-classes).
 The existing source class/base and constructor requirements still apply.
 
@@ -1768,44 +1768,62 @@ See the [example](../../examples/compiler-comparators/README.md) and
 
 ## Comparison interface values
 
-Non-null `Toybox.Lang.Comparable` and `Toybox.Lang.Comparator` are supported
-parameter and result contracts from API 5.0.0. Module aliases and imports resolve
-them like other API types. Comparable exposes `compareTo(Object) as Number`;
-Comparator exposes `compare(Object, Object) as Number`. Calls use ordinary
-receiver/member dispatch, evaluate receiver before arguments once, and preserve
-the implementing instance. Comparator values can also supply Array `sort`.
+`Toybox.Lang.Comparable` and `Toybox.Lang.Comparator`, optionally `or Null`, are
+supported parameter and result contracts from API 5.0.0. Module aliases and
+imports resolve them like other API types. Comparable exposes `compareTo(Object)
+as Number`; Comparator exposes `compare(Object, Object) as Number`. Calls use
+ordinary receiver/member dispatch, evaluate receiver before arguments once, and
+preserve the implementing instance. Comparator values can also supply Array
+`sort`.
 
-User calls and returns accept the same interface, a verified native scalar
-witness, or an exact source-class witness. Unit validation rechecks every
-required source member, arity, parameter,
-and result contract. Opaque Object/View values, a `has` test, and source classes
-with narrowed parameters do not establish the interface. A standalone function
-can retain unresolved source witnesses; assembling a complete unit requires
-proof.
+User calls, returns, and interface-local assignments accept the same interface,
+a verified native scalar witness, or an exact source-class witness. Unit
+validation rechecks every required source member, arity, parameter, and result
+contract. Opaque Object/View values, a `has` test, and source classes with
+narrowed parameters do not establish the interface. A standalone function can
+retain unresolved source witnesses; assembling a complete unit requires proof.
 
-Number, Long, Float, Double, Boolean, Char, and String satisfy Comparable.
-The bounded native witness check requires the catalogue's exact method
-signature and an effective introduction level no later than Comparable's
-API 5.0.0 requirement. Checking the receiving interface therefore covers these
-native members as well. No runtime conversion, allocation, or wrapper is added.
-Other native types do not establish an interface witness. A nullable scalar
-needs a non-null/concrete proof before use; a positive concrete class test on an
-Object read can likewise establish a scalar witness. Comparison still follows
-the receiver's runtime method; a common interface does not guarantee that
-arbitrary operand domains can be ordered or that a call cannot fail.
+Number, Long, Float, Double, Boolean, Char, and String satisfy Comparable. The
+bounded native witness check requires the catalogue's exact method signature and
+an effective introduction level no later than Comparable's API 5.0.0
+requirement. Checking the receiving interface therefore covers these native
+members as well. No runtime conversion, allocation, or wrapper is added. Other
+native types do not establish an interface witness. A nullable scalar needs a
+non-null/concrete proof before non-null Comparable use; a positive concrete
+class test on an Object read can likewise establish a scalar witness. Comparison
+still follows the receiver's runtime method; a common interface does not
+guarantee that arbitrary operand domains can be ordered or that a call cannot
+fail.
 
 An interface parameter or call result retains its contract through inferred
-locals, aliases, and same-interface assignment and conditional joins. A Comparable
-local also accepts a verified scalar assignment. A conditional with a Comparable
-arm and a verified scalar arm retains Comparable in either arm order; two
-different scalar types do not implicitly infer an interface.
-There is no implicit conversion between Comparable and Comparator. Assigning a
-raw source object to an existing interface local requires a typed forwarding call
-first; source-to-interface matching currently belongs to call/return boundaries.
-Fields, nullable interfaces, interface container elements, unchecked `as`
-assertions, and interface runtime type targets remain unsupported. An interface
-can widen to Object without proving additional members; ordinary Object casts
-and concrete type tests retain their existing rules.
+locals, aliases, and same-interface assignment and conditional joins. A
+Comparable local also accepts a verified scalar assignment. A conditional with a
+Comparable arm and a verified scalar arm retains Comparable in either arm order;
+two different scalar types do not implicitly infer an interface. There is no
+implicit conversion between Comparable and Comparator. Direct source assignments
+defer their signature proof to unit validation, including after IR reload; an
+incompatible source class cannot enter either interface local.
+
+A nullable interface accepts Null and compatible non-null values. Nullable
+scalars can widen to Comparable-or-Null. Nullable locals keep their declared
+contract across writes and require a fresh non-null read proof before member
+calls or non-null forwarding. Equality/inequality with Null works in either
+operand order. The shared branch rules cover early returns, conditional arms,
+and loops; writes invalidate local proofs, and aliases/stored Boolean guards do
+not transfer them. A conditional combining an interface and Null produces the
+corresponding nullable interface. Existing nullable-interface arms can also
+accept compatible scalar/interface alternatives; this does not enable general
+union inference.
+
+`Array.sort` accepts Comparator-or-Null directly: Null selects default ordering,
+and a non-null instance supplies custom ordering. This does not permit calling
+`compare` on a nullable receiver without a non-null proof.
+
+Interface fields/container elements, unchecked `as` assertions, and interface
+runtime type targets remain unsupported. A non-null interface can widen to
+Object without proving additional members. A nullable interface can widen to
+Object-or-Null; Object requires a non-null proof. Ordinary Object casts and
+concrete type tests retain their existing rules.
 
 Erased comparison calls, including sorting through a Comparator value, may
 request shutdown. Constructor checks conservatively propagate that effect

@@ -365,10 +365,9 @@ pub(crate) fn value_call(
         return Err("String.compareTo lowering currently requires String".into());
     }
     if class == "Toybox.Lang.Array" && member == "sort" {
-        if arguments != [api::Type::Null]
-            && arguments != [api::Type::named("Toybox.Lang.Comparator")]
+        if !matches!(arguments, [actual] if accepts(&crate::InterfaceType::Comparator.api_type(true), actual))
         {
-            return Err("Array.sort requires Null or a checked source Comparator".into());
+            return Err("Array.sort requires a checked Comparator or Null".into());
         }
         if !matches!(receiver, api::Type::Array(element) if matches!(
             crate::ArrayElement::from_api_type(element),

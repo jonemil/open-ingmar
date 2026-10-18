@@ -17,6 +17,8 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Method",
         "$Comparable",
         "$Comparator",
+        "$Comparable or Null",
+        "$Comparator or Null",
         "$Symbol",
         "$WeakReference",
         "$Dictionary",

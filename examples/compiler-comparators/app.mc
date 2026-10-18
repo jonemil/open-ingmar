@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        NullableInterfaces.run();
         NativeComparables.run();
         InterfaceCalls.run();
         var text = new TextOrder();
@@ -37,6 +38,47 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module NullableInterfaces {
+    function comparable(present as Toybox.Lang.Boolean) as Toybox.Lang.Comparable or Null {
+        if (present) { return new TextOrder(); } else { return null; }
+    }
+    function comparator(present as Toybox.Lang.Boolean) as Toybox.Lang.Comparator or Null {
+        if (present) { return new Ordering(-1); } else { return null; }
+    }
+    function read(value as Toybox.Lang.Comparable or Null) as Toybox.Lang.Number {
+        if (value == null) { return -9; }
+        return value.compareTo("b");
+    }
+    function sort(order as Toybox.Lang.Comparator or Null) as Toybox.Lang.String {
+        var values = ["a", "c", "b"];
+        values.sort(order);
+        return values.toString();
+    }
+    function run() as Void {
+        System.println(NullableInterfaces.read(null));
+        System.println(NullableInterfaces.read(NullableInterfaces.comparable(true)) == 0);
+        var value = NullableInterfaces.comparable(false);
+        value = new TextOrder();
+        if (value != null) { System.println(value.compareTo("a") > 0); }
+        value = null;
+        System.println(value == null);
+        value = 3;
+        if (value != null) { System.println(value.compareTo(3) == 0); }
+        while (value != null) { System.println(value.compareTo(3) == 0); value = null; }
+        System.println(NullableInterfaces.sort(NullableInterfaces.comparator(false)));
+        System.println(NullableInterfaces.sort(NullableInterfaces.comparator(true)));
+        var order = NullableInterfaces.comparator(false);
+        order = new Ordering(-1);
+        if (order != null) { System.println(order.compare("a", "b") > 0); }
+        order = null;
+        System.println(order == null);
+        var exact = InterfaceCalls.create();
+        exact = new TextOrder();
+        System.println(exact.compareTo("b") == 0);
+        var selected = true ? InterfaceCalls.create() : null;
+        System.println(NullableInterfaces.read(selected) == 0);
     }
 }
 module NativeComparables {

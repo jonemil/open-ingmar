@@ -16,6 +16,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
             | ValueType::Object(_)
             | ValueType::Tuple(_)
             | ValueType::Interface(_)
+            | ValueType::NullableInterface(_)
     ) {
         return None;
     }

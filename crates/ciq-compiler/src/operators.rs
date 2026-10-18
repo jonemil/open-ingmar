@@ -136,6 +136,14 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let nullable_float = Type::Union(vec![Type::named("Toybox.Lang.Float"), Type::Null]);
     let nullable_double = Type::Union(vec![Type::named("Toybox.Lang.Double"), Type::Null]);
     let nullable_long = Type::Union(vec![Type::named("Toybox.Lang.Long"), Type::Null]);
+    let interface = |ty: &Type| {
+        matches!(
+            crate::ValueType::from_api_type(ty),
+            Some(crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_))
+        )
+    };
+    let interface_null = kind.is_equality()
+        && ((*left == Type::Null && interface(right)) || (interface(left) && *right == Type::Null));
     let null_check = kind.is_equality()
         && ((left == &Type::Null
             && (right == &Type::Null
@@ -161,7 +169,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
             || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));
-    (numbers || symbols || booleans || null_check || strings)
+    (numbers || symbols || booleans || null_check || interface_null || strings)
         .then(|| Type::named("Toybox.Lang.Boolean"))
 }
 

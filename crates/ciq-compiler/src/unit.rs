@@ -62,11 +62,14 @@ fn erased_comparison(function: &Function, operation: &Operation) -> bool {
         } => {
             matches!(
                 function.value_types[receiver],
-                crate::ValueType::Interface(_)
+                crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
             ) || (member == "sort"
-                && arguments
-                    .iter()
-                    .any(|a| matches!(function.value_types[a], crate::ValueType::Interface(_))))
+                && arguments.iter().any(|a| {
+                    matches!(
+                        function.value_types[a],
+                        crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
+                    )
+                }))
         }
         _ => false,
     }
@@ -704,6 +707,22 @@ impl CompilationUnit {
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut origins =
                 crate::source_objects::Origins::new(function.parameter_types().to_vec());
+            let interface_locals = function
+                .operations()
+                .iter()
+                .filter_map(|located| {
+                    if let Operation::LocalInitialize { local, value } = located.operation {
+                        let ty = function.value_types[&value];
+                        if matches!(
+                            ty,
+                            crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
+                        ) {
+                            return Some((local, ty));
+                        }
+                    }
+                    None
+                })
+                .collect::<BTreeMap<_, _>>();
             let inputs = crate::type_flow::prefix_inputs(function.operations());
             let mut facts = Default::default();
             for located in function.operations() {
@@ -714,9 +733,34 @@ impl CompilationUnit {
             }
             for (operation, located) in function.operations().iter().enumerate() {
                 if let Operation::Return { value } = &located.operation {
-                    if let ReturnType::Interface(interface) = function.return_type() {
-                        self.check_interface_value(function, &origins, *value, interface)
-                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    if let ReturnType::Interface(interface)
+                    | ReturnType::NullableInterface(interface) = function.return_type()
+                    {
+                        self.check_interface_value(
+                            function,
+                            &origins,
+                            *value,
+                            interface,
+                            matches!(function.return_type(), ReturnType::NullableInterface(_)),
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                }
+                if let Operation::LocalAssign { local, value } = located.operation {
+                    if let Some(ty) = interface_locals.get(&local) {
+                        let (crate::ValueType::Interface(interface)
+                        | crate::ValueType::NullableInterface(interface)) = *ty
+                        else {
+                            unreachable!()
+                        };
+                        self.check_interface_value(
+                            function,
+                            &origins,
+                            value,
+                            interface,
+                            matches!(ty, crate::ValueType::NullableInterface(_)),
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
                     }
                 }
                 if let Operation::SelfFieldRead { field, .. }
@@ -962,9 +1006,17 @@ impl CompilationUnit {
                     ));
                 }
                 for (argument, parameter) in arguments.iter().zip(*parameters) {
-                    if let crate::ParameterType::Interface(interface) = parameter {
-                        self.check_interface_value(function, &origins, *argument, *interface)
-                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    if let crate::ParameterType::Interface(interface)
+                    | crate::ParameterType::NullableInterface(interface) = parameter
+                    {
+                        self.check_interface_value(
+                            function,
+                            &origins,
+                            *argument,
+                            *interface,
+                            matches!(parameter, crate::ParameterType::NullableInterface(_)),
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
                         continue;
                     }
                     if let crate::ParameterType::SourceObject(class) = parameter {
@@ -1021,9 +1073,10 @@ impl CompilationUnit {
         origins: &crate::source_objects::Origins,
         value: crate::ValueId,
         interface: crate::InterfaceType,
+        nullable: bool,
     ) -> Result<(), String> {
         if crate::native::accepts(
-            &crate::api::Type::named(interface.name()),
+            &interface.api_type(nullable),
             &function.value_types[&value].api_type(),
         ) {
             return Ok(());

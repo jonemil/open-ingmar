@@ -1946,6 +1946,9 @@ impl Parser<'_> {
                         self.token()?;
                         self.expect(Kind::Word("Null"), "'Null'")?;
                         match ty {
+                            crate::ParameterType::Interface(interface) => {
+                                crate::ParameterType::NullableInterface(interface)
+                            }
                             crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
                             crate::ParameterType::LangObject => {
                                 crate::ParameterType::NullableObject
@@ -2027,6 +2030,9 @@ impl Parser<'_> {
                 self.token()?;
                 self.expect(Kind::Word("Null"), "'Null'")?;
                 match ty {
+                    crate::ReturnType::Interface(interface) => {
+                        crate::ReturnType::NullableInterface(interface)
+                    }
                     crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
                     crate::ReturnType::LangObject => crate::ReturnType::NullableObject,
                     crate::ReturnType::Long => crate::ReturnType::NullableLong,

@@ -364,6 +364,8 @@ bounded checking policy, not Garmin's complete definite-initialization rules.
 Calls that may request System.exit, including transitive source calls and
 constructors and source comparator callbacks reached through Array sorting,
 are also rejected until all reference fields are established.
+Erased interface calls and sorting through nullable/non-null Comparator values
+are conservatively included when the exact callback body is unavailable.
 This conservative call-graph check includes conditional exits; runtime failures
 and additional native callback effects are not proven safe by it.
 

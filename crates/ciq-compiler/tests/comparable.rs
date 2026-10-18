@@ -163,6 +163,7 @@ fn erased_comparison_effects_preserve_reference_initialization_requirements() {
             "module M { function call(c as Toybox.Lang.Comparable) { return c.compareTo(1); } }",
         ),
         ("Comparator", "var a=[1,2]; a.sort(c);", ""),
+        ("Comparator or Null", "var a=[1,2]; a.sort(c);", ""),
     ] {
         let before = format!(
             "class Holder {{ var target as Target; function initialize(c as Toybox.Lang.{interface},t as Target) {{ {call} self.target=t; }} }}"

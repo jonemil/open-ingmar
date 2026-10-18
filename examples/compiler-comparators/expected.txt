@@ -1,3 +1,15 @@
+-9
+true
+true
+true
+true
+true
+[a, b, c]
+[c, b, a]
+true
+true
+true
+true
 true
 true
 true

@@ -10,6 +10,8 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "weak-reference" => Type::named("Toybox.Lang.WeakReference"),
         "method" => Type::named("Toybox.Lang.Method"),
         "comparable" => Type::named("Toybox.Lang.Comparable"),
+        "nullable-comparable" => crate::InterfaceType::Comparable.api_type(true),
+        "nullable-comparator" => crate::InterfaceType::Comparator.api_type(true),
         "comparator" => Type::named("Toybox.Lang.Comparator"),
         "symbol" => Type::named("Toybox.Lang.Symbol"),
         "integer" => Type::named("Toybox.Lang.Number"),
@@ -41,6 +43,8 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "weak-reference",
         "method",
         "comparable",
+        "nullable-comparable",
+        "nullable-comparator",
         "comparator",
         "symbol",
         "integer",
@@ -73,10 +77,17 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     for (expected, actual) in [(left, right), (right, left)] {
         if matches!(
             ValueType::from_api_type(expected),
-            Some(ValueType::Interface(_))
+            Some(ValueType::Interface(_) | ValueType::NullableInterface(_))
         ) && crate::native::accepts(expected, actual)
         {
             return Some(expected.clone());
+        }
+    }
+    for (interface, other) in [(left, right), (right, left)] {
+        if let Some(ValueType::Interface(interface)) = ValueType::from_api_type(interface) {
+            if *other == Type::Null {
+                return Some(interface.api_type(true));
+            }
         }
     }
     let object = parse_type("object").unwrap();

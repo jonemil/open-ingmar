@@ -344,7 +344,7 @@ impl fmt::Display for SourceClass {
     }
 }
 
-/// A supported non-null structural comparison interface.
+/// A supported structural comparison interface.
 /// Source implementations require a unit-level member/signature proof.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InterfaceType {
@@ -358,6 +358,15 @@ impl InterfaceType {
         match self {
             Self::Comparable => "Toybox.Lang.Comparable",
             Self::Comparator => "Toybox.Lang.Comparator",
+        }
+    }
+
+    pub(crate) fn api_type(self, nullable: bool) -> api::Type {
+        let ty = api::Type::named(self.name());
+        if nullable {
+            api::Type::Union(vec![ty, api::Type::Null])
+        } else {
+            ty
         }
     }
 
@@ -384,6 +393,8 @@ impl InterfaceType {
 pub enum ReturnType {
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
+    /// Structural comparison reference or Null.
+    NullableInterface(InterfaceType),
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
@@ -425,6 +436,8 @@ pub enum ReturnType {
 pub enum ParameterType {
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
+    /// Structural comparison reference or Null.
+    NullableInterface(InterfaceType),
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
@@ -486,7 +499,8 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
-            Self::Interface(interface) => api::Type::named(interface.name()),
+            Self::Interface(interface) => interface.api_type(false),
+            Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
@@ -522,7 +536,8 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
-            Self::Interface(interface) => api::Type::named(interface.name()),
+            Self::Interface(interface) => interface.api_type(false),
+            Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
@@ -537,6 +552,8 @@ impl ReturnType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
     Interface(InterfaceType),
+    /// Structural comparison reference or Null.
+    NullableInterface(InterfaceType),
     TypedDictionary(DictionaryType),
     Dictionary,
     /// An opaque Lang.Object value; concrete members require a narrower contract.
@@ -575,6 +592,7 @@ impl ValueType {
     /// Return the non-null alternative of a supported nullable value.
     fn without_null(self) -> Self {
         match self {
+            Self::NullableInterface(interface) => Self::Interface(interface),
             Self::NullableInteger => Self::Integer,
             Self::NullableLong => Self::Long,
             Self::NullableDouble => Self::Double,
@@ -630,7 +648,8 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
-            Self::Interface(interface) => api::Type::named(interface.name()),
+            Self::Interface(interface) => interface.api_type(false),
+            Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => api::Type::named("Toybox.Lang.Method"),
             Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
             Self::Object(class) => api::Type::named(class.name()),
@@ -677,6 +696,12 @@ impl ValueType {
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
+            _ if *ty == InterfaceType::Comparable.api_type(true) => {
+                Some(Self::NullableInterface(InterfaceType::Comparable))
+            }
+            _ if *ty == InterfaceType::Comparator.api_type(true) => {
+                Some(Self::NullableInterface(InterfaceType::Comparator))
+            }
             _ if *ty == Self::NullableObject.api_type() => Some(Self::NullableObject),
             _ if *ty == Self::NullableDictionary.api_type() => Some(Self::NullableDictionary),
             _ if *ty == Self::NullableInteger.api_type() => Some(Self::NullableInteger),
@@ -2340,12 +2365,18 @@ impl Function {
                         ));
                     }
                     let incoming = type_of(value);
+                    let source_interface = matches!(
+                        local_types[&local],
+                        ValueType::Interface(_) | ValueType::NullableInterface(_)
+                    ) && origins.class(value).is_some();
                     if local_types[&local] != incoming
+                        && !source_interface
                         && !(matches!(
                             local_types[&local],
                             ValueType::LangObject
                                 | ValueType::NullableObject
                                 | ValueType::Interface(_)
+                                | ValueType::NullableInterface(_)
                         ) && native::accepts(
                             &local_types[&local].api_type(),
                             &incoming.api_type(),
@@ -2419,8 +2450,10 @@ impl Function {
                                 ));
                             }
                         }
-                        let source_witness = matches!(contract, ReturnType::Interface(_))
-                            && origins.class(value).is_some();
+                        let source_witness = matches!(
+                            contract,
+                            ReturnType::Interface(_) | ReturnType::NullableInterface(_)
+                        ) && origins.class(value).is_some();
                         if !source_witness
                             && !native::accepts(&contract.api_type(), &type_of(value).api_type())
                         {
@@ -2786,6 +2819,12 @@ impl Function {
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
                             ParameterType::Interface(interface) => interface.tag(),
+                            ParameterType::NullableInterface(InterfaceType::Comparable) => {
+                                "nullable-comparable"
+                            }
+                            ParameterType::NullableInterface(InterfaceType::Comparator) => {
+                                "nullable-comparator"
+                            }
                             ParameterType::Method => "method",
                             ParameterType::Symbol => "symbol",
                             ParameterType::Object(NativeClass::View) => "view",
@@ -2807,6 +2846,7 @@ impl Function {
             | ReturnType::NullableObject
             | ReturnType::WeakReference
             | ReturnType::Interface(_)
+            | ReturnType::NullableInterface(_)
             | ReturnType::Method
             | ReturnType::Symbol
             | ReturnType::Dictionary
@@ -3352,6 +3392,7 @@ fn validate_call_arguments(
                     | ValueType::NullableObject
                     | ValueType::WeakReference
                     | ValueType::Interface(_)
+                    | ValueType::NullableInterface(_)
                     | ValueType::Method
                     | ValueType::Symbol
                     | ValueType::Dictionary
@@ -3397,6 +3438,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
         ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
+        ReturnType::NullableInterface(interface) => Ok(ValueType::NullableInterface(interface)),
         ReturnType::Method => Ok(ValueType::Method),
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
@@ -3415,6 +3457,9 @@ fn call_type_text(result: &ReturnType) -> String {
     match result {
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),
+        ReturnType::NullableInterface(interface) => {
+            return format!(" result=nullable-{}", interface.tag());
+        }
         ReturnType::NullableInteger => " result=nullable-integer",
         ReturnType::NullableLong => " result=nullable-long",
         ReturnType::NullableDouble => " result=nullable-double",

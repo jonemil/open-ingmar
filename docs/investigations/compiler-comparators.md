@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 32 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 44 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-native-comparables-final/`. Existing compareTo binding/instructions
+in `scratch/check-nullable-interfaces/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -72,7 +72,7 @@ to sort. Both SDK/generated runs print `interface-receiver` before
 `interface-argument`, then the expected comparison results and `[c, b, a]`.
 The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
 instructions. No new opcode or DATA record was encountered. This does not
-establish nullable/field/container storage,
+establish interface field/container storage,
 or default sorting of source-object Arrays. The [API contract][api] owns the
 signature-query behavior and limits.
 
@@ -93,6 +93,24 @@ reconstruction pass. Dispatch uses the existing `compareTo` symbol and invocatio
 instructions, without new opcodes or DATA records. This establishes these
 witnesses and comparisons, not arbitrary mixed-domain comparison behavior or
 exception recovery.
+
+## Nullable interfaces and source assignments
+
+**Experimentally observed:** the tracked `NullableInterfaces` returns source
+instances or Null through Comparable/Comparator-or-Null signatures. A null-first
+early return permits comparison on the surviving path. Null guards on locals
+also permit member calls in an if/while body; assigning Null ends the loop.
+Sorting with a Null Comparator prints `[a, b, c]`; the non-null descending
+Comparator prints `[c, b, a]`.
+
+The SDK accepts direct assignment of source implementations to existing nullable
+and non-null interface locals, plus later Null/scalar writes where the declared
+contract permits them. Both simulator programs match the tracked expected text.
+The shared console checker above verifies saved stages and structured
+reconstruction with existing Null, comparison, branch, and invocation encodings;
+no new opcode or DATA record was encountered. Source assignments still need
+exact member proofs; successful runtime cases do not establish broader source
+inheritance, interface field/container storage, or exception recovery.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef
