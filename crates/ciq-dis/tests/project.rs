@@ -11,6 +11,67 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn byte_arrays_export_rebuild_relocate_and_edit_without_raw_fallback() {
+    let temporary = TemporaryDirectory::new();
+    let directory = temporary.0.join("bytes");
+    let data = ciq_prg::data::Source::parse(
+        ".bytearray b\n.bytes 0001ff\n.endbytearray\n.string suffix \"x\"\n",
+    )
+    .unwrap()
+    .encode()
+    .unwrap()
+    .0;
+    let original = Prg::from_sections(vec![
+        Section::new(DATA, data).unwrap(),
+        Section::new(CODE, vec![0x38, 3, 0x36, 0x02, 0x41, 0, 0, 0, 0, 0x16]).unwrap(),
+    ]);
+    let manifest = ciq_dis::export_project(&original, &directory).unwrap();
+    assert_eq!(manifest.entries[0].encoding, Encoding::Data);
+    assert_eq!(manifest.entries[1].encoding, Encoding::Assembly);
+    let code = fs::read_to_string(directory.join(&manifest.entries[1].file)).unwrap();
+    assert!(code.contains("newba"));
+    assert!(code.contains("bpush &bytes_00000000"));
+    assert_eq!(ciq_asm::assemble_project(&directory).unwrap(), original);
+    let repeated = temporary.0.join("again");
+    let rebuilt = ciq_asm::assemble_project(&directory).unwrap();
+    ciq_dis::export_project(&rebuilt, &repeated).unwrap();
+    for entry in &manifest.entries {
+        assert_eq!(
+            fs::read(directory.join(&entry.file)).unwrap(),
+            fs::read(repeated.join(&entry.file)).unwrap()
+        );
+    }
+    let path = directory.join(&manifest.entries[0].file);
+    let text = fs::read_to_string(&path)
+        .unwrap()
+        .replace("0001ff", "2a01ff")
+        .replace(" at=0x00000000", "")
+        .replace(" at=0x00000016", "");
+    // Moving the record updates the typed CODE binding without editing bpush.
+    let prefix = text
+        .lines()
+        .find(|line| line.starts_with(".string "))
+        .unwrap();
+    let rest = text
+        .lines()
+        .filter(|line| !line.starts_with(".string "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&path, format!("{prefix}\n{rest}\n")).unwrap();
+    let edited = ciq_asm::assemble_project(&directory).unwrap();
+    assert_eq!(
+        &edited.unique_section(CODE).unwrap().payload()[5..9],
+        &[0, 0, 0, 5]
+    );
+    let (bytes, _) = ciq_prg::data::byte_arrays::byte_array_at(
+        edited.unique_section(DATA).unwrap().payload(),
+        5,
+    )
+    .unwrap();
+    assert_eq!(bytes.values, [42, 1, 255]);
+}
+
+#[test]
 fn dictionary_constants_export_rebuild_and_edit_with_typed_references() {
     let temporary = TemporaryDirectory::new();
     let first = temporary.0.join("dictionary");

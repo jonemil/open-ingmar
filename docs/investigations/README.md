@@ -41,6 +41,8 @@ SDK/version and scope; they are not current feature inventories. Use
   operands, typed value transport, and simulator checks.
 - [Dictionary](compiler-dictionary.md): empty allocation, native observers,
   reference calls, and outstanding constant-literal encoding.
+- [ByteArray](byte-arrays.md): compact constants, zero-filled allocation,
+  indexed stores, and structured reconstruction in the simulator.
 - [Operator coverage](compiler-operator-coverage.md): logical keyword aliases,
   Number inversion, and remaining prerequisite boundaries.
 - [Conditional expressions](compiler-conditionals.md): lazy arms, precedence,

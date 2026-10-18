@@ -1,4 +1,4 @@
-//! Shared flat constant-container framing and record-local scalar values.
+//! Shared constant-container framing, compact bytes, and record-local scalars.
 use super::StringDeclaration;
 use crate::symbols::source::{Error, valid_alias};
 use std::collections::BTreeMap;
@@ -7,6 +7,7 @@ pub(super) struct Record {
     pub root: u8,
     pub pool: Option<Vec<StringDeclaration>>,
     pub values: Vec<Value>,
+    pub bytes: Vec<u8>,
     pub end: usize,
 }
 
@@ -217,8 +218,28 @@ pub(super) fn encode<'a>(
     for value in values {
         value.encode(&mut body, &offsets)?;
     }
+    frame(pool.is_some(), pool_data, body)
+}
+
+/// Encode compact unsigned bytes using the shared constant-record framing.
+pub(super) fn encode_bytes(
+    pool: Option<&[StringDeclaration]>,
+    values: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let (pool_data, _) = pool_bytes(pool)?;
+    let mut body = vec![0x14];
+    body.extend(
+        u32::try_from(values.len())
+            .map_err(|_| Error("ByteArray count exceeds u32".into()))?
+            .to_be_bytes(),
+    );
+    body.extend(values);
+    frame(pool.is_some(), pool_data, body)
+}
+
+fn frame(has_pool: bool, pool_data: Vec<u8>, body: Vec<u8>) -> Result<Vec<u8>, Error> {
     let mut data = Vec::new();
-    if pool.is_some() {
+    if has_pool {
         data.extend(0xabcd_abcdu32.to_be_bytes());
         data.extend(
             u32::try_from(pool_data.len())
@@ -245,7 +266,7 @@ pub(super) fn encode<'a>(
     Ok(out)
 }
 
-/// Decode one flat Array or Dictionary at a known DATA boundary.
+/// Decode one flat Array, ByteArray, or Dictionary at a known DATA boundary.
 /// Validate the complete framing, pool references, scalar count, and terminator;
 /// reject unsupported roots/nested values without scanning for another record.
 pub(super) fn decode(payload: &[u8], start: u32) -> Result<Record, Error> {
@@ -310,7 +331,7 @@ pub(super) fn decode(payload: &[u8], start: u32) -> Result<Record, Error> {
     }
     let root = reader.take(1)?[0];
     let arity = match root {
-        5 => 1,
+        5 | 0x14 => 1,
         0x0b => 2,
         _ => return Err(Error("unsupported constant root tag".into())),
     };
@@ -321,9 +342,14 @@ pub(super) fn decode(payload: &[u8], start: u32) -> Result<Record, Error> {
         return Err(Error("constant entry count exceeds record".into()));
     }
     let mut values = Vec::new();
-    for _ in 0..count {
-        values.push(reader.value(&strings)?);
-    }
+    let bytes = if root == 0x14 {
+        reader.take(count)?.to_vec()
+    } else {
+        for _ in 0..count {
+            values.push(reader.value(&strings)?);
+        }
+        vec![]
+    };
     if reader.at != reader.bytes.len() {
         return Err(Error("constant record has trailing bytes".into()));
     }
@@ -331,6 +357,7 @@ pub(super) fn decode(payload: &[u8], start: u32) -> Result<Record, Error> {
         root,
         pool,
         values,
+        bytes,
         end,
     })
 }

@@ -1,10 +1,11 @@
-//! Supported DATA strings, classes, scalar arrays/Dictionaries, and opaque spans.
+//! Supported DATA strings, classes, constant containers, and opaque spans.
 
 use crate::symbols::source::{Error, tokens, valid_alias};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 pub mod arrays;
+pub mod byte_arrays;
 pub mod classes;
 mod constants;
 pub mod dictionaries;
@@ -25,6 +26,7 @@ pub enum Fragment {
     String(StringDeclaration),
     Class(classes::source::Declaration),
     Array(arrays::Declaration),
+    ByteArray(byte_arrays::Declaration),
     Dictionary(dictionaries::Declaration),
 }
 
@@ -81,6 +83,7 @@ pub fn record_string_offsets(payload: &[u8]) -> Result<Vec<u32>, Error> {
                 Some(u32::try_from(offset).map_err(|_| Error("DATA offset exceeds u32".into())))
             }
             classes::Record::Class(_)
+            | classes::Record::ByteArray(_)
             | classes::Record::Array(_)
             | classes::Record::Dictionary(_) => None,
         })
@@ -157,11 +160,27 @@ impl Source {
         let mut source = Self::default();
         let mut class: Option<classes::source::Declaration> = None;
         let mut array: Option<arrays::Declaration> = None;
+        let mut byte_array: Option<byte_arrays::Declaration> = None;
         let mut dictionary: Option<dictionaries::Declaration> = None;
         for (index, line) in text.lines().enumerate() {
             let mut parse = || -> Result<Option<Fragment>, Error> {
                 let fields = tokens(line)?;
                 if fields.is_empty() {
+                    return Ok(None);
+                }
+                if let Some(declaration) = byte_array.as_mut() {
+                    if fields == [".endbytearray"] {
+                        return Ok(Some(Fragment::ByteArray(byte_array.take().unwrap())));
+                    }
+                    declaration.push_field(&fields)?;
+                    return Ok(None);
+                }
+                if fields[0] == ".bytearray"
+                    && array.is_none()
+                    && dictionary.is_none()
+                    && class.is_none()
+                {
+                    byte_array = Some(byte_arrays::Declaration::parse_header(&fields)?);
                     return Ok(None);
                 }
                 if let Some(declaration) = dictionary.as_mut() {
@@ -231,6 +250,9 @@ impl Source {
                 source.fragments.push(fragment);
             }
         }
+        if byte_array.is_some() {
+            return Err(Error("unterminated .bytearray declaration".into()));
+        }
         if dictionary.is_some() {
             return Err(Error("unterminated Dictionary declaration".into()));
         }
@@ -262,6 +284,7 @@ impl Source {
                     Fragment::Class(classes::source::Declaration::from_record(&class)?)
                 }
                 classes::Record::Array(array) => Fragment::Array(array),
+                classes::Record::ByteArray(array) => Fragment::ByteArray(array),
                 classes::Record::Dictionary(d) => Fragment::Dictionary(d),
             });
         }
@@ -443,6 +466,7 @@ impl Source {
             match fragment {
                 Fragment::Bytes { bytes, .. } => payload.extend(bytes),
                 Fragment::Array(a) => payload.extend(a.encode()?),
+                Fragment::ByteArray(a) => payload.extend(a.encode()?),
                 Fragment::Dictionary(d) => payload.extend(d.encode()?),
                 Fragment::Class(c) => {
                     payload.extend(c.encode_with_code(symbols, &classes, &strings, code)?)
@@ -478,6 +502,7 @@ impl Source {
                     arrays.insert(a.alias.clone(), offset as u32);
                     a.encoded_length()?
                 }
+                Fragment::ByteArray(a) => a.encoded_length()?,
                 Fragment::String(s) => s.value.len() + 4,
                 Fragment::Dictionary(d) => d.encoded_length()?,
                 Fragment::Class(c) => c.encoded_length()?,
@@ -499,6 +524,29 @@ impl Source {
                     d.encoded_length()?
                 }
                 Fragment::Array(a) => a.encoded_length()?,
+                Fragment::ByteArray(a) => a.encoded_length()?,
+                Fragment::String(s) => s.value.len() + 4,
+                Fragment::Class(c) => c.encoded_length()?,
+                Fragment::Bytes { bytes, .. } => bytes.len(),
+            };
+        }
+        Ok(bindings)
+    }
+
+    /// Bind ByteArray aliases to DATA record starts in a separate namespace.
+    /// Validate layout without resolving class references before CODE encoding.
+    pub fn byte_array_bindings(&self) -> Result<Bindings, Error> {
+        self.layout()?;
+        let mut offset = 0usize;
+        let mut bindings = Bindings::new();
+        for fragment in &self.fragments {
+            offset += match fragment {
+                Fragment::ByteArray(d) => {
+                    bindings.insert(d.alias.clone(), offset as u32);
+                    d.encoded_length()?
+                }
+                Fragment::Array(a) => a.encoded_length()?,
+                Fragment::Dictionary(a) => a.encoded_length()?,
                 Fragment::String(s) => s.value.len() + 4,
                 Fragment::Class(c) => c.encoded_length()?,
                 Fragment::Bytes { bytes, .. } => bytes.len(),
@@ -513,9 +561,16 @@ impl Source {
         let mut classes = BTreeMap::new();
         let mut arrays = BTreeSet::new();
         let mut dictionaries = BTreeSet::new();
+        let mut byte_arrays = BTreeSet::new();
         for fragment in &self.fragments {
             let (at, size) = match fragment {
                 Fragment::Bytes { at, bytes } => (Some(*at), bytes.len()),
+                Fragment::ByteArray(a) => {
+                    if !valid_alias(&a.alias) || !byte_arrays.insert(a.alias.clone()) {
+                        return Err(Error("invalid or duplicate ByteArray alias".into()));
+                    }
+                    (a.at, a.encoded_length()?)
+                }
                 Fragment::Dictionary(d) => {
                     if !valid_alias(&d.alias) || !dictionaries.insert(d.alias.clone()) {
                         return Err(Error("invalid or duplicate Dictionary alias".into()));
@@ -576,6 +631,7 @@ impl Source {
                 Fragment::String(s) => text.push_str(&s.to_text()),
                 Fragment::Class(c) => text.push_str(&c.to_text()),
                 Fragment::Array(a) => text.push_str(&a.to_text()),
+                Fragment::ByteArray(a) => text.push_str(&a.to_text()),
                 Fragment::Dictionary(d) => text.push_str(&d.to_text()),
                 Fragment::Bytes { at, bytes } => {
                     for (index, chunk) in bytes.chunks(32).enumerate() {

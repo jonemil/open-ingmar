@@ -1,7 +1,9 @@
 # DATA flat constant containers
 
-[Arrays](data-arrays.md) and [Dictionaries](data-dictionaries.md) share the
-following framing, scalar tags, and record-local String pool. Nested containers,
+[Arrays](data-arrays.md), [Dictionaries](data-dictionaries.md), and
+[ByteArrays](data-byte-arrays.md) share the following framing and optional
+record-local String pool. Arrays/Dictionaries use tagged scalar elements;
+ByteArrays use compact untagged bytes. Nested containers,
 Symbol and other unlisted scalar tags remain unsupported. Wider numeric
 runtime evidence comes from [Array](../investigations/compiler-numeric-arrays.md)
 and [Dictionary](../investigations/compiler-numeric-dictionaries.md) specimens.
@@ -18,7 +20,8 @@ All integers are big-endian. Starting at a known DATA record boundary:
 `N` covers both blocks including their headers, so `N = M + 8` without a pool,
 or `N = P + M + 16` with one. Total record size is `N + 6`. The value block
 starts with a root type and u32 count: Array `0x05` has that many scalar elements;
-Dictionary `0x0b` has that many ordered scalar key/value pairs. Counts must consume
+Dictionary `0x0b` has that many ordered scalar key/value pairs; ByteArray `0x14`
+has that many unsigned bytes. Counts must consume
 the block exactly. No trailing bytes are allowed.
 
 A pool is an ordered sequence of u16 lengths followed by UTF-8 bytes and a zero

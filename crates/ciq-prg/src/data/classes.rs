@@ -39,6 +39,7 @@ pub struct Class<'a> {
 pub enum Record<'a> {
     String { offset: usize, value: &'a str },
     Array(super::arrays::Declaration),
+    ByteArray(super::byte_arrays::Declaration),
     Dictionary(super::dictionaries::Declaration),
     Class(Class<'a>),
 }
@@ -62,6 +63,7 @@ pub fn records(payload: &[u8]) -> Result<Vec<Record<'_>>, Error> {
             let record = super::constants::decode(payload, offset)?;
             at = record.end;
             records.push(match record.root {
+                0x14 => Record::ByteArray(super::byte_arrays::from_record(offset, record)),
                 5 => Record::Array(super::arrays::from_record(offset, record)),
                 0x0b => Record::Dictionary(super::dictionaries::from_record(offset, record)),
                 _ => unreachable!("constant decoder checked root tag"),

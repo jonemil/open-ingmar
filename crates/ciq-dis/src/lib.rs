@@ -147,6 +147,10 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
     }
     let strings = data.as_ref().map(string_declarations).unwrap_or_default();
     let arrays = data.as_ref().map(array_declarations).unwrap_or_default();
+    let byte_arrays = data
+        .as_ref()
+        .map(byte_array_declarations)
+        .unwrap_or_default();
     let dictionaries = data
         .as_ref()
         .map(dictionary_declarations)
@@ -163,7 +167,7 @@ pub fn export_project(prg: &Prg, directory: &Path) -> Result<Manifest, Box<dyn S
                 symbols.as_ref(),
                 structured.is_some(),
                 &strings,
-                &arrays,
+                (&arrays, &byte_arrays),
                 &dictionaries,
                 &code_labels,
             ) {
@@ -385,6 +389,17 @@ fn array_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, St
         .iter()
         .filter_map(|f| match f {
             Fragment::Array(a) => a.at.map(|at| (at, a.alias.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn byte_array_declarations(source: &DataSource) -> std::collections::BTreeMap<u32, String> {
+    source
+        .fragments
+        .iter()
+        .filter_map(|f| match f {
+            Fragment::ByteArray(a) => a.at.map(|at| (at, a.alias.clone())),
             _ => None,
         })
         .collect()
@@ -682,7 +697,10 @@ pub fn disassemble_symbolic(prg: &Prg) -> Result<String, Box<dyn StdError>> {
         symbols.as_ref(),
         true,
         &strings,
-        &std::collections::BTreeMap::new(),
+        (
+            &std::collections::BTreeMap::new(),
+            &std::collections::BTreeMap::new(),
+        ),
         &std::collections::BTreeMap::new(),
         &labels,
     )?);
@@ -711,7 +729,10 @@ pub fn disassemble_with_symbols(
         symbols,
         false,
         &std::collections::BTreeMap::new(),
-        &std::collections::BTreeMap::new(),
+        (
+            &std::collections::BTreeMap::new(),
+            &std::collections::BTreeMap::new(),
+        ),
         &std::collections::BTreeMap::new(),
         &std::collections::BTreeMap::new(),
     )
@@ -722,7 +743,10 @@ fn disassemble_named(
     symbols: Option<&Symbols<'_>>,
     named: bool,
     strings: &std::collections::BTreeMap<u32, StringDeclaration>,
-    arrays: &std::collections::BTreeMap<u32, String>,
+    arrays: (
+        &std::collections::BTreeMap<u32, String>,
+        &std::collections::BTreeMap<u32, String>,
+    ),
     dictionaries: &std::collections::BTreeMap<u32, String>,
     labels: &std::collections::BTreeMap<u32, String>,
 ) -> Result<String, Error> {
@@ -767,7 +791,15 @@ fn disassemble_named(
             }
             if instruction.opcode() == ciq_mc::Opcode::Apush {
                 let at = u32::from_be_bytes(instruction.operands().try_into().unwrap());
-                if let Some(alias) = arrays.get(&at) {
+                if let Some(alias) = arrays.0.get(&at) {
+                    write!(text, " &{alias}").unwrap();
+                    start += width;
+                    continue;
+                }
+            }
+            if instruction.opcode() == ciq_mc::Opcode::Bpush {
+                let at = u32::from_be_bytes(instruction.operands().try_into().unwrap());
+                if let Some(alias) = arrays.1.get(&at) {
                     write!(text, " &{alias}").unwrap();
                     start += width;
                     continue;

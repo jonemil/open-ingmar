@@ -80,6 +80,7 @@ opcodes! {
     Throw = 0x33, "throw", [];
     Cpush = 0x34, "cpush", [4];
     Argc = 0x35, "argc", [1];
+    Newba = 0x36, "newba", [];
     Ipushz = 0x37, "ipushz", [];
     Ipush1 = 0x38, "ipush1", [1];
     Ipush2 = 0x39, "ipush2", [2];
@@ -87,6 +88,7 @@ opcodes! {
     Btpush = 0x3e, "btpush", [];
     Bfpush = 0x3f, "bfpush", [];
     Apush = 0x40, "apush", [4];
+    Bpush = 0x41, "bpush", [4];
     Hpush = 0x42, "hpush", [4];
     Getselfv = 0x43, "getselfv", [4];
     Getself = 0x44, "getself", [];
@@ -220,6 +222,22 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<LocatedInstruction>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn byte_array_allocation_and_constant_load_have_distinct_encodings() {
+        let bytes = [0x38, 3, 0x36, 0x41, 0, 0, 0x33, 0x4f];
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(decoded[1].instruction.opcode(), Opcode::Newba);
+        assert_eq!(decoded[2].offset, 3);
+        assert_eq!(decoded[2].instruction.opcode(), Opcode::Bpush);
+        let mut encoded = Vec::new();
+        for i in decoded {
+            i.instruction.encode_into(&mut encoded);
+        }
+        assert_eq!(encoded, bytes);
+        assert!(Instruction::new(Opcode::Newba, vec![0]).is_err());
+        assert!(decode(&bytes[..7]).is_err());
+    }
 
     #[test]
     fn dictionary_allocation_has_no_inline_operands() {

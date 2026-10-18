@@ -31,6 +31,8 @@ pub enum Operand {
     String(String),
     /// A constant-array DATA alias used by `apush`.
     Array(String),
+    /// A compact ByteArray DATA alias used by `bpush`.
+    ByteArray(String),
     /// A constant Dictionary DATA alias used by `hpush`.
     Dictionary(String),
     /// A local CODE label resolved to a signed relative instruction operand.
@@ -176,6 +178,8 @@ impl Program {
                                 Operand::Dictionary(alias.into())
                             } else if opcode == Opcode::Apush {
                                 Operand::Array(alias.into())
+                            } else if opcode == Opcode::Bpush {
+                                Operand::ByteArray(alias.into())
                             } else {
                                 Operand::String(alias.into())
                             });
@@ -305,6 +309,15 @@ impl Program {
                             {
                                 return Err(fail("invalid array reference or non-array operand"));
                             }
+                            Operand::ByteArray(alias)
+                                if *opcode != Opcode::Bpush
+                                    || field != 0
+                                    || !valid_alias(alias) =>
+                            {
+                                return Err(fail(
+                                    "invalid ByteArray reference or non-ByteArray operand",
+                                ));
+                            }
                             Operand::Code(alias)
                                 if !opcode.has_relative_target()
                                     || field != 0
@@ -374,9 +387,9 @@ impl Program {
                             }
                             Operand::Symbol(alias) => text.push_str(&format!("@{alias}")),
                             Operand::String(alias) => text.push_str(&format!("&{alias}")),
-                            Operand::Array(alias) | Operand::Dictionary(alias) => {
-                                text.push_str(&format!("&{alias}"))
-                            }
+                            Operand::Array(alias)
+                            | Operand::Dictionary(alias)
+                            | Operand::ByteArray(alias) => text.push_str(&format!("&{alias}")),
                             Operand::Code(alias) => text.push_str(&format!("code:{alias}")),
                         }
                     }
@@ -437,6 +450,26 @@ impl Program {
         external_strings: &BTreeMap<String, u32>,
         external_arrays: &BTreeMap<String, u32>,
         external_dictionaries: &BTreeMap<String, u32>,
+    ) -> Result<Vec<u8>, Error> {
+        self.encode_with_byte_arrays(
+            external,
+            external_strings,
+            external_arrays,
+            external_dictionaries,
+            &BTreeMap::new(),
+        )
+    }
+
+    /// Encode CODE with separately typed symbol and literal binding maps.
+    /// ByteArray aliases resolve only for `bpush`, using zero-prefix DATA offsets.
+    /// Declarations belong in DATA; missing bindings or out-of-range offsets fail.
+    pub fn encode_with_byte_arrays(
+        &self,
+        external: &BTreeMap<String, u32>,
+        external_strings: &BTreeMap<String, u32>,
+        external_arrays: &BTreeMap<String, u32>,
+        external_dictionaries: &BTreeMap<String, u32>,
+        external_byte_arrays: &BTreeMap<String, u32>,
     ) -> Result<Vec<u8>, Error> {
         let labels = self.labels()?;
         let code_length: usize = self
@@ -556,6 +589,16 @@ impl Program {
                             ));
                         }
                         at as u64
+                    }
+                    Operand::ByteArray(alias) => {
+                        let at = *external_byte_arrays.get(alias).ok_or_else(|| {
+                            self.error(index, format!("undefined ByteArray alias {alias}"))
+                        })?;
+                        if at >= 0x1000000 {
+                            return Err(self
+                                .error(index, "ByteArray address exceeds zero-prefix DATA space"));
+                        }
+                        u64::from(at)
                     }
                 };
                 if *width < 8 && value >= (1u64 << (width * 8)) {

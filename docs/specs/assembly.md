@@ -9,7 +9,8 @@ construct `ciq-assembly::Program` directly. Crate responsibilities belong in
 
 A `Program` is an ordered sequence of labels, instructions, symbol declarations,
 and string/array literal requirements. Instructions contain an `Opcode` and
-`Bits`, `Symbol`, `String`, `Array`, `Dictionary`, or relative `Code` operands. Semantic IR
+`Bits`, `Symbol`, `String`, `Array`, `ByteArray`, `Dictionary`, or relative `Code`
+operands. Semantic IR
 value IDs are absent. Native construction and text parsing share validation:
 identifier syntax, operand kinds/counts/widths, duplicate aliases/labels, and
 supported layout bounds. Parsed errors retain assembly line numbers; constructed
@@ -69,3 +70,9 @@ remain available for programs without external Dictionary aliases.
 
 Section projects retain authoritative Dictionary declarations in DATA;
 inline CODE requirements remain rejected there, as for Arrays/Strings.
+
+ByteArray constants use `bpush &alias` and the separate ByteArray map in
+`Program::encode_with_byte_arrays`. Their `.bytearray` declarations belong in
+[DATA](data-byte-arrays.md); inline CODE declarations are unsupported. Numeric
+operands retain raw bits. Typed references must resolve in their own namespace
+and within the current zero-prefix DATA address profile.

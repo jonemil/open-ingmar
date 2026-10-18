@@ -2,7 +2,8 @@
 
 This profile covers flat constant arrays used by `apush`, based on
 [constant-array experiments](../investigations/constant-arrays.md). It does not
-cover nested containers, ByteArray, or unlisted scalar types.
+cover nested containers or unlisted scalar types. Compact
+[ByteArray records](data-byte-arrays.md) have a distinct root and load opcode.
 [Dictionary constants](data-dictionaries.md) have a separate profile.
 Unsupported framing or element tags stop the complete DATA walk.
 

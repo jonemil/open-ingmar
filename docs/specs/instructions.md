@@ -64,10 +64,12 @@ CODE instruction targets, independently of symbols and DATA addresses.
 - [`aputvdup`](#aputvdup): store an element/entry and retain the receiver.
 - [`hpush`](#hpush): load a serialized constant Dictionary.
 - [`apush`](#apush): load a serialized constant array.
+- [`bpush`](#bpush): load a serialized ByteArray.
 - [`lgetv`](#lgetv): load a local-frame slot.
 - [`lputv`](#lputv): store a local-frame slot.
 - [`newd`](#newd): create a Dictionary.
 - [`newa`](#newa): create an array.
+- [`newba`](#newba): create a zero-filled ByteArray.
 - [`newc`](#newc): create a class instance.
 - [`return`](#return): return from a function.
 - [`news`](#news): load a string from serialized data.
@@ -448,6 +450,22 @@ load yield independently mutable arrays: changing the first does not change the
 second. Nested containers, unsupported scalar types, invalid addresses, and
 other SDK/device versions remain unverified.
 
+## bpush
+
+**Load a serialized ByteArray.** Opcode `0x41`; length **5 bytes**.
+Operand: big-endian u32 DATA record address. Successful abstract stack:
+`[...] → [..., byte-array]`.
+
+The address names the outer `0x03` tag of a
+[compact ByteArray record](data-byte-arrays.md). `bpush &alias` uses a distinct
+ByteArray binding namespace. Numeric operands retain all 32 bits; symbolic
+bindings currently support zero-prefix DATA addresses only. No universal
+24-bit capacity limit follows from that binding profile.
+
+The [SDK specimen](../investigations/byte-arrays.md) loads a seven-byte constant;
+editing its first DATA byte changes the corresponding runtime value. Deep-copy
+behavior, invalid addresses, and other address prefixes remain unverified.
+
 ## aputvdup
 
 **Store an Array element or Dictionary entry and retain the receiver.**
@@ -507,6 +525,17 @@ Observed encoding: `13 00` at CODE+`0x00002c` in **minimal-console**, /hello.
 
 **Limits:** The observed slot-0 write constrains simplistic “local 0 is always
 this” descriptions. Frame ownership and lifetime remain unresolved.
+
+## newba
+
+**Create a zero-filled ByteArray.** Opcode `0x36`; length **1 byte**.
+No inline operands. Successful abstract stack:
+`[..., number-length] → [..., byte-array]`.
+
+The [SDK specimen](../investigations/byte-arrays.md) uses this instruction for
+`new[n]b` and effectful byte literals. Length three produces three Number zeros.
+Computed literal elements use the existing indexed stores. Invalid sizes,
+allocation failure behavior, and portable device capacity remain unverified.
 
 ## newa
 
