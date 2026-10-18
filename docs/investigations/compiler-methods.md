@@ -85,9 +85,16 @@ alias keeps the old receiver alive. Copying that alias, then clearing the
 original, retains the receiver; clearing the last alias expires its weak
 reference. Guarded invocation still returns its original size (`2`).
 
-Both SDK/generated programs match all 28 expected lines, including Null checks,
+`MethodStore` holds the old receiver in a required Method field, then a nullable
+field. Replacing the required binding retains the old receiver through the
+nullable field; clearing that field retains it through a local snapshot.
+Clearing the final snapshot expires its weak reference. The replacement binding
+invokes the new receiver. AppBase also stores its own `method(:answer)` in a
+nullable field, clears the field, and invokes a saved local (`42`).
+
+Both SDK/generated programs match all 37 expected lines, including Null checks,
 guarded hash/weak calls, and a loop that clears its Method. Structured section
-reconstruction passes for both. Artifacts: `scratch/check-nullable-methods/`.
+reconstruction passes for both. Artifacts: `scratch/check-method-fields/`.
 No callable signature or concrete recovery from an erased result is inferred.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

@@ -26,3 +26,12 @@ true
 1
 true
 false
+true
+true
+3
+true
+true
+3
+false
+1
+42

@@ -89,7 +89,51 @@ module NullableMethods {
         System.println(empty != null && empty.equals(bound));
     }
 }
+class MethodStore {
+    var fixed as Toybox.Lang.Method;
+    var maybe as Toybox.Lang.Method or Null = null;
+    function initialize(m as Toybox.Lang.Method) { self.fixed = m; }
+    function replace(m as Toybox.Lang.Method) as Void { self.fixed = m; }
+    function required() as Toybox.Lang.Method { return self.fixed; }
+    function set(m as Toybox.Lang.Method or Null) as Void { self.maybe = m; }
+    function snapshot() as Toybox.Lang.Method or Null { return self.maybe; }
+    function call() as Toybox.Lang.Object or Null { return self.fixed.invoke(); }
+}
+module MethodFields {
+    function run() as Void {
+        var owner = [4, 5, 6];
+        var weak = owner.weak();
+        var bound = owner.method(:size);
+        var store = new MethodStore(bound);
+        System.println(store.snapshot() == null);
+        owner = [0];
+        bound = owner.method(:size);
+        System.println(weak.stillAlive());
+        Methods.show(store.call());
+        store.set(store.required());
+        store.replace(bound);
+        System.println(weak.stillAlive());
+        var retained = store.snapshot();
+        store.set(null);
+        System.println(weak.stillAlive());
+        if (retained != null) { Methods.show(retained.invoke()); }
+        retained = null;
+        System.println(weak.stillAlive());
+        Methods.show(store.call());
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
+    var startup as Toybox.Lang.Method or Null;
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { Methods.run(); NullableMethods.run(); System.exit(); }
+    function answer() as Toybox.Lang.Number { return 42; }
+    function onStart(state) {
+        Methods.run();
+        NullableMethods.run();
+        MethodFields.run();
+        self.startup = method(:answer);
+        var saved = self.startup;
+        self.startup = null;
+        if (saved != null) { Methods.show(saved.invoke()); }
+        System.exit();
+    }
 }

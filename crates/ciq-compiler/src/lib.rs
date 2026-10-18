@@ -1895,6 +1895,8 @@ impl Function {
                             | ReturnType::SourceObject(_)
                             | ReturnType::Symbol
                             | ReturnType::NullableSymbol
+                            | ReturnType::Method
+                            | ReturnType::NullableMethod
                             | ReturnType::Interface(_)
                             | ReturnType::NullableInterface(_)
                     ) {
@@ -1916,6 +1918,8 @@ impl Function {
                                 | ValueType::NullableInterface(_)
                                 | ValueType::Symbol
                                 | ValueType::NullableSymbol
+                                | ValueType::Method
+                                | ValueType::NullableMethod
                         )
                         && !native::accepts(
                             &InterfaceType::Comparable.api_type(true),

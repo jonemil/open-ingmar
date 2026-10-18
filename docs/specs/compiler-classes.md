@@ -373,9 +373,10 @@ cannot satisfy it. Requiring this straight-line initialization prefix is our
 bounded checking policy, not Garmin's complete definite-initialization rules.
 Calls that may request System.exit, including transitive source calls and
 constructors and source comparator callbacks reached through Array sorting,
-are also rejected until all reference fields are established.
-Erased interface calls and sorting through nullable/non-null Comparator values
-are conservatively included when the exact callback body is unavailable.
+are also rejected until all required fields are established.
+Erased Method invocation, interface calls, and sorting through nullable/non-null
+Comparator values are conservatively included when the exact callback body is
+unavailable.
 This conservative call-graph check includes conditional exits; runtime failures
 and additional native callback effects are not proven safe by it.
 
@@ -454,6 +455,40 @@ Reads use `.read-self %<result> <name> result=<tag>`; writes use the existing
 encoding for AppBase fields and other source classes, with ordinary field and
 invocation instructions. See the [comparison example](../../examples/compiler-comparators/README.md)
 and [evidence](../investigations/compiler-comparators.md#interface-fields).
+
+## Method fields
+
+All supported source class bases accept annotated `Toybox.Lang.Method` and
+`Method or Null` fields from API 1.0.0, with canonical/imported/aliased names:
+
+```monkeyc
+var required as Toybox.Lang.Method;
+var optional as Toybox.Lang.Method or Null = null;
+function initialize(callback as Toybox.Lang.Method) {
+    self.required = callback;
+}
+```
+
+Both slots start as Null in metadata (type `0x00`, value zero). A non-null field
+requires assignment in source `initialize`, following the required-field prefix
+and self-exposure restrictions of [reference fields](#source-reference-fields).
+Binding `self.method(...)` exposes self and cannot fill the first required slot.
+Nullable fields may omit their initializer or use literal `null`; computed
+defaults remain unsupported. Writes must preserve the declared Method/nullability
+contract. Methods retain their erased invocation contracts.
+
+Reads retain the declaration's type. Nullable invocation/member access requires
+a guarded local snapshot; testing one mutable field read does not refine another.
+Replacing or clearing a field does not alter saved aliases. Each stored Method
+retains its bound receiver until all owning aliases are released. Ordinary
+instance isolation, field name/count limits, and evaluation order still apply.
+
+Unit IR uses `.field-method <name> method|nullable-method` before methods, without
+a default operand. `.read-self` must claim the declared result tag and
+`.assign-self` must satisfy it; unit validation rechecks both after IR reload.
+Existing field load/store instructions and DATA framing suffice. See the
+[specimen](../../examples/compiler-methods/README.md) and
+[ownership evidence](../investigations/compiler-methods.md#nullable-ownership).
 
 ## Symbol fields
 

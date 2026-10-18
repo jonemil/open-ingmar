@@ -1436,7 +1436,8 @@ storage; invocation and every Method member require a non-null proof. Writes
 invalidate local proofs; aliases and stored Boolean tests do not transfer them.
 Releasing the last Method alias also releases its bound receiver. Lexical
 `as Method or Null` is an unchecked type assertion, with no runtime conversion
-or signature recovery. Method fields and container elements remain unsupported.
+or signature recovery. [Method fields](compiler-classes.md#method-fields) support
+required/nullable storage; Method container elements remain unsupported.
 
 `invoke(arguments...)` accepts up to 254 supported Object/Null values and
 returns opaque `Object or Null`. This erased result covers scalar/container

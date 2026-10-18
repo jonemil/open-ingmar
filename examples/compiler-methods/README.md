@@ -2,7 +2,9 @@
 
 [app.mc](app.mc) binds native methods through Object `method(Symbol)`, invokes
 zero/one/two-argument callbacks, and observes receiver lifetime, aliases, hashes,
-nullable/Void results, returned containers, and nullable Method ownership. The
+nullable/Void results, returned containers, and nullable Method ownership.
+`MethodStore` and AppBase fields exercise required/nullable callback storage,
+local snapshots, replacement, and release. The
 [expected output](expected.txt) matches SDK/generated `fr265` programs.
 
 From the repository root, using fresh output paths:

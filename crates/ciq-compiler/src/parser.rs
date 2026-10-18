@@ -2223,7 +2223,9 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                                 "';' after Symbol field declaration",
                             )?;
                             crate::FieldKind::Symbol { initial, nullable }
-                        } else if let Some(interface) = crate::InterfaceType::from_name(&class) {
+                        } else if class == "Toybox.Lang.Method"
+                            || crate::InterfaceType::from_name(&class).is_some()
+                        {
                             let nullable = if parser.peek()? == Kind::Word("or") {
                                 parser.token()?;
                                 parser.expect(Kind::Word("Null"), "'Null'")?;
@@ -2235,7 +2237,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                                 if !nullable {
                                     return Err(parser.error(
                                         token.span.start,
-                                        "non-null interface fields must be assigned in initialize",
+                                        "non-null reference fields must be assigned in initialize",
                                     ));
                                 }
                                 parser.token()?;
@@ -2244,11 +2246,15 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                             }
                             parser.expect(
                                 Kind::Punctuation(';'),
-                                "';' after interface field declaration",
+                                "';' after reference field declaration",
                             )?;
-                            crate::FieldKind::Interface {
-                                interface,
-                                nullable,
+                            if class == "Toybox.Lang.Method" {
+                                crate::FieldKind::Method { nullable }
+                            } else {
+                                crate::FieldKind::Interface {
+                                    interface: crate::InterfaceType::from_name(&class).unwrap(),
+                                    nullable,
+                                }
                             }
                         } else {
                             if class.contains('.') {

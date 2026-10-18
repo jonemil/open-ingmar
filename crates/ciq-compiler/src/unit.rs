@@ -112,6 +112,8 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(function.value_types[receiver], crate::ValueType::Dictionary
                     | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
                     | crate::ValueType::NullableObject if member == "toString")
+                || matches!(function.value_types[receiver], crate::ValueType::Method
+                    | crate::ValueType::NullableMethod if member == "invoke")
         }
         _ => false,
     }
@@ -254,6 +256,9 @@ pub enum FieldKind {
         initial: Option<String>,
         nullable: bool,
     },
+    /// A Null-initialized bound Method slot. Non-null fields must be filled by
+    /// source initialize before reads, self exposure, control flow, or return.
+    Method { nullable: bool },
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
@@ -270,6 +275,7 @@ impl FieldKind {
         matches!(
             self,
             Self::SourceObject(_)
+                | Self::Method { nullable: false }
                 | Self::Symbol {
                     initial: None,
                     nullable: false
@@ -303,6 +309,13 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::Method { nullable } => {
+                if *nullable {
+                    ReturnType::NullableMethod
+                } else {
+                    ReturnType::Method
+                }
+            }
             FieldKind::Symbol { nullable, .. } => {
                 if *nullable {
                     ReturnType::NullableSymbol
@@ -1479,6 +1492,11 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::Method { nullable } => format!(
+                        ".field-method {} {}method\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" }
+                    ),
                     FieldKind::Symbol { initial, nullable } => format!(
                         ".field-symbol {} {}{}\n",
                         field.name,
@@ -1870,6 +1888,7 @@ fn parse_unit_ir_context(
                                 | ".field-reference"
                                 | ".field-interface"
                                 | ".field-symbol"
+                                | ".field-method"
                         )
                     }) {
                         if (parts.len() != 3 && !(parts[0] == ".field-symbol" && parts.len() == 4))
@@ -1886,6 +1905,20 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-method" {
+                            FieldKind::Method {
+                                nullable: match parts[2].as_str() {
+                                    "method" => false,
+                                    "nullable-method" => true,
+                                    _ => {
+                                        return Err(Diagnostic::at(
+                                            text,
+                                            method_at,
+                                            "invalid Method field contract",
+                                        ));
+                                    }
+                                },
+                            }
                         } else if parts[0] == ".field-symbol" {
                             let nullable = match parts[2].as_str() {
                                 "symbol" => false,

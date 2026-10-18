@@ -1410,6 +1410,8 @@ Object-or-Null for invocation, including when all observed results were non-null
 Native API declarations carry a repeated argument type for `invoke`; ordinary
 fixed-arity methods remain fixed. The existing 254-argument VM limit applies.
 See [source Method contracts](compiler-subset.md#method-values-and-invocation).
+Class storage uses [`.field-method`](compiler-classes.md#method-fields), retaining
+the declared Method/nullability contract through field reads and writes.
 
 `.symbol %<result-id> <name> [span=<start>:<end>]` defines a non-null Symbol by
 ASCII identifier, without a numeric ID. Parameter, call-result, and matching

@@ -136,6 +136,7 @@ fn instance_field(
         } => (8, ids[name]),
         crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::SourceObject(_)
+        | crate::FieldKind::Method { .. }
         | crate::FieldKind::Interface { .. } => (0, 0),
     };
     field(ids[&declaration.name], 0, kind, Reference::Raw(value))
