@@ -1437,8 +1437,8 @@ invalidate local proofs; aliases and stored Boolean tests do not transfer them.
 Releasing the last Method alias also releases its bound receiver. Lexical
 `as Method or Null` is an unchecked type assertion, with no runtime conversion
 or signature recovery. [Method fields](compiler-classes.md#method-fields) support
-required/nullable storage. Arrays follow the [Method Array profile](#method-arrays);
-Method Dictionary keys/values remain unsupported.
+required/nullable storage. Arrays and Dictionaries follow the
+[Array](#method-arrays) and [Dictionary](#method-dictionaries) profiles below.
 
 `invoke(arguments...)` accepts up to 254 supported Object/Null values and
 returns opaque `Object or Null`. This erased result covers scalar/container
@@ -1497,6 +1497,37 @@ element preserves saved aliases. Releasing the last Method reference releases
 its bound receiver. Array storage does not recover a callback signature or a
 concrete invocation result. See the [specimen](../../examples/compiler-methods/README.md)
 and [ownership evidence](../investigations/compiler-methods.md#nullable-ownership).
+
+### Method Dictionaries
+
+Typed Dictionaries accept non-null Method keys, Method values, and nullable
+Method values from API 1.0.0, alongside their other supported key/value domains.
+Both mutable parameters remain invariant through signatures, storage, and writes.
+Nullable keys require a non-null proof before lookup or mutation; Null keys
+remain unsupported.
+
+Method-bearing literals allocate privately and evaluate each key before its
+value, in entry order. Homogeneous Method candidates can establish a literal's
+contract; Null-only values need an expected nullable contract. Existing scalar
+keys with Null-only nullable Method values may use DATA constants. Method keys
+or values are never encoded as pooled scalar payloads or numeric addresses.
+
+`get` and indexed lookup return Method or Null even for non-null Method values,
+because the key may be missing. Guard a local snapshot before invocation;
+`hasKey` and a test of another mutable lookup do not refine that read.
+`put`/indexed writes preserve declared nullability. Existing `size`, `hasKey`,
+`remove`, and observer profiles apply. Runtime Method equality/hash determines
+key identity; repeated aliases replace an entry, while independently created
+bindings need not compare equal. No hash algorithm is specified.
+
+`keys()` returns `Array<Method>` for Method keys. `values()` returns an Array
+with the declared Method/nullability contract, without adding the missing-key
+Null alternative. These Arrays and lookup snapshots retain the same Method
+objects independently of later Dictionary mutation. Keys and values both own
+their stored Methods; the bound receiver expires only after all aliases release
+them. Erased binding/invocation still establishes no concrete callback signature.
+See the [specimen](../../examples/compiler-methods/README.md) and
+[ownership evidence](../investigations/compiler-methods.md#nullable-ownership).
 
 ## Ordinary weak references
 

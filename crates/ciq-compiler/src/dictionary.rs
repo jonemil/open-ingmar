@@ -174,9 +174,10 @@ pub(crate) fn constant_record(
     }
 }
 
-/// Supported non-null scalar and comparison-interface Dictionary key contracts.
+/// Supported non-null scalar, Method, and comparison-interface Dictionary keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryKey {
+    Method,
     Symbol,
     Interface(crate::InterfaceType),
     Number,
@@ -188,10 +189,12 @@ pub enum DictionaryKey {
     Char,
 }
 
-/// Supported scalar and comparison-interface Dictionary value contracts,
+/// Supported scalar, Method, and comparison-interface Dictionary value contracts,
 /// including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    Method,
+    NullableMethod,
     Symbol,
     NullableSymbol,
     Interface(crate::InterfaceType),
@@ -234,6 +237,7 @@ impl DictionaryType {
             DictionaryKey::Boolean => "Boolean",
             DictionaryKey::Char => "Char",
             DictionaryKey::Symbol => "Symbol",
+            DictionaryKey::Method => "Method",
         };
         let (value, nullable) = match self.value {
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => ("Comparable", false),
@@ -258,6 +262,8 @@ impl DictionaryType {
             DictionaryValue::NullableBoolean => ("Boolean", true),
             DictionaryValue::Char => ("Char", false),
             DictionaryValue::Symbol => ("Symbol", false),
+            DictionaryValue::Method => ("Method", false),
+            DictionaryValue::NullableMethod => ("Method", true),
             DictionaryValue::NullableSymbol => ("Symbol", true),
             DictionaryValue::NullableChar => ("Char", true),
         };
@@ -292,6 +298,7 @@ impl DictionaryType {
                 "Toybox.Lang.Boolean" => DictionaryKey::Boolean,
                 "Toybox.Lang.Char" => DictionaryKey::Char,
                 "Toybox.Lang.Symbol" => DictionaryKey::Symbol,
+                "Toybox.Lang.Method" => DictionaryKey::Method,
                 _ => return None,
             },
             _ => return None,
@@ -315,6 +322,8 @@ impl DictionaryType {
             DictionaryValue::NullableBoolean,
             DictionaryValue::Symbol,
             DictionaryValue::NullableSymbol,
+            DictionaryValue::Method,
+            DictionaryValue::NullableMethod,
             DictionaryValue::Char,
             DictionaryValue::NullableChar,
         ] {
@@ -341,6 +350,7 @@ impl DictionaryType {
             DictionaryKey::Boolean => "boolean",
             DictionaryKey::Char => "char",
             DictionaryKey::Symbol => "symbol",
+            DictionaryKey::Method => "method",
         };
         let value = match self.value {
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
@@ -365,6 +375,8 @@ impl DictionaryType {
             DictionaryValue::NullableBoolean => "nullable-boolean",
             DictionaryValue::Char => "char",
             DictionaryValue::Symbol => "symbol",
+            DictionaryValue::Method => "method",
+            DictionaryValue::NullableMethod => "nullable-method",
             DictionaryValue::NullableSymbol => "nullable-symbol",
             DictionaryValue::NullableChar => "nullable-char",
         };
@@ -388,6 +400,7 @@ impl DictionaryType {
                 "boolean" => DictionaryKey::Boolean,
                 "char" => DictionaryKey::Char,
                 "symbol" => DictionaryKey::Symbol,
+                "method" => DictionaryKey::Method,
                 _ => return None,
             },
             value: match value {
@@ -413,6 +426,8 @@ impl DictionaryType {
                 "nullable-boolean" => DictionaryValue::NullableBoolean,
                 "char" => DictionaryValue::Char,
                 "symbol" => DictionaryValue::Symbol,
+                "method" => DictionaryValue::Method,
+                "nullable-method" => DictionaryValue::NullableMethod,
                 "nullable-symbol" => DictionaryValue::NullableSymbol,
                 "nullable-char" => DictionaryValue::NullableChar,
                 _ => return None,
@@ -480,6 +495,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
                         | "Toybox.Lang.Boolean"
                         | "Toybox.Lang.Char"
                         | "Toybox.Lang.Symbol"
+                        | "Toybox.Lang.Method"
                 ) =>
             {
                 if scalar.as_ref().is_some_and(|previous| previous != ty) {

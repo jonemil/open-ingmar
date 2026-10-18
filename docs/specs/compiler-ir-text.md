@@ -555,6 +555,10 @@ categories use `method-array` or `nullable-method-array`. Runtime literals use
 private Array builders and ordinary Method values; constants permit only Null
 under the nullable element contract. No Method payload token or DATA tag is added.
 See [Method Arrays](compiler-subset.md#method-arrays).
+Dictionary tags also accept `method` keys and `method`/`nullable-method` values,
+for example `dictionary(method=>nullable-method)`. Method entries use private
+runtime construction; [Method Dictionary rules](compiler-subset.md#method-dictionaries)
+also permit existing scalar-key/Null-only nullable constants.
 
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
 applications materialize its [DATA record](data-arrays.md), using a shared local

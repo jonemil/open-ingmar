@@ -311,6 +311,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryKey::Char,
             "Toybox.Lang.Symbol" => crate::DictionaryKey::Symbol,
+            "Toybox.Lang.Method" => crate::DictionaryKey::Method,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryKey::Interface(crate::InterfaceType::Comparable)
             }
@@ -329,6 +330,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryValue::Char,
             "Toybox.Lang.Symbol" => crate::DictionaryValue::Symbol,
+            "Toybox.Lang.Method" => crate::DictionaryValue::Method,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
             }
@@ -351,6 +353,7 @@ impl<'a> Parser<'a> {
                 crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
                 crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
                 crate::DictionaryValue::Symbol => crate::DictionaryValue::NullableSymbol,
+                crate::DictionaryValue::Method => crate::DictionaryValue::NullableMethod,
                 crate::DictionaryValue::Interface(interface) => {
                     crate::DictionaryValue::NullableInterface(interface)
                 }

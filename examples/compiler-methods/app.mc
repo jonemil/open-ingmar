@@ -176,6 +176,64 @@ module MethodArrays {
         System.println(staged.size());
     }
 }
+module MethodDictionaries {
+    function build(m as Toybox.Lang.Method) as Toybox.Lang.Dictionary<Toybox.Lang.Method, Toybox.Lang.Method> {
+        return {m => m, m => m};
+    }
+    function optional(m as Toybox.Lang.Method) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Method or Null> {
+        return {"value" => m, "empty" => null};
+    }
+    function nullOnly() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Method or Null> { return {"empty" => null}; }
+    function mark(m as Toybox.Lang.Method, n as Toybox.Lang.Number) as Toybox.Lang.Method { System.println(n); return m; }
+    function staged(a as Toybox.Lang.Method, b as Toybox.Lang.Method) as Toybox.Lang.Dictionary<Toybox.Lang.Method, Toybox.Lang.Method> {
+        return {MethodDictionaries.mark(a, 50) => MethodDictionaries.mark(a, 51),
+                MethodDictionaries.mark(b, 52) => MethodDictionaries.mark(b, 53)};
+    }
+    function run() as Void {
+        var owner = [6, 7, 8, 9];
+        var weak = owner.weak();
+        var bound = owner.method(:size);
+        var other = owner.method(:size);
+        var values = MethodDictionaries.build(bound);
+        var nullable = MethodDictionaries.optional(bound);
+        System.println(values.size());
+        System.println(values.hasKey(other));
+        owner = [0];
+        var fresh = owner.method(:size);
+        bound = fresh;
+        other = fresh;
+        System.println(weak.stillAlive());
+        var keys = values.keys();
+        var methods = values.values();
+        var key = keys[0];
+        System.println(values.hasKey(key));
+        var found = values[key];
+        if (found != null) { Methods.show(found.invoke()); }
+        found = null;
+        System.println(values.get(fresh) == null);
+        values[key] = fresh;
+        nullable["value"] = null;
+        values.remove(key);
+        key = fresh;
+        System.println(weak.stillAlive());
+        keys.removeAll(keys[0]);
+        System.println(weak.stillAlive());
+        methods.removeAll(methods[0]);
+        System.println(weak.stillAlive());
+        nullable.put("value", fresh);
+        var snapshot = nullable.get("value");
+        nullable.remove("value");
+        if (snapshot != null) { Methods.show(snapshot.invoke()); }
+        var empty = MethodDictionaries.nullOnly();
+        System.println(empty.hasKey("empty"));
+        System.println(empty["empty"] == null);
+        var nulls = empty.values();
+        System.println(nulls[0] == null);
+        var n = 41;
+        var staged = MethodDictionaries.staged(fresh, n.method(:abs));
+        System.println(staged.size());
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
     var startup as Toybox.Lang.Method or Null;
     function initialize() { AppBase.initialize(); }
@@ -189,6 +247,7 @@ class MinimalConsoleApp extends Application.AppBase {
         self.startup = null;
         if (saved != null) { Methods.show(saved.invoke()); }
         MethodArrays.run();
+        MethodDictionaries.run();
         System.exit();
     }
 }

@@ -98,9 +98,16 @@ the last indexed local snapshot retains the old receiver until replaced.
 Nullable snapshots remain callable after their element is cleared. Identity
 search/removal and ordered literal markers (`40`, `41`) match across compilers.
 
-Both SDK/generated programs match all 57 expected lines, including Null checks,
+`MethodDictionaries` coalesces duplicate Method aliases and distinguishes a
+separate binding of the same receiver/member. Method-key and Method-value
+enumeration Arrays retain the old receiver after its entries are replaced or
+removed; releasing both Arrays expires its weak reference. A lookup snapshot
+remains callable after its entry is removed. Key/value markers run once in order
+(`50`, `51`, `52`, `53`); Null-only values enumerate as nullable Methods.
+
+Both SDK/generated programs match all 75 expected lines, including Null checks,
 guarded hash/weak calls, and a loop that clears its Method. Structured section
-reconstruction passes for both. Artifacts: `scratch/check-method-arrays/`.
+reconstruction passes for both. Artifacts: `scratch/check-method-dictionaries/`.
 No callable signature or concrete recovery from an erased result is inferred.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

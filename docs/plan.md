@@ -46,8 +46,7 @@ simulator observations, not portable failure/recovery or conversion guarantees.
 Keep heterogeneous Dictionary values, Null keys, and nested containers deferred
 under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
 Nullable Array elements currently need explicit context; broader literal
-inference can follow once mixed scalar/Null contracts are established. Dictionary
-callable methods belong to the shared Object work.
+inference can follow once mixed scalar/Null contracts are established.
 
 Broader weak targets, nullable WeakReference storage, and container recovery from
 opaque Object results need their own type/refinement contracts. Keep hidden
