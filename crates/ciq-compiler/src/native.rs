@@ -427,11 +427,54 @@ fn equality_argument(ty: &api::Type) -> bool {
     }
 }
 
-/// Check exact types, declared inheritance, or union membership without implicit
-/// conversions. Every alternative of an actual union must be accepted.
+/// Check the observed scalar Comparable implementations against the catalogue.
+/// Their required members must be available by the interface introduction level,
+/// so checking the receiving interface's API level also covers this witness.
+fn scalar_comparable(actual: &api::Type) -> bool {
+    let api::Type::Named(class) = actual else {
+        return false;
+    };
+    if !matches!(
+        class.as_str(),
+        "Toybox.Lang.Number"
+            | "Toybox.Lang.Long"
+            | "Toybox.Lang.Float"
+            | "Toybox.Lang.Double"
+            | "Toybox.Lang.Boolean"
+            | "Toybox.Lang.Char"
+            | "Toybox.Lang.String"
+    ) {
+        return false;
+    }
+    let catalogue = api::core();
+    let name = crate::InterfaceType::Comparable.name();
+    let interface = catalogue.interface(name).unwrap();
+    let level = catalogue.interface_level(name).unwrap();
+    interface.methods.iter().all(|required| {
+        catalogue
+            .method(class, &required.name)
+            .is_some_and(|actual| {
+                actual.method.parameters == required.parameters
+                    && actual.method.variadic == required.variadic
+                    && actual.result == &required.result
+                    && !actual.method.callback
+                    && actual.required_api <= level
+                    && required.since <= level
+            })
+    })
+}
+
+/// Check exact types, declared inheritance, verified scalar Comparable witnesses,
+/// or union membership without implicit conversions. Every alternative of an
+/// actual union must be accepted.
 /// Containers may widen to their declared class/base; their parameters are invariant.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual {
+        return true;
+    }
+    if matches!(expected, api::Type::Named(name) if name == crate::InterfaceType::Comparable.name())
+        && scalar_comparable(actual)
+    {
         return true;
     }
     if let api::Type::Union(types) = actual {

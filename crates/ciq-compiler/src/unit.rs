@@ -1013,7 +1013,7 @@ impl CompilationUnit {
         Ok(())
     }
 
-    /// Require the same interface contract or prove an exact source witness.
+    /// Require the same interface, a verified scalar, or an exact source witness.
     /// Native-base projection alone cannot establish structural members.
     fn check_interface_value(
         &self,
@@ -1022,7 +1022,10 @@ impl CompilationUnit {
         value: crate::ValueId,
         interface: crate::InterfaceType,
     ) -> Result<(), String> {
-        if function.value_types[&value] == crate::ValueType::Interface(interface) {
+        if crate::native::accepts(
+            &crate::api::Type::named(interface.name()),
+            &function.value_types[&value].api_type(),
+        ) {
             return Ok(());
         }
         let class = origins

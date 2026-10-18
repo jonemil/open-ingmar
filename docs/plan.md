@@ -18,9 +18,10 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Extend comparison-interface contracts to native Comparable witnesses and broader
-storage as concrete uses require. Nullable interfaces, fields, and container
-elements need their own contracts. Preserve exact source identities until unit
+Extend comparison-interface storage as concrete uses require. Nullable
+interfaces, fields, and container elements need their own contracts. Direct
+source-object assignment to an interface local also needs a unit proof.
+Preserve exact source identities until unit
 checking can establish required members; an erased Object or a runtime `has`
 test alone cannot prove a signature. Keep interface storage distinct from the
 exact source-class Comparator witness used by sorting.

@@ -1775,15 +1775,30 @@ Comparator exposes `compare(Object, Object) as Number`. Calls use ordinary
 receiver/member dispatch, evaluate receiver before arguments once, and preserve
 the implementing instance. Comparator values can also supply Array `sort`.
 
-User calls and returns accept the same interface or an exact source-class
-witness. Unit validation rechecks every required source member, arity, parameter,
+User calls and returns accept the same interface, a verified native scalar
+witness, or an exact source-class witness. Unit validation rechecks every
+required source member, arity, parameter,
 and result contract. Opaque Object/View values, a `has` test, and source classes
-with narrowed parameters do not establish the interface. Native scalar witnesses
-remain outside this profile. A standalone function can
-retain unresolved source witnesses; assembling a complete unit requires proof.
+with narrowed parameters do not establish the interface. A standalone function
+can retain unresolved source witnesses; assembling a complete unit requires
+proof.
+
+Number, Long, Float, Double, Boolean, Char, and String satisfy Comparable.
+The bounded native witness check requires the catalogue's exact method
+signature and an effective introduction level no later than Comparable's
+API 5.0.0 requirement. Checking the receiving interface therefore covers these
+native members as well. No runtime conversion, allocation, or wrapper is added.
+Other native types do not establish an interface witness. A nullable scalar
+needs a non-null/concrete proof before use; a positive concrete class test on an
+Object read can likewise establish a scalar witness. Comparison still follows
+the receiver's runtime method; a common interface does not guarantee that
+arbitrary operand domains can be ordered or that a call cannot fail.
 
 An interface parameter or call result retains its contract through inferred
-locals, aliases, same-interface assignment, and same-interface conditional joins.
+locals, aliases, and same-interface assignment and conditional joins. A Comparable
+local also accepts a verified scalar assignment. A conditional with a Comparable
+arm and a verified scalar arm retains Comparable in either arm order; two
+different scalar types do not implicitly infer an interface.
 There is no implicit conversion between Comparable and Comparator. Assigning a
 raw source object to an existing interface local requires a typed forwarding call
 first; source-to-interface matching currently belongs to call/return boundaries.

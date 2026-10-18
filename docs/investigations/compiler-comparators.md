@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 19 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 32 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-interface-calls/`. Existing compareTo binding/instructions
+in `scratch/check-native-comparables-final/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -72,9 +72,27 @@ to sort. Both SDK/generated runs print `interface-receiver` before
 `interface-argument`, then the expected comparison results and `[c, b, a]`.
 The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
 instructions. No new opcode or DATA record was encountered. This does not
-establish native scalar interface witnesses, nullable/field/container storage,
+establish nullable/field/container storage,
 or default sorting of source-object Arrays. The [API contract][api] owns the
 signature-query behavior and limits.
+
+## Native Comparable witnesses
+
+**Experimentally observed:** the tracked `NativeComparables` passes Number,
+Long, Float, Double, Boolean, Char, and String to a Comparable parameter, then
+compares each with an equal value through `compareTo(Object)`. All return zero.
+A Number returned as Comparable compares greater than a smaller Long. Assigning
+String to that interface local changes subsequent dispatch to String comparison.
+Conditional arms combining Comparable and scalar values retain the selected
+String in both arm orders. A positive Number test lets a fresh nullable Object
+read cross the Comparable boundary; Null follows the rejected branch.
+
+The SDK accepts these authored sources; SDK/generated simulator output matches
+the expected text through the console checker above. Saved stages and structured
+reconstruction pass. Dispatch uses the existing `compareTo` symbol and invocation
+instructions, without new opcodes or DATA records. This establishes these
+witnesses and comparisons, not arbitrary mixed-domain comparison behavior or
+exception recovery.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

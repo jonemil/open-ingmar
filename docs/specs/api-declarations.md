@@ -63,7 +63,9 @@ receivers retain WeakReference. Executable support follows the
 [bounded reference profile](compiler-subset.md#ordinary-weak-references).
 
 Assignability follows declared superclass paths without implicit conversion or
-acceptance of unknown classes. Every alternative of an actual union must satisfy
+acceptance of unknown classes. The executable profile also recognizes bounded
+[native Comparable witnesses](compiler-subset.md#comparison-interface-values).
+Every alternative of an actual union must satisfy
 the expected type. `Catalogue::method_for_type()` substitutes Array's `Element`
 or Dictionary's `Key`/`Value` throughout argument/result types, including nested
 containers and tuples. It retains the resolved declaration/availability and
@@ -173,8 +175,7 @@ operator/type-system dependencies and sequencing belong to the
 - **ResourceId:** resource-reference value/binding contracts and own/inherited
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
-  constants; native Comparable witnesses and nullable/field/container interface
-  contracts;
+  constants; nullable/field/container interface contracts;
   Integer/Numeric/Decimal aliases and needed union/structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

@@ -1119,7 +1119,7 @@ Source, typed, and text paths use the same operation and VM lowering.
 `comparable` and `comparator` are non-null parameter/result tags for the
 [source interface profile](compiler-subset.md#comparison-interface-values).
 They occur in `parameter-types=`, function `result=`, user-call `result=`, and
-same-interface block-parameter tags. Calls use `.call-native` with `compareTo`
+interface block-parameter tags. Calls use `.call-native` with `compareTo`
 or `compare`; Comparator values also supply the ordinary native `sort` call.
 No interface class allocation, cast, or new VM instruction is implied.
 
@@ -1130,7 +1130,11 @@ No interface class allocation, cast, or new VM instruction is implied.
 ```
 
 Function validation checks interface call arity/types and retained value
-contracts. Source witnesses at arguments/returns remain unit obligations;
+contracts, including scalar Comparable witnesses at returns, local assignments,
+and incoming block values. User-call arguments use the same witness rules.
+No coercion operation is serialized; the declared storage/edge/call contract
+retains the interface while the scalar keeps its runtime representation.
+Source witnesses at arguments/returns remain unit obligations;
 unit validation resolves their exact classes and checks required members after
 text reload. A forged call result or a changed implementation signature cannot
 bypass that check. Erased calls retain conservative constructor effects.

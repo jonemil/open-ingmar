@@ -2343,7 +2343,9 @@ impl Function {
                     if local_types[&local] != incoming
                         && !(matches!(
                             local_types[&local],
-                            ValueType::LangObject | ValueType::NullableObject
+                            ValueType::LangObject
+                                | ValueType::NullableObject
+                                | ValueType::Interface(_)
                         ) && native::accepts(
                             &local_types[&local].api_type(),
                             &incoming.api_type(),

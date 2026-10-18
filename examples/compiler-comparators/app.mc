@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        NativeComparables.run();
         InterfaceCalls.run();
         var text = new TextOrder();
         System.println(text.compareTo("a") > 0);
@@ -36,6 +37,35 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module NativeComparables {
+    function equal(value as Toybox.Lang.Comparable, other as Toybox.Lang.Object) as Toybox.Lang.Boolean {
+        return value.compareTo(other) == 0;
+    }
+    function create() as Toybox.Lang.Comparable { return 3; }
+    function guarded(value as Toybox.Lang.Object or Null) as Toybox.Lang.Boolean {
+        if (value instanceof Toybox.Lang.Number) { return NativeComparables.equal(value, 3); }
+        else { return false; }
+    }
+    function run() as Void {
+        System.println(NativeComparables.equal(3, 3));
+        System.println(NativeComparables.equal(3l, 3l));
+        System.println(NativeComparables.equal(3.0, 3.0));
+        System.println(NativeComparables.equal(3.0d, 3.0d));
+        System.println(NativeComparables.equal(true, true));
+        System.println(NativeComparables.equal('b', 'b'));
+        System.println(NativeComparables.equal("b", "b"));
+        var value = NativeComparables.create();
+        System.println(value.compareTo(2l) > 0);
+        value = "b";
+        System.println(value.compareTo("a") > 0);
+        var selected = true ? value : "c";
+        System.println(selected.compareTo("b") == 0);
+        var reversed = false ? 1 : selected;
+        System.println(reversed.compareTo("b") == 0);
+        System.println(NativeComparables.guarded(3));
+        System.println(!NativeComparables.guarded(null));
     }
 }
 module InterfaceCalls {

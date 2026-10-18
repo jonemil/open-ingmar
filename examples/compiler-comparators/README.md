@@ -15,7 +15,9 @@ API levels; see [API contracts](../../docs/specs/api-declarations.md#declaration
 locals, calls their declared methods, and sorts through a Comparator value.
 Receiver/argument markers check evaluation order. See the
 [interface profile](../../docs/specs/compiler-subset.md#comparison-interface-values)
-for remaining limits, including native witnesses and object-array sorting.
+for remaining limits, including nullable interfaces and object-array sorting.
+`NativeComparables` checks all seven supported scalar witnesses, typed returns,
+scalar assignments, mixed interface/scalar conditional arms, and a Number guard.
 
 From the repository root:
 

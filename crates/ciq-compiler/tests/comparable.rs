@@ -13,6 +13,83 @@ fn context(target: ApiLevel, minimum: ApiLevel) -> ApiContext {
 }
 
 #[test]
+fn scalar_comparable_witnesses_share_api_and_saved_pipeline_checks() {
+    let current = context(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0));
+    let consumer = "module M { function use(c as Toybox.Lang.Comparable, other as Toybox.Lang.Object) as Toybox.Lang.Number { return c.compareTo(other); } }";
+    for (ty, literal) in [
+        ("Number", "1"),
+        ("Long", "1l"),
+        ("Float", "1.0"),
+        ("Double", "1.0d"),
+        ("Boolean", "true"),
+        ("Char", "'a'"),
+        ("String", "\"a\""),
+    ] {
+        let source = format!(
+            "function create(value as Toybox.Lang.{ty}) as Toybox.Lang.Comparable {{ return value; }} function use() {{ return M.use({literal},{literal}); }}"
+        );
+        let unit = compile_sources_with_api(&[consumer, &source], current).unwrap();
+        let text = unit.to_ir_text();
+        let resumed = parse_unit_ir_with_api(&text, current).unwrap();
+        assert_eq!(unit, resumed, "{ty}");
+        assert_eq!(unit.lower(), resumed.lower(), "{ty}");
+        for low in [
+            context(ApiLevel(4, 2, 0), ApiLevel(4, 2, 0)),
+            context(ApiLevel(5, 2, 0), ApiLevel(4, 2, 0)),
+        ] {
+            assert!(
+                compile_sources_with_api(&[consumer, &source], low).is_err(),
+                "{ty}"
+            );
+            assert!(parse_unit_ir_with_api(&text, low).is_err(), "{ty}");
+        }
+        let changed = source.replace(
+            "as Toybox.Lang.Comparable { return value; }",
+            "as Toybox.Lang.Comparator { return value; }",
+        );
+        assert_ne!(changed, source);
+        assert!(compile_sources(&[consumer, &changed]).is_err(), "{ty}");
+        let nullable = format!(
+            "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.Comparable {{ return value; }}"
+        );
+        assert!(compile(&nullable).is_err(), "{ty}");
+        let function = compile(&format!(
+            "function f() as Toybox.Lang.Comparable {{ return {literal}; }}"
+        ))
+        .unwrap();
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap(), "{ty}");
+    }
+}
+
+#[test]
+fn scalar_witnesses_do_not_enable_erased_nullable_or_heterogeneous_contracts() {
+    for source in [
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Comparable { return o; }",
+        "function f(o as Toybox.Lang.Symbol) as Toybox.Lang.Comparable { return o; }",
+        "function f(o as Toybox.Lang.Method) as Toybox.Lang.Comparable { return o; }",
+        "function f(o as Toybox.Lang.Dictionary) as Toybox.Lang.Comparable { return o; }",
+        "function f(o as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Comparable { return o; }",
+        "function f(c as Toybox.Lang.Comparable) { var local=c; local=null; }",
+        "function f(c as Toybox.Lang.Comparator) { var local=c; local=1; }",
+        "function f() { var local=1; local=\"x\"; }",
+        "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Comparable { return b ? 1 : \"x\"; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let function = compile("function f(value as Toybox.Lang.Object) as Toybox.Lang.Comparable { if (value instanceof Toybox.Lang.Number) { return value; } else { return 0; } }").unwrap();
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile(
+        "function f(value as Toybox.Lang.Number) as Toybox.Lang.Comparable { return value; }",
+    )
+    .unwrap();
+    let text = function.to_ir_text();
+    // Integer-only parameter lists are omitted in the canonical text.
+    let changed = text.replace("parameters=1", "parameters=1 parameter-types=object");
+    assert_ne!(changed, text);
+    assert!(parse_ir(&changed).is_err());
+}
+
+#[test]
 fn interface_calls_forwarding_locals_and_returns_share_saved_contracts() {
     let api = context(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0));
     let unit = compile_sources_with_api(&[APP, ORDERING], api).unwrap();
@@ -58,7 +135,6 @@ fn interface_boundaries_reject_erasure_and_mismatched_members() {
     for source in [
         "function f(o as Toybox.Lang.Object) { return M.use(o); }",
         "function f(o as Toybox.Lang.Object) { if (o has :compareTo) { return M.use(o); } else { return 0; } }",
-        "function f() { return M.use(1); }",
         "function f() { return M.use(null); }",
     ] {
         assert!(compile_sources(&[consumer, source]).is_err(), "{source}");

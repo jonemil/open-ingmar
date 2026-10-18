@@ -70,6 +70,15 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     if left == right && type_tag(left).is_some() {
         return Some(left.clone());
     }
+    for (expected, actual) in [(left, right), (right, left)] {
+        if matches!(
+            ValueType::from_api_type(expected),
+            Some(ValueType::Interface(_))
+        ) && crate::native::accepts(expected, actual)
+        {
+            return Some(expected.clone());
+        }
+    }
     let object = parse_type("object").unwrap();
     let nullable_object = parse_type("nullable-object").unwrap();
     if ((left == &object || left == &nullable_object) && right == &Type::Null)
