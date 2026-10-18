@@ -62,18 +62,17 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 83 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 100 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-interface-sorting/`. Existing compareTo binding/instructions
+in `scratch/check-interface-dictionaries/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
 to sort. Both SDK/generated runs print `interface-receiver` before
 `interface-argument`, then the expected comparison results and `[c, b, a]`.
 The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
-instructions. No new opcode or DATA record was encountered. This does not
-establish Dictionary interface storage. The [API contract][api] owns the
-signature-query behavior and limits.
+instructions. No new opcode or DATA record was encountered. The
+[API contract][api] owns the signature-query behavior and limits.
 
 ## Native Comparable witnesses
 
@@ -109,7 +108,7 @@ The shared console checker above verifies saved stages and structured
 reconstruction with existing Null, comparison, branch, and invocation encodings;
 no new opcode or DATA record was encountered. Source assignments still need
 exact member proofs; successful runtime cases do not establish broader source
-inheritance, Dictionary interface storage, or exception recovery.
+inheritance, interface Dictionary keys, or exception recovery.
 
 ## Interface fields
 
@@ -128,8 +127,8 @@ SDK/generated simulator text matches the expected output. The shared console
 checker above covers saved stages, structured CODE/DATA, and reconstruction.
 Ordinary Null field slots and existing field/invocation instructions suffice;
 no new opcode or DATA record was encountered. Direct repeated-field guard
-refinement, general native field types, and Dictionary interfaces remain outside
-the supported contract.
+refinement, general native field types, and interface Dictionary keys remain
+outside the supported contract.
 
 ## Interface Arrays
 
@@ -161,14 +160,33 @@ path. Homogeneous Number and String witnesses sort normally under the Comparable
 element contract; an empty Array completes. `Array<Comparator>` containing Ranked
 instances sorts through an explicit RankOrder, including a forwarded Comparator.
 
-The shared console checker records all 83 SDK/generated lines and structured
-reconstruction in `scratch/check-interface-sorting/`; the SDK build log is
-`scratch/interface-sort-sdk-build.log`. Existing compareTo/compare bindings and
+The shared console checker above covers SDK/generated text and structured
+reconstruction. Existing compareTo/compare bindings and
 invocation instructions suffice; no new opcode or DATA record was encountered.
 This establishes neither ordering arbitrary mixed Comparable domains nor default
 ordering of Comparator-only elements, nullable elements, callback sequence,
 stability, or exception recovery. Source casts in the authored callbacks assert
 the Ranked domain; they do not perform runtime conversion or validation.
+
+## Interface Dictionaries
+
+**Experimentally observed:** `InterfaceDictionaries` uses String-keyed
+Dictionaries with Comparable/Comparator values, with and without Null. Source
+instances enter through literals, indexed writes, and `put`; native scalar
+Comparable witnesses also fit the declared value contract. Lookup of a missing
+key returns Null. Guarded snapshots invoke comparison methods. Aliases observe
+writes/removal; a `values()` Array retains its original membership after removal.
+`keys()` returns a String Array. Retrieved nullable Comparators select default
+or explicit ordering for scalar Arrays. A flat Comparable constant retains
+distinct Number and Char runtime tags.
+
+SDK/generated output matches all 100 lines in the shared console checker above.
+Artifacts: `scratch/check-interface-dictionaries/`; SDK build log:
+`scratch/interface-dictionary-sdk-build.log`. Structured CODE/DATA reconstruction
+and saved stages pass with existing dictionary constants, private builders,
+lookup/write instructions, and native dispatch. No new opcode or DATA record
+was encountered. These observations do not establish interface-key hashing or
+equality, general Object containers, formatting callback order, or exceptions.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

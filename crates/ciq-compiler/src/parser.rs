@@ -292,8 +292,8 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    /// Parse the supported Array element annotation after its canonical path.
-    /// Number/Char elements are accepted; raw and nullable arrays are not.
+    /// Parse invariant Dictionary key/value annotations after its canonical path.
+    /// Keys are non-null scalars; values may include Null or comparison interfaces.
     fn dictionary_annotation(&mut self) -> Result<Option<crate::DictionaryType>, Diagnostic> {
         if self.peek()? != Kind::Punctuation('<') {
             return Ok(None);
@@ -319,11 +319,14 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.String" => crate::DictionaryValue::String,
             "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryValue::Char,
+            "Toybox.Lang.Comparable" => {
+                crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
+            }
+            "Toybox.Lang.Comparator" => {
+                crate::DictionaryValue::Interface(crate::InterfaceType::Comparator)
+            }
             _ => {
-                return Err(self.error(
-                    at,
-                    "Dictionary values require Number, String, Boolean, or Char",
-                ));
+                return Err(self.error(at, "unsupported Dictionary value contract"));
             }
         };
         if self.peek()? == Kind::Word("or") {
@@ -337,6 +340,9 @@ impl<'a> Parser<'a> {
                 crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
                 crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
                 crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
+                crate::DictionaryValue::Interface(interface) => {
+                    crate::DictionaryValue::NullableInterface(interface)
+                }
                 _ => unreachable!(),
             };
         }

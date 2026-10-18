@@ -336,8 +336,9 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
 `integer`, `long`, `float`, `double`, `string`, `boolean`, or `char`;
-values use those tags or their `nullable-` counterparts. Other tags, nested containers, and
-heterogeneous unions are rejected. For example:
+values use those tags, `comparable`, `comparator`, or their `nullable-`
+counterparts. Interface value contracts require API 5.0.0. Other tags, nested
+containers, and heterogeneous unions are rejected. For example:
 
 ```text
 ciq-ir
@@ -395,6 +396,12 @@ Strings require quotes and use the existing escape rules. For example:
 ```text
 .dictionary-constant %0 dictionary(string=>nullable-integer) string "one" number 0x00000001 string "missing" null
 ```
+
+An interface value contract can accept compatible scalar witnesses while each
+token retains its VM tag. Source/interface references use private construction
+instead; they cannot be represented as scalar constant tokens. Private fills,
+indexed writes, and native `put` share the
+[source/unit interface proof](compiler-subset.md#comparison-interface-dictionaries).
 
 The [source contracts](compiler-subset.md#dictionary-values) govern supported
 key/value kinds, nullability, and entry typing. Missing pairs, empty entry lists,

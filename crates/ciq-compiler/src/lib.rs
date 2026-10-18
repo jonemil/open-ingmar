@@ -1562,7 +1562,14 @@ impl Function {
                         native::value_call(
                             &dictionary_type.api_type(),
                             "put",
-                            &[type_of(key).api_type(), type_of(value).api_type()],
+                            &origins.native_arguments(
+                                &dictionary_type.api_type(),
+                                "put",
+                                [
+                                    (key, type_of(key).api_type()),
+                                    (value, type_of(value).api_type()),
+                                ],
+                            ),
                             context,
                         )
                         .map_err(|e| fail(&e))?;
@@ -2176,7 +2183,14 @@ impl Function {
                     native::value_call(
                         &type_of(dictionary).api_type(),
                         "put",
-                        &[type_of(key).api_type(), type_of(value).api_type()],
+                        &origins.native_arguments(
+                            &type_of(dictionary).api_type(),
+                            "put",
+                            [
+                                (key, type_of(key).api_type()),
+                                (value, type_of(value).api_type()),
+                            ],
+                        ),
                         context,
                     )
                     .map_err(|e| fail(&e))?;

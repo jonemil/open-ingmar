@@ -1091,6 +1091,7 @@ does not copy contents. Calls and construction retain source evaluation order.
 
 `Toybox.Lang.Dictionary<K, V>` accepts invariant non-null numeric, String,
 Boolean, or Char keys and values of those scalar types, optionally `or Null`.
+It also accepts [comparison-interface values](#comparison-interface-dictionaries).
 The Dictionary itself is non-null. Char keys or values require API 1.3.0;
 the other contracts require 1.0.0. `DictionaryType` carries the bounded contracts through source,
 semantic IR, locals, function arguments/results, and API checks.
@@ -1106,7 +1107,8 @@ numeric, String, Boolean, or Char keys and homogeneous scalar values with option
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed key kinds, mixed non-null value kinds, container-valued entries,
+Null keys, mixed key kinds, mixed non-null scalar value kinds without an expected
+interface contract, container-valued entries,
 and trailing commas are unsupported. Nested Dictionary literal syntax is also
 unsupported, including inside entry call arguments. Ordinary calls and Array
 reads may produce scalar entries.
@@ -1824,8 +1826,9 @@ and a non-null instance supplies custom ordering. This does not permit calling
 
 Source classes also support [comparison-interface fields](compiler-classes.md#comparison-interface-fields)
 with the same write contracts and checked initialization. Arrays follow the
-[interface element contract](#comparison-interface-arrays). Dictionary interface
-elements, unchecked `as` assertions, and interface runtime type targets remain
+[interface element contract](#comparison-interface-arrays). Dictionaries follow
+their [interface value contract](#comparison-interface-dictionaries).
+Unchecked `as` assertions and interface runtime type targets remain
 unsupported. A non-null interface can widen to
 Object without proving additional members. A nullable interface can widen to
 Object-or-Null; Object requires a non-null proof. Ordinary Object casts and
@@ -1886,11 +1889,46 @@ shutdown effects through constructor checking, including default sorting.
 Runtime comparison failures, sort stability, and callback count/order are not
 guaranteed. Existing [sort evaluation/lowering](#default-array-sorting) applies.
 
-Sorting nullable elements, nested/general Object containers, Array field
-declarations, and Dictionary interface elements remain outside this profile.
+Sorting nullable elements, nested/general Object containers, and Array field
+declarations remain outside this profile.
 Comparator values read from an Array can supply an ordering callback. See the
 [example](../../examples/compiler-comparators/README.md) and
 [evidence](../investigations/compiler-comparators.md#interface-arrays).
+
+## Comparison interface Dictionaries
+
+`Dictionary<K, Comparable>` and `Dictionary<K, Comparator>`, optionally `or Null`
+on the value type, support the existing non-null scalar key contracts. Interfaces
+require API 5.0.0. Key/value parameters stay invariant across assignments and
+calls; scalar-valued Dictionaries do not widen to interface-valued ones.
+Interface keys and general Object values remain unsupported.
+
+An expected Dictionary contract types direct literals and empty construction.
+Values accept compatible native/interface witnesses or exact source instances;
+unit validation checks required source members for every private literal fill,
+indexed write, and `put` argument, including after IR reload. Opaque Object
+values do not establish an interface. Computed literals retain ordered evaluation
+and private construction. Scalar-only literals can use the existing Dictionary
+constant payload, which distinguishes Number and Char tags under an erased
+Comparable contract. Implicit inference of interface-valued literals is deferred.
+
+Lookup always produces the value type or Null, including for a non-null value
+contract. Calls require a guarded local snapshot; `hasKey` or a guard on another
+read does not refine the lookup. Indexed writes and `put` accept Null only for
+nullable value contracts. `values()` returns `Array<V>`, preserving value
+nullability without adding lookup's missing-key Null. `keys()` retains the
+scalar key contract. Enumeration snapshots membership, sharing element references
+under the existing [Dictionary rules](#dictionary-values).
+
+Other supported Dictionary methods retain their profiles. Formatting may call
+erased element methods, so constructor checking treats `toString` as possibly
+requesting shutdown while required reference fields are pending. Opaque
+Dictionary/Object string conversions retain this conservative effect: erasing
+the container must not bypass initialization checks. No guarantees about callback
+sequence, exception recovery, or element string representations follow.
+
+See the [example](../../examples/compiler-comparators/README.md) and
+[evidence](../investigations/compiler-comparators.md#interface-dictionaries).
 
 ## Nullable Array elements
 

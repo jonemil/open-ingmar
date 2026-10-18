@@ -67,14 +67,17 @@ impl DictionaryScalar {
     }
 }
 
-/// Infer homogeneous scalar contracts or check all entries against an expected
-/// invariant contract. Null-only values need context; Null keys are unsupported.
+/// Infer homogeneous scalar contracts or check scalar entries against an expected
+/// invariant contract, including native interface witnesses. Null-only values
+/// need context; Null keys are unsupported.
 pub(crate) fn constant_type(
     entries: &[(DictionaryScalar, DictionaryScalar)],
     expected: Option<DictionaryType>,
 ) -> Result<DictionaryType, String> {
-    let fail =
-        || "Dictionary constants require homogeneous scalar keys and scalar/Null values".to_owned();
+    let fail = || {
+        "Dictionary constants require homogeneous scalar keys and compatible scalar/Null values"
+            .to_owned()
+    };
     let (first, _) = entries.first().ok_or_else(fail)?;
     let ty = if let Some(expected) = expected {
         expected
@@ -180,9 +183,12 @@ pub enum DictionaryKey {
     Char,
 }
 
-/// Supported Dictionary value contracts, including explicit nullable values.
+/// Supported scalar and comparison-interface Dictionary value contracts,
+/// including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    Interface(crate::InterfaceType),
+    NullableInterface(crate::InterfaceType),
     Number,
     Double,
     NullableDouble,
@@ -220,6 +226,14 @@ impl DictionaryType {
             DictionaryKey::Char => "Char",
         };
         let (value, nullable) = match self.value {
+            DictionaryValue::Interface(crate::InterfaceType::Comparable) => ("Comparable", false),
+            DictionaryValue::Interface(crate::InterfaceType::Comparator) => ("Comparator", false),
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparable) => {
+                ("Comparable", true)
+            }
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparator) => {
+                ("Comparator", true)
+            }
             DictionaryValue::Number => ("Number", false),
             DictionaryValue::Double => ("Double", false),
             DictionaryValue::NullableDouble => ("Double", true),
@@ -264,6 +278,10 @@ impl DictionaryType {
             _ => return None,
         };
         for value_kind in [
+            DictionaryValue::Interface(crate::InterfaceType::Comparable),
+            DictionaryValue::Interface(crate::InterfaceType::Comparator),
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparable),
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparator),
             DictionaryValue::Number,
             DictionaryValue::Double,
             DictionaryValue::NullableDouble,
@@ -301,6 +319,14 @@ impl DictionaryType {
             DictionaryKey::Char => "char",
         };
         let value = match self.value {
+            DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
+            DictionaryValue::Interface(crate::InterfaceType::Comparator) => "comparator",
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparable) => {
+                "nullable-comparable"
+            }
+            DictionaryValue::NullableInterface(crate::InterfaceType::Comparator) => {
+                "nullable-comparator"
+            }
             DictionaryValue::Number => "integer",
             DictionaryValue::Double => "double",
             DictionaryValue::NullableDouble => "nullable-double",
@@ -336,6 +362,14 @@ impl DictionaryType {
                 _ => return None,
             },
             value: match value {
+                "comparable" => DictionaryValue::Interface(crate::InterfaceType::Comparable),
+                "comparator" => DictionaryValue::Interface(crate::InterfaceType::Comparator),
+                "nullable-comparable" => {
+                    DictionaryValue::NullableInterface(crate::InterfaceType::Comparable)
+                }
+                "nullable-comparator" => {
+                    DictionaryValue::NullableInterface(crate::InterfaceType::Comparator)
+                }
                 "integer" => DictionaryValue::Number,
                 "double" => DictionaryValue::Double,
                 "nullable-double" => DictionaryValue::NullableDouble,

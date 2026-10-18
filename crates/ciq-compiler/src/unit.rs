@@ -73,6 +73,12 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(function.value_types[receiver], crate::ValueType::Array(
                     crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
+                || matches!(function.value_types[receiver], crate::ValueType::TypedDictionary(
+                    crate::DictionaryType {value: crate::DictionaryValue::Interface(_) | crate::DictionaryValue::NullableInterface(_), ..})
+                    if member == "toString")
+                || matches!(function.value_types[receiver], crate::ValueType::Dictionary
+                    | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
+                    | crate::ValueType::NullableObject if member == "toString")
         }
         _ => false,
     }
@@ -774,6 +780,22 @@ impl CompilationUnit {
                     }
                 })
                 .collect::<BTreeMap<_, _>>();
+            let dictionary_builders = function
+                .operations()
+                .iter()
+                .filter_map(|located| {
+                    if let Operation::DictionaryBegin {
+                        builder,
+                        dictionary_type,
+                        ..
+                    } = located.operation
+                    {
+                        Some((builder, dictionary_type))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
             let interface_locals = function
                 .operations()
                 .iter()
@@ -816,7 +838,33 @@ impl CompilationUnit {
                     }
                     Ok(())
                 };
+                let check_dictionary_value =
+                    |dictionary: crate::DictionaryType, value| match dictionary.value {
+                        crate::DictionaryValue::Interface(interface) => {
+                            check_element(crate::ArrayElement::Interface(interface), value)
+                        }
+                        crate::DictionaryValue::NullableInterface(interface) => {
+                            check_element(crate::ArrayElement::NullableInterface(interface), value)
+                        }
+                        _ => Ok(()),
+                    };
                 match &located.operation {
+                    Operation::DictionaryFill {
+                        builder, entries, ..
+                    } => {
+                        for (_, value) in entries {
+                            check_dictionary_value(dictionary_builders[builder], *value)?;
+                        }
+                    }
+                    Operation::DictionaryWrite {
+                        dictionary, value, ..
+                    } => {
+                        if let crate::ValueType::TypedDictionary(dictionary) =
+                            function.value_types[dictionary]
+                        {
+                            check_dictionary_value(dictionary, *value)?;
+                        }
+                    }
                     Operation::ArrayFill { builder, value, .. } => {
                         check_element(array_builders[builder], *value)?
                     }
@@ -843,7 +891,10 @@ impl CompilationUnit {
                         member,
                         arguments,
                     } => {
-                        if matches!(function.value_types[receiver], crate::ValueType::Array(_)) {
+                        if matches!(
+                            function.value_types[receiver],
+                            crate::ValueType::Array(_) | crate::ValueType::TypedDictionary(_)
+                        ) {
                             let parameters = crate::native::value_parameters(
                                 &function.value_types[receiver].api_type(),
                                 member,

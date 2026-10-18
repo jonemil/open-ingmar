@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceDictionaries.run();
         InterfaceSorting.run();
         InterfaceArrays.run();
         InterfaceFields.run();
@@ -41,6 +42,65 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceDictionaries {
+    function values() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparable> {
+        return {"a" => new TextOrder(), "b" => 1};
+    }
+    function scalars() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparable> {
+        return {"n" => 97, "c" => 'a', "s" => "a"};
+    }
+    function optional() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparable or Null> {
+        return {"a" => null, "b" => new TextOrder()};
+    }
+    function orders() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparator> {
+        return {"a" => new Ordering(-1)};
+    }
+    function optionalOrders() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparator or Null> {
+        return {"a" => null, "b" => new Ordering(1)};
+    }
+    function empty() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Comparable> { return {}; }
+    function run() as Void {
+        var values = InterfaceDictionaries.values();
+        var shared = values;
+        var item = values["a"];
+        if (item != null) { System.println(item.compareTo("b") == 0); }
+        System.println(values["missing"] == null);
+        values["a"] = new TextOrder();
+        values.put("c", new TextOrder());
+        System.println(shared.size());
+        System.println(values.hasKey("c"));
+        var snapshot = values.values();
+        values.remove("c");
+        System.println(snapshot.size());
+        System.println(shared.size());
+        var empty = InterfaceDictionaries.empty();
+        empty.put("key", new TextOrder());
+        var found = empty.get("key");
+        if (found != null) { System.println(found.compareTo("b") == 0); }
+        System.println(empty.keys().toString());
+        var scalars = InterfaceDictionaries.scalars();
+        System.println(scalars["n"] instanceof Toybox.Lang.Number);
+        System.println(scalars["c"] instanceof Toybox.Lang.Char);
+        var optional = InterfaceDictionaries.optional();
+        System.println(optional["a"] == null);
+        optional["a"] = new TextOrder();
+        optional.put("b", null);
+        var nullable = optional.values();
+        System.println(nullable.size());
+        System.println(optional["b"] == null);
+        var orders = InterfaceDictionaries.orders();
+        var order = orders["a"];
+        if (order != null) { System.println(order.compare("a", "b") > 0); }
+        orders["a"] = new Ordering(1);
+        System.println(orders.values()[0].compare("a", "b") < 0);
+        var optionalOrders = InterfaceDictionaries.optionalOrders();
+        var names = ["b", "a"];
+        names.sort(optionalOrders["a"]);
+        System.println(names.toString());
+        names.sort(optionalOrders["b"]);
+        System.println(names.toString());
     }
 }
 module InterfaceSorting {
