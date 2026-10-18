@@ -1439,11 +1439,17 @@ The compiler checks the Method API and VM argument-count limit. The target's
 existence, arity, accepted types, introduction level, and result behavior remain
 runtime/caller obligations; dynamic lookup does not recover its signature.
 Source instances support `instance.method(selector)` and instance bodies support
-explicit `self.method(selector)`. A declared source member named `method` keeps
+`self.method(selector)` or bare `method(selector)`. Bare calls resolve to the
+current instance and use the same semantic operations as explicit self calls.
+A declared source member named `method` keeps
 ordinary source-call priority. Bare `self` produces opaque Object and requires
 an instance body; it does not recover a source-class type or concrete callback
 signature. Existing `self.member(...)` source calls retain checked signatures.
-Unqualified inherited `method(...)` lookup remains unsupported.
+Bare `method(...)` requires an instance body; a local, parameter, or field named
+`method` prevents implicit lookup. Calling such lexical values remains
+unsupported; use explicit `self.method(...)` for the instance member. Other
+unqualified function/member calls are outside this profile. Receiver capture
+still requires all required instance fields to be initialized.
 
 Unlike the SDK checker, this erased lookup profile does not statically resolve
 a literal selector to a source target. A missing target or incompatible

@@ -59,6 +59,7 @@ class V extends Toybox.WatchUi.View {
     function method(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; }
     function f() as Toybox.Lang.Number { return self.method(7); }
 }
+
 function f() as Toybox.Lang.Number { var v=new V(); return v.method(8); }
 "#])
     .unwrap();
@@ -75,4 +76,77 @@ function f() as Toybox.Lang.Number { var v=new V(); return v.method(8); }
         f.operations()[0].operation,
         Operation::SelfValue { .. }
     ));
+}
+
+#[test]
+fn implicit_method_lookup_reuses_explicit_self_calls() {
+    for base in [
+        "Toybox.Lang.Object",
+        "Toybox.WatchUi.View",
+        "Toybox.Application.AppBase",
+    ] {
+        for body in [
+            "function bind(s as Toybox.Lang.Symbol) as Toybox.Lang.Method { return method(s); }",
+            "function bind() { method(:bind); }",
+            "function bind(b as Toybox.Lang.Boolean) as Toybox.Lang.Method { return method(b ? :bind : :bind); }",
+            "function method(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); } function bind() as Toybox.Lang.Number { return method([1, 2]); }",
+            "function method(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function bind() as Toybox.Lang.Number { return method(7); }",
+            "function method(n as Toybox.Lang.Number) as Void {} function bind() { method(7); }",
+        ] {
+            let implicit = format!("class C extends {base} {{ {body} }}");
+            let explicit = implicit
+                .replace("return method(", "return self.method(")
+                .replace("{ method(", "{ self.method(");
+            let a = compile_sources(&[&implicit]).unwrap();
+            let b = compile_sources(&[&explicit]).unwrap();
+            let without_spans = |text: String| {
+                text.lines()
+                    .map(|line| line.split(" span=").next().unwrap())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            assert_eq!(
+                without_spans(a.to_ir_text()),
+                without_spans(b.to_ir_text()),
+                "{implicit}"
+            );
+            assert_eq!(a.lower(), b.lower());
+            assert_eq!(a, parse_unit_ir(&a.to_ir_text()).unwrap());
+        }
+    }
+}
+
+#[test]
+fn implicit_method_lookup_rejects_non_instance_and_shadowed_calls() {
+    for source in [
+        "function f() as Toybox.Lang.Method { return method(:f); }",
+        "module M { function f() { method(:f); } }",
+        "class C extends Toybox.Lang.Object { function f(method as Toybox.Lang.Number) { method(:f); } }",
+        "class C extends Toybox.Lang.Object { function f() { var method = 1; method(:f); } }",
+        "class C extends Toybox.Lang.Object { var method = 1; function f() { method(:f); } }",
+        "class C extends Toybox.Lang.Object { function f() { method(1); } }",
+        "class C extends Toybox.Lang.Object { function f() { method(:f, :f); } }",
+        "class C extends Toybox.Lang.Object { function f() { other(:f); } }",
+        "class C extends Toybox.Lang.Object { var required as Toybox.Lang.Symbol; function initialize() { method(:initialize); self.required = :ready; } }",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+    let explicit = "class C extends Toybox.Lang.Object { function bind(method as Toybox.Lang.Number) as Toybox.Lang.Method { return self.method(:bind); } }";
+    compile_sources(&[explicit]).unwrap();
+}
+
+#[test]
+fn implicit_method_calls_preserve_nesting_limits() {
+    for (depth, accepted) in [(64, true), (65, false)] {
+        let expression = format!("{}1{}", "method(".repeat(depth), ")".repeat(depth));
+        let source = format!(
+            "class C extends Toybox.Lang.Object {{ function method(n as Toybox.Lang.Number) as Toybox.Lang.Number {{ return n; }} function f() as Toybox.Lang.Number {{ return {expression}; }} }}"
+        );
+        let result = compile_sources(&[&source]);
+        if accepted {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().diagnostic.message.contains("nesting"));
+        }
+    }
 }

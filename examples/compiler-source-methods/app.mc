@@ -16,7 +16,7 @@ class CallbackView extends WatchUi.View {
         return self.count;
     }
     function bind(s as Toybox.Lang.Symbol) as Toybox.Lang.Method {
-        return self.method(s);
+        return method(s);
     }
     function owner() as Toybox.Lang.Object { return self; }
 }
@@ -38,9 +38,9 @@ class MinimalConsoleApp extends Application.AppBase {
         view = new CallbackView();
         Callbacks.show(direct, 1);
         System.println(view.add(0));
-        var own = self.method(:add);
+        var own = method(:add);
         Callbacks.show(own, 5);
-        self.method(:add);
+        method(:add);
         System.exit();
     }
 }

@@ -23,6 +23,43 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     }
 }
 
+/// Resolve bare `method(...)` to the current receiver. Callable lexical values
+/// remain unsupported, so shadowing must not silently select the inherited method.
+fn resolve_implicit_method(
+    source: &str,
+    kind: parser::ExpressionKind,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    calls: &CallContext,
+    span: Span,
+) -> Result<parser::ExpressionKind, Diagnostic> {
+    let parser::ExpressionKind::ImplicitMethodCall(arguments) = kind else {
+        return Ok(kind);
+    };
+    if !calls.class_bases.contains_key("self") {
+        return Err(Diagnostic::at(
+            source,
+            span.start,
+            "unqualified method calls require an instance receiver",
+        ));
+    }
+    if locals.contains_key("method")
+        || parameters.contains_key("method")
+        || calls.field_types.contains_key("method")
+    {
+        return Err(Diagnostic::at(
+            source,
+            span.start,
+            "calling a local, parameter, or field named method is unsupported; use self.method explicitly",
+        ));
+    }
+    Ok(parser::ExpressionKind::ModuleCall {
+        module: "self".into(),
+        member: "method".into(),
+        arguments,
+    })
+}
+
 fn emit(
     source: &str,
     expression: parser::Expression,
@@ -31,7 +68,16 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
-    let operation = match expression.kind {
+    let kind = resolve_implicit_method(
+        source,
+        expression.kind,
+        locals,
+        parameters,
+        calls,
+        expression.span,
+    )?;
+    let operation = match kind {
+        parser::ExpressionKind::ImplicitMethodCall(_) => unreachable!("resolved implicit call"),
         parser::ExpressionKind::DictionaryNew => Operation::DictionaryNew {
             dictionary_type: None,
             result: ValueId(operations.len() as u32),
@@ -1055,7 +1101,15 @@ impl Builder<'_> {
     ) -> Result<parser::Expression, Diagnostic> {
         use parser::ExpressionKind as E;
         let span = expression.span;
-        let kind = match expression.kind {
+        let kind = resolve_implicit_method(
+            self.source,
+            expression.kind,
+            locals,
+            &self.parameters,
+            self.calls,
+            span,
+        )?;
+        let kind = match kind {
             kind @ E::Conditional { .. } => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
@@ -1299,6 +1353,16 @@ impl Builder<'_> {
                 .operations
                 .last_mut()
                 .expect("call emitted an operation");
+            if let Operation::SelfCall {
+                member, arguments, ..
+            } = &last.operation
+            {
+                last.operation = Operation::SelfCallStatement {
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
             if let Operation::ObjectCall {
                 receiver,
                 class,

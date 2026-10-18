@@ -32,8 +32,7 @@ exact source-class Comparator witness used by sorting.
 Establish checked Method signatures when a concrete callback consumer needs
 argument/result guarantees. Keep source-target resolution and saved-IR checking
 consistent. Erased invocation does not establish a target's API availability,
-arity, or concrete result type. Unqualified inherited `method(...)` lookup
-remains separate from explicit `self.method(...)`.
+arity, or concrete result type.
 Symbol-bearing container literals use runtime construction; pooled Symbol payloads need
 independent encoding/relocation evidence before adding a DATA representation.
 

@@ -1,7 +1,8 @@
 # Source receiver callbacks
 
-[app.mc](app.mc) binds source methods through a source instance, explicit
-`self`, and an opaque Object with a dynamic selector. Calls share the original
+[app.mc](app.mc) binds source methods through a source instance, implicit
+`method(...)` in View/AppBase bodies, and an opaque Object with a dynamic
+selector. Calls share the original
 receiver's fields and keep that receiver alive after its variable is replaced.
 The [expected output](expected.txt) matches SDK/generated `fr265` programs.
 

@@ -176,6 +176,7 @@ pub(crate) enum ExpressionKind {
     Float(u32),
     String(String),
     Local(String),
+    ImplicitMethodCall(Vec<Expression>),
     ModuleCall {
         module: String,
         member: String,
@@ -245,7 +246,8 @@ impl Expression {
             ExpressionKind::ArrayRead { array, index } => {
                 array.needs_materialization() || index.needs_materialization()
             }
-            ExpressionKind::ModuleCall { arguments, .. }
+            ExpressionKind::ImplicitMethodCall(arguments)
+            | ExpressionKind::ModuleCall { arguments, .. }
             | ExpressionKind::SourceNew { arguments, .. } => {
                 arguments.iter().any(Self::needs_materialization)
             }
@@ -1443,93 +1445,113 @@ impl<'a> Parser<'a> {
                         | "null"
                 ) =>
             {
-                if self.peek()? == Kind::Punctuation('.') {
-                    self.token()?;
-                    let member = self.identifier()?;
-                    let member_end = member.span.end;
-                    let Kind::Word(member) = member.kind else {
-                        unreachable!()
-                    };
-                    if name == "self" && self.peek()? != Kind::Punctuation('(') {
-                        return self.node(
-                            ExpressionKind::SelfField(member.into()),
-                            Span {
-                                start: token.span.start,
-                                end: member_end,
-                            },
-                        );
-                    }
-                    let mut path = format!("{name}.{member}");
-                    while self.peek()? == Kind::Punctuation('.') {
-                        self.token()?;
-                        let token = self.identifier()?;
-                        let Kind::Word(part) = token.kind else {
-                            unreachable!()
-                        };
-                        path.push('.');
-                        path.push_str(part);
-                    }
-                    let (module, member) = path.rsplit_once('.').unwrap();
-                    if self.names.module(module) == Some(crate::names::NativeModule::Graphics)
-                        && member == "FONT_MEDIUM"
-                        && self.peek()? != Kind::Punctuation('(')
-                    {
-                        return self.node(
-                            ExpressionKind::NativeConstant {
-                                module: "Toybox.Graphics".into(),
-                                member: member.into(),
-                                qualifier: path.split('.').next().unwrap().into(),
-                            },
-                            Span {
-                                start: token.span.start,
-                                end: self.offset,
-                            },
-                        );
-                    }
-                    let module = if let Some(native) = self.names.module(module) {
-                        native.name()
-                    } else if self.native_base.is_some()
-                        && (module == "AppBase" || self.names.app_base(module))
-                    {
-                        "Application.AppBase"
-                    } else if self.native_base.is_some()
-                        && (module == "View" || self.names.view(module))
-                    {
-                        "WatchUi.View"
-                    } else if self.native_base.is_some()
-                        && (module == "BehaviorDelegate" || self.names.behavior_delegate(module))
-                    {
-                        "WatchUi.BehaviorDelegate"
-                    } else if module.contains('.') {
-                        return Err(
-                            self.error(token.span.start, "unsupported qualified module path")
-                        );
-                    } else {
-                        module
-                    };
-                    let (arguments, end) = self.call_arguments(token.span.start, depth)?;
-                    self.node(
-                        ExpressionKind::ModuleCall {
-                            module: module.into(),
-                            member: member.into(),
-                            arguments,
-                        },
-                        Span {
-                            start: token.span.start,
-                            end,
-                        },
-                    )
-                } else if name == "self" {
-                    self.node(ExpressionKind::SelfValue, token.span)
-                } else {
-                    self.node(ExpressionKind::Local(name.into()), token.span)
-                }
+                self.named_atom(name, token.span, depth)
             }
             _ => Err(self.error(
                 token.span.start,
                 "expected an integer, local identifier, or parenthesized expression",
             )),
         }
+    }
+
+    /// Parse an identifier value or call. Resolve qualified targets before
+    /// descending into arguments so target parsing does not grow recursive frames.
+    fn named_atom(
+        &mut self,
+        name: &str,
+        span: Span,
+        depth: usize,
+    ) -> Result<Expression, Diagnostic> {
+        let mut expression = if self.peek()? == Kind::Punctuation('.') {
+            self.qualified_atom(name, span.start)?
+        } else if name == "method" && self.peek()? == Kind::Punctuation('(') {
+            self.node(ExpressionKind::ImplicitMethodCall(Vec::new()), span)?
+        } else if name == "self" {
+            return self.node(ExpressionKind::SelfValue, span);
+        } else {
+            return self.node(ExpressionKind::Local(name.into()), span);
+        };
+        if let ExpressionKind::ModuleCall { arguments, .. }
+        | ExpressionKind::ImplicitMethodCall(arguments) = &mut expression.kind
+        {
+            let (parsed, end) = self.call_arguments(span.start, depth)?;
+            *arguments = parsed;
+            expression.span.end = end;
+        }
+        Ok(expression)
+    }
+
+    /// Parse a qualified member access/call, without parsing recursive arguments.
+    fn qualified_atom(&mut self, name: &str, start: usize) -> Result<Expression, Diagnostic> {
+        self.token()?;
+        let member = self.identifier()?;
+        let member_end = member.span.end;
+        let Kind::Word(member) = member.kind else {
+            unreachable!()
+        };
+        if name == "self" && self.peek()? != Kind::Punctuation('(') {
+            return self.node(
+                ExpressionKind::SelfField(member.into()),
+                Span {
+                    start,
+                    end: member_end,
+                },
+            );
+        }
+        let mut path = format!("{name}.{member}");
+        while self.peek()? == Kind::Punctuation('.') {
+            self.token()?;
+            let token = self.identifier()?;
+            let Kind::Word(part) = token.kind else {
+                unreachable!()
+            };
+            path.push('.');
+            path.push_str(part);
+        }
+        let (module, member) = path.rsplit_once('.').unwrap();
+        if self.names.module(module) == Some(crate::names::NativeModule::Graphics)
+            && member == "FONT_MEDIUM"
+            && self.peek()? != Kind::Punctuation('(')
+        {
+            return self.node(
+                ExpressionKind::NativeConstant {
+                    module: "Toybox.Graphics".into(),
+                    member: member.into(),
+                    qualifier: path.split('.').next().unwrap().into(),
+                },
+                Span {
+                    start,
+                    end: self.offset,
+                },
+            );
+        }
+        let module = if let Some(native) = self.names.module(module) {
+            native.name()
+        } else if self.native_base.is_some() && (module == "AppBase" || self.names.app_base(module))
+        {
+            "Application.AppBase"
+        } else if self.native_base.is_some() && (module == "View" || self.names.view(module)) {
+            "WatchUi.View"
+        } else if self.native_base.is_some()
+            && (module == "BehaviorDelegate" || self.names.behavior_delegate(module))
+        {
+            "WatchUi.BehaviorDelegate"
+        } else if module.contains('.') {
+            return Err(self.error(start, "unsupported qualified module path"));
+        } else {
+            module
+        };
+        self.node(
+            ExpressionKind::ModuleCall {
+                module: module.into(),
+                member: member.into(),
+                arguments: Vec::new(),
+            },
+            Span {
+                start,
+                end: self.offset,
+            },
+        )
     }
 
     /// Check a parsed assignment target without entering RHS parsing.
@@ -1774,7 +1796,11 @@ impl<'a> Parser<'a> {
                         )?
                     } else {
                         let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        if matches!(expression.kind, ExpressionKind::ValueCall { .. }) {
+                        if matches!(
+                            expression.kind,
+                            ExpressionKind::ValueCall { .. }
+                                | ExpressionKind::ImplicitMethodCall(_)
+                        ) {
                             Statement::ValueCall {
                                 expression,
                                 span: Span { start, end },

@@ -53,14 +53,19 @@ and raw-CODE symbol binding, including the earlier `stillAlive` alias.
 ## Source receivers
 
 The [source callback specimen](../../examples/compiler-source-methods/README.md)
-binds a source View method directly, inside the View through `self.method`,
+binds a source View method directly, inside the View through bare `method`,
 and through an opaque Object with a dynamic Symbol parameter. All bindings
 mutate the same instance: results are `2`, `5`, `9`. After replacing the source
 variable, its bound Method still reaches the original instance (`10`), while
-the replacement starts at `0`. An AppBase `self` callback updates its own field
+the replacement starts at `0`. An AppBase implicit callback updates its own field
 to `15`. Bare `self` can be returned as Object. SDK/generated programs match
 all six lines; both have structured CODE/DATA and lossless reconstruction.
-Artifacts: `scratch/check-source-methods-2/`.
+Rechecked 2026-10-18 with SDK 9.2.0, `fr265`, debug `-O 0`:
+`scratch/check-implicit-methods/`. Both valued and discarded bare bindings run.
+Compiler tests compare explicit/implicit IR (excluding source spans) and
+assembly, including declared source members named `method`, Void statements,
+branching arguments, and contextual Array literals. This does not establish
+general unqualified name lookup or source inheritance.
 
 The SDK rejects `view.owner().method(:add)` when `owner` declares Object:
 `Could not find method 'add' on object '$.Toybox.Lang.Object'`. Passing the
