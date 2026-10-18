@@ -756,7 +756,7 @@ impl CompilationUnit {
                     {
                         if let [argument] = arguments.as_slice() {
                             if let Some(class) = origins.class(*argument) {
-                                self.check_interface(class, "Toybox.Lang.Comparator")
+                                self.check_interface_signature(class, "Toybox.Lang.Comparator")
                                     .map_err(|message| {
                                         fail(Some(index), Some(operation), message)
                                     })?;
@@ -973,9 +973,39 @@ impl CompilationUnit {
         Ok(())
     }
 
-    /// Check that a declared source class supplies every required interface
-    /// member with exactly matching parameter and result types. This does not add an inheritance relationship.
-    fn check_interface(&self, class: &str, interface: &str) -> Result<(), String> {
+    /// Check a source class against a named core API interface and API levels.
+    ///
+    /// Requires directly declared methods with exactly matching parameter and
+    /// result contracts. Rejects unknown classes/interfaces and unavailable
+    /// interface or signature declarations. This proves a structural signature,
+    /// not method behavior, native inheritance, or interface-typed source storage.
+    pub fn check_interface(
+        &self,
+        class: &str,
+        interface: &str,
+        context: crate::api::ApiContext,
+    ) -> Result<(), String> {
+        self.check_interface_signature(class, interface)?;
+        let catalogue = crate::api::core();
+        context.check_type(catalogue, &crate::api::Type::named(interface))?;
+        let declaration = self.classes.iter().find(|c| c.name == class).unwrap();
+        context.check_class(catalogue, declaration.base.api_name())?;
+        for member in &catalogue.interface(interface).unwrap().methods {
+            context.require(&format!("{interface}.{}", member.name), member.since)?;
+            for ty in member
+                .parameters
+                .iter()
+                .chain(std::iter::once(&member.result))
+            {
+                context.check_type(catalogue, ty)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Match directly declared source members against an interface signature.
+    /// Availability is checked separately when API context is supplied.
+    fn check_interface_signature(&self, class: &str, interface: &str) -> Result<(), String> {
         let declaration = self
             .classes
             .iter()
@@ -1001,7 +1031,10 @@ impl CompilationUnit {
                     .parameter_types()
                     .iter()
                     .zip(&required.parameters)
-                    .all(|(actual, expected)| &actual.api_type() == expected)
+                    .all(|(actual, expected)| {
+                        !matches!(actual, crate::ParameterType::SourceObject(_))
+                            && &actual.api_type() == expected
+                    })
                 || required.result != implementation.return_type().api_type()
             {
                 return Err(format!(

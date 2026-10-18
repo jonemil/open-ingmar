@@ -22,6 +22,15 @@ Recording an interface alone does not enable source annotations or executable
 implementations. Consumer-specific structural checks must establish the
 required members before native-call checking can use that interface type.
 
+`Lang.Comparable` requires `compareTo(Object) as Number` from API 5.0.0.
+`CompilationUnit::check_interface(class, interface, context)` checks directly
+declared source members against a catalogue interface with exact parameter and
+result contracts. It checks the interface, signature types, members, and native
+base against the supplied target/minimum API. The query can be repeated on
+parsed unit IR; it does not serialize a proof or change the unit. A source-class
+parameter cannot satisfy Object merely because its native projection is Object.
+This establishes signatures, not comparison behavior or interface-typed storage.
+
 `Lang.Comparator` requires `compare(Object, Object) as Number` from API 5.0.0.
 Array `sort(Comparator or Null)` returns Void from 5.0.0. The executable
 [sorting profile](compiler-subset.md#source-comparators) accepts Null or an

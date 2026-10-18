@@ -1,4 +1,4 @@
-# Source Comparator implementations
+# Source comparison contracts
 
 [ordering.mc](ordering.mc) supplies `compare(Object, Object) as Number` through
 an existing source View class. It orders Object string conversions and retains
@@ -6,6 +6,13 @@ per-instance direction and call-count state. [app.mc](app.mc) checks callback
 dispatch, typed source forwarding, shared mutation, receiver/argument order,
 and empty/singleton inputs. The [expected output](expected.txt) matches
 SDK/generated `fr265` programs.
+
+The Object-rooted `TextOrder` class supplies `compareTo(Object) as Number`, the
+Comparable signature. Direct calls check negative, equal, and positive results.
+The library's `CompilationUnit::check_interface` checks this signature and its
+API levels; see [API contracts](../../docs/specs/api-declarations.md#declaration-model).
+General interface-typed source values and sorting Arrays of source objects
+remain unsupported.
 
 From the repository root:
 

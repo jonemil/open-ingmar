@@ -12,3 +12,10 @@ class Ordering extends WatchUi.View {
     }
     function calls() as Toybox.Lang.Number { return self.count; }
 }
+
+class TextOrder {
+    function initialize() {}
+    function compareTo(other as Toybox.Lang.Object) as Toybox.Lang.Number {
+        return "b".compareTo(other.toString());
+    }
+}

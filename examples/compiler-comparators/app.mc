@@ -12,6 +12,10 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        var text = new TextOrder();
+        System.println(text.compareTo("a") > 0);
+        System.println(text.compareTo("b") == 0);
+        System.println(text.compareTo("c") < 0);
         var ascending = new Ordering(1);
         var descending = new Ordering(-1);
         var a = ["bb", "a", "aa", "b", "a"];

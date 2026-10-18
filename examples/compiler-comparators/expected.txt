@@ -1,3 +1,6 @@
+true
+true
+true
 array
 comparator
 [bb, b, aa, a, a]

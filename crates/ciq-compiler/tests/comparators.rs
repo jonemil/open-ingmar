@@ -51,6 +51,8 @@ fn structural_comparators_preserve_saved_stages_and_runtime_member_identity() {
 
 #[test]
 fn structural_signatures_require_exact_object_inputs_and_number_results() {
+    let narrowed = "class C { function initialize() {} function compare(a as C, b as Toybox.Lang.Object) as Toybox.Lang.Number { return 0; } } function run(c as C) { var a=[1,2]; a.sort(c); }";
+    assert!(compile_sources(&[narrowed]).is_err());
     let broad = ORDERING
         .replace(
             "a as Toybox.Lang.Object, b as Toybox.Lang.Object",

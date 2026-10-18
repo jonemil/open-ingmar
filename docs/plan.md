@@ -18,11 +18,12 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Review Lang.Comparable and its
-`compareTo(Object) as Number` contract alongside those prerequisites. Keep
-general interface-typed parameters/results/storage separate from the exact
-source-class Comparator witness used by sorting. Nullable/object Array sorting
-needs its own argument and comparison contracts.
+Connect checked structural signatures to interface-typed parameters, results,
+and calls, starting with Comparable and Comparator. Preserve exact source
+identities until unit checking can establish required members; an erased Object
+or a runtime `has` test alone cannot prove a signature. Keep interface storage
+distinct from the exact source-class Comparator witness used by sorting.
+Nullable/object Array sorting needs its own argument and comparison contracts.
 
 Establish checked Method signatures when a concrete callback consumer needs
 argument/result guarantees. Keep source-target resolution and saved-IR checking

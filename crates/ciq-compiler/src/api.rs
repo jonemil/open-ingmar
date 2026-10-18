@@ -995,19 +995,34 @@ fn build_core() -> Catalogue {
         .functions
         .push(method("requestUpdate", vec![], Type::Void, initial));
     Catalogue {
-        interfaces: BTreeMap::from([(
-            "Toybox.Lang.Comparator".into(),
-            Interface {
-                name: "Toybox.Lang.Comparator".into(),
-                since: ApiLevel(5, 0, 0),
-                methods: vec![method(
-                    "compare",
-                    vec![Type::named(object), Type::named(object)],
-                    Type::named(number),
-                    ApiLevel(5, 0, 0),
-                )],
-            },
-        )]),
+        interfaces: BTreeMap::from([
+            (
+                "Toybox.Lang.Comparable".into(),
+                Interface {
+                    name: "Toybox.Lang.Comparable".into(),
+                    since: ApiLevel(5, 0, 0),
+                    methods: vec![method(
+                        "compareTo",
+                        vec![Type::named(object)],
+                        Type::named(number),
+                        ApiLevel(5, 0, 0),
+                    )],
+                },
+            ),
+            (
+                "Toybox.Lang.Comparator".into(),
+                Interface {
+                    name: "Toybox.Lang.Comparator".into(),
+                    since: ApiLevel(5, 0, 0),
+                    methods: vec![method(
+                        "compare",
+                        vec![Type::named(object), Type::named(object)],
+                        Type::named(number),
+                        ApiLevel(5, 0, 0),
+                    )],
+                },
+            ),
+        ]),
         modules,
         classes,
         enums: BTreeMap::from([("Toybox.Graphics.FontDefinition".into(), initial)]),
