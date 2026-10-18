@@ -159,7 +159,7 @@ operator/type-system dependencies and sequencing belong to the
 - **Dictionary:** Object/Symbol/reference keys and values, heterogeneous/nested
   containers, general nullable storage, and typed keys/values Arrays for those
   domains.
-- **Symbol:** nullable values, fields/container elements and keys, and full
+- **Symbol:** fields/container elements and keys, and full
   selector/member-resolution contracts.
 - **Method:** constructor and class/module receiver values, unqualified method
   lookup, known-selector checks, nullable storage, and concrete callback

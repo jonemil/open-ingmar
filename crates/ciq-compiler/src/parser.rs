@@ -1980,6 +1980,7 @@ impl Parser<'_> {
                             crate::ParameterType::String => crate::ParameterType::NullableString,
                             crate::ParameterType::Boolean => crate::ParameterType::NullableBoolean,
                             crate::ParameterType::Char => crate::ParameterType::NullableChar,
+                            crate::ParameterType::Symbol => crate::ParameterType::NullableSymbol,
                             _ => return Err(self.error(at, "unsupported nullable parameter type")),
                         }
                     } else {
@@ -2062,6 +2063,7 @@ impl Parser<'_> {
                     crate::ReturnType::String => crate::ReturnType::NullableString,
                     crate::ReturnType::Boolean => crate::ReturnType::NullableBoolean,
                     crate::ReturnType::Char => crate::ReturnType::NullableChar,
+                    crate::ReturnType::Symbol => crate::ReturnType::NullableSymbol,
                     _ => return Err(self.error(at, "unsupported nullable result type")),
                 }
             } else {

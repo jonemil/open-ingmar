@@ -301,6 +301,7 @@ pub fn build_console_application(
             | ReturnType::NullableDouble
             | ReturnType::NullableFloat
             | ReturnType::NullableBoolean
+            | ReturnType::NullableSymbol
             | ReturnType::NullableChar
             | ReturnType::TypedDictionary(_)
             | ReturnType::Array(_)

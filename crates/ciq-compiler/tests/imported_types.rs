@@ -20,6 +20,7 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Comparable or Null",
         "$Comparator or Null",
         "$Symbol",
+        "$Symbol or Null",
         "$WeakReference",
         "$Dictionary",
         "$Array<$Number>",

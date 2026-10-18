@@ -726,6 +726,7 @@ defines the result of a positional-argument call to a top-level user module.
 Scalar result types are `integer`, `long`, `float`, `double`, `string`, `boolean`,
 and `char`, plus `nullable-integer`, `nullable-long`, `nullable-float`,
 `nullable-double`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
+Symbol calls use `symbol` or `nullable-symbol`.
 Array results use the [element categories](#array-allocation). Omission means
 integer.
 Canonical text omits the integer default and writes noninteger contracts.
@@ -1036,7 +1037,8 @@ value ID does not cross the edge.
 Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`, `null`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
-`nullable-char`, `array-number`, and `array-char`. They map to the existing
+`nullable-char`, `symbol`, `nullable-symbol`, `array-number`, and `array-char`.
+They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 
@@ -1194,6 +1196,7 @@ Array categories follow [Array allocation](#array-allocation).
 Ordinary signatures also accept `long`, `nullable-long`, `float`, `double`,
 `nullable-float`, `nullable-double`,
 `nullable-integer`, `nullable-string`, `nullable-boolean`, and `nullable-char`.
+Symbol signatures use `symbol` or `nullable-symbol`.
 Separate entries with colons; the list must match `parameters=<count>`. Omitted types are integers. This field
 applies to ordinary functions and instance methods. `nullable-dictionary` is
 also accepted; unit validation restricts it to native AppBase.onStart/onStop
@@ -1394,8 +1397,8 @@ See [source Method contracts](compiler-subset.md#method-values-and-invocation).
 
 `.symbol %<result-id> <name> [span=<start>:<end>]` defines a non-null Symbol by
 ASCII identifier, without a numeric ID. Parameter, call-result, and matching
-conditional-edge contracts use `symbol`; explicit function `result=symbol`
-retains that result contract. Validation applies the
+conditional-edge contracts use `symbol` or `nullable-symbol`; explicit function
+result contracts retain either tag. Validation applies the
 [source Symbol profile](compiler-subset.md#symbol-values), including API checks.
 
 Lowering emits `spush @__ciq_symbol_<name>`. Raw CODE binding resolves that alias
@@ -1523,7 +1526,8 @@ all facts; IR text carries no trusted narrowing metadata. See
 
 A function declaration may carry `result=nullable-integer`,
 `result=nullable-long`, `result=nullable-float`, `result=nullable-double`,
-`result=nullable-string`, `result=nullable-boolean`, or `result=nullable-char`.
+`result=nullable-string`, `result=nullable-boolean`, `result=nullable-char`, or
+`result=nullable-symbol`.
 Every value return must be Null, the corresponding scalar type, or the same
 union. A void return is invalid. The declared union is
 preserved even when all returns are scalar or all are Null; canonical text

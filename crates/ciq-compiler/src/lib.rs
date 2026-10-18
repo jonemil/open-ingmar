@@ -415,6 +415,8 @@ pub enum ReturnType {
     Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
+    /// Symbol identity or Null; member/selector use requires a non-null proof.
+    NullableSymbol,
     Integer,
     Long,
     NullableLong,
@@ -458,6 +460,8 @@ pub enum ParameterType {
     Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
+    /// Symbol identity or Null; member/selector use requires a non-null proof.
+    NullableSymbol,
     Integer,
     Long,
     NullableLong,
@@ -494,6 +498,7 @@ impl ParameterType {
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
+            Self::NullableSymbol => ValueType::NullableSymbol.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::Long => ValueType::Long.api_type(),
             Self::Double => ValueType::Double.api_type(),
@@ -531,6 +536,7 @@ impl ReturnType {
             Self::NullableString => ValueType::NullableString.api_type(),
             Self::NullableBoolean => ValueType::NullableBoolean.api_type(),
             Self::NullableChar => ValueType::NullableChar.api_type(),
+            Self::NullableSymbol => ValueType::NullableSymbol.api_type(),
             Self::Integer => ValueType::Integer.api_type(),
             Self::Long => ValueType::Long.api_type(),
             Self::Double => ValueType::Double.api_type(),
@@ -573,6 +579,8 @@ enum ValueType {
     Method,
     /// A symbol identity assigned a numeric ID during binding.
     Symbol,
+    /// Symbol identity or Null; member/selector use requires a non-null proof.
+    NullableSymbol,
     Integer,
     Long,
     NullableLong,
@@ -607,6 +615,7 @@ impl ValueType {
             Self::NullableString => Self::String,
             Self::NullableBoolean => Self::Boolean,
             Self::NullableChar => Self::Char,
+            Self::NullableSymbol => Self::Symbol,
             Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
             _ => self,
@@ -659,6 +668,10 @@ impl ValueType {
             Self::NullableInterface(interface) => interface.api_type(true),
             Self::Method => api::Type::named("Toybox.Lang.Method"),
             Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
+            Self::NullableSymbol => api::Type::Union(vec![
+                api::Type::named("Toybox.Lang.Symbol"),
+                api::Type::Null,
+            ]),
             Self::Object(class) => api::Type::named(class.name()),
             Self::Tuple(shape) => shape.api_type(),
             Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
@@ -718,6 +731,7 @@ impl ValueType {
             _ if *ty == Self::NullableString.api_type() => Some(Self::NullableString),
             _ if *ty == Self::NullableBoolean.api_type() => Some(Self::NullableBoolean),
             _ if *ty == Self::NullableChar.api_type() => Some(Self::NullableChar),
+            _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
             _ => None,
         }
     }
@@ -1793,6 +1807,7 @@ impl Function {
                                     ty @ (ValueType::NullableInteger
                                     | ValueType::NullableString
                                     | ValueType::NullableBoolean
+                                    | ValueType::NullableSymbol
                                     | ValueType::NullableChar
                                     | ValueType::NullableLong
                                     | ValueType::NullableDouble
@@ -2404,6 +2419,8 @@ impl Function {
                             && matches!(incoming, ValueType::Integer | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableBoolean
                             && matches!(incoming, ValueType::Boolean | ValueType::Null))
+                        && !(local_types[&local] == ValueType::NullableSymbol
+                            && matches!(incoming, ValueType::Symbol | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableChar
                             && matches!(incoming, ValueType::Char | ValueType::Null))
                         && !(local_types[&local] == ValueType::NullableString
@@ -2815,6 +2832,7 @@ impl Function {
                             ParameterType::NullableString => "nullable-string",
                             ParameterType::NullableBoolean => "nullable-boolean",
                             ParameterType::NullableChar => "nullable-char",
+                            ParameterType::NullableSymbol => "nullable-symbol",
                             ParameterType::Integer => "integer",
                             ParameterType::Long => "long",
                             ParameterType::Double => "double",
@@ -2863,6 +2881,7 @@ impl Function {
             | ReturnType::NullableInteger
             | ReturnType::NullableString
             | ReturnType::NullableBoolean
+            | ReturnType::NullableSymbol
             | ReturnType::NullableChar
             | ReturnType::NullableLong
             | ReturnType::NullableDouble
@@ -3421,6 +3440,7 @@ fn validate_call_arguments(
                     | ValueType::NullableInteger
                     | ValueType::NullableString
                     | ValueType::NullableBoolean
+                    | ValueType::NullableSymbol
                     | ValueType::NullableChar
                     | ValueType::NullableLong
                     | ValueType::NullableDouble
@@ -3445,6 +3465,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NullableString => Ok(ValueType::NullableString),
         ReturnType::NullableBoolean => Ok(ValueType::NullableBoolean),
         ReturnType::NullableChar => Ok(ValueType::NullableChar),
+        ReturnType::NullableSymbol => Ok(ValueType::NullableSymbol),
         ReturnType::Integer => Ok(ValueType::Integer),
         ReturnType::Long => Ok(ValueType::Long),
         ReturnType::Double => Ok(ValueType::Double),
@@ -3490,6 +3511,7 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::NullableString => " result=nullable-string",
         ReturnType::NullableBoolean => " result=nullable-boolean",
         ReturnType::NullableChar => " result=nullable-char",
+        ReturnType::NullableSymbol => " result=nullable-symbol",
         ReturnType::Integer => "",
         ReturnType::Long => " result=long",
         ReturnType::Double => " result=double",

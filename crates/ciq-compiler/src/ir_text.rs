@@ -112,6 +112,7 @@ pub(crate) fn parse_ir_context(
                 "nullable-string" => crate::ReturnType::NullableString,
                 "nullable-boolean" => crate::ReturnType::NullableBoolean,
                 "nullable-char" => crate::ReturnType::NullableChar,
+                "nullable-symbol" => crate::ReturnType::NullableSymbol,
                 _ => return Err(fail(*name_at, "unsupported function result contract")),
             });
         } else if field == "receiver=instance" && !instance_method {
@@ -141,6 +142,7 @@ pub(crate) fn parse_ir_context(
                         "nullable-string" => Ok(crate::ParameterType::NullableString),
                         "nullable-boolean" => Ok(crate::ParameterType::NullableBoolean),
                         "nullable-char" => Ok(crate::ParameterType::NullableChar),
+                        "nullable-symbol" => Ok(crate::ParameterType::NullableSymbol),
                         "integer" => Ok(crate::ParameterType::Integer),
                         "long" => Ok(crate::ParameterType::Long),
                         "double" => Ok(crate::ParameterType::Double),
@@ -1242,6 +1244,7 @@ fn call_contract(
             "nullable-string" => crate::ReturnType::NullableString,
             "nullable-boolean" => crate::ReturnType::NullableBoolean,
             "nullable-char" => crate::ReturnType::NullableChar,
+            "nullable-symbol" => crate::ReturnType::NullableSymbol,
             "integer" => crate::ReturnType::Integer,
             "long" => crate::ReturnType::Long,
             "double" => crate::ReturnType::Double,

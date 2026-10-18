@@ -29,6 +29,7 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "nullable-string" => Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]),
         "nullable-boolean" => Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]),
         "nullable-char" => Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]),
+        "nullable-symbol" => Type::Union(vec![Type::named("Toybox.Lang.Symbol"), Type::Null]),
         "array-number" => Type::Array(Box::new(Type::named("Toybox.Lang.Number"))),
         "array-char" => Type::Array(Box::new(Type::named("Toybox.Lang.Char"))),
         _ => return None,
@@ -62,6 +63,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "nullable-string",
         "nullable-boolean",
         "nullable-char",
+        "nullable-symbol",
         "array-number",
         "array-char",
     ]
@@ -107,6 +109,7 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
         "nullable-string",
         "nullable-boolean",
         "nullable-char",
+        "nullable-symbol",
     ] {
         let ty = parse_type(tag).unwrap();
         if crate::native::accepts(&ty, left) && crate::native::accepts(&ty, right) {

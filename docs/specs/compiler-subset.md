@@ -388,7 +388,7 @@ standalone function IR retains that declaration-resolution obligation.
 targets are Number, Long, Float, Double, Boolean, Char, String, Object, Symbol,
 Method, WeakReference, and opaque Dictionary. Canonical `Toybox.Lang.Type` and
 Lang module aliases are accepted. Number, Long, Float, Double, Boolean, Char,
-String, and Object targets can include `or Null`. Target types still satisfy
+String, Symbol, and Object targets can include `or Null`. Target types still satisfy
 selected API introduction requirements.
 [Source-class targets](#source-class-targets) additionally retain exact identity.
 Imported native names use the same cast profile. Parameterized containers,
@@ -1368,7 +1368,20 @@ names for arbitrary runtime-created values or release builds without reflection
 metadata. Raw CODE output needs an explicit symbol source; it cannot allocate
 an independent identity space.
 
-Symbol arithmetic, ordering, truthiness, direct printing, nullable contracts,
+`Symbol or Null` supports annotated parameters/results, local storage, and
+Symbol/Null conditional joins from API 1.0.0. Forwarding and returns preserve the
+declared union even when the current value is a Symbol. Local writes may replace
+it with Symbol, Null, or the same union. `==`/`!=` with literal Null support fresh
+local/parameter proofs in either operand order. Guarded reads may compare with
+other Symbols, invoke methods, or act as `has`/`method` selectors. Existing
+[null-proof rules](#nullable-results) apply across branches, short circuit
+expressions, and loops; writes invalidate the local's proof. Copies and stored
+Boolean guards do not transfer it. Nullable Symbols cannot satisfy a non-null
+Symbol consumer without proof. Native `equals` arguments explicitly permitting
+Null retain their shared argument profile. Method API requirements still apply
+after a guard, including 2.3.0 for `toNumber`.
+
+Symbol arithmetic, ordering, truthiness, direct printing, fields,
 and container elements/keys remain unsupported. Method lookup follows its
 separate contract below.
 See the [specimen and binding evidence](../investigations/compiler-symbols.md).
@@ -2108,7 +2121,7 @@ A direct `if (value == null)` or `if (null == value)` proves that parameter or
 local non-null on the false path. Direct `value != null` or `null != value`
 proves non-null on the true path. Boolean negation reverses this proof edge;
 `if (!(value == null))` proves non-null on the true path. Fresh reads there have
-the non-null numeric, String, Boolean, or Char type
+the non-null numeric, String, Boolean, Char, or Symbol type
 and support its consumers, including ordinary user arguments/returns. For example:
 
 ```monkeyc

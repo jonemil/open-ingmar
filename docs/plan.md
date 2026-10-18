@@ -34,8 +34,9 @@ argument/result guarantees. Keep source-target resolution and saved-IR checking
 consistent. Erased invocation does not establish a target's API availability,
 arity, or concrete result type. Unqualified inherited `method(...)` lookup
 remains separate from explicit `self.method(...)`.
-Nullable Symbols and Symbol Array/Dictionary elements need their own container
-and DATA contracts; ordinary Symbol values do not implicitly enable them.
+Symbol fields and Array/Dictionary elements need storage, DATA, and binding
+contracts; nullable Symbol values do not implicitly enable them. Review SDK
+constant-container Symbol tags before choosing their literal lowering.
 
 Keep SDK-rejected wider Char ordering and floating Char addition outside the
 operator profile. Further numeric boundary work should answer a concrete
