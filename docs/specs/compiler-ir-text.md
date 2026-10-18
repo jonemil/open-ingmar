@@ -550,6 +550,12 @@ These contracts require API 1.0.0 and use the
 literals emit `.symbol` values and private fills. No constant token accepts an
 embedded numeric Symbol ID; Null-only nullable payloads remain valid constants.
 
+Method Array elements use `method` or `nullable-method`; parameter/call result
+categories use `method-array` or `nullable-method-array`. Runtime literals use
+private Array builders and ordinary Method values; constants permit only Null
+under the nullable element contract. No Method payload token or DATA tag is added.
+See [Method Arrays](compiler-subset.md#method-arrays).
+
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
 applications materialize its [DATA record](data-arrays.md), using a shared local
 pool entry for equal String text, and bind the outer
@@ -1047,7 +1053,7 @@ Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,
-`array-number`, and `array-char`.
+`array-number`, `array-char`, `array-method`, and `array-nullable-method`.
 They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.

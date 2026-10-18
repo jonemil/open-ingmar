@@ -1437,7 +1437,8 @@ invalidate local proofs; aliases and stored Boolean tests do not transfer them.
 Releasing the last Method alias also releases its bound receiver. Lexical
 `as Method or Null` is an unchecked type assertion, with no runtime conversion
 or signature recovery. [Method fields](compiler-classes.md#method-fields) support
-required/nullable storage; Method container elements remain unsupported.
+required/nullable storage. Arrays follow the [Method Array profile](#method-arrays);
+Method Dictionary keys/values remain unsupported.
 
 `invoke(arguments...)` accepts up to 254 supported Object/Null values and
 returns opaque `Object or Null`. This erased result covers scalar/container
@@ -1468,6 +1469,34 @@ invocation remains a runtime/caller obligation even for literal selectors.
 Constructors and typed signatures remain deferred.
 Array sorting uses a [separate Comparator contract](#source-comparators). See the
 [binding/lifetime evidence](../investigations/compiler-methods.md).
+
+### Method Arrays
+
+`Array<Method>` and `Array<Method or Null>` preserve invariant element contracts
+through parameters, results, locals, indexed reads/writes, and matching Array
+conditional arms. The value types require API 1.0.0; native Array methods retain
+their existing API requirements. A non-null-element Array cannot widen to a
+nullable-element Array. Empty/nullable literals need a concrete expected contract;
+otherwise a first non-null Method can establish the literal element type.
+
+Method-bearing literals allocate privately and fill in source order at runtime.
+They do not embed Method objects or addresses in DATA constants. Null-only
+nullable literals can use the existing Null constant encoding. Each construction
+produces a fresh mutable Array.
+
+The supported `size`, `toString`, `add`, `addAll`, `indexOf`, `remove`, `removeAll`,
+`reverse`, and `slice` profiles apply. Element arguments match the declared
+nullability; `addAll` requires the same invariant Array contract. Reverse/slice
+produce independent Arrays while retaining the same Method references. Search
+and removal use runtime Method equality; separately created bindings need not
+compare equal. Method sorting remains outside the supported ordering profiles.
+
+Nullable indexed reads need guarded local snapshots before invocation or member
+use; a test of one indexed read does not refine another. Replacing/removing an
+element preserves saved aliases. Releasing the last Method reference releases
+its bound receiver. Array storage does not recover a callback signature or a
+concrete invocation result. See the [specimen](../../examples/compiler-methods/README.md)
+and [ownership evidence](../investigations/compiler-methods.md#nullable-ownership).
 
 ## Ordinary weak references
 

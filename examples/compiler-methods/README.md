@@ -4,7 +4,8 @@
 zero/one/two-argument callbacks, and observes receiver lifetime, aliases, hashes,
 nullable/Void results, returned containers, and nullable Method ownership.
 `MethodStore` and AppBase fields exercise required/nullable callback storage,
-local snapshots, replacement, and release. The
+local snapshots, replacement, and release. `MethodArrays` checks typed/nullable
+elements, reverse/slice copies, mutation, and ordered literal evaluation. The
 [expected output](expected.txt) matches SDK/generated `fr265` programs.
 
 From the repository root, using fresh output paths:

@@ -162,7 +162,7 @@ operator/type-system dependencies and sequencing belong to the
 - **Symbol:** full selector/member-resolution contracts, shared with source
   inheritance and Method lookup work.
 - **Method:** constructor and class/module receiver values,
-  known-selector checks, container storage, and concrete callback
+  known-selector checks, Dictionary storage, and concrete callback
   signature/refinement rules where required by consumers.
 - **WeakReference and Object.weak:** broader source/Object targets, nullable
   storage, and safe concrete recovery from get(); preserve exact immutable

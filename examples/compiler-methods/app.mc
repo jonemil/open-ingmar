@@ -122,6 +122,60 @@ module MethodFields {
         Methods.show(store.call());
     }
 }
+module MethodArrays {
+    function single(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Method> { return [m]; }
+    function optional(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Method or Null> { return [m, null]; }
+    function emptySlot() as Toybox.Lang.Array<Toybox.Lang.Method or Null> { return [null]; }
+    function forward(a as Toybox.Lang.Array<Toybox.Lang.Method>) as Toybox.Lang.Array<Toybox.Lang.Method> { return a; }
+    function mark(m as Toybox.Lang.Method, n as Toybox.Lang.Number) as Toybox.Lang.Method { System.println(n); return m; }
+    function staged(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Method> {
+        return [MethodArrays.mark(m, 40), MethodArrays.mark(m, 41)];
+    }
+    function run() as Void {
+        var owner = [8, 9];
+        var weak = owner.weak();
+        var bound = owner.method(:size);
+        var values = MethodArrays.single(bound);
+        var nullable = MethodArrays.optional(bound);
+        var reversed = values.reverse();
+        var sliced = values.slice(0, 1);
+        owner = [0];
+        bound = owner.method(:size);
+        System.println(weak.stillAlive());
+        Methods.show(values[0].invoke());
+        nullable[0] = null;
+        values[0] = bound;
+        System.println(weak.stillAlive());
+        reversed.removeAll(reversed[0]);
+        System.println(weak.stillAlive());
+        var retained = sliced[0];
+        sliced.removeAll(sliced[0]);
+        System.println(weak.stillAlive());
+        retained = bound;
+        System.println(weak.stillAlive());
+        Methods.show(MethodArrays.forward(values)[0].invoke());
+        values.add(bound);
+        values.addAll(MethodArrays.single(bound));
+        System.println(values.size());
+        System.println(values.indexOf(bound));
+        System.println(values.remove(bound));
+        System.println(values.size());
+        System.println(values.toString().equals(values.toString()));
+        values.removeAll(bound);
+        System.println(values.size());
+        nullable[1] = bound;
+        nullable.add(null);
+        nullable.addAll(MethodArrays.emptySlot());
+        System.println(nullable.size());
+        System.println(nullable.indexOf(null));
+        System.println(nullable.remove(null));
+        var snapshot = nullable[0];
+        nullable[0] = null;
+        if (snapshot != null) { Methods.show(snapshot.invoke()); }
+        var staged = MethodArrays.staged(bound);
+        System.println(staged.size());
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
     var startup as Toybox.Lang.Method or Null;
     function initialize() { AppBase.initialize(); }
@@ -134,6 +188,7 @@ class MinimalConsoleApp extends Application.AppBase {
         var saved = self.startup;
         self.startup = null;
         if (saved != null) { Methods.show(saved.invoke()); }
+        MethodArrays.run();
         System.exit();
     }
 }

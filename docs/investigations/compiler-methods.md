@@ -92,9 +92,15 @@ Clearing the final snapshot expires its weak reference. The replacement binding
 invokes the new receiver. AppBase also stores its own `method(:answer)` in a
 nullable field, clears the field, and invokes a saved local (`42`).
 
-Both SDK/generated programs match all 37 expected lines, including Null checks,
+`MethodArrays` retains callbacks in non-null/nullable element Arrays and in
+reverse/slice copies. Replacement/removal releases each container's ownership;
+the last indexed local snapshot retains the old receiver until replaced.
+Nullable snapshots remain callable after their element is cleared. Identity
+search/removal and ordered literal markers (`40`, `41`) match across compilers.
+
+Both SDK/generated programs match all 57 expected lines, including Null checks,
 guarded hash/weak calls, and a loop that clears its Method. Structured section
-reconstruction passes for both. Artifacts: `scratch/check-method-fields/`.
+reconstruction passes for both. Artifacts: `scratch/check-method-arrays/`.
 No callable signature or concrete recovery from an erased result is inferred.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

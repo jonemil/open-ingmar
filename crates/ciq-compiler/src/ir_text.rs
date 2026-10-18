@@ -195,6 +195,12 @@ pub(crate) fn parse_ir_context(
                             ),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "method-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Method))
+                        }
+                        "nullable-method-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableMethod,
+                        )),
                         "symbol-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Symbol))
                         }
@@ -637,6 +643,8 @@ pub(crate) fn parse_ir_context(
                     }
                     "char" => crate::ArrayElement::Char,
                     "symbol" => crate::ArrayElement::Symbol,
+                    "method" => crate::ArrayElement::Method,
+                    "nullable-method" => crate::ArrayElement::NullableMethod,
                     "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
                     "string" => crate::ArrayElement::String,
@@ -759,6 +767,8 @@ pub(crate) fn parse_ir_context(
                     }
                     "char" => crate::ArrayElement::Char,
                     "symbol" => crate::ArrayElement::Symbol,
+                    "method" => crate::ArrayElement::Method,
+                    "nullable-method" => crate::ArrayElement::NullableMethod,
                     "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
                     "number" => crate::ArrayElement::Number,
@@ -813,6 +823,8 @@ pub(crate) fn parse_ir_context(
                 }
                 "char" => crate::ArrayElement::Char,
                 "symbol" => crate::ArrayElement::Symbol,
+                "method" => crate::ArrayElement::Method,
+                "nullable-method" => crate::ArrayElement::NullableMethod,
                 "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                 "boolean" => crate::ArrayElement::Boolean,
                 "number" => crate::ArrayElement::Number,
@@ -1304,6 +1316,10 @@ fn call_contract(
             "nullable-float-array" => crate::ReturnType::Array(crate::ArrayElement::NullableFloat),
             "long-array" => crate::ReturnType::Array(crate::ArrayElement::Long),
             "symbol-array" => crate::ReturnType::Array(crate::ArrayElement::Symbol),
+            "method-array" => crate::ReturnType::Array(crate::ArrayElement::Method),
+            "nullable-method-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableMethod)
+            }
             "nullable-symbol-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::NullableSymbol)
             }

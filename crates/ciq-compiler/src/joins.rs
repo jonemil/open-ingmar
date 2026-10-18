@@ -33,6 +33,10 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "nullable-symbol" => Type::Union(vec![Type::named("Toybox.Lang.Symbol"), Type::Null]),
         "array-number" => Type::Array(Box::new(Type::named("Toybox.Lang.Number"))),
         "array-char" => Type::Array(Box::new(Type::named("Toybox.Lang.Char"))),
+        "array-method" => Type::Array(Box::new(Type::named("Toybox.Lang.Method"))),
+        "array-nullable-method" => {
+            Type::Array(Box::new(crate::ValueType::NullableMethod.api_type()))
+        }
         _ => return None,
     })
 }
@@ -68,6 +72,8 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "nullable-method",
         "array-number",
         "array-char",
+        "array-method",
+        "array-nullable-method",
     ]
     .into_iter()
     .find(|tag| parse_type(tag).as_ref() == Some(ty))
