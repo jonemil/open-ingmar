@@ -164,7 +164,7 @@ operator/type-system dependencies and sequencing belong to the
 - **Method:** constructor and class/module receiver values,
   known-selector checks and concrete callback
   signature/refinement rules where required by consumers.
-- **WeakReference and Object.weak:** broader source/Object targets, constructors,
+- **WeakReference and Object.weak:** broader source/Object targets
   and safe concrete recovery from get(); preserve exact
   immutable weak-result behavior.
 - **ByteArray:** value/literal/allocation/indexing contracts and all own/inherited

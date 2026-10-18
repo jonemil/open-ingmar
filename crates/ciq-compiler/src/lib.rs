@@ -969,6 +969,11 @@ pub enum Operation {
         result: ValueId,
         class: NativeClass,
     },
+    /// Construct the zero-argument native WeakReference class instance. This is
+    /// distinct from binding another target through Object.weak().
+    WeakReferenceNew {
+        result: ValueId,
+    },
     /// Allocate an empty array with the specified element contract.
     /// The element contract is explicit; allocation failures belong to the VM.
     ArrayNew {
@@ -2147,6 +2152,15 @@ impl Function {
                     types.insert(result, ValueType::Tuple(shape));
                     (Some(result), elements.clone())
                 }
+                Operation::WeakReferenceNew { result } => {
+                    if let Some(context) = context {
+                        context
+                            .check_class(api::core(), "Toybox.Lang.WeakReference")
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, ValueType::WeakReference);
+                    (Some(result), vec![])
+                }
                 Operation::NativeNew { result, class } => {
                     native::constructor(class, context).map_err(|message| fail(&message))?;
                     types.insert(result, ValueType::Object(class));
@@ -2684,6 +2698,7 @@ impl Function {
                     | Operation::ArrayFill { .. }
                     | Operation::ArrayFillMany { .. }
                     | Operation::NativeNew { .. }
+                    | Operation::WeakReferenceNew { .. }
                     | Operation::TupleNew { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
@@ -3181,6 +3196,9 @@ impl Function {
                 ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())
+                }
+                Operation::WeakReferenceNew { result } => {
+                    format!(".new-native %{} Toybox.Lang.WeakReference", result.0)
                 }
                 Operation::DictionaryBegin {
                     builder,

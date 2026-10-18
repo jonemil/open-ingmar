@@ -263,6 +263,7 @@ conversion call. Invalid widths and malformed operands are rejected. See the
 `.new-native %<result> Toybox.WatchUi.View [span=<start>:<end>]` allocates and
 initializes a non-null View with no arguments. Typed IR uses
 `NativeNew { result, class: NativeClass::View }`.
+
 `Toybox.WatchUi.BehaviorDelegate` is also accepted, using the corresponding
 NativeClass, `behavior-delegate` parameter/result tag, and initializer API 1.0.0.
 Other class paths and extra arguments are rejected. View parameter text is
@@ -281,6 +282,15 @@ on the stack after the initializer result is popped. Symbol sources bind those
 aliases to exactly one `Toybox_WatchUi`, class, and `initialize` declaration
 respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor evidence](../investigations/compiler-native-views.md).
+
+`.new-native %<result> Toybox.Lang.WeakReference [span=<start>:<end>]` uses
+`WeakReferenceNew { result }` and produces a non-null WeakReference. It takes no
+operands, retains allocation effect order, and checks class availability from
+API 1.2.0. Lowering resolves `__ciq_sdk_Lang` / `__ciq_type_WeakReference`, then
+uses the existing `newc`, `initialize` lookup, and zero-argument invocation
+sequence. It does not invoke `weak` or introduce a new VM opcode/DATA record.
+The [source contract](compiler-subset.md#weakreference-construction) scopes the
+SDK-observed constructor separately from target binding.
 
 ## Positional result construction
 

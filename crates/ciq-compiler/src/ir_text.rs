@@ -619,10 +619,16 @@ pub(crate) fn parse_ir_context(
                     .collect::<Result<_, _>>()?,
             }
         } else if kind == 31 {
-            Operation::NativeNew {
-                result: parse_value(&fields[1])?,
-                class: crate::NativeClass::from_name(&fields[2])
-                    .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+            if fields[2] == "Toybox.Lang.WeakReference" {
+                Operation::WeakReferenceNew {
+                    result: parse_value(&fields[1])?,
+                }
+            } else {
+                Operation::NativeNew {
+                    result: parse_value(&fields[1])?,
+                    class: crate::NativeClass::from_name(&fields[2])
+                        .ok_or_else(|| fail(*at, "unsupported native construction class"))?,
+                }
             }
         } else if kind == 61 {
             if width < 4 {

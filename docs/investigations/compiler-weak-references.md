@@ -43,8 +43,8 @@ Compile the tracked source with an ignored Jungle and the shared native-names
 manifest/resources. Use the
 [console checker](../../scripts/README.md#console-specimen-check) for saved-stage
 parity, structured SDK/generated reconstruction, own-key signing, and simulator
-comparison. Both programs match all 58 expected console lines. Artifacts:
-`scratch/check-weak-containers/`.
+comparison. Both programs match all 64 expected console lines. Artifacts:
+`scratch/check-weak-construction-final/`.
 
 SDK symbols use `weak` = `0x00800418`, `stillAlive` = `0x00800417`, and
 `get` = `0x008000b5` (already used by Dictionary). Existing member invocation,
@@ -89,6 +89,30 @@ scalar payloads under weak constant contracts, and API declarations below 1.2.0.
 Structured SDK/generated reconstruction needs no new opcode or DATA record.
 Other native/source weak targets, checked concrete recovery, and broader callback
 interactions remain open.
+
+## Zero-argument construction
+
+2026-10-18, SDK/compiler/simulator 9.2.0, `fr265`, debug `-O 0`.
+
+**Officially documented:** the [WeakReference page][weak] lists class availability
+from API 1.2.0 and `get`/`stillAlive`; it does not declare a constructor.
+
+**Observed:** `new Lang.WeakReference(array)` fails SDK compilation with wrong
+initializer arity. `new Lang.WeakReference()` compiles and runs: `stillAlive()`
+is true, `get()` is non-null, and that result compares equal to the constructed
+instance. It does not create an empty/expired reference to an unspecified target.
+
+In the tracked `WeakConstruction` specimen, a saved retrieval retains the original
+instance after its variable is replaced. Clearing that retrieval expires a
+separate `weak()` observer of the original instance. The replacement is alive.
+SDK/generated programs agree. Existing Lang class lookup and allocation/initializer
+instructions suffice; native/text paths and structured reconstruction pass.
+
+Isolated probes: `scratch/weak-constructor-probe/` (`build.log` for rejected
+one-argument syntax; `zero-runtime/` and `self-runtime/` for accepted forms).
+The complete tracked specimen uses `scratch/check-weak-construction-final/`.
+Using class API 1.2.0 as an availability floor does not establish constructor
+behavior on all historical runtimes. No target-binding constructor is inferred.
 
 ## Dictionary key rejection
 

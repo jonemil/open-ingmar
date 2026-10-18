@@ -162,6 +162,21 @@ module WeakContainers {
         System.println(staged.size());
     }
 }
+module WeakConstruction {
+    function run() as Void {
+        var fresh = new Toybox.Lang.WeakReference();
+        System.println(fresh.stillAlive());
+        var value = fresh.get();
+        System.println(value != null);
+        if (value != null) { System.println(value.equals(fresh)); }
+        var observed = fresh.weak();
+        fresh = new Toybox.Lang.WeakReference();
+        System.println(observed.stillAlive());
+        value = null;
+        System.println(observed.stillAlive());
+        System.println(fresh.stillAlive());
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
     var startup as Toybox.Lang.WeakReference or Null;
     function initialize() { AppBase.initialize(); }
@@ -178,6 +193,7 @@ class MinimalConsoleApp extends Application.AppBase {
             System.println(saved.stillAlive());
         }
         WeakContainers.run();
+        WeakConstruction.run();
         System.exit();
     }
 }

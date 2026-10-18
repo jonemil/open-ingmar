@@ -1565,7 +1565,7 @@ arms also join. These rules do not introduce heterogeneous container joins.
 The declared Object type does not establish a WeakReference result from
 `Object.weak()`: the runtime value might be an immutable scalar. That receiver
 path, other native/source weak targets, Dictionary weak keys,
-constructors, and safe concrete recovery remain deferred. The new types do
+and safe concrete recovery remain outside this profile. The new types do
 not acquire arithmetic, truthiness, direct printing, or general equality
 operators; nullable Object/Null tests use the existing proof rules.
 
@@ -1574,6 +1574,25 @@ Hidden reference temporaries transfer ownership on their final read using IR
 Source locals retain their assignment/frame lifetimes. Backend staging must not
 silently extend a target's strong lifetime. See the
 [lifetime specimen and evidence](../investigations/compiler-weak-references.md).
+
+### WeakReference construction
+
+`new Toybox.Lang.WeakReference()` constructs a fresh native class instance;
+canonical, module-alias, and imported bare names are accepted. Qualifier
+shadowing and constructor arguments are rejected. This is distinct from
+`target.weak()` and does not accept a target object.
+
+The bounded profile follows SDK 9.2.0/`fr265` simulator evidence: a fresh instance
+reports alive and its `get()` result compares equal to itself. Saved retrievals
+retain the instance normally. The compiler still types `get()` as Object or Null;
+it does not infer self identity or non-null retrieval from construction.
+
+Construction is effectful and uses ordinary native allocation/initialization.
+The class's API 1.2.0 introduction is the minimum availability guard, including
+after IR reload. Garmin's published WeakReference page does not declare a
+constructor, so this guard is not a published constructor-compatibility claim
+for every older SDK/device. See the
+[constructor evidence](../investigations/compiler-weak-references.md#zero-argument-construction).
 
 ### WeakReference containers
 

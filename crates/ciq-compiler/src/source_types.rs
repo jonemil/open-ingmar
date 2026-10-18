@@ -106,6 +106,9 @@ impl Types {
                 (*result, Some(shape.api_type()))
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
+            Operation::WeakReferenceNew { result } => {
+                (*result, Some(Type::named("Toybox.Lang.WeakReference")))
+            }
             Operation::Long { result, .. } => (*result, Some(Type::named("Toybox.Lang.Long"))),
             Operation::Double { result, .. } => (*result, Some(Type::named("Toybox.Lang.Double"))),
             Operation::Float { result, .. } => (*result, Some(Type::named("Toybox.Lang.Float"))),

@@ -60,11 +60,39 @@ fn resolve_implicit_method(
     })
 }
 
+/// Emit a checked zero-argument native constructor operation. Keep constructor
+/// diagnostics outside recursive expression emission to preserve its depth budget.
+fn emit_native_constructor(
+    source: &str,
+    kind: parser::ExpressionKind,
+    span: Span,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    result: ValueId,
+) -> Result<Operation, Diagnostic> {
+    let parser::ExpressionKind::NativeNew { class, qualifier } = kind else {
+        unreachable!("native construction");
+    };
+    if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
+        return Err(Diagnostic::at(
+            source,
+            span.start,
+            "native constructor qualifier is shadowed by a local or parameter",
+        ));
+    }
+    Ok(match class {
+        parser::NativeConstructor::Object(class) => Operation::NativeNew { result, class },
+        parser::NativeConstructor::WeakReference => Operation::WeakReferenceNew { result },
+    })
+}
+
+/// Emit a source expression and return its semantic value ID. Keep recursive
+/// calls and arithmetic separate from atom emission to preserve the depth budget.
 fn emit(
     source: &str,
     expression: parser::Expression,
-    locals: &std::collections::BTreeMap<String, LocalId>,
-    parameters: &std::collections::BTreeMap<String, usize>,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
@@ -76,7 +104,59 @@ fn emit(
         calls,
         expression.span,
     )?;
-    let operation = match kind {
+    match kind {
+        kind @ (parser::ExpressionKind::ValueCall { .. }
+        | parser::ExpressionKind::ModuleCall { .. }) => {
+            let operation = emit_call(
+                source,
+                kind,
+                expression.span,
+                locals,
+                parameters,
+                operations,
+                calls,
+            )?;
+            let result = ValueId(operations.len() as u32);
+            operations.push(LocatedOperation {
+                operation,
+                span: Some(expression.span),
+            });
+            Ok(result)
+        }
+        kind @ parser::ExpressionKind::Binary { .. } => emit_binary_chain(
+            source,
+            parser::Expression {
+                kind,
+                span: expression.span,
+            },
+            locals,
+            parameters,
+            operations,
+            calls,
+        ),
+        kind => emit_non_call(
+            source,
+            parser::Expression {
+                kind,
+                span: expression.span,
+            },
+            locals,
+            parameters,
+            operations,
+            calls,
+        ),
+    }
+}
+
+fn emit_non_call(
+    source: &str,
+    expression: parser::Expression,
+    locals: &std::collections::BTreeMap<String, LocalId>,
+    parameters: &std::collections::BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+    calls: &CallContext,
+) -> Result<ValueId, Diagnostic> {
+    let operation = match expression.kind {
         parser::ExpressionKind::ImplicitMethodCall(_) => unreachable!("resolved implicit call"),
         parser::ExpressionKind::DictionaryNew => Operation::DictionaryNew {
             dictionary_type: None,
@@ -139,19 +219,14 @@ fn emit(
                 member,
             }
         }
-        parser::ExpressionKind::NativeNew { class, qualifier } => {
-            if locals.contains_key(&qualifier) || parameters.contains_key(&qualifier) {
-                return Err(Diagnostic::at(
-                    source,
-                    expression.span.start,
-                    "native constructor qualifier is shadowed by a local or parameter",
-                ));
-            }
-            Operation::NativeNew {
-                result: ValueId(operations.len() as u32),
-                class,
-            }
-        }
+        kind @ parser::ExpressionKind::NativeNew { .. } => emit_native_constructor(
+            source,
+            kind,
+            expression.span,
+            locals,
+            parameters,
+            ValueId(operations.len() as u32),
+        )?,
         parser::ExpressionKind::DictionaryLiteral(_) | parser::ExpressionKind::ArrayLiteral(_) => {
             return Err(Diagnostic::at(
                 source,
@@ -238,29 +313,9 @@ fn emit(
                 ));
             }
         }
-        kind @ (parser::ExpressionKind::ValueCall { .. }
-        | parser::ExpressionKind::ModuleCall { .. }) => emit_call(
-            source,
-            kind,
-            expression.span,
-            locals,
-            parameters,
-            operations,
-            calls,
-        )?,
-        kind @ parser::ExpressionKind::Binary { .. } => {
-            return emit_binary_chain(
-                source,
-                parser::Expression {
-                    kind,
-                    span: expression.span,
-                },
-                locals,
-                parameters,
-                operations,
-                calls,
-            );
-        }
+        parser::ExpressionKind::ValueCall { .. }
+        | parser::ExpressionKind::ModuleCall { .. }
+        | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
         parser::ExpressionKind::Cast { operand, target } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             if let crate::api::Type::Named(name) = &target {

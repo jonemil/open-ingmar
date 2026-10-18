@@ -134,6 +134,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::DictionaryFinish { result, .. }
             | Operation::ArrayFinish { result, .. }
             | Operation::NativeNew { result, .. }
+            | Operation::WeakReferenceNew { result }
             | Operation::SourceNew { result, .. }
             | Operation::Symbol { result, .. }
             | Operation::NativeConstant { result, .. }
@@ -679,20 +680,25 @@ fn expression(
                     );
                     continue;
                 }
-                Operation::NativeNew {
-                    class: class @ (crate::NativeClass::View | crate::NativeClass::BehaviorDelegate),
+                operation @ (Operation::NativeNew {
+                    class: crate::NativeClass::View | crate::NativeClass::BehaviorDelegate,
                     ..
-                } => {
+                }
+                | Operation::WeakReferenceNew { .. }) => {
+                    let (module, symbol) = match operation {
+                        Operation::WeakReferenceNew { .. } => {
+                            ("__ciq_sdk_Lang", "__ciq_type_WeakReference".into())
+                        }
+                        Operation::NativeNew { class, .. } => (
+                            "__ciq_sdk_WatchUi",
+                            format!("__ciq_native_{}", class.name().rsplit('.').next().unwrap()),
+                        ),
+                        _ => unreachable!(),
+                    };
                     items.extend([
                         instruction(
                             Opcode::Getmv,
-                            vec![
-                                Operand::Symbol("__ciq_sdk_WatchUi".into()),
-                                Operand::Symbol(format!(
-                                    "__ciq_native_{}",
-                                    class.name().rsplit('.').next().unwrap()
-                                )),
-                            ],
+                            vec![Operand::Symbol(module.into()), Operand::Symbol(symbol)],
                         ),
                         instruction(Opcode::Newc, vec![]),
                         instruction(Opcode::Dup, vec![Operand::Bits(0)]),

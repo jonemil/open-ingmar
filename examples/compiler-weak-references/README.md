@@ -6,6 +6,8 @@ arguments/results. `WeakStore` and AppBase fields also exercise required/nullabl
 handle storage, guarded snapshots, and target expiry while handles remain stored.
 `WeakContainers` checks Array elements, Dictionary values/enumeration, independent
 copies, shared Array joins, mutation, and ordered literal evaluation.
+`WeakConstruction` checks SDK-observed zero-argument allocation, self retrieval,
+and lifetime after replacing the constructed instance.
 The [expected output](expected.txt) matches SDK/generated
 `fr265` programs. `get()` produces `Object or Null`; guarded Object values keep
 their targets alive until their strong references are released.

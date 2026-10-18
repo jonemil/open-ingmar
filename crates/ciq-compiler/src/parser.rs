@@ -120,6 +120,12 @@ pub(crate) struct Expression {
     pub kind: ExpressionKind,
     pub span: Span,
 }
+/// Zero-argument native constructor targets, separate from expression value types.
+pub(crate) enum NativeConstructor {
+    Object(crate::NativeClass),
+    WeakReference,
+}
+
 pub(crate) enum ExpressionKind {
     Symbol(String),
     DictionaryNew,
@@ -148,7 +154,7 @@ pub(crate) enum ExpressionKind {
         qualifier: String,
     },
     NativeNew {
-        class: crate::NativeClass,
+        class: NativeConstructor,
         qualifier: String,
     },
     ArrayLiteral(Vec<Expression>),
@@ -1185,6 +1191,8 @@ impl<'a> Parser<'a> {
     fn construct(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let open = self.token()?;
         let path = self.path()?;
+        let weak = self.names.type_name(&path).ok().flatten().as_deref()
+            == Some("Toybox.Lang.WeakReference");
         let native = self
             .names
             .view(&path)
@@ -1194,20 +1202,24 @@ impl<'a> Parser<'a> {
                     .behavior_delegate(&path)
                     .then_some(crate::NativeClass::BehaviorDelegate)
             });
-        if native.is_none() && path.contains('.') {
+        if native.is_none() && !weak && path.contains('.') {
             return Err(self.error(open.span.start, "unsupported qualified construction class"));
         }
         let (arguments, end) = self.call_arguments(open.span.start, depth)?;
-        if native.is_some() && !arguments.is_empty() {
+        if (native.is_some() || weak) && !arguments.is_empty() {
             return Err(self.error(
                 open.span.start,
                 "supported native construction requires zero arguments",
             ));
         }
         self.node(
-            if let Some(class) = native {
+            if weak || native.is_some() {
                 ExpressionKind::NativeNew {
-                    class,
+                    class: if weak {
+                        NativeConstructor::WeakReference
+                    } else {
+                        NativeConstructor::Object(native.unwrap())
+                    },
                     qualifier: path.split('.').next().unwrap().into(),
                 }
             } else {
