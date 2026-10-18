@@ -307,8 +307,9 @@ IDs need not be contiguous; their numeric values never select physical slots.
 Object, Number, Long, Float, Double, Boolean, Char, String, Array, Dictionary,
 Symbol, Method, and WeakReference. Canonical `Toybox.Lang.Class` and Lang module
 aliases also work. The class must satisfy the selected API requirements.
-Bare imported native class names, interfaces, unions, and parameterized class
-operands remain outside this profile. Null is not an instance of these
+[Imported type names](#native-name-declarations) and qualified aliases resolve to
+the same targets. Interfaces, unions, and parameterized class operands remain
+outside this profile. Null is not an instance of these
 classes. This is a runtime identity/inheritance test, not a conversion or an
 exact source-class assertion.
 
@@ -390,8 +391,8 @@ Lang module aliases are accepted. Number, Long, Float, Double, Boolean, Char,
 String, and Object targets can include `or Null`. Target types still satisfy
 selected API introduction requirements.
 [Source-class targets](#source-class-targets) additionally retain exact identity.
-Bare imported native types, parameterized containers, interfaces, general unions,
-Void, and Null alone remain outside this profile.
+Imported native names use the same cast profile. Parameterized containers,
+interfaces, general unions, Void, and Null alone remain outside this profile.
 
 ```text
 using Toybox.Lang;
@@ -424,13 +425,14 @@ Ordinary source parameters default to Number. `as` annotations accept the fully
 qualified names `Toybox.Lang.Number`, `Toybox.Lang.Long`, `Toybox.Lang.Float`,
 `Toybox.Lang.Double`, `Toybox.Lang.String`,
 `Toybox.Lang.Boolean`, and `Toybox.Lang.Char`; result annotations also accept
-`Void`. Native short names, module aliases in annotations, and general unions
-are outside this subset. Unqualified constructible source-class names additionally
-provide [exact source contracts](compiler-classes.md#source-class-signatures).
+`Void`. Imported bare native names and qualified module aliases follow the
+[native name profile](#native-name-declarations), including supported container
+arguments. General unions remain outside this subset. Unqualified constructible
+source-class names additionally provide [exact source contracts](compiler-classes.md#source-class-signatures).
 Numeric, String, Boolean, and Char annotations additionally accept `or Null`
 for both parameters and results. Reversed alternatives, parenthesized unions,
-and other type syntax remain unsupported. These declarations require no `using`
-statement.
+and other type syntax remain unsupported. Canonical Toybox paths are available
+without native-name declarations.
 
 Unannotated functions with value returns require Number results; those with no
 value returns have a Void contract. Long, Float, Double, String, Boolean, Char, View, array, and
@@ -590,15 +592,23 @@ native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
 ```
 
 `using` introduces a module binding, optionally aliased. `import` introduces
-the module name and its supported class names: Application's `AppBase` and
-WatchUi's `View` and `BehaviorDelegate`, and Lang's Object for base clauses.
-This does not expand type-annotation aliases. Therefore `import Toybox.Application;`
-permits `extends AppBase`,
-while `using Toybox.Application;` requires `extends Application.AppBase`.
-Aliased modules permit `extends App.AppBase` and `Sys.println(value)`.
-Fully qualified `Toybox.Application.AppBase` and `Toybox.System.println(value)`
-are also accepted. Existing `Application.AppBase` and `System.println` spellings
-remain accepted without declarations.
+the module name and its directly declared type names known to the API catalogue:
+classes, interfaces, and enums. Bare native names require that import; qualified
+module names and aliases resolve through the same catalogue. For example,
+`import Toybox.Lang;` permits `Number` in annotations, casts, and runtime class
+tests, while `using Toybox.Lang as L;` permits `L.Number`.
+
+Resolution also covers supported Array element and Dictionary key/value type
+arguments. Each consumer retains its own executable profile: recognizing
+Comparator does not make it a runtime class, and recognizing Array does not
+enable an unparameterized cast. API introduction checks use canonical types;
+imports neither filter names by API level nor bypass those checks.
+
+The same environment resolves base clauses and supported constructors:
+`import Toybox.Application;` permits `extends AppBase`; module aliases permit
+`extends App.AppBase`. Existing canonical short module paths such as
+`Application.AppBase` and `System.println` remain available without declarations.
+Fully qualified Toybox paths are also accepted.
 
 Bindings apply to following declarations in their file and are inherited by
 class/module bodies. Owner-local bindings do not escape their owner; bindings
@@ -608,8 +618,10 @@ frontend profile, not a specification of all Monkey C namespace behavior.
 
 Reject duplicate bindings, shadowing by parameters/locals/functions/owners,
 aliases of reserved identities, import aliases, declarations after functions,
-and native modules outside this profile. General source namespace aliases and
-general native type/member lookup remain unsupported. Number conversion uses
+and native modules outside this profile. Imported type names also conflict with
+module aliases in either declaration order. Bare imported module functions and
+constants, general source namespace aliases, and types outside the catalogue
+remain unsupported. Number conversion uses
 inherited lookup only as specified below. Calls on ordinary user modules
 and `self` keep their existing rules. Supported native spellings resolve to the
 same semantic operation or superclass identity before IR construction; aliases

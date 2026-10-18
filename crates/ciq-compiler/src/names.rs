@@ -1,7 +1,7 @@
 //! Bounded native name resolution before semantic IR construction.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum NativeModule {
     Lang,
     Application,
@@ -28,10 +28,7 @@ impl NativeModule {
 #[derive(Clone, Default)]
 pub(crate) struct Names {
     bindings: BTreeMap<String, NativeModule>,
-    object: bool,
-    app_base: bool,
-    view: bool,
-    behavior_delegate: bool,
+    imported: BTreeSet<NativeModule>,
 }
 
 impl Names {
@@ -59,25 +56,59 @@ impl Names {
             || (name == "System" && module != NativeModule::System)
             || (name == "WatchUi" && module != NativeModule::WatchUi)
             || (name == "Graphics" && module != NativeModule::Graphics)
-            || self.bindings.contains_key(name)
+            || self.bound(name)
+            || (import
+                && self
+                    .bindings
+                    .keys()
+                    .any(|binding| Self::known_type(module, binding).is_some()))
         {
             return Err(format!("conflicting native binding {name:?}"));
         }
         self.bindings.insert(name.into(), module);
-        self.object |= import && module == NativeModule::Lang;
-        self.app_base |= import && module == NativeModule::Application;
-        self.view |= import && module == NativeModule::WatchUi;
-        self.behavior_delegate |= import && module == NativeModule::WatchUi;
+        if import {
+            self.imported.insert(module);
+        }
         Ok(())
     }
 
     /// Check explicit module/class bindings before accepting a declaration name.
     pub fn bound(&self, name: &str) -> bool {
         self.bindings.contains_key(name)
-            || (self.object && name == "Object")
-            || (self.app_base && name == "AppBase")
-            || (self.view && name == "View")
-            || (self.behavior_delegate && name == "BehaviorDelegate")
+            || self
+                .imported
+                .iter()
+                .any(|module| Self::known_type(*module, name).is_some())
+    }
+
+    /// Resolve a catalogue type exported directly by a supported module.
+    /// This recognizes declarations, without claiming executable support.
+    fn known_type(module: NativeModule, name: &str) -> Option<String> {
+        let path = format!("Toybox.{}.{name}", module.name());
+        let api = crate::api::core();
+        (api.class(&path).is_some()
+            || api.interface(&path).is_some()
+            || api.enum_level(&path).is_some())
+        .then_some(path)
+    }
+
+    /// Resolve imported bare types and qualified module aliases to canonical
+    /// catalogue names. Return an error for ambiguous imported type names.
+    pub(crate) fn type_name(&self, path: &str) -> Result<Option<String>, String> {
+        if let Some((module, name)) = path.rsplit_once('.') {
+            return Ok(self
+                .module(module)
+                .and_then(|module| Self::known_type(module, name)));
+        }
+        let mut found = self
+            .imported
+            .iter()
+            .filter_map(|module| Self::known_type(*module, path));
+        let name = found.next();
+        if found.next().is_some() {
+            return Err(format!("ambiguous imported native type {path:?}"));
+        }
+        Ok(name)
     }
 
     /// Resolve an alias or supported canonical module path to a native identity.
@@ -92,42 +123,23 @@ impl Names {
         })
     }
 
-    /// Resolve the Object base through Lang bindings or an imported bare name.
+    /// Resolve the Object base through the shared imported/qualified type names.
     pub fn object(&self, path: &str) -> bool {
-        if path == "Object" {
-            return self.object;
-        }
-        path.rsplit_once('.').is_some_and(|(module, member)| {
-            member == "Object" && self.module(module) == Some(NativeModule::Lang)
-        })
+        self.type_name(path).ok().flatten().as_deref() == Some("Toybox.Lang.Object")
     }
 
-    /// Resolve the supported superclass spellings, including imported bare names.
+    /// Resolve the supported AppBase superclass through the shared type names.
     pub fn app_base(&self, path: &str) -> bool {
-        if path == "AppBase" {
-            return self.app_base;
-        }
-        path.rsplit_once('.').is_some_and(|(module, member)| {
-            member == "AppBase" && self.module(module) == Some(NativeModule::Application)
-        })
+        self.type_name(path).ok().flatten().as_deref() == Some("Toybox.Application.AppBase")
     }
 
-    /// Resolve the bounded native View constructor, including imported bare names.
+    /// Resolve the supported View base/constructor through the shared type names.
     pub fn view(&self, path: &str) -> bool {
-        if path == "View" {
-            return self.view;
-        }
-        path.rsplit_once('.').is_some_and(|(module, member)| {
-            member == "View" && self.module(module) == Some(NativeModule::WatchUi)
-        })
+        self.type_name(path).ok().flatten().as_deref() == Some("Toybox.WatchUi.View")
     }
-    /// Resolve the supported behavior delegate base through WatchUi bindings.
+
+    /// Resolve the supported delegate base/constructor through shared type names.
     pub fn behavior_delegate(&self, path: &str) -> bool {
-        if path == "BehaviorDelegate" {
-            return self.behavior_delegate;
-        }
-        path.rsplit_once('.').is_some_and(|(module, member)| {
-            member == "BehaviorDelegate" && self.module(module) == Some(NativeModule::WatchUi)
-        })
+        self.type_name(path).ok().flatten().as_deref() == Some("Toybox.WatchUi.BehaviorDelegate")
     }
 }

@@ -15,7 +15,7 @@ class = "class" identifier ("extends" native-base)?
 native-base = recognized Lang.Object, Application.AppBase, WatchUi.View, or
               WatchUi.BehaviorDelegate identity
 number-field = "var" identifier "=" signed-number-literal ";"
-reference-field = "var" identifier "as" source-view-class-name ";"
+reference-field = "var" identifier "as" source-class-name ";"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
@@ -141,8 +141,8 @@ function pass(view as HelloView) as HelloView { return view; }
 The name must resolve to a declared Object-, View-, or BehaviorDelegate-derived
 class in the unit, including forward or cross-file declarations. AppBase
 references, arbitrary native classes, nullable source references, Array<ClassName>, aliases, and qualified source-class
-names are unsupported. Bare native type names such as Number remain unsupported;
-native annotations use their established canonical names.
+names are unsupported. Native annotations use canonical, qualified-alias, or
+imported bare names through the shared native type environment.
 
 Source contracts are exact and non-null. Arguments and every value return must
 retain the declared source class through construction, typed parameters,

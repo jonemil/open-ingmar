@@ -23,6 +23,7 @@ module Tests {
         System.println("selector"); return :length;
     }
     function run() as Void {
+        ImportedTypes.run();
         SourceTests.run();
         Lexical.run();
         Refine.run();

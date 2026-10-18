@@ -3,7 +3,7 @@
 2026-10-17 to 2026-10-18, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
 Question: how do runtime predicates encode and support guarded Object uses?
 
-**Experimentally observed:** the [tracked specimen][example] matches all 75
+**Experimentally observed:** the [tracked specimen][example] matches all 82
 expected lines in SDK/generated runs. It tests all supported concrete Lang
 classes, source field/method existence, inherited observers, Symbol parameters,
 computed selectors, null guards, and Boolean short-circuiting. Computed operands
@@ -74,6 +74,17 @@ tests use existing `getmv`/`isa` encoding; no new instruction or record was foun
 These cases do not establish source inheritance, nullable source signatures,
 dynamic class operands, or qualified/nested source lookup.
 
+## Imported native types
+
+**Experimentally observed:** `ImportedTypes` in [source-types.mc][source-types]
+uses `import Toybox.Lang` with bare Object/Number/String/Char/Boolean names in
+signatures, casts, and runtime tests. Array<String> and Dictionary<String, Number>
+arguments accept literals with the expected contracts. SDK/generated output
+matches all expected lines; native/text paths and both structured PRG round trips
+pass. Canonical and aliased spellings normalize to the same signatures and
+assembly in focused compiler tests. These checks do not establish new methods,
+interface-typed storage, or general Monkey C import/member lookup.
+
 ## Reproduction
 
 Use the example's compiler command and the shared [console checker][check].
@@ -81,7 +92,7 @@ The ignored `scratch/compiler-object-tests/monkey.jungle` selects the tracked
 source and shared native-names manifest/resources. Build through
 `scripts/build-example.sh`, then prepare and simulate `compiler-object-tests`.
 Accepted saved-stage, SDK/generated round-trip, and runtime artifacts are under
-`scratch/check-source-types/`. The isolated nullable failure is under
+`scratch/check-imported-types/`. The isolated nullable failure is under
 `scratch/object-tests-sdk-runtime-full/`; its source is the preliminary
 `scratch/compiler-object-tests/source/app.mc`.
 

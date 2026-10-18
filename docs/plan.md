@@ -12,8 +12,8 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**Object and structural contracts.** Add imported bare native type operands,
-member/signature proofs, and API guards through explicit contracts. Extend source
+**Object and structural contracts.** Establish member/signature proofs and API
+guards through explicit contracts. Extend source
 type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.

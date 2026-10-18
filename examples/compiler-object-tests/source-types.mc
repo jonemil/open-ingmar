@@ -1,5 +1,5 @@
 using Toybox.System;
-using Toybox.Lang;
+import Toybox.Lang;
 using Toybox.WatchUi;
 module SourceTests {
     function read(o as Toybox.Lang.Object or Null) as Toybox.Lang.Number {
@@ -37,4 +37,22 @@ class LocalView extends WatchUi.View {
 class LocalDelegate extends WatchUi.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
     function value() { return 3; }
+}
+
+module ImportedTypes {
+    function number(value as Object) as Number { return value as Number + 1; }
+    function array(values as Array<String>) as Number { return values.size(); }
+    function dictionary(values as Dictionary<String, Number>) as Number { return values.size(); }
+    function nullable(value as Object or Null) as String or Null { return value as String or Null; }
+    function isChar(value as Object) as Boolean { return value instanceof Char; }
+    function run() as Void {
+        System.println(ImportedTypes.number(7));
+        System.println(ImportedTypes.array(["a", "b"]));
+        System.println(ImportedTypes.dictionary({"a" => 1}));
+        System.println(ImportedTypes.isChar('a'));
+        System.println(ImportedTypes.nullable(null) == null);
+        var object = "hello" as Object;
+        System.println((object as String).length());
+        System.println(object instanceof String);
+    }
 }

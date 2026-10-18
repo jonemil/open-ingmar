@@ -300,7 +300,7 @@ impl<'a> Parser<'a> {
         }
         self.token()?;
         let at = self.offset;
-        let key = match self.path()?.as_str() {
+        let key = match self.type_path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryKey::Number,
             "Toybox.Lang.Double" => crate::DictionaryKey::Double,
             "Toybox.Lang.Float" => crate::DictionaryKey::Float,
@@ -311,7 +311,7 @@ impl<'a> Parser<'a> {
             _ => return Err(self.error(at, "unsupported Dictionary key contract")),
         };
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
-        let mut value = match self.path()?.as_str() {
+        let mut value = match self.type_path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryValue::Number,
             "Toybox.Lang.Double" => crate::DictionaryValue::Double,
             "Toybox.Lang.Float" => crate::DictionaryValue::Float,
@@ -347,7 +347,7 @@ impl<'a> Parser<'a> {
     fn array_annotation(&mut self) -> Result<crate::ArrayElement, Diagnostic> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
-        let mut element = match self.path()?.as_str() {
+        let mut element = match self.type_path()?.as_str() {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
@@ -391,6 +391,18 @@ impl<'a> Parser<'a> {
             path.push_str(name);
         }
         Ok(path)
+    }
+
+    /// Parse a type path and canonicalize its imported or aliased native name.
+    /// Unresolved bare names remain available for unit source-class resolution.
+    fn type_path(&mut self) -> Result<String, Diagnostic> {
+        let at = self.offset;
+        let path = self.path()?;
+        Ok(self
+            .names
+            .type_name(&path)
+            .map_err(|message| self.error(at, message))?
+            .unwrap_or(path))
     }
 
     fn imports(&mut self) -> Result<(), Diagnostic> {
@@ -791,20 +803,10 @@ impl<'a> Parser<'a> {
         if self.peek()? == Kind::Word("instanceof") {
             self.token()?;
             let at = self.offset;
-            let path = self.path()?;
-            let class = if !path.contains('.') {
-                path
-            } else {
-                path.rsplit_once('.')
-                    .and_then(|(module, name)| {
-                        (self.names.module(module) == Some(crate::names::NativeModule::Lang))
-                            .then(|| format!("Toybox.Lang.{name}"))
-                    })
-                    .filter(|class| crate::runtime_types::symbol(class).is_some())
-                    .ok_or_else(|| {
-                        self.error(at, "instanceof requires a supported runtime class")
-                    })?
-            };
+            let class = self.type_path()?;
+            if class.contains('.') && crate::runtime_types::symbol(&class).is_none() {
+                return Err(self.error(at, "instanceof requires a supported runtime class"));
+            }
             let span = Span {
                 start: left.span.start,
                 end: self.offset,
@@ -913,19 +915,7 @@ impl<'a> Parser<'a> {
             }
             casts += 1;
             let at = self.token()?.span.start;
-            let path = self.path()?;
-            let class = if !path.contains('.') {
-                path
-            } else {
-                path.rsplit_once('.')
-                    .and_then(|(module, name)| {
-                        (self.names.module(module) == Some(crate::names::NativeModule::Lang))
-                            .then(|| format!("Toybox.Lang.{name}"))
-                    })
-                    .ok_or_else(|| {
-                        self.error(at, "cast requires a supported Lang or source type")
-                    })?
-            };
+            let class = self.type_path()?;
             let mut target = crate::api::Type::named(class);
             if self.peek()? == Kind::Word("or") {
                 // Leave logical OR available unless its next token is Null.
@@ -1896,7 +1886,7 @@ impl Parser<'_> {
                 parameter_types.push(if self.peek()? == Kind::Word("as") {
                     self.token()?;
                     let at = self.offset;
-                    let ty = match self.path()?.as_str() {
+                    let ty = match self.type_path()?.as_str() {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.Object" => crate::ParameterType::LangObject,
                         "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
@@ -1978,7 +1968,7 @@ impl Parser<'_> {
         let result_type = if self.peek()? == Kind::Word("as") {
             self.token()?;
             let at = self.offset;
-            let ty = match self.path()?.as_str() {
+            let ty = match self.type_path()?.as_str() {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.Object" => crate::ReturnType::LangObject,
                 "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
@@ -2134,7 +2124,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     };
                     let kind = if parser.peek()? == Kind::Word("as") {
                         parser.token()?;
-                        let class = parser.path()?;
+                        let class = parser.type_path()?;
                         if class.contains('.') {
                             return Err(parser.error(
                                 token.span.start,

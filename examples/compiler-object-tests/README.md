@@ -8,7 +8,8 @@ conditional arms, loops, and numeric comparator sorting. Lexical casts cover
 scalar/reference assertions, nullable targets, erasure/recovery, runtime identity,
 and one-time operand effects. [source-types.mc](source-types.mc) checks cross-file
 source targets, guarded calls, exact return contracts, and Object/View/delegate
-projections.
+projections. Its imported bare native names also cover signatures, casts,
+runtime tests, and container arguments.
 
 From the repository root:
 
