@@ -683,11 +683,15 @@ operand/argument order when an enclosing expression has earlier effects.
 
 Supported arm types match exactly: numeric scalars, Char, Boolean, String, Null,
 or an
-invariant Number/Char Array. Scalar alternatives may also join with Null
+invariant Array with a supported element contract. Array arms must have exactly
+the same element type, including element nullability and interface identity;
+selection preserves the chosen reference without copying or conversion.
+Scalar alternatives may also join with Null
 or their existing nullable type, producing the corresponding scalar-or-Null. No
-Char-to-Number promotion, heterogeneous union, nullable Array, class join,
+Char-to-Number promotion, heterogeneous union, nullable Array reference, class join,
 Void arm, or non-Boolean truthiness is supported. Expected Array element context
-from a declaration, call, or return reaches direct empty literals in both arms;
+from a declaration, call, or return reaches direct empty literals and sized
+allocations in both arms;
 no element contract is inferred solely from a sibling arm.
 
 Join inference uses checked incoming operand types after the complete graph's
@@ -2224,10 +2228,9 @@ Reads preserve the nullable element contract after writes. Reassignment replaces
 the reference while aliases retain the previous array.
 
 An untyped `var a = new[n]`, non-null element contracts (even `new[0]`), nested
-arrays, and inference from later writes remain unsupported. Allocation does
-not extend the existing whole-Array conditional-result profile; for example,
-a conditional Number length works, but a choice between nullable Number arrays
-remains unsupported. Type availability is checked independently of Array
+arrays, and inference from later writes remain unsupported. Conditional arms
+can select sized arrays when their invariant element contracts match.
+Type availability is checked independently of Array
 methods: nullable Number allocation requires
 API 1.0.0, while nullable Char requires 1.3.0. See
 [IR allocation](compiler-ir-text.md#array-allocation) and

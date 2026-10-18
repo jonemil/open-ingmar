@@ -1,6 +1,6 @@
 # Contextual empty array construction
 
-SDK 9.2.0 and independently generated fr265 applications agree on all 22
+SDK 9.2.0 and independently generated fr265 applications agree on all 29
 lines in [the example][example], checked 2026-10-18. The specimen asks whether
 empty arrays supplied to typed returns, arguments, and assignments remain
 usable without defaulting to Char or relaxing element contracts, and how sized
@@ -74,9 +74,7 @@ The isolated authored probe and captures are in `scratch/sized-array-probe/`;
 The [tracked example][example] also checks reassignment aliases, typed argument
 context, and a conditional length with only the selected helper executing. Use
 its existing SDK wrapper/Jungle and the console specimen checker to compare
-SDK/generated execution and structured reconstruction. Both programs match all
-22 expected lines, with structured CODE/DATA reconstruction passing. Captures
-are in `scratch/check-sized-arrays/`. Sized allocation lowers
+SDK/generated execution and structured reconstruction. Sized allocation lowers
 to the existing `newa` instruction; no additional DATA payload is required.
 
 **Contract choice:** require nullable elements for all sized allocations,
@@ -84,3 +82,19 @@ including zero length, because allocation supplies Null slots. This is our
 bounded safety rule, not a claim that the SDK rejects non-null element
 annotations. Negative/oversized lengths and allocation failure recovery were
 not characterized; no portable limit or error class follows from this probe.
+
+## Conditional Array selection
+
+**Experimentally observed (2026-10-18):** the tracked example, built with SDK
+9.2.0 at `-O 0` for fr265, selects between existing nullable Number arrays and
+between sized allocations. Mutating the selection changes the selected array;
+the other alias retains its contents. True/false allocation branches print only
+their selected size helper (`2` or `4`) before the corresponding Null-filled
+array. SDK/generated output matches all 29 lines, and both programs pass
+structured CODE/DATA reconstruction. Artifacts:
+`scratch/check-array-joins/`.
+
+**Implementation checks:** all 25 supported Array element contracts preserve
+their invariant type through source, saved IR, and assembly. A direct join of
+incoming references needs no allocation or staging local. These static checks
+do not establish additional element operations or nullable Array references.

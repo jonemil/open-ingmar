@@ -154,7 +154,7 @@ operator/type-system dependencies and sequencing belong to the
   lookup, source-inheritance/general-union type tests and refinement, and broader
   inherited-method dispatch.
 - **Array:** general nested/heterogeneous/Object/reference
-  elements, remaining nullable storage/receivers and joins, and sorting and
+  elements, remaining nullable storage/receivers, and sorting and
   Comparable contracts outside the checked comparison profiles.
 - **Dictionary:** general Object/reference keys and values, heterogeneous/nested
   containers, general nullable storage, and typed keys/values Arrays for those

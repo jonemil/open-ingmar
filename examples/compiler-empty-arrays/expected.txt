@@ -20,3 +20,10 @@ true
 1
 1
 true
+[9]
+[null, 7, null]
+[8, 7, null]
+2
+[null, null]
+4
+[null, null, null, null]

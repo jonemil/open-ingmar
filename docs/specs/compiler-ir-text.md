@@ -1084,11 +1084,13 @@ Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`,
 `nullable-integer`, `nullable-long`, `nullable-float`, `nullable-double`,
 `nullable-string`, `nullable-boolean`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,
-`weak-reference`, `nullable-weak-reference`,
-`array-number`, `array-char`, `array-method`, and `array-nullable-method`.
-Weak Array edges use `array-weak-reference` or `array-nullable-weak-reference`.
-They map to the existing
-core/nullable/invariant Array contracts. Availability checks apply to the
+`weak-reference`, and `nullable-weak-reference`.
+Array tags prefix the [allocation element tag](#array-allocation) with `array-`,
+for example `array-nullable-number`, `array-string`, `array-comparable`, or
+`array-view`. All supported element contracts have a corresponding join tag.
+Incoming Arrays must match the invariant element contract exactly; non-null and
+nullable elements do not widen to a common Array type. Tags describe element
+nullability, not nullable Array references. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 Lower a value edge to its operand and `goto`; the parameter emits no load, copy,

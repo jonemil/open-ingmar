@@ -3,6 +3,7 @@
 [app.mc](app.mc) creates Number and Char arrays through typed returns,
 user/native arguments, and local reassignment. Sized nullable Number arrays
 check Null initialization, writes, aliases, and length evaluation order.
+Conditional selection preserves aliases and evaluates only the chosen allocation.
 API minimum: 1.3.0; target: 5.2.0; runtime: SDK 9.2.0
 / fr265.
 
@@ -45,6 +46,13 @@ true
 1
 1
 true
+[9]
+[null, 7, null]
+[8, 7, null]
+2
+[null, null]
+4
+[null, null, null, null]
 ```
 
 `var a = []` remains ambiguous. A direct literal can receive its element type

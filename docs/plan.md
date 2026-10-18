@@ -53,8 +53,6 @@ Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.
 Sized Array allocation keeps nullable elements until a separate initialization
 proof can establish safe non-null reads; do not infer that proof from writes.
-Extend whole-Array conditional joins to remaining element contracts, including
-nullable Number, before claiming general selection between sized arrays.
 
 Broader weak targets and container recovery from
 opaque Object results need their own type/refinement contracts. Keep hidden

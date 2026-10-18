@@ -103,6 +103,7 @@ fn allocation_checks_element_availability_without_native_method_requirements() {
 fn conditional_allocations_and_lengths_keep_saved_ir_effect_order() {
     for source in [
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.Method or Null> { return flag ? new[2] : new[0]; }",
+        "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return flag ? new[2] : new[0]; }",
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return new[flag ? 2 : 0]; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { if (n != null) { return new[n]; } return new[0]; }",
     ] {

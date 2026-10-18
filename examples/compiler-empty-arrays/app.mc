@@ -25,6 +25,16 @@ module Empty {
     function nullableCount(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) {
         return a.size();
     }
+    function select(flag as Toybox.Lang.Boolean,
+                    a as Toybox.Lang.Array<Toybox.Lang.Number or Null>,
+                    b as Toybox.Lang.Array<Toybox.Lang.Number or Null>)
+                    as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
+        return flag ? a : b;
+    }
+    function chooseSized(flag as Toybox.Lang.Boolean)
+                        as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
+        return flag ? new[Empty.effect(2)] : new[Empty.effect(4)];
+    }
 }
 function start() {
     var a = Empty.numbers();
@@ -58,5 +68,14 @@ function start() {
     sized = new[true ? Empty.effect(1) : Empty.effect(9)];
     System.println(sized.size());
     System.println(sized[0] == null);
+    var selected = Empty.select(true, sized, old);
+    selected[0] = 9;
+    System.println(sized.toString());
+    System.println(old.toString());
+    selected = Empty.select(false, sized, old);
+    selected[0] = 8;
+    System.println(old.toString());
+    System.println(Empty.chooseSized(true).toString());
+    System.println(Empty.chooseSized(false).toString());
     System.exit();
 }

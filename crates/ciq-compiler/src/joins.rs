@@ -2,8 +2,61 @@
 use crate::{BlockId, IrError, LocatedOperation, Operation, ValueId, ValueType, api::Type};
 use std::collections::BTreeMap;
 
+/// Array joins preserve one invariant element contract without conversion.
+const ARRAY_TYPES: &[(&str, crate::ArrayElement)] = &[
+    ("array-number", crate::ArrayElement::Number),
+    ("array-nullable-number", crate::ArrayElement::NullableNumber),
+    ("array-long", crate::ArrayElement::Long),
+    ("array-nullable-long", crate::ArrayElement::NullableLong),
+    ("array-float", crate::ArrayElement::Float),
+    ("array-nullable-float", crate::ArrayElement::NullableFloat),
+    ("array-double", crate::ArrayElement::Double),
+    ("array-nullable-double", crate::ArrayElement::NullableDouble),
+    ("array-char", crate::ArrayElement::Char),
+    ("array-nullable-char", crate::ArrayElement::NullableChar),
+    ("array-boolean", crate::ArrayElement::Boolean),
+    (
+        "array-nullable-boolean",
+        crate::ArrayElement::NullableBoolean,
+    ),
+    ("array-string", crate::ArrayElement::String),
+    ("array-nullable-string", crate::ArrayElement::NullableString),
+    ("array-symbol", crate::ArrayElement::Symbol),
+    ("array-nullable-symbol", crate::ArrayElement::NullableSymbol),
+    ("array-method", crate::ArrayElement::Method),
+    ("array-nullable-method", crate::ArrayElement::NullableMethod),
+    ("array-weak-reference", crate::ArrayElement::WeakReference),
+    (
+        "array-nullable-weak-reference",
+        crate::ArrayElement::NullableWeakReference,
+    ),
+    (
+        "array-comparable",
+        crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
+    ),
+    (
+        "array-nullable-comparable",
+        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparable),
+    ),
+    (
+        "array-comparator",
+        crate::ArrayElement::Interface(crate::InterfaceType::Comparator),
+    ),
+    (
+        "array-nullable-comparator",
+        crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator),
+    ),
+    (
+        "array-view",
+        crate::ArrayElement::Object(crate::NativeClass::View),
+    ),
+];
+
 /// Parse an exact text tag for a supported incoming stack-value contract.
 pub(crate) fn parse_type(tag: &str) -> Option<Type> {
+    if let Some((_, element)) = ARRAY_TYPES.iter().find(|(name, _)| *name == tag) {
+        return Some(Type::Array(Box::new(element.api_type())));
+    }
     Some(match tag {
         "object" => Type::named("Toybox.Lang.Object"),
         "nullable-object" => Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]),
@@ -34,22 +87,18 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "nullable-boolean" => Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]),
         "nullable-char" => Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]),
         "nullable-symbol" => Type::Union(vec![Type::named("Toybox.Lang.Symbol"), Type::Null]),
-        "array-number" => Type::Array(Box::new(Type::named("Toybox.Lang.Number"))),
-        "array-char" => Type::Array(Box::new(Type::named("Toybox.Lang.Char"))),
-        "array-method" => Type::Array(Box::new(Type::named("Toybox.Lang.Method"))),
-        "array-weak-reference" => Type::Array(Box::new(Type::named("Toybox.Lang.WeakReference"))),
-        "array-nullable-weak-reference" => {
-            Type::Array(Box::new(crate::ValueType::NullableWeakReference.api_type()))
-        }
-        "array-nullable-method" => {
-            Type::Array(Box::new(crate::ValueType::NullableMethod.api_type()))
-        }
         _ => return None,
     })
 }
 
 /// Return the canonical text tag, rejecting types outside the join profile.
 pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
+    if let Type::Array(element) = ty {
+        return ARRAY_TYPES
+            .iter()
+            .find(|(_, supported)| supported.api_type() == **element)
+            .map(|(tag, _)| *tag);
+    }
     [
         "object",
         "nullable-object",
@@ -78,12 +127,6 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "nullable-symbol",
         "nullable-method",
         "nullable-weak-reference",
-        "array-number",
-        "array-char",
-        "array-method",
-        "array-weak-reference",
-        "array-nullable-weak-reference",
-        "array-nullable-method",
     ]
     .into_iter()
     .find(|tag| parse_type(tag).as_ref() == Some(ty))
