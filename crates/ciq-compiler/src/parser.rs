@@ -2299,6 +2299,7 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                             crate::FieldKind::Symbol { initial, nullable }
                         } else if class == "Toybox.Lang.Method"
                             || class == "Toybox.Lang.WeakReference"
+                            || class == "Toybox.Lang.ByteArray"
                             || crate::InterfaceType::from_name(&class).is_some()
                         {
                             let nullable = if parser.peek()? == Kind::Word("or") {
@@ -2327,6 +2328,8 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                                 crate::FieldKind::Method { nullable }
                             } else if class == "Toybox.Lang.WeakReference" {
                                 crate::FieldKind::WeakReference { nullable }
+                            } else if class == "Toybox.Lang.ByteArray" {
+                                crate::FieldKind::ByteArray { nullable }
                             } else {
                                 crate::FieldKind::Interface {
                                     interface: crate::InterfaceType::from_name(&class).unwrap(),

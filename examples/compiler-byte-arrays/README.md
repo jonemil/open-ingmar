@@ -7,6 +7,9 @@ byte literals check fresh mutable results and ordered element effects.
 Conditional elements/allocations check lazy branches and single evaluation.
 Nullable calls, guarded indexing, short-circuit/loop checks, and weak expiry
 exercise nullable reference flow and ownership through the last alias.
+`ByteBox` checks initialized/non-null and default-null fields, shared mutation,
+replacement, and field ownership of a weak target. The AppBase class delegates
+startup to `ByteProgram.run`.
 
 API minimum: 3.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
@@ -16,7 +19,7 @@ From the repository root, using unused output paths:
 mkdir -p scratch/compiler-byte-arrays
 cargo run -p ciq-compiler -- --unit --emit prg \
   --target-api 5.2.0 --min-api 3.0.0 \
-  --app-id a7086949531941379eb8b38164ed99aa --entry start \
+  --app-id a7086949531941379eb8b38164ed99aa --entry MinimalConsoleApp.onStart \
   examples/compiler-byte-arrays/app.mc scratch/compiler-byte-arrays/unsigned.prg
 cargo run -p ciq-asm -- sign scratch/compiler-byte-arrays/unsigned.prg \
   scratch/compiler-byte-arrays/generated.prg -y keys/developer_key.der
@@ -28,6 +31,6 @@ Compare the complete console with [expected.txt](expected.txt). See the
 [source contract](../../docs/specs/compiler-subset.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
-ByteArray fields/container elements,
+ByteArray container elements,
 numeric encoding options, and recovery from erased Object results remain
 outside this example's supported profile.

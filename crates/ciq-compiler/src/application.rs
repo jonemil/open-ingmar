@@ -138,6 +138,7 @@ fn instance_field(
         | crate::FieldKind::SourceObject(_)
         | crate::FieldKind::Method { .. }
         | crate::FieldKind::WeakReference { .. }
+        | crate::FieldKind::ByteArray { .. }
         | crate::FieldKind::Interface { .. } => (0, 0),
     };
     field(ids[&declaration.name], 0, kind, Reference::Raw(value))

@@ -1994,6 +1994,8 @@ impl Function {
                             | ReturnType::NullableSymbol
                             | ReturnType::Method
                             | ReturnType::WeakReference
+                            | ReturnType::ByteArray
+                            | ReturnType::NullableByteArray
                             | ReturnType::NullableWeakReference
                             | ReturnType::NullableMethod
                             | ReturnType::Interface(_)
@@ -2019,6 +2021,8 @@ impl Function {
                                 | ValueType::NullableSymbol
                                 | ValueType::Method
                                 | ValueType::WeakReference
+                                | ValueType::ByteArray
+                                | ValueType::NullableByteArray
                                 | ValueType::NullableWeakReference
                                 | ValueType::NullableMethod
                         )

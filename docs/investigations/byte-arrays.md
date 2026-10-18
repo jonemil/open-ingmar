@@ -76,10 +76,10 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 **Experimentally observed (2026-10-18):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 51
+same SDK/target and `-O 0`, agrees with the independent compiler on all 57
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
 and native/text pipeline checks. Artifacts:
-`scratch/check-nullable-byte-arrays/`.
+`scratch/check-byte-array-fields/`.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -105,15 +105,21 @@ alive through a saved alias; clearing that last alias immediately changes
 `stillAlive()` from true to false on this simulator. No weak retrieval or
 explicit collection is needed for this observation.
 
+`ByteBox` initializes a non-null field from a parameter; a nullable field starts
+as Null. An indexed field update is visible through a saved alias. Replacing
+that field leaves the alias unchanged. Clearing a guarded snapshot leaves its
+weak target alive through the nullable field; clearing the field expires it.
+SDK/generated programs agree on these observations.
+
 Invalid byte ranges, fatal bounds errors, and numeric encoding
 options were not executed here.
 Negative/oversized constant inputs remain runtime obligations in compiler tests,
 not observed portable exception guarantees.
 
-For SDK comparison, use the minimal-console manifest/resources and the
-[shared console wrapper](compiler-boolean-negation.md#reference-and-specimen).
-Set `base.sourcePath` to `../../examples/compiler-byte-arrays;sdk.mc` in
-`scratch/compiler-byte-arrays/monkey.jungle`, with the wrapper as `sdk.mc`.
+For SDK comparison, use the minimal-console manifest/resources. The example
+contains its own AppBase class. Set `base.sourcePath` to
+`../../examples/compiler-byte-arrays` in
+`scratch/compiler-byte-arrays/monkey.jungle`.
 Build with `scripts/build-example.sh`, then use `scripts/check-example.py`
 `prepare compiler-byte-arrays --sdk-prg <SDK PRG> --output <fresh directory>`
 and `simulate <prepared directory>` in the Rust/SDK environments respectively.

@@ -493,7 +493,9 @@ Local assignment and matching conditional arms retain the ByteArray reference.
 ByteArray/Null joins retain either runtime value without conversion. Reuse the
 [source null-proof rules](compiler-subset.md#bytearrays) in native and saved IR;
 annotations do not assert a proof. API 3.0.0 also applies to nullable contracts
-without an allocation. Fields and container element contracts are unsupported.
+without an allocation. Class fields use
+[`.field-byte-array`](compiler-classes.md#bytearray-fields). Container element
+contracts are unsupported.
 
 `.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
 zero-filled ByteArray. Length must be an earlier same-block non-null Number

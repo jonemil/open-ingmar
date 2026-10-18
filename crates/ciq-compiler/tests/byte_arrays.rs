@@ -15,7 +15,7 @@ fn complete_byte_array_program_preserves_native_text_and_application_boundaries(
     assert_eq!(unit, resumed);
     let options = ConsoleApplication {
         id: [0x71; 16],
-        entry: "start".into(),
+        entry: "MinimalConsoleApp.onStart".into(),
     };
     assert_eq!(
         build_console_application(&unit, &options).unwrap(),

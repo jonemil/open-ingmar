@@ -262,6 +262,9 @@ pub enum FieldKind {
     /// A Null-initialized ordinary WeakReference slot. Non-null fields require
     /// source initialization; storing the reference does not own its target.
     WeakReference { nullable: bool },
+    /// A Null-initialized strong ByteArray reference slot. Non-null fields
+    /// require source initialization before reads, self exposure, or control flow.
+    ByteArray { nullable: bool },
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
@@ -280,6 +283,7 @@ impl FieldKind {
             Self::SourceObject(_)
                 | Self::Method { nullable: false }
                 | Self::WeakReference { nullable: false }
+                | Self::ByteArray { nullable: false }
                 | Self::Symbol {
                     initial: None,
                     nullable: false
@@ -313,6 +317,13 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::ByteArray { nullable } => {
+                if *nullable {
+                    ReturnType::NullableByteArray
+                } else {
+                    ReturnType::ByteArray
+                }
+            }
             FieldKind::WeakReference { nullable } => {
                 if *nullable {
                     ReturnType::NullableWeakReference
@@ -1507,6 +1518,11 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::ByteArray { nullable } => format!(
+                        ".field-byte-array {} {}byte-array\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" }
+                    ),
                     FieldKind::WeakReference { nullable } => format!(
                         ".field-weak-reference {} {}weak-reference\n",
                         field.name,
@@ -1910,6 +1926,7 @@ fn parse_unit_ir_context(
                                 | ".field-symbol"
                                 | ".field-method"
                                 | ".field-weak-reference"
+                                | ".field-byte-array"
                         )
                     }) {
                         if (parts.len() != 3 && !(parts[0] == ".field-symbol" && parts.len() == 4))
@@ -1926,6 +1943,20 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-byte-array" {
+                            FieldKind::ByteArray {
+                                nullable: match parts[2].as_str() {
+                                    "byte-array" => false,
+                                    "nullable-byte-array" => true,
+                                    _ => {
+                                        return Err(Diagnostic::at(
+                                            text,
+                                            method_at,
+                                            "invalid ByteArray field contract",
+                                        ));
+                                    }
+                                },
+                            }
                         } else if parts[0] == ".field-weak-reference" {
                             FieldKind::WeakReference {
                                 nullable: match parts[2].as_str() {

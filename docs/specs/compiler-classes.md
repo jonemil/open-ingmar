@@ -513,6 +513,29 @@ tag; unit validation checks declarations, writes, initialization, and API
 availability after reload. Existing field instructions and DATA framing suffice.
 See the [specimen](../../examples/compiler-weak-references/README.md).
 
+## ByteArray fields
+
+All supported source class bases accept `Toybox.Lang.ByteArray` and
+`ByteArray or Null` fields from API 3.0.0, including unused declarations.
+Canonical names, imports, and aliases work. Both slots start as Null metadata
+(type `0x00`, value zero). Non-null fields require assignment in source
+`initialize` under the required-field prefix and self-exposure rules. Nullable
+fields may omit a default or use literal `null`; computed defaults are rejected.
+
+Reads/writes preserve the declared reference and nullability. Ordinary Arrays
+cannot satisfy ByteArray fields. Methods and indexed updates accept non-null
+field reads; nullable fields need a guarded local snapshot. Testing one field
+read does not refine another mutable read. A snapshot retains its object after
+the field is replaced or cleared. Fields hold strong references; clearing the
+last strong reference allows an existing weak target to expire.
+
+Unit IR uses `.field-byte-array <name> byte-array|nullable-byte-array` before
+methods, with no default operand. `.read-self` must claim the declared result
+tag, and `.assign-self` must satisfy it. Unit loading rechecks initialization,
+assignability, and availability. Existing field instructions and DATA framing
+suffice. See the [example](../../examples/compiler-byte-arrays/README.md) and
+[evidence](../investigations/byte-arrays.md#source-and-ir-profile).
+
 ## Symbol fields
 
 All supported source class bases accept Symbol fields from API 1.0.0:

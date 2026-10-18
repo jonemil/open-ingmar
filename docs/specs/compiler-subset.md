@@ -2243,7 +2243,11 @@ profiles. Weak retrieval remains Object-or-Null. Direct arguments to `addAll`
 need an established Array element contract; ambiguous empty Array inference
 does not choose Number or Char automatically.
 
-ByteArray fields/container elements, casts/runtime class
+Annotated [fields](compiler-classes.md#bytearray-fields) preserve these reference
+contracts, with constructor initialization for non-null storage and guarded
+local snapshots for nullable reads.
+
+ByteArray container elements, casts/runtime class
 recovery, and numeric encoding/decoding options remain unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and
