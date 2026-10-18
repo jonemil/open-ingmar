@@ -1137,14 +1137,17 @@ contracts, including scalar Comparable witnesses at returns, local assignments,
 and incoming block values. User-call arguments use the same witness rules.
 No coercion operation is serialized; the declared storage/edge/call contract
 retains the interface while the scalar keeps its runtime representation.
-Source witnesses at arguments, returns, and local assignments remain unit
+Source witnesses at arguments, returns, and local/field assignments remain unit
 obligations;
 unit validation resolves their exact classes and checks required members after
 text reload. A forged call result or a changed implementation signature cannot
 bypass that check. Erased calls retain conservative constructor effects.
 The backend selects the existing comparison symbols and invocation instructions.
-No new opcode or field representation is introduced for nullable interface
-storage. Ordinary Null values, branches, and frame slots retain their existing
+Class declarations retain interface fields through
+[`.field-interface`](compiler-classes.md#comparison-interface-fields). Reads
+must claim the declared result tag; writes require unit-level compatibility.
+No new VM opcode or DATA value tag is introduced for interface storage.
+Ordinary Null values, branches, and frame slots retain their existing
 encodings. Sorting accepts a nullable Comparator argument without a receiver
 refinement; compare member calls still require one.
 

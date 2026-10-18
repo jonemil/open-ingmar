@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceFields.run();
         NullableInterfaces.run();
         NativeComparables.run();
         InterfaceCalls.run();
@@ -38,6 +39,30 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceFields {
+    function run() as Void {
+        var holder = new InterfaceHolder("b");
+        System.println(holder.compareValue("b") == 0);
+        System.println(holder.compareMaybe("x"));
+        holder.setMaybe(new TextOrder());
+        System.println(holder.compareMaybe("b") == 0);
+        System.println(holder.takeMaybe("b") == 0);
+        System.println(holder.compareMaybe("b"));
+        holder.replace(3);
+        System.println(holder.compareValue(2) > 0);
+        holder.reset();
+        System.println(holder.compareValue("b") == 0);
+        System.println(holder.sorted());
+        holder.select(new Ordering(-1));
+        System.println(holder.sorted());
+        holder.select(null);
+        System.println(holder.sorted());
+        System.println(holder.requiredSorted());
+        var other = new InterfaceHolder("a");
+        System.println(other.compareValue("a") == 0);
+        System.println(holder.compareValue("b") == 0);
     }
 }
 module NullableInterfaces {

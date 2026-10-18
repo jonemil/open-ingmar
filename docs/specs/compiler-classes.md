@@ -350,15 +350,16 @@ See the [counter example](../../examples/compiler-fields/README.md) and
 Object-, View-, or BehaviorDelegate-derived class.
 The class must resolve across the unit, including forward declarations. The
 256-field limit and name/conflict rules above cover Number and reference fields
-together. Declaration initializers, Null unions, native reference fields, and
-other field kinds are unsupported.
+together. These exact-source fields reject declaration initializers and Null
+unions. Comparison interfaces follow their [own field rules](#comparison-interface-fields).
 
 Metadata creates a null slot (key bits zero, type `0x00`, value zero). A source
 initialize method is required to establish the non-null field contract. It must
-assign every reference field before exposing `self` as an Object, binding a
-self callback, making a self call, branching, jumping, or returning. A
-reference read before that field's assignment is rejected. Assignment must use
-the exact declared source class; native erasure, another class, and Null
+assign every required non-null reference field before exposing `self` as an
+Object, binding a self callback, making a self call, branching, jumping, or
+returning. A reference read before that field's assignment is rejected.
+Assignment must use the exact declared source class; native erasure, another
+class, and Null
 cannot satisfy it. Requiring this straight-line initialization prefix is our
 bounded checking policy, not Garmin's complete definite-initialization rules.
 Calls that may request System.exit, including transitive source calls and
@@ -402,6 +403,48 @@ looks up the source class through globals, allocates it, invokes `initialize`,
 and retains the instance while discarding the initializer result. See the
 [visible example](../../examples/compiler-visible-view/README.md) and
 [runtime evidence](../investigations/compiler-visible-view.md).
+
+## Comparison interface fields
+
+Source classes support `var value as Toybox.Lang.Comparable;` and the
+corresponding Comparator declaration, optionally `or Null`. Module aliases and
+imports resolve the type through the existing name rules. All require API 5.0.0,
+including unused declarations; source and saved-IR API entry points check field
+types independently of method references. Fields share the existing name,
+conflict, and 256-field limits. Access remains limited to `self.<field>`.
+
+Metadata creates ordinary Null slots (type `0x00`, value zero). A non-null field
+requires a source initializer and follows the straight-line
+[reference-initialization requirements](#source-reference-fields). It cannot
+be read until assigned, and must be filled before self exposure, self calls,
+control flow, return, or calls that may request shutdown. Nullable fields start
+as Null and do not require assignment; an explicit literal `= null` is equivalent.
+Other declaration initializers remain unsupported.
+
+Writes accept the corresponding interface, a verified native witness, or an
+exact source implementation under the
+[interface contract](compiler-subset.md#comparison-interface-values). Nullable
+fields additionally accept Null and compatible nullable values. Unit validation
+checks required source members on every write, including after text reload.
+Nonnull fields reject nullable writes without a non-null proof. A read's saved
+result contract must exactly match its field declaration. Function IR alone
+checks supported operands; the declaring unit proves the field's actual type.
+
+Reads retain the declared interface contract, rather than the last stored source
+class. Non-null reads can call interface methods directly. A nullable read needs
+a local snapshot and null guard for member calls: testing one field read does
+not refine another mutable field read. Clearing or replacing the field does not
+change a previously captured local value. Nullable Comparator reads can supply
+Array.sort directly. These rules do not add field/class intersection proofs,
+general native field types, or interface container storage.
+
+Unit IR uses `.field-interface <name> <tag>` before methods. Tags are
+`comparable`, `comparator`, `nullable-comparable`, or `nullable-comparator`.
+Reads use `.read-self %<result> <name> result=<tag>`; writes use the existing
+`.assign-self <name> %<value>`. The application builder uses the same Null-slot
+encoding for AppBase fields and other source classes, with ordinary field and
+invocation instructions. See the [comparison example](../../examples/compiler-comparators/README.md)
+and [evidence](../investigations/compiler-comparators.md#interface-fields).
 
 ## Source initial View callback
 

@@ -109,5 +109,12 @@ fn field_reads_cannot_move_across_writes_and_locals_remain_distinct() {
             .message
             .contains("evaluation order")
     );
-    assert!(parse_ir("ciq-ir\n.function f receiver=instance\n.string %0 \"bad\"\n.assign-self n %0\n.return-void\n.end\n").is_err());
+    let write = "ciq-ir\n.function f receiver=instance\n.string %0 \"bad\"\n.assign-self n %0\n.return-void\n.end\n";
+    assert!(parse_ir(write).is_ok()); // An interface field may hold String.
+    assert!(
+        ciq_compiler::parse_unit_ir(&format!(
+            "ciq-unit\n.class C Lang.Object\n.field-number n 0\n{write}.end-class\n"
+        ))
+        .is_err()
+    );
 }

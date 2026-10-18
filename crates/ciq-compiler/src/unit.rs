@@ -209,6 +209,25 @@ pub enum FieldKind {
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
+    /// A Null-initialized comparison-interface slot. Non-null fields must be
+    /// filled by source initialize before reads, self calls, or return.
+    Interface {
+        interface: crate::InterfaceType,
+        nullable: bool,
+    },
+}
+
+impl FieldKind {
+    fn requires_initialization(&self) -> bool {
+        matches!(
+            self,
+            Self::SourceObject(_)
+                | Self::Interface {
+                    nullable: false,
+                    ..
+                }
+        )
+    }
 }
 
 /// An instance field declaration with a checked initialization contract.
@@ -216,7 +235,7 @@ pub enum FieldKind {
 pub struct InstanceField {
     /// Unqualified member name, unique within the class.
     pub name: String,
-    /// Default storage and required non-null source contract, where applicable.
+    /// Default storage and required value contract, where applicable.
     pub kind: FieldKind,
 }
 impl InstanceField {
@@ -224,6 +243,16 @@ impl InstanceField {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
             FieldKind::SourceObject(class) => ReturnType::SourceObject(class.clone()),
+            FieldKind::Interface {
+                interface,
+                nullable,
+            } => {
+                if *nullable {
+                    ReturnType::NullableInterface(*interface)
+                } else {
+                    ReturnType::Interface(*interface)
+                }
+            }
         }
     }
 }
@@ -286,10 +315,30 @@ pub struct CompilationUnit {
 }
 
 impl CompilationUnit {
-    /// Check known native bases and unguarded API references in all bodies.
+    /// Check known native bases, field types, and unguarded API references.
     /// Errors retain the unit's flattened body indexes. The context is external
     /// to semantic IR; this does not validate a device or application profile.
     pub fn validate_api(&self, context: crate::api::ApiContext) -> Result<(), UnitError> {
+        self.validate_declaration_api(context)?;
+        for (index, body) in self
+            .declarations
+            .iter()
+            .map(|d| &d.function)
+            .chain(self.classes.iter().flat_map(|c| &c.methods))
+            .enumerate()
+        {
+            body.validate_api(context).map_err(|error| UnitError {
+                declaration: Some(index),
+                operation: error.operation,
+                message: error.message,
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Check class, callback, and field declarations without rechecking bodies.
+    /// Source and IR entry points already validate bodies with their context.
+    fn validate_declaration_api(&self, context: crate::api::ApiContext) -> Result<(), UnitError> {
         for class in &self.classes {
             context
                 .check_class(crate::api::core(), class.base.api_name())
@@ -309,19 +358,15 @@ impl CompilationUnit {
                         })?;
                 }
             }
-        }
-        for (index, body) in self
-            .declarations
-            .iter()
-            .map(|d| &d.function)
-            .chain(self.classes.iter().flat_map(|c| &c.methods))
-            .enumerate()
-        {
-            body.validate_api(context).map_err(|error| UnitError {
-                declaration: Some(index),
-                operation: error.operation,
-                message: error.message,
-            })?;
+            for field in &class.fields {
+                context
+                    .check_type(crate::api::core(), &field.result_type().api_type())
+                    .map_err(|message| UnitError {
+                        declaration: None,
+                        operation: None,
+                        message,
+                    })?;
+            }
         }
         Ok(())
     }
@@ -508,7 +553,10 @@ impl CompilationUnit {
                     ));
                 }
             }
-            if !references.is_empty()
+            if class
+                .fields
+                .iter()
+                .any(|field| field.kind.requires_initialization())
                 && !class
                     .methods
                     .iter()
@@ -637,7 +685,7 @@ impl CompilationUnit {
                     .fields
                     .iter()
                     .filter_map(|field| {
-                        if matches!(field.kind, FieldKind::SourceObject(_)) {
+                        if field.kind.requires_initialization() {
                             Some(field.name.as_str())
                         } else {
                             None
@@ -804,7 +852,16 @@ impl CompilationUnit {
                                     ));
                                 }
                             }
-                            if !crate::native::accepts(
+                            if let FieldKind::Interface {
+                                interface,
+                                nullable,
+                            } = declaration.kind
+                            {
+                                self.check_interface_value(
+                                    function, &origins, *value, interface, nullable,
+                                )
+                                .map_err(|message| fail(Some(index), Some(operation), message))?;
+                            } else if !crate::native::accepts(
                                 &declaration.result_type().api_type(),
                                 &function.value_types[value].api_type(),
                             ) {
@@ -1219,6 +1276,17 @@ impl CompilationUnit {
                     FieldKind::SourceObject(class) => {
                         format!(".field-reference {} {class}\n", field.name)
                     }
+                    FieldKind::Interface {
+                        interface,
+                        nullable,
+                    } => {
+                        format!(
+                            ".field-interface {} {}{}\n",
+                            field.name,
+                            if *nullable { "nullable-" } else { "" },
+                            interface.tag()
+                        )
+                    }
                 });
             }
             for method in &class.methods {
@@ -1426,32 +1494,34 @@ fn compile_sources_context(
         declarations,
         classes,
     };
-    unit.validate().map_err(|error| {
-        let bodies = unit
-            .declarations
-            .iter()
-            .map(|d| &d.function)
-            .chain(unit.classes.iter().flat_map(|c| &c.methods))
-            .collect::<Vec<_>>();
-        let (source_index, start) = error
-            .declaration
-            .and_then(|i| origins.get(i).copied())
-            .unwrap_or((0, 0));
-        let start = error
-            .declaration
-            .and_then(|i| bodies.get(i))
-            .and_then(|f| error.operation.and_then(|op| f.operations().get(op)))
-            .and_then(|op| op.span)
-            .map_or(start, |span| span.start);
-        SourceDiagnostic {
-            source: source_index,
-            diagnostic: Diagnostic::at(
-                sources.get(source_index).copied().unwrap_or(""),
-                start,
-                error.message,
-            ),
-        }
-    })?;
+    unit.validate()
+        .and_then(|()| context.map_or(Ok(()), |context| unit.validate_declaration_api(context)))
+        .map_err(|error| {
+            let bodies = unit
+                .declarations
+                .iter()
+                .map(|d| &d.function)
+                .chain(unit.classes.iter().flat_map(|c| &c.methods))
+                .collect::<Vec<_>>();
+            let (source_index, start) = error
+                .declaration
+                .and_then(|i| origins.get(i).copied())
+                .unwrap_or((0, 0));
+            let start = error
+                .declaration
+                .and_then(|i| bodies.get(i))
+                .and_then(|f| error.operation.and_then(|op| f.operations().get(op)))
+                .and_then(|op| op.span)
+                .map_or(start, |span| span.start);
+            SourceDiagnostic {
+                source: source_index,
+                diagnostic: Diagnostic::at(
+                    sources.get(source_index).copied().unwrap_or(""),
+                    start,
+                    error.message,
+                ),
+            }
+        })?;
     Ok(unit)
 }
 
@@ -1575,19 +1645,41 @@ fn parse_unit_ir_context(
                         break;
                     }
                     if parts.first().is_some_and(|part| {
-                        matches!(part.as_str(), ".field-number" | ".field-reference")
+                        matches!(
+                            part.as_str(),
+                            ".field-number" | ".field-reference" | ".field-interface"
+                        )
                     }) {
                         if parts.len() != 3 || !methods.is_empty() || instance_fields.len() >= 256 {
                             return Err(Diagnostic::at(
                                 text,
                                 method_at,
-                                "expected .field-number <name> <i32> before methods, at most 256 fields",
+                                "expected a three-part field declaration before methods, at most 256 fields",
                             ));
                         }
                         let kind = if parts[0] == ".field-number" {
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-interface" {
+                            let (tag, nullable) = parts[2]
+                                .strip_prefix("nullable-")
+                                .map_or((parts[2].as_str(), false), |tag| (tag, true));
+                            let interface = match tag {
+                                "comparable" => crate::InterfaceType::Comparable,
+                                "comparator" => crate::InterfaceType::Comparator,
+                                _ => {
+                                    return Err(Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid interface field contract",
+                                    ));
+                                }
+                            };
+                            FieldKind::Interface {
+                                interface,
+                                nullable,
+                            }
                         } else {
                             FieldKind::SourceObject(
                                 crate::SourceClass::parse(&parts[2]).ok_or_else(|| {
@@ -1645,13 +1737,20 @@ fn parse_unit_ir_context(
         }
     }
     locations.extend(class_locations);
-    CompilationUnit::with_classes(declarations, classes).map_err(|e| {
-        Diagnostic::at(
-            text,
-            e.declaration
-                .and_then(|i| locations.get(i).copied())
-                .unwrap_or(0),
-            e.message,
-        )
-    })
+    CompilationUnit::with_classes(declarations, classes)
+        .and_then(|unit| {
+            if let Some(context) = context {
+                unit.validate_declaration_api(context)?;
+            }
+            Ok(unit)
+        })
+        .map_err(|e| {
+            Diagnostic::at(
+                text,
+                e.declaration
+                    .and_then(|i| locations.get(i).copied())
+                    .unwrap_or(0),
+                e.message,
+            )
+        })
 }

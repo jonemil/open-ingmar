@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 44 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 57 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-nullable-interfaces/`. Existing compareTo binding/instructions
+in `scratch/check-interface-fields/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -72,7 +72,7 @@ to sort. Both SDK/generated runs print `interface-receiver` before
 `interface-argument`, then the expected comparison results and `[c, b, a]`.
 The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
 instructions. No new opcode or DATA record was encountered. This does not
-establish interface field/container storage,
+establish interface container storage,
 or default sorting of source-object Arrays. The [API contract][api] owns the
 signature-query behavior and limits.
 
@@ -110,7 +110,27 @@ The shared console checker above verifies saved stages and structured
 reconstruction with existing Null, comparison, branch, and invocation encodings;
 no new opcode or DATA record was encountered. Source assignments still need
 exact member proofs; successful runtime cases do not establish broader source
-inheritance, interface field/container storage, or exception recovery.
+inheritance, interface container storage, or exception recovery.
+
+## Interface fields
+
+**Experimentally observed:** the tracked `InterfaceHolder` stores both interfaces
+in nullable and non-null fields. The SDK accepts these declarations and a literal
+Null initializer on the nullable Comparator field. Reading unset nullable fields
+produces Null: guarded comparison takes the `-9` path and sorting uses default
+order. Source constructors fill non-null fields before use. Replacing a stored
+Comparable with Number or a source implementation changes subsequent dispatch;
+stored source Comparators remain callable after their constructor returns.
+Two holders retain independent values.
+
+`takeMaybe` snapshots a nullable Comparable, clears its field, and successfully
+compares through the guarded local. A later field read takes the Null path.
+SDK/generated simulator text matches the expected output. The shared console
+checker above covers saved stages, structured CODE/DATA, and reconstruction.
+Ordinary Null field slots and existing field/invocation instructions suffice;
+no new opcode or DATA record was encountered. Direct repeated-field guard
+refinement, general native field types, and interface containers remain outside
+the supported contract.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

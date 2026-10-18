@@ -1836,7 +1836,10 @@ impl Function {
                     validate_call_names(None, field).map_err(fail)?;
                     if !matches!(
                         result_type,
-                        ReturnType::Integer | ReturnType::SourceObject(_)
+                        ReturnType::Integer
+                            | ReturnType::SourceObject(_)
+                            | ReturnType::Interface(_)
+                            | ReturnType::NullableInterface(_)
                     ) {
                         return Err(fail("unsupported instance field result contract"));
                     }
@@ -1848,9 +1851,19 @@ impl Function {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if type_of(value) != ValueType::Integer && origins.class(value).is_none() {
+                    if type_of(value) != ValueType::Integer
+                        && origins.class(value).is_none()
+                        && !matches!(
+                            type_of(value),
+                            ValueType::Interface(_) | ValueType::NullableInterface(_)
+                        )
+                        && !native::accepts(
+                            &InterfaceType::Comparable.api_type(true),
+                            &type_of(value).api_type(),
+                        )
+                    {
                         return Err(fail(
-                            "instance fields require Number or exact source values",
+                            "instance field assignment requires a supported reference or scalar value",
                         ));
                     }
                     (None, vec![value])

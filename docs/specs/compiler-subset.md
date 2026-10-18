@@ -1819,8 +1819,10 @@ union inference.
 and a non-null instance supplies custom ordering. This does not permit calling
 `compare` on a nullable receiver without a non-null proof.
 
-Interface fields/container elements, unchecked `as` assertions, and interface
-runtime type targets remain unsupported. A non-null interface can widen to
+Source classes also support [comparison-interface fields](compiler-classes.md#comparison-interface-fields)
+with the same write contracts and checked initialization. Interface container
+elements, unchecked `as` assertions, and interface runtime type targets remain
+unsupported. A non-null interface can widen to
 Object without proving additional members. A nullable interface can widen to
 Object-or-Null; Object requires a non-null proof. Ordinary Object casts and
 concrete type tests retain their existing rules.

@@ -2143,20 +2143,49 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     let kind = if parser.peek()? == Kind::Word("as") {
                         parser.token()?;
                         let class = parser.type_path()?;
-                        if class.contains('.') {
-                            return Err(parser.error(
-                                token.span.start,
-                                "reference field requires a source class name",
-                            ));
+                        if let Some(interface) = crate::InterfaceType::from_name(&class) {
+                            let nullable = if parser.peek()? == Kind::Word("or") {
+                                parser.token()?;
+                                parser.expect(Kind::Word("Null"), "'Null'")?;
+                                true
+                            } else {
+                                false
+                            };
+                            if parser.peek()? == Kind::Punctuation('=') {
+                                if !nullable {
+                                    return Err(parser.error(
+                                        token.span.start,
+                                        "non-null interface fields must be assigned in initialize",
+                                    ));
+                                }
+                                parser.token()?;
+                                parser
+                                    .expect(Kind::Word("null"), "literal null field initializer")?;
+                            }
+                            parser.expect(
+                                Kind::Punctuation(';'),
+                                "';' after interface field declaration",
+                            )?;
+                            crate::FieldKind::Interface {
+                                interface,
+                                nullable,
+                            }
+                        } else {
+                            if class.contains('.') {
+                                return Err(parser.error(
+                                    token.span.start,
+                                    "reference field requires a source class name",
+                                ));
+                            }
+                            parser.expect(
+                                Kind::Punctuation(';'),
+                                "';' after reference field declaration",
+                            )?;
+                            crate::FieldKind::SourceObject(crate::SourceClass {
+                                name: class,
+                                base: crate::ClassBase::LangObject,
+                            })
                         }
-                        parser.expect(
-                            Kind::Punctuation(';'),
-                            "';' after reference field declaration",
-                        )?;
-                        crate::FieldKind::SourceObject(crate::SourceClass {
-                            name: class,
-                            base: crate::ClassBase::LangObject,
-                        })
                     } else {
                         parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
                         let value = parser.expression(0)?;

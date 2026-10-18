@@ -695,7 +695,7 @@ pub fn build_console_application(
                     },
                     Reference::Raw(match declaration.kind {
                         crate::FieldKind::Number(initial) => initial as u32,
-                        crate::FieldKind::SourceObject(_) => 0,
+                        crate::FieldKind::SourceObject(_) | crate::FieldKind::Interface { .. } => 0,
                     }),
                 )
             }));
@@ -770,7 +770,7 @@ pub fn build_console_application(
                 },
                 Reference::Raw(match declaration.kind {
                     crate::FieldKind::Number(initial) => initial as u32,
-                    crate::FieldKind::SourceObject(_) => 0,
+                    crate::FieldKind::SourceObject(_) | crate::FieldKind::Interface { .. } => 0,
                 }),
             )
         }));
