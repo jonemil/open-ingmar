@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceConstants.run();
         InterfaceKeys.run();
         InterfaceDictionaries.run();
         InterfaceSorting.run();
@@ -43,6 +44,36 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceConstants {
+    function values() as Toybox.Lang.Array<Toybox.Lang.Comparable> {return [97, 'a', true, 1l, 1.0, 1.0d, "a"];}
+    function optional() as Toybox.Lang.Array<Toybox.Lang.Comparable or Null> {return [null, 97, 'a'];}
+    function orders() as Toybox.Lang.Array<Toybox.Lang.Comparator or Null> {return [null];}
+    function run() as Void {
+        var values = InterfaceConstants.values();
+        System.println(values[0] instanceof Toybox.Lang.Number);
+        System.println(values[1] instanceof Toybox.Lang.Char);
+        System.println(values[2] instanceof Toybox.Lang.Boolean);
+        System.println(values[3] instanceof Toybox.Lang.Long);
+        System.println(values[4] instanceof Toybox.Lang.Float);
+        System.println(values[5] instanceof Toybox.Lang.Double);
+        System.println(values[6] instanceof Toybox.Lang.String);
+        System.println(values[0].compareTo(97) == 0);
+        var separate = InterfaceConstants.values();
+        var shared = values;
+        values[0] = false;
+        System.println(shared[0] instanceof Toybox.Lang.Boolean);
+        System.println(separate[0] instanceof Toybox.Lang.Number);
+        var optional = InterfaceConstants.optional();
+        System.println(optional[0] == null);
+        System.println(optional[1] instanceof Toybox.Lang.Number);
+        System.println(optional[2] instanceof Toybox.Lang.Char);
+        var snapshot = optional[1];
+        if (snapshot != null) {System.println(snapshot.compareTo(97) == 0);}
+        var names = ["b", "a"];
+        names.sort(InterfaceConstants.orders()[0]);
+        System.println(names.toString());
     }
 }
 module InterfaceKeys {

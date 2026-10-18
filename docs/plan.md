@@ -22,9 +22,7 @@ Resolve SDK constant-literal Number/Char key conflation before accepting mixed
 scalar-token interface-key constants. Interface-key pool emission also needs a
 hash/equality-preserving materialization contract.
 Nullable/object Array sorting needs its own element/callback contracts and
-evidence. Pool emission for interface
-Array literals needs a tag-preserving Number/Char payload before replacing
-private construction. Further interface refinement
+evidence. Further interface refinement
 should preserve both structural members and concrete class facts where needed.
 Preserve exact source identities until unit
 checking can establish required members; an erased Object or a runtime `has`

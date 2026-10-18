@@ -95,26 +95,17 @@ fn array_contracts_are_invariant_and_reads_preserve_nullable_interfaces() {
 }
 
 #[test]
-fn interface_literals_keep_runtime_scalar_tags_and_private_initialization() {
+fn interface_constants_keep_scalar_tags_and_callbacks_require_initialization() {
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return [1,'a',true,1l,1.0,1.0d,\"x\"]; }";
     let function = compile(source).unwrap();
     assert!(
-        !function
-            .operations()
-            .iter()
-            .any(|op| matches!(op.operation, Operation::ArrayConstant { .. }))
-    );
-    assert!(
         function
             .operations()
             .iter()
-            .any(|op| matches!(op.operation, Operation::Char { .. }))
-    );
-    assert!(
-        function
-            .operations()
-            .iter()
-            .any(|op| matches!(op.operation, Operation::Integer { .. }))
+            .any(|op| matches!(&op.operation,
+        Operation::ArrayConstant {values,..}
+            if matches!(values[0], ciq_compiler::ArrayConstantValue::Number(1))
+            && matches!(values[1], ciq_compiler::ArrayConstantValue::Char(97))))
     );
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
     let target = "class Target { function initialize() {} }";

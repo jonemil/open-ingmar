@@ -1,7 +1,7 @@
 //! Bounded Dictionary contracts shared by source checking and semantic IR.
 use crate::api::Type;
 
-/// A scalar token stored in a flat Dictionary constant. Numeric/Char values retain
+/// A scalar token stored in a flat Array or Dictionary constant. Numeric/Char values retain
 /// their exact VM bits; String values contain text, not DATA addresses or pool aliases.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryScalar {
@@ -16,7 +16,7 @@ pub enum DictionaryScalar {
 }
 
 impl DictionaryScalar {
-    fn api_type(&self) -> Type {
+    pub(crate) fn api_type(&self) -> Type {
         match self {
             Self::Number(_) => Type::named("Toybox.Lang.Number"),
             Self::Double(_) => Type::named("Toybox.Lang.Double"),

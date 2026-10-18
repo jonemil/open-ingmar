@@ -37,6 +37,9 @@ keys, inherited identity, native witnesses inserted at runtime, key enumeration,
 and removal. Comparison counters verify that hashing does not use the ordering
 methods. Mixed scalar-token key constants remain deferred; see the
 [key contract](../../docs/specs/compiler-subset.md#interface-dictionary-keys).
+`InterfaceConstants` checks all scalar tags, Number/Char distinctions, independent
+constant loads versus shared aliases, nullable Comparable contents, and a
+Null-only Comparator constant used for default sorting.
 
 From the repository root:
 

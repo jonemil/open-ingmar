@@ -61,27 +61,17 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 alias, entries,
             )));
         }
-        if let Operation::ArrayConstant {
-            result,
-            element_type,
-            values,
-        } = &located.operation
-        {
+        if let Operation::ArrayConstant { result, values, .. } = &located.operation {
             let alias = format!("__ciq_array_{}_{}", label, result.0);
             literal_aliases.insert(LiteralKey::Array(*result), alias.clone());
             let mut pool = Vec::<ciq_prg::data::StringDeclaration>::new();
             let values = values
                 .iter()
                 .map(|value| match value {
-                    crate::ArrayConstantValue::Bits(n)
-                        if matches!(
-                            element_type,
-                            crate::ArrayElement::Number | crate::ArrayElement::NullableNumber
-                        ) =>
-                    {
+                    crate::ArrayConstantValue::Number(n) => {
                         ciq_prg::data::arrays::Value::Number(*n)
                     }
-                    crate::ArrayConstantValue::Bits(n) => ciq_prg::data::arrays::Value::Char(*n),
+                    crate::ArrayConstantValue::Char(n) => ciq_prg::data::arrays::Value::Char(*n),
                     crate::ArrayConstantValue::Long(n) => ciq_prg::data::arrays::Value::Long(*n),
                     crate::ArrayConstantValue::Float(n) => ciq_prg::data::arrays::Value::Float(*n),
                     crate::ArrayConstantValue::Double(n) => {

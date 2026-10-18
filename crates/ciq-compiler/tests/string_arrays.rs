@@ -45,7 +45,7 @@ fn strings_preserve_types_and_pooled_constants_through_saved_stages() {
     let Operation::ArrayConstant { values, .. } = &mut malformed[0].operation else {
         unreachable!()
     };
-    values[0] = ArrayConstantValue::Bits(41);
+    values[0] = ArrayConstantValue::Number(41);
     assert!(ciq_compiler::Function::new("bad".into(), malformed).is_err());
 }
 

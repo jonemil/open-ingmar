@@ -1851,11 +1851,12 @@ cannot widen to nullable-element Arrays.
 An expected Array annotation or argument contract supplies literal element
 typing, including empty and mixed native/source literals. Otherwise the first
 element must already establish a supported element contract; arbitrary mixtures
-do not infer an interface. Literals allocate privately before evaluating and
-filling elements in order. Interface literals use this path even for scalar
-tokens, preserving Number/Char distinctions and each native runtime tag. The
-current homogeneous constant payload cannot express those distinctions under
-an interface contract; interface `.array-constant` records remain unsupported.
+do not infer an interface. Scalar-token literals use tagged DATA constants,
+preserving Number/Char distinctions and each native runtime tag. Nullable
+contracts also permit Null tokens, including Null-only literals. Each evaluation
+produces a fresh mutable Array. Source-object and computed literals allocate
+privately before evaluating and filling elements in order. The same declared
+element contract applies to either construction path.
 
 Indexed reads retain the declared interface, including Null where allowed;
 they do not recover an exact source class. Member calls on nullable elements

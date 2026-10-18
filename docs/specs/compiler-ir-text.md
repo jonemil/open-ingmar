@@ -501,10 +501,6 @@ and [empty construction](../investigations/compiler-empty-arrays.md).
 
 ## Constant arrays
 
-Comparison-interface elements use private construction instead of these
-homogeneous constant payloads. `.array-constant` rejects interface tags even
-when its scalar values could individually satisfy the interface.
-
 ```text
 .array-constant %0 number 0x0000000a 0x00000014
 .return %0
@@ -519,13 +515,32 @@ their raw bits, including signed floating zero and NaN payloads. String values a
 ordinary IR String escapes, for example `.array-constant %0 string "one" ""`.
 Boolean payloads use `true`/`false` or `ArrayConstantValue::Boolean`; numeric
 0/1 do not substitute for them; Null requires a nullable element contract.
-Typed IR uses `ArrayConstantValue::Bits` for Number/Char, `::Long`, `::Float`,
-or `::Double` for those exact bits, or `::String` for text;
+Typed IR uses distinct `ArrayConstantValue::Number` and `::Char` variants,
+`::Long`, `::Float`, or `::Double` for those exact bits, or `::String` for text;
 nullable contracts also permit `null` / `ArrayConstantValue::Null`. Every
 payload must match its element contract; other mixed types and nested
 containers are rejected. API checks require Array and each element class, as
 for allocation.
 Definition/use and ordered-effect checks include this allocation.
+
+Interface element tags use tagged scalar tokens with the same syntax as
+[Dictionary constants](#dictionary-constants), retaining each runtime class:
+
+```text
+.array-constant %0 comparable number 0x00000061 char 0x00000061 string "a"
+.array-constant %1 nullable-comparable null boolean true
+.array-constant %2 nullable-comparator null
+```
+
+Every token must satisfy the declared interface/nullability contract; no source
+reference or arbitrary Object token is supported. Comparable admits the seven
+supported native scalar witnesses. Comparator has no scalar witness, so only
+Null fits its nullable constant profile. Interface contracts require API 5.0.0.
+Typed IR shares the tagged scalar enum with `DictionaryScalar`; Number and Char
+remain distinct even outside a scalar element contract. Nested containers and
+empty constant payloads remain rejected. Computed/source-object elements use
+private construction. Scalar-element Array text retains the compact untagged
+payload syntax above.
 
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
 applications materialize its [DATA record](data-arrays.md), using a shared local

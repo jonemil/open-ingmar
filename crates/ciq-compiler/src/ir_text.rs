@@ -638,67 +638,96 @@ pub(crate) fn parse_ir_context(
                         ));
                     }
                 },
-                values: fields[3..width]
-                    .iter()
-                    .map(|s| {
-                        if s == "null" {
-                            return Ok(crate::ArrayConstantValue::Null);
-                        }
-                        if matches!(fields[2].as_str(), "boolean" | "nullable-boolean") {
-                            return match s.as_str() {
-                                "true" => Ok(crate::ArrayConstantValue::Boolean(true)),
-                                "false" => Ok(crate::ArrayConstantValue::Boolean(false)),
-                                _ => {
-                                    Err(fail(*at, "Boolean array constants require true or false"))
+                values: if matches!(
+                    fields[2].as_str(),
+                    "comparable" | "nullable-comparable" | "comparator" | "nullable-comparator"
+                ) {
+                    let mut values = Vec::new();
+                    let mut next = 3;
+                    while next < width {
+                        values.push(
+                            crate::ArrayConstantValue::parse(&fields[..width], &mut next)
+                                .ok_or_else(|| fail(*at, "invalid tagged scalar Array constant"))?,
+                        );
+                    }
+                    values
+                } else {
+                    fields[3..width]
+                        .iter()
+                        .map(|s| {
+                            if s == "null" {
+                                return Ok(crate::ArrayConstantValue::Null);
+                            }
+                            if matches!(fields[2].as_str(), "boolean" | "nullable-boolean") {
+                                return match s.as_str() {
+                                    "true" => Ok(crate::ArrayConstantValue::Boolean(true)),
+                                    "false" => Ok(crate::ArrayConstantValue::Boolean(false)),
+                                    _ => Err(fail(
+                                        *at,
+                                        "Boolean array constants require true or false",
+                                    )),
+                                };
+                            }
+                            if matches!(fields[2].as_str(), "string" | "nullable-string") {
+                                return s
+                                    .strip_prefix('"')
+                                    .map(|s| crate::ArrayConstantValue::String(s.into()))
+                                    .ok_or_else(|| {
+                                        fail(*at, "String array constants require quoted text")
+                                    });
+                            }
+                            if matches!(
+                                fields[2].as_str(),
+                                "long"
+                                    | "nullable-long"
+                                    | "double"
+                                    | "nullable-double"
+                                    | "float"
+                                    | "nullable-float"
+                            ) {
+                                let wide =
+                                    !matches!(fields[2].as_str(), "float" | "nullable-float");
+                                let hex = s
+                                    .strip_prefix("0x")
+                                    .filter(|s| s.len() == if wide { 16 } else { 8 })
+                                    .ok_or_else(|| {
+                                        fail(*at, "numeric array constant has wrong bit width")
+                                    })?;
+                                if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                                    return Err(fail(*at, "invalid numeric array constant bits"));
                                 }
-                            };
-                        }
-                        if matches!(fields[2].as_str(), "string" | "nullable-string") {
-                            return s
-                                .strip_prefix('"')
-                                .map(|s| crate::ArrayConstantValue::String(s.into()))
-                                .ok_or_else(|| {
-                                    fail(*at, "String array constants require quoted text")
+                                let bits = u64::from_str_radix(hex, 16)
+                                    .map_err(|_| fail(*at, "invalid numeric array bits"))?;
+                                return Ok(match fields[2].as_str() {
+                                    "long" | "nullable-long" => {
+                                        crate::ArrayConstantValue::Long(bits)
+                                    }
+                                    "double" | "nullable-double" => {
+                                        crate::ArrayConstantValue::Double(bits)
+                                    }
+                                    _ => crate::ArrayConstantValue::Float(bits as u32),
                                 });
-                        }
-                        if matches!(
-                            fields[2].as_str(),
-                            "long"
-                                | "nullable-long"
-                                | "double"
-                                | "nullable-double"
-                                | "float"
-                                | "nullable-float"
-                        ) {
-                            let wide = !matches!(fields[2].as_str(), "float" | "nullable-float");
+                            }
                             let hex = s
                                 .strip_prefix("0x")
-                                .filter(|s| s.len() == if wide { 16 } else { 8 })
+                                .filter(|s| {
+                                    s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())
+                                })
                                 .ok_or_else(|| {
-                                    fail(*at, "numeric array constant has wrong bit width")
+                                    fail(*at, "array constants require eight hex digits")
                                 })?;
-                            if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-                                return Err(fail(*at, "invalid numeric array constant bits"));
-                            }
-                            let bits = u64::from_str_radix(hex, 16)
-                                .map_err(|_| fail(*at, "invalid numeric array bits"))?;
-                            return Ok(match fields[2].as_str() {
-                                "long" | "nullable-long" => crate::ArrayConstantValue::Long(bits),
-                                "double" | "nullable-double" => {
-                                    crate::ArrayConstantValue::Double(bits)
-                                }
-                                _ => crate::ArrayConstantValue::Float(bits as u32),
-                            });
-                        }
-                        let hex = s
-                            .strip_prefix("0x")
-                            .filter(|s| s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-                            .ok_or_else(|| fail(*at, "array constants require eight hex digits"))?;
-                        u32::from_str_radix(hex, 16)
-                            .map(crate::ArrayConstantValue::Bits)
-                            .map_err(|_| fail(*at, "invalid array constant"))
-                    })
-                    .collect::<Result<_, _>>()?,
+                            u32::from_str_radix(hex, 16)
+                                .map(|bits| {
+                                    if matches!(fields[2].as_str(), "char" | "nullable-char") {
+                                        crate::ArrayConstantValue::Char(bits)
+                                    } else {
+                                        crate::ArrayConstantValue::Number(bits)
+                                    }
+                                })
+                                .map_err(|_| fail(*at, "invalid array constant"))
+                        })
+                        .collect::<Result<_, _>>()?
+                },
             }
         } else if kind == 57 {
             Operation::ArrayBegin {

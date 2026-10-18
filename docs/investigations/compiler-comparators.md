@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 132 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 147 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-interface-keys-runtime/`. Existing compareTo binding/instructions
+in `scratch/check-interface-array-constants/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -144,9 +144,9 @@ and passing it to scalar Array.sort selects default ordering.
 
 SDK/generated programs match the expected text through the console checker
 above. Both CODE/DATA walks and structured reconstruction succeed without new
-opcodes or DATA records. Our builder path preserves mixed scalar tags without
-an interface constant-payload grammar. These cases do not establish callback
-ordering or exception recovery.
+opcodes or DATA records. Mixed source/native literals preserve scalar tags
+through private construction. These cases do not establish callback ordering
+or exception recovery.
 
 ## Interface Array sorting
 
@@ -228,6 +228,25 @@ The SDK rejects these as incompatible native Object overrides. Diagnostics:
 `scratch/interface-key-bad-equals-sdk.log`. Our declaration checks preserve the
 native signatures even after erasure; they do not prove behavioral hash laws,
 callback ordering, mutation safety, or exception recovery.
+
+## Interface Array constants
+
+**Experimentally observed:** `InterfaceConstants` returns scalar-only Comparable
+Arrays containing Number, Char, Boolean, Long, Float, Double, and String. Each
+element passes its runtime class test; Number 97 and Char 'a' retain distinct
+tags. Mutating one returned Array updates its alias while a separate call
+retains the original Number. Nullable Comparable contents retain Null and scalar
+tags, and a guarded read invokes comparison. A Null-only Comparator Array
+selects default sorting when indexed as a callback.
+
+The generated program loads these literals from DATA constants. SDK/generated
+simulator output matches all 147 expected lines, and saved IR, assembly,
+structured CODE/DATA, signing, and reconstruction pass through the console
+checker. Artifacts: `scratch/check-interface-array-constants/`; SDK build log:
+`scratch/interface-array-constants-sdk-build.log`. Existing scalar tags, local
+String pools, and `apush` suffice; no new opcode or binary record was encountered.
+This establishes scalar constant storage, not source-object constant encoding
+or a shared ordering domain for arbitrary Comparable mixtures.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

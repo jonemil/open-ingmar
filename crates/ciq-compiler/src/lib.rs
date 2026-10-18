@@ -284,20 +284,11 @@ impl ArrayElement {
     }
 }
 
-/// Payload of a homogeneous Array constant. Bits are interpreted as Number or
-/// Char by the element contract; Long/Float/Double retain their exact-width bits.
-/// String contains text rather than a pool alias.
-/// Boolean retains its logical value; Null requires a nullable element contract.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ArrayConstantValue {
-    Boolean(bool),
-    Bits(u32),
-    Double(u64),
-    Float(u32),
-    Long(u64),
-    String(String),
-    Null,
-}
+/// Scalar token in a flat Array constant, retaining its VM type and exact bits.
+/// Interface element contracts may mix compatible scalar witnesses. Null requires
+/// a nullable element contract; String contains text rather than a pool alias.
+/// Arrays and Dictionaries share the same tagged scalar payload representation.
+pub use dictionary::DictionaryScalar as ArrayConstantValue;
 
 /// Supported positional native callback results, independent of runtime storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2082,40 +2073,7 @@ impl Function {
                 } => {
                     if values.is_empty()
                         || !values.iter().all(|value| {
-                            matches!(
-                                (element_type, value),
-                                (
-                                    ArrayElement::Boolean | ArrayElement::NullableBoolean,
-                                    ArrayConstantValue::Boolean(_)
-                                ) | (
-                                    ArrayElement::Number
-                                        | ArrayElement::NullableNumber
-                                        | ArrayElement::Char
-                                        | ArrayElement::NullableChar,
-                                    ArrayConstantValue::Bits(_)
-                                ) | (
-                                    ArrayElement::Long | ArrayElement::NullableLong,
-                                    ArrayConstantValue::Long(_)
-                                ) | (
-                                    ArrayElement::Float | ArrayElement::NullableFloat,
-                                    ArrayConstantValue::Float(_)
-                                ) | (
-                                    ArrayElement::Double | ArrayElement::NullableDouble,
-                                    ArrayConstantValue::Double(_)
-                                ) | (
-                                    ArrayElement::String | ArrayElement::NullableString,
-                                    ArrayConstantValue::String(_)
-                                ) | (
-                                    ArrayElement::NullableNumber
-                                        | ArrayElement::NullableFloat
-                                        | ArrayElement::NullableDouble
-                                        | ArrayElement::NullableLong
-                                        | ArrayElement::NullableString
-                                        | ArrayElement::NullableChar
-                                        | ArrayElement::NullableBoolean,
-                                    ArrayConstantValue::Null
-                                )
-                            )
+                            native::accepts(&element_type.api_type(), &value.api_type())
                         })
                     {
                         return Err(fail(
@@ -3190,14 +3148,25 @@ impl Function {
                     element_type.text(),
                     values
                         .iter()
-                        .map(|v| match v {
-                            ArrayConstantValue::Bits(n) => format!(" 0x{n:08x}"),
-                            ArrayConstantValue::Double(n) => format!(" 0x{n:016x}"),
-                            ArrayConstantValue::Float(n) => format!(" 0x{n:08x}"),
-                            ArrayConstantValue::Long(n) => format!(" 0x{n:016x}"),
-                            ArrayConstantValue::String(s) => format!(" {s:?}"),
-                            ArrayConstantValue::Null => " null".into(),
-                            ArrayConstantValue::Boolean(b) => format!(" {b}"),
+                        .map(|v| {
+                            if matches!(
+                                element_type,
+                                ArrayElement::Interface(_) | ArrayElement::NullableInterface(_)
+                            ) {
+                                format!(" {}", v.text())
+                            } else {
+                                match v {
+                                    ArrayConstantValue::Number(n) | ArrayConstantValue::Char(n) => {
+                                        format!(" 0x{n:08x}")
+                                    }
+                                    ArrayConstantValue::Double(n) => format!(" 0x{n:016x}"),
+                                    ArrayConstantValue::Float(n) => format!(" 0x{n:08x}"),
+                                    ArrayConstantValue::Long(n) => format!(" 0x{n:016x}"),
+                                    ArrayConstantValue::String(s) => format!(" {s:?}"),
+                                    ArrayConstantValue::Null => " null".into(),
+                                    ArrayConstantValue::Boolean(b) => format!(" {b}"),
+                                }
+                            }
                         })
                         .collect::<String>()
                 ),

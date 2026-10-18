@@ -882,7 +882,7 @@ impl Builder<'_> {
             .map(|e| match e.kind {
                 parser::ExpressionKind::Integer(n) => Some((
                     Some(crate::ArrayElement::Number),
-                    crate::ArrayConstantValue::Bits(n as u32),
+                    crate::ArrayConstantValue::Number(n as u32),
                 )),
                 parser::ExpressionKind::Long(n) => Some((
                     Some(crate::ArrayElement::Long),
@@ -898,7 +898,7 @@ impl Builder<'_> {
                 )),
                 parser::ExpressionKind::Char(c) => Some((
                     Some(crate::ArrayElement::Char),
-                    crate::ArrayConstantValue::Bits(c),
+                    crate::ArrayConstantValue::Char(c),
                 )),
                 parser::ExpressionKind::String(ref s) => Some((
                     Some(crate::ArrayElement::String),
@@ -915,12 +915,6 @@ impl Builder<'_> {
         if let Some(values) = constant {
             let element_type = expected.or(values[0].0);
             if let Some(element_type) = element_type.filter(|element| {
-                if matches!(
-                    element,
-                    crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_)
-                ) {
-                    return false; // Bits payloads cannot distinguish Number from Char here.
-                }
                 values.iter().all(|v| {
                     let actual =
                         v.0.map(|ty| ty.api_type())

@@ -24,7 +24,7 @@ fn boolean_arrays_preserve_types_and_native_saved_stages() {
     let Operation::ArrayConstant { values, .. } = &mut bad[0].operation else {
         unreachable!()
     };
-    values[0] = ArrayConstantValue::Bits(1);
+    values[0] = ArrayConstantValue::Number(1);
     assert!(Function::new("bad".into(), bad).is_err());
     for values in ["null", "0x00000001", "true 1", "\"true\"", "True"] {
         assert!(
