@@ -199,6 +199,12 @@ pub(crate) fn parse_ir_context(
                             ),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "weak-reference-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::WeakReference,
+                        )),
+                        "nullable-weak-reference-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableWeakReference,
+                        )),
                         "method-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Method))
                         }
@@ -648,6 +654,8 @@ pub(crate) fn parse_ir_context(
                     "char" => crate::ArrayElement::Char,
                     "symbol" => crate::ArrayElement::Symbol,
                     "method" => crate::ArrayElement::Method,
+                    "weak-reference" => crate::ArrayElement::WeakReference,
+                    "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                     "nullable-method" => crate::ArrayElement::NullableMethod,
                     "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
@@ -772,6 +780,8 @@ pub(crate) fn parse_ir_context(
                     "char" => crate::ArrayElement::Char,
                     "symbol" => crate::ArrayElement::Symbol,
                     "method" => crate::ArrayElement::Method,
+                    "weak-reference" => crate::ArrayElement::WeakReference,
+                    "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                     "nullable-method" => crate::ArrayElement::NullableMethod,
                     "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
@@ -828,6 +838,8 @@ pub(crate) fn parse_ir_context(
                 "char" => crate::ArrayElement::Char,
                 "symbol" => crate::ArrayElement::Symbol,
                 "method" => crate::ArrayElement::Method,
+                "weak-reference" => crate::ArrayElement::WeakReference,
+                "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                 "nullable-method" => crate::ArrayElement::NullableMethod,
                 "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                 "boolean" => crate::ArrayElement::Boolean,
@@ -1322,6 +1334,10 @@ fn call_contract(
             "long-array" => crate::ReturnType::Array(crate::ArrayElement::Long),
             "symbol-array" => crate::ReturnType::Array(crate::ArrayElement::Symbol),
             "method-array" => crate::ReturnType::Array(crate::ArrayElement::Method),
+            "weak-reference-array" => crate::ReturnType::Array(crate::ArrayElement::WeakReference),
+            "nullable-weak-reference-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableWeakReference)
+            }
             "nullable-method-array" => {
                 crate::ReturnType::Array(crate::ArrayElement::NullableMethod)
             }

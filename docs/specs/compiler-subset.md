@@ -1564,7 +1564,7 @@ arms also join. These rules do not introduce heterogeneous container joins.
 
 The declared Object type does not establish a WeakReference result from
 `Object.weak()`: the runtime value might be an immutable scalar. That receiver
-path, other native/source weak targets, container storage,
+path, other native/source weak targets, Dictionary weak keys,
 constructors, and safe concrete recovery remain deferred. The new types do
 not acquire arithmetic, truthiness, direct printing, or general equality
 operators; nullable Object/Null tests use the existing proof rules.
@@ -1574,6 +1574,39 @@ Hidden reference temporaries transfer ownership on their final read using IR
 Source locals retain their assignment/frame lifetimes. Backend staging must not
 silently extend a target's strong lifetime. See the
 [lifetime specimen and evidence](../investigations/compiler-weak-references.md).
+
+### WeakReference containers
+
+`Array<WeakReference>`, `Array<WeakReference or Null>`, and typed Dictionary
+WeakReference/nullable-WeakReference values require API 1.2.0. Array elements and
+both Dictionary parameters remain invariant. Existing native container methods
+retain their API requirements. WeakReference Dictionary keys remain unsupported
+pending hash/equality evidence across target expiry.
+
+Weak-bearing literals allocate privately and evaluate entries in source order.
+Homogeneous weak handles may infer a contract; empty and Null-only literals need
+an expected type. Null-only nullable payloads with supported scalar Dictionary
+keys may use existing DATA constants. Weak handles/targets are never encoded as
+pooled objects or numeric addresses. Nested containers remain unsupported.
+
+Arrays preserve their element type through parameters/results, indexed reads and
+writes, and matching conditional arms. `size`, `toString`, `add`, `addAll`,
+`indexOf`, `remove`, `removeAll`, `reverse`, and `slice` use the existing profiles.
+Reverse/slice produce independent Arrays with the same weak handle values;
+search/removal uses native WeakReference equality. Weak-element sorting remains
+outside the supported ordering profiles.
+
+Dictionary `get`/indexing adds Null for a missing key, including for non-null
+WeakReference values. `values()` returns an Array with exactly the declared value
+contract; it does not add the missing-key alternative. Existing `put`, indexed
+writes, `hasKey`, `remove`, and observers preserve that contract.
+
+Nullable element/lookup members need a fresh guarded local snapshot. A test of
+another mutable read does not refine the value. Storage and copies retain the
+weak handle without retaining its target; a non-null handle may already be
+expired. Neither storage nor `stillAlive()` removes Null from a later `get()`
+Object result. See the [specimen](../../examples/compiler-weak-references/README.md)
+and [evidence](../investigations/compiler-weak-references.md#container-storage).
 
 ## Char arrays
 

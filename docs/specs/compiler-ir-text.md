@@ -560,6 +560,13 @@ for example `dictionary(method=>nullable-method)`. Method entries use private
 runtime construction; [Method Dictionary rules](compiler-subset.md#method-dictionaries)
 also permit existing scalar-key/Null-only nullable constants.
 
+WeakReference Array elements use `weak-reference`/`nullable-weak-reference`;
+parameter/call results use `weak-reference-array`/`nullable-weak-reference-array`.
+Dictionary values use those element tags, for example
+`dictionary(string=>nullable-weak-reference)`; weak keys are unsupported.
+Weak-bearing literals use private builders. Existing Null-only constants need no
+new DATA tag. See [WeakReference containers](compiler-subset.md#weakreference-containers).
+
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
 applications materialize its [DATA record](data-arrays.md), using a shared local
 pool entry for equal String text, and bind the outer
@@ -1059,6 +1066,7 @@ Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`,
 `nullable-char`, `symbol`, `nullable-symbol`, `method`, `nullable-method`,
 `weak-reference`, `nullable-weak-reference`,
 `array-number`, `array-char`, `array-method`, and `array-nullable-method`.
+Weak Array edges use `array-weak-reference` or `array-nullable-weak-reference`.
 They map to the existing
 core/nullable/invariant Array contracts. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.

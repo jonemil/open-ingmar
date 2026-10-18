@@ -165,7 +165,7 @@ operator/type-system dependencies and sequencing belong to the
   known-selector checks and concrete callback
   signature/refinement rules where required by consumers.
 - **WeakReference and Object.weak:** broader source/Object targets, constructors,
-  container storage, and safe concrete recovery from get(); preserve exact
+  Dictionary key contracts, and safe concrete recovery from get(); preserve exact
   immutable weak-result behavior.
 - **ByteArray:** value/literal/allocation/indexing contracts and all own/inherited
   methods, including numeric encoding/decoding options.

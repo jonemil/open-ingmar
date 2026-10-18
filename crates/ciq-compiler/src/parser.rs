@@ -331,6 +331,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Char" => crate::DictionaryValue::Char,
             "Toybox.Lang.Symbol" => crate::DictionaryValue::Symbol,
             "Toybox.Lang.Method" => crate::DictionaryValue::Method,
+            "Toybox.Lang.WeakReference" => crate::DictionaryValue::WeakReference,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
             }
@@ -354,6 +355,9 @@ impl<'a> Parser<'a> {
                 crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
                 crate::DictionaryValue::Symbol => crate::DictionaryValue::NullableSymbol,
                 crate::DictionaryValue::Method => crate::DictionaryValue::NullableMethod,
+                crate::DictionaryValue::WeakReference => {
+                    crate::DictionaryValue::NullableWeakReference
+                }
                 crate::DictionaryValue::Interface(interface) => {
                     crate::DictionaryValue::NullableInterface(interface)
                 }
@@ -377,6 +381,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
             "Toybox.Lang.Symbol" => crate::ArrayElement::Symbol,
             "Toybox.Lang.Method" => crate::ArrayElement::Method,
+            "Toybox.Lang.WeakReference" => crate::ArrayElement::WeakReference,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
             "Toybox.Lang.Double" => crate::ArrayElement::Double,
@@ -401,6 +406,7 @@ impl<'a> Parser<'a> {
                 crate::ArrayElement::Char => crate::ArrayElement::NullableChar,
                 crate::ArrayElement::Symbol => crate::ArrayElement::NullableSymbol,
                 crate::ArrayElement::Method => crate::ArrayElement::NullableMethod,
+                crate::ArrayElement::WeakReference => crate::ArrayElement::NullableWeakReference,
                 crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,
                 _ => return Err(self.error(at, "nullable Array elements require Number or String")),
             };

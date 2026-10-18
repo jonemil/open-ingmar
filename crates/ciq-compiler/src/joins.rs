@@ -37,6 +37,10 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
         "array-number" => Type::Array(Box::new(Type::named("Toybox.Lang.Number"))),
         "array-char" => Type::Array(Box::new(Type::named("Toybox.Lang.Char"))),
         "array-method" => Type::Array(Box::new(Type::named("Toybox.Lang.Method"))),
+        "array-weak-reference" => Type::Array(Box::new(Type::named("Toybox.Lang.WeakReference"))),
+        "array-nullable-weak-reference" => {
+            Type::Array(Box::new(crate::ValueType::NullableWeakReference.api_type()))
+        }
         "array-nullable-method" => {
             Type::Array(Box::new(crate::ValueType::NullableMethod.api_type()))
         }
@@ -77,6 +81,8 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         "array-number",
         "array-char",
         "array-method",
+        "array-weak-reference",
+        "array-nullable-weak-reference",
         "array-nullable-method",
     ]
     .into_iter()

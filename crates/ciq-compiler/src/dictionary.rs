@@ -189,10 +189,11 @@ pub enum DictionaryKey {
     Char,
 }
 
-/// Supported scalar, Method, and comparison-interface Dictionary value contracts,
-/// including explicit nullable values.
+/// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    WeakReference,
+    NullableWeakReference,
     Method,
     NullableMethod,
     Symbol,
@@ -263,6 +264,8 @@ impl DictionaryType {
             DictionaryValue::Char => ("Char", false),
             DictionaryValue::Symbol => ("Symbol", false),
             DictionaryValue::Method => ("Method", false),
+            DictionaryValue::WeakReference => ("WeakReference", false),
+            DictionaryValue::NullableWeakReference => ("WeakReference", true),
             DictionaryValue::NullableMethod => ("Method", true),
             DictionaryValue::NullableSymbol => ("Symbol", true),
             DictionaryValue::NullableChar => ("Char", true),
@@ -324,6 +327,8 @@ impl DictionaryType {
             DictionaryValue::NullableSymbol,
             DictionaryValue::Method,
             DictionaryValue::NullableMethod,
+            DictionaryValue::WeakReference,
+            DictionaryValue::NullableWeakReference,
             DictionaryValue::Char,
             DictionaryValue::NullableChar,
         ] {
@@ -376,6 +381,8 @@ impl DictionaryType {
             DictionaryValue::Char => "char",
             DictionaryValue::Symbol => "symbol",
             DictionaryValue::Method => "method",
+            DictionaryValue::WeakReference => "weak-reference",
+            DictionaryValue::NullableWeakReference => "nullable-weak-reference",
             DictionaryValue::NullableMethod => "nullable-method",
             DictionaryValue::NullableSymbol => "nullable-symbol",
             DictionaryValue::NullableChar => "nullable-char",
@@ -427,6 +434,8 @@ impl DictionaryType {
                 "char" => DictionaryValue::Char,
                 "symbol" => DictionaryValue::Symbol,
                 "method" => DictionaryValue::Method,
+                "weak-reference" => DictionaryValue::WeakReference,
+                "nullable-weak-reference" => DictionaryValue::NullableWeakReference,
                 "nullable-method" => DictionaryValue::NullableMethod,
                 "nullable-symbol" => DictionaryValue::NullableSymbol,
                 "nullable-char" => DictionaryValue::NullableChar,
@@ -496,6 +505,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
                         | "Toybox.Lang.Char"
                         | "Toybox.Lang.Symbol"
                         | "Toybox.Lang.Method"
+                        | "Toybox.Lang.WeakReference"
                 ) =>
             {
                 if scalar.as_ref().is_some_and(|previous| previous != ty) {

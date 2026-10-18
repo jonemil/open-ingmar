@@ -43,8 +43,8 @@ Compile the tracked source with an ignored Jungle and the shared native-names
 manifest/resources. Use the
 [console checker](../../scripts/README.md#console-specimen-check) for saved-stage
 parity, structured SDK/generated reconstruction, own-key signing, and simulator
-comparison. Both programs match all 39 expected console lines. Artifacts:
-`scratch/check-nullable-weak/`.
+comparison. Both programs match all 58 expected console lines. Artifacts:
+`scratch/check-weak-containers/`.
 
 SDK symbols use `weak` = `0x00800418`, `stillAlive` = `0x00800417`, and
 `get` = `0x008000b5` (already used by Dictionary). Existing member invocation,
@@ -68,8 +68,27 @@ new opcodes or PRG records. API checks reject declarations below 1.2.0, includin
 unused nullable fields after IR reload. Lexical assertions are checked only as
 unchanged-value lowering; they establish no runtime type or liveness proof.
 
-Other native/source weak targets, checked concrete recovery, container storage,
-and broader callback interactions are not established here.
+## Container storage
+
+2026-10-18, same SDK/simulator and target.
+
+**Observed:** Arrays, reverse/slice copies, and Dictionary values keep weak
+handles usable while their original Array target expires. An independently
+saved `get()` Object delays expiry until released. Nullable indexed/lookup
+snapshots remain usable after their entries are cleared or removed; their
+`get()` results remain Null for the expired target.
+
+A whole-Array conditional join aliases its selected Array. Mutating that Array
+changes the alias's size while its reversed copy remains independent. Search
+and removal accept the saved expired handle in this specimen. Null-only values
+enumerate as nullable WeakReferences, and literal markers run once in order
+(`60`, `61`). No general equality/hash algorithm or weak-key behavior is inferred.
+
+Source/IR validation rejects contract widening, unguarded nullable element use,
+scalar payloads under weak constant contracts, and API declarations below 1.2.0.
+Structured SDK/generated reconstruction needs no new opcode or DATA record.
+Other native/source weak targets, checked concrete recovery, Dictionary weak
+keys, and broader callback interactions remain open.
 
 [weak]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/WeakReference.html
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html

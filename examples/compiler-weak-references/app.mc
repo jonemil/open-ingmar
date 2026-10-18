@@ -108,6 +108,60 @@ module NullableReferences {
         System.println(candidate == null);
     }
 }
+module WeakContainers {
+    function array(w as Toybox.Lang.WeakReference) as Toybox.Lang.Array<Toybox.Lang.WeakReference> { return [w]; }
+    function optional(w as Toybox.Lang.WeakReference) as Toybox.Lang.Array<Toybox.Lang.WeakReference or Null> { return [w, null]; }
+    function dictionary(w as Toybox.Lang.WeakReference) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.WeakReference> { return {"live" => w}; }
+    function nullable(w as Toybox.Lang.WeakReference) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.WeakReference or Null> { return {"live" => w, "empty" => null}; }
+    function nullOnly() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.WeakReference or Null> { return {"empty" => null}; }
+    function nullSlot() as Toybox.Lang.Array<Toybox.Lang.WeakReference or Null> { return [null]; }
+    function mark(w as Toybox.Lang.WeakReference, n as Toybox.Lang.Number) as Toybox.Lang.WeakReference { System.println(n); return w; }
+    function staged(w as Toybox.Lang.WeakReference) as Toybox.Lang.Array<Toybox.Lang.WeakReference> { return [WeakContainers.mark(w, 60), WeakContainers.mark(w, 61)]; }
+    function run() as Void {
+        var owner = [5, 6];
+        var w = owner.weak();
+        var array = WeakContainers.array(w);
+        var maybe = WeakContainers.optional(w);
+        var reversed = array.reverse();
+        var sliced = array.slice(0, 1);
+        var selected = true ? array : reversed;
+        var dictionary = WeakContainers.dictionary(w);
+        var nullable = WeakContainers.nullable(w);
+        var strong = array[0].get();
+        owner = [0];
+        System.println(array[0].stillAlive());
+        strong = null;
+        System.println(array[0].stillAlive());
+        System.println(reversed[0].stillAlive());
+        System.println(sliced[0].get() == null);
+        var snapshot = maybe[0];
+        maybe[0] = null;
+        if (snapshot != null) { System.println(snapshot.get() == null); }
+        System.println(maybe[0] == null);
+        var lookup = dictionary["live"];
+        dictionary.remove("live");
+        if (lookup != null) { System.println(lookup.stillAlive()); }
+        var values = nullable.values();
+        nullable["live"] = null;
+        System.println(values.size());
+        System.println(values.indexOf(null) >= 0);
+        array.add(w);
+        array.addAll(WeakContainers.array(w));
+        System.println(array.size());
+        System.println(array.indexOf(w));
+        System.println(array.remove(w));
+        array.removeAll(w);
+        System.println(selected.size());
+        System.println(reversed.size());
+        maybe.addAll(WeakContainers.nullSlot());
+        System.println(maybe.size());
+        var empty = WeakContainers.nullOnly();
+        var nulls = empty.values();
+        System.println(nulls[0] == null);
+        var staged = WeakContainers.staged(w);
+        System.println(staged.size());
+    }
+}
 class MinimalConsoleApp extends Application.AppBase {
     var startup as Toybox.Lang.WeakReference or Null;
     function initialize() { AppBase.initialize(); }
@@ -123,6 +177,7 @@ class MinimalConsoleApp extends Application.AppBase {
             owner = [0];
             System.println(saved.stillAlive());
         }
+        WeakContainers.run();
         System.exit();
     }
 }
