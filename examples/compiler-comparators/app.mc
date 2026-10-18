@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceSorting.run();
         InterfaceArrays.run();
         InterfaceFields.run();
         NullableInterfaces.run();
@@ -40,6 +41,47 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceSorting {
+    function values() as Toybox.Lang.Array<Toybox.Lang.Comparable> {
+        return [new Ranked(3), new Ranked(1), new Ranked(2), new Ranked(1)];
+    }
+    function numbers() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return [3, 1, 2]; }
+    function names() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return ["c", "a", "b"]; }
+    function orders() as Toybox.Lang.Array<Toybox.Lang.Comparator> { return [new Ranked(1), new Ranked(3), new Ranked(2)]; }
+    function sort(a as Toybox.Lang.Array<Toybox.Lang.Comparable>, c as Toybox.Lang.Comparator or Null) as Void { a.sort(c); }
+    function comparator(value as Toybox.Lang.Comparator) as Toybox.Lang.Comparator { return value; }
+    function run() as Void {
+        var values = InterfaceSorting.values();
+        var shared = values;
+        values.sort(null);
+        System.println((shared[0] as Ranked).value());
+        System.println((shared[3] as Ranked).value());
+        var order = new RankOrder();
+        values.sort(order);
+        System.println((shared[0] as Ranked).value());
+        System.println((shared[3] as Ranked).value());
+        System.println(order.calls() > 0);
+        InterfaceSorting.sort(values, null);
+        System.println((shared[0] as Ranked).value());
+        InterfaceSorting.sort(values, order);
+        System.println((shared[0] as Ranked).value());
+        var numbers = InterfaceSorting.numbers();
+        numbers.sort(null);
+        System.println(numbers.toString());
+        var names = InterfaceSorting.names();
+        names.sort(null);
+        System.println(names.toString());
+        var empty = InterfaceArrays.empty();
+        empty.sort(null);
+        System.println(empty.size());
+        var orders = InterfaceSorting.orders();
+        orders.sort(order);
+        System.println((orders[0] as Ranked).value());
+        var checkedOrder = InterfaceSorting.comparator(order);
+        orders.sort(checkedOrder);
+        System.println((orders[2] as Ranked).value());
     }
 }
 module InterfaceArrays {

@@ -117,9 +117,9 @@ impl Origins {
             )
     }
 
-    /// Project source arguments to their expected interface types for call
-    /// checking. Unit validation must still resolve their classes and required members;
-    /// erased native references cannot claim that obligation.
+    /// Project exact source arguments to non-null interface types for call
+    /// checking. Unit validation must still resolve their classes and required
+    /// members; erased native references cannot claim that obligation.
     pub(crate) fn native_arguments(
         &self,
         receiver: &crate::api::Type,
@@ -136,7 +136,15 @@ impl Origins {
                     .get(index)
                     .filter(|expected| self.deferred_interface(expected, value))
                 {
-                    expected.clone()
+                    // An exact source instance cannot be Null, even when the
+                    // consumer also permits Null to select default behavior.
+                    match crate::ValueType::from_api_type(expected) {
+                        Some(
+                            crate::ValueType::Interface(interface)
+                            | crate::ValueType::NullableInterface(interface),
+                        ) => interface.api_type(false),
+                        _ => unreachable!("deferred interface argument"),
+                    }
                 } else {
                     ty
                 }

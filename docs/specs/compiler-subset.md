@@ -1721,8 +1721,10 @@ locale-sensitive String collation, or atomic behavior if comparison fails.
 Garmin's full parameter type is `Lang.Comparator or Null`. Comparator is a
 structural interface requiring `compare(Object, Object) as Number`; it is not
 Method or an instantiable native class. Null selects default sorting; supported
-source comparator instances follow the contract below. Nullable/object elements
-remain unsupported, even if current contents happen to be comparable.
+source comparator instances follow the contract below. Non-null
+[Comparable elements](#comparison-interface-arrays) also support default sorting.
+Nullable/general Object elements remain unsupported, even if current contents
+happen to be comparable.
 
 See the [example](../../examples/compiler-array-sort/README.md) and
 [evidence](../investigations/compiler-array-sort.md).
@@ -1737,8 +1739,9 @@ parameters/results, and missing/extra parameters are rejected. Untyped source
 parameters still infer Number and therefore do not establish this interface.
 Matching is structural: no Comparator superclass or `implements` syntax is used.
 
-The same non-null scalar-element Array and API 5.0.0 requirements as default
-sorting apply. A negative/zero/positive Number orders the first element before,
+Supported receivers are the scalar-element Arrays above and non-null
+[comparison-interface Arrays](#comparison-interface-arrays), from API 5.0.0.
+A negative/zero/positive Number orders the first element before,
 equal to, or after the second. The runtime calls the source `compare` body on
 the supplied instance, preserving its fields. It controls comparison count and
 order; callers must supply a consistent ordering and must not depend on a
@@ -1866,9 +1869,26 @@ profiles. Collection operations that may call erased element methods
 (`toString`, lookup, and removal) conservatively propagate possible shutdown
 effects through constructor checking.
 
-Sorting these Arrays, nested/general Object containers, Array field declarations,
-and Dictionary interface elements remain outside this profile. Comparator values
-read from an Array can still sort supported scalar Arrays. See the
+`Array<Comparable>.sort` accepts Null, a checked exact source Comparator, or a
+Comparator(-or-Null) value. Null dispatches through element `compareTo` methods;
+an explicit Comparator supplies `compare` instead. `Array<Comparator>.sort`
+requires a non-null Comparator: its element contract alone does not prove
+`compareTo` for default ordering. A guarded nullable Comparator snapshot can
+satisfy this requirement. Exact source arguments retain their non-null proof
+while unit checking verifies their comparison signature.
+
+Callers must provide mutually comparable elements or a callback that handles
+every element pair. The interface proves a signature, not a common comparison
+domain: native scalar witnesses and unrelated source implementations need not
+accept each other. Sorting mutates shared contents and retains the invariant
+element type. Erased element/callback calls conservatively propagate possible
+shutdown effects through constructor checking, including default sorting.
+Runtime comparison failures, sort stability, and callback count/order are not
+guaranteed. Existing [sort evaluation/lowering](#default-array-sorting) applies.
+
+Sorting nullable elements, nested/general Object containers, Array field
+declarations, and Dictionary interface elements remain outside this profile.
+Comparator values read from an Array can supply an ordering callback. See the
 [example](../../examples/compiler-comparators/README.md) and
 [evidence](../investigations/compiler-comparators.md#interface-arrays).
 

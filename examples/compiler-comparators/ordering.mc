@@ -20,6 +20,28 @@ class TextOrder {
     }
 }
 
+class Ranked {
+    var rank = 0;
+    function initialize(rank as Toybox.Lang.Number) { self.rank = rank; }
+    function value() as Toybox.Lang.Number { return self.rank; }
+    function compareTo(other as Toybox.Lang.Object) as Toybox.Lang.Number {
+        return self.rank - (other as Ranked).value();
+    }
+    function compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as Toybox.Lang.Number {
+        return self.rank * a.toString().compareTo(b.toString());
+    }
+}
+
+class RankOrder {
+    var count = 0;
+    function initialize() {}
+    function compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as Toybox.Lang.Number {
+        self.count = self.count + 1;
+        return (b as Ranked).value() - (a as Ranked).value();
+    }
+    function calls() as Toybox.Lang.Number { return self.count; }
+}
+
 class InterfaceHolder {
     var primary as Toybox.Lang.Comparable;
     var requiredOrder as Toybox.Lang.Comparator;

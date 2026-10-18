@@ -32,8 +32,8 @@ must use that ID for runtime dispatch. `sort` retains `0x00800e51` and existing
 invocation instructions; no new opcode or DATA record was encountered.
 
 Using an existing View class isolates sorting from Object-rooted construction.
-Nullable/object Array elements were not established. Callback counts, call order
-within sorting, stability, and exception
+Nullable/general Object Array elements were not established. Callback counts,
+call order within sorting, stability, and exception
 behavior are not inferred. Current rules belong in the [sorting contract][spec];
 the [plan][plan] owns remaining core work.
 
@@ -62,9 +62,9 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 71 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 83 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-interface-arrays/`. Existing compareTo binding/instructions
+in `scratch/check-interface-sorting/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
 The extended tracked consumer forwards Comparable and Comparator parameters and
 results through locals, invokes both methods, and supplies an erased Comparator
@@ -72,8 +72,7 @@ to sort. Both SDK/generated runs print `interface-receiver` before
 `interface-argument`, then the expected comparison results and `[c, b, a]`.
 The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
 instructions. No new opcode or DATA record was encountered. This does not
-establish Dictionary interface storage,
-or default sorting of source-object Arrays. The [API contract][api] owns the
+establish Dictionary interface storage. The [API contract][api] owns the
 signature-query behavior and limits.
 
 ## Native Comparable witnesses
@@ -147,8 +146,29 @@ and passing it to scalar Array.sort selects default ordering.
 SDK/generated programs match the expected text through the console checker
 above. Both CODE/DATA walks and structured reconstruction succeed without new
 opcodes or DATA records. Our builder path preserves mixed scalar tags without
-an interface constant-payload grammar. These cases do not establish sorting the
-interface-valued Arrays themselves, callback ordering, or exception recovery.
+an interface constant-payload grammar. These cases do not establish callback
+ordering or exception recovery.
+
+## Interface Array sorting
+
+**Experimentally observed:** `InterfaceSorting` sorts `Array<Comparable>` values
+containing Object-rooted `Ranked` instances. Null selects their `compareTo`
+method and produces ascending ranks with duplicates retained. `RankOrder`
+reverses the result through `compare(Object, Object)`, records callback activity,
+and works as both an exact source instance and an erased Comparator. Shared
+references observe each mutation. Forwarding Comparator-or-Null selects either
+path. Homogeneous Number and String witnesses sort normally under the Comparable
+element contract; an empty Array completes. `Array<Comparator>` containing Ranked
+instances sorts through an explicit RankOrder, including a forwarded Comparator.
+
+The shared console checker records all 83 SDK/generated lines and structured
+reconstruction in `scratch/check-interface-sorting/`; the SDK build log is
+`scratch/interface-sort-sdk-build.log`. Existing compareTo/compare bindings and
+invocation instructions suffice; no new opcode or DATA record was encountered.
+This establishes neither ordering arbitrary mixed Comparable domains nor default
+ordering of Comparator-only elements, nullable elements, callback sequence,
+stability, or exception recovery. Source casts in the authored callbacks assert
+the Ranked domain; they do not perform runtime conversion or validation.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef

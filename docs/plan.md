@@ -18,9 +18,9 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Complete comparison-interface containers through Array sorting and Dictionary
-contracts. Ordering interface-valued Arrays needs comparison-domain and callback
-evidence; nullable/object sorting remains separate. Pool emission for interface
+Complete comparison-interface containers through Dictionary contracts.
+Nullable/object Array sorting needs its own element/callback contracts and
+evidence. Pool emission for interface
 Array literals needs a tag-preserving Number/Char payload before replacing
 private construction. Further interface refinement
 should preserve both structural members and concrete class facts where needed.

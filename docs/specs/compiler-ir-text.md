@@ -1396,8 +1396,10 @@ Function result categories are inferred from returns; those categories are not
 Nullable Array receivers and unsupported element types cannot be introduced
 by text edits.
 
-Array `sort` uses a native call with one Null or exact source-comparator
-argument and a supported non-null scalar-element Array receiver. Its Void
+Array `sort` uses a native call with one Null, exact source-comparator, or typed
+Comparator(-or-Null) argument and a supported scalar/comparison-interface Array
+receiver. Comparator elements require a non-null callback; nullable elements
+remain unsupported. Its Void
 result is consumed by `.discard`, or the call uses `.call-native-discard`.
 Validation reapplies the [sorting contract](compiler-subset.md#source-comparators),
 including API 5.0.0 and element restrictions. Source identity is reconstructed

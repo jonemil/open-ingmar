@@ -369,14 +369,28 @@ pub(crate) fn value_call(
         {
             return Err("Array.sort requires a checked Comparator or Null".into());
         }
-        if !matches!(receiver, api::Type::Array(element) if matches!(
-            crate::ArrayElement::from_api_type(element),
-            Some(crate::ArrayElement::Number | crate::ArrayElement::Long
-                | crate::ArrayElement::Float | crate::ArrayElement::Double
-                | crate::ArrayElement::Boolean | crate::ArrayElement::Char
-                | crate::ArrayElement::String)
-        )) {
-            return Err("Array.sort currently requires non-null comparable scalar elements".into());
+        let supported_elements = match receiver {
+            api::Type::Array(element) => match crate::ArrayElement::from_api_type(element) {
+                Some(
+                    crate::ArrayElement::Number
+                    | crate::ArrayElement::Long
+                    | crate::ArrayElement::Float
+                    | crate::ArrayElement::Double
+                    | crate::ArrayElement::Boolean
+                    | crate::ArrayElement::Char
+                    | crate::ArrayElement::String
+                    | crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
+                ) => true,
+                Some(crate::ArrayElement::Interface(crate::InterfaceType::Comparator)) => accepts(
+                    &crate::InterfaceType::Comparator.api_type(false),
+                    &arguments[0],
+                ),
+                _ => false,
+            },
+            _ => false,
+        };
+        if !supported_elements {
+            return Err("Array.sort requires non-null comparable elements, or Comparator elements with a non-null Comparator argument".into());
         }
     }
     if class == "Toybox.Lang.Array" && member == "slice" {
