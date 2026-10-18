@@ -34,9 +34,9 @@ argument/result guarantees. Keep source-target resolution and saved-IR checking
 consistent. Erased invocation does not establish a target's API availability,
 arity, or concrete result type. Unqualified inherited `method(...)` lookup
 remains separate from explicit `self.method(...)`.
-Symbol fields and Array/Dictionary elements need storage, DATA, and binding
-contracts; nullable Symbol values do not implicitly enable them. Review SDK
-constant-container Symbol tags before choosing their literal lowering.
+Symbol fields need initialization, DATA, and binding contracts. Symbol-bearing
+container literals use runtime construction; pooled Symbol payloads need
+independent encoding/relocation evidence before adding a DATA representation.
 
 Keep SDK-rejected wider Char ordering and floating Char addition outside the
 operator profile. Further numeric boundary work should answer a concrete
@@ -237,7 +237,7 @@ below are planned requirements, not claims that every encoding is understood.
   Define assignability, ambiguity, override, and checking-policy rules shared
   by source and saved IR; current fixed/integer defaults are subset policies.
 - **Containers and references:** complete dynamic-sized allocation, nested and
-  heterogeneous contents, object/reference/Symbol values and keys, nullable
+  heterogeneous contents, general object/reference values and keys, nullable
   references/receivers, indexing and member writes, and general contextual
   construction. Close ownership, aliasing, weak-target recovery, and callback
   retention contracts alongside the [remaining Lang API inventory][core-gaps].

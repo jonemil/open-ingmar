@@ -1090,7 +1090,7 @@ Dictionary parameters/results. Copies preserve reference identity; reassignment
 does not copy contents. Calls and construction retain source evaluation order.
 
 `Toybox.Lang.Dictionary<K, V>` accepts invariant non-null numeric, String,
-Boolean, or Char keys and values of those scalar types, optionally `or Null`.
+Boolean, Char, or Symbol keys and values of those types, optionally `or Null`.
 It also accepts [comparison-interface keys and values](#comparison-interface-dictionaries).
 The Dictionary itself is non-null. Char keys or values require API 1.3.0;
 the other contracts require 1.0.0. `DictionaryType` carries the bounded contracts through source,
@@ -1103,7 +1103,7 @@ contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
 Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
-numeric, String, Boolean, or Char keys and homogeneous scalar values with optional
+numeric, String, Boolean, Char, or Symbol keys and homogeneous values with optional
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
@@ -1381,10 +1381,36 @@ Symbol consumer without proof. Native `equals` arguments explicitly permitting
 Null retain their shared argument profile. Method API requirements still apply
 after a guard, including 2.3.0 for `toNumber`.
 
-Symbol arithmetic, ordering, truthiness, direct printing, fields,
-and container elements/keys remain unsupported. Method lookup follows its
+Symbol arithmetic, ordering, truthiness, direct printing, and fields remain
+unsupported. Method lookup follows its
 separate contract below.
 See the [specimen and binding evidence](../investigations/compiler-symbols.md).
+
+### Symbol containers
+
+Arrays support invariant Symbol and Symbol-or-Null elements from API 1.0.0.
+Symbol Dictionary keys are non-null; values may be Symbol or Symbol-or-Null,
+combined with other supported key/value contracts. An expected contract types
+empty and nullable literals. Non-null Symbol literals can infer homogeneous
+Array/Dictionary contracts; arbitrary scalar/Symbol mixtures do not infer a
+broader union. Existing mutation, collection, Object observer, and enumeration
+profiles apply. `reverse` and `slice` return independent Arrays. Symbol is not a
+Comparable witness; sorting these Arrays remains outside the sorting profile.
+
+Indexed reads, `get`, `keys`, and `values` preserve their declared types.
+Dictionary lookup always adds missing-key Null; `values()` does not add it.
+Snapshot a nullable element and guard the local before Symbol consumers. Repeated
+indexed reads and `hasKey` do not establish a proof. Nullable key arguments need
+a fresh non-null proof; nullable key contracts and nullable container references
+remain unsupported.
+
+Symbol-bearing literals use ordered private construction with symbolic `spush`
+operands. Raw CODE resolves names through the supplied symbol source; complete
+applications share the normal name/ID map, including pinned native member IDs.
+No numeric Symbol ID is placed in semantic IR or treated as Number. Flat DATA
+constants do not accept Symbol tokens. A Null-only payload under a nullable
+Symbol element/value contract can still use the existing Null constant encoding.
+Pooled Symbol encodings and Symbol fields require separate evidence/contracts.
 
 ## Method values and invocation
 
@@ -1980,7 +2006,7 @@ not guaranteed. See [evidence](../investigations/compiler-comparators.md#interfa
 
 ## Nullable Array elements
 
-`Toybox.Lang.Array<T or Null>` supports numeric, String, Boolean, or Char T
+`Toybox.Lang.Array<T or Null>` supports numeric, String, Boolean, Char, or Symbol T
 with invariant element contracts and a non-null Array reference. Indexed reads produce the base type or Null. Stores and native
 `add`, `indexOf`, `remove`, and `removeAll` accept either alternative; `addAll`
 requires the same Array contract. `reverse` and `slice` retain it. API levels
@@ -2009,7 +2035,7 @@ See the [example](../../examples/compiler-nullable-arrays/README.md) and
 ## Empty array literals
 
 A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,
-`Array<String>`, `Array<Boolean>`, `Array<View>`, or a supported
+`Array<String>`, `Array<Boolean>`, `Array<Symbol>`, `Array<View>`, or a supported
 [nullable element contract](#nullable-array-elements).
 Parentheses preserve direct context. Supported contexts are:
 

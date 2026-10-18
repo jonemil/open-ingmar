@@ -93,8 +93,6 @@ fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
         "function f() { return :; }",
         "function f() { return :123; }",
         "function f() { var s=:alpha; s=1; return 0; }",
-        "function f() as Toybox.Lang.Array<Toybox.Lang.Symbol> { return [:alpha]; }",
-        "function f() { return {:alpha=>1}; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

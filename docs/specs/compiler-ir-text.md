@@ -335,9 +335,9 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary` is the opaque parameter-type and value-call result tag.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
-`integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `comparable`,
+`integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `symbol`, `comparable`,
 or `comparator`;
-values use those tags, `comparable`, `comparator`, or their `nullable-`
+values use those tags, `symbol`, `comparable`, `comparator`, or their `nullable-`
 counterparts. Interface value contracts require API 5.0.0. Other tags, nested
 containers, and heterogeneous unions are rejected. For example:
 
@@ -477,7 +477,7 @@ container is owned by the produced value and its subsequent consumers.
 
 `.array-new %<result> <element> [span=<start>:<end>]` allocates a fresh empty
 non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
-`char`, `boolean`, and `string`, each also accepting a `nullable-` prefix.
+`char`, `boolean`, `string`, and `symbol`, each also accepting a `nullable-` prefix.
 `view` represents the supported native View contract. `comparable`, `comparator`,
 `nullable-comparable`, and `nullable-comparator` retain comparison-interface
 element contracts. Typed construction uses
@@ -541,6 +541,14 @@ remain distinct even outside a scalar element contract. Nested containers and
 empty constant payloads remain rejected. Computed/source-object elements use
 private construction. Scalar-element Array text retains the compact untagged
 payload syntax above.
+
+`symbol` and `nullable-symbol` are Array element tags; their parameter/call result
+categories are `symbol-array` and `nullable-symbol-array`. Dictionary keys and
+values also accept `symbol`, with `nullable-symbol` available only for values.
+These contracts require API 1.0.0 and use the
+[Symbol container rules](compiler-subset.md#symbol-containers). Symbol-bearing
+literals emit `.symbol` values and private fills. No constant token accepts an
+embedded numeric Symbol ID; Null-only nullable payloads remain valid constants.
 
 Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
 applications materialize its [DATA record](data-arrays.md), using a shared local

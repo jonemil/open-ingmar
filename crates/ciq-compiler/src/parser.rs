@@ -308,6 +308,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.String" => crate::DictionaryKey::String,
             "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryKey::Char,
+            "Toybox.Lang.Symbol" => crate::DictionaryKey::Symbol,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryKey::Interface(crate::InterfaceType::Comparable)
             }
@@ -325,6 +326,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.String" => crate::DictionaryValue::String,
             "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
             "Toybox.Lang.Char" => crate::DictionaryValue::Char,
+            "Toybox.Lang.Symbol" => crate::DictionaryValue::Symbol,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
             }
@@ -346,6 +348,7 @@ impl<'a> Parser<'a> {
                 crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
                 crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
                 crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
+                crate::DictionaryValue::Symbol => crate::DictionaryValue::NullableSymbol,
                 crate::DictionaryValue::Interface(interface) => {
                     crate::DictionaryValue::NullableInterface(interface)
                 }
@@ -367,6 +370,7 @@ impl<'a> Parser<'a> {
                 crate::ArrayElement::Interface(crate::InterfaceType::Comparator)
             }
             "Toybox.Lang.Char" => crate::ArrayElement::Char,
+            "Toybox.Lang.Symbol" => crate::ArrayElement::Symbol,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
             "Toybox.Lang.Double" => crate::ArrayElement::Double,
@@ -389,6 +393,7 @@ impl<'a> Parser<'a> {
                 crate::ArrayElement::Long => crate::ArrayElement::NullableLong,
                 crate::ArrayElement::String => crate::ArrayElement::NullableString,
                 crate::ArrayElement::Char => crate::ArrayElement::NullableChar,
+                crate::ArrayElement::Symbol => crate::ArrayElement::NullableSymbol,
                 crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,
                 _ => return Err(self.error(at, "nullable Array elements require Number or String")),
             };

@@ -193,6 +193,12 @@ pub(crate) fn parse_ir_context(
                             ),
                         )),
                         "char-array" => Ok(crate::ParameterType::Array(crate::ArrayElement::Char)),
+                        "symbol-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Symbol))
+                        }
+                        "nullable-symbol-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableSymbol,
+                        )),
                         "boolean-array" => {
                             Ok(crate::ParameterType::Array(crate::ArrayElement::Boolean))
                         }
@@ -628,6 +634,8 @@ pub(crate) fn parse_ir_context(
                         crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
                     }
                     "char" => crate::ArrayElement::Char,
+                    "symbol" => crate::ArrayElement::Symbol,
+                    "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
                     "string" => crate::ArrayElement::String,
                     "nullable-string" => crate::ArrayElement::NullableString,
@@ -748,6 +756,8 @@ pub(crate) fn parse_ir_context(
                         crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
                     }
                     "char" => crate::ArrayElement::Char,
+                    "symbol" => crate::ArrayElement::Symbol,
+                    "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                     "boolean" => crate::ArrayElement::Boolean,
                     "number" => crate::ArrayElement::Number,
                     "double" => crate::ArrayElement::Double,
@@ -800,6 +810,8 @@ pub(crate) fn parse_ir_context(
                     crate::ArrayElement::NullableInterface(crate::InterfaceType::Comparator)
                 }
                 "char" => crate::ArrayElement::Char,
+                "symbol" => crate::ArrayElement::Symbol,
+                "nullable-symbol" => crate::ArrayElement::NullableSymbol,
                 "boolean" => crate::ArrayElement::Boolean,
                 "number" => crate::ArrayElement::Number,
                 "double" => crate::ArrayElement::Double,
@@ -1288,6 +1300,10 @@ fn call_contract(
             "float-array" => crate::ReturnType::Array(crate::ArrayElement::Float),
             "nullable-float-array" => crate::ReturnType::Array(crate::ArrayElement::NullableFloat),
             "long-array" => crate::ReturnType::Array(crate::ArrayElement::Long),
+            "symbol-array" => crate::ReturnType::Array(crate::ArrayElement::Symbol),
+            "nullable-symbol-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableSymbol)
+            }
             "nullable-long-array" => crate::ReturnType::Array(crate::ArrayElement::NullableLong),
             "nullable-char-array" => crate::ReturnType::Array(crate::ArrayElement::NullableChar),
             "nullable-boolean-array" => {

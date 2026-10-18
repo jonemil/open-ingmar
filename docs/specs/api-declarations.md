@@ -155,11 +155,11 @@ operator/type-system dependencies and sequencing belong to the
   inherited-method dispatch.
 - **Array:** dynamic-sized allocation, general nested/heterogeneous/Object/reference
   elements, remaining nullable storage/receivers and joins, and sorting and
-  Comparable contracts outside the scalar profile.
-- **Dictionary:** Object/Symbol/reference keys and values, heterogeneous/nested
+  Comparable contracts outside the checked comparison profiles.
+- **Dictionary:** general Object/reference keys and values, heterogeneous/nested
   containers, general nullable storage, and typed keys/values Arrays for those
   domains.
-- **Symbol:** fields/container elements and keys, and full
+- **Symbol:** fields and full
   selector/member-resolution contracts.
 - **Method:** constructor and class/module receiver values, unqualified method
   lookup, known-selector checks, nullable storage, and concrete callback
