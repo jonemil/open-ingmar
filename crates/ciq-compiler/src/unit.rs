@@ -45,6 +45,33 @@ fn requests_exit(operation: &Operation) -> bool {
     matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
 }
 
+/// Treat erased comparison dispatch as a possible shutdown request; no exact
+/// callback body remains available for the reference-initialization proof.
+fn erased_comparison(function: &Function, operation: &Operation) -> bool {
+    match operation {
+        Operation::NativeCall {
+            receiver,
+            member,
+            arguments,
+            ..
+        }
+        | Operation::NativeCallStatement {
+            receiver,
+            member,
+            arguments,
+        } => {
+            matches!(
+                function.value_types[receiver],
+                crate::ValueType::Interface(_)
+            ) || (member == "sort"
+                && arguments
+                    .iter()
+                    .any(|a| matches!(function.value_types[a], crate::ValueType::Interface(_))))
+        }
+        _ => false,
+    }
+}
+
 /// Resolve a checked sort callback to its source body for effect propagation.
 /// The runtime selects the same pinned compare member checked by the unit.
 fn comparator_callee<'a>(
@@ -93,6 +120,7 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
         for &(owner, function) in bodies {
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
+                    || erased_comparison(function, &located.operation)
                     || source_callee(owner, &located.operation)
                         .is_some_and(|key| exits.contains(&key))
                     || comparator_callee(function, &located.operation, bodies)
@@ -616,6 +644,7 @@ impl CompilationUnit {
                 for (operation, located) in function.operations().iter().enumerate() {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
+                            || erased_comparison(function, &located.operation)
                             || source_callee(owner, &located.operation)
                                 .is_some_and(|key| exit_callers.contains(&key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -684,6 +713,12 @@ impl CompilationUnit {
                     .map_err(|message| fail(Some(index), None, message.into()))?;
             }
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::Return { value } = &located.operation {
+                    if let ReturnType::Interface(interface) = function.return_type() {
+                        self.check_interface_value(function, &origins, *value, interface)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                }
                 if let Operation::SelfFieldRead { field, .. }
                 | Operation::SelfFieldAssign { field, .. } = &located.operation
                 {
@@ -927,6 +962,11 @@ impl CompilationUnit {
                     ));
                 }
                 for (argument, parameter) in arguments.iter().zip(*parameters) {
+                    if let crate::ParameterType::Interface(interface) = parameter {
+                        self.check_interface_value(function, &origins, *argument, *interface)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                        continue;
+                    }
                     if let crate::ParameterType::SourceObject(class) = parameter {
                         if origins.class(*argument) != Some(class.as_str()) {
                             return Err(fail(
@@ -973,12 +1013,30 @@ impl CompilationUnit {
         Ok(())
     }
 
+    /// Require the same interface contract or prove an exact source witness.
+    /// Native-base projection alone cannot establish structural members.
+    fn check_interface_value(
+        &self,
+        function: &Function,
+        origins: &crate::source_objects::Origins,
+        value: crate::ValueId,
+        interface: crate::InterfaceType,
+    ) -> Result<(), String> {
+        if function.value_types[&value] == crate::ValueType::Interface(interface) {
+            return Ok(());
+        }
+        let class = origins
+            .class(value)
+            .ok_or("interface argument or return requires a checked source implementation")?;
+        self.check_interface_signature(class, interface.name())
+    }
+
     /// Check a source class against a named core API interface and API levels.
     ///
     /// Requires directly declared methods with exactly matching parameter and
     /// result contracts. Rejects unknown classes/interfaces and unavailable
     /// interface or signature declarations. This proves a structural signature,
-    /// not method behavior, native inheritance, or interface-typed source storage.
+    /// not method behavior or native inheritance.
     pub fn check_interface(
         &self,
         class: &str,

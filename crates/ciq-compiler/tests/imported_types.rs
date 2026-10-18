@@ -15,6 +15,8 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Char",
         "$String",
         "$Method",
+        "$Comparable",
+        "$Comparator",
         "$Symbol",
         "$WeakReference",
         "$Dictionary",
@@ -90,7 +92,6 @@ fn imported_names_keep_shadowing_api_and_executable_profile_checks() {
         "using Toybox.System as Number; import Toybox.Lang; function f() {}",
         "import Toybox.Lang; function f(o as Object) as Boolean { return o instanceof Comparator; }",
         "import Toybox.Lang; function f(o as Object) { var a=o as Array; }",
-        "import Toybox.Lang; function f(o as Comparator) { return 0; }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }

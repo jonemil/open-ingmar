@@ -485,6 +485,7 @@ pub fn build_console_application(
         ("__ciq_native_method".into(), METHOD),
         ("__ciq_native_invoke".into(), INVOKE),
         ("__ciq_native_compareTo".into(), COMPARE_TO),
+        ("__ciq_native_compare".into(), COMPARE),
         ("__ciq_native_length".into(), LENGTH),
         ("__ciq_native_substring".into(), SUBSTRING),
         ("__ciq_native_find".into(), FIND),

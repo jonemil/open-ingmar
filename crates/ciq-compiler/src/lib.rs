@@ -344,11 +344,46 @@ impl fmt::Display for SourceClass {
     }
 }
 
+/// A supported non-null structural comparison interface.
+/// Source implementations require a unit-level member/signature proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InterfaceType {
+    Comparable,
+    Comparator,
+}
+
+impl InterfaceType {
+    /// Return the canonical API interface name without implying a runtime class.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Comparable => "Toybox.Lang.Comparable",
+            Self::Comparator => "Toybox.Lang.Comparator",
+        }
+    }
+
+    pub(crate) fn tag(self) -> &'static str {
+        match self {
+            Self::Comparable => "comparable",
+            Self::Comparator => "comparator",
+        }
+    }
+
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Toybox.Lang.Comparable" => Some(Self::Comparable),
+            "Toybox.Lang.Comparator" => Some(Self::Comparator),
+            _ => None,
+        }
+    }
+}
+
 /// The supported function result contract, declared explicitly or inferred
 /// from uniform supported value/Void returns.
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// Non-null structural reference with checked comparison members.
+    Interface(InterfaceType),
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
@@ -388,6 +423,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Non-null structural reference with checked comparison members.
+    Interface(InterfaceType),
     /// Non-null Dictionary with invariant bounded key/value contracts.
     TypedDictionary(DictionaryType),
     Dictionary,
@@ -449,6 +486,7 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Interface(interface) => api::Type::named(interface.name()),
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
@@ -484,6 +522,7 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::Interface(interface) => api::Type::named(interface.name()),
             Self::Method => ValueType::Method.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
@@ -497,6 +536,7 @@ impl ReturnType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
+    Interface(InterfaceType),
     TypedDictionary(DictionaryType),
     Dictionary,
     /// An opaque Lang.Object value; concrete members require a narrower contract.
@@ -590,6 +630,7 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::Interface(interface) => api::Type::named(interface.name()),
             Self::Method => api::Type::named("Toybox.Lang.Method"),
             Self::Symbol => api::Type::named("Toybox.Lang.Symbol"),
             Self::Object(class) => api::Type::named(class.name()),
@@ -630,6 +671,9 @@ impl ValueType {
                 "Toybox.Lang.WeakReference" => Some(Self::WeakReference),
                 "Toybox.Lang.Method" => Some(Self::Method),
                 "Toybox.Lang.Symbol" => Some(Self::Symbol),
+                name if InterfaceType::from_name(name).is_some() => {
+                    InterfaceType::from_name(name).map(Self::Interface)
+                }
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
@@ -2373,7 +2417,11 @@ impl Function {
                                 ));
                             }
                         }
-                        if !native::accepts(&contract.api_type(), &type_of(value).api_type()) {
+                        let source_witness = matches!(contract, ReturnType::Interface(_))
+                            && origins.class(value).is_some();
+                        if !source_witness
+                            && !native::accepts(&contract.api_type(), &type_of(value).api_type())
+                        {
                             return Err(fail("return type does not match function contract"));
                         }
                         contract.clone()
@@ -2390,6 +2438,7 @@ impl Function {
                             ValueType::Dictionary => ReturnType::Dictionary,
                             ValueType::LangObject => ReturnType::LangObject,
                             ValueType::WeakReference => ReturnType::WeakReference,
+                            ValueType::Interface(interface) => ReturnType::Interface(interface),
                             ValueType::Method => ReturnType::Method,
                             ValueType::Symbol => ReturnType::Symbol,
                             ValueType::Object(class) => ReturnType::Object(class),
@@ -2734,6 +2783,7 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::Interface(interface) => interface.tag(),
                             ParameterType::Method => "method",
                             ParameterType::Symbol => "symbol",
                             ParameterType::Object(NativeClass::View) => "view",
@@ -2754,6 +2804,7 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::Interface(_)
             | ReturnType::Method
             | ReturnType::Symbol
             | ReturnType::Dictionary
@@ -3298,6 +3349,7 @@ fn validate_call_arguments(
                     | ValueType::LangObject
                     | ValueType::NullableObject
                     | ValueType::WeakReference
+                    | ValueType::Interface(_)
                     | ValueType::Method
                     | ValueType::Symbol
                     | ValueType::Dictionary
@@ -3342,6 +3394,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::Interface(interface) => Ok(ValueType::Interface(interface)),
         ReturnType::Method => Ok(ValueType::Method),
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
@@ -3359,6 +3412,7 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
 fn call_type_text(result: &ReturnType) -> String {
     match result {
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
+        ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),
         ReturnType::NullableInteger => " result=nullable-integer",
         ReturnType::NullableLong => " result=nullable-long",
         ReturnType::NullableDouble => " result=nullable-double",

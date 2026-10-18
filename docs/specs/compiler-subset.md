@@ -1749,7 +1749,8 @@ Construction, aliases, exact source-class parameters/results, and source
 reference fields can supply a comparator while retaining class identity.
 Whole-unit validation resolves the class and rechecks the required method;
 an erased View/Object or Method cannot establish the structural contract.
-General interface-typed storage/annotations, nullable comparators, and bare
+The [comparison-interface profile](#comparison-interface-values) also accepts
+non-null Comparator parameters/results and locals. Nullable comparators and bare
 `self` as a comparator remain unsupported. Object-rooted source classes support
 construction, exact source signatures/reference fields, and comparator use
 through their [class contract](compiler-classes.md#object-rooted-classes).
@@ -1764,6 +1765,37 @@ or comparator consistency.
 
 See the [example](../../examples/compiler-comparators/README.md) and
 [evidence](../investigations/compiler-comparators.md).
+
+## Comparison interface values
+
+Non-null `Toybox.Lang.Comparable` and `Toybox.Lang.Comparator` are supported
+parameter and result contracts from API 5.0.0. Module aliases and imports resolve
+them like other API types. Comparable exposes `compareTo(Object) as Number`;
+Comparator exposes `compare(Object, Object) as Number`. Calls use ordinary
+receiver/member dispatch, evaluate receiver before arguments once, and preserve
+the implementing instance. Comparator values can also supply Array `sort`.
+
+User calls and returns accept the same interface or an exact source-class
+witness. Unit validation rechecks every required source member, arity, parameter,
+and result contract. Opaque Object/View values, a `has` test, and source classes
+with narrowed parameters do not establish the interface. Native scalar witnesses
+remain outside this profile. A standalone function can
+retain unresolved source witnesses; assembling a complete unit requires proof.
+
+An interface parameter or call result retains its contract through inferred
+locals, aliases, same-interface assignment, and same-interface conditional joins.
+There is no implicit conversion between Comparable and Comparator. Assigning a
+raw source object to an existing interface local requires a typed forwarding call
+first; source-to-interface matching currently belongs to call/return boundaries.
+Fields, nullable interfaces, interface container elements, unchecked `as`
+assertions, and interface runtime type targets remain unsupported. An interface
+can widen to Object without proving additional members; ordinary Object casts
+and concrete type tests retain their existing rules.
+
+Erased comparison calls, including sorting through a Comparator value, may
+request shutdown. Constructor checks conservatively propagate that effect
+through source wrappers and require reference fields to be initialized first.
+This does not establish exception safety or callback termination.
 
 ## Nullable Array elements
 

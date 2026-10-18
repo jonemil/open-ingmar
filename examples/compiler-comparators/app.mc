@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceCalls.run();
         var text = new TextOrder();
         System.println(text.compareTo("a") > 0);
         System.println(text.compareTo("b") == 0);
@@ -35,6 +36,30 @@ module Comparators {
         var singleton = ["only"];
         singleton.sort(descending);
         System.println(singleton[0]);
+    }
+}
+module InterfaceCalls {
+    function comparable(value as Toybox.Lang.Comparable) as Toybox.Lang.Comparable { return value; }
+    function create() as Toybox.Lang.Comparable { return new TextOrder(); }
+    function comparator(value as Ordering) as Toybox.Lang.Comparator { return value; }
+    function forward(value as Toybox.Lang.Comparator) as Toybox.Lang.Comparator { return value; }
+    function receiver(value as Toybox.Lang.Comparable) as Toybox.Lang.Comparable {
+        System.println("interface-receiver"); return value;
+    }
+    function argument() as Toybox.Lang.Object { System.println("interface-argument"); return "a"; }
+    function run() as Void {
+        var text = InterfaceCalls.create();
+        var shared = InterfaceCalls.comparable(text);
+        System.println(shared.compareTo("b") == 0);
+        System.println(InterfaceCalls.receiver(text).compareTo(InterfaceCalls.argument()) > 0);
+        shared = InterfaceCalls.comparable(new TextOrder());
+        System.println(shared.compareTo("c") < 0);
+        var order = InterfaceCalls.comparator(new Ordering(-1));
+        order = InterfaceCalls.forward(order);
+        System.println(order.compare("a", "b") > 0);
+        var values = ["a", "c", "b"];
+        values.sort(order);
+        System.println(values.toString());
     }
 }
 class MinimalConsoleApp extends Application.AppBase {

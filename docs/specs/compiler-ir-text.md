@@ -1114,6 +1114,28 @@ the call's effect order; unit validation additionally enforces the
 [source initializer contract](compiler-classes.md#source-initialization).
 Source, typed, and text paths use the same operation and VM lowering.
 
+## Comparison interface contracts
+
+`comparable` and `comparator` are non-null parameter/result tags for the
+[source interface profile](compiler-subset.md#comparison-interface-values).
+They occur in `parameter-types=`, function `result=`, user-call `result=`, and
+same-interface block-parameter tags. Calls use `.call-native` with `compareTo`
+or `compare`; Comparator values also supply the ordinary native `sort` call.
+No interface class allocation, cast, or new VM instruction is implied.
+
+```text
+.function forward parameters=1 parameter-types=comparable result=comparable
+.parameter %0 0
+.return %0
+```
+
+Function validation checks interface call arity/types and retained value
+contracts. Source witnesses at arguments/returns remain unit obligations;
+unit validation resolves their exact classes and checks required members after
+text reload. A forged call result or a changed implementation signature cannot
+bypass that check. Erased calls retain conservative constructor effects.
+The backend selects the existing comparison symbols and invocation instructions.
+
 ## Nullable callback state
 
 Instance-function metadata may include

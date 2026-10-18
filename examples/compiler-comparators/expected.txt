@@ -1,4 +1,11 @@
 true
+interface-receiver
+interface-argument
+true
+true
+true
+[c, b, a]
+true
 true
 true
 array

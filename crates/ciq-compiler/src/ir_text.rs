@@ -84,6 +84,8 @@ pub(crate) fn parse_ir_context(
                 "object" => crate::ReturnType::LangObject,
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
+                "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
+                "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
                 "method" => crate::ReturnType::Method,
                 "symbol" => crate::ReturnType::Symbol,
                 tag if tag.starts_with("source(") && tag.ends_with(')') => {
@@ -144,6 +146,12 @@ pub(crate) fn parse_ir_context(
                         "object" => Ok(crate::ParameterType::LangObject),
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
+                        "comparable" => Ok(crate::ParameterType::Interface(
+                            crate::InterfaceType::Comparable,
+                        )),
+                        "comparator" => Ok(crate::ParameterType::Interface(
+                            crate::InterfaceType::Comparator,
+                        )),
                         "method" => Ok(crate::ParameterType::Method),
                         "symbol" => Ok(crate::ParameterType::Symbol),
                         "view" => Ok(crate::ParameterType::Object(crate::NativeClass::View)),
@@ -1156,6 +1164,8 @@ fn call_contract(
             "object" => crate::ReturnType::LangObject,
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
+            "comparable" => crate::ReturnType::Interface(crate::InterfaceType::Comparable),
+            "comparator" => crate::ReturnType::Interface(crate::InterfaceType::Comparator),
             "method" => crate::ReturnType::Method,
             "symbol" => crate::ReturnType::Symbol,
             "char-array" => crate::ReturnType::Array(crate::ArrayElement::Char),

@@ -11,8 +11,11 @@ The Object-rooted `TextOrder` class supplies `compareTo(Object) as Number`, the
 Comparable signature. Direct calls check negative, equal, and positive results.
 The library's `CompilationUnit::check_interface` checks this signature and its
 API levels; see [API contracts](../../docs/specs/api-declarations.md#declaration-model).
-General interface-typed source values and sorting Arrays of source objects
-remain unsupported.
+`InterfaceCalls` forwards Comparable and Comparator parameters/results through
+locals, calls their declared methods, and sorts through a Comparator value.
+Receiver/argument markers check evaluation order. See the
+[interface profile](../../docs/specs/compiler-subset.md#comparison-interface-values)
+for remaining limits, including native witnesses and object-array sorting.
 
 From the repository root:
 
@@ -25,6 +28,6 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-comparators/generat
 
 The structural contract requires exact Object inputs and a non-null Number
 result. Source callbacks need no Comparator superclass. This profile retains
-exact source-class identity; general interface-typed storage and erased Object
+exact source-class identity or an explicit Comparator contract; erased Object
 comparators remain unsupported. See the
 [sorting contract](../../docs/specs/compiler-subset.md#source-comparators).

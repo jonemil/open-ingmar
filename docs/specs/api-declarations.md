@@ -29,7 +29,8 @@ result contracts. It checks the interface, signature types, members, and native
 base against the supplied target/minimum API. The query can be repeated on
 parsed unit IR; it does not serialize a proof or change the unit. A source-class
 parameter cannot satisfy Object merely because its native projection is Object.
-This establishes signatures, not comparison behavior or interface-typed storage.
+This establishes signatures, not comparison behavior. Executable interface values
+follow the [source contract](compiler-subset.md#comparison-interface-values).
 
 `Lang.Comparator` requires `compare(Object, Object) as Number` from API 5.0.0.
 Array `sort(Comparator or Null)` returns Void from 5.0.0. The executable
@@ -172,7 +173,8 @@ operator/type-system dependencies and sequencing belong to the
 - **ResourceId:** resource-reference value/binding contracts and own/inherited
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
-  constants; Comparable and general Comparator interface use;
+  constants; native Comparable witnesses and nullable/field/container interface
+  contracts;
   Integer/Numeric/Decimal aliases and needed union/structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

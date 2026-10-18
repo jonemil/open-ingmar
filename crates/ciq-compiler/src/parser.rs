@@ -1890,6 +1890,12 @@ impl Parser<'_> {
                         "Toybox.Lang.Number" => crate::ParameterType::Integer,
                         "Toybox.Lang.Object" => crate::ParameterType::LangObject,
                         "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
+                        "Toybox.Lang.Comparable" => {
+                            crate::ParameterType::Interface(crate::InterfaceType::Comparable)
+                        }
+                        "Toybox.Lang.Comparator" => {
+                            crate::ParameterType::Interface(crate::InterfaceType::Comparator)
+                        }
                         "Toybox.Lang.Method" => crate::ParameterType::Method,
                         "Toybox.Lang.Symbol" => crate::ParameterType::Symbol,
                         "Toybox.Lang.Long" => crate::ParameterType::Long,
@@ -1972,6 +1978,12 @@ impl Parser<'_> {
                 "Toybox.Lang.Number" => crate::ReturnType::Integer,
                 "Toybox.Lang.Object" => crate::ReturnType::LangObject,
                 "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
+                "Toybox.Lang.Comparable" => {
+                    crate::ReturnType::Interface(crate::InterfaceType::Comparable)
+                }
+                "Toybox.Lang.Comparator" => {
+                    crate::ReturnType::Interface(crate::InterfaceType::Comparator)
+                }
                 "Toybox.Lang.Method" => crate::ReturnType::Method,
                 "Toybox.Lang.Symbol" => crate::ReturnType::Symbol,
                 "Toybox.Lang.Long" => crate::ReturnType::Long,

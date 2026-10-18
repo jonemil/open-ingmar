@@ -32,8 +32,8 @@ must use that ID for runtime dispatch. `sort` retains `0x00800e51` and existing
 invocation instructions; no new opcode or DATA record was encountered.
 
 Using an existing View class isolates sorting from Object-rooted construction.
-General interface storage and nullable/object Array elements were not
-established. Callback counts, call order within sorting, stability, and exception
+Nullable/object Array elements were not established. Callback counts, call order
+within sorting, stability, and exception
 behavior are not inferred. Current rules belong in the [sorting contract][spec];
 the [plan][plan] owns remaining core work.
 
@@ -62,12 +62,18 @@ variant diagnostics: `scratch/comparable-contract-probe/`; runtime capture:
 `scratch/comparable-contract-sdk-runtime/`.
 
 The tracked `TextOrder` uses the same comparison body through direct source
-calls. SDK/generated programs match all 12 expected lines. Structured CODE/DATA,
+calls. SDK/generated programs match all 19 expected lines. Structured CODE/DATA,
 saved-stage equivalence, and reconstruction pass through the [console checker][check]
-in `scratch/check-comparable-contracts/`. Existing compareTo binding/instructions
+in `scratch/check-interface-calls/`. Existing compareTo binding/instructions
 handle these calls; no new opcode or DATA record was encountered.
-This does not establish interface-typed source values in our compiler or
-default sorting of source-object Arrays. The [API contract][api] owns the
+The extended tracked consumer forwards Comparable and Comparator parameters and
+results through locals, invokes both methods, and supplies an erased Comparator
+to sort. Both SDK/generated runs print `interface-receiver` before
+`interface-argument`, then the expected comparison results and `[c, b, a]`.
+The direct `compare` call uses existing symbol `0x00800150` and ordinary invoke
+instructions. No new opcode or DATA record was encountered. This does not
+establish native scalar interface witnesses, nullable/field/container storage,
+or default sorting of source-object Arrays. The [API contract][api] owns the
 signature-query behavior and limits.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef

@@ -58,6 +58,15 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if let api::Type::Named(name) = receiver {
+        if let Some(interface) = api::core().interface(name) {
+            return interface
+                .methods
+                .iter()
+                .find(|m| m.name == member)
+                .map(|m| m.parameters.clone());
+        }
+    }
     Some(api::core().method_for_type(receiver, member)?.parameters)
 }
 
@@ -109,6 +118,30 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::Named(name) = receiver {
+        if let Some(interface) = crate::InterfaceType::from_name(name) {
+            let declaration = api::core().interface(interface.name()).unwrap();
+            let method = declaration
+                .methods
+                .iter()
+                .find(|m| m.name == member)
+                .ok_or("member is not declared by the comparison interface")?;
+            if let Some(context) = context {
+                context.check_type(api::core(), receiver)?;
+                context.require(&format!("{name}.{member}"), method.since)?;
+            }
+            if method.parameters.len() != arguments.len()
+                || !method
+                    .parameters
+                    .iter()
+                    .zip(arguments)
+                    .all(|(expected, actual)| accepts(expected, actual))
+            {
+                return Err("interface call arguments do not match the declared signature".into());
+            }
+            return Ok(method.result.clone());
+        }
+    }
     let class = match receiver {
         api::Type::Dictionary { .. }
             if crate::DictionaryType::from_api_type(receiver).is_some() =>
@@ -421,6 +454,9 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
             api::Type::Dictionary { .. } => "Toybox.Lang.Dictionary",
             _ => return false,
         };
+        if expected == "Toybox.Lang.Object" && crate::InterfaceType::from_name(actual).is_some() {
+            return true;
+        }
         let mut class = api::core().class(actual);
         while let Some(current) = class {
             if current.name == *expected {
