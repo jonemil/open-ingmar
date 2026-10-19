@@ -324,6 +324,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Char" => crate::DictionaryKey::Char,
             "Toybox.Lang.Symbol" => crate::DictionaryKey::Symbol,
             "Toybox.Lang.Method" => crate::DictionaryKey::Method,
+            "Toybox.Lang.ByteArray" => crate::DictionaryKey::ByteArray,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryKey::Interface(crate::InterfaceType::Comparable)
             }
@@ -971,7 +972,9 @@ impl<'a> Parser<'a> {
             casts += 1;
             let at = self.token()?.span.start;
             let class = self.type_path()?;
-            let mut target = crate::api::Type::named(class);
+            let mut target = crate::api::core()
+                .type_alias(&class)
+                .unwrap_or_else(|| crate::api::Type::named(class));
             if self.peek()? == Kind::Word("or") {
                 // Leave logical OR available unless its next token is Null.
                 let saved = self.token()?.span.start;
@@ -1577,13 +1580,15 @@ impl<'a> Parser<'a> {
             path.push_str(part);
         }
         let (module, member) = path.rsplit_once('.').unwrap();
-        if self.names.module(module) == Some(crate::names::NativeModule::Graphics)
-            && member == "FONT_MEDIUM"
-            && self.peek()? != Kind::Punctuation('(')
+        if self.names.module(module).is_some_and(|native| {
+            crate::api::core()
+                .constant(&format!("Toybox.{}", native.name()), member)
+                .is_some()
+        }) && self.peek()? != Kind::Punctuation('(')
         {
             return self.node(
                 ExpressionKind::NativeConstant {
-                    module: "Toybox.Graphics".into(),
+                    module: format!("Toybox.{}", self.names.module(module).unwrap().name()),
                     member: member.into(),
                     qualifier: path.split('.').next().unwrap().into(),
                 },
@@ -2022,6 +2027,9 @@ impl Parser<'_> {
                         "Toybox.Lang.Long" => crate::ParameterType::Long,
                         "Toybox.Lang.Double" => crate::ParameterType::Double,
                         "Toybox.Lang.Float" => crate::ParameterType::Float,
+                        "Toybox.Lang.Numeric" => crate::ParameterType::Numeric,
+                        "Toybox.Lang.NumberFormat" => crate::ParameterType::NumberFormat,
+                        "Toybox.Lang.Endian" => crate::ParameterType::Endian,
                         "Toybox.Lang.String" => crate::ParameterType::String,
                         "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
                         "Toybox.Lang.Char" => crate::ParameterType::Char,
@@ -2122,6 +2130,9 @@ impl Parser<'_> {
                 "Toybox.Lang.Long" => crate::ReturnType::Long,
                 "Toybox.Lang.Double" => crate::ReturnType::Double,
                 "Toybox.Lang.Float" => crate::ReturnType::Float,
+                "Toybox.Lang.Numeric" => crate::ReturnType::Numeric,
+                "Toybox.Lang.NumberFormat" => crate::ReturnType::NumberFormat,
+                "Toybox.Lang.Endian" => crate::ReturnType::Endian,
                 "Toybox.Lang.String" => crate::ReturnType::String,
                 "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
                 "Toybox.Lang.Char" => crate::ReturnType::Char,

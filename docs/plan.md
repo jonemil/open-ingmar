@@ -12,23 +12,17 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**ByteArray.** Finish the remaining group in one implementation batch: numeric
-encoding/decoding, NumberFormat/Endian constants and bounded option contracts,
-plus Dictionary keys where runtime evidence supports them. Establish
-hash/equality and mutation behavior before enabling keys. Use focused checks
-while implementing, then one combined simulator comparison and final workspace
-audit. Split only for a concrete blocker or a substantially broader prerequisite.
-Preserve private initialization and
-allocation-before-element effects when adding new literal/storage paths.
-Keep Number/Char byte range checks as runtime obligations until independent
-evidence justifies compile-time rejection.
-
 **Object and structural contracts.** Establish member/signature proofs and API
 guards through explicit contracts. Extend source
 type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
+Extend Numeric arithmetic, nullable/container/field contracts, and the
+Integer/Decimal aliases as core consumers require their shared union rules.
+Broader option records need explicit field/value contracts beyond the checked
+ByteArray option builder. Extend structural source annotations and option
+storage/mutation only with corresponding record proofs.
 Resolve SDK constant-literal Number/Char key conflation before accepting mixed
 scalar-token interface-key constants. Interface-key pool emission also needs a
 hash/equality-preserving materialization contract.

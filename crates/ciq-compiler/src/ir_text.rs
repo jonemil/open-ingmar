@@ -84,6 +84,9 @@ pub(crate) fn parse_ir_context(
                 "object" => crate::ReturnType::LangObject,
                 "nullable-object" => crate::ReturnType::NullableObject,
                 "weak-reference" => crate::ReturnType::WeakReference,
+                "number-format" => crate::ReturnType::NumberFormat,
+                "endian" => crate::ReturnType::Endian,
+                "numeric" => crate::ReturnType::Numeric,
                 "byte-array" => crate::ReturnType::ByteArray,
                 "nullable-byte-array" => crate::ReturnType::NullableByteArray,
                 "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,
@@ -158,6 +161,9 @@ pub(crate) fn parse_ir_context(
                         "object" => Ok(crate::ParameterType::LangObject),
                         "nullable-object" => Ok(crate::ParameterType::NullableObject),
                         "weak-reference" => Ok(crate::ParameterType::WeakReference),
+                        "number-format" => Ok(crate::ParameterType::NumberFormat),
+                        "endian" => Ok(crate::ParameterType::Endian),
+                        "numeric" => Ok(crate::ParameterType::Numeric),
                         "byte-array" => Ok(crate::ParameterType::ByteArray),
                         "nullable-byte-array" => Ok(crate::ParameterType::NullableByteArray),
                         "nullable-weak-reference" => {
@@ -361,6 +367,7 @@ pub(crate) fn parse_ir_context(
             Some(".array-new") => (30, 3),
             Some(".array-allocate") => (96, 4),
             Some(".byte-array-new") => (97, 3),
+            Some(".byte-options-begin") => (100, 3),
             Some(".byte-array-constant") => (98, 3),
             Some(".byte-array-begin") => (99, 3),
             Some(".dictionary-begin") => (70, 4),
@@ -848,6 +855,13 @@ pub(crate) fn parse_ir_context(
             Operation::ArrayFinish {
                 result: parse_value(&fields[1])?,
                 builder: parse_builder(&fields[2])?,
+            }
+        } else if kind == 100 {
+            Operation::ByteOptionsBegin {
+                builder: parse_builder(&fields[1])?,
+                length: fields[2]
+                    .parse()
+                    .map_err(|_| fail(*at, "invalid option field count"))?,
             }
         } else if kind == 98 {
             let hex = fields[2]
@@ -1357,6 +1371,9 @@ fn call_contract(
             "object" => crate::ReturnType::LangObject,
             "nullable-object" => crate::ReturnType::NullableObject,
             "weak-reference" => crate::ReturnType::WeakReference,
+            "number-format" => crate::ReturnType::NumberFormat,
+            "endian" => crate::ReturnType::Endian,
+            "numeric" => crate::ReturnType::Numeric,
             "byte-array" => crate::ReturnType::ByteArray,
             "nullable-byte-array" => crate::ReturnType::NullableByteArray,
             "nullable-weak-reference" => crate::ReturnType::NullableWeakReference,

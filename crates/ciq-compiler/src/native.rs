@@ -37,7 +37,7 @@ impl CallbackSignature {
     }
 }
 
-/// Resolve the bounded font constant with its enum type and published value.
+/// Resolve a supported native constant with its API type and published value.
 pub(crate) fn constant(
     module: &str,
     member: &str,
@@ -58,6 +58,16 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if *receiver == api::Type::numeric() {
+        let api::Type::Union(alternatives) = receiver else {
+            unreachable!()
+        };
+        let first = value_parameters(&alternatives[0], member)?;
+        return alternatives
+            .iter()
+            .all(|ty| value_parameters(ty, member).as_ref() == Some(&first))
+            .then_some(first);
+    }
     if let api::Type::Named(name) = receiver {
         if let Some(interface) = api::core().interface(name) {
             return interface
@@ -118,6 +128,18 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if *receiver == api::Type::numeric() {
+        let api::Type::Union(alternatives) = receiver else {
+            unreachable!()
+        };
+        let result = value_call(&alternatives[0], member, arguments, context)?;
+        for alternative in &alternatives[1..] {
+            if value_call(alternative, member, arguments, context)? != result {
+                return Err("Numeric call requires one common result contract".into());
+            }
+        }
+        return Ok(result);
+    }
     if let api::Type::Named(name) = receiver {
         if let Some(interface) = crate::InterfaceType::from_name(name) {
             let declaration = api::core().interface(interface.name()).unwrap();
@@ -269,6 +291,8 @@ pub(crate) fn value_call(
                     | "removeAll"
                     | "reverse"
                     | "slice"
+                    | "decodeNumber"
+                    | "encodeNumber"
             )
             | (
                 "Toybox.Lang.Array",

@@ -57,14 +57,16 @@ pub(crate) fn refine(
     }
     let non_null = facts.contains(&Fact::NonNull(place));
     let ty = if non_null { ty.without_null() } else { ty };
-    if ty == crate::ValueType::LangObject {
+    if matches!(ty, crate::ValueType::LangObject | crate::ValueType::Numeric) {
         for fact in facts {
             if let Fact::Class(at, ClassTarget::Native(class)) = fact {
                 if *at == place && class != "Toybox.Lang.Object" {
-                    if let Some(ty) =
+                    if let Some(narrowed) =
                         crate::ValueType::from_api_type(&crate::api::Type::named(class))
                     {
-                        return ty;
+                        if crate::native::accepts(&ty.api_type(), &narrowed.api_type()) {
+                            return narrowed;
+                        }
                     }
                 }
             }

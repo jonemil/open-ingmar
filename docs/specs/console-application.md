@@ -91,6 +91,10 @@ Fixed native symbol IDs in this profile:
 | toUpper | `0x008000bf` |
 | Object | `0x0080004c` |
 | ByteArray | `0x008007a2` |
+| decodeNumber | `0x00800a25` |
+| encodeNumber | `0x00800a26` |
+| offset | `0x00800aa9` |
+| endianness | `0x00800aae` |
 | Toybox_Lang (native import module) | `0x00800007` |
 | View | `0x0080019f` |
 | BehaviorDelegate | `0x00800064` |

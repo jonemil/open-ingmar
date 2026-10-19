@@ -10,9 +10,19 @@ separates declaration lookup, compiler validation, and executable lowering.
 ## Declaration model
 
 Types represent named classes/interfaces, Null, Void, unions, invariant Arrays and
-Dictionaries, positional tuples, and class type parameters. A declaration
+Dictionaries, positional tuples, optional Symbol-keyed option fields, and class
+type parameters. A declaration
 describes a runtime-provided API; compiler analysis state does not belong in it.
 `Lang.Object` is the root class. Modules are namespaces and do not inherit Object.
+
+`Catalogue::type_alias()` expands the supported Numeric typedef into its four
+numeric classes. It is not a class or an enum. NumberFormat and Endian are
+declared enum types from API 1.0.0; their published constants require 3.1.0.
+Executable signatures retain these enum identities, while `.constant` retains
+the member's introduction level and lowers to its integer value. ByteArray conversion
+methods declare optional `offset`/`endianness` fields; the
+[bounded source option builder](compiler-subset.md#bytearrays) checks each
+field before exposing a record, independently of general structural assignability.
 
 Structural interfaces record required method signatures separately from classes.
 `Catalogue::interface()` resolves them without class inheritance or construction;
@@ -167,11 +177,6 @@ operator/type-system dependencies and sequencing belong to the
 - **WeakReference and Object.weak:** broader source/Object targets
   and safe concrete recovery from get(); preserve exact
   immutable weak-result behavior.
-- **ByteArray:** Dictionary keys and numeric
-  encoding/decoding options. The
-  [bounded executable profile](compiler-subset.md#bytearrays) covers nullable
-  values, constant/computed literals, sized allocation, indexing, and
-  mutation/observer methods.
 - **Exception family:** exception construction, message/stack methods, source
   subclassing, and throw/try/catch/finally lowering and unwinding. Distinguish
   fatal runtime errors.
@@ -179,7 +184,8 @@ operator/type-system dependencies and sequencing belong to the
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
   constants;
-  Integer/Numeric/Decimal aliases and needed union/structural option types.
+  Integer/Decimal aliases, broader Numeric union operations/storage, and general
+  structural option types.
 
 Array default sorting and checked source Comparator instances are implemented
 within their [documented profile](compiler-subset.md#source-comparators).

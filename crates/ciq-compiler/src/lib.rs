@@ -442,6 +442,12 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// A Lang.NumberFormat enum value, distinct from Number and Endian.
+    NumberFormat,
+    /// A Lang.Endian enum value, distinct from Number and NumberFormat.
+    Endian,
+    /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
+    Numeric,
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
@@ -495,6 +501,12 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// A Lang.NumberFormat enum value, distinct from Number and Endian.
+    NumberFormat,
+    /// A Lang.Endian enum value, distinct from Number and NumberFormat.
+    Endian,
+    /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
+    Numeric,
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
@@ -571,6 +583,9 @@ impl ParameterType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
+            Self::Endian => api::Type::named("Toybox.Lang.Endian"),
+            Self::Numeric => api::Type::numeric(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
@@ -613,6 +628,9 @@ impl ReturnType {
             Self::LangObject => ValueType::LangObject.api_type(),
             Self::NullableObject => ValueType::NullableObject.api_type(),
             Self::WeakReference => ValueType::WeakReference.api_type(),
+            Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
+            Self::Endian => api::Type::named("Toybox.Lang.Endian"),
+            Self::Numeric => api::Type::numeric(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
@@ -632,6 +650,13 @@ impl ReturnType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
+    ByteArrayOptions,
+    /// A Lang.NumberFormat enum value, distinct from Number and Endian.
+    NumberFormat,
+    /// A Lang.Endian enum value, distinct from Number and NumberFormat.
+    Endian,
+    /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
+    Numeric,
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
     NullableInterface(InterfaceType),
@@ -704,6 +729,7 @@ impl ValueType {
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(self) -> api::Type {
         match self {
+            Self::ByteArrayOptions => api::Type::byte_options(),
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
             Self::Long => api::Type::named("Toybox.Lang.Long"),
             Self::Double => api::Type::named("Toybox.Lang.Double"),
@@ -743,6 +769,9 @@ impl ValueType {
                 api::Type::Union(vec![Self::LangObject.api_type(), api::Type::Null])
             }
             Self::WeakReference => api::Type::named("Toybox.Lang.WeakReference"),
+            Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
+            Self::Endian => api::Type::named("Toybox.Lang.Endian"),
+            Self::Numeric => api::Type::numeric(),
             Self::ByteArray => api::Type::named("Toybox.Lang.ByteArray"),
             Self::NullableByteArray => {
                 api::Type::Union(vec![Self::ByteArray.api_type(), api::Type::Null])
@@ -786,6 +815,8 @@ impl ValueType {
             }
             api::Type::Array(element) => ArrayElement::from_api_type(element).map(Self::Array),
             api::Type::Named(name) => match name.as_str() {
+                "Toybox.Lang.NumberFormat" => Some(Self::NumberFormat),
+                "Toybox.Lang.Endian" => Some(Self::Endian),
                 "Toybox.Graphics.FontDefinition" => Some(Self::FontDefinition),
                 "Toybox.Lang.Number" => Some(Self::Integer),
                 "Toybox.Lang.Long" => Some(Self::Long),
@@ -824,6 +855,8 @@ impl ValueType {
             _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
             _ if *ty == Self::NullableMethod.api_type() => Some(Self::NullableMethod),
             _ if *ty == Self::NullableWeakReference.api_type() => Some(Self::NullableWeakReference),
+            _ if *ty == api::Type::byte_options() => Some(Self::ByteArrayOptions),
+            _ if *ty == api::Type::numeric() => Some(Self::Numeric),
             _ if *ty == Self::NullableByteArray.api_type() => Some(Self::NullableByteArray),
             _ => None,
         }
@@ -836,6 +869,11 @@ pub enum Operation {
     Symbol {
         result: ValueId,
         name: String,
+    },
+    /// Allocate private ByteArray conversion options before field effects.
+    ByteOptionsBegin {
+        builder: BuilderId,
+        length: u32,
     },
     /// Allocate a private Dictionary before evaluating its entries. Length is the
     /// source entry count passed to newd, not the final number of distinct keys.
@@ -1686,31 +1724,61 @@ impl Function {
                     }
                     (None, vec![])
                 }
+                Operation::ByteOptionsBegin { .. } => {
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &api::Type::byte_options())
+                            .map_err(|e| fail(&e))?;
+                    }
+                    (None, vec![])
+                }
                 Operation::DictionaryBegin { .. } | Operation::ArrayBegin { .. } => (None, vec![]),
                 Operation::DictionaryFill {
                     builder,
                     ref entries,
                     ..
                 } => {
-                    let dictionary_type = builders[&builder]
-                        .0
-                        .dictionary()
-                        .expect("validated Dictionary builder");
-                    for &(key, value) in entries {
-                        native::value_call(
-                            &dictionary_type.api_type(),
-                            "put",
-                            &origins.native_arguments(
+                    if matches!(builders[&builder].0, builders::Contract::ByteOptions) {
+                        for &(key, value) in entries {
+                            let name = operations[..index]
+                                .iter()
+                                .find_map(|op| match &op.operation {
+                                    Operation::Symbol { result, name } if *result == key => {
+                                        Some(name.as_str())
+                                    }
+                                    _ => None,
+                                })
+                                .ok_or_else(|| fail("option key must be a literal Symbol"))?;
+                            let expected = match name {
+                                "offset" => ValueType::Integer,
+                                "endianness" => ValueType::Endian,
+                                _ => return Err(fail("unknown ByteArray conversion option")),
+                            };
+                            if type_of(value) != expected {
+                                return Err(fail("option value must match its named field type"));
+                            }
+                        }
+                    } else {
+                        let dictionary_type = builders[&builder]
+                            .0
+                            .dictionary()
+                            .expect("validated Dictionary builder");
+                        for &(key, value) in entries {
+                            native::value_call(
                                 &dictionary_type.api_type(),
                                 "put",
-                                [
-                                    (key, type_of(key).api_type()),
-                                    (value, type_of(value).api_type()),
-                                ],
-                            ),
-                            context,
-                        )
-                        .map_err(|e| fail(&e))?;
+                                &origins.native_arguments(
+                                    &dictionary_type.api_type(),
+                                    "put",
+                                    [
+                                        (key, type_of(key).api_type()),
+                                        (value, type_of(value).api_type()),
+                                    ],
+                                ),
+                                context,
+                            )
+                            .map_err(|e| fail(&e))?;
+                        }
                     }
                     (
                         None,
@@ -1723,12 +1791,16 @@ impl Function {
                 Operation::DictionaryFinish { result, builder } => {
                     types.insert(
                         result,
-                        ValueType::TypedDictionary(
-                            builders[&builder]
-                                .0
-                                .dictionary()
-                                .expect("validated Dictionary builder"),
-                        ),
+                        if matches!(builders[&builder].0, builders::Contract::ByteOptions) {
+                            ValueType::ByteArrayOptions
+                        } else {
+                            ValueType::TypedDictionary(
+                                builders[&builder]
+                                    .0
+                                    .dictionary()
+                                    .expect("validated Dictionary builder"),
+                            )
+                        },
                     );
                     (Some(result), vec![])
                 }
@@ -2105,6 +2177,7 @@ impl Function {
                     if !matches!(
                         type_of(value),
                         ValueType::Integer
+                            | ValueType::Numeric
                             | ValueType::String
                             | ValueType::Boolean
                             | ValueType::Char
@@ -2134,8 +2207,13 @@ impl Function {
                     ref module,
                     ref member,
                 } => {
-                    native::constant(module, member, context).map_err(|message| fail(&message))?;
-                    types.insert(result, ValueType::FontDefinition);
+                    let (ty, _) = native::constant(module, member, context)
+                        .map_err(|message| fail(&message))?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty)
+                            .ok_or_else(|| fail("unsupported constant value type"))?,
+                    );
                     (Some(result), vec![])
                 }
                 Operation::SourceNew {
@@ -2610,6 +2688,7 @@ impl Function {
                         && !(matches!(
                             local_types[&local],
                             ValueType::LangObject
+                                | ValueType::Numeric
                                 | ValueType::NullableObject
                                 | ValueType::Interface(_)
                                 | ValueType::NullableInterface(_)
@@ -2706,6 +2785,9 @@ impl Function {
                         contract.clone()
                     } else {
                         match type_of(value) {
+                            ValueType::NumberFormat => ReturnType::NumberFormat,
+                            ValueType::Endian => ReturnType::Endian,
+                            ValueType::Numeric => ReturnType::Numeric,
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
                             ValueType::Double => ReturnType::Double,
@@ -2828,6 +2910,7 @@ impl Function {
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
                     | Operation::DictionaryBegin { .. }
+                    | Operation::ByteOptionsBegin { .. }
                     | Operation::DictionaryFill { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ArrayFill { .. }
@@ -2872,6 +2955,7 @@ impl Function {
                         value,
                     } => vec![*array, *index, *value],
                     Operation::DictionaryBegin { .. }
+                    | Operation::ByteOptionsBegin { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ByteArrayBegin { .. } => vec![],
                     Operation::DictionaryFill { entries, .. } => entries
@@ -3078,6 +3162,9 @@ impl Function {
                             ParameterType::LangObject => "object",
                             ParameterType::NullableObject => "nullable-object",
                             ParameterType::WeakReference => "weak-reference",
+                            ParameterType::NumberFormat => "number-format",
+                            ParameterType::Endian => "endian",
+                            ParameterType::Numeric => "numeric",
                             ParameterType::ByteArray => "byte-array",
                             ParameterType::NullableByteArray => "nullable-byte-array",
                             ParameterType::NullableWeakReference => "nullable-weak-reference",
@@ -3109,6 +3196,9 @@ impl Function {
             ReturnType::LangObject
             | ReturnType::NullableObject
             | ReturnType::WeakReference
+            | ReturnType::NumberFormat
+            | ReturnType::Endian
+            | ReturnType::Numeric
             | ReturnType::ByteArray
             | ReturnType::NullableByteArray
             | ReturnType::NullableWeakReference
@@ -3346,6 +3436,9 @@ impl Function {
                 }
                 Operation::WeakReferenceNew { result } => {
                     format!(".new-native %{} Toybox.Lang.WeakReference", result.0)
+                }
+                Operation::ByteOptionsBegin { builder, length } => {
+                    format!(".byte-options-begin &{} {length}", builder.0)
                 }
                 Operation::DictionaryBegin {
                     builder,
@@ -3698,6 +3791,9 @@ fn validate_call_arguments(
                     | ValueType::NullableObject
                     | ValueType::WeakReference
                     | ValueType::ByteArray
+                    | ValueType::NumberFormat
+                    | ValueType::Endian
+                    | ValueType::Numeric
                     | ValueType::NullableByteArray
                     | ValueType::NullableWeakReference
                     | ValueType::Interface(_)
@@ -3749,6 +3845,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::LangObject => Ok(ValueType::LangObject),
         ReturnType::NullableObject => Ok(ValueType::NullableObject),
         ReturnType::WeakReference => Ok(ValueType::WeakReference),
+        ReturnType::NumberFormat => Ok(ValueType::NumberFormat),
+        ReturnType::Endian => Ok(ValueType::Endian),
+        ReturnType::Numeric => Ok(ValueType::Numeric),
         ReturnType::ByteArray => Ok(ValueType::ByteArray),
         ReturnType::NullableByteArray => Ok(ValueType::NullableByteArray),
         ReturnType::NullableWeakReference => Ok(ValueType::NullableWeakReference),
@@ -3799,6 +3898,9 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::LangObject => " result=object",
         ReturnType::NullableObject => " result=nullable-object",
         ReturnType::WeakReference => " result=weak-reference",
+        ReturnType::NumberFormat => " result=number-format",
+        ReturnType::Endian => " result=endian",
+        ReturnType::Numeric => " result=numeric",
         ReturnType::ByteArray => " result=byte-array",
         ReturnType::NullableByteArray => " result=nullable-byte-array",
         ReturnType::NullableWeakReference => " result=nullable-weak-reference",

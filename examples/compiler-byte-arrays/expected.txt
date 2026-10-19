@@ -92,3 +92,58 @@ true
 2
 true
 [41, 41]
+[0, 63, 192, 0, 0, 0]
+1.500000
+false
+false
+true
+[0, 251, 46, 0, 0, 0]
+-1234
+true
+false
+false
+-1233
+[0, 255, 254, 29, 192, 0]
+-123456
+true
+false
+false
+-123455
+[0, 244, 0, 0, 0, 0]
+-12
+true
+false
+false
+-11
+[0, 212, 49, 0, 0, 0]
+54321
+true
+false
+false
+54322
+[0, 255, 255, 255, 255, 0]
+4294967295
+false
+true
+false
+[0, 250, 0, 0, 0, 0]
+250
+true
+false
+false
+251
+[2, 1, 0, 0]
+258
+2.500000
+true
+true
+true
+2
+10
+false
+10
+true
+2
+1
+true
+false

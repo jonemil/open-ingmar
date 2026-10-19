@@ -47,7 +47,6 @@ fn dictionary_values_cannot_erase_class_nullability_or_lookup_proofs() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Void {d[\"a\"]=[1];}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null> {return d;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null>) as Toybox.Lang.Array<Toybox.Lang.ByteArray> {return d.values();}",
-        "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.ByteArray,Toybox.Lang.Number>) as Void {}",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

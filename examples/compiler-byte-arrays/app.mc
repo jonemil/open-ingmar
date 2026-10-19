@@ -64,6 +64,19 @@ module Bytes {
     }
     function values(table as Lang.Dictionary<Lang.String, Lang.ByteArray>)
         as Lang.Array<Lang.ByteArray> { return table.values(); }
+    function codec(value as Lang.Numeric, format as Lang.NumberFormat) as Void {
+        var b = new[6]b;
+        b.encodeNumber(value, format, {:offset => 1, :endianness => Lang.ENDIAN_BIG});
+        var decoded = b.decodeNumber(format, {:offset => 1, :endianness => Lang.ENDIAN_BIG});
+        System.println(b.toString());
+        System.println(decoded.toString());
+        System.println(decoded instanceof Lang.Number);
+        System.println(decoded instanceof Lang.Long);
+        System.println(decoded instanceof Lang.Float);
+        if (decoded instanceof Lang.Number) { System.println(decoded + 1); }
+    }
+    function byteKeys(key as Lang.ByteArray)
+        as Lang.Dictionary<Lang.ByteArray, Lang.Number> { return {key => 10}; }
     function recovered(o as Lang.Object or Null) {
         if (!(o instanceof Lang.ByteArray)) { return -1; }
         o[0] += 1;
@@ -266,6 +279,53 @@ module ByteProgram {
         if (erasedResult instanceof Lang.ByteArray) {
             System.println(erasedResult.toString());
         }
+        ByteProgram.finalChecks();
         System.exit();
+    }
+    function finalChecks() as Void {
+        Bytes.codec(1.5, Lang.NUMBER_FORMAT_FLOAT);
+        Bytes.codec(-1234, Lang.NUMBER_FORMAT_SINT16);
+        Bytes.codec(-123456, Lang.NUMBER_FORMAT_SINT32);
+        Bytes.codec(-12, Lang.NUMBER_FORMAT_SINT8);
+        Bytes.codec(54321, Lang.NUMBER_FORMAT_UINT16);
+        Bytes.codec(4294967295l, Lang.NUMBER_FORMAT_UINT32);
+        Bytes.codec(250, Lang.NUMBER_FORMAT_UINT8);
+        var defaultBytes = new[4]b;
+        defaultBytes.encodeNumber(258, Lang.NUMBER_FORMAT_UINT16, {});
+        System.println(defaultBytes.toString());
+        System.println(defaultBytes.decodeNumber(Lang.NUMBER_FORMAT_UINT16, {}).toString());
+        defaultBytes.encodeNumber(2.5d, Lang.NUMBER_FORMAT_FLOAT, {});
+        System.println(defaultBytes.decodeNumber(Lang.NUMBER_FORMAT_FLOAT, {}).toString());
+        var byteKey = Bytes.echo([1, 2]b);
+        var equalKey = Bytes.echo([1, 2]b);
+        var byteTable = Bytes.byteKeys(byteKey);
+        System.println(byteKey.equals(equalKey));
+        System.println(byteKey.hashCode() == equalKey.hashCode());
+        System.println(byteTable.get(equalKey) == null);
+        byteTable.put(equalKey, 20);
+        System.println(byteTable.size());
+        var found = byteTable.get(byteKey);
+        if (found != null) { System.println(found); }
+        var keyHash = byteKey.hashCode();
+        byteKey[0] = 9;
+        System.println(byteKey.hashCode() == keyHash);
+        found = byteTable[byteKey];
+        if (found != null) { System.println(found); }
+        System.println(byteTable.get([9, 2]b) == null);
+        var enumeration = byteTable.keys();
+        byteTable.remove(byteKey);
+        System.println(enumeration.size());
+        System.println(byteTable.size());
+        var ownedKey = Bytes.optional(true);
+        if (ownedKey != null) {
+            var ownedTable = Bytes.byteKeys(ownedKey);
+            var watch = ownedKey.weak();
+            var keptKeys = ownedTable.keys();
+            ownedTable.remove(ownedKey);
+            ownedKey = null;
+            System.println(watch.stillAlive());
+            keptKeys = [];
+            System.println(watch.stillAlive());
+        }
     }
 }

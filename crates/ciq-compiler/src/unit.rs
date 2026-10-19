@@ -986,9 +986,11 @@ impl CompilationUnit {
                     Operation::DictionaryFill {
                         builder, entries, ..
                     } => {
-                        for (key, value) in entries {
-                            check_dictionary_key(dictionary_builders[builder], *key)?;
-                            check_dictionary_value(dictionary_builders[builder], *value)?;
+                        if let Some(dictionary) = dictionary_builders.get(builder) {
+                            for (key, value) in entries {
+                                check_dictionary_key(*dictionary, *key)?;
+                                check_dictionary_value(*dictionary, *value)?;
+                            }
                         }
                     }
                     Operation::DictionaryWrite {

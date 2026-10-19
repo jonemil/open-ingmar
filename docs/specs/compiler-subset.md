@@ -387,7 +387,8 @@ standalone function IR retains that declaration-resolution obligation.
 
 `expression as Lang.Type` explicitly asserts a value's static type. Supported
 targets are Number, Long, Float, Double, Boolean, Char, String, Object, Symbol,
-Method, WeakReference, ByteArray, and opaque Dictionary. Canonical
+Method, WeakReference, ByteArray, Numeric, NumberFormat, Endian, and opaque
+Dictionary. Canonical
 `Toybox.Lang.Type` and Lang module aliases are accepted. Number, Long, Float,
 Double, Boolean, Char, String, Symbol, Object, Method, WeakReference, and ByteArray
 targets can include `or Null`. Target types still satisfy
@@ -2179,6 +2180,22 @@ its earlier value. Reassigning that scalar invalidates its null proof.
 See the [example](../../examples/compiler-nullable-arrays/README.md) and
 [evidence](../investigations/compiler-nullable-arrays.md).
 
+## Numeric values
+
+`Toybox.Lang.Numeric` expands to Number, Float, Long, or Double. It is a typedef,
+not a runtime class. Canonical names, imports, and Lang aliases work in
+parameters, returns, and lexical assertions. Locals preserve the union across
+assignments of any of its four alternatives; no numeric conversion is implied.
+Native and saved-IR validation retain the same contract.
+
+Printing accepts Numeric. A native member call must be valid for every possible
+class and have one common result contract, including `toString`, `format`, and
+numeric conversions. Arithmetic needs a concrete runtime-class proof or an
+explicit conversion. Direct `instanceof Number/Long/Float/Double` branches
+refine fresh Numeric local/parameter reads under the existing branch rules.
+Nullable Numeric, Numeric container elements/fields, and general union
+inference remain unsupported.
+
 ## ByteArrays
 
 `Toybox.Lang.ByteArray` is a mutable reference, separate from
@@ -2236,6 +2253,8 @@ Supported native calls use ordinary value-call lowering and API checking:
 | `remove(byte)`, `removeAll(byte)` | Number/Char; Boolean result |
 | `reverse()` | Independent ByteArray with reversed elements |
 | `slice(start, end)` | Number-or-Null indexes; independent ByteArray |
+| `decodeNumber(format, options)` | NumberFormat and options; Numeric result |
+| `encodeNumber(value, format, options)` | Numeric, NumberFormat, options; ByteArray result |
 
 Both append methods mutate the receiver. Bulk Array inputs retain their
 invariant non-null Number/Char element contract.
@@ -2289,8 +2308,52 @@ from weak retrieval or Method invocation. `as Lang.ByteArray` and
 [unchecked lexical assertion contract](#lexical-casts); neither checks nor
 converts the runtime value. Both forms require API 3.0.0.
 
-ByteArray Dictionary keys and numeric encoding/decoding options remain
-unsupported. See the
+`Dictionary<ByteArray, V>` accepts existing value contracts, with API 3.0.0
+availability on the key even for unused declarations. Keys must be non-null;
+literal construction uses private fills, never scalar DATA keys. `keys()`
+returns `Array<ByteArray>` and retains strong references after entry removal.
+The verified simulator distinguishes separately allocated ByteArray keys even
+when their contents and hashes compare equal. Aliases address the same entry.
+The compiler preserves references and performs no key copying, deduplication,
+or hash normalization; mutation behavior is delegated to the runtime.
+
+Numeric conversion requires API 3.1.0. `Lang.NUMBER_FORMAT_*` constants are:
+
+| Suffix | Value | Binary representation |
+|---|---|---|
+| `FLOAT` | 0 | IEEE 754 binary32 |
+| `SINT16` | 1 | Signed 16-bit |
+| `SINT32` | 2 | Signed 32-bit |
+| `SINT8` | 3 | Signed 8-bit |
+| `UINT16` | 4 | Unsigned 16-bit |
+| `UINT32` | 5 | Unsigned 32-bit |
+| `UINT8` | 6 | Unsigned 8-bit |
+
+`Lang.ENDIAN_LITTLE` is 0 and `Lang.ENDIAN_BIG` is 1. These constants require
+API 3.1.0. NumberFormat and Endian annotations retain distinct enum contracts;
+neither plain Number nor the other enum satisfies them. The VM receives their
+integer representations without a separate runtime class or conversion opcode.
+An explicit lexical assertion can claim an enum type without validating its value.
+
+Both conversion calls require an options argument. Direct literals, including
+`{}`, receive a checked record contract from call context. Up to two literal
+Symbol fields are supported: `:offset` requires Number and defaults to 0;
+`:endianness` requires Endian and defaults to little endian. Unknown keys or
+wrong field types are rejected. A literal containing an Endian constant/local
+under `:endianness` can infer this record contract for reuse through a saved
+local. An arbitrary homogeneous Dictionary cannot claim the record proof.
+General structural source annotations and record mutation remain unsupported.
+
+Private construction allocates before field effects, preserves source order,
+and exposes the record only after every declared field is filled. Values use
+ordinary runtime Dictionary storage. Invalid asserted formats/endian values,
+offset bounds, conversion ranges, and failures remain native checks; no masking,
+conversion, or portable exception guarantee is added by the compiler.
+
+Encoding mutates and returns the receiver. Decoding returns Numeric without
+assuming a result class from the format token: UINT32 can require Long, while
+FLOAT produces Float in the verified runtime. Use Numeric's common methods or
+runtime-class refinement before class-specific operations. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and
 [evidence](../investigations/byte-arrays.md#source-and-ir-profile).

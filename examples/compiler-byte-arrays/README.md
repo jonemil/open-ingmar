@@ -16,15 +16,18 @@ Typed Dictionaries check absent keys, guarded reads, value replacement,
 nullable/Null-only entries, and ownership through `values()` enumerations.
 Weak retrieval and Method results check runtime ByteArray refinement and
 unchecked assertions from erased Object values.
+`finalChecks` exercises all seven numeric formats, endian/offset options,
+Numeric result refinement, ByteArray key identity/mutation, and key enumeration
+ownership. Helpers keep each function within the shared operation limit.
 
-API minimum: 3.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
+API minimum: 3.1.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
 From the repository root, using unused output paths:
 
 ```sh
 mkdir -p scratch/compiler-byte-arrays
 cargo run -p ciq-compiler -- --unit --emit prg \
-  --target-api 5.2.0 --min-api 3.0.0 \
+  --target-api 5.2.0 --min-api 3.1.0 \
   --app-id a7086949531941379eb8b38164ed99aa --entry MinimalConsoleApp.onStart \
   examples/compiler-byte-arrays/app.mc scratch/compiler-byte-arrays/unsigned.prg
 cargo run -p ciq-asm -- sign scratch/compiler-byte-arrays/unsigned.prg \
@@ -37,5 +40,4 @@ Compare the complete console with [expected.txt](expected.txt). See the
 [source contract](../../docs/specs/compiler-subset.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
-ByteArray Dictionary keys and numeric encoding options remain
-outside this example's supported profile.
+Invalid options/ranges and exception recovery are not executed by this example.

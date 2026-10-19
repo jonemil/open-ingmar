@@ -485,6 +485,12 @@ container is owned by the produced value and its subsequent consumers.
 
 ## ByteArray values and allocation
 
+`numeric` is the canonical Number/Float/Long/Double union in parameter, function
+result, user-call result, cast, and matching conditional-edge tags. It introduces
+no runtime Numeric class or conversion. Validation recomputes common native
+member contracts and class-branch proofs under the
+[source rules](compiler-subset.md#numeric-values).
+
 `byte-array` denotes a non-null `Toybox.Lang.ByteArray`; `nullable-byte-array`
 adds Null. Both are parameter, function-result, call-result, and
 conditional-edge tags. ByteArray is distinct from
@@ -503,6 +509,25 @@ nullability in its Array element tag. Availability applies to unused types and
 Null-only constants as well as construction and reads. ByteArray references use
 private Dictionary fills, never scalar constant tokens; nullable constants
 can contain Null under existing payload validation.
+`dictionary(byte-array=><value>)` enables non-null ByteArray keys, with matching
+`byte-array-array` results from `keys()`. Reference-bearing entries remain
+runtime construction rather than scalar constants.
+
+`decodeNumber` and `encodeNumber` use ordinary native calls, API 3.1.0, and the
+[conversion contracts](compiler-subset.md#bytearrays). `number-format` and
+`endian` are distinct parameter/result/cast/join tags, not `integer`. `.constant`
+retains enum identity and introduction level; lowering pushes its integer value.
+Decode retains its Numeric result after reload.
+
+`.byte-options-begin &<builder> <count>` allocates a private Dictionary for zero
+to two fields. Existing `.dictionary-fill` operations require direct literal
+Symbol keys: `offset` with Number, or `endianness` with Endian. Values are staged
+before key/value setup when needed. `.dictionary-finish` exposes a sealed
+`byte-options` record after complete ordered fills, clearing builder ownership.
+The `byte-options` tag also supports matching conditional edges; lexical casts
+cannot manufacture this proof. Native and saved IR check field names/types,
+counts, order, block/value uses, and the shared frame limit. CODE uses ordinary
+Dictionary construction and calls; no codec opcode or new DATA framing is added.
 
 `.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
 zero-filled ByteArray. Length must be an earlier same-block non-null Number
@@ -1730,7 +1755,8 @@ from the operand or a branch proof. This explicit assertion is separate from
 recomputed control-flow facts.
 
 Target tags are `integer`, `long`, `float`, `double`, `boolean`, `char`, `string`,
-`object`, `symbol`, `method`, `weak-reference`, `byte-array`, and `dictionary`.
+`object`, `symbol`, `method`, `weak-reference`, `byte-array`, `numeric`,
+`number-format`, `endian`, and `dictionary`.
 Supported nullable targets use `nullable-` tags. Types and their source obligations follow
 the [source cast contract](compiler-subset.md#lexical-casts).
 

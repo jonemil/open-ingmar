@@ -88,7 +88,8 @@ impl Names {
         let api = crate::api::core();
         (api.class(&path).is_some()
             || api.interface(&path).is_some()
-            || api.enum_level(&path).is_some())
+            || api.enum_level(&path).is_some()
+            || api.type_alias(&path).is_some())
         .then_some(path)
     }
 

@@ -64,6 +64,10 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
     }
     Some(match tag {
         "byte-array" => Type::named("Toybox.Lang.ByteArray"),
+        "numeric" => Type::numeric(),
+        "number-format" => Type::named("Toybox.Lang.NumberFormat"),
+        "endian" => Type::named("Toybox.Lang.Endian"),
+        "byte-options" => Type::byte_options(),
         "nullable-byte-array" => {
             Type::Union(vec![Type::named("Toybox.Lang.ByteArray"), Type::Null])
         }
@@ -110,6 +114,10 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     }
     [
         "byte-array",
+        "numeric",
+        "number-format",
+        "endian",
+        "byte-options",
         "object",
         "nullable-object",
         "weak-reference",

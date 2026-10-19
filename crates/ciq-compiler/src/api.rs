@@ -100,6 +100,9 @@ impl ApiContext {
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::Options(fields) => fields
+                .values()
+                .try_for_each(|ty| self.check_type(catalogue, ty)),
             Type::Array(element) => {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
                 self.check_type(catalogue, element)
@@ -114,6 +117,9 @@ impl ApiContext {
                 elements
                     .iter()
                     .try_for_each(|ty| self.check_type(catalogue, ty))
+            }
+            Type::Named(name) if catalogue.type_alias(name).is_some() => {
+                self.check_type(catalogue, &catalogue.type_alias(name).unwrap())
             }
             Type::Named(name) if catalogue.enums.contains_key(name) => {
                 self.require(name, catalogue.enum_level(name).unwrap())
@@ -188,6 +194,9 @@ pub enum Type {
     },
     /// Positional Array shape with an exact number of typed slots.
     Tuple(Vec<Type>),
+    /// Symbol-keyed options with optional named fields. This describes the API
+    /// shape; executable callers must satisfy a supported Dictionary profile.
+    Options(BTreeMap<String, Type>),
     Named(String),
     /// A generic class parameter substituted from a concrete receiver type.
     Parameter(String),
@@ -197,6 +206,22 @@ pub enum Type {
 }
 
 impl Type {
+    /// Return ByteArray's optional offset/endianness field contract.
+    pub fn byte_options() -> Self {
+        Self::Options(BTreeMap::from([
+            ("offset".into(), Self::named("Toybox.Lang.Number")),
+            ("endianness".into(), Self::named("Toybox.Lang.Endian")),
+        ]))
+    }
+    /// Return the canonical Lang.Numeric union without implying a VM class.
+    pub fn numeric() -> Self {
+        Self::Union(
+            ["Number", "Float", "Long", "Double"]
+                .into_iter()
+                .map(|name| Self::named(format!("Toybox.Lang.{name}")))
+                .collect(),
+        )
+    }
     /// Construct a named type without assigning an executable binding.
     pub fn named(path: impl Into<String>) -> Self {
         Self::Named(path.into())
@@ -219,6 +244,12 @@ fn substitute_parameters(ty: &Type, bindings: &[(&str, &Type)]) -> Option<Type> 
             substitute_parameters(argument, &[])?
         }
         Type::Array(element) => Type::Array(Box::new(substitute_parameters(element, bindings)?)),
+        Type::Options(fields) => Type::Options(
+            fields
+                .iter()
+                .map(|(name, ty)| Some((name.clone(), substitute_parameters(ty, bindings)?)))
+                .collect::<Option<_>>()?,
+        ),
         Type::Dictionary { key, value } => Type::dictionary(
             substitute_parameters(key, bindings)?,
             substitute_parameters(value, bindings)?,
@@ -390,6 +421,10 @@ impl Catalogue {
     pub fn constant(&self, module: &str, member: &str) -> Option<&Constant> {
         self.constants.get(&(module.into(), member.into()))
     }
+    /// Resolve the supported Numeric typedef to its concrete scalar alternatives.
+    pub fn type_alias(&self, name: &str) -> Option<Type> {
+        (name == "Toybox.Lang.Numeric").then(Type::numeric)
+    }
     /// Resolve a bounded enum type without treating it as an object class.
     pub fn enum_level(&self, name: &str) -> Option<ApiLevel> {
         let level = *self.enums.get(name)?;
@@ -518,10 +553,33 @@ fn build_core() -> Catalogue {
         );
     }
     let bytes = "Toybox.Lang.ByteArray";
+    let number_options = Type::Options(BTreeMap::from([
+        ("offset".into(), Type::named(number)),
+        ("endianness".into(), Type::named("Toybox.Lang.Endian")),
+    ]));
     let byte_api = ApiLevel(3, 0, 0);
     let byte_argument = Type::Union(vec![Type::named(number), Type::named("Toybox.Lang.Char")]);
     classes.get_mut(bytes).unwrap().since = byte_api;
     classes.get_mut(bytes).unwrap().methods = vec![
+        method(
+            "decodeNumber",
+            vec![
+                Type::named("Toybox.Lang.NumberFormat"),
+                number_options.clone(),
+            ],
+            Type::numeric(),
+            ApiLevel(3, 1, 0),
+        ),
+        method(
+            "encodeNumber",
+            vec![
+                Type::numeric(),
+                Type::named("Toybox.Lang.NumberFormat"),
+                number_options,
+            ],
+            Type::named(bytes),
+            ApiLevel(3, 1, 0),
+        ),
         method("size", vec![], Type::named(number), byte_api),
         method("toString", vec![], Type::named(string), byte_api),
         method(
@@ -1050,6 +1108,34 @@ fn build_core() -> Catalogue {
         .unwrap()
         .functions
         .push(method("requestUpdate", vec![], Type::Void, initial));
+    let mut constants = BTreeMap::from([(
+        ("Toybox.Graphics".into(), "FONT_MEDIUM".into()),
+        Constant {
+            ty: Type::named("Toybox.Graphics.FontDefinition"),
+            value: 3,
+            since: initial,
+        },
+    )]);
+    for (member, value, ty) in [
+        ("NUMBER_FORMAT_FLOAT", 0, "NumberFormat"),
+        ("NUMBER_FORMAT_SINT16", 1, "NumberFormat"),
+        ("NUMBER_FORMAT_SINT32", 2, "NumberFormat"),
+        ("NUMBER_FORMAT_SINT8", 3, "NumberFormat"),
+        ("NUMBER_FORMAT_UINT16", 4, "NumberFormat"),
+        ("NUMBER_FORMAT_UINT32", 5, "NumberFormat"),
+        ("NUMBER_FORMAT_UINT8", 6, "NumberFormat"),
+        ("ENDIAN_LITTLE", 0, "Endian"),
+        ("ENDIAN_BIG", 1, "Endian"),
+    ] {
+        constants.insert(
+            ("Toybox.Lang".into(), member.into()),
+            Constant {
+                ty: Type::named(format!("Toybox.Lang.{ty}")),
+                value,
+                since: ApiLevel(3, 1, 0),
+            },
+        );
+    }
     Catalogue {
         interfaces: BTreeMap::from([
             (
@@ -1081,15 +1167,12 @@ fn build_core() -> Catalogue {
         ]),
         modules,
         classes,
-        enums: BTreeMap::from([("Toybox.Graphics.FontDefinition".into(), initial)]),
-        constants: BTreeMap::from([(
-            ("Toybox.Graphics".into(), "FONT_MEDIUM".into()),
-            Constant {
-                ty: Type::named("Toybox.Graphics.FontDefinition"),
-                value: 3,
-                since: initial,
-            },
-        )]),
+        enums: BTreeMap::from([
+            ("Toybox.Graphics.FontDefinition".into(), initial),
+            ("Toybox.Lang.NumberFormat".into(), initial),
+            ("Toybox.Lang.Endian".into(), initial),
+        ]),
+        constants,
     }
 }
 
@@ -1236,6 +1319,7 @@ mod tests {
                     "unknown {name}"
                 ),
                 Type::Parameter(_) => {}
+                Type::Options(fields) => fields.values().for_each(|ty| check_type(api, ty)),
                 Type::Union(types) | Type::Tuple(types) => {
                     types.iter().for_each(|ty| check_type(api, ty))
                 }

@@ -76,10 +76,10 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 **Experimentally observed (2026-10-19):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 94
+same SDK/target and `-O 0`, agrees with the independent compiler on all 149
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
 and native/text pipeline checks. Artifacts:
-`scratch/check-byte-array-recovery/`.
+`scratch/check-byte-array-complete/`. The full example requires minimum API 3.1.0.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -143,8 +143,42 @@ and nullable `as ByteArray` assertions preserve valid references, and a nullable
 assertion preserves Null. Assertions lower without a runtime check or conversion;
 wrong-class assertion failure behavior was not executed.
 
-Invalid byte ranges, fatal bounds errors, and numeric encoding
-options were not executed here.
+**Officially documented (reviewed 2026-10-19):** [Lang constants and typedefs][lang]
+define seven NumberFormat values, two Endian values, and Numeric's four scalar
+alternatives. ByteArray's two numeric methods require API 3.1.0, with default
+offset zero and little endian. Current value/option contracts are in the
+[source specification](../specs/compiler-subset.md#bytearrays).
+
+**Experimentally observed:** all seven formats round-trip with offset 1 and
+big endian. FLOAT prints `1.500000` and tests as Float. UINT32 with
+`4294967295l` decodes as Long; the smaller signed/unsigned cases test as Number.
+Empty options encode `258` as `[2, 1, 0, 0]`; Double `2.5d` encodes/decodes as
+binary32 `2.500000`. Numeric class guards permit arithmetic only on the
+matching concrete result. Method selectors are decodeNumber `0x00800a25` and
+encodeNumber `0x00800a26`; option symbols are offset `0x00800aa9` and endianness
+`0x00800aae`, observed in exported authored SDK output.
+
+The SDK rejects bare integer `4` as a NumberFormat argument and bare integer
+`0` under `:endianness`, rather than treating them as enum values. The negative
+probe uses `encodeNumber(258, 4, {:offset=>0, :endianness=>0})` and an equivalent
+decode call. Diagnostics are retained in
+`scratch/byte-final-raw-enums-sdk-build.log`. This establishes the separate enum
+and named option-field checks; integer VM representation alone is insufficient
+for the static contract.
+
+ByteArray keys behave differently from direct `equals`: separate `[1, 2]b`
+values compare equal and have equal hashes, but the second does not find the
+first's Dictionary entry. Inserting both produces two entries. Mutating the
+original key changes its public hash but its own lookup still finds the entry
+in this simulator. A fresh equal-content key does not. These are target-scoped
+observations; the compiler delegates comparison and mutation to the runtime.
+`keys()` retains the original references after removal; dropping the final
+enumeration expires a weak target. An isolated SDK probe under
+`scratch/byte-array-final/` supplied the initial observations; tracked
+`Bytes.codec`/`ByteProgram.finalChecks` retain their reproducible coverage.
+
+Invalid byte ranges, fatal bounds errors, and invalid numeric options were not
+executed here.
 Negative/oversized constant inputs remain runtime obligations in compiler tests,
 not observed portable exception guarantees.
 
@@ -155,3 +189,5 @@ contains its own AppBase class. Set `base.sourcePath` to
 Build with `scripts/build-example.sh`, then use `scripts/check-example.py`
 `prepare compiler-byte-arrays --sdk-prg <SDK PRG> --output <fresh directory>`
 and `simulate <prepared directory>` in the Rust/SDK environments respectively.
+
+[lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html

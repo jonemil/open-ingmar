@@ -10,6 +10,7 @@ pub(crate) enum Contract {
     Array(ArrayElement),
     ByteArray,
     Dictionary(DictionaryType),
+    ByteOptions,
 }
 impl Contract {
     pub(crate) fn element_type(self) -> Option<crate::api::Type> {
@@ -19,7 +20,7 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Dictionary(_) => None,
+            Self::Dictionary(_) | Self::ByteOptions => None,
         }
     }
     pub(crate) fn dictionary(self) -> Option<DictionaryType> {
@@ -101,6 +102,19 @@ pub(crate) fn validate(
             }
         }
     }
+    for (index, op) in operations.iter().enumerate() {
+        if let Operation::ByteOptionsBegin { builder, length } = op.operation {
+            if length > 2 {
+                return Err(fail(index, "ByteArray options permit at most two fields"));
+            }
+            if declarations
+                .insert(builder, (Contract::ByteOptions, length))
+                .is_some()
+            {
+                return Err(fail(index, "duplicate container builder declaration"));
+            }
+        }
+    }
     if declarations.is_empty()
         && !operations.iter().any(|o| {
             matches!(
@@ -128,6 +142,7 @@ pub(crate) fn validate(
         for &index in &blocks[&block] {
             match operations[index].operation {
                 Operation::DictionaryBegin { builder, .. }
+                | Operation::ByteOptionsBegin { builder, .. }
                 | Operation::ArrayBegin { builder, .. }
                 | Operation::ByteArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
@@ -203,10 +218,10 @@ pub(crate) fn validate(
                     start,
                     ref entries,
                 } => {
-                    if declarations
-                        .get(&builder)
-                        .is_none_or(|(contract, _)| contract.dictionary().is_none())
-                    {
+                    if declarations.get(&builder).is_none_or(|(contract, _)| {
+                        contract.dictionary().is_none()
+                            && !matches!(contract, Contract::ByteOptions)
+                    }) {
                         return Err(fail(index, "Dictionary fill requires a Dictionary builder"));
                     }
                     let count = active
@@ -224,10 +239,10 @@ pub(crate) fn validate(
                     *count += entries.len() as u32;
                 }
                 Operation::DictionaryFinish { result: _, builder } => {
-                    if declarations
-                        .get(&builder)
-                        .is_none_or(|(contract, _)| contract.dictionary().is_none())
-                    {
+                    if declarations.get(&builder).is_none_or(|(contract, _)| {
+                        contract.dictionary().is_none()
+                            && !matches!(contract, Contract::ByteOptions)
+                    }) {
                         return Err(fail(
                             index,
                             "Dictionary finish requires a Dictionary builder",

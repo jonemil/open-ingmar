@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Copy)]
 enum ConstructionType {
+    ByteOptions,
     Array(crate::ArrayElement),
     Dictionary(crate::DictionaryType),
 }
@@ -13,6 +14,9 @@ enum ConstructionType {
 /// Extract a supported container contract for contextual literal construction.
 fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     match ty {
+        crate::api::Type::Options(_) if *ty == crate::api::Type::byte_options() => {
+            Some(ConstructionType::ByteOptions)
+        }
         crate::api::Type::Array(element) => {
             crate::ArrayElement::from_api_type(element).map(ConstructionType::Array)
         }
@@ -1607,6 +1611,62 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        let inferred_options = expected.is_none()
+            && matches!(&expression.kind,
+            parser::ExpressionKind::DictionaryLiteral(entries) if entries.iter().any(|(key,value)| {
+                if !matches!(&key.kind, parser::ExpressionKind::Symbol(name) if name=="endianness") {return false;}
+                match &value.kind {
+                    parser::ExpressionKind::NativeConstant {module,member,..} => crate::api::core().constant(module, member).is_some_and(|c| c.ty==crate::api::Type::named("Toybox.Lang.Endian")),
+                    parser::ExpressionKind::Local(name) => locals.get(name).and_then(|local| self.types.local_type(*local)).is_some_and(|ty| *ty==crate::api::Type::named("Toybox.Lang.Endian")),
+                    _=>false,
+                }
+            }));
+        if (matches!(expected, Some(ConstructionType::ByteOptions)) || inferred_options)
+            && matches!(
+                &expression.kind,
+                parser::ExpressionKind::DictionaryNew
+                    | parser::ExpressionKind::DictionaryLiteral(_)
+            )
+        {
+            let entries = match expression.kind {
+                parser::ExpressionKind::DictionaryNew => Vec::new(),
+                parser::ExpressionKind::DictionaryLiteral(entries) => entries,
+                _ => unreachable!(),
+            };
+            let span = expression.span;
+            let builder = crate::BuilderId(self.local_id(span)?.0);
+            self.push(
+                Operation::ByteOptionsBegin {
+                    builder,
+                    length: entries.len() as u32,
+                },
+                Some(span),
+            );
+            for (index, (key, value)) in entries.into_iter().enumerate() {
+                let parser::ExpressionKind::Symbol(name) = key.kind else {
+                    return Err(Diagnostic::at(
+                        self.source,
+                        key.span.start,
+                        "option keys require literal Symbols",
+                    ));
+                };
+                let value = self.snapshot(value, locals)?;
+                let key = ValueId(self.operations.len() as u32);
+                self.push(Operation::Symbol { result: key, name }, Some(span));
+                let value = self.value(value, locals)?;
+                self.push(
+                    Operation::DictionaryFill {
+                        builder,
+                        start: index as u32,
+                        entries: vec![(key, value)],
+                    },
+                    Some(span),
+                );
+            }
+            let result = ValueId(self.operations.len() as u32);
+            self.push(Operation::DictionaryFinish { result, builder }, Some(span));
+            return Ok(result);
+        }
         if let parser::ExpressionKind::ByteArrayAllocate(length) = expression.kind {
             let length = self.value(*length, locals)?;
             let result = ValueId(self.operations.len() as u32);

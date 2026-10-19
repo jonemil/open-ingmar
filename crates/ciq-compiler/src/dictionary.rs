@@ -177,6 +177,8 @@ pub(crate) fn constant_record(
 /// Supported non-null scalar, Method, and comparison-interface Dictionary keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryKey {
+    /// A ByteArray reference; Dictionary key comparison uses runtime identity.
+    ByteArray,
     Method,
     Symbol,
     Interface(crate::InterfaceType),
@@ -243,6 +245,7 @@ impl DictionaryType {
             DictionaryKey::Char => "Char",
             DictionaryKey::Symbol => "Symbol",
             DictionaryKey::Method => "Method",
+            DictionaryKey::ByteArray => "ByteArray",
         };
         let (value, nullable) = match self.value {
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => ("Comparable", false),
@@ -308,6 +311,7 @@ impl DictionaryType {
                 "Toybox.Lang.Char" => DictionaryKey::Char,
                 "Toybox.Lang.Symbol" => DictionaryKey::Symbol,
                 "Toybox.Lang.Method" => DictionaryKey::Method,
+                "Toybox.Lang.ByteArray" => DictionaryKey::ByteArray,
                 _ => return None,
             },
             _ => return None,
@@ -364,6 +368,7 @@ impl DictionaryType {
             DictionaryKey::Char => "char",
             DictionaryKey::Symbol => "symbol",
             DictionaryKey::Method => "method",
+            DictionaryKey::ByteArray => "byte-array",
         };
         let value = match self.value {
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
@@ -418,6 +423,7 @@ impl DictionaryType {
                 "char" => DictionaryKey::Char,
                 "symbol" => DictionaryKey::Symbol,
                 "method" => DictionaryKey::Method,
+                "byte-array" => DictionaryKey::ByteArray,
                 _ => return None,
             },
             value: match value {

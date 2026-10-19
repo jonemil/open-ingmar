@@ -13,6 +13,7 @@ pub(crate) struct Types {
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
     byte_arrays: std::collections::BTreeSet<crate::BuilderId>,
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
+    options: std::collections::BTreeSet<crate::BuilderId>,
     origins: crate::source_objects::Origins,
     pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
 }
@@ -34,6 +35,7 @@ impl Types {
             builders: BTreeMap::new(),
             byte_arrays: Default::default(),
             dictionaries: BTreeMap::new(),
+            options: Default::default(),
             origins: crate::source_objects::Origins::new(parameters),
             facts: Default::default(),
         }
@@ -44,6 +46,13 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
+            Operation::ByteOptionsBegin { builder, .. } => {
+                self.options.insert(*builder);
+                return;
+            }
+            Operation::DictionaryFinish { result, builder } if self.options.contains(builder) => {
+                (*result, Some(Type::byte_options()))
+            }
             Operation::ByteArrayBegin { builder, .. } => {
                 self.byte_arrays.insert(*builder);
                 return;
@@ -107,7 +116,8 @@ impl Types {
                 *result,
                 native::constant(module, member, None)
                     .ok()
-                    .map(|(ty, _)| ty),
+                    .and_then(|(ty, _)| crate::ValueType::from_api_type(&ty))
+                    .map(crate::ValueType::api_type),
             ),
             Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
             Operation::TupleNew { result, elements } => {
