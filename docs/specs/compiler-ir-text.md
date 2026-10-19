@@ -346,10 +346,10 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
 `integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `symbol`, `comparable`,
-or `comparator`;
-values use those tags, `symbol`, `comparable`, `comparator`, or their `nullable-`
-counterparts. Interface value contracts require API 5.0.0. Other tags, nested
-containers, and heterogeneous unions are rejected. For example:
+`comparator`, or `method`. Values use those tags, `weak-reference`, `byte-array`,
+or their `nullable-` counterparts. Interface value contracts require API 5.0.0;
+WeakReference requires 1.2.0 and ByteArray requires 3.0.0. Other tags, nested
+ordinary containers, and heterogeneous unions are rejected. For example:
 
 ```text
 ciq-ir
@@ -495,8 +495,14 @@ ByteArray/Null joins retain either runtime value without conversion. Reuse the
 annotations do not assert a proof. API 3.0.0 also applies to nullable contracts
 without an allocation. Class fields use
 [`.field-byte-array`](compiler-classes.md#bytearray-fields). Array elements reuse
-these tags under the [allocation grammar](#array-allocation); Dictionary values
-are unsupported.
+these tags under the [allocation grammar](#array-allocation). Dictionary value
+contracts use `dictionary(<key>=>byte-array)` or
+`dictionary(<key>=>nullable-byte-array)` with an existing supported key contract.
+Lookups yield nullable ByteArray; `values()` preserves the declared value
+nullability in its Array element tag. Availability applies to unused types and
+Null-only constants as well as construction and reads. ByteArray references use
+private Dictionary fills, never scalar constant tokens; nullable constants
+can contain Null under existing payload validation.
 
 `.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
 zero-filled ByteArray. Length must be an earlier same-block non-null Number

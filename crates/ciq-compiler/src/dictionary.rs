@@ -192,6 +192,10 @@ pub enum DictionaryKey {
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A non-null mutable ByteArray reference.
+    ByteArray,
+    /// A ByteArray reference or Null; lookups still require a non-null proof.
+    NullableByteArray,
     WeakReference,
     NullableWeakReference,
     Method,
@@ -217,7 +221,7 @@ pub enum DictionaryValue {
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
-/// This bounded profile excludes nested containers and heterogeneous unions.
+/// Nested Array/Dictionary contracts and heterogeneous unions are unsupported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DictionaryType {
     pub key: DictionaryKey,
@@ -265,6 +269,8 @@ impl DictionaryType {
             DictionaryValue::Symbol => ("Symbol", false),
             DictionaryValue::Method => ("Method", false),
             DictionaryValue::WeakReference => ("WeakReference", false),
+            DictionaryValue::ByteArray => ("ByteArray", false),
+            DictionaryValue::NullableByteArray => ("ByteArray", true),
             DictionaryValue::NullableWeakReference => ("WeakReference", true),
             DictionaryValue::NullableMethod => ("Method", true),
             DictionaryValue::NullableSymbol => ("Symbol", true),
@@ -328,6 +334,8 @@ impl DictionaryType {
             DictionaryValue::Method,
             DictionaryValue::NullableMethod,
             DictionaryValue::WeakReference,
+            DictionaryValue::ByteArray,
+            DictionaryValue::NullableByteArray,
             DictionaryValue::NullableWeakReference,
             DictionaryValue::Char,
             DictionaryValue::NullableChar,
@@ -382,6 +390,8 @@ impl DictionaryType {
             DictionaryValue::Symbol => "symbol",
             DictionaryValue::Method => "method",
             DictionaryValue::WeakReference => "weak-reference",
+            DictionaryValue::ByteArray => "byte-array",
+            DictionaryValue::NullableByteArray => "nullable-byte-array",
             DictionaryValue::NullableWeakReference => "nullable-weak-reference",
             DictionaryValue::NullableMethod => "nullable-method",
             DictionaryValue::NullableSymbol => "nullable-symbol",
@@ -435,6 +445,8 @@ impl DictionaryType {
                 "symbol" => DictionaryValue::Symbol,
                 "method" => DictionaryValue::Method,
                 "weak-reference" => DictionaryValue::WeakReference,
+                "byte-array" => DictionaryValue::ByteArray,
+                "nullable-byte-array" => DictionaryValue::NullableByteArray,
                 "nullable-weak-reference" => DictionaryValue::NullableWeakReference,
                 "nullable-method" => DictionaryValue::NullableMethod,
                 "nullable-symbol" => DictionaryValue::NullableSymbol,
@@ -506,6 +518,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
                         | "Toybox.Lang.Symbol"
                         | "Toybox.Lang.Method"
                         | "Toybox.Lang.WeakReference"
+                        | "Toybox.Lang.ByteArray"
                 ) =>
             {
                 if scalar.as_ref().is_some_and(|previous| previous != ty) {

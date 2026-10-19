@@ -2263,7 +2263,22 @@ an element leaves saved aliases intact. Elements hold strong references until
 removed or replaced, independently of any saved snapshot. Sorting and widening
 to ordinary or heterogeneous Array elements remain unsupported.
 
-ByteArray Dictionary keys/values, casts/runtime class
+`Dictionary<K, ByteArray>` and `Dictionary<K, ByteArray or Null>` use existing
+supported key contracts from API 3.0.0. Nonempty literals infer ByteArray values;
+explicit context also permits empty or Null-only literals. Computed entries use
+private ordered Dictionary construction. Value types remain invariant across
+parameters, calls, assignments, and saved IR.
+
+Indexed reads and `get` return ByteArray-or-Null even for non-null value
+contracts because a key may be absent. Store a read in a local and guard it
+before ByteArray operations; `hasKey` or a check on another lookup is not a
+non-null proof. Writes and `put` must satisfy the declared value nullability.
+`values()` returns an Array with that exact value contract, retaining strong
+references independently of later Dictionary changes. Removing/replacing a
+value leaves saved aliases and enumerations intact; clearing the last strong
+reference allows a weak target to expire. Enumeration order is not specified.
+
+ByteArray Dictionary keys, casts/runtime class
 recovery, and numeric encoding/decoding options remain unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and

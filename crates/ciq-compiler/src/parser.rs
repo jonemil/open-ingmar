@@ -344,6 +344,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Symbol" => crate::DictionaryValue::Symbol,
             "Toybox.Lang.Method" => crate::DictionaryValue::Method,
             "Toybox.Lang.WeakReference" => crate::DictionaryValue::WeakReference,
+            "Toybox.Lang.ByteArray" => crate::DictionaryValue::ByteArray,
             "Toybox.Lang.Comparable" => {
                 crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
             }
@@ -370,6 +371,7 @@ impl<'a> Parser<'a> {
                 crate::DictionaryValue::WeakReference => {
                     crate::DictionaryValue::NullableWeakReference
                 }
+                crate::DictionaryValue::ByteArray => crate::DictionaryValue::NullableByteArray,
                 crate::DictionaryValue::Interface(interface) => {
                     crate::DictionaryValue::NullableInterface(interface)
                 }

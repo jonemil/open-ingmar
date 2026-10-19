@@ -52,6 +52,18 @@ module Bytes {
     }
     function nullList() as Lang.Array<Lang.ByteArray or Null> { return [null]; }
     function slots(n) as Lang.Array<Lang.ByteArray or Null> { return new[n]; }
+    function table(flag as Lang.Boolean) as Lang.Dictionary<Lang.String, Lang.ByteArray> {
+        return {"one" => [13]b, "two" => flag ? [14]b : [15]b};
+    }
+    function emptyTable() as Lang.Dictionary<Lang.String, Lang.ByteArray> { return {}; }
+    function optionalTable() as Lang.Dictionary<Lang.String, Lang.ByteArray or Null> {
+        return {"empty" => null, "live" => Bytes.optional(true)};
+    }
+    function nullTable() as Lang.Dictionary<Lang.String, Lang.ByteArray or Null> {
+        return {"empty" => null};
+    }
+    function values(table as Lang.Dictionary<Lang.String, Lang.ByteArray>)
+        as Lang.Array<Lang.ByteArray> { return table.values(); }
 }
 module ByteProgram {
     function run() {
@@ -191,6 +203,44 @@ module ByteProgram {
             slots[1] = null;
             System.println(elementWatch.stillAlive());
         }
+        var table = Bytes.table(true);
+        System.println(table.size());
+        System.println(table["missing"] == null);
+        var item = table.get("one");
+        if (item != null) {
+            item[0] += 1;
+            var again = table["one"];
+            if (again != null) { System.println(again[0]); }
+            table.put("one", [20]b);
+            System.println(item[0]);
+        }
+        var values = Bytes.values(table);
+        System.println(values.size());
+        table.remove("one");
+        table.remove("two");
+        System.println(values.size());
+        var emptyTable = Bytes.emptyTable();
+        emptyTable["saved"] = values[0];
+        System.println(emptyTable.hasKey("saved"));
+        emptyTable.remove("saved");
+        System.println(emptyTable.isEmpty());
+        var optionalTable = Bytes.optionalTable();
+        System.println(optionalTable.hasKey("empty"));
+        System.println(optionalTable.get("empty") == null);
+        var dictSnapshot = optionalTable["live"];
+        if (dictSnapshot != null) {
+            var dictWatch = dictSnapshot.weak();
+            var dictValues = optionalTable.values();
+            dictSnapshot = null;
+            optionalTable.remove("live");
+            System.println(dictWatch.stillAlive());
+            dictValues = [];
+            System.println(dictWatch.stillAlive());
+        }
+        optionalTable.put("empty", [6]b);
+        optionalTable["empty"] = null;
+        System.println(optionalTable.keys().size());
+        System.println(Bytes.nullTable()["empty"] == null);
         System.exit();
     }
 }

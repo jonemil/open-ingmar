@@ -12,8 +12,8 @@ backlog while these language foundations are the priority.
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
-**ByteArray.** Extend Dictionary values and concrete Object recovery under
-explicit contracts. Establish hash/equality and mutation behavior before
+**ByteArray.** Extend concrete Object recovery under explicit contracts.
+Establish hash/equality and mutation behavior before
 enabling ByteArray keys. Preserve private initialization and
 allocation-before-element effects when adding new literal/storage paths.
 Keep Number/Char byte range checks as runtime obligations until independent

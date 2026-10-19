@@ -76,10 +76,10 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 **Experimentally observed (2026-10-18):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 72
+same SDK/target and `-O 0`, agrees with the independent compiler on all 86
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
 and native/text pipeline checks. Artifacts:
-`scratch/check-byte-array-elements/`.
+`scratch/check-byte-dictionary-values/`.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -119,6 +119,15 @@ preserve the element references. Nullable/Null-only literals and sized allocatio
 produce the expected Null slots. Clearing an Array slot preserves a saved
 snapshot. Clearing a snapshot first leaves its weak target alive through the
 slot; clearing that slot expires it. Both compilers agree on these results.
+
+String-keyed Dictionaries retain ByteArray values through construction and
+`put`/indexed writes. Missing-key reads return Null. A guarded lookup mutation
+reaches the stored object; replacing its entry leaves the saved alias unchanged.
+`values()` preserves its own references after entries are removed. Null-valued
+entries remain present according to `hasKey`. A nullable enumeration keeps a
+weak target alive after its Dictionary entry is removed; replacing that
+enumeration with an empty Array expires the target. The specimen does not rely
+on key/value enumeration order. Both compilers agree on these observations.
 
 Invalid byte ranges, fatal bounds errors, and numeric encoding
 options were not executed here.
