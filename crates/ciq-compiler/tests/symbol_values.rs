@@ -81,7 +81,6 @@ fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
         "~:alpha",
         ":alpha.toNumber(1)",
         ":alpha.compareTo(:beta)",
-        "1.compareTo(:alpha)",
         ":alpha.method(:toNumber, :size)",
     ] {
         assert!(

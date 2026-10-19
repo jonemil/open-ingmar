@@ -17,6 +17,8 @@ guards through explicit contracts. Extend source
 type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
+Native Object-typed parameters should retain their declared domains; do not
+replace runtime type exceptions with narrower compiler-only argument rules.
 Parameterized-container and general-union casts need their own type contracts.
 Extend general union rules and broader container/storage contracts as core
 consumers require them.

@@ -67,8 +67,6 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return \"a\".compareTo(1); }",
-        "function f() { return \"a\".compareTo(true); }",
         "function f() { return \"a\".compareTo(null); }",
         "function f() { return \"a\".compareTo(); }",
         "function f(x as Toybox.Lang.String or Null) { return \"a\".compareTo(x); }",
@@ -90,7 +88,7 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
     let f = compile("function f() { return \"a\".compareTo(\"b\"); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".string %1 \"b\""));
-    assert!(parse_ir(&text.replace(".string %1 \"b\"", ".integer %1 1")).is_err());
+    assert!(parse_ir(&text.replace(".string %1 \"b\"", ".null %1")).is_err());
     assert!(parse_ir(&text.replace("compareTo", "toNumberWithBase")).is_err());
     let f = compile("function f() { var n = \"10\".toNumberWithBase(2); if (n == null) { return 0; } return n; }").unwrap();
     let mut operations = f.operations().to_vec();

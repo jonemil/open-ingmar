@@ -1555,6 +1555,11 @@ ownership and constructor resolution follow the [class rules](compiler-classes.m
 
 ## Native value calls
 
+Comparison and equality calls retain the catalogue's Object argument contracts,
+including nullable equality arguments and non-null comparison arguments.
+Validation does not replace these with a narrower runtime-safe class list;
+see the [shared source contract](compiler-subset.md#comparison-object-arguments).
+
 Method parameters, call results, and matching conditional-edge values use the
 `method` or `nullable-method` tag, retained by explicit function result contracts.
 `nullable-method` means Method or Null; reads after a proven null test use the

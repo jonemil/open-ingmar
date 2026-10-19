@@ -243,13 +243,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
                 .is_err()
             );
         }
-        for method in [
-            "abs(1)",
-            "format(1)",
-            "toNumber(1)",
-            "compareTo(null)",
-            "compareTo(\"x\")",
-        ] {
+        for method in ["abs(1)", "format(1)", "toNumber(1)", "compareTo(null)"] {
             assert!(
                 compile(&format!(
                     "function f() {{ System.println({literal}.{method}); }}"

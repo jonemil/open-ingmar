@@ -63,7 +63,6 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return true.compareTo(\"1\"); }",
         "function f() { return true.compareTo(null); }",
         "function f() { return true.compareTo(); }",
         "function f() { return true.compareTo(0, 1); }",
@@ -81,7 +80,7 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
     let f = compile("function f() { return true.compareTo(false); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".boolean %1 false"));
-    assert!(parse_ir(&text.replace(".boolean %1 false", ".string %1 \"false\"")).is_err());
+    assert!(parse_ir(&text.replace(".boolean %1 false", ".null %1")).is_err());
     let arithmetic = compile("function f() { return true.compareTo(false) + 1; }").unwrap();
     assert!(parse_ir(&arithmetic.to_ir_text().replace("compareTo", "equals")).is_err());
     let f = compile("function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return true.compareTo(n); }").unwrap();

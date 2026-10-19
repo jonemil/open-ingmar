@@ -85,7 +85,6 @@ fn observers_do_not_enable_object_erasure_weak_callbacks_or_equality_operators()
         "return a.equals();",
         "return a.equals(a,a);",
         "return a.hashCode(1);",
-        "return a.equals(new Toybox.WatchUi.View());",
         "return a == a;",
         "return a.weak(1);",
         "return a.method(1);",

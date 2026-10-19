@@ -997,8 +997,9 @@ the effective receiver type since 1.2.0. Float inherits Object `equals` since
 1.0.0; Double overrides it since 1.3.0. Equality accepts the
 [shared Object argument profile](#object-equality-and-container-observers)
 and distinguishes floating widths and integer classes. Do not infer a
-cross-instance Double hash contract from numeric equality. `compareTo` accepts
-non-null numeric/Boolean/Char arguments and returns Number since 5.0.0.
+cross-instance Double hash contract from numeric equality. `compareTo` follows
+the shared [Object argument contract](#comparison-object-arguments) and returns
+Number since 5.0.0.
 String `toFloat()` returns Float or Null since 1.0.0; `toDouble()` returns Double
 or Null since 3.1.0. Guard nullable results before scalar use. Conversion content
 and formatting are passed through to the runtime.
@@ -1064,7 +1065,7 @@ Long receivers support these native methods:
 | inherited `hashCode()` | Number | 1.0.0 |
 | inherited `weak()` | Long | 1.2.0 |
 | `equals(other)` | Boolean | 1.3.0 |
-| `compareTo(numeric, Boolean, or Char)` | Number | 5.0.0 |
+| `compareTo(Object)` | Number | 5.0.0 |
 
 `toNumber()` retains the low 32 bits as a signed Number. Number's `toLong()`
 sign-extends its value, since API 1.0.0. `abs()` of minimum Long wraps to minimum.
@@ -1215,17 +1216,14 @@ ordinary `weak` follows the [bounded reference profile](#ordinary-weak-reference
 
 ## Object equality and container observers
 
-Supported numeric, String, Boolean, Char, Symbol, Array, Dictionary, opaque Object,
-Method, and WeakReference receivers accept `equals(other)` → Boolean. Its bounded
-argument profile includes those scalar
-types, all supported invariant Array contracts, opaque or typed Dictionary
-references, opaque Object/Method/WeakReference values, Null, and supported nullable
-forms. Comparing containers does not require matching element/key/value
-contracts and does not convert or erase
-their types. Nullable callback Dictionary arguments require no proof; nullable
-receivers still require a non-null proof. Arbitrary source/native object
-arguments and nested containers remain deferred. Opaque Object storage and its
-limits follow the [weak-reference contracts](#ordinary-weak-references).
+Supported numeric, String, Boolean, Char, Symbol, Array, Dictionary, ByteArray,
+opaque Object, Method, and WeakReference receivers accept `equals(other)` →
+Boolean. Arguments follow the catalogue's Object-or-Null contract, including
+supported source/native objects, comparison interfaces, containers, numeric
+aliases, and nullable forms. Nullable arguments require no proof; nullable
+receivers still require a non-null proof. Container comparison neither requires
+matching element/key/value contracts nor converts their types. General Object
+storage and recovery retain their existing restrictions.
 
 All supported Arrays and Dictionaries inherit `equals` and `hashCode()` →
 Number from Object, since API 1.0.0. Element/key/value availability is checked
@@ -1242,6 +1240,25 @@ sections. This profile does not enable Array/Dictionary equality operators,
 or general callback consumers. See the
 [observer evidence](../investigations/compiler-object-observers.md).
 
+## Comparison Object arguments
+
+Number, Long, Float, Double, Boolean, Char, and String `compareTo(other)` take
+one non-null Object and return Number, since API 5.0.0. Supported Object
+arguments include scalar classes, numeric aliases, containers, source/native
+objects, and comparison interfaces. A nullable argument requires a current
+non-null proof. Source and saved IR check the declared API signature without
+narrowing it to the receiver's runtime comparison domain.
+
+The runtime still checks that domain: numeric/Boolean/Char receivers compare
+numeric, Boolean, or Char values; String compares Strings. An incompatible
+Object argument is valid at the static call boundary but can throw
+`UnexpectedTypeException`. The compiler inserts no conversion, dynamic class
+guard, or fallback comparison. Null is rejected statically by the non-null
+parameter contract. Comparison signs are meaningful; particular magnitudes and
+exception recovery are not established by this profile. See the
+[Object argument example](../../examples/compiler-comparison-objects/README.md)
+and [runtime evidence](../investigations/compiler-comparison-objects.md).
+
 ## Native value calls
 
 A Number-valued expression may receive these catalogue-resolved methods:
@@ -1253,17 +1270,17 @@ A Number-valued expression may receive these catalogue-resolved methods:
 | `abs()` | `Lang.Number` | Number |
 | `toNumber()` | `Lang.Number` | Number |
 | `toLong()` | `Lang.Number` | Long |
-| `compareTo(numeric, Boolean, or Char)` | `Lang.Number` | Number |
+| `compareTo(Object)` | `Lang.Number` | Number |
 | `equals(other)` | `Lang.Object` | Boolean |
 | `hashCode()` | `Lang.Object` | Number |
 
-Number `compareTo` requires API 5.0.0; the other listed Number methods require
-1.0.0. Its declaration takes Object, but current lowering admits Number or
-Long, Float, Double, Boolean, or Char only. Unchecked nullable comparison arguments are rejected.
-`equals` uses the [shared argument profile](#object-equality-and-container-observers).
-Dictionary arguments to Number `compareTo` remain unsupported.
-Object arguments use catalogue-declared inheritance, not implicit conversions
-or acceptance of unknown classes. Scalar user-function contracts remain exact.
+Number `compareTo` requires API 5.0.0 and follows the
+[shared Object argument contract](#comparison-object-arguments). The other
+listed Number methods require 1.0.0. `equals` uses the
+[shared equality contract](#object-equality-and-container-observers).
+Object arguments use catalogue-declared inheritance, without implicit
+conversions or acceptance of unknown classes. Scalar user-function contracts
+remain exact.
 Comparison/equality/hash behavior is supplied by the runtime; comparison signs
 and hash consistency are the contracts, not particular magnitudes or hashes.
 See the [Number group evidence](../investigations/compiler-number-methods.md).
@@ -1274,9 +1291,8 @@ String-valued expressions support these zero-argument methods, declared by
 API 1.0.0. Runtime implementations determine character counts and case mapping;
 the compiler does not evaluate these calls at compile time.
 
-String `compareTo(String)` returns Number and requires API 5.0.0. Its Object
-argument declaration is narrowed to String by the executable profile; unchecked
-nullable arguments are rejected. String `equals` returns Boolean and accepts
+String `compareTo(Object)` follows the
+[shared comparison contract](#comparison-object-arguments) and requires API 5.0.0. String `equals` returns Boolean and accepts
 the shared Object equality arguments, since API 1.0.0.
 `toNumberWithBase(Number)` returns Number or Null, since API 1.4.1, and follows
 the existing null-check rules. The base is 0 for prefix detection or 2..=36 for
@@ -1287,16 +1303,17 @@ runtime without compiler validation. See the
 Boolean receivers support `toString()` returning String, `hashCode()` returning
 Number, and `equals` returning Boolean with the shared Object argument
 profile as Number/String equality. These inherited methods date from API 1.0.0.
-Boolean `compareTo` returns Number and accepts numeric/Boolean/Char arguments
-since API 5.0.0. Unchecked nullable arguments are rejected. This native-call support
-does not enable Boolean arithmetic or ordering operators. See the
+Boolean `compareTo` follows the
+[shared Object argument contract](#comparison-object-arguments) since API 5.0.0.
+This native-call support does not enable Boolean arithmetic or ordering operators. See the
 [Boolean group evidence](../investigations/compiler-boolean-methods.md).
 
 Char values originate from literals or Number's zero-argument `toChar()` and are distinct
 from Number. They support `toLower()`/`toUpper()` returning Char, `toNumber()`
 returning Number, and `toString()` returning String. Char's direct `compareTo`
-returns Number for numeric/Boolean/Char arguments, since API 5.0.0. Inherited
-`equals` accepts the shared Object argument profile and returns Boolean;
+follows the [shared Object argument contract](#comparison-object-arguments)
+since API 5.0.0. Inherited `equals` accepts the shared Object argument profile
+and returns Boolean;
 `hashCode()` returns Number. Char itself and its conversions require API 1.3.0,
 including when it appears only in a function signature. Typed arguments,
 returns, local initialization/assignment, printing, and chained calls retain

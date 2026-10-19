@@ -92,7 +92,6 @@ fn dictionary_identity_does_not_enable_unrelated_object_or_operator_profiles() {
     for body in [
         "return d.equals();",
         "return d.equals(d, d);",
-        "return d.equals(new Toybox.WatchUi.View());",
         "return d == d;",
         "return d.weak(1);",
     ] {

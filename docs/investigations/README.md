@@ -41,6 +41,8 @@ SDK/version and scope; they are not current feature inventories. Use
   operands, typed value transport, and simulator checks.
 - [Dictionary](compiler-dictionary.md): empty allocation, native observers,
   reference calls, and outstanding constant-literal encoding.
+- [Comparison Object arguments](compiler-comparison-objects.md): declared
+  domains, dynamic scalar comparisons, and isolated runtime type errors.
 - [Numeric aliases](compiler-numeric-unions.md): arithmetic promotion through
   Numeric/Integer/Decimal signatures, fields, containers, and nullable guards.
 - [ByteArray](byte-arrays.md): compact constants, zero-filled allocation,

@@ -71,7 +71,6 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f() { return 7.compareTo(); }",
         "function f() { return 7.compareTo(1, 2); }",
         "function f() { return 7.compareTo(null); }",
-        "function f() { return 7.compareTo(\"7\"); }",
         "function f(x as Toybox.Lang.Number or Null) { return 7.compareTo(x); }",
         "function f(x as Toybox.Lang.Number or Null) { return x.hashCode(); }",
         "function f() { return 7.equals(7) + 1; }",
@@ -102,10 +101,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
     let ciq_compiler::Operation::Integer { result, .. } = op.operation else {
         unreachable!()
     };
-    op.operation = ciq_compiler::Operation::String {
-        result,
-        value: "3".into(),
-    };
+    op.operation = ciq_compiler::Operation::Null { result };
     assert!(ciq_compiler::Function::new("bad".into(), operations).is_err());
 }
 

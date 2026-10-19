@@ -157,9 +157,9 @@ members against the reviewed public API before marking it complete. Remaining
 operator/type-system dependencies and sequencing belong to the
 [core completion gate](../plan.md#core-completion-gate).
 
-- **Number, Long, Float, Double, Boolean, Char, String:** close the full
-  applicable Object/argument domains of comparison and observers. Resolve
-  literal/Unicode discrepancies and validate remaining boundaries. Existing
+- **Number, Long, Float, Double, Boolean, Char, String:** resolve literal/Unicode
+  discrepancies and validate remaining boundaries. Broader Object/interface/enum
+  representation and inherited dispatch follow the core type work; existing
   own-method names largely have executable profiles.
 - **Object and source objects:** complete source inheritance/overrides, member
   lookup, source-inheritance/general-union type tests and refinement, and broader

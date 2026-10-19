@@ -119,6 +119,8 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
 /// Resolve a value-call contract through the catalogue, then require its bounded
 /// executable profile. Return the effective receiver-specific result; declaration
 /// availability, arguments, and executable support must all pass first.
+/// Comparison and equality operands follow their declared Object contracts;
+/// an accepted argument may still cause a runtime type exception.
 pub(crate) fn value_call(
     receiver: &api::Type,
     member: &str,
@@ -372,7 +374,8 @@ pub(crate) fn value_call(
     let supported = supported
         || (member == "method"
             && resolved.declaring_class.name == "Toybox.Lang.Object"
-            && (equality_argument(receiver) || crate::NativeClass::from_name(class).is_some())
+            && (method_receiver_profile(receiver)
+                || crate::NativeClass::from_name(class).is_some())
             && !matches!(receiver, api::Type::Null | api::Type::Union(_)));
     if class == "Toybox.Lang.ByteArray"
         && member == "addAll"
@@ -385,27 +388,6 @@ pub(crate) fn value_call(
     }
     if !supported {
         return Err("native member has no supported lowering for this receiver".into());
-    }
-    if matches!(
-        class,
-        "Toybox.Lang.Number"
-            | "Toybox.Lang.Float"
-            | "Toybox.Lang.Double"
-            | "Toybox.Lang.Long"
-            | "Toybox.Lang.Boolean"
-            | "Toybox.Lang.Char"
-    ) && member == "compareTo"
-        && !matches!(arguments, [api::Type::Named(name)] if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Float" | "Toybox.Lang.Double" | "Toybox.Lang.Long" | "Toybox.Lang.Boolean" | "Toybox.Lang.Char"))
-    {
-        return Err(format!(
-            "{class}.compareTo lowering currently requires Number, Long, Float, Double, Boolean, or Char"
-        ));
-    }
-    if class == "Toybox.Lang.String"
-        && member == "compareTo"
-        && arguments != [api::Type::named("Toybox.Lang.String")]
-    {
-        return Err("String.compareTo lowering currently requires String".into());
     }
     if class == "Toybox.Lang.Array" && member == "sort" {
         if !matches!(arguments, [actual] if accepts(&crate::InterfaceType::Comparator.api_type(true), actual))
@@ -451,17 +433,12 @@ pub(crate) fn value_call(
             return Err("Array.slice requires Number or Null bounds".into());
         }
     }
-    if member == "equals" && !equality_argument(&arguments[0]) {
-        return Err(format!(
-            "{class}.equals argument is outside its supported comparison profile"
-        ));
-    }
     Ok(signature.result)
 }
 
-/// Check the bounded scalar/container and Null arguments supported by native
-/// equality calls. Container comparison does not convert element contracts.
-fn equality_argument(ty: &api::Type) -> bool {
+/// Check value profiles used to select supported Object.method receivers.
+/// The caller separately excludes Null and union receivers.
+fn method_receiver_profile(ty: &api::Type) -> bool {
     match ty {
         api::Type::Null => true,
         api::Type::Named(name) => matches!(
@@ -482,7 +459,7 @@ fn equality_argument(ty: &api::Type) -> bool {
         ),
         api::Type::Array(element) => crate::ArrayElement::from_api_type(element).is_some(),
         api::Type::Dictionary { .. } => crate::DictionaryType::from_api_type(ty).is_some(),
-        api::Type::Union(types) => types.iter().all(equality_argument),
+        api::Type::Union(types) => types.iter().all(method_receiver_profile),
         _ => false,
     }
 }

@@ -129,7 +129,6 @@ fn nullable_long_and_native_calls_cannot_bypass_contracts() {
         "function f() { return 1l.format(1); }",
         "function f() { return 1l.toNumber(1); }",
         "function f() { return 1l.compareTo(null); }",
-        "function f() { return 1l.compareTo(\"1\"); }",
         "function f() { return 1l.toFloat(1); }",
         "function f() { return 1l.toDouble(1); }",
         "function f() { var n = \"42\".toLongWithBase(16l); }",
