@@ -316,6 +316,9 @@ impl<'a> Parser<'a> {
         let at = self.offset;
         let key = match self.type_path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryKey::Number,
+            "Toybox.Lang.Integer" => crate::DictionaryKey::Numeric(crate::NumericAlias::Integer),
+            "Toybox.Lang.Decimal" => crate::DictionaryKey::Numeric(crate::NumericAlias::Decimal),
+            "Toybox.Lang.Numeric" => crate::DictionaryKey::Numeric(crate::NumericAlias::Numeric),
             "Toybox.Lang.Double" => crate::DictionaryKey::Double,
             "Toybox.Lang.Float" => crate::DictionaryKey::Float,
             "Toybox.Lang.Long" => crate::DictionaryKey::Long,
@@ -336,6 +339,18 @@ impl<'a> Parser<'a> {
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
         let mut value = match self.type_path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryValue::Number,
+            "Toybox.Lang.Integer" => crate::DictionaryValue::Numeric {
+                alias: crate::NumericAlias::Integer,
+                nullable: false,
+            },
+            "Toybox.Lang.Decimal" => crate::DictionaryValue::Numeric {
+                alias: crate::NumericAlias::Decimal,
+                nullable: false,
+            },
+            "Toybox.Lang.Numeric" => crate::DictionaryValue::Numeric {
+                alias: crate::NumericAlias::Numeric,
+                nullable: false,
+            },
             "Toybox.Lang.Double" => crate::DictionaryValue::Double,
             "Toybox.Lang.Float" => crate::DictionaryValue::Float,
             "Toybox.Lang.Long" => crate::DictionaryValue::Long,
@@ -361,6 +376,10 @@ impl<'a> Parser<'a> {
             self.expect(Kind::Word("Null"), "'Null'")?;
             value = match value {
                 crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
+                crate::DictionaryValue::Numeric { alias, .. } => crate::DictionaryValue::Numeric {
+                    alias,
+                    nullable: true,
+                },
                 crate::DictionaryValue::Double => crate::DictionaryValue::NullableDouble,
                 crate::DictionaryValue::Float => crate::DictionaryValue::NullableFloat,
                 crate::DictionaryValue::Long => crate::DictionaryValue::NullableLong,
@@ -400,6 +419,18 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.ByteArray" => crate::ArrayElement::ByteArray,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            "Toybox.Lang.Integer" => crate::ArrayElement::Numeric {
+                alias: crate::NumericAlias::Integer,
+                nullable: false,
+            },
+            "Toybox.Lang.Decimal" => crate::ArrayElement::Numeric {
+                alias: crate::NumericAlias::Decimal,
+                nullable: false,
+            },
+            "Toybox.Lang.Numeric" => crate::ArrayElement::Numeric {
+                alias: crate::NumericAlias::Numeric,
+                nullable: false,
+            },
             "Toybox.Lang.Double" => crate::ArrayElement::Double,
             "Toybox.Lang.Float" => crate::ArrayElement::Float,
             "Toybox.Lang.Long" => crate::ArrayElement::Long,
@@ -415,6 +446,10 @@ impl<'a> Parser<'a> {
                     crate::ArrayElement::NullableInterface(interface)
                 }
                 crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
+                crate::ArrayElement::Numeric { alias, .. } => crate::ArrayElement::Numeric {
+                    alias,
+                    nullable: true,
+                },
                 crate::ArrayElement::Double => crate::ArrayElement::NullableDouble,
                 crate::ArrayElement::Float => crate::ArrayElement::NullableFloat,
                 crate::ArrayElement::Long => crate::ArrayElement::NullableLong,

@@ -153,6 +153,11 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A supported numeric alias; nullable elements require a guarded snapshot.
+    Numeric {
+        alias: NumericAlias,
+        nullable: bool,
+    },
     Interface(InterfaceType),
     NullableInterface(InterfaceType),
     Number,
@@ -186,6 +191,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Numeric { alias, nullable } => return alias.api_type(nullable),
             Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
             Self::Double | Self::NullableDouble => "Toybox.Lang.Double",
@@ -209,6 +215,13 @@ impl ArrayElement {
 
     fn nullable_base(self) -> Option<Self> {
         match self {
+            Self::Numeric {
+                alias,
+                nullable: true,
+            } => Some(Self::Numeric {
+                alias,
+                nullable: false,
+            }),
             Self::NullableInterface(interface) => Some(Self::Interface(interface)),
             Self::NullableNumber => Some(Self::Number),
             Self::NullableDouble => Some(Self::Double),
@@ -226,6 +239,9 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if let Some((alias, nullable)) = NumericAlias::from_api_type(ty) {
+            return Some(Self::Numeric { alias, nullable });
+        }
         [
             Self::Interface(InterfaceType::Comparable),
             Self::Interface(InterfaceType::Comparator),
@@ -261,6 +277,7 @@ impl ArrayElement {
 
     fn text(self) -> &'static str {
         match self {
+            Self::Numeric { alias, nullable } => alias.value_tag(nullable),
             Self::Interface(InterfaceType::Comparable) => "comparable",
             Self::Interface(InterfaceType::Comparator) => "comparator",
             Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable",
@@ -295,6 +312,30 @@ impl ArrayElement {
 
     fn array_text(self) -> &'static str {
         match self {
+            Self::Numeric {
+                alias: NumericAlias::Integer,
+                nullable: false,
+            } => "integer-union-array",
+            Self::Numeric {
+                alias: NumericAlias::Integer,
+                nullable: true,
+            } => "nullable-integer-union-array",
+            Self::Numeric {
+                alias: NumericAlias::Decimal,
+                nullable: false,
+            } => "decimal-array",
+            Self::Numeric {
+                alias: NumericAlias::Decimal,
+                nullable: true,
+            } => "nullable-decimal-array",
+            Self::Numeric {
+                alias: NumericAlias::Numeric,
+                nullable: false,
+            } => "numeric-array",
+            Self::Numeric {
+                alias: NumericAlias::Numeric,
+                nullable: true,
+            } => "nullable-numeric-array",
             Self::Interface(InterfaceType::Comparable) => "comparable-array",
             Self::Interface(InterfaceType::Comparator) => "comparator-array",
             Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable-array",
@@ -329,7 +370,7 @@ impl ArrayElement {
 }
 
 /// Scalar token in a flat Array constant, retaining its VM type and exact bits.
-/// Interface element contracts may mix compatible scalar witnesses. Null requires
+/// Interface and numeric alias contracts may mix compatible scalars. Null requires
 /// a nullable element contract; String contains text rather than a pool alias.
 /// Arrays and Dictionaries share the same tagged scalar payload representation.
 pub use dictionary::DictionaryScalar as ArrayConstantValue;
@@ -3605,7 +3646,9 @@ impl Function {
                         .map(|v| {
                             if matches!(
                                 element_type,
-                                ArrayElement::Interface(_) | ArrayElement::NullableInterface(_)
+                                ArrayElement::Interface(_)
+                                    | ArrayElement::NullableInterface(_)
+                                    | ArrayElement::Numeric { .. }
                             ) {
                                 format!(" {}", v.text())
                             } else {
@@ -3979,7 +4022,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
 fn call_type_text(result: &ReturnType) -> String {
     match result {
         ReturnType::Array(
-            element @ (ArrayElement::Interface(_) | ArrayElement::NullableInterface(_)),
+            element @ (ArrayElement::Interface(_)
+            | ArrayElement::NullableInterface(_)
+            | ArrayElement::Numeric { .. }),
         ) => return format!(" result={}", element.array_text()),
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),

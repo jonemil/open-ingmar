@@ -177,6 +177,8 @@ pub(crate) fn constant_record(
 /// Supported non-null scalar, Method, and comparison-interface Dictionary keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryKey {
+    /// A non-null Numeric, Integer, or Decimal key, retaining its runtime type.
+    Numeric(crate::NumericAlias),
     /// A ByteArray reference; Dictionary key comparison uses runtime identity.
     ByteArray,
     Method,
@@ -191,9 +193,36 @@ pub enum DictionaryKey {
     Char,
 }
 
+impl DictionaryKey {
+    /// Return the invariant key contract without erasing numeric alternatives.
+    pub fn api_type(self) -> Type {
+        let name = match self {
+            Self::Numeric(alias) => return alias.api_type(false),
+            Self::Interface(crate::InterfaceType::Comparable) => "Comparable",
+            Self::Interface(crate::InterfaceType::Comparator) => "Comparator",
+            Self::Number => "Number",
+            Self::Double => "Double",
+            Self::Float => "Float",
+            Self::Long => "Long",
+            Self::String => "String",
+            Self::Boolean => "Boolean",
+            Self::Char => "Char",
+            Self::Symbol => "Symbol",
+            Self::Method => "Method",
+            Self::ByteArray => "ByteArray",
+        };
+        Type::named(format!("Toybox.Lang.{name}"))
+    }
+}
+
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A numeric alias, optionally permitting explicitly stored Null values.
+    Numeric {
+        alias: crate::NumericAlias,
+        nullable: bool,
+    },
     /// A non-null mutable ByteArray reference.
     ByteArray,
     /// A ByteArray reference or Null; lookups still require a non-null proof.
@@ -223,7 +252,8 @@ pub enum DictionaryValue {
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
-/// Nested Array/Dictionary contracts and heterogeneous unions are unsupported.
+/// Nested containers and arbitrary heterogeneous unions are unsupported.
+/// Numeric typedefs retain their bounded scalar alternatives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DictionaryType {
     pub key: DictionaryKey,
@@ -233,21 +263,11 @@ pub struct DictionaryType {
 impl DictionaryType {
     /// Return the generic API type without erasing either mutable parameter.
     pub fn api_type(self) -> Type {
-        let key = match self.key {
-            DictionaryKey::Interface(crate::InterfaceType::Comparable) => "Comparable",
-            DictionaryKey::Interface(crate::InterfaceType::Comparator) => "Comparator",
-            DictionaryKey::Number => "Number",
-            DictionaryKey::Double => "Double",
-            DictionaryKey::Float => "Float",
-            DictionaryKey::Long => "Long",
-            DictionaryKey::String => "String",
-            DictionaryKey::Boolean => "Boolean",
-            DictionaryKey::Char => "Char",
-            DictionaryKey::Symbol => "Symbol",
-            DictionaryKey::Method => "Method",
-            DictionaryKey::ByteArray => "ByteArray",
-        };
+        let key = self.key.api_type();
         let (value, nullable) = match self.value {
+            DictionaryValue::Numeric { alias, nullable } => {
+                return Type::dictionary(key, alias.api_type(nullable));
+            }
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => ("Comparable", false),
             DictionaryValue::Interface(crate::InterfaceType::Comparator) => ("Comparator", false),
             DictionaryValue::NullableInterface(crate::InterfaceType::Comparable) => {
@@ -281,7 +301,7 @@ impl DictionaryType {
         };
         let value = Type::named(format!("Toybox.Lang.{value}"));
         Type::dictionary(
-            Type::named(format!("Toybox.Lang.{key}")),
+            key,
             if nullable {
                 Type::Union(vec![value, Type::Null])
             } else {
@@ -291,10 +311,13 @@ impl DictionaryType {
     }
 
     pub(crate) fn from_api_type(ty: &Type) -> Option<Self> {
-        let Type::Dictionary { key, .. } = ty else {
+        let Type::Dictionary { key, value } = ty else {
             return None;
         };
         let key = match key.as_ref() {
+            ty if crate::NumericAlias::from_api_type(ty).is_some_and(|(_, nullable)| !nullable) => {
+                DictionaryKey::Numeric(crate::NumericAlias::from_api_type(ty)?.0)
+            }
             Type::Named(name) => match name.as_str() {
                 "Toybox.Lang.Comparable" => {
                     DictionaryKey::Interface(crate::InterfaceType::Comparable)
@@ -316,6 +339,12 @@ impl DictionaryType {
             },
             _ => return None,
         };
+        if let Some((alias, nullable)) = crate::NumericAlias::from_api_type(value) {
+            return Some(Self {
+                key,
+                value: DictionaryValue::Numeric { alias, nullable },
+            });
+        }
         for value_kind in [
             DictionaryValue::Interface(crate::InterfaceType::Comparable),
             DictionaryValue::Interface(crate::InterfaceType::Comparator),
@@ -357,6 +386,7 @@ impl DictionaryType {
 
     pub(crate) fn text(self) -> String {
         let key = match self.key {
+            DictionaryKey::Numeric(alias) => alias.value_tag(false),
             DictionaryKey::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryKey::Interface(crate::InterfaceType::Comparator) => "comparator",
             DictionaryKey::Number => "integer",
@@ -371,6 +401,7 @@ impl DictionaryType {
             DictionaryKey::ByteArray => "byte-array",
         };
         let value = match self.value {
+            DictionaryValue::Numeric { alias, nullable } => alias.value_tag(nullable),
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryValue::Interface(crate::InterfaceType::Comparator) => "comparator",
             DictionaryValue::NullableInterface(crate::InterfaceType::Comparable) => {
@@ -412,6 +443,11 @@ impl DictionaryType {
             .split_once("=>")?;
         Some(Self {
             key: match key {
+                tag if crate::NumericAlias::parse_tag(tag)
+                    .is_some_and(|(_, nullable)| !nullable) =>
+                {
+                    DictionaryKey::Numeric(crate::NumericAlias::parse_tag(tag)?.0)
+                }
                 "comparable" => DictionaryKey::Interface(crate::InterfaceType::Comparable),
                 "comparator" => DictionaryKey::Interface(crate::InterfaceType::Comparator),
                 "integer" => DictionaryKey::Number,
@@ -427,6 +463,10 @@ impl DictionaryType {
                 _ => return None,
             },
             value: match value {
+                tag if crate::NumericAlias::parse_tag(tag).is_some() => {
+                    let (alias, nullable) = crate::NumericAlias::parse_tag(tag)?;
+                    DictionaryValue::Numeric { alias, nullable }
+                }
                 "comparable" => DictionaryValue::Interface(crate::InterfaceType::Comparable),
                 "comparator" => DictionaryValue::Interface(crate::InterfaceType::Comparator),
                 "nullable-comparable" => {
@@ -497,9 +537,12 @@ pub(crate) fn record_entries(
 /// Infer bounded contracts from source candidate types. Nullable key candidates
 /// select their non-null class; the IR checker must prove every actual key safe.
 pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> {
-    fn key(ty: &Type) -> Option<&Type> {
+    fn key(ty: &Type) -> Option<Type> {
+        if let Some((alias, _)) = crate::NumericAlias::from_api_type(ty) {
+            return Some(alias.api_type(false));
+        }
         match ty {
-            Type::Named(_) => Some(ty),
+            Type::Named(_) => Some(ty.clone()),
             Type::Union(types) => {
                 let mut non_null = types.iter().filter(|ty| **ty != Type::Null);
                 let first = non_null.next()?;
@@ -513,6 +556,15 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
         }
     }
     fn value(ty: &Type, scalar: &mut Option<Type>, nullable: &mut bool) -> Option<()> {
+        if let Some((alias, has_null)) = crate::NumericAlias::from_api_type(ty) {
+            let base = alias.api_type(false);
+            if scalar.as_ref().is_some_and(|previous| previous != &base) {
+                return None;
+            }
+            *scalar = Some(base);
+            *nullable |= has_null;
+            return Some(());
+        }
         match ty {
             Type::Named(name)
                 if matches!(
@@ -552,11 +604,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
     }
     let value = scalar?;
     DictionaryType::from_api_type(&Type::dictionary(
-        first.clone(),
-        if nullable {
-            Type::Union(vec![value, Type::Null])
-        } else {
-            value
-        },
+        first,
+        if nullable { value.with_null() } else { value },
     ))
 }

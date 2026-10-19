@@ -4,6 +4,48 @@ use std::collections::BTreeMap;
 
 /// Array joins preserve one invariant element contract without conversion.
 const ARRAY_TYPES: &[(&str, crate::ArrayElement)] = &[
+    (
+        "array-integer-union",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Integer,
+            nullable: false,
+        },
+    ),
+    (
+        "array-nullable-integer-union",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Integer,
+            nullable: true,
+        },
+    ),
+    (
+        "array-decimal",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Decimal,
+            nullable: false,
+        },
+    ),
+    (
+        "array-nullable-decimal",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Decimal,
+            nullable: true,
+        },
+    ),
+    (
+        "array-numeric",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Numeric,
+            nullable: false,
+        },
+    ),
+    (
+        "array-nullable-numeric",
+        crate::ArrayElement::Numeric {
+            alias: crate::NumericAlias::Numeric,
+            nullable: true,
+        },
+    ),
     ("array-number", crate::ArrayElement::Number),
     ("array-nullable-number", crate::ArrayElement::NullableNumber),
     ("array-long", crate::ArrayElement::Long),

@@ -691,7 +691,7 @@ the same element type, including element nullability and interface identity;
 selection preserves the chosen reference without copying or conversion.
 Scalar alternatives may also join with Null
 or their existing nullable type, producing the corresponding scalar-or-Null. No
-Char-to-Number promotion, heterogeneous union, nullable Array reference, class join,
+Char-to-Number promotion, general heterogeneous union, nullable Array reference, class join,
 Void arm, or non-Boolean truthiness is supported. Expected Array element context
 from a declaration, call, or return reaches direct empty literals and sized
 allocations in both arms;
@@ -1109,14 +1109,16 @@ later uses do not retrospectively type an opaque local. Different key or value
 contracts cannot widen or narrow through assignment. Typed references may pass
 to opaque Dictionary parameters/results, but erasure cannot be reversed.
 
+[Numeric alias containers](#numeric-alias-containers) additionally admit bounded
+mixed numeric classes under explicit or already established alias contracts.
+
 Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
 numeric, String, Boolean, Char, or Symbol keys and homogeneous values with optional
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed key kinds without an expected interface contract,
-mixed non-null scalar value kinds without an expected
-interface contract, container-valued entries,
+Null keys, mixed scalar kinds without an expected interface or numeric alias
+contract, container-valued entries,
 and trailing commas are unsupported. Nested Dictionary literal syntax is also
 unsupported, including inside entry call arguments. Ordinary calls and Array
 reads may produce scalar entries.
@@ -2218,8 +2220,41 @@ Conditional joins retain an existing numeric alias when it covers both arms;
 adding a Null arm makes it nullable. Concrete Number/Long or Float/Double arms
 alone do not introduce a numeric alias.
 [Class fields](compiler-classes.md#numeric-alias-fields) retain these same alias
-contracts. Numeric alias container elements, arbitrary source unions, and
-general union inference remain unsupported.
+contracts. Arbitrary source unions and general union inference remain unsupported.
+
+### Numeric alias containers
+
+The numeric aliases are supported as invariant Array element and Dictionary
+key/value contracts. Array elements and Dictionary values may additionally
+include Null; keys remain non-null. Canonical names, imports, and aliases share
+these contracts in parameters, results, locals, and conditional joins. This does
+not add nullable Array/Dictionary references or container fields.
+
+Explicit literal context may admit different scalar classes within the selected
+alias. Without context, a computed value already typed as a numeric alias can
+establish that alias contract; mixed concrete literals alone do not invent it.
+Array/Dictionary construction, element/key/value writes, and native calls check
+every supplied alternative. Mutable contracts are invariant: an Array of Number
+cannot substitute for an Array of Integer or Numeric, nor can a narrower
+Dictionary substitute for one with a wider numeric alias.
+
+Non-null indexed reads support the shared arithmetic/update rules; writes must
+still fit the element contract. Nullable reads need a guarded local snapshot.
+Sized Array allocation permits only nullable elements, including nullable numeric
+aliases, and does not infer non-nullness from subsequent writes. Dictionary
+lookup adds Null for an absent key even when stored values are non-null;
+`values()` preserves the stored value contract and `keys()` the non-null key
+contract.
+
+Generic Array and Dictionary methods preserve these types. Non-null numeric
+alias Arrays support default and checked source Comparator sorting under the
+existing API 5.0.0 sorting rules; nullable element sorting remains unsupported.
+Constant Arrays and Dictionaries retain each scalar's runtime type and exact
+bits. Computed literals use the existing ordered private builders. No implicit
+conversion, numeric-key merging across scalar classes, or mutable-container
+widening is introduced. See the
+[example](../../examples/compiler-numeric-containers/README.md) and
+[evidence](../investigations/compiler-numeric-unions.md#container-storage).
 
 ## ByteArrays
 

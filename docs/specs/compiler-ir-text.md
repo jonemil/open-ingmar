@@ -347,9 +347,11 @@ capacity operand is involved. Allocation failures remain runtime obligations.
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
 `integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `symbol`, `comparable`,
 `comparator`, or `method`. Values use those tags, `weak-reference`, `byte-array`,
-or their `nullable-` counterparts. Interface value contracts require API 5.0.0;
+or their `nullable-` counterparts. Keys and values also accept `numeric`,
+`integer-union`, and `decimal`; only values accept their nullable forms.
+Interface value contracts require API 5.0.0;
 WeakReference requires 1.2.0 and ByteArray requires 3.0.0. Other tags, nested
-ordinary containers, and heterogeneous unions are rejected. For example:
+ordinary containers, and arbitrary heterogeneous unions are rejected. For example:
 
 ```text
 ciq-ir
@@ -499,6 +501,15 @@ Unit field declarations reuse these tags through
 [`.field-numeric`](compiler-classes.md#numeric-alias-fields); reads retain the
 exact declaration and writes are checked against it after unit reload.
 
+Array element tags also use `numeric`, `integer-union`, `decimal`, and their
+nullable forms. Parameter/call-result tags append `-array`; conditional-edge
+tags prepend `array-`. `.array-new`, `.array-begin`, `.array-allocate`, and
+`.array-constant` retain the selected element contract. Dictionary contracts
+reuse these scalar tags on either side of `=>`, excluding nullable keys.
+Native methods and index operations recheck the
+[source container rules](compiler-subset.md#numeric-alias-containers), including
+invariance and null proofs, rather than trusting a saved result annotation.
+
 ## ByteArray values and allocation
 
 `byte-array` denotes a non-null `Toybox.Lang.ByteArray`; `nullable-byte-array`
@@ -581,6 +592,7 @@ non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
 element contracts. `method`, `weak-reference`, and their `nullable-` forms
 retain callable/weak-handle contracts.
 `byte-array` and `nullable-byte-array` retain strong ByteArray references.
+Numeric alias tags follow the [alias grammar](#numeric-aliases).
 Construction uses
 `Operation::ArrayNew` with the corresponding `ArrayElement` variant.
 Other parsed element contracts are rejected. Definition/use, block, and effect
@@ -634,6 +646,18 @@ containers are rejected. API checks require Array and each element class, as
 for allocation.
 Definition/use and ordered-effect checks include this allocation.
 
+Numeric alias element tags use tagged scalar tokens to retain each alternative,
+with the same syntax as [Dictionary constants](#dictionary-constants):
+
+```text
+.array-constant %0 numeric number 0x00000001 long 0x0000000000000001 float 0x3f800000 double 0x3ff0000000000000
+.array-constant %1 nullable-integer-union number 0x00000001 null
+```
+
+Each scalar must satisfy the alias/nullability contract. In particular, Char
+cannot substitute for a numeric token, and integer payloads cannot satisfy
+Decimal. Numeric aliases reuse the supported mixed-scalar DATA framing.
+
 Interface element tags use tagged scalar tokens with the same syntax as
 [Dictionary constants](#dictionary-constants), retaining each runtime class:
 
@@ -650,7 +674,7 @@ Null fits its nullable constant profile. Interface contracts require API 5.0.0.
 Typed IR shares the tagged scalar enum with `DictionaryScalar`; Number and Char
 remain distinct even outside a scalar element contract. Nested containers and
 empty constant payloads remain rejected. Computed/source-object elements use
-private construction. Scalar-element Array text retains the compact untagged
+private construction. Concrete scalar-element Array text retains the compact untagged
 payload syntax above.
 
 `symbol` and `nullable-symbol` are Array element tags; their parameter/call result

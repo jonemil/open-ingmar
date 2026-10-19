@@ -169,6 +169,19 @@ pub(crate) fn parse_ir_context(
                         "number-format" => Ok(crate::ParameterType::NumberFormat),
                         "endian" => Ok(crate::ParameterType::Endian),
                         "numeric" => Ok(crate::ParameterType::Numeric),
+                        tag if tag
+                            .strip_suffix("-array")
+                            .and_then(crate::NumericAlias::parse_tag)
+                            .is_some() =>
+                        {
+                            let (alias, nullable) =
+                                crate::NumericAlias::parse_tag(tag.strip_suffix("-array").unwrap())
+                                    .unwrap();
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::Numeric {
+                                alias,
+                                nullable,
+                            }))
+                        }
                         "integer-union" => Ok(crate::ParameterType::IntegerAlias),
                         "decimal" => Ok(crate::ParameterType::Decimal),
                         "nullable-numeric" => Ok(crate::ParameterType::NullableNumeric),
@@ -693,6 +706,10 @@ pub(crate) fn parse_ir_context(
                     "method" => crate::ArrayElement::Method,
                     "weak-reference" => crate::ArrayElement::WeakReference,
                     "byte-array" => crate::ArrayElement::ByteArray,
+                    tag if crate::NumericAlias::parse_tag(tag).is_some() => {
+                        let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
+                        crate::ArrayElement::Numeric { alias, nullable }
+                    }
                     "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                     "nullable-byte-array" => crate::ArrayElement::NullableByteArray,
                     "nullable-method" => crate::ArrayElement::NullableMethod,
@@ -709,10 +726,11 @@ pub(crate) fn parse_ir_context(
                         ));
                     }
                 },
-                values: if matches!(
-                    fields[2].as_str(),
-                    "comparable" | "nullable-comparable" | "comparator" | "nullable-comparator"
-                ) {
+                values: if crate::NumericAlias::parse_tag(&fields[2]).is_some()
+                    || matches!(
+                        fields[2].as_str(),
+                        "comparable" | "nullable-comparable" | "comparator" | "nullable-comparator"
+                    ) {
                     let mut values = Vec::new();
                     let mut next = 3;
                     while next < width {
@@ -821,6 +839,10 @@ pub(crate) fn parse_ir_context(
                     "method" => crate::ArrayElement::Method,
                     "weak-reference" => crate::ArrayElement::WeakReference,
                     "byte-array" => crate::ArrayElement::ByteArray,
+                    tag if crate::NumericAlias::parse_tag(tag).is_some() => {
+                        let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
+                        crate::ArrayElement::Numeric { alias, nullable }
+                    }
                     "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                     "nullable-byte-array" => crate::ArrayElement::NullableByteArray,
                     "nullable-method" => crate::ArrayElement::NullableMethod,
@@ -912,6 +934,10 @@ pub(crate) fn parse_ir_context(
                 "method" => crate::ArrayElement::Method,
                 "weak-reference" => crate::ArrayElement::WeakReference,
                 "byte-array" => crate::ArrayElement::ByteArray,
+                tag if crate::NumericAlias::parse_tag(tag).is_some() => {
+                    let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
+                    crate::ArrayElement::Numeric { alias, nullable }
+                }
                 "nullable-weak-reference" => crate::ArrayElement::NullableWeakReference,
                 "nullable-byte-array" => crate::ArrayElement::NullableByteArray,
                 "nullable-method" => crate::ArrayElement::NullableMethod,
@@ -1384,6 +1410,15 @@ fn call_contract(
             "number-format" => crate::ReturnType::NumberFormat,
             "endian" => crate::ReturnType::Endian,
             "numeric" => crate::ReturnType::Numeric,
+            tag if tag
+                .strip_suffix("-array")
+                .and_then(crate::NumericAlias::parse_tag)
+                .is_some() =>
+            {
+                let (alias, nullable) =
+                    crate::NumericAlias::parse_tag(tag.strip_suffix("-array").unwrap()).unwrap();
+                crate::ReturnType::Array(crate::ArrayElement::Numeric { alias, nullable })
+            }
             "integer-union" => crate::ReturnType::IntegerAlias,
             "decimal" => crate::ReturnType::Decimal,
             "nullable-numeric" => crate::ReturnType::NullableNumeric,

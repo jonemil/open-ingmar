@@ -415,7 +415,10 @@ pub(crate) fn value_call(
         let supported_elements = match receiver {
             api::Type::Array(element) => match crate::ArrayElement::from_api_type(element) {
                 Some(
-                    crate::ArrayElement::Number
+                    crate::ArrayElement::Numeric {
+                        nullable: false, ..
+                    }
+                    | crate::ArrayElement::Number
                     | crate::ArrayElement::Long
                     | crate::ArrayElement::Float
                     | crate::ArrayElement::Double

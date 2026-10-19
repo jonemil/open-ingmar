@@ -269,15 +269,11 @@ impl NumericAlias {
 
     /// Return the saved-IR tag for this non-null alias.
     fn tag(self) -> &'static str {
-        match self {
-            Self::Integer => "integer-union",
-            Self::Decimal => "decimal",
-            Self::Numeric => "numeric",
-        }
+        self.value_tag(false)
     }
 
-    /// Return the field read contract for this alias and declared nullability.
-    fn result_type(self, nullable: bool) -> ReturnType {
+    /// Return the scalar result contract for this alias and declared nullability.
+    pub(crate) fn result_type(self, nullable: bool) -> ReturnType {
         match (self, nullable) {
             (Self::Integer, false) => ReturnType::IntegerAlias,
             (Self::Integer, true) => ReturnType::NullableIntegerAlias,
@@ -286,6 +282,52 @@ impl NumericAlias {
             (Self::Numeric, false) => ReturnType::Numeric,
             (Self::Numeric, true) => ReturnType::NullableNumeric,
         }
+    }
+
+    /// Return the canonical scalar union, optionally including Null.
+    pub(crate) fn api_type(self, nullable: bool) -> crate::api::Type {
+        self.result_type(nullable).api_type()
+    }
+
+    /// Return the scalar text tag, retaining declared nullability.
+    pub(crate) fn value_tag(self, nullable: bool) -> &'static str {
+        match (self, nullable) {
+            (Self::Integer, false) => "integer-union",
+            (Self::Integer, true) => "nullable-integer-union",
+            (Self::Decimal, false) => "decimal",
+            (Self::Decimal, true) => "nullable-decimal",
+            (Self::Numeric, false) => "numeric",
+            (Self::Numeric, true) => "nullable-numeric",
+        }
+    }
+
+    /// Parse a supported alias tag and its nullable alternative.
+    pub(crate) fn parse_tag(tag: &str) -> Option<(Self, bool)> {
+        let (tag, nullable) = tag
+            .strip_prefix("nullable-")
+            .map(|tag| (tag, true))
+            .unwrap_or((tag, false));
+        Some((
+            match tag {
+                "integer-union" => Self::Integer,
+                "decimal" => Self::Decimal,
+                "numeric" => Self::Numeric,
+                _ => return None,
+            },
+            nullable,
+        ))
+    }
+
+    /// Resolve an exact supported numeric union, including its Null alternative.
+    pub(crate) fn from_api_type(ty: &crate::api::Type) -> Option<(Self, bool)> {
+        for alias in [Self::Integer, Self::Decimal, Self::Numeric] {
+            for nullable in [false, true] {
+                if alias.api_type(nullable) == *ty {
+                    return Some((alias, nullable));
+                }
+            }
+        }
+        None
     }
 }
 

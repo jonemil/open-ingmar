@@ -58,5 +58,32 @@ For SDK reproduction, reuse the minimal-console manifest/resources with
 AppBase class. Use the specimen checker with `compiler-numeric-fields` as above;
 current captures are in `scratch/check-numeric-fields/`.
 
+## Container storage
+
+SDK/compiler/simulator 9.2.0 / fr265 accept numeric aliases as Array elements
+and Dictionary keys/values in the
+[container example](../../examples/compiler-numeric-containers/app.mc).
+Mixed Number/Long/Float/Double Arrays sort without conversion. Reads, indexed
+updates, generic methods, nullable snapshots, and sized allocation preserve the
+stored numeric classes. Dictionary `keys()` and `values()` expose those same
+classes; lookup of an absent key returns Null.
+
+A Dictionary constant containing `1`, `1l`, `1.0`, and `1.0d` has four entries,
+with separately retrievable values. Equal mathematical value alone does not
+merge keys of these four runtime classes on this target. The compiler retains
+all scalar tags/bits rather than folding across classes. This does not establish
+portable hash/equality behavior for arbitrary numeric edge cases.
+
+SDK and generated applications match all
+[69 console lines](../../examples/compiler-numeric-containers/expected.txt),
+including ordered effects in computed Array and Dictionary literals. Both PRGs
+support structured CODE/DATA export/reconstruction using existing scalar record
+framing. See the [container contracts](../specs/compiler-subset.md#numeric-alias-containers).
+For SDK reproduction, reuse the minimal-console manifest/resources with
+`../../examples/compiler-numeric-containers` as the source path from
+`scratch/compiler-numeric-containers/monkey.jungle`; the example owns its AppBase
+class. Use the specimen checker with `compiler-numeric-containers`; current
+captures are in `scratch/check-numeric-containers-v4/`.
+
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
 [language]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

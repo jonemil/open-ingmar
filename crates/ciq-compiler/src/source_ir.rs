@@ -1770,7 +1770,10 @@ impl Builder<'_> {
                 },
                 Some(ConstructionType::Array(element)),
             ) if element.nullable_base().is_some()
-                || matches!(element, crate::ArrayElement::Interface(_)) =>
+                || matches!(
+                    element,
+                    crate::ArrayElement::Interface(_) | crate::ArrayElement::Numeric { .. }
+                ) =>
             {
                 self.array_literal(elements, Some(element), span, locals)?
             }

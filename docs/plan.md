@@ -18,7 +18,7 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Extend numeric alias container contracts and general union rules as core
+Extend general union rules and broader container/storage contracts as core
 consumers require them.
 Broader option records need explicit field/value contracts beyond the checked
 ByteArray option builder. Extend structural source annotations and option
@@ -52,8 +52,8 @@ patterns, or conversion thresholds. The isolated
 [boundary probes](investigations/compiler-numeric-boundaries.md) establish
 simulator observations, not portable failure/recovery or conversion guarantees.
 
-Keep heterogeneous Dictionary values, Null keys, and nested containers deferred
-under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
+Keep general heterogeneous Dictionary values, Null keys, and nested containers
+deferred under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.
 Sized Array allocation keeps nullable elements until a separate initialization
