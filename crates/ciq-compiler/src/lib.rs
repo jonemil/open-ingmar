@@ -448,6 +448,16 @@ pub enum ReturnType {
     Endian,
     /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
     Numeric,
+    /// A non-null Lang.Integer value: Number or Long.
+    IntegerAlias,
+    /// A non-null Lang.Decimal value: Float or Double.
+    Decimal,
+    /// A Lang.Numeric value or Null; arithmetic requires a non-null proof.
+    NullableNumeric,
+    /// A Lang.Integer value or Null; arithmetic requires a non-null proof.
+    NullableIntegerAlias,
+    /// A Lang.Decimal value or Null; arithmetic requires a non-null proof.
+    NullableDecimal,
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
@@ -507,6 +517,16 @@ pub enum ParameterType {
     Endian,
     /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
     Numeric,
+    /// A non-null Lang.Integer value: Number or Long.
+    IntegerAlias,
+    /// A non-null Lang.Decimal value: Float or Double.
+    Decimal,
+    /// A Lang.Numeric value or Null; arithmetic requires a non-null proof.
+    NullableNumeric,
+    /// A Lang.Integer value or Null; arithmetic requires a non-null proof.
+    NullableIntegerAlias,
+    /// A Lang.Decimal value or Null; arithmetic requires a non-null proof.
+    NullableDecimal,
     /// Non-null structural reference with checked comparison members.
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
@@ -586,6 +606,11 @@ impl ParameterType {
             Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
             Self::Endian => api::Type::named("Toybox.Lang.Endian"),
             Self::Numeric => api::Type::numeric(),
+            Self::IntegerAlias => api::Type::integer(),
+            Self::Decimal => api::Type::decimal(),
+            Self::NullableNumeric => api::Type::numeric().with_null(),
+            Self::NullableIntegerAlias => api::Type::integer().with_null(),
+            Self::NullableDecimal => api::Type::decimal().with_null(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
@@ -631,6 +656,11 @@ impl ReturnType {
             Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
             Self::Endian => api::Type::named("Toybox.Lang.Endian"),
             Self::Numeric => api::Type::numeric(),
+            Self::IntegerAlias => api::Type::integer(),
+            Self::Decimal => api::Type::decimal(),
+            Self::NullableNumeric => api::Type::numeric().with_null(),
+            Self::NullableIntegerAlias => api::Type::integer().with_null(),
+            Self::NullableDecimal => api::Type::decimal().with_null(),
             Self::ByteArray => ValueType::ByteArray.api_type(),
             Self::NullableByteArray => ValueType::NullableByteArray.api_type(),
             Self::NullableWeakReference => ValueType::NullableWeakReference.api_type(),
@@ -657,6 +687,16 @@ enum ValueType {
     Endian,
     /// A non-null Lang.Numeric value: Number, Float, Long, or Double.
     Numeric,
+    /// A non-null Lang.Integer value: Number or Long.
+    IntegerAlias,
+    /// A non-null Lang.Decimal value: Float or Double.
+    Decimal,
+    /// A Lang.Numeric value or Null; arithmetic requires a non-null proof.
+    NullableNumeric,
+    /// A Lang.Integer value or Null; arithmetic requires a non-null proof.
+    NullableIntegerAlias,
+    /// A Lang.Decimal value or Null; arithmetic requires a non-null proof.
+    NullableDecimal,
     Interface(InterfaceType),
     /// Structural comparison reference or Null.
     NullableInterface(InterfaceType),
@@ -710,6 +750,9 @@ impl ValueType {
         match self {
             Self::NullableInterface(interface) => Self::Interface(interface),
             Self::NullableInteger => Self::Integer,
+            Self::NullableNumeric => Self::Numeric,
+            Self::NullableIntegerAlias => Self::IntegerAlias,
+            Self::NullableDecimal => Self::Decimal,
             Self::NullableLong => Self::Long,
             Self::NullableDouble => Self::Double,
             Self::NullableFloat => Self::Float,
@@ -772,6 +815,11 @@ impl ValueType {
             Self::NumberFormat => api::Type::named("Toybox.Lang.NumberFormat"),
             Self::Endian => api::Type::named("Toybox.Lang.Endian"),
             Self::Numeric => api::Type::numeric(),
+            Self::IntegerAlias => api::Type::integer(),
+            Self::Decimal => api::Type::decimal(),
+            Self::NullableNumeric => api::Type::numeric().with_null(),
+            Self::NullableIntegerAlias => api::Type::integer().with_null(),
+            Self::NullableDecimal => api::Type::decimal().with_null(),
             Self::ByteArray => api::Type::named("Toybox.Lang.ByteArray"),
             Self::NullableByteArray => {
                 api::Type::Union(vec![Self::ByteArray.api_type(), api::Type::Null])
@@ -857,6 +905,11 @@ impl ValueType {
             _ if *ty == Self::NullableWeakReference.api_type() => Some(Self::NullableWeakReference),
             _ if *ty == api::Type::byte_options() => Some(Self::ByteArrayOptions),
             _ if *ty == api::Type::numeric() => Some(Self::Numeric),
+            _ if *ty == api::Type::integer() => Some(Self::IntegerAlias),
+            _ if *ty == api::Type::decimal() => Some(Self::Decimal),
+            _ if *ty == api::Type::numeric().with_null() => Some(Self::NullableNumeric),
+            _ if *ty == api::Type::integer().with_null() => Some(Self::NullableIntegerAlias),
+            _ if *ty == api::Type::decimal().with_null() => Some(Self::NullableDecimal),
             _ if *ty == Self::NullableByteArray.api_type() => Some(Self::NullableByteArray),
             _ => None,
         }
@@ -1117,7 +1170,8 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
     },
-    /// Negate one numeric operand with a same-type zero subtraction.
+    /// Negate a numeric operand with zero subtraction. Concrete types use their
+    /// own zero width; numeric aliases use Number zero and runtime promotion.
     /// Nullable values require a non-null proof before use.
     Negate {
         result: ValueId,
@@ -2008,6 +2062,9 @@ impl Function {
                                 if let Some(
                                     ty @ (ValueType::NullableInteger
                                     | ValueType::NullableString
+                                    | ValueType::NullableNumeric
+                                    | ValueType::NullableIntegerAlias
+                                    | ValueType::NullableDecimal
                                     | ValueType::NullableBoolean
                                     | ValueType::NullableWeakReference
                                     | ValueType::NullableByteArray
@@ -2178,6 +2235,8 @@ impl Function {
                         type_of(value),
                         ValueType::Integer
                             | ValueType::Numeric
+                            | ValueType::IntegerAlias
+                            | ValueType::Decimal
                             | ValueType::String
                             | ValueType::Boolean
                             | ValueType::Char
@@ -2689,7 +2748,12 @@ impl Function {
                             local_types[&local],
                             ValueType::LangObject
                                 | ValueType::Numeric
+                                | ValueType::IntegerAlias
+                                | ValueType::Decimal
                                 | ValueType::NullableObject
+                                | ValueType::NullableNumeric
+                                | ValueType::NullableIntegerAlias
+                                | ValueType::NullableDecimal
                                 | ValueType::Interface(_)
                                 | ValueType::NullableInterface(_)
                         ) && native::accepts(
@@ -2788,6 +2852,11 @@ impl Function {
                             ValueType::NumberFormat => ReturnType::NumberFormat,
                             ValueType::Endian => ReturnType::Endian,
                             ValueType::Numeric => ReturnType::Numeric,
+                            ValueType::IntegerAlias => ReturnType::IntegerAlias,
+                            ValueType::Decimal => ReturnType::Decimal,
+                            ValueType::NullableNumeric => ReturnType::NullableNumeric,
+                            ValueType::NullableIntegerAlias => ReturnType::NullableIntegerAlias,
+                            ValueType::NullableDecimal => ReturnType::NullableDecimal,
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
                             ValueType::Double => ReturnType::Double,
@@ -3165,6 +3234,11 @@ impl Function {
                             ParameterType::NumberFormat => "number-format",
                             ParameterType::Endian => "endian",
                             ParameterType::Numeric => "numeric",
+                            ParameterType::IntegerAlias => "integer-union",
+                            ParameterType::Decimal => "decimal",
+                            ParameterType::NullableNumeric => "nullable-numeric",
+                            ParameterType::NullableIntegerAlias => "nullable-integer-union",
+                            ParameterType::NullableDecimal => "nullable-decimal",
                             ParameterType::ByteArray => "byte-array",
                             ParameterType::NullableByteArray => "nullable-byte-array",
                             ParameterType::NullableWeakReference => "nullable-weak-reference",
@@ -3199,6 +3273,11 @@ impl Function {
             | ReturnType::NumberFormat
             | ReturnType::Endian
             | ReturnType::Numeric
+            | ReturnType::IntegerAlias
+            | ReturnType::Decimal
+            | ReturnType::NullableNumeric
+            | ReturnType::NullableIntegerAlias
+            | ReturnType::NullableDecimal
             | ReturnType::ByteArray
             | ReturnType::NullableByteArray
             | ReturnType::NullableWeakReference
@@ -3789,11 +3868,16 @@ fn validate_call_arguments(
                     | ValueType::Array(_)
                     | ValueType::LangObject
                     | ValueType::NullableObject
+                    | ValueType::NullableNumeric
+                    | ValueType::NullableIntegerAlias
+                    | ValueType::NullableDecimal
                     | ValueType::WeakReference
                     | ValueType::ByteArray
                     | ValueType::NumberFormat
                     | ValueType::Endian
                     | ValueType::Numeric
+                    | ValueType::IntegerAlias
+                    | ValueType::Decimal
                     | ValueType::NullableByteArray
                     | ValueType::NullableWeakReference
                     | ValueType::Interface(_)
@@ -3848,6 +3932,11 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NumberFormat => Ok(ValueType::NumberFormat),
         ReturnType::Endian => Ok(ValueType::Endian),
         ReturnType::Numeric => Ok(ValueType::Numeric),
+        ReturnType::IntegerAlias => Ok(ValueType::IntegerAlias),
+        ReturnType::Decimal => Ok(ValueType::Decimal),
+        ReturnType::NullableNumeric => Ok(ValueType::NullableNumeric),
+        ReturnType::NullableIntegerAlias => Ok(ValueType::NullableIntegerAlias),
+        ReturnType::NullableDecimal => Ok(ValueType::NullableDecimal),
         ReturnType::ByteArray => Ok(ValueType::ByteArray),
         ReturnType::NullableByteArray => Ok(ValueType::NullableByteArray),
         ReturnType::NullableWeakReference => Ok(ValueType::NullableWeakReference),
@@ -3901,6 +3990,11 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::NumberFormat => " result=number-format",
         ReturnType::Endian => " result=endian",
         ReturnType::Numeric => " result=numeric",
+        ReturnType::IntegerAlias => " result=integer-union",
+        ReturnType::Decimal => " result=decimal",
+        ReturnType::NullableNumeric => " result=nullable-numeric",
+        ReturnType::NullableIntegerAlias => " result=nullable-integer-union",
+        ReturnType::NullableDecimal => " result=nullable-decimal",
         ReturnType::ByteArray => " result=byte-array",
         ReturnType::NullableByteArray => " result=nullable-byte-array",
         ReturnType::NullableWeakReference => " result=nullable-weak-reference",

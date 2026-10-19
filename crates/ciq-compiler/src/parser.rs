@@ -980,7 +980,7 @@ impl<'a> Parser<'a> {
                 let saved = self.token()?.span.start;
                 if self.peek()? == Kind::Word("Null") {
                     self.token()?;
-                    target = crate::api::Type::Union(vec![target, crate::api::Type::Null]);
+                    target = target.with_null();
                 } else {
                     self.offset = saved;
                     self.lookahead = None;
@@ -2028,6 +2028,8 @@ impl Parser<'_> {
                         "Toybox.Lang.Double" => crate::ParameterType::Double,
                         "Toybox.Lang.Float" => crate::ParameterType::Float,
                         "Toybox.Lang.Numeric" => crate::ParameterType::Numeric,
+                        "Toybox.Lang.Integer" => crate::ParameterType::IntegerAlias,
+                        "Toybox.Lang.Decimal" => crate::ParameterType::Decimal,
                         "Toybox.Lang.NumberFormat" => crate::ParameterType::NumberFormat,
                         "Toybox.Lang.Endian" => crate::ParameterType::Endian,
                         "Toybox.Lang.String" => crate::ParameterType::String,
@@ -2079,6 +2081,11 @@ impl Parser<'_> {
                                 crate::ParameterType::NullableInterface(interface)
                             }
                             crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
+                            crate::ParameterType::Numeric => crate::ParameterType::NullableNumeric,
+                            crate::ParameterType::IntegerAlias => {
+                                crate::ParameterType::NullableIntegerAlias
+                            }
+                            crate::ParameterType::Decimal => crate::ParameterType::NullableDecimal,
                             crate::ParameterType::LangObject => {
                                 crate::ParameterType::NullableObject
                             }
@@ -2131,6 +2138,8 @@ impl Parser<'_> {
                 "Toybox.Lang.Double" => crate::ReturnType::Double,
                 "Toybox.Lang.Float" => crate::ReturnType::Float,
                 "Toybox.Lang.Numeric" => crate::ReturnType::Numeric,
+                "Toybox.Lang.Integer" => crate::ReturnType::IntegerAlias,
+                "Toybox.Lang.Decimal" => crate::ReturnType::Decimal,
                 "Toybox.Lang.NumberFormat" => crate::ReturnType::NumberFormat,
                 "Toybox.Lang.Endian" => crate::ReturnType::Endian,
                 "Toybox.Lang.String" => crate::ReturnType::String,
@@ -2175,6 +2184,9 @@ impl Parser<'_> {
                         crate::ReturnType::NullableInterface(interface)
                     }
                     crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
+                    crate::ReturnType::Numeric => crate::ReturnType::NullableNumeric,
+                    crate::ReturnType::IntegerAlias => crate::ReturnType::NullableIntegerAlias,
+                    crate::ReturnType::Decimal => crate::ReturnType::NullableDecimal,
                     crate::ReturnType::LangObject => crate::ReturnType::NullableObject,
                     crate::ReturnType::Long => crate::ReturnType::NullableLong,
                     crate::ReturnType::Double => crate::ReturnType::NullableDouble,

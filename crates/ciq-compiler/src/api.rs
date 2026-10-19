@@ -206,6 +206,44 @@ pub enum Type {
 }
 
 impl Type {
+    /// Return the canonical Lang.Integer alias (Number or Long).
+    pub fn integer() -> Self {
+        Self::Union(vec![
+            Self::named("Toybox.Lang.Number"),
+            Self::named("Toybox.Lang.Long"),
+        ])
+    }
+    /// Return the canonical Lang.Decimal alias (Float or Double).
+    pub fn decimal() -> Self {
+        Self::Union(vec![
+            Self::named("Toybox.Lang.Float"),
+            Self::named("Toybox.Lang.Double"),
+        ])
+    }
+    /// Add Null to the top-level union alternatives once, preserving their order.
+    pub fn with_null(self) -> Self {
+        let mut alternatives = match self {
+            Self::Union(types) => types,
+            ty => vec![ty],
+        };
+        if !alternatives.contains(&Self::Null) {
+            alternatives.push(Self::Null);
+        }
+        Self::Union(alternatives)
+    }
+    /// Return alternatives for a supported non-null numeric typedef.
+    pub(crate) fn numeric_alternatives(&self) -> Option<&[Type]> {
+        match self {
+            Self::Union(types)
+                if *self == Self::numeric()
+                    || *self == Self::integer()
+                    || *self == Self::decimal() =>
+            {
+                Some(types)
+            }
+            _ => None,
+        }
+    }
     /// Return ByteArray's optional offset/endianness field contract.
     pub fn byte_options() -> Self {
         Self::Options(BTreeMap::from([
@@ -421,9 +459,14 @@ impl Catalogue {
     pub fn constant(&self, module: &str, member: &str) -> Option<&Constant> {
         self.constants.get(&(module.into(), member.into()))
     }
-    /// Resolve the supported Numeric typedef to its concrete scalar alternatives.
+    /// Resolve a supported Numeric, Integer, or Decimal typedef to its scalar alternatives.
     pub fn type_alias(&self, name: &str) -> Option<Type> {
-        (name == "Toybox.Lang.Numeric").then(Type::numeric)
+        match name {
+            "Toybox.Lang.Numeric" => Some(Type::numeric()),
+            "Toybox.Lang.Integer" => Some(Type::integer()),
+            "Toybox.Lang.Decimal" => Some(Type::decimal()),
+            _ => None,
+        }
     }
     /// Resolve a bounded enum type without treating it as an object class.
     pub fn enum_level(&self, name: &str) -> Option<ApiLevel> {

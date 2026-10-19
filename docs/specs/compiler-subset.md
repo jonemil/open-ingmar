@@ -2182,19 +2182,42 @@ See the [example](../../examples/compiler-nullable-arrays/README.md) and
 
 ## Numeric values
 
-`Toybox.Lang.Numeric` expands to Number, Float, Long, or Double. It is a typedef,
-not a runtime class. Canonical names, imports, and Lang aliases work in
-parameters, returns, and lexical assertions. Locals preserve the union across
-assignments of any of its four alternatives; no numeric conversion is implied.
-Native and saved-IR validation retain the same contract.
+The numeric typedefs expand to these concrete alternatives:
 
-Printing accepts Numeric. A native member call must be valid for every possible
-class and have one common result contract, including `toString`, `format`, and
-numeric conversions. Arithmetic needs a concrete runtime-class proof or an
-explicit conversion. Direct `instanceof Number/Long/Float/Double` branches
-refine fresh Numeric local/parameter reads under the existing branch rules.
-Nullable Numeric, Numeric container elements/fields, and general union
-inference remain unsupported.
+| Alias | Alternatives |
+|---|---|
+| `Toybox.Lang.Integer` | Number, Long |
+| `Toybox.Lang.Decimal` | Float, Double |
+| `Toybox.Lang.Numeric` | Number, Float, Long, Double |
+
+They introduce no VM class, wrapper, or conversion. Canonical names, imports,
+and Lang aliases work in parameters, returns, lexical assertions, and their
+`or Null` forms. Locals retain the declared union across assignments of its
+alternatives. A non-null alias cannot receive Null; a nullable alias can.
+Native and saved-IR validation enforce the same contracts.
+
+Arithmetic and comparisons require every possible concrete operand pair to
+support the operation. Existing scalar promotion rules apply to each pair;
+the result is one exact scalar or the narrowest supported numeric alias covering
+all results. For example, Integer + Integer yields Integer, Numeric + Float
+and Integer + Float yield Decimal, and Decimal + Long yields Double. Only
+Integer supports remainder, bitwise operations, shifts, and complement. Unary
+signs and statement updates preserve each non-null alias. Operations lower to
+the ordinary VM instructions without inserting conversions. Alias negation uses
+Number zero subtraction, with result width selected by runtime promotion.
+
+Printing accepts non-null numeric aliases. Native member calls must be valid
+for every alternative and have one common result contract, including `toString`,
+`format`, and numeric conversions. Direct `instanceof Number/Long/Float/Double`
+branches refine fresh alias local/parameter reads under the existing branch
+rules. Nullable aliases require a current non-null proof before arithmetic,
+printing, or member calls. Writes invalidate that proof; a saved Boolean guard
+is not a proof for later reads.
+
+Conditional joins retain an existing numeric alias when it covers both arms;
+adding a Null arm makes it nullable. Concrete Number/Long or Float/Double arms
+alone do not introduce a numeric alias. Numeric alias fields/container elements,
+arbitrary source unions, and general union inference remain unsupported.
 
 ## ByteArrays
 

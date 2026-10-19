@@ -221,7 +221,7 @@ impl Types {
                             &self.origins.native_arguments(
                                 receiver,
                                 "get",
-                                [(*key, candidate(key_type).clone())],
+                                [(*key, candidate(key_type).into_owned())],
                             ),
                             None,
                         )
@@ -230,13 +230,15 @@ impl Types {
             ),
             Operation::ArrayRead { result, array, .. } => (
                 *result,
-                self.values.get(array).and_then(|ty| match candidate(ty) {
-                    Type::Array(element) => Some((**element).clone()),
-                    Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
-                        Some(Type::named("Toybox.Lang.Number"))
-                    }
-                    _ => None,
-                }),
+                self.values
+                    .get(array)
+                    .and_then(|ty| match candidate(ty).as_ref() {
+                        Type::Array(element) => Some((**element).clone()),
+                        Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
+                            Some(Type::named("Toybox.Lang.Number"))
+                        }
+                        _ => None,
+                    }),
             ),
             Operation::NativeCall {
                 result,
@@ -247,13 +249,17 @@ impl Types {
                 let ty = self.values.get(receiver).and_then(|receiver| {
                     let argument_types: Option<Vec<_>> = arguments
                         .iter()
-                        .map(|id| self.values.get(id).map(|ty| (*id, candidate(ty).clone())))
+                        .map(|id| {
+                            self.values
+                                .get(id)
+                                .map(|ty| (*id, candidate(ty).into_owned()))
+                        })
                         .collect();
                     native::value_call(
-                        candidate(receiver),
+                        &candidate(receiver),
                         member,
                         &self.origins.native_arguments(
-                            candidate(receiver),
+                            &candidate(receiver),
                             member,
                             argument_types?,
                         ),
@@ -274,7 +280,7 @@ impl Types {
                     .get(left)
                     .zip(self.values.get(right))
                     .and_then(|(left, right)| {
-                        operators::binary_result(*kind, candidate(left), candidate(right))
+                        operators::binary_result(*kind, &candidate(left), &candidate(right))
                     }),
             ),
             Operation::SourceCast { result, class, .. } => (*result, class.base.constructed_type()),
@@ -293,14 +299,14 @@ impl Types {
                     .get(left)
                     .zip(self.values.get(right))
                     .and_then(|(left, right)| {
-                        operators::comparison_result(*kind, candidate(left), candidate(right))
+                        operators::comparison_result(*kind, &candidate(left), &candidate(right))
                     }),
             ),
             Operation::Not { result, operand } => (
                 *result,
                 self.values
                     .get(operand)
-                    .and_then(|ty| operators::not_result(candidate(ty))),
+                    .and_then(|ty| operators::not_result(&candidate(ty))),
             ),
             Operation::Step {
                 result,
@@ -310,19 +316,19 @@ impl Types {
                 *result,
                 self.values
                     .get(operand)
-                    .and_then(|ty| operators::step_result(candidate(ty), *increment)),
+                    .and_then(|ty| operators::step_result(&candidate(ty), *increment)),
             ),
             Operation::Negate { result, operand } | Operation::Positive { result, operand } => (
                 *result,
                 self.values
                     .get(operand)
-                    .and_then(|ty| operators::sign_result(candidate(ty))),
+                    .and_then(|ty| operators::sign_result(&candidate(ty))),
             ),
             Operation::Complement { result, operand } => (
                 *result,
                 self.values
                     .get(operand)
-                    .and_then(|ty| operators::complement_result(candidate(ty))),
+                    .and_then(|ty| operators::complement_result(&candidate(ty))),
             ),
             _ => return,
         };
@@ -334,7 +340,7 @@ impl Types {
     pub(crate) fn element(&self, value: ValueId) -> Option<ArrayElement> {
         self.values
             .get(&value)
-            .and_then(|ty| ArrayElement::from_api_type(candidate(ty)))
+            .and_then(|ty| ArrayElement::from_api_type(&candidate(ty)))
     }
 
     /// Read a stored local's candidate type; final IR checking remains authoritative.
@@ -358,16 +364,13 @@ impl Types {
 }
 
 /// Select the possible non-null class without asserting a control-flow proof.
-fn candidate(ty: &Type) -> &Type {
-    if let Type::Union(types) = ty {
-        let mut non_null = types.iter().filter(|ty| **ty != Type::Null);
-        if let Some(only) = non_null.next() {
-            if non_null.next().is_none() {
-                return only;
-            }
+fn candidate(ty: &Type) -> std::borrow::Cow<'_, Type> {
+    if let Some(value) = crate::ValueType::from_api_type(ty) {
+        if value.without_null() != value {
+            return std::borrow::Cow::Owned(value.without_null().api_type());
         }
     }
-    ty
+    std::borrow::Cow::Borrowed(ty)
 }
 
 /// Replay candidate types for a primitive emitter that has no builder cache.

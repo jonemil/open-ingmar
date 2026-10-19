@@ -15,9 +15,10 @@ type parameters. A declaration
 describes a runtime-provided API; compiler analysis state does not belong in it.
 `Lang.Object` is the root class. Modules are namespaces and do not inherit Object.
 
-`Catalogue::type_alias()` expands the supported Numeric typedef into its four
-numeric classes. It is not a class or an enum. NumberFormat and Endian are
-declared enum types from API 1.0.0; their published constants require 3.1.0.
+`Catalogue::type_alias()` expands Numeric, Integer, and Decimal into their
+[scalar alternatives](compiler-subset.md#numeric-values). These typedefs are
+neither classes nor enums. NumberFormat and Endian are declared enum types from
+API 1.0.0; their published constants require 3.1.0.
 Executable signatures retain these enum identities, while `.constant` retains
 the member's introduction level and lowers to its integer value. ByteArray conversion
 methods declare optional `offset`/`endianness` fields; the
@@ -184,7 +185,7 @@ operator/type-system dependencies and sequencing belong to the
   methods, using minimal fixtures before broader resource generation.
 - **Lang module and supporting types:** Lang.format; NumberFormat/Endian
   constants;
-  Integer/Decimal aliases, broader Numeric union operations/storage, and general
+  numeric alias fields/container elements, general unions, and broader
   structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

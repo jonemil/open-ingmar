@@ -18,8 +18,8 @@ type targets alongside nested names, source superclass chains, and nullable
 source-reference contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Parameterized-container and general-union casts need their own type contracts.
-Extend Numeric arithmetic, nullable/container/field contracts, and the
-Integer/Decimal aliases as core consumers require their shared union rules.
+Extend numeric alias container/field contracts and general union rules as core
+consumers require them.
 Broader option records need explicit field/value contracts beyond the checked
 ByteArray option builder. Extend structural source annotations and option
 storage/mutation only with corresponding record proofs.

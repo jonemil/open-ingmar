@@ -4,16 +4,31 @@ use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
 pub(crate) fn not_result(operand: &Type) -> Option<Type> {
+    if let Some(types) = operand.numeric_alternatives() {
+        return types
+            .iter()
+            .all(|ty| not_result(ty).is_some())
+            .then(|| operand.clone());
+    }
     (*operand == Type::named("Toybox.Lang.Boolean") || integer(operand)).then(|| operand.clone())
 }
 
 /// Resolve Number/Long complement without widening its width or admitting Null.
 pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
+    if let Some(types) = operand.numeric_alternatives() {
+        return types
+            .iter()
+            .all(|ty| complement_result(ty).is_some())
+            .then(|| operand.clone());
+    }
     integer(operand).then(|| operand.clone())
 }
 
 /// Resolve unary signs without changing numeric width or admitting Null.
 pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+    if operand.numeric_alternatives().is_some() {
+        return Some(operand.clone());
+    }
     numeric(operand).then(|| operand.clone())
 }
 
@@ -28,6 +43,9 @@ fn numeric(ty: &Type) -> bool {
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
 pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+    if operand.numeric_alternatives().is_some() {
+        return Some(operand.clone());
+    }
     (numeric(operand) || (increment && *operand == Type::named("Toybox.Lang.Char")))
         .then(|| operand.clone())
 }
@@ -39,7 +57,36 @@ pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
 /// promotes to Double for Double operands or a Long/Float pair, otherwise Float.
 /// An exact String operand
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
+/// Numeric aliases require every concrete pair to be valid; results use an
+/// exact scalar or the narrowest supported numeric alias containing them.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
+        let mut results = Vec::new();
+        for a in left
+            .numeric_alternatives()
+            .unwrap_or(std::slice::from_ref(left))
+        {
+            for b in right
+                .numeric_alternatives()
+                .unwrap_or(std::slice::from_ref(right))
+            {
+                let result = binary_result(kind, a, b)?;
+                if !results.contains(&result) {
+                    results.push(result);
+                }
+            }
+        }
+        if results.len() == 1 {
+            return results.pop();
+        }
+        return [Type::integer(), Type::decimal(), Type::numeric()]
+            .into_iter()
+            .find(|ty| {
+                results
+                    .iter()
+                    .all(|actual| crate::native::accepts(ty, actual))
+            });
+    }
     if matches!(
         kind,
         BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide
@@ -117,6 +164,20 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
+        for a in left
+            .numeric_alternatives()
+            .unwrap_or(std::slice::from_ref(left))
+        {
+            for b in right
+                .numeric_alternatives()
+                .unwrap_or(std::slice::from_ref(right))
+            {
+                comparison_result(kind, a, b)?;
+            }
+        }
+        return Some(Type::named("Toybox.Lang.Boolean"));
+    }
     let char_numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
     let char_equality = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.Char") && numeric(right))
@@ -149,36 +210,49 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     };
     let interface_null = kind.is_equality()
         && ((*left == Type::Null && interface(right)) || (interface(left) && *right == Type::Null));
+    let alias_nullable = |ty: &Type| {
+        matches!(
+            crate::ValueType::from_api_type(ty),
+            Some(
+                crate::ValueType::NullableNumeric
+                    | crate::ValueType::NullableIntegerAlias
+                    | crate::ValueType::NullableDecimal
+            )
+        )
+    };
     let null_check = kind.is_equality()
-        && ((left == &Type::Null
-            && (right == &Type::Null
-                || right == &nullable_object
-                || right == &nullable_dictionary
-                || right == &nullable_number
-                || right == &nullable_string
-                || right == &nullable_boolean
-                || right == &nullable_weak_reference
-                || right == &nullable_byte_array
-                || right == &nullable_method
-                || right == &nullable_symbol
-                || right == &nullable_char
-                || right == &nullable_float
-                || right == &nullable_double
-                || right == &nullable_long))
-            || ((left == &nullable_object
-                || left == &nullable_dictionary
-                || left == &nullable_number
-                || left == &nullable_string
-                || left == &nullable_boolean
-                || left == &nullable_weak_reference
-                || left == &nullable_byte_array
-                || left == &nullable_method
-                || left == &nullable_symbol
-                || left == &nullable_char
-                || left == &nullable_float
-                || left == &nullable_double
-                || left == &nullable_long)
-                && right == &Type::Null));
+        && ((*left == Type::Null && alias_nullable(right))
+            || (*right == Type::Null && alias_nullable(left)))
+        || kind.is_equality()
+            && ((left == &Type::Null
+                && (right == &Type::Null
+                    || right == &nullable_object
+                    || right == &nullable_dictionary
+                    || right == &nullable_number
+                    || right == &nullable_string
+                    || right == &nullable_boolean
+                    || right == &nullable_weak_reference
+                    || right == &nullable_byte_array
+                    || right == &nullable_method
+                    || right == &nullable_symbol
+                    || right == &nullable_char
+                    || right == &nullable_float
+                    || right == &nullable_double
+                    || right == &nullable_long))
+                || ((left == &nullable_object
+                    || left == &nullable_dictionary
+                    || left == &nullable_number
+                    || left == &nullable_string
+                    || left == &nullable_boolean
+                    || left == &nullable_weak_reference
+                    || left == &nullable_byte_array
+                    || left == &nullable_method
+                    || left == &nullable_symbol
+                    || left == &nullable_char
+                    || left == &nullable_float
+                    || left == &nullable_double
+                    || left == &nullable_long)
+                    && right == &Type::Null));
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
             || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));

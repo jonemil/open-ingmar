@@ -43,7 +43,7 @@ fn byte_number_calls_keep_numeric_results_options_and_saved_contracts() {
 #[test]
 fn byte_numeric_and_option_operands_are_checked_without_emitting_conversions() {
     for source in [
-        "function f(n as Lang.Numeric) {return n+1;}",
+        "function f(n as Lang.Numeric or Null) as Lang.Numeric {return n+1;}",
         "function f(b as Lang.ByteArray) {return b.decodeNumber(Lang.NUMBER_FORMAT_UINT32,{});}",
         "function f(b as Lang.ByteArray) as Void {b.encodeNumber(true,Lang.NUMBER_FORMAT_UINT8,{});}",
         "function f(b as Lang.ByteArray) as Void {b.encodeNumber(null,Lang.NUMBER_FORMAT_UINT8,{});}",

@@ -483,13 +483,20 @@ effects and can fail there.
 Finishing either builder kind clears its private strong reference; a completed
 container is owned by the produced value and its subsequent consumers.
 
-## ByteArray values and allocation
+## Numeric aliases
 
-`numeric` is the canonical Number/Float/Long/Double union in parameter, function
-result, user-call result, cast, and matching conditional-edge tags. It introduces
-no runtime Numeric class or conversion. Validation recomputes common native
-member contracts and class-branch proofs under the
-[source rules](compiler-subset.md#numeric-values).
+`numeric`, `integer-union`, and `decimal` denote the supported Numeric,
+Integer, and Decimal aliases. `integer` continues to mean concrete Number.
+Their nullable tags are `nullable-numeric`, `nullable-integer-union`, and
+`nullable-decimal`. These are parameter, function-result, user-call-result,
+cast, and conditional-edge tags; aliases introduce no runtime class or
+conversion. Validation recomputes operator results, common native members,
+class refinements, and current null proofs under the
+[source rules](compiler-subset.md#numeric-values). A result annotation cannot
+narrow an arithmetic union or establish a null proof. Lowering uses ordinary
+VM operators; alias negation uses Number zero subtraction.
+
+## ByteArray values and allocation
 
 `byte-array` denotes a non-null `Toybox.Lang.ByteArray`; `nullable-byte-array`
 adds Null. Both are parameter, function-result, call-result, and

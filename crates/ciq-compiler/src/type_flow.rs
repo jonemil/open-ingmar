@@ -57,7 +57,13 @@ pub(crate) fn refine(
     }
     let non_null = facts.contains(&Fact::NonNull(place));
     let ty = if non_null { ty.without_null() } else { ty };
-    if matches!(ty, crate::ValueType::LangObject | crate::ValueType::Numeric) {
+    if matches!(
+        ty,
+        crate::ValueType::LangObject
+            | crate::ValueType::Numeric
+            | crate::ValueType::IntegerAlias
+            | crate::ValueType::Decimal
+    ) {
         for fact in facts {
             if let Fact::Class(at, ClassTarget::Native(class)) = fact {
                 if *at == place && class != "Toybox.Lang.Object" {

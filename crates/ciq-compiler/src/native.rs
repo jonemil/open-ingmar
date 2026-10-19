@@ -58,10 +58,7 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
-    if *receiver == api::Type::numeric() {
-        let api::Type::Union(alternatives) = receiver else {
-            unreachable!()
-        };
+    if let Some(alternatives) = receiver.numeric_alternatives() {
         let first = value_parameters(&alternatives[0], member)?;
         return alternatives
             .iter()
@@ -128,10 +125,7 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
-    if *receiver == api::Type::numeric() {
-        let api::Type::Union(alternatives) = receiver else {
-            unreachable!()
-        };
+    if let Some(alternatives) = receiver.numeric_alternatives() {
         let result = value_call(&alternatives[0], member, arguments, context)?;
         for alternative in &alternatives[1..] {
             if value_call(alternative, member, arguments, context)? != result {
