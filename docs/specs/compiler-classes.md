@@ -353,6 +353,40 @@ constant initialization precedes its source initialize method. Reads lower to
 See the [counter example](../../examples/compiler-fields/README.md) and
 [instance isolation evidence](../investigations/compiler-fields.md).
 
+## Numeric alias fields
+
+All supported source class bases accept fields declared as `Lang.Numeric`,
+`Lang.Integer`, or `Lang.Decimal`, including `or Null` forms. Canonical names,
+imports, and aliases resolve to the same contracts. Their scalar alternatives
+and operator rules follow the [numeric value contract](compiler-subset.md#numeric-values).
+
+Each field starts as a Null metadata slot (key bits zero, type `0x00`, value
+zero). Non-null fields require a source `initialize` that assigns them under
+the [required-field prefix rules](#source-reference-fields). Nullable fields
+may omit a default or use literal `null`. Other declaration initializers are
+unsupported in this profile; assign values in `initialize` instead. These are
+our bounded initialization rules, not complete Monkey C declaration semantics.
+The shared 256-field and member-name rules apply.
+
+Reads retain the declared alias and nullability. Writes must satisfy every
+possible alternative of the RHS, without implicit numeric conversion. Numeric
+accepts all four scalar classes, Integer accepts Number/Long, and Decimal
+accepts Float/Double; non-null fields reject nullable values without a proof.
+Compound assignments and statement updates use the shared operator/write rules
+and capture the old field value before RHS effects. Nullable fields require a
+guarded local snapshot for arithmetic or member calls; checking one mutable
+field read does not refine another. Replacing or clearing a field does not
+change an already captured value. Different instances retain independent slots.
+
+Unit IR declares `.field-numeric <name> <tag>` before methods. Tags are
+`numeric`, `integer-union`, `decimal`, and their `nullable-` forms. There is no
+default operand. `.read-self` must claim the exact declared result tag;
+`.assign-self` must satisfy its contract. Reloading unit IR rechecks ownership,
+assignability, initialization, and API availability. Existing field instructions
+and Null-slot DATA framing suffice. See the
+[example](../../examples/compiler-numeric-fields/README.md) and
+[evidence](../investigations/compiler-numeric-unions.md#field-storage).
+
 ## Source-reference fields
 
 `var target as HelloView;` declares an exact source reference field for an

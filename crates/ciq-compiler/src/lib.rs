@@ -36,8 +36,8 @@ mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
-    SourceDiagnostic, UnitError, compile_sources, compile_sources_with_api, parse_unit_ir,
-    parse_unit_ir_with_api,
+    NumericAlias, SourceDiagnostic, UnitError, compile_sources, compile_sources_with_api,
+    parse_unit_ir, parse_unit_ir_with_api,
 };
 
 use std::fmt;
@@ -2130,6 +2130,12 @@ impl Function {
                     if !matches!(
                         result_type,
                         ReturnType::Integer
+                            | ReturnType::Numeric
+                            | ReturnType::IntegerAlias
+                            | ReturnType::Decimal
+                            | ReturnType::NullableNumeric
+                            | ReturnType::NullableIntegerAlias
+                            | ReturnType::NullableDecimal
                             | ReturnType::SourceObject(_)
                             | ReturnType::Symbol
                             | ReturnType::NullableSymbol
@@ -2157,6 +2163,19 @@ impl Function {
                         && !matches!(
                             type_of(value),
                             ValueType::Interface(_)
+                                | ValueType::Numeric
+                                | ValueType::IntegerAlias
+                                | ValueType::Decimal
+                                | ValueType::NullableNumeric
+                                | ValueType::NullableIntegerAlias
+                                | ValueType::NullableDecimal
+                                | ValueType::Long
+                                | ValueType::Float
+                                | ValueType::Double
+                                | ValueType::NullableLong
+                                | ValueType::NullableFloat
+                                | ValueType::NullableDouble
+                                | ValueType::NullableInteger
                                 | ValueType::NullableInterface(_)
                                 | ValueType::Symbol
                                 | ValueType::NullableSymbol

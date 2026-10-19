@@ -245,11 +245,58 @@ impl ClassBase {
     }
 }
 
+/// A supported numeric typedef, independent of nullability or storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericAlias {
+    /// Number or Long.
+    Integer,
+    /// Float or Double.
+    Decimal,
+    /// Number, Float, Long, or Double.
+    Numeric,
+}
+
+impl NumericAlias {
+    /// Resolve a canonical Lang typedef name; concrete scalar classes are excluded.
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Toybox.Lang.Integer" => Some(Self::Integer),
+            "Toybox.Lang.Decimal" => Some(Self::Decimal),
+            "Toybox.Lang.Numeric" => Some(Self::Numeric),
+            _ => None,
+        }
+    }
+
+    /// Return the saved-IR tag for this non-null alias.
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Integer => "integer-union",
+            Self::Decimal => "decimal",
+            Self::Numeric => "numeric",
+        }
+    }
+
+    /// Return the field read contract for this alias and declared nullability.
+    fn result_type(self, nullable: bool) -> ReturnType {
+        match (self, nullable) {
+            (Self::Integer, false) => ReturnType::IntegerAlias,
+            (Self::Integer, true) => ReturnType::NullableIntegerAlias,
+            (Self::Decimal, false) => ReturnType::Decimal,
+            (Self::Decimal, true) => ReturnType::NullableDecimal,
+            (Self::Numeric, false) => ReturnType::Numeric,
+            (Self::Numeric, true) => ReturnType::NullableNumeric,
+        }
+    }
+}
+
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
     /// A Number copied from class metadata into each new instance.
     Number(i32),
+    /// A Null-initialized numeric alias slot. Non-null fields must be filled
+    /// by source initialize before reads, self exposure, control flow, or return.
+    Numeric { alias: NumericAlias, nullable: bool },
     /// A Symbol slot with an optional literal metadata default. Nullable slots
     /// otherwise default to Null; non-null slots require source initialization.
     Symbol {
@@ -281,6 +328,10 @@ impl FieldKind {
         matches!(
             self,
             Self::SourceObject(_)
+                | Self::Numeric {
+                    nullable: false,
+                    ..
+                }
                 | Self::Method { nullable: false }
                 | Self::WeakReference { nullable: false }
                 | Self::ByteArray { nullable: false }
@@ -317,6 +368,7 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::Numeric { alias, nullable } => alias.result_type(*nullable),
             FieldKind::ByteArray { nullable } => {
                 if *nullable {
                     ReturnType::NullableByteArray
@@ -1520,6 +1572,12 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::Numeric { alias, nullable } => format!(
+                        ".field-numeric {} {}{}\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" },
+                        alias.tag()
+                    ),
                     FieldKind::ByteArray { nullable } => format!(
                         ".field-byte-array {} {}byte-array\n",
                         field.name,
@@ -1923,6 +1981,7 @@ fn parse_unit_ir_context(
                         matches!(
                             part.as_str(),
                             ".field-number"
+                                | ".field-numeric"
                                 | ".field-reference"
                                 | ".field-interface"
                                 | ".field-symbol"
@@ -1945,6 +2004,24 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-numeric" {
+                            let (tag, nullable) = parts[2]
+                                .strip_prefix("nullable-")
+                                .map(|tag| (tag, true))
+                                .unwrap_or((&parts[2], false));
+                            let alias = match tag {
+                                "integer-union" => NumericAlias::Integer,
+                                "decimal" => NumericAlias::Decimal,
+                                "numeric" => NumericAlias::Numeric,
+                                _ => {
+                                    return Err(Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid numeric alias field contract",
+                                    ));
+                                }
+                            };
+                            FieldKind::Numeric { alias, nullable }
                         } else if parts[0] == ".field-byte-array" {
                             FieldKind::ByteArray {
                                 nullable: match parts[2].as_str() {

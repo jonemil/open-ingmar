@@ -780,8 +780,8 @@ Assignment-containing IR uses the conservative schedule specified in
 `target--;` and `--target;` subtract one from a numeric scalar; Char decrement
 is rejected.
 The two operator characters must be contiguous. Accepted targets are bare
-initialized numeric/Char locals, explicit `self` Number fields, and Number/Char
-array elements. Char requires API 1.3.0, as for other Char expressions.
+initialized numeric/Char locals, explicit `self` Number or non-null numeric
+alias fields, and supported numeric/Char array elements. Char requires API 1.3.0, as for other Char expressions.
 Parameters, grouped local targets, other value/element types, and unknown or
 out-of-scope names are rejected. A nullable Number local needs an established
 non-null proof at the read. Existing assignment contracts still govern its write.
@@ -2216,8 +2216,10 @@ is not a proof for later reads.
 
 Conditional joins retain an existing numeric alias when it covers both arms;
 adding a Null arm makes it nullable. Concrete Number/Long or Float/Double arms
-alone do not introduce a numeric alias. Numeric alias fields/container elements,
-arbitrary source unions, and general union inference remain unsupported.
+alone do not introduce a numeric alias.
+[Class fields](compiler-classes.md#numeric-alias-fields) retain these same alias
+contracts. Numeric alias container elements, arbitrary source unions, and
+general union inference remain unsupported.
 
 ## ByteArrays
 

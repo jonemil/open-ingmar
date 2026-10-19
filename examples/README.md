@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   Comparator implementations, stateful runtime dispatch, and custom sorting.
 - [compiler-array-sort](compiler-array-sort/README.md): default scalar sorting,
   shared mutation, copies, and edge-sized inputs.
+- [compiler-numeric-fields](compiler-numeric-fields/README.md): numeric alias
+  fields, constructor initialization, nullable snapshots, and instance isolation.
 - [compiler-numeric-unions](compiler-numeric-unions/README.md): Numeric,
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed

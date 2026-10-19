@@ -37,5 +37,26 @@ AppBase class. Build with `scripts/build-example.sh`, then use
 --output <fresh directory>` and `simulate <prepared directory>` in the Rust and
 SDK environments. Current captures are in `scratch/check-numeric-unions-v2/`.
 
+## Field storage
+
+SDK/compiler/simulator 9.2.0 / fr265 also accept
+[NumericBox](../../examples/compiler-numeric-fields/app.mc), which declares all
+three numeric aliases and their nullable forms as instance fields. Constructor
+writes, later scalar-class replacement, and compound/statement updates retain
+the stored runtime numeric class. Uninitialized nullable fields read as Null;
+a local snapshot remains usable after its field is cleared. Separate instances
+retain independent values. SDK and generated applications match all
+[25 console lines](../../examples/compiler-numeric-fields/expected.txt).
+Structured export/reconstruction works for both applications with existing
+field opcodes and DATA records. Generated fields use Null metadata slots and
+source constructor writes; the compiler does not require the SDK's exact class
+layout. Current contracts are in the [field specification](../specs/compiler-classes.md#numeric-alias-fields).
+
+For SDK reproduction, reuse the minimal-console manifest/resources with
+`../../examples/compiler-numeric-fields` as the source path from
+`scratch/compiler-numeric-fields/monkey.jungle`. The example contains its own
+AppBase class. Use the specimen checker with `compiler-numeric-fields` as above;
+current captures are in `scratch/check-numeric-fields/`.
+
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
 [language]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
