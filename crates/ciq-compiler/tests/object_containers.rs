@@ -154,7 +154,6 @@ fn object_storage_does_not_invent_mutable_covariance_or_recover_erased_types() {
         "function f(d as Lang.Dictionary<Lang.String,Lang.Object>) as Lang.String {return d[\"n\"].toString();}",
         "function f(d as Lang.Dictionary<Lang.String,Lang.Object>) as Void {d.values().add(null);}",
         "function f() as Lang.Array<Lang.Object> {return new[2];}",
-        "function f(a as Lang.Array<Lang.Object>) as Void {a.sort(null);}",
         "function f() as Lang.Dictionary<Lang.Object,Lang.Object> {return {};}",
         "function f(a as Lang.Array<Lang.Object>) as Lang.Array<Lang.Object> {return a as Lang.Array<Lang.Object>;}",
     ] {

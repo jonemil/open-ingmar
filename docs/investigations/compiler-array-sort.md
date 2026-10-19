@@ -24,9 +24,10 @@ reconstruction, and SDK/generated runtime comparison. Artifacts:
 Existing member lookup, `invokem`, and `popv` suffice; no opcode or DATA record
 extension was needed.
 
-Nullable/object elements and custom Comparator implementations were not probed.
-Their exclusion is a bounded compiler policy, not a claim that every such
-runtime input fails. See the [current contract][spec] and [plan](../plan.md).
+This specimen does not establish nullable/object element or custom Comparator
+behavior. See the [current contract][spec],
+[source-comparator evidence](compiler-comparators.md), and
+[Object/reference sorting evidence](compiler-object-sort.md).
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef

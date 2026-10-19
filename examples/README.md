@@ -15,6 +15,8 @@ and future Rust toolchain experiments.
   shared mutation, copies, and edge-sized inputs.
 - [compiler-object-containers](compiler-object-containers/README.md): mixed
   Object storage, nullable snapshots, class recovery, and reference lifetimes.
+- [compiler-object-sort](compiler-object-sort/README.md): Object default ordering
+  and custom Comparator sorting of non-null reference elements.
 - [compiler-lang-format](compiler-lang-format/README.md): value-returning native
   module calls, erased Array arguments, substitutions, and evaluation order.
 - [compiler-comparison-objects](compiler-comparison-objects/README.md): declared

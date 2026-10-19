@@ -165,8 +165,8 @@ operator/type-system dependencies and sequencing belong to the
   lookup, source-inheritance/general-union type tests and refinement, and broader
   inherited-method dispatch.
 - **Array:** exact source-class elements, explicit nested parameters, nullable
-  Array references, broader literal inference, and sorting/Comparable contracts
-  outside the checked profiles.
+  Array references, broader literal inference, and nullable sorting/Comparable
+  contracts outside the checked profiles.
 - **Dictionary:** general Object/reference keys, exact source/nested value
   contracts, general typed nullable references, and enumeration for those domains.
 - **Symbol:** full selector/member-resolution contracts, shared with source

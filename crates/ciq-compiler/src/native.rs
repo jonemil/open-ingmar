@@ -407,9 +407,12 @@ pub(crate) fn value_call(
                     | crate::ArrayElement::Boolean
                     | crate::ArrayElement::Char
                     | crate::ArrayElement::String
+                    | crate::ArrayElement::LangObject
                     | crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
                 ) => true,
-                Some(crate::ArrayElement::Interface(crate::InterfaceType::Comparator)) => accepts(
+                // Other non-null reference elements have no default ordering
+                // profile, but a checked callback receives them as Object.
+                Some(element) if element.nullable_base().is_none() => accepts(
                     &crate::InterfaceType::Comparator.api_type(false),
                     &arguments[0],
                 ),
@@ -418,7 +421,7 @@ pub(crate) fn value_call(
             _ => false,
         };
         if !supported_elements {
-            return Err("Array.sort requires non-null comparable elements, or Comparator elements with a non-null Comparator argument".into());
+            return Err("Array.sort requires non-null elements and a supported default order or non-null Comparator".into());
         }
     }
     if class == "Toybox.Lang.Array" && member == "slice" {

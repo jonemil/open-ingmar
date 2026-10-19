@@ -106,6 +106,10 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(function.value_types[receiver], crate::ValueType::Array(
                     crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
+                || matches!(function.value_types[receiver], crate::ValueType::Array(crate::ArrayElement::LangObject)
+                    if member == "sort" && arguments.iter().any(|argument|
+                        matches!(function.value_types[argument], crate::ValueType::Null
+                            | crate::ValueType::NullableInterface(crate::InterfaceType::Comparator))))
                 || matches!(function.value_types[receiver], crate::ValueType::TypedDictionary(
                     crate::DictionaryType {value: crate::DictionaryValue::Interface(_) | crate::DictionaryValue::NullableInterface(_), ..})
                     if member == "toString")

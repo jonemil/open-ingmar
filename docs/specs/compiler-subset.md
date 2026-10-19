@@ -1446,7 +1446,8 @@ empty and nullable literals. Non-null Symbol literals can infer homogeneous
 Array/Dictionary contracts; arbitrary scalar/Symbol mixtures do not infer a
 broader union. Existing mutation, collection, Object observer, and enumeration
 profiles apply. `reverse` and `slice` return independent Arrays. Symbol is not a
-Comparable witness; sorting these Arrays remains outside the sorting profile.
+Comparable witness; non-null elements require a non-null checked
+[Comparator](#source-comparators) for sorting.
 
 Indexed reads, `get`, `keys`, and `values` preserve their declared types.
 Dictionary lookup always adds missing-key Null; `values()` does not add it.
@@ -1539,7 +1540,8 @@ The supported `size`, `toString`, `add`, `addAll`, `indexOf`, `remove`, `removeA
 nullability; `addAll` requires the same invariant Array contract. Reverse/slice
 produce independent Arrays while retaining the same Method references. Search
 and removal use runtime Method equality; separately created bindings need not
-compare equal. Method sorting remains outside the supported ordering profiles.
+compare equal. Non-null Method elements support sorting with a non-null checked
+[Comparator](#source-comparators), preserving their bound references.
 
 Nullable indexed reads need guarded local snapshots before invocation or member
 use; a test of one indexed read does not refine another. Replacing/removing an
@@ -1664,8 +1666,9 @@ Arrays preserve their element type through parameters/results, indexed reads and
 writes, and matching conditional arms. `size`, `toString`, `add`, `addAll`,
 `indexOf`, `remove`, `removeAll`, `reverse`, and `slice` use the existing profiles.
 Reverse/slice produce independent Arrays with the same weak handle values;
-search/removal uses native WeakReference equality. Weak-element sorting remains
-outside the supported ordering profiles.
+search/removal uses native WeakReference equality. Non-null weak elements support
+sorting with a non-null checked [Comparator](#source-comparators); sorting
+handles does not retain their targets.
 
 Dictionary `get`/indexing adds Null for a missing key, including for non-null
 WeakReference values. `values()` returns an Array with exactly the declared value
@@ -1956,8 +1959,12 @@ structural interface requiring `compare(Object, Object) as Number`; it is not
 Method or an instantiable native class. Null selects default sorting; supported
 source comparator instances follow the contract below. Non-null
 [Comparable elements](#comparison-interface-arrays) also support default sorting.
-Nullable/general Object elements remain unsupported, even if current contents
-happen to be comparable.
+Non-null Object elements also support default sorting. Their declared type does
+not prove that the runtime contents are mutually comparable: String/Number
+comparisons, for example, raise the native UnexpectedTypeException. Preserve
+those runtime failures instead of inventing a narrower static element contract.
+Nullable elements remain unsupported, even if current contents are non-null;
+an indexed write does not prove whole-Array initialization or comparability.
 
 See the [example](../../examples/compiler-array-sort/README.md) and
 [evidence](../investigations/compiler-array-sort.md).
@@ -1972,8 +1979,16 @@ parameters/results, and missing/extra parameters are rejected. Untyped source
 parameters still infer Number and therefore do not establish this interface.
 Matching is structural: no Comparator superclass or `implements` syntax is used.
 
-Supported receivers are the scalar-element Arrays above and non-null
-[comparison-interface Arrays](#comparison-interface-arrays), from API 5.0.0.
+Supported receivers are Arrays with any supported non-null element contract,
+from API 5.0.0. This includes Object, Symbol, Method, WeakReference, ByteArray,
+View, and [comparison-interface elements](#comparison-interface-arrays).
+For elements without a supported default-order profile (Symbol, Method,
+WeakReference, ByteArray, View, or Comparator), the comparator must be provably
+non-null. A nullable Comparator could select an unsupported default order.
+Scalar, Numeric-alias, Comparable, and Object elements also accept Null or
+Comparator-or-Null arguments under the default-order rules above.
+Nullable element contracts remain excluded: the checked callback takes two
+non-null Objects. Container invariance and exact element identities are unchanged.
 A negative/zero/positive Number orders the first element before,
 equal to, or after the second. The runtime calls the source `compare` body on
 the supplied instance, preserving its fields. It controls comparison count and
@@ -1996,11 +2011,16 @@ Sort uses ordinary native-call lowering with receiver-before-argument order.
 The runtime callback member `compare` uses its pinned symbol ID; it remains a
 source method body. Constructor checks propagate known comparator shutdown
 requests through sort and source wrappers, rejecting them while reference fields
-are pending. These checks do not prove callback termination, exception safety,
-or comparator consistency.
+are pending. Default sorting of opaque Object elements conservatively permits
+erased callback effects; reject it before required fields are initialized.
+A pinned source comparator retains its known-body effect analysis. These checks
+do not prove callback termination, exception safety, or comparator consistency.
 
 See the [example](../../examples/compiler-comparators/README.md) and
 [evidence](../investigations/compiler-comparators.md).
+Object/reference-element ordering has a separate
+[example](../../examples/compiler-object-sort/README.md) and
+[evidence record](../investigations/compiler-object-sort.md).
 
 ## Comparison interface values
 
@@ -2329,8 +2349,9 @@ Object observers; specific members need the existing lexical assertion or class
 proof. Erasure does not recover nested container parameters. Dictionary lookup
 adds absent-key Null, while `values()` retains the stored value contract.
 Nullable reads require a guarded local snapshot; testing a mutable container
-read does not refine another read. Sized allocation requires nullable elements,
-and Object-element sorting remains outside the supported sorting profiles.
+read does not refine another read. Sized allocation requires nullable elements.
+Non-null Object arrays follow the [sorting contracts](#default-array-sorting);
+nullable elements require further ordering/callback contracts.
 
 Containers and their shallow enumerations retain strong references to stored
 objects. Removal/replacement releases that ownership; other aliases or snapshots
