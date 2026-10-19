@@ -1,5 +1,6 @@
 //! Typed single-value control-flow edges for conditional expressions.
 use crate::{BlockId, IrError, LocatedOperation, Operation, ValueId, ValueType, api::Type};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 /// Array joins preserve one invariant element contract without conversion.
@@ -103,6 +104,9 @@ const ARRAY_TYPES: &[(&str, crate::ArrayElement)] = &[
 
 /// Parse an exact text tag for a supported incoming stack-value contract.
 pub(crate) fn parse_type(tag: &str) -> Option<Type> {
+    if let Some(dictionary) = crate::DictionaryType::parse(tag) {
+        return Some(dictionary.api_type());
+    }
     if let Some((_, element)) = ARRAY_TYPES.iter().find(|(name, _)| *name == tag) {
         return Some(Type::Array(Box::new(element.api_type())));
     }
@@ -154,12 +158,15 @@ pub(crate) fn parse_type(tag: &str) -> Option<Type> {
 }
 
 /// Return the canonical text tag, rejecting types outside the join profile.
-pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
+pub(crate) fn type_tag(ty: &Type) -> Option<Cow<'static, str>> {
+    if let Some(dictionary) = crate::DictionaryType::from_api_type(ty) {
+        return Some(Cow::Owned(dictionary.text()));
+    }
     if let Type::Array(element) = ty {
         return ARRAY_TYPES
             .iter()
             .find(|(_, supported)| supported.api_type() == **element)
-            .map(|(tag, _)| *tag);
+            .map(|(tag, _)| Cow::Borrowed(*tag));
     }
     [
         "byte-array",
@@ -203,6 +210,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     ]
     .into_iter()
     .find(|tag| parse_type(tag).as_ref() == Some(ty))
+    .map(Cow::Borrowed)
 }
 
 /// Join supported alternatives without converting either runtime value.

@@ -14,6 +14,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
         ValueType::Null
             | ValueType::ByteArrayOptions
             | ValueType::Array(_)
+            | ValueType::TypedDictionary(_)
             | ValueType::Object(_)
             | ValueType::Tuple(_)
             | ValueType::Interface(_)
@@ -21,7 +22,10 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     ) {
         return None;
     }
-    crate::joins::type_tag(ty)
+    match crate::joins::type_tag(ty)? {
+        std::borrow::Cow::Borrowed(tag) => Some(tag),
+        std::borrow::Cow::Owned(_) => None,
+    }
 }
 
 /// Parse a cast target tag, rejecting targets outside the lexical-cast profile.

@@ -685,16 +685,16 @@ selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
 Supported arm types match exactly: numeric scalars, Char, Boolean, String, Null,
-or an
-invariant Array with a supported element contract. Array arms must have exactly
-the same element type, including element nullability and interface identity;
-selection preserves the chosen reference without copying or conversion.
+or an invariant Array/typed Dictionary with supported content contracts.
+Container arms must have exactly the same element or key/value types, including
+content nullability and interface identity; selection preserves the chosen
+reference without copying or conversion.
 Scalar alternatives may also join with Null
 or their existing nullable type, producing the corresponding scalar-or-Null. No
 Char-to-Number promotion, general heterogeneous union, nullable Array reference, class join,
-Void arm, or non-Boolean truthiness is supported. Expected Array element context
-from a declaration, call, or return reaches direct empty literals and sized
-allocations in both arms;
+Void arm, or non-Boolean truthiness is supported. Expected container context
+from a declaration, assignment, call, or return reaches direct literals and
+supported sized Array allocations in both arms;
 no element contract is inferred solely from a sibling arm.
 
 Join inference uses checked incoming operand types after the complete graph's
@@ -1219,7 +1219,12 @@ non-null proof; unguarded access is rejected. Its nullable declaration/assignmen
 remain unchanged. Ordinary source nullable Dictionary annotations are not yet
 supported.
 
-Dictionary `==`/`!=`, conditional Dictionary joins, direct printing,
+Matching typed Dictionary conditional arms retain their exact invariant
+key/value contract and selected reference. Different contracts, opaque
+Dictionary joins, and Dictionary/Null joins remain unsupported. Conditional
+literals receive an available declared contract in each arm.
+
+Dictionary `==`/`!=`, direct printing,
 `new Dictionary()`, and the other methods remain unsupported. No key
 or value contract is inferred from an empty literal without context. See
 [the example](../../examples/compiler-dictionary/README.md) and

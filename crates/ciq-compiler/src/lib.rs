@@ -2201,6 +2201,10 @@ impl Function {
                     if !matches!(
                         result_type,
                         ReturnType::Integer
+                            | ReturnType::LangObject
+                            | ReturnType::NullableObject
+                            | ReturnType::Array(_)
+                            | ReturnType::TypedDictionary(_)
                             | ReturnType::NullableInteger
                             | ReturnType::Long
                             | ReturnType::NullableLong
@@ -2242,39 +2246,10 @@ impl Function {
                         return Err(fail("self field assignments require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if type_of(value) != ValueType::Integer
-                        && origins.class(value).is_none()
-                        && !matches!(
-                            type_of(value),
-                            ValueType::Interface(_)
-                                | ValueType::Numeric
-                                | ValueType::IntegerAlias
-                                | ValueType::Decimal
-                                | ValueType::NullableNumeric
-                                | ValueType::NullableIntegerAlias
-                                | ValueType::NullableDecimal
-                                | ValueType::Long
-                                | ValueType::Float
-                                | ValueType::Double
-                                | ValueType::NullableLong
-                                | ValueType::NullableFloat
-                                | ValueType::NullableDouble
-                                | ValueType::NullableInteger
-                                | ValueType::NullableInterface(_)
-                                | ValueType::Symbol
-                                | ValueType::NullableSymbol
-                                | ValueType::Method
-                                | ValueType::WeakReference
-                                | ValueType::ByteArray
-                                | ValueType::NullableByteArray
-                                | ValueType::NullableWeakReference
-                                | ValueType::NullableMethod
-                        )
-                        && !native::accepts(
-                            &InterfaceType::Comparable.api_type(true),
-                            &type_of(value).api_type(),
-                        )
-                    {
+                    if !native::accepts(
+                        &api::Type::named("Toybox.Lang.Object").with_null(),
+                        &type_of(value).api_type(),
+                    ) {
                         return Err(fail(
                             "instance field assignment requires a supported reference or scalar value",
                         ));

@@ -2360,6 +2360,48 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                             }
                             parser.expect(Kind::Punctuation(';'), "';' after scalar field")?;
                             crate::FieldKind::Scalar { ty, nullable }
+                        } else if class == "Toybox.Lang.Object" {
+                            let nullable = if parser.peek()? == Kind::Word("or") {
+                                parser.token()?;
+                                parser.expect(Kind::Word("Null"), "'Null'")?;
+                                true
+                            } else {
+                                false
+                            };
+                            if parser.peek()? == Kind::Punctuation('=') {
+                                if !nullable {
+                                    return Err(parser.error(
+                                        token.span.start,
+                                        "non-null Object fields must be assigned in initialize",
+                                    ));
+                                }
+                                parser.token()?;
+                                parser
+                                    .expect(Kind::Word("null"), "literal null field initializer")?;
+                            }
+                            parser.expect(Kind::Punctuation(';'), "';' after Object field")?;
+                            crate::FieldKind::LangObject { nullable }
+                        } else if class == "Toybox.Lang.Array" || class == "Toybox.Lang.Dictionary"
+                        {
+                            let kind = if class == "Toybox.Lang.Array" {
+                                crate::FieldKind::Array {
+                                    element: parser.array_annotation()?,
+                                }
+                            } else {
+                                let dictionary_type =
+                                    parser.dictionary_annotation()?.ok_or_else(|| {
+                                        parser.error(
+                                            token.span.start,
+                                            "Dictionary fields require key/value annotations",
+                                        )
+                                    })?;
+                                crate::FieldKind::Dictionary { dictionary_type }
+                            };
+                            parser.expect(
+                                Kind::Punctuation(';'),
+                                "';' after non-null container field; initialize it in initialize",
+                            )?;
+                            kind
                         } else if let Some(alias) = crate::NumericAlias::from_name(&class) {
                             let nullable = if parser.peek()? == Kind::Word("or") {
                                 parser.token()?;

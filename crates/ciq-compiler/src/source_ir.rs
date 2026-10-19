@@ -1829,8 +1829,19 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<ValueId, Diagnostic> {
+        self.value_for_setup_with_context(expression, locals, None)
+    }
+
+    /// Stage a setup value under a field's literal-construction contract.
+    /// A join result must leave the operand stack before receiver setup.
+    fn value_for_setup_with_context(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        expected: Option<ConstructionType>,
+    ) -> Result<ValueId, Diagnostic> {
         let span = expression.span;
-        let value = self.value(expression, locals)?;
+        let value = self.value_with_context(expression, locals, expected)?;
         if !self.operations.last().is_some_and(|op| matches!(op.operation, Operation::BlockParameter { result, .. } if result == value)) {
             return Ok(value);
         }
@@ -2031,7 +2042,12 @@ impl Builder<'_> {
                     self.push(operation, Some(span));
                 }
                 parser::Statement::FieldAssign { name, value, .. } => {
-                    let value = self.value_for_setup(value, locals)?;
+                    let expected = self
+                        .calls
+                        .field_types
+                        .get(&name)
+                        .and_then(|ty| construction_type(&ty.api_type()));
+                    let value = self.value_for_setup_with_context(value, locals, expected)?;
                     self.push(
                         Operation::SelfFieldAssign { field: name, value },
                         Some(span),

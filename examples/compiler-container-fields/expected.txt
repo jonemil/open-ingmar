@@ -1,0 +1,35 @@
+1
+true
+[1, 2, 4]
+3
+[9]
+text
+0
+7
+3.500000
+1
+8
+11
+changed
+1
+[1, 2]
+[3, 1, 2]
+true
+false
+true
+true
+false
+true
+true
+false
+true
+false
+false
+true
+false
+false
+2
+1
+0
+0
+stored

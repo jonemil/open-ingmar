@@ -27,6 +27,8 @@ and future Rust toolchain experiments.
   fields, constructor initialization, nullable snapshots, and instance isolation.
 - [compiler-scalar-fields](compiler-scalar-fields/README.md): concrete scalar
   fields, exact widths, nullable snapshots, and initialization contracts.
+- [compiler-container-fields](compiler-container-fields/README.md): Object
+  erasure, typed container fields, conditional writes, and reference ownership.
 - [compiler-numeric-unions](compiler-numeric-unions/README.md): Numeric,
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed

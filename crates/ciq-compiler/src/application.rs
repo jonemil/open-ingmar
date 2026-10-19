@@ -137,6 +137,9 @@ fn instance_field(
         crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::Numeric { .. }
         | crate::FieldKind::Scalar { .. }
+        | crate::FieldKind::LangObject { .. }
+        | crate::FieldKind::Array { .. }
+        | crate::FieldKind::Dictionary { .. }
         | crate::FieldKind::SourceObject(_)
         | crate::FieldKind::Method { .. }
         | crate::FieldKind::WeakReference { .. }

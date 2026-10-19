@@ -407,6 +407,45 @@ fields. See the
 [example](../../examples/compiler-numeric-fields/README.md) and
 [evidence](../investigations/compiler-numeric-unions.md#field-storage).
 
+## Object and container fields
+
+All supported source class bases accept `Lang.Object` and `Lang.Object or Null`
+fields. Values erase to Object without conversion; scalars, known enums, source
+objects, and supported native/container references retain their runtime values.
+Concrete source identity, member signatures, and container parameters are not
+recovered from the field declaration. Use the ordinary class proofs or lexical
+assertion contracts for more specific consumers. Nullable reads require fresh
+local snapshots and guards.
+
+Non-null `Lang.Array<T>` and `Lang.Dictionary<K,V>` fields use the existing
+supported element/key/value contracts, including nullable contents and numeric
+aliases. Reads, writes, mutation, and method calls retain invariant container
+types. Existing arrays/dictionaries cannot widen through assignment. Direct
+literals receive field construction context, including empty literals and
+conditional arms; this does not broaden unrelated literal inference.
+
+Initialization and field limits follow the [typed-field rules](#typed-scalar-fields).
+Object fields may have literal Null defaults only when nullable. Containers
+require assignment in `initialize`; declaration defaults, opaque unparameterized
+Dictionary fields, and nullable whole-container fields remain unsupported.
+Payload types retain their API requirements even for unused fields.
+
+Fields hold strong references. Replacing a field releases its ownership, while
+other aliases, snapshots, entries, or enumerations can keep the value alive.
+Transfer conditional values out of their CFG join before field receiver setup;
+hidden staging slots must not extend ownership after their final use.
+
+Unit IR uses `.field-object <name> object|nullable-object`,
+`.field-array <name> <element-tag>`, and
+`.field-dictionary <name> dictionary(<key>=><value>)` before methods. Array tags
+match `.array-new`; a `nullable-` Array element tag describes contents, not the
+field reference. There are no default operands. Existing Null-slot metadata
+and field access instructions suffice. Unit reload rechecks declaration/read
+agreement, assignment, required initialization, and source interface witnesses
+inside container literals. See the
+[example](../../examples/compiler-container-fields/README.md) and
+[evidence](../investigations/compiler-container-fields.md).
+
 ## Source-reference fields
 
 `var target as HelloView;` declares an exact source reference field for an

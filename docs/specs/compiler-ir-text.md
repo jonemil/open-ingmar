@@ -343,6 +343,11 @@ ordered allocation. Lowering emits `ipushz; newd`; no DATA record or compiler
 capacity operand is involved. Allocation failures remain runtime obligations.
 
 `dictionary` is the opaque parameter-type and value-call result tag.
+`dictionary(<key>=><value>)` also tags `.block-value` joins of matching typed
+Dictionaries. Both incoming contracts must match exactly; this neither enables
+Dictionary/Null joins nor parameterized Dictionary casts. Reference ownership
+and empty-stack receiver setup follow the ordinary join/staging rules.
+
 `dictionary(<key>=><value>)` preserves typed contracts in `parameter-types=`,
 function `result=`, call `result=`, and allocation `type=` fields. Keys are
 `integer`, `long`, `float`, `double`, `string`, `boolean`, `char`, `symbol`, `comparable`,

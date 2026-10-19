@@ -419,6 +419,15 @@ pub enum FieldKind {
     /// A Null-initialized concrete scalar slot. Non-null fields require source
     /// initialization before reads, self exposure, control flow, or return.
     Scalar { ty: ScalarFieldType, nullable: bool },
+    /// A strong opaque Object slot. Non-null fields require source initialization;
+    /// erasure does not preserve a concrete source or container contract.
+    LangObject { nullable: bool },
+    /// A non-null Array slot with an invariant element contract, filled in initialize.
+    Array { element: crate::ArrayElement },
+    /// A non-null Dictionary slot with invariant key/value contracts, filled in initialize.
+    Dictionary {
+        dictionary_type: crate::DictionaryType,
+    },
     /// A Null-initialized numeric alias slot. Non-null fields must be filled
     /// by source initialize before reads, self exposure, control flow, or return.
     Numeric { alias: NumericAlias, nullable: bool },
@@ -453,6 +462,9 @@ impl FieldKind {
         matches!(
             self,
             Self::SourceObject(_)
+                | Self::LangObject { nullable: false }
+                | Self::Array { .. }
+                | Self::Dictionary { .. }
                 | Self::Scalar {
                     nullable: false,
                     ..
@@ -497,6 +509,17 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::LangObject { nullable } => {
+                if *nullable {
+                    ReturnType::NullableObject
+                } else {
+                    ReturnType::LangObject
+                }
+            }
+            FieldKind::Array { element } => ReturnType::Array(*element),
+            FieldKind::Dictionary { dictionary_type } => {
+                ReturnType::TypedDictionary(*dictionary_type)
+            }
             FieldKind::Scalar { ty, nullable } => ty.result_type(*nullable),
             FieldKind::Numeric { alias, nullable } => alias.result_type(*nullable),
             FieldKind::ByteArray { nullable } => {
@@ -814,6 +837,15 @@ impl CompilationUnit {
             }
             let mut field_names = BTreeSet::new();
             for field in &class.fields {
+                if let FieldKind::Array { element } = field.kind {
+                    if crate::ArrayElement::from_api_type(&element.api_type()) != Some(element) {
+                        return Err(fail(
+                            Some(at),
+                            None,
+                            "unsupported Array field element contract".into(),
+                        ));
+                    }
+                }
                 if field
                     .kind
                     .symbol_default()
@@ -1702,6 +1734,19 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::LangObject { nullable } => format!(
+                        ".field-object {} {}object\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" }
+                    ),
+                    FieldKind::Array { element } => {
+                        format!(".field-array {} {}\n", field.name, element.text())
+                    }
+                    FieldKind::Dictionary { dictionary_type } => format!(
+                        ".field-dictionary {} {}\n",
+                        field.name,
+                        dictionary_type.text()
+                    ),
                     FieldKind::Scalar { ty, nullable } => format!(
                         ".field-scalar {} {}{}\n",
                         field.name,
@@ -2117,6 +2162,9 @@ fn parse_unit_ir_context(
                         matches!(
                             part.as_str(),
                             ".field-number"
+                                | ".field-object"
+                                | ".field-array"
+                                | ".field-dictionary"
                                 | ".field-scalar"
                                 | ".field-numeric"
                                 | ".field-reference"
@@ -2141,6 +2189,48 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-object" {
+                            FieldKind::LangObject {
+                                nullable: match parts[2].as_str() {
+                                    "object" => false,
+                                    "nullable-object" => true,
+                                    _ => {
+                                        return Err(Diagnostic::at(
+                                            text,
+                                            method_at,
+                                            "invalid Object field contract",
+                                        ));
+                                    }
+                                },
+                            }
+                        } else if parts[0] == ".field-array" {
+                            let Some(element) =
+                                crate::joins::parse_type(&format!("array-{}", parts[2])).and_then(
+                                    |ty| match ty {
+                                        crate::api::Type::Array(element) => {
+                                            crate::ArrayElement::from_api_type(&element)
+                                        }
+                                        _ => None,
+                                    },
+                                )
+                            else {
+                                return Err(Diagnostic::at(
+                                    text,
+                                    method_at,
+                                    "invalid Array field contract",
+                                ));
+                            };
+                            FieldKind::Array { element }
+                        } else if parts[0] == ".field-dictionary" {
+                            let dictionary_type = crate::DictionaryType::parse(&parts[2])
+                                .ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "invalid Dictionary field contract",
+                                    )
+                                })?;
+                            FieldKind::Dictionary { dictionary_type }
                         } else if parts[0] == ".field-scalar" {
                             let (tag, nullable) = parts[2]
                                 .strip_prefix("nullable-")
