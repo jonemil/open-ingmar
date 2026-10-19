@@ -76,10 +76,10 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 **Experimentally observed (2026-10-18):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 57
+same SDK/target and `-O 0`, agrees with the independent compiler on all 72
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
 and native/text pipeline checks. Artifacts:
-`scratch/check-byte-array-fields/`.
+`scratch/check-byte-array-elements/`.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -110,6 +110,15 @@ as Null. An indexed field update is visible through a saved alias. Replacing
 that field leaves the alias unchanged. Clearing a guarded snapshot leaves its
 weak target alive through the nullable field; clearing the field expires it.
 SDK/generated programs agree on these observations.
+
+Arrays retain ByteArray elements by reference. An indexed element mutation is
+visible through the original Array and its reversed copy. `slice` returns a
+distinct Array (`equals` is false) while retaining element aliases; replacing
+one copied element leaves the original slot unchanged. Add/bulk-add/remove
+preserve the element references. Nullable/Null-only literals and sized allocation
+produce the expected Null slots. Clearing an Array slot preserves a saved
+snapshot. Clearing a snapshot first leaves its weak target alive through the
+slot; clearing that slot expires it. Both compilers agree on these results.
 
 Invalid byte ranges, fatal bounds errors, and numeric encoding
 options were not executed here.

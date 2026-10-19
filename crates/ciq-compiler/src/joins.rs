@@ -26,6 +26,11 @@ const ARRAY_TYPES: &[(&str, crate::ArrayElement)] = &[
     ("array-method", crate::ArrayElement::Method),
     ("array-nullable-method", crate::ArrayElement::NullableMethod),
     ("array-weak-reference", crate::ArrayElement::WeakReference),
+    ("array-byte-array", crate::ArrayElement::ByteArray),
+    (
+        "array-nullable-byte-array",
+        crate::ArrayElement::NullableByteArray,
+    ),
     (
         "array-nullable-weak-reference",
         crate::ArrayElement::NullableWeakReference,

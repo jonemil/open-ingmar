@@ -43,6 +43,15 @@ module Bytes {
         System.println(b[0]);
         System.println(Bytes.required(b));
     }
+    function list(flag as Lang.Boolean) as Lang.Array<Lang.ByteArray> {
+        return [[1, 2]b, flag ? [3]b : [4]b];
+    }
+    function emptyList() as Lang.Array<Lang.ByteArray> { return []; }
+    function nullableList(flag as Lang.Boolean) as Lang.Array<Lang.ByteArray or Null> {
+        return [null, flag ? [7]b : null];
+    }
+    function nullList() as Lang.Array<Lang.ByteArray or Null> { return [null]; }
+    function slots(n) as Lang.Array<Lang.ByteArray or Null> { return new[n]; }
 }
 module ByteProgram {
     function run() {
@@ -145,6 +154,42 @@ module ByteProgram {
             System.println(fieldWatch.stillAlive());
             box.save(null);
             System.println(fieldWatch.stillAlive());
+        }
+        var list = Bytes.list(true);
+        System.println(list.size());
+        var element = list[0];
+        element[0] = 11;
+        System.println(list[0][0]);
+        var reversedList = list.reverse();
+        reversedList[1][1] = 12;
+        System.println(list[0].toString());
+        var copiedList = list.slice(null, null);
+        System.println(copiedList.equals(list));
+        copiedList[0] = [99]b;
+        System.println(list[0][0]);
+        var emptyList = Bytes.emptyList();
+        emptyList.addAll(list);
+        emptyList.add([5]b);
+        System.println(emptyList.size());
+        System.println(emptyList.remove(element));
+        System.println(emptyList.size());
+        var nullableList = Bytes.nullableList(true);
+        System.println(nullableList[0] == null);
+        var nullableElement = nullableList[1];
+        if (nullableElement != null) { System.println(nullableElement[0]); }
+        nullableList[1] = null;
+        System.println(nullableElement != null);
+        System.println(Bytes.nullList()[0] == null);
+        var slots = Bytes.slots(2);
+        System.println(slots[0] == null);
+        slots[1] = Bytes.optional(true);
+        var retained = slots[1];
+        if (retained != null) {
+            var elementWatch = retained.weak();
+            retained = null;
+            System.println(elementWatch.stillAlive());
+            slots[1] = null;
+            System.println(elementWatch.stillAlive());
         }
         System.exit();
     }

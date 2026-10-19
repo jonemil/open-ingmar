@@ -103,7 +103,6 @@ fn computed_literals_use_private_initialization_without_truncating_bad_tokens() 
         "function f() { var a = [1.0]b; }",
         "function f() { var a = [\"a\"]b; }",
         "function f() { var a = [[1]b]b; }",
-        "function f() { var a = [[1]b]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

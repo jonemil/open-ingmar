@@ -10,6 +10,8 @@ exercise nullable reference flow and ownership through the last alias.
 `ByteBox` checks initialized/non-null and default-null fields, shared mutation,
 replacement, and field ownership of a weak target. The AppBase class delegates
 startup to `ByteProgram.run`.
+Arrays of ByteArrays check element aliases, shallow copies, nullable snapshots,
+Null-only constants, sized allocation, mutation, and element ownership.
 
 API minimum: 3.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
@@ -31,6 +33,6 @@ Compare the complete console with [expected.txt](expected.txt). See the
 [source contract](../../docs/specs/compiler-subset.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
-ByteArray container elements,
+ByteArray Dictionary values,
 numeric encoding options, and recovery from erased Object results remain
 outside this example's supported profile.

@@ -2247,7 +2247,23 @@ Annotated [fields](compiler-classes.md#bytearray-fields) preserve these referenc
 contracts, with constructor initialization for non-null storage and guarded
 local snapshots for nullable reads.
 
-ByteArray container elements, casts/runtime class
+`Array<ByteArray>` and `Array<ByteArray or Null>` preserve invariant element
+contracts from API 3.0.0. Nonempty literals can infer non-null ByteArray elements;
+typed context also supports empty, nullable, and Null-only literals. Computed
+elements use private Array initialization, preserving reference identity and
+evaluation order. ByteArray values are never embedded as scalar Array constant
+tokens; Null-only literals may use existing DATA constants.
+
+Indexing, writes, and existing native Array methods retain that contract;
+`addAll` requires matching element nullability. A nullable indexed read needs
+a guarded local snapshot; a check on one indexed read does not prove another.
+Sized allocation accepts only nullable elements because each slot starts Null.
+Array copies made by `slice`/`reverse` share the ByteArray elements. Replacing
+an element leaves saved aliases intact. Elements hold strong references until
+removed or replaced, independently of any saved snapshot. Sorting and widening
+to ordinary or heterogeneous Array elements remain unsupported.
+
+ByteArray Dictionary keys/values, casts/runtime class
 recovery, and numeric encoding/decoding options remain unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and

@@ -394,6 +394,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.Symbol" => crate::ArrayElement::Symbol,
             "Toybox.Lang.Method" => crate::ArrayElement::Method,
             "Toybox.Lang.WeakReference" => crate::ArrayElement::WeakReference,
+            "Toybox.Lang.ByteArray" => crate::ArrayElement::ByteArray,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
             "Toybox.Lang.Double" => crate::ArrayElement::Double,
@@ -419,6 +420,7 @@ impl<'a> Parser<'a> {
                 crate::ArrayElement::Symbol => crate::ArrayElement::NullableSymbol,
                 crate::ArrayElement::Method => crate::ArrayElement::NullableMethod,
                 crate::ArrayElement::WeakReference => crate::ArrayElement::NullableWeakReference,
+                crate::ArrayElement::ByteArray => crate::ArrayElement::NullableByteArray,
                 crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,
                 _ => return Err(self.error(at, "nullable Array elements require Number or String")),
             };

@@ -494,8 +494,9 @@ ByteArray/Null joins retain either runtime value without conversion. Reuse the
 [source null-proof rules](compiler-subset.md#bytearrays) in native and saved IR;
 annotations do not assert a proof. API 3.0.0 also applies to nullable contracts
 without an allocation. Class fields use
-[`.field-byte-array`](compiler-classes.md#bytearray-fields). Container element
-contracts are unsupported.
+[`.field-byte-array`](compiler-classes.md#bytearray-fields). Array elements reuse
+these tags under the [allocation grammar](#array-allocation); Dictionary values
+are unsupported.
 
 `.byte-array-new %<result> %<length> [span=<start>:<end>]` allocates a fresh
 zero-filled ByteArray. Length must be an earlier same-block non-null Number
@@ -537,12 +538,15 @@ non-null array. Scalar element tags are `number`, `long`, `float`, `double`,
 `view` represents the supported native View contract. `comparable`, `comparator`,
 `nullable-comparable`, and `nullable-comparator` retain comparison-interface
 element contracts. `method`, `weak-reference`, and their `nullable-` forms
-retain callable/weak-handle contracts. Typed construction uses
+retain callable/weak-handle contracts.
+`byte-array` and `nullable-byte-array` retain strong ByteArray references.
+Construction uses
 `Operation::ArrayNew` with the corresponding `ArrayElement` variant.
 Other parsed element contracts are rejected. Definition/use, block, and effect
 checks apply even when the allocation result is consumed later. API checking
 requires Array and the element type: 5.0.0 for comparison interfaces, 1.3.0 for
-Char, 1.2.0 for WeakReference, otherwise 1.0.0 within this profile.
+Char, 1.2.0 for WeakReference, 3.0.0 for ByteArray, otherwise 1.0.0 within this
+profile.
 
 Parameter/user-call Array categories append `-array` to these element tags,
 for example `long-array`, `nullable-double-array`, or `view-array`. Nullability
