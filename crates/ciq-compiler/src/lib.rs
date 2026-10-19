@@ -1254,6 +1254,14 @@ pub enum Operation {
         result: ValueId,
         value: u32,
     },
+    /// Invoke a catalogue-resolved native module function and produce its result.
+    /// Validation derives the result type from the API, never from its consumer.
+    NativeModuleCall {
+        result: ValueId,
+        module: String,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     /// Invoke a catalogue-resolved native module function as a Void statement.
     /// Names are canonical API identities, independent of executable bindings.
     NativeModuleCallStatement {
@@ -2330,6 +2338,26 @@ impl Function {
                     }
                     (None, vec![value])
                 }
+                Operation::NativeModuleCall {
+                    result,
+                    ref module,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let argument_types = arguments
+                        .iter()
+                        .map(|v| type_of(*v).api_type())
+                        .collect::<Vec<_>>();
+                    let ty = native::module_value(module, member, &argument_types, context)
+                        .map_err(|message| fail(&message))?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty).ok_or_else(|| {
+                            fail("native module result has no supported lowering")
+                        })?,
+                    );
+                    (Some(result), arguments.clone())
+                }
                 Operation::NativeModuleCallStatement {
                     ref module,
                     ref member,
@@ -3079,6 +3107,7 @@ impl Function {
                     | Operation::NativeCall { .. }
                     | Operation::ObjectCall { .. }
                     | Operation::ObjectCallStatement { .. }
+                    | Operation::NativeModuleCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
                     | Operation::SelfCall { .. }
@@ -3215,6 +3244,7 @@ impl Function {
                                 }
                                 | Operation::SourceNew { arguments, .. }
                                 | Operation::ModuleCall { arguments, .. }
+                                | Operation::NativeModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
                                     arguments.iter().rev().map(|value| Task::Value(*value)),
                                 ),
@@ -3484,6 +3514,18 @@ impl Function {
                     symbol,
                 } => format!(".has %{} %{} %{}", result.0, receiver.0, symbol.0),
                 Operation::Null { result } => format!(".null %{}", result.0),
+                Operation::NativeModuleCall {
+                    result,
+                    ref module,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let mut line = format!(".call-native-module %{} {module} {member}", result.0);
+                    for argument in arguments {
+                        line.push_str(&format!(" %{}", argument.0));
+                    }
+                    line
+                }
                 Operation::NativeModuleCallStatement {
                     ref module,
                     ref member,

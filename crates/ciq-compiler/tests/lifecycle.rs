@@ -196,7 +196,7 @@ fn native_module_exit_preserves_aliases_bindings_and_effect_order() {
     for (source, message) in [
         ("function f() { System.exit(1); }", "argument count"),
         ("function f() { System.missing(); }", "not known"),
-        ("function f() { return System.exit(); }", "System calls"),
+        ("function f() { return System.exit(); }", "value lowering"),
         ("function f(System) { System.exit(); }", "System"),
     ] {
         let error = ciq_compiler::compile(source).unwrap_err();

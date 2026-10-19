@@ -43,6 +43,8 @@ SDK/version and scope; they are not current feature inventories. Use
   reference calls, and outstanding constant-literal encoding.
 - [Object containers](compiler-object-containers.md): erased mixed storage,
   nominal enum erasure, class recovery, and strong reference ownership.
+- [Lang.format](compiler-lang-format.md): mixed substitutions, module dispatch,
+  evaluation order, and missing-parameter runtime failure.
 - [Comparison Object arguments](compiler-comparison-objects.md): declared
   domains, dynamic scalar comparisons, and isolated runtime type errors.
 - [Numeric aliases](compiler-numeric-unions.md): arithmetic promotion through

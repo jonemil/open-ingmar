@@ -80,6 +80,8 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
             matches!(located.operation, Operation::DictionaryBegin { builder: id, dictionary_type, .. }
                 if id == *builder && matches!(dictionary_type.key, crate::DictionaryKey::Interface(_)))
         }),
+        Operation::NativeModuleCall { module, member, .. }
+            if module == "Toybox.Lang" && member == "format" => true,
         Operation::NativeCall {
             receiver,
             member,

@@ -556,6 +556,32 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     false
 }
 
+/// Resolve a module function's parameter declarations for literal construction.
+/// Availability and executable support are checked when validating the call.
+pub(crate) fn module_parameters(module: &str, member: &str) -> Option<Vec<api::Type>> {
+    api::core()
+        .module(module)?
+        .functions
+        .iter()
+        .find(|function| function.name == member)
+        .map(|function| function.parameters.clone())
+}
+
+/// Check a value-producing native module call and return its API result type.
+/// Argument assignability preserves typed containers at erased API boundaries.
+pub(crate) fn module_value(
+    module: &str,
+    member: &str,
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<api::Type, String> {
+    let method = module_contract(module, member, arguments, context)?;
+    if !matches!((module, member), ("Toybox.Lang", "format")) {
+        return Err("native module member has no supported value lowering".into());
+    }
+    Ok(method.result.clone())
+}
+
 /// Resolve a module statement contract, then require supported Void lowering.
 /// Declarations and introduction levels are checked before executable support.
 pub(crate) fn module_statement(
@@ -564,6 +590,25 @@ pub(crate) fn module_statement(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<(), String> {
+    let method = module_contract(module, member, arguments, context)?;
+    if method.result != api::Type::Void
+        || !matches!(
+            (module, member),
+            ("Toybox.System", "exit") | ("Toybox.WatchUi", "requestUpdate")
+        )
+    {
+        return Err("native module member has no supported statement lowering".into());
+    }
+    Ok(())
+}
+
+/// Resolve a canonical module function and check availability, arity, and types.
+fn module_contract(
+    module: &str,
+    member: &str,
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<&'static api::Method, String> {
     let catalogue = api::core();
     let method = if let Some(context) = context {
         context.function(catalogue, module, member)?
@@ -578,18 +623,15 @@ pub(crate) fn module_statement(
     if method.parameters.len() != arguments.len() {
         return Err("native call argument count does not match its API contract".into());
     }
-    if method.parameters != arguments {
+    if !method
+        .parameters
+        .iter()
+        .zip(arguments)
+        .all(|(expected, actual)| accepts(expected, actual))
+    {
         return Err("native call argument types do not match its API contract".into());
     }
-    if method.result != api::Type::Void
-        || !matches!(
-            (module, member),
-            ("Toybox.System", "exit") | ("Toybox.WatchUi", "requestUpdate")
-        )
-    {
-        return Err("native module member has no supported statement lowering".into());
-    }
-    Ok(())
+    Ok(method)
 }
 
 #[cfg(test)]

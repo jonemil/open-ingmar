@@ -158,6 +158,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::LocalRead { result, .. }
             | Operation::LocalTake { result, .. }
             | Operation::ModuleCall { result, .. }
+            | Operation::NativeModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
             | Operation::ObjectCall { result, .. }
             | Operation::NativeCall { result, .. } => {
@@ -840,6 +841,28 @@ fn expression(
                         Task::Value(*receiver),
                     ]);
                     continue;
+                }
+                Operation::NativeModuleCall {
+                    module,
+                    member,
+                    arguments,
+                    ..
+                } => {
+                    tasks.push(Task::Invoke(arguments.len()));
+                    if !arguments.is_empty() {
+                        tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
+                        tasks.push(Task::Context);
+                    }
+                    (
+                        Opcode::Getmv,
+                        vec![
+                            Operand::Symbol(format!(
+                                "__ciq_sdk_{}",
+                                module.rsplit('.').next().unwrap()
+                            )),
+                            Operand::Symbol(format!("__ciq_native_{member}")),
+                        ],
+                    )
                 }
                 Operation::ModuleCall {
                     member, arguments, ..

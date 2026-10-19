@@ -364,6 +364,7 @@ pub(crate) fn parse_ir_context(
             Some(".dictionary-write") => (69, 4),
             Some(".array-write") => (49, 4),
             Some(".call-native-module-discard") => (24, call_width()),
+            Some(".call-native-module") => (101, call_width()),
             Some(".return") => (1, 2),
             Some(".add") => (2, 4),
             Some(".subtract") => (3, 4),
@@ -445,6 +446,7 @@ pub(crate) fn parse_ir_context(
             || (kind == 19 && width < 2)
             || (kind == 22 && width < 4))
             || (kind == 24 && width < 3)
+            || (kind == 101 && width < 4)
             || fields.len() < width
             || fields.len() > width + 1
         {
@@ -1077,6 +1079,16 @@ pub(crate) fn parse_ir_context(
                 result: parse_value(&fields[1])?,
                 value: u32::from_str_radix(digits, 16)
                     .map_err(|_| fail(*at, "invalid Char bits"))?,
+            }
+        } else if kind == 101 {
+            Operation::NativeModuleCall {
+                result: parse_value(&fields[1])?,
+                module: fields[2].clone(),
+                member: fields[3].clone(),
+                arguments: fields[4..width]
+                    .iter()
+                    .map(|f| parse_value(f))
+                    .collect::<Result<_, _>>()?,
             }
         } else if kind == 24 {
             Operation::NativeModuleCallStatement {

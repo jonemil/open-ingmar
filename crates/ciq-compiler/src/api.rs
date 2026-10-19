@@ -1132,6 +1132,19 @@ fn build_core() -> Catalogue {
         );
     }
     modules
+        .get_mut("Toybox.Lang")
+        .unwrap()
+        .functions
+        .push(method(
+            "format",
+            vec![
+                Type::named("Toybox.Lang.String"),
+                Type::named("Toybox.Lang.Array"),
+            ],
+            Type::named("Toybox.Lang.String"),
+            initial,
+        ));
+    modules
         .get_mut("Toybox.System")
         .unwrap()
         .functions

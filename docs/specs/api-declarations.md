@@ -182,7 +182,7 @@ operator/type-system dependencies and sequencing belong to the
   fatal runtime errors.
 - **ResourceId:** resource-reference value/binding contracts and own/inherited
   methods, using minimal fixtures before broader resource generation.
-- **Lang module and supporting types:** Lang.format, general unions, and broader
+- **Supporting types:** general unions and broader
   structural option types.
 
 Array default sorting and checked source Comparator instances are implemented

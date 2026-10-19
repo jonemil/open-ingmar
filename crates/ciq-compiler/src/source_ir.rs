@@ -23,6 +23,9 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
         crate::api::Type::Dictionary { .. } => {
             crate::DictionaryType::from_api_type(ty).map(ConstructionType::Dictionary)
         }
+        crate::api::Type::Named(name) if name == "Toybox.Lang.Array" => {
+            Some(ConstructionType::Array(crate::ArrayElement::NullableObject))
+        }
         _ => None,
     }
 }
@@ -611,6 +614,18 @@ fn emit_call(
                 member,
                 arguments,
             }
+        }
+    } else if module.as_deref().is_some_and(|module| {
+        matches!(
+            module,
+            "Lang" | "System" | "WatchUi" | "Graphics" | "Application"
+        )
+    }) {
+        Operation::NativeModuleCall {
+            result,
+            module: format!("Toybox.{}", module.unwrap()),
+            member,
+            arguments,
         }
     } else if module.as_deref() == Some("self") {
         Operation::SelfCall {
@@ -1310,7 +1325,7 @@ impl Builder<'_> {
                 right: Box::new(self.snapshot(*right, locals)?),
             },
             E::SourceNew { class, arguments } => {
-                let expected = self.user_argument_context(&class, "initialize");
+                let expected = self.call_argument_context(&class, "initialize");
                 E::SourceNew {
                     class,
                     arguments: self.snapshot_arguments(arguments, locals, &expected)?,
@@ -1349,7 +1364,7 @@ impl Builder<'_> {
                 let expected = if let Some(receiver) = &receiver {
                     self.receiver_argument_context(receiver, &member)
                 } else {
-                    self.user_argument_context(&module, &member)
+                    self.call_argument_context(&module, &member)
                 };
                 let arguments = self.snapshot_arguments(arguments, locals, &expected)?;
                 if let Some(receiver) = receiver {
@@ -1408,8 +1423,16 @@ impl Builder<'_> {
             .collect()
     }
 
-    /// Read container argument expectations from predeclared user call signatures.
-    fn user_argument_context(&self, module: &str, member: &str) -> Vec<Option<ConstructionType>> {
+    /// Read literal-construction expectations from source or native call signatures.
+    fn call_argument_context(&self, module: &str, member: &str) -> Vec<Option<ConstructionType>> {
+        if matches!(
+            module,
+            "Lang" | "System" | "WatchUi" | "Graphics" | "Application"
+        ) {
+            return crate::native::module_parameters(&format!("Toybox.{module}"), member)
+                .map(|parameters| parameters.iter().map(construction_type).collect())
+                .unwrap_or_default();
+        }
         self.calls
             .get(&(module.into(), member.into()))
             .map(|signature| {
@@ -1433,7 +1456,7 @@ impl Builder<'_> {
             return Vec::new();
         };
         if let Some(class) = self.types.local_class(local) {
-            return self.user_argument_context(class, member);
+            return self.call_argument_context(class, member);
         }
         self.types
             .local_type(local)
@@ -2099,7 +2122,8 @@ impl Builder<'_> {
                     arguments,
                     ..
                 } => {
-                    if locals.contains_key(&module)
+                    if module == "Lang"
+                        || locals.contains_key(&module)
                         || self.parameters.contains_key(&module)
                         || (module == "self"
                             && (member == "method"
@@ -2119,7 +2143,7 @@ impl Builder<'_> {
                             span,
                         )?;
                     } else {
-                        let expected = self.user_argument_context(&module, &member);
+                        let expected = self.call_argument_context(&module, &member);
                         let arguments = self.arguments(arguments, locals, &expected)?;
                         let operation = if module == "self" {
                             Operation::SelfCallStatement { member, arguments }

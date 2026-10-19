@@ -26,8 +26,8 @@ The [current Object storage contract](../specs/compiler-subset.md#object-contain
 owns erasure, nullability, invariance, and payload API checks. Typed nested
 parameter recovery, general Object keys, and Object-element sorting are outside
 this evidence. [Lang.format][lang] takes an erased Array; this container work
-provides mixed contents for that planned consumer, without establishing its
-module-call lowering or substitution behavior.
+provides mixed contents for that consumer. Its module dispatch and substitutions
+have [separate evidence](compiler-lang-format.md).
 
 For SDK reproduction, reuse the minimal-console manifest/resources with
 `../../examples/compiler-object-containers` as the source path from

@@ -1444,6 +1444,24 @@ source inheritance are unsupported.
 
 [class-ir]: compiler-classes.md#native-and-textual-ir
 
+## Native module values
+
+`.call-native-module %<result> <module> <member> [%<argument-id> ...]` invokes
+a runtime-provided module function and defines its catalogue-declared result.
+Module names are canonical API paths; optional spans use the ordinary syntax.
+The executable profile accepts `Toybox.Lang format`: String and erased Array
+arguments, String result, API 1.0.0. Validation checks arity, assignability,
+availability, supported lowering, and ordered single-use operands. Neither the
+consumer nor saved text supplies a result-type override. Void members require
+the statement form below; ignoring a value uses `.discard`.
+
+Lowering selects `getmv @__ciq_sdk_Lang @__ciq_native_format`, `frpush`, the
+arguments in order, and `invokem` with receiver-inclusive arity. Explicit symbol
+sources bind `Toybox_Lang` and `format`; application generation supplies their
+native IDs. Concrete Array types survive the erased parameter boundary. See the
+[source contract](compiler-subset.md#native-module-calls) for literal context and
+callback effects.
+
 ## Native module statements
 
 `.call-native-module-discard <module> <member> [%<argument-id> ...]` invokes a

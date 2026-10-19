@@ -240,6 +240,19 @@ impl Types {
                         _ => None,
                     }),
             ),
+            Operation::NativeModuleCall {
+                result,
+                module,
+                member,
+                arguments,
+            } => {
+                let ty = arguments
+                    .iter()
+                    .map(|id| self.values.get(id).cloned())
+                    .collect::<Option<Vec<_>>>()
+                    .and_then(|types| native::module_value(module, member, &types, None).ok());
+                (*result, ty)
+            }
             Operation::NativeCall {
                 result,
                 receiver,

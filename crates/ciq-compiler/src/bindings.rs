@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 /// `symbols` must contain only valid `.symbol` declarations. Compiler-generated
 /// aliases must match exactly one stored name: modules use `globals/<name>`,
 /// while members use their short names. The dedicated `__ciq_sdk_System` alias
-/// uses `Toybox_System`; no general SDK module-name inference is performed.
+/// uses `Toybox_System`; `__ciq_sdk_Lang` and `__ciq_sdk_WatchUi` bind their
+/// corresponding stored module names. Other SDK module names are not inferred.
 /// Native initialization binds AppBase/initialize, and Number methods bind
 /// Number/String methods by their stored names. Native System.exit binds exit.
 /// Missing, ambiguous, or conflicting
@@ -57,6 +58,8 @@ pub fn symbol_bindings(
                 "Toybox_System".to_string()
             } else if alias == "__ciq_sdk_WatchUi" {
                 "Toybox_WatchUi".to_string()
+            } else if alias == "__ciq_sdk_Lang" {
+                "Toybox_Lang".to_string()
             } else if alias == "__ciq_native_View" {
                 "View".to_string()
             } else if alias == "__ciq_source_globals" {

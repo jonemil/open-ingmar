@@ -933,6 +933,29 @@ general object values/fields, source inheritance,
 and general native calls remain open. See [runtime
 evidence](../investigations/compiler-class.md).
 
+## Native module calls
+
+`Lang.format(format as Lang.String, parameters as Lang.Array) as Lang.String`
+is available since API 1.0.0. Module aliases and fully qualified Toybox paths
+use the ordinary native-name rules. Arguments are evaluated left to right;
+the runtime substitutes one-based `$1$`, `$2$`, etc. placeholders. The compiler
+passes the template unchanged and does not perform formatting or conversion.
+The returned String supports normal storage, calls, returns, and discarding.
+
+The Array parameter is erased. Any supported concrete Array element contract
+can pass unchanged; it does not become `Array<Object>` or lose its invariant
+element type. Direct literals receive nullable Object construction context,
+allowing heterogeneous scalar/reference contents, nulls, and empty literals.
+This context does not widen inference for unrelated literals or existing arrays.
+Null/opaque Object arguments cannot establish the required Array contract.
+
+Formatting can invoke element `toString` implementations. Treat it as a possible
+shutdown callback when checking required constructor field initialization.
+Runtime conversion and placeholder failures remain runtime behavior. The
+[specimen](../../examples/compiler-lang-format/README.md) and
+[evidence](../investigations/compiler-lang-format.md) cover substitution,
+evaluation order, and a missing-parameter failure.
+
 ## Native module statements
 
 `System.exit();` requests application termination and has no expression result.
