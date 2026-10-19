@@ -90,6 +90,7 @@ Fixed native symbol IDs in this profile:
 | toLower | `0x008000be` |
 | toUpper | `0x008000bf` |
 | Object | `0x0080004c` |
+| ByteArray | `0x008007a2` |
 | Toybox_Lang (native import module) | `0x00800007` |
 | View | `0x0080019f` |
 | BehaviorDelegate | `0x00800064` |

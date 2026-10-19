@@ -1711,6 +1711,10 @@ independently of PRG import-table placement. `Has` evaluates receiver then
 selector and emits `hasv`. No section offsets or native symbol IDs are stored
 in semantic IR.
 
+ByteArray tests use `Toybox.Lang.ByteArray` with API 3.0.0. Positive Object
+refinement yields the concrete ByteArray contract, enabling indexed operations
+as well as native methods under the shared proof rules.
+
 [object-tests]: compiler-subset.md#runtime-object-predicates
 
 ## Lexical casts
@@ -1726,8 +1730,8 @@ from the operand or a branch proof. This explicit assertion is separate from
 recomputed control-flow facts.
 
 Target tags are `integer`, `long`, `float`, `double`, `boolean`, `char`, `string`,
-`object`, `symbol`, `method`, `weak-reference`, and `dictionary`. Supported
-nullable targets use `nullable-` tags. Types and their source obligations follow
+`object`, `symbol`, `method`, `weak-reference`, `byte-array`, and `dictionary`.
+Supported nullable targets use `nullable-` tags. Types and their source obligations follow
 the [source cast contract](compiler-subset.md#lexical-casts).
 
 Lowering emits only the operand. There is no cast opcode, runtime class test,

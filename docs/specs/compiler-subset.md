@@ -305,8 +305,9 @@ IDs need not be contiguous; their numeric values never select physical slots.
 
 `value instanceof Lang.Class` produces Boolean for supported concrete classes:
 Object, Number, Long, Float, Double, Boolean, Char, String, Array, Dictionary,
-Symbol, Method, and WeakReference. Canonical `Toybox.Lang.Class` and Lang module
-aliases also work. The class must satisfy the selected API requirements.
+Symbol, Method, WeakReference, and ByteArray. Canonical `Toybox.Lang.Class` and
+Lang module aliases also work. The class must satisfy the selected API
+requirements.
 [Imported type names](#native-name-declarations) and qualified aliases resolve to
 the same targets. Interfaces, unions, and parameterized class operands remain
 outside this profile. Null is not an instance of these
@@ -330,9 +331,9 @@ broader cast targets remain planned.
 
 A positive `instanceof` branch refines fresh reads of the tested local or
 parameter. Object and Object-or-Null can narrow to the supported concrete scalar,
-Dictionary, Method, Symbol, or WeakReference contract. An Object test establishes
-non-nullness. An Array test also establishes non-nullness, but cannot infer an
-Array element contract or enable indexed access on an erased Object. Existing
+Dictionary, Method, Symbol, WeakReference, or ByteArray contract. An Object test
+establishes non-nullness. An Array test also establishes non-nullness, but cannot
+infer an Array element contract or enable indexed access on an erased Object. Existing
 concrete storage contracts retain their types, with Null removed when proven.
 
 ```text
@@ -386,9 +387,10 @@ standalone function IR retains that declaration-resolution obligation.
 
 `expression as Lang.Type` explicitly asserts a value's static type. Supported
 targets are Number, Long, Float, Double, Boolean, Char, String, Object, Symbol,
-Method, WeakReference, and opaque Dictionary. Canonical `Toybox.Lang.Type` and
-Lang module aliases are accepted. Number, Long, Float, Double, Boolean, Char,
-String, Symbol, and Object targets can include `or Null`. Target types still satisfy
+Method, WeakReference, ByteArray, and opaque Dictionary. Canonical
+`Toybox.Lang.Type` and Lang module aliases are accepted. Number, Long, Float,
+Double, Boolean, Char, String, Symbol, Object, Method, WeakReference, and ByteArray
+targets can include `or Null`. Target types still satisfy
 selected API introduction requirements.
 [Source-class targets](#source-class-targets) additionally retain exact identity.
 Imported native names use the same cast profile. Parameterized containers,
@@ -2278,8 +2280,17 @@ references independently of later Dictionary changes. Removing/replacing a
 value leaves saved aliases and enumerations intact; clearing the last strong
 reference allows a weak target to expire. Enumeration order is not specified.
 
-ByteArray Dictionary keys, casts/runtime class
-recovery, and numeric encoding/decoding options remain unsupported. See the
+Object/Object-or-Null storage can recover ByteArray through a positive
+`instanceof Lang.ByteArray` branch on a fresh local/parameter read. This is a
+concrete class contract, with no element parameter to infer. It enables methods,
+indexing, and typed calls on the proven path, including saved Object results
+from weak retrieval or Method invocation. `as Lang.ByteArray` and
+`as Lang.ByteArray or Null` follow the
+[unchecked lexical assertion contract](#lexical-casts); neither checks nor
+converts the runtime value. Both forms require API 3.0.0.
+
+ByteArray Dictionary keys and numeric encoding/decoding options remain
+unsupported. See the
 [example](../../examples/compiler-byte-arrays/README.md),
 [IR contract](compiler-ir-text.md#bytearray-values-and-allocation), and
 [evidence](../investigations/byte-arrays.md#source-and-ir-profile).

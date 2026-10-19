@@ -64,6 +64,14 @@ module Bytes {
     }
     function values(table as Lang.Dictionary<Lang.String, Lang.ByteArray>)
         as Lang.Array<Lang.ByteArray> { return table.values(); }
+    function recovered(o as Lang.Object or Null) {
+        if (!(o instanceof Lang.ByteArray)) { return -1; }
+        o[0] += 1;
+        return o[0];
+    }
+    function assertion(o as Lang.Object or Null) as Lang.ByteArray or Null {
+        return o as Lang.ByteArray or Null;
+    }
 }
 module ByteProgram {
     function run() {
@@ -241,6 +249,23 @@ module ByteProgram {
         optionalTable["empty"] = null;
         System.println(optionalTable.keys().size());
         System.println(Bytes.nullTable()["empty"] == null);
+        var concrete = Bytes.echo([40, 41]b);
+        var recoveryWatch = concrete.weak();
+        var erased = recoveryWatch.get();
+        System.println(Bytes.recovered(erased));
+        System.println(Bytes.recovered(null));
+        System.println(Bytes.recovered([1]));
+        if (erased instanceof Lang.ByteArray) { System.println(erased.size()); }
+        var asserted = Bytes.assertion(recoveryWatch.get());
+        if (asserted != null) { System.println(asserted[0]); }
+        var concreteAssertion = recoveryWatch.get() as Lang.ByteArray;
+        System.println(concreteAssertion.size());
+        System.println(Bytes.assertion(null) == null);
+        var reversedCallback = concrete.method(:reverse);
+        var erasedResult = reversedCallback.invoke();
+        if (erasedResult instanceof Lang.ByteArray) {
+            System.println(erasedResult.toString());
+        }
         System.exit();
     }
 }

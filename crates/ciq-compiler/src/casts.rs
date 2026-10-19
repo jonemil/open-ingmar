@@ -11,9 +11,7 @@ pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
     let value = ValueType::from_api_type(ty)?;
     if matches!(
         value,
-        ValueType::ByteArray
-            | ValueType::NullableByteArray
-            | ValueType::Null
+        ValueType::Null
             | ValueType::Array(_)
             | ValueType::Object(_)
             | ValueType::Tuple(_)

@@ -74,12 +74,12 @@ or addresses. Specimen offsets may differ with SDK/scaffold changes.
 
 ## Source and IR profile
 
-**Experimentally observed (2026-10-18):** the
+**Experimentally observed (2026-10-19):** the
 [compiler example](../../examples/compiler-byte-arrays/README.md), using the
-same SDK/target and `-O 0`, agrees with the independent compiler on all 86
+same SDK/target and `-O 0`, agrees with the independent compiler on all 94
 expected lines. SDK/generated programs pass structured CODE/DATA reconstruction
 and native/text pipeline checks. Artifacts:
-`scratch/check-byte-dictionary-values/`.
+`scratch/check-byte-array-recovery/`.
 
 The specimen allocates with `new[n]b`, writes Number and Char values, performs
 an indexed compound, and observes unsigned readback. `addAll` accepts ByteArrays
@@ -128,6 +128,20 @@ entries remain present according to `hasKey`. A nullable enumeration keeps a
 weak target alive after its Dictionary entry is removed; replacing that
 enumeration with an empty Array expires the target. The specimen does not rely
 on key/value enumeration order. Both compilers agree on these observations.
+
+An authored SDK probe tests an Object-or-Null parameter against
+`Lang.ByteArray`. Its exported CODE uses `getmv @Toybox_Lang @ByteArray; isa`;
+SYMBOLS identifies ByteArray as `0x008007a2`. Probe source/artifacts:
+`scratch/byte-array-class/`; compile/export with the shared helpers.
+The complete tracked example retains the tested class operand and equivalent
+runtime recovery through `Bytes.recovered`.
+
+Weak retrieval and bound `reverse` invocation return erased Object-or-Null
+values. Positive ByteArray tests enable indexed updates and native calls on
+those saved results; Array and Null arguments take the false branch. Non-null
+and nullable `as ByteArray` assertions preserve valid references, and a nullable
+assertion preserves Null. Assertions lower without a runtime check or conversion;
+wrong-class assertion failure behavior was not executed.
 
 Invalid byte ranges, fatal bounds errors, and numeric encoding
 options were not executed here.

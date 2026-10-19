@@ -17,6 +17,7 @@ pub(crate) fn symbol(class: &str) -> Option<u32> {
         "Symbol" => 0x0080009d,
         "Method" => 0x0080009f,
         "WeakReference" => 0x00800416,
+        "ByteArray" => 0x008007a2,
         _ => return None,
     })
 }

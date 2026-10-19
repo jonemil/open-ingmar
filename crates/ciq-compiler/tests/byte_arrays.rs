@@ -74,7 +74,6 @@ fn invalid_byte_lengths_writes_methods_and_storage_forms_are_rejected() {
         "function f() as Toybox.Lang.ByteArray { return [1]; }",
         "function f() as Toybox.Lang.ByteArray { return null; }",
         "function f() { return [1, 2]b; }",
-        "function f(a as Toybox.Lang.Object) { return a as Toybox.Lang.ByteArray; }",
         "function f() { var a = new[0]b; return true ? a : null; }",
     ] {
         assert!(compile(source).is_err(), "{source}");

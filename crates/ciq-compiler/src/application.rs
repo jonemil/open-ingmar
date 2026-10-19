@@ -567,6 +567,7 @@ pub fn build_console_application(
         "Symbol",
         "Method",
         "WeakReference",
+        "ByteArray",
     ] {
         bindings.insert(
             format!("__ciq_type_{name}"),

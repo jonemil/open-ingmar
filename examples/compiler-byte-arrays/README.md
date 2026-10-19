@@ -14,6 +14,8 @@ Arrays of ByteArrays check element aliases, shallow copies, nullable snapshots,
 Null-only constants, sized allocation, mutation, and element ownership.
 Typed Dictionaries check absent keys, guarded reads, value replacement,
 nullable/Null-only entries, and ownership through `values()` enumerations.
+Weak retrieval and Method results check runtime ByteArray refinement and
+unchecked assertions from erased Object values.
 
 API minimum: 3.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
@@ -35,6 +37,5 @@ Compare the complete console with [expected.txt](expected.txt). See the
 [source contract](../../docs/specs/compiler-subset.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
-ByteArray Dictionary keys,
-numeric encoding options, and recovery from erased Object results remain
+ByteArray Dictionary keys and numeric encoding options remain
 outside this example's supported profile.
