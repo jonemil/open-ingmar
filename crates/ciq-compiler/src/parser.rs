@@ -2339,7 +2339,28 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     let kind = if parser.peek()? == Kind::Word("as") {
                         parser.token()?;
                         let class = parser.type_path()?;
-                        if let Some(alias) = crate::NumericAlias::from_name(&class) {
+                        if let Some(ty) = crate::ScalarFieldType::from_name(&class) {
+                            let nullable = if parser.peek()? == Kind::Word("or") {
+                                parser.token()?;
+                                parser.expect(Kind::Word("Null"), "'Null'")?;
+                                true
+                            } else {
+                                false
+                            };
+                            if parser.peek()? == Kind::Punctuation('=') {
+                                if !nullable {
+                                    return Err(parser.error(
+                                        token.span.start,
+                                        "non-null scalar fields must be assigned in initialize",
+                                    ));
+                                }
+                                parser.token()?;
+                                parser
+                                    .expect(Kind::Word("null"), "literal null field initializer")?;
+                            }
+                            parser.expect(Kind::Punctuation(';'), "';' after scalar field")?;
+                            crate::FieldKind::Scalar { ty, nullable }
+                        } else if let Some(alias) = crate::NumericAlias::from_name(&class) {
                             let nullable = if parser.peek()? == Kind::Word("or") {
                                 parser.token()?;
                                 parser.expect(Kind::Word("Null"), "'Null'")?;

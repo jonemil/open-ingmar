@@ -25,6 +25,8 @@ and future Rust toolchain experiments.
   alias Arrays and Dictionary keys/values, nullable reads, and mixed constants.
 - [compiler-numeric-fields](compiler-numeric-fields/README.md): numeric alias
   fields, constructor initialization, nullable snapshots, and instance isolation.
+- [compiler-scalar-fields](compiler-scalar-fields/README.md): concrete scalar
+  fields, exact widths, nullable snapshots, and initialization contracts.
 - [compiler-numeric-unions](compiler-numeric-unions/README.md): Numeric,
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed

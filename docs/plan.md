@@ -29,8 +29,10 @@ Resolve SDK constant-literal Number/Char key conflation before accepting mixed
 scalar-token interface-key constants. Interface-key pool emission also needs a
 hash/equality-preserving materialization contract.
 Nullable Array sorting needs element/callback contracts and evidence: checked
-Comparator parameters currently exclude Null, and the default-comparator probe
-failed on a Null element. Further interface refinement
+Comparator parameters currently exclude Null. The SDK rejects explicitly nullable
+Comparator parameters, while default sorting failed on a Null element; resolve
+this [contract mismatch](investigations/compiler-object-sort.md#failure-probes)
+before widening the profile. Further interface refinement
 should preserve both structural members and concrete class facts where needed.
 Preserve exact source identities until unit
 checking can establish required members; an erased Object or a runtime `has`

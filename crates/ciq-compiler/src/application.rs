@@ -136,6 +136,7 @@ fn instance_field(
         } => (8, ids[name]),
         crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::Numeric { .. }
+        | crate::FieldKind::Scalar { .. }
         | crate::FieldKind::SourceObject(_)
         | crate::FieldKind::Method { .. }
         | crate::FieldKind::WeakReference { .. }

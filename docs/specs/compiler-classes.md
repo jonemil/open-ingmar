@@ -15,8 +15,9 @@ class = "class" identifier ("extends" native-base)?
 native-base = recognized Lang.Object, Application.AppBase, WatchUi.View, or
               WatchUi.BehaviorDelegate identity
 number-field = "var" identifier "=" signed-number-literal ";"
-field = number-field | source-reference-field | interface-field | symbol-field
-source-reference-field = "var" identifier "as" source-class-name ";"
+field = number-field | typed-field | symbol-field
+typed-field = "var" identifier "as" supported-field-contract
+              ("=" permitted-literal-default)? ";"
 receiver-call = "self" "." member "(" argument-list? ")"
 ```
 
@@ -304,9 +305,10 @@ field access on another instance remains unsupported.
 
 ## Number instance fields
 
-AppBase and View classes may declare up to 256 fields with signed 32-bit decimal
-Number literal initializers. Fields have a fixed Number contract. Uninitialized
-Number declarations, Number annotations, non-Number literals, and computed initializers are
+Source classes may declare up to 256 fields with signed 32-bit decimal Number
+literal initializers. These inferred fields have a fixed Number contract;
+typed declarations follow the [scalar-field contract](#typed-scalar-fields).
+Other inferred numeric literals and computed declaration initializers are
 unsupported. Parentheses around a literal are accepted. These restrictions and
 the field-count limit define our subset, not a device memory limit.
 
@@ -353,6 +355,36 @@ constant initialization precedes its source initialize method. Reads lower to
 See the [counter example](../../examples/compiler-fields/README.md) and
 [instance isolation evidence](../investigations/compiler-fields.md).
 
+## Typed scalar fields
+
+All supported source class bases accept explicit Number, Long, Float, Double,
+Boolean, Char, and String fields, including `or Null` forms. Canonical names,
+imports, and module aliases resolve the same contracts. Fields retain their
+exact scalar class without implicit conversion; numeric promotion in an RHS
+must still produce a type assignable to the field. Operators and native methods
+follow the ordinary scalar rules. Char declarations require API 1.3.0; the
+other scalar classes require 1.0.0. Base classes retain their own availability.
+
+Typed fields start as Null metadata slots. A non-null declaration requires
+assignment in `initialize` under the
+[required-field prefix rules](#source-reference-fields). Nullable fields may
+omit a default or use literal `null`. Other declaration initializers remain
+outside this profile. Shared member-name and 256-field limits apply.
+
+Nullable reads need a guarded local snapshot before non-null use; testing one
+mutable field read does not refine a later read. Clearing the field leaves
+earlier snapshots intact. Writes, compound assignments, and statement updates
+use the same type and evaluation-order rules as locals. Each instance owns its
+slots independently.
+
+Unit IR declares `.field-scalar <name> <tag>` before methods. Tags are `integer`
+(Number), `long`, `float`, `double`, `boolean`, `char`, `string`, and their
+`nullable-` forms. There is no default operand. Unit reload rechecks exact
+`.read-self` types, assignment contracts, initialization, and API availability.
+Existing field instructions and Null-slot DATA records suffice. See the
+[example](../../examples/compiler-scalar-fields/README.md) and
+[evidence](../investigations/compiler-scalar-fields.md).
+
 ## Numeric alias fields
 
 All supported source class bases accept fields declared as `Lang.Numeric`,
@@ -360,30 +392,18 @@ All supported source class bases accept fields declared as `Lang.Numeric`,
 imports, and aliases resolve to the same contracts. Their scalar alternatives
 and operator rules follow the [numeric value contract](compiler-subset.md#numeric-values).
 
-Each field starts as a Null metadata slot (key bits zero, type `0x00`, value
-zero). Non-null fields require a source `initialize` that assigns them under
-the [required-field prefix rules](#source-reference-fields). Nullable fields
-may omit a default or use literal `null`. Other declaration initializers are
-unsupported in this profile; assign values in `initialize` instead. These are
-our bounded initialization rules, not complete Monkey C declaration semantics.
-The shared 256-field and member-name rules apply.
+Initialization, Null metadata, snapshots, evaluation order, and field limits
+follow the [typed-field rules](#typed-scalar-fields).
 
 Reads retain the declared alias and nullability. Writes must satisfy every
 possible alternative of the RHS, without implicit numeric conversion. Numeric
 accepts all four scalar classes, Integer accepts Number/Long, and Decimal
 accepts Float/Double; non-null fields reject nullable values without a proof.
-Compound assignments and statement updates use the shared operator/write rules
-and capture the old field value before RHS effects. Nullable fields require a
-guarded local snapshot for arithmetic or member calls; checking one mutable
-field read does not refine another. Replacing or clearing a field does not
-change an already captured value. Different instances retain independent slots.
 
 Unit IR declares `.field-numeric <name> <tag>` before methods. Tags are
 `numeric`, `integer-union`, `decimal`, and their `nullable-` forms. There is no
-default operand. `.read-self` must claim the exact declared result tag;
-`.assign-self` must satisfy its contract. Reloading unit IR rechecks ownership,
-assignability, initialization, and API availability. Existing field instructions
-and Null-slot DATA framing suffice. See the
+default operand. Reads and writes retain the exact declaration as for scalar
+fields. See the
 [example](../../examples/compiler-numeric-fields/README.md) and
 [evidence](../investigations/compiler-numeric-unions.md#field-storage).
 

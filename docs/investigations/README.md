@@ -51,6 +51,8 @@ SDK/version and scope; they are not current feature inventories. Use
   domains, dynamic scalar comparisons, and isolated runtime type errors.
 - [Numeric aliases](compiler-numeric-unions.md): arithmetic promotion through
   Numeric/Integer/Decimal signatures, fields, containers, and nullable guards.
+- [Typed scalar fields](compiler-scalar-fields.md): concrete widths, nullable
+  snapshots, instance isolation, and structured field metadata.
 - [ByteArray](byte-arrays.md): compact constants, zero-filled allocation,
   indexed stores, and structured reconstruction in the simulator.
 - [Operator coverage](compiler-operator-coverage.md): logical keyword aliases,

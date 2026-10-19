@@ -36,8 +36,8 @@ mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
-    NumericAlias, SourceDiagnostic, UnitError, compile_sources, compile_sources_with_api,
-    parse_unit_ir, parse_unit_ir_with_api,
+    NumericAlias, ScalarFieldType, SourceDiagnostic, UnitError, compile_sources,
+    compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
 
 use std::fmt;
@@ -2201,6 +2201,19 @@ impl Function {
                     if !matches!(
                         result_type,
                         ReturnType::Integer
+                            | ReturnType::NullableInteger
+                            | ReturnType::Long
+                            | ReturnType::NullableLong
+                            | ReturnType::Float
+                            | ReturnType::NullableFloat
+                            | ReturnType::Double
+                            | ReturnType::NullableDouble
+                            | ReturnType::Boolean
+                            | ReturnType::NullableBoolean
+                            | ReturnType::Char
+                            | ReturnType::NullableChar
+                            | ReturnType::String
+                            | ReturnType::NullableString
                             | ReturnType::Numeric
                             | ReturnType::IntegerAlias
                             | ReturnType::Decimal

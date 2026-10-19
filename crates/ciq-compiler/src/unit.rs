@@ -337,11 +337,88 @@ impl NumericAlias {
     }
 }
 
+/// A concrete scalar contract supported by typed instance fields.
+/// Numeric classes stay distinct; assignments do not perform conversions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScalarFieldType {
+    Number,
+    Long,
+    Float,
+    Double,
+    Boolean,
+    Char,
+    String,
+}
+
+impl ScalarFieldType {
+    /// Resolve a canonical API scalar name without accepting aliases or unions.
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Some(match name.strip_prefix("Toybox.Lang.")? {
+            "Number" => Self::Number,
+            "Long" => Self::Long,
+            "Float" => Self::Float,
+            "Double" => Self::Double,
+            "Boolean" => Self::Boolean,
+            "Char" => Self::Char,
+            "String" => Self::String,
+            _ => return None,
+        })
+    }
+
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Number => "integer",
+            Self::Long => "long",
+            Self::Float => "float",
+            Self::Double => "double",
+            Self::Boolean => "boolean",
+            Self::Char => "char",
+            Self::String => "string",
+        }
+    }
+
+    fn parse_tag(tag: &str) -> Option<Self> {
+        [
+            Self::Number,
+            Self::Long,
+            Self::Float,
+            Self::Double,
+            Self::Boolean,
+            Self::Char,
+            Self::String,
+        ]
+        .into_iter()
+        .find(|ty| ty.tag() == tag)
+    }
+
+    fn result_type(self, nullable: bool) -> ReturnType {
+        match (self, nullable) {
+            (Self::Number, false) => ReturnType::Integer,
+            (Self::Number, true) => ReturnType::NullableInteger,
+            (Self::Long, false) => ReturnType::Long,
+            (Self::Long, true) => ReturnType::NullableLong,
+            (Self::Float, false) => ReturnType::Float,
+            (Self::Float, true) => ReturnType::NullableFloat,
+            (Self::Double, false) => ReturnType::Double,
+            (Self::Double, true) => ReturnType::NullableDouble,
+            (Self::Boolean, false) => ReturnType::Boolean,
+            (Self::Boolean, true) => ReturnType::NullableBoolean,
+            (Self::Char, false) => ReturnType::Char,
+            (Self::Char, true) => ReturnType::NullableChar,
+            (Self::String, false) => ReturnType::String,
+            (Self::String, true) => ReturnType::NullableString,
+        }
+    }
+}
+
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
     /// A Number copied from class metadata into each new instance.
     Number(i32),
+    /// A Null-initialized concrete scalar slot. Non-null fields require source
+    /// initialization before reads, self exposure, control flow, or return.
+    Scalar { ty: ScalarFieldType, nullable: bool },
     /// A Null-initialized numeric alias slot. Non-null fields must be filled
     /// by source initialize before reads, self exposure, control flow, or return.
     Numeric { alias: NumericAlias, nullable: bool },
@@ -376,6 +453,10 @@ impl FieldKind {
         matches!(
             self,
             Self::SourceObject(_)
+                | Self::Scalar {
+                    nullable: false,
+                    ..
+                }
                 | Self::Numeric {
                     nullable: false,
                     ..
@@ -416,6 +497,7 @@ impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
             FieldKind::Number(_) => ReturnType::Integer,
+            FieldKind::Scalar { ty, nullable } => ty.result_type(*nullable),
             FieldKind::Numeric { alias, nullable } => alias.result_type(*nullable),
             FieldKind::ByteArray { nullable } => {
                 if *nullable {
@@ -1620,6 +1702,12 @@ impl CompilationUnit {
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
+                    FieldKind::Scalar { ty, nullable } => format!(
+                        ".field-scalar {} {}{}\n",
+                        field.name,
+                        if *nullable { "nullable-" } else { "" },
+                        ty.tag()
+                    ),
                     FieldKind::Numeric { alias, nullable } => format!(
                         ".field-numeric {} {}{}\n",
                         field.name,
@@ -2029,6 +2117,7 @@ fn parse_unit_ir_context(
                         matches!(
                             part.as_str(),
                             ".field-number"
+                                | ".field-scalar"
                                 | ".field-numeric"
                                 | ".field-reference"
                                 | ".field-interface"
@@ -2052,6 +2141,15 @@ fn parse_unit_ir_context(
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)
+                        } else if parts[0] == ".field-scalar" {
+                            let (tag, nullable) = parts[2]
+                                .strip_prefix("nullable-")
+                                .map(|tag| (tag, true))
+                                .unwrap_or((&parts[2], false));
+                            let ty = ScalarFieldType::parse_tag(tag).ok_or_else(|| {
+                                Diagnostic::at(text, method_at, "invalid scalar field contract")
+                            })?;
+                            FieldKind::Scalar { ty, nullable }
                         } else if parts[0] == ".field-numeric" {
                             let (tag, nullable) = parts[2]
                                 .strip_prefix("nullable-")

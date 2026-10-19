@@ -499,7 +499,9 @@ class refinements, and current null proofs under the
 [source rules](compiler-subset.md#numeric-values). A result annotation cannot
 narrow an arithmetic union or establish a null proof. Lowering uses ordinary
 VM operators; alias negation uses Number zero subtraction.
-Unit field declarations reuse these tags through
+Concrete scalar field contracts use
+[`.field-scalar`](compiler-classes.md#typed-scalar-fields), preserving the same
+scalar/nullability tags. Numeric alias field declarations reuse their tags through
 [`.field-numeric`](compiler-classes.md#numeric-alias-fields); reads retain the
 exact declaration and writes are checked against it after unit reload.
 

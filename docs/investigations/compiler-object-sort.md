@@ -54,5 +54,14 @@ ordering of nullable elements requires a callback contract that admits Null;
 the current checked Comparator parameters are non-null Object. This observation
 does not establish every null placement, catchability, or device behavior.
 
+The follow-up `scratch/nullable-sort-probe/app.mc` declares
+`compare(Object or Null, Object or Null) as Number`, guarding both parameters.
+SDK 9.2.0 rejects this class both at a direct sort call and when passed to a
+Comparator-typed helper (`scratch/nullable-sort-sdk-build.log`, exit 105).
+Its required interface parameters are exactly Object. This prevents treating
+an explicitly nullable implementation as the missing checked callback contract;
+do not infer that nullable sorting has a safe signature from API acceptance of
+the Array alone.
+
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html#sort-instance_function
 [spec]: ../specs/compiler-subset.md#source-comparators
