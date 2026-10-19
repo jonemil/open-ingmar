@@ -537,6 +537,11 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         if expected == "Toybox.Lang.Object" && crate::InterfaceType::from_name(actual).is_some() {
             return true;
         }
+        // Recorded enums use Number values at runtime, while their nominal
+        // contracts still reject implicit substitution at scalar boundaries.
+        if expected == "Toybox.Lang.Object" && api::core().enum_level(actual).is_some() {
+            return true;
+        }
         let mut class = api::core().class(actual);
         while let Some(current) = class {
             if current.name == *expected {

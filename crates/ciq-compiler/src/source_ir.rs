@@ -1772,7 +1772,9 @@ impl Builder<'_> {
             ) if element.nullable_base().is_some()
                 || matches!(
                     element,
-                    crate::ArrayElement::Interface(_) | crate::ArrayElement::Numeric { .. }
+                    crate::ArrayElement::Interface(_)
+                        | crate::ArrayElement::Numeric { .. }
+                        | crate::ArrayElement::LangObject
                 ) =>
             {
                 self.array_literal(elements, Some(element), span, locals)?

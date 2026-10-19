@@ -13,6 +13,8 @@ and future Rust toolchain experiments.
   Comparator implementations, stateful runtime dispatch, and custom sorting.
 - [compiler-array-sort](compiler-array-sort/README.md): default scalar sorting,
   shared mutation, copies, and edge-sized inputs.
+- [compiler-object-containers](compiler-object-containers/README.md): mixed
+  Object storage, nullable snapshots, class recovery, and reference lifetimes.
 - [compiler-comparison-objects](compiler-comparison-objects/README.md): declared
   Object arguments for comparison/equality and runtime numeric dispatch.
 - [compiler-numeric-containers](compiler-numeric-containers/README.md): numeric

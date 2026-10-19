@@ -218,6 +218,10 @@ impl DictionaryKey {
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A non-null erased Object; lookups additionally permit absent-key Null.
+    LangObject,
+    /// An erased Object or an explicitly stored Null value.
+    NullableObject,
     /// A numeric alias, optionally permitting explicitly stored Null values.
     Numeric {
         alias: crate::NumericAlias,
@@ -252,8 +256,9 @@ pub enum DictionaryValue {
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
-/// Nested containers and arbitrary heterogeneous unions are unsupported.
-/// Numeric typedefs retain their bounded scalar alternatives.
+/// Explicit nested type parameters and arbitrary unions are unsupported.
+/// Object values may hold nested references without retaining their parameters;
+/// numeric typedefs retain their bounded scalar alternatives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DictionaryType {
     pub key: DictionaryKey,
@@ -265,6 +270,8 @@ impl DictionaryType {
     pub fn api_type(self) -> Type {
         let key = self.key.api_type();
         let (value, nullable) = match self.value {
+            DictionaryValue::LangObject => ("Object", false),
+            DictionaryValue::NullableObject => ("Object", true),
             DictionaryValue::Numeric { alias, nullable } => {
                 return Type::dictionary(key, alias.api_type(nullable));
             }
@@ -346,6 +353,8 @@ impl DictionaryType {
             });
         }
         for value_kind in [
+            DictionaryValue::LangObject,
+            DictionaryValue::NullableObject,
             DictionaryValue::Interface(crate::InterfaceType::Comparable),
             DictionaryValue::Interface(crate::InterfaceType::Comparator),
             DictionaryValue::NullableInterface(crate::InterfaceType::Comparable),
@@ -401,6 +410,8 @@ impl DictionaryType {
             DictionaryKey::ByteArray => "byte-array",
         };
         let value = match self.value {
+            DictionaryValue::LangObject => "object",
+            DictionaryValue::NullableObject => "nullable-object",
             DictionaryValue::Numeric { alias, nullable } => alias.value_tag(nullable),
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryValue::Interface(crate::InterfaceType::Comparator) => "comparator",
@@ -463,6 +474,8 @@ impl DictionaryType {
                 _ => return None,
             },
             value: match value {
+                "object" => DictionaryValue::LangObject,
+                "nullable-object" => DictionaryValue::NullableObject,
                 tag if crate::NumericAlias::parse_tag(tag).is_some() => {
                     let (alias, nullable) = crate::NumericAlias::parse_tag(tag)?;
                     DictionaryValue::Numeric { alias, nullable }
@@ -570,6 +583,7 @@ pub(crate) fn inferred_type(entries: &[(Type, Type)]) -> Option<DictionaryType> 
                 if matches!(
                     name.as_str(),
                     "Toybox.Lang.Number"
+                        | "Toybox.Lang.Object"
                         | "Toybox.Lang.String"
                         | "Toybox.Lang.Boolean"
                         | "Toybox.Lang.Char"

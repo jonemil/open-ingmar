@@ -107,7 +107,6 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
         "class C { function initialize() {} } class Holder { var value as C; function initialize() {} }",
         "class C { function initialize() {} } function f() { var c=new C(); var d=new Other(); c=d; } class Other { function initialize() {} }",
         "class C { function initialize() {} } function f() as Toybox.WatchUi.View { return new C(); }",
-        "class C { function initialize() {} } function f() { var a=[new C()]; }",
         "function f(o as Toybox.Lang.Object) { return o.value(); }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");

@@ -107,11 +107,7 @@ fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements
     assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    for bad in [
-        ".array-new %0 object",
-        ".array-new %0 char 1",
-        ".array-new char",
-    ] {
+    for bad in [".array-new %0 char 1", ".array-new char"] {
         assert!(parse_ir(&text.replace(".array-new %0 char", bad)).is_err());
     }
     let numbers = parse_ir(&text.replace("char", "number")).unwrap();

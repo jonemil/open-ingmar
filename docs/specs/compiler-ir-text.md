@@ -349,6 +349,8 @@ function `result=`, call `result=`, and allocation `type=` fields. Keys are
 `comparator`, or `method`. Values use those tags, `weak-reference`, `byte-array`,
 or their `nullable-` counterparts. Keys and values also accept `numeric`,
 `integer-union`, and `decimal`; only values accept their nullable forms.
+Values also accept `object` and `nullable-object`, with the
+[source erasure rules](compiler-subset.md#object-containers).
 Interface value contracts require API 5.0.0;
 WeakReference requires 1.2.0 and ByteArray requires 3.0.0. Other tags, nested
 ordinary containers, and arbitrary heterogeneous unions are rejected. For example:
@@ -593,6 +595,9 @@ element contracts. `method`, `weak-reference`, and their `nullable-` forms
 retain callable/weak-handle contracts.
 `byte-array` and `nullable-byte-array` retain strong ByteArray references.
 Numeric alias tags follow the [alias grammar](#numeric-aliases).
+`object` and `nullable-object` retain erased Object elements; their parameter
+and call-result tags are `object-array` and `nullable-object-array`, and their
+conditional-edge tags are `array-object` and `array-nullable-object`.
 Construction uses
 `Operation::ArrayNew` with the corresponding `ArrayElement` variant.
 Other parsed element contracts are rejected. Definition/use, block, and effect
@@ -645,6 +650,12 @@ payload must match its element contract; other mixed types and nested
 containers are rejected. API checks require Array and each element class, as
 for allocation.
 Definition/use and ordered-effect checks include this allocation.
+
+Object element tags use the tagged scalar tokens below for supported scalar
+constants; `nullable-object` also permits Null. Validation checks each payload's
+API requirements independently of its Object contract. Reference values use
+private construction, not scalar DATA tokens. Unit/native calls preserve the
+same [Object storage contracts](compiler-subset.md#object-containers).
 
 Numeric alias element tags use tagged scalar tokens to retain each alternative,
 with the same syntax as [Dictionary constants](#dictionary-constants):

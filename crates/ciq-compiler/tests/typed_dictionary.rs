@@ -91,7 +91,6 @@ fn saved_ir_does_not_recover_erased_or_incompatible_allocation_types() {
     );
     for bad in [
         "dictionary(string)",
-        "dictionary(string=>object)",
         "dictionary(null=>integer)",
         "dictionary(string=>integer=>integer)",
         "dictionary(string=>array-integer)",

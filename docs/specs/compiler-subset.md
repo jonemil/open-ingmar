@@ -1118,8 +1118,8 @@ numeric, String, Boolean, Char, or Symbol keys and homogeneous values with optio
 Null. Without context, a non-null value establishes the value type; any Null
 makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
-Null keys, mixed scalar kinds without an expected interface or numeric alias
-contract, container-valued entries,
+Null keys, mixed scalar kinds without an expected interface, numeric alias, or Object
+contract, container-valued entries outside the Object value profile,
 and trailing commas are unsupported. Nested Dictionary literal syntax is also
 unsupported, including inside entry call arguments. Ordinary calls and Array
 reads may produce scalar entries.
@@ -1208,8 +1208,9 @@ These are intended contracts, not executable support yet. Do not infer key/value
 contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
-General heterogeneous unions, Null keys, and nested containers need separate
-contracts before acceptance. Object `method` follows the
+General source unions, Null keys, and explicit nested parameter contracts need
+separate rules before acceptance. Nested references stored as
+[Object values](#object-containers) remain erased. Object `method` follows the
 [bounded Method profile](#method-values-and-invocation);
 ordinary `weak` follows the [bounded reference profile](#ordinary-weak-references).
 
@@ -2109,7 +2110,8 @@ Comparator values read from an Array can supply an ordering callback. See the
 on the value type, support scalar keys and the interface-key profile below. Interfaces
 require API 5.0.0. Key/value parameters stay invariant across assignments and
 calls; scalar-valued Dictionaries do not widen to interface-valued ones.
-General Object values remain unsupported.
+Erased Object values alone do not establish these interface contracts;
+[Object-valued Dictionaries](#object-containers) use a separate erased profile.
 
 An expected Dictionary contract types direct literals and empty construction.
 Values accept compatible native/interface witnesses or exact source instances;
@@ -2272,6 +2274,47 @@ conversion, numeric-key merging across scalar classes, or mutable-container
 widening is introduced. See the
 [example](../../examples/compiler-numeric-containers/README.md) and
 [evidence](../investigations/compiler-numeric-unions.md#container-storage).
+
+## Object containers
+
+`Array<Lang.Object>` and `Array<Lang.Object or Null>` retain non-null Array
+references with invariant erased element contracts. Dictionary values likewise
+accept `Lang.Object` or `Lang.Object or Null` with any supported key contract;
+Object keys remain unsupported. Canonical names, imports, and Lang aliases work
+in signatures and contextual construction. General source unions, explicit
+nested parameters, and exact source-class element/value contracts remain
+separate requirements.
+
+Object slots accept supported scalar classes, numeric aliases, source/native
+objects, comparison interfaces, and container/Method/WeakReference references.
+Known enum values may widen to Object with their Number runtime representation;
+this does not make them assignable to Number or permit numeric operators on
+nominal enum types. Nullable Object slots additionally accept Null. Mutable
+containers are invariant: existing Array/Dictionary references cannot widen
+their parameters to Object, even though individual values can be stored there.
+
+Explicit context admits heterogeneous literal contents. Without context, a value
+already represented as Object can establish that erased contract; mixed scalar
+literals alone do not infer it. Scalar constants use tagged DATA records,
+retaining class, exact bits, order, and fresh mutable results. Symbol/reference
+or computed contents use the existing ordered private builders. Check API
+availability for each constant payload class as well as the erased container
+type; storing Char under Object still requires API 1.3.0.
+
+Indexing and native methods preserve erased types. Non-null Object reads support
+Object observers; specific members need the existing lexical assertion or class
+proof. Erasure does not recover nested container parameters. Dictionary lookup
+adds absent-key Null, while `values()` retains the stored value contract.
+Nullable reads require a guarded local snapshot; testing a mutable container
+read does not refine another read. Sized allocation requires nullable elements,
+and Object-element sorting remains outside the supported sorting profiles.
+
+Containers and their shallow enumerations retain strong references to stored
+objects. Removal/replacement releases that ownership; other aliases or snapshots
+may still keep a weak target alive. A source object retrieved under Object loses
+its exact source identity until a supported runtime class proof reestablishes it.
+See the [example](../../examples/compiler-object-containers/README.md) and
+[evidence](../investigations/compiler-object-containers.md).
 
 ## ByteArrays
 

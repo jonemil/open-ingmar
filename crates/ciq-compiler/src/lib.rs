@@ -153,6 +153,10 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A non-null Object value; concrete members require a narrower proof.
+    LangObject,
+    /// An Object value or Null; consumers must guard saved nullable reads.
+    NullableObject,
     /// A supported numeric alias; nullable elements require a guarded snapshot.
     Numeric {
         alias: NumericAlias,
@@ -191,6 +195,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::LangObject | Self::NullableObject => "Toybox.Lang.Object",
             Self::Numeric { alias, nullable } => return alias.api_type(nullable),
             Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
@@ -215,6 +220,7 @@ impl ArrayElement {
 
     fn nullable_base(self) -> Option<Self> {
         match self {
+            Self::NullableObject => Some(Self::LangObject),
             Self::Numeric {
                 alias,
                 nullable: true,
@@ -243,6 +249,8 @@ impl ArrayElement {
             return Some(Self::Numeric { alias, nullable });
         }
         [
+            Self::LangObject,
+            Self::NullableObject,
             Self::Interface(InterfaceType::Comparable),
             Self::Interface(InterfaceType::Comparator),
             Self::NullableInterface(InterfaceType::Comparable),
@@ -277,6 +285,8 @@ impl ArrayElement {
 
     fn text(self) -> &'static str {
         match self {
+            Self::LangObject => "object",
+            Self::NullableObject => "nullable-object",
             Self::Numeric { alias, nullable } => alias.value_tag(nullable),
             Self::Interface(InterfaceType::Comparable) => "comparable",
             Self::Interface(InterfaceType::Comparator) => "comparator",
@@ -312,6 +322,8 @@ impl ArrayElement {
 
     fn array_text(self) -> &'static str {
         match self {
+            Self::LangObject => "object-array",
+            Self::NullableObject => "nullable-object-array",
             Self::Numeric {
                 alias: NumericAlias::Integer,
                 nullable: false,
@@ -370,8 +382,9 @@ impl ArrayElement {
 }
 
 /// Scalar token in a flat Array constant, retaining its VM type and exact bits.
-/// Interface and numeric alias contracts may mix compatible scalars. Null requires
-/// a nullable element contract; String contains text rather than a pool alias.
+/// Object, interface, and numeric alias contracts may mix compatible scalars.
+/// Null requires a nullable element contract; String contains text rather than
+/// a pool alias.
 /// Arrays and Dictionaries share the same tagged scalar payload representation.
 pub use dictionary::DictionaryScalar as ArrayConstantValue;
 
@@ -1796,6 +1809,15 @@ impl Function {
                 } => {
                     dictionary::constant_type(entries, Some(dictionary_type))
                         .map_err(|e| fail(&e))?;
+                    if let Some(context) = context {
+                        for (key, value) in entries {
+                            for scalar in [key, value] {
+                                context
+                                    .check_type(api::core(), &scalar.api_type())
+                                    .map_err(|message| fail(&message))?;
+                            }
+                        }
+                    }
                     types.insert(result, ValueType::TypedDictionary(dictionary_type));
                     (Some(result), vec![])
                 }
@@ -2456,6 +2478,11 @@ impl Function {
                         context
                             .check_type(api::core(), &ty.api_type())
                             .map_err(|message| fail(&message))?;
+                        for value in values {
+                            context
+                                .check_type(api::core(), &value.api_type())
+                                .map_err(|message| fail(&message))?;
+                        }
                     }
                     types.insert(result, ty);
                     (Some(result), vec![])
@@ -3649,6 +3676,8 @@ impl Function {
                                 ArrayElement::Interface(_)
                                     | ArrayElement::NullableInterface(_)
                                     | ArrayElement::Numeric { .. }
+                                    | ArrayElement::LangObject
+                                    | ArrayElement::NullableObject
                             ) {
                                 format!(" {}", v.text())
                             } else {
@@ -3937,6 +3966,7 @@ fn validate_call_arguments(
                     | ValueType::ByteArray
                     | ValueType::NumberFormat
                     | ValueType::Endian
+                    | ValueType::FontDefinition
                     | ValueType::Numeric
                     | ValueType::IntegerAlias
                     | ValueType::Decimal
@@ -4024,7 +4054,9 @@ fn call_type_text(result: &ReturnType) -> String {
         ReturnType::Array(
             element @ (ArrayElement::Interface(_)
             | ArrayElement::NullableInterface(_)
-            | ArrayElement::Numeric { .. }),
+            | ArrayElement::Numeric { .. }
+            | ArrayElement::LangObject
+            | ArrayElement::NullableObject),
         ) => return format!(" result={}", element.array_text()),
         ReturnType::SourceObject(class) => return format!(" result=source({class})"),
         ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),

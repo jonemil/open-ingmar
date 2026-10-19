@@ -77,7 +77,6 @@ fn char_arrays_preserve_element_contracts_and_complete_pipelines() {
 fn char_array_contracts_reject_wrong_elements_receivers_and_unsupported_consumers() {
     for source in [
         "function f(a as Toybox.Lang.Array) { return a.size(); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Object>) { return a.size(); }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Char> or Null) { return 0; }",
         "function f() { return 1.toCharArray(); }",
         "function f() { return \"A\".toCharArray(1); }",

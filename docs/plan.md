@@ -22,6 +22,10 @@ replace runtime type exceptions with narrower compiler-only argument rules.
 Parameterized-container and general-union casts need their own type contracts.
 Extend general union rules and broader container/storage contracts as core
 consumers require them.
+Use the Object container profile to implement `Lang.format` next. Add
+value-producing native module calls across source, saved IR, lowering, and
+imports. Its published Array parameter is erased; keep concrete mutable Array
+contracts intact rather than requiring covariance to `Array<Object>`.
 Broader option records need explicit field/value contracts beyond the checked
 ByteArray option builder. Extend structural source annotations and option
 storage/mutation only with corresponding record proofs.
@@ -54,7 +58,7 @@ patterns, or conversion thresholds. The isolated
 [boundary probes](investigations/compiler-numeric-boundaries.md) establish
 simulator observations, not portable failure/recovery or conversion guarantees.
 
-Keep general heterogeneous Dictionary values, Null keys, and nested containers
+Keep general source unions, Null keys, and explicit nested container parameters
 deferred under the [bounded source contracts](specs/compiler-subset.md#planned-dictionary-extensions).
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.

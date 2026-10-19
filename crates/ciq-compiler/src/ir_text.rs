@@ -169,6 +169,12 @@ pub(crate) fn parse_ir_context(
                         "number-format" => Ok(crate::ParameterType::NumberFormat),
                         "endian" => Ok(crate::ParameterType::Endian),
                         "numeric" => Ok(crate::ParameterType::Numeric),
+                        "object-array" => {
+                            Ok(crate::ParameterType::Array(crate::ArrayElement::LangObject))
+                        }
+                        "nullable-object-array" => Ok(crate::ParameterType::Array(
+                            crate::ArrayElement::NullableObject,
+                        )),
                         tag if tag
                             .strip_suffix("-array")
                             .and_then(crate::NumericAlias::parse_tag)
@@ -706,6 +712,8 @@ pub(crate) fn parse_ir_context(
                     "method" => crate::ArrayElement::Method,
                     "weak-reference" => crate::ArrayElement::WeakReference,
                     "byte-array" => crate::ArrayElement::ByteArray,
+                    "object" => crate::ArrayElement::LangObject,
+                    "nullable-object" => crate::ArrayElement::NullableObject,
                     tag if crate::NumericAlias::parse_tag(tag).is_some() => {
                         let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
                         crate::ArrayElement::Numeric { alias, nullable }
@@ -729,7 +737,12 @@ pub(crate) fn parse_ir_context(
                 values: if crate::NumericAlias::parse_tag(&fields[2]).is_some()
                     || matches!(
                         fields[2].as_str(),
-                        "comparable" | "nullable-comparable" | "comparator" | "nullable-comparator"
+                        "comparable"
+                            | "nullable-comparable"
+                            | "comparator"
+                            | "nullable-comparator"
+                            | "object"
+                            | "nullable-object"
                     ) {
                     let mut values = Vec::new();
                     let mut next = 3;
@@ -839,6 +852,8 @@ pub(crate) fn parse_ir_context(
                     "method" => crate::ArrayElement::Method,
                     "weak-reference" => crate::ArrayElement::WeakReference,
                     "byte-array" => crate::ArrayElement::ByteArray,
+                    "object" => crate::ArrayElement::LangObject,
+                    "nullable-object" => crate::ArrayElement::NullableObject,
                     tag if crate::NumericAlias::parse_tag(tag).is_some() => {
                         let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
                         crate::ArrayElement::Numeric { alias, nullable }
@@ -934,6 +949,8 @@ pub(crate) fn parse_ir_context(
                 "method" => crate::ArrayElement::Method,
                 "weak-reference" => crate::ArrayElement::WeakReference,
                 "byte-array" => crate::ArrayElement::ByteArray,
+                "object" => crate::ArrayElement::LangObject,
+                "nullable-object" => crate::ArrayElement::NullableObject,
                 tag if crate::NumericAlias::parse_tag(tag).is_some() => {
                     let (alias, nullable) = crate::NumericAlias::parse_tag(tag).unwrap();
                     crate::ArrayElement::Numeric { alias, nullable }
@@ -1410,6 +1427,10 @@ fn call_contract(
             "number-format" => crate::ReturnType::NumberFormat,
             "endian" => crate::ReturnType::Endian,
             "numeric" => crate::ReturnType::Numeric,
+            "object-array" => crate::ReturnType::Array(crate::ArrayElement::LangObject),
+            "nullable-object-array" => {
+                crate::ReturnType::Array(crate::ArrayElement::NullableObject)
+            }
             tag if tag
                 .strip_suffix("-array")
                 .and_then(crate::NumericAlias::parse_tag)

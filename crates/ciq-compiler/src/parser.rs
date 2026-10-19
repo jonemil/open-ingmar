@@ -339,6 +339,7 @@ impl<'a> Parser<'a> {
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
         let mut value = match self.type_path()?.as_str() {
             "Toybox.Lang.Number" => crate::DictionaryValue::Number,
+            "Toybox.Lang.Object" => crate::DictionaryValue::LangObject,
             "Toybox.Lang.Integer" => crate::DictionaryValue::Numeric {
                 alias: crate::NumericAlias::Integer,
                 nullable: false,
@@ -376,6 +377,7 @@ impl<'a> Parser<'a> {
             self.expect(Kind::Word("Null"), "'Null'")?;
             value = match value {
                 crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
+                crate::DictionaryValue::LangObject => crate::DictionaryValue::NullableObject,
                 crate::DictionaryValue::Numeric { alias, .. } => crate::DictionaryValue::Numeric {
                     alias,
                     nullable: true,
@@ -419,6 +421,7 @@ impl<'a> Parser<'a> {
             "Toybox.Lang.ByteArray" => crate::ArrayElement::ByteArray,
             "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
             "Toybox.Lang.Number" => crate::ArrayElement::Number,
+            "Toybox.Lang.Object" => crate::ArrayElement::LangObject,
             "Toybox.Lang.Integer" => crate::ArrayElement::Numeric {
                 alias: crate::NumericAlias::Integer,
                 nullable: false,
@@ -446,6 +449,7 @@ impl<'a> Parser<'a> {
                     crate::ArrayElement::NullableInterface(interface)
                 }
                 crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
+                crate::ArrayElement::LangObject => crate::ArrayElement::NullableObject,
                 crate::ArrayElement::Numeric { alias, .. } => crate::ArrayElement::Numeric {
                     alias,
                     nullable: true,
