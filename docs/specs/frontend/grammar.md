@@ -70,23 +70,30 @@ parameters, nested declarations, source superclass chains, or annotations.
 
 ## Statements
 
-`function` contains a `block`; `if-statement` and `while-statement` recursively
-contain blocks. Each leaf statement below names its expression or target rules.
+`function` contains a `block`; conditionals and loops recursively contain blocks.
+Each leaf statement below names its expression or target rules.
 
 ```text
 block = "{" statement* "}"
 statement = local-statement | assignment-statement | update-statement
           | call-statement | return-statement | if-statement | while-statement
+          | for-statement | do-statement
           | break-statement | continue-statement
-local-statement = "var" identifier "=" expression ";"
-assignment-statement = assign-target "=" expression ";"
-                     | assign-target compound-operator expression ";"
-update-statement = update-target ("++" | "--") ";"
-                 | ("++" | "--") update-target ";"
+local-statement = local-clause ";"
+assignment-statement = assignment-clause ";"
+update-statement = update-clause ";"
 call-statement = call-expression ";"
 return-statement = "return" expression? ";"
 if-statement = "if" "(" expression ")" block ("else" block)?
 while-statement = "while" "(" expression ")" block
+for-statement = "for" "(" for-initializer? ";" expression? ";"
+                loop-effect? ")" block
+for-initializer = local-clause | loop-effect
+loop-effect = assignment-clause | update-clause | call-expression
+local-clause = "var" identifier "=" expression
+assignment-clause = assign-target ("=" | compound-operator) expression
+update-clause = update-target ("++" | "--") | ("++" | "--") update-target
+do-statement = "do" block "while" "(" expression ")" ";"
 break-statement = "break" ";"
 continue-statement = "continue" ";"
 assign-target = identifier | "self" "." identifier | primary "[" expression "]"
@@ -101,8 +108,10 @@ permit every assignment form for every type. Locals require initializers and
 have no explicit source annotation. Update operators are statements only. Calls
 include module/self/receiver calls, intrinsic System.println, and supported
 native base initialization. Arbitrary expression statements, standalone nested
-blocks, unbraced arms, `else if`, `for`, `do`, `switch`, and exception
-statements are unsupported. [Statement
+blocks, unbraced arms, `else if`, `switch`, and exception statements are
+unsupported. A `for` header permits at most one initializer and one update;
+comma-separated lists and declarations in its update are unsupported. Present
+loop conditions must be Boolean. [Statement
 contracts](README.md#statements-and-control-flow) define scope, reachability,
 loop targets, and evaluation order.
 

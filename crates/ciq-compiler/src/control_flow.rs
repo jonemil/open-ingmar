@@ -6,9 +6,94 @@ pub(crate) struct Structure {
     pub explicit: bool,
     pub blocks: Vec<BlockId>,
     pub predecessors: BTreeMap<BlockId, Vec<BlockId>>,
+    pub roots: Vec<BlockId>,
+    components: BTreeMap<BlockId, usize>,
 }
 
-/// Validate terminated blocks and reachable targets, returning block membership
+impl Structure {
+    /// Partition entry-reachable code and disconnected validation components.
+    /// Edges into an earlier component cannot contribute execution proofs there.
+    fn new(
+        explicit: bool,
+        blocks: Vec<BlockId>,
+        mut predecessors: BTreeMap<BlockId, Vec<BlockId>>,
+    ) -> Self {
+        let mut successors = BTreeMap::<BlockId, Vec<BlockId>>::new();
+        for (to, froms) in &predecessors {
+            for from in froms {
+                successors.entry(*from).or_default().push(*to);
+            }
+        }
+        let mut roots = Vec::new();
+        let mut components = BTreeMap::new();
+        for &root in blocks.iter().chain(predecessors.keys()) {
+            if components.contains_key(&root) {
+                continue;
+            }
+            let component = roots.len();
+            roots.push(root);
+            let mut pending = vec![root];
+            while let Some(block) = pending.pop() {
+                if components.contains_key(&block) {
+                    continue;
+                }
+                components.insert(block, component);
+                pending.extend(successors.get(&block).into_iter().flatten().copied());
+            }
+        }
+        for (to, froms) in &mut predecessors {
+            froms.retain(|from| components[from] == components[to]);
+        }
+        Self {
+            explicit,
+            blocks,
+            predecessors,
+            roots,
+            components,
+        }
+    }
+
+    pub(crate) fn reachable(&self, block: BlockId) -> bool {
+        self.components.get(&block) == Some(&0)
+    }
+
+    pub(crate) fn same_component(&self, left: BlockId, right: BlockId) -> bool {
+        self.components.get(&left) == self.components.get(&right)
+    }
+}
+
+/// Describe a source prefix whose last block or branch targets may still be open.
+/// This supplies candidate proofs only; final validation checks the full graph.
+pub(crate) fn prefix(operations: &[LocatedOperation]) -> Structure {
+    let mut blocks = Vec::new();
+    let mut current = BlockId(0);
+    let mut predecessors = BTreeMap::<BlockId, Vec<BlockId>>::new();
+    let mut explicit = false;
+    for located in operations {
+        if let Operation::Block { block } = located.operation {
+            current = block;
+            explicit = true;
+        }
+        predecessors.entry(current).or_default();
+        blocks.push(current);
+        let targets = match located.operation {
+            Operation::Branch {
+                on_true, on_false, ..
+            } => vec![on_true, on_false],
+            Operation::Jump { target } | Operation::JumpValue { target, .. } => vec![target],
+            _ => Vec::new(),
+        };
+        for target in targets {
+            let incoming = predecessors.entry(target).or_default();
+            if !incoming.contains(&current) {
+                incoming.push(current);
+            }
+        }
+    }
+    Structure::new(explicit, blocks, predecessors)
+}
+
+/// Validate terminated blocks and declared targets, returning checking components
 /// and predecessor lists for value and definite-initialization checks.
 pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrError> {
     let explicit = operations.iter().any(|o| {
@@ -21,11 +106,11 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
         )
     });
     if !explicit {
-        return Ok(Structure {
-            explicit: false,
-            blocks: vec![BlockId(0); operations.len()],
-            predecessors: BTreeMap::new(),
-        });
+        return Ok(Structure::new(
+            false,
+            vec![BlockId(0); operations.len()],
+            BTreeMap::new(),
+        ));
     }
     let fail = |index, message: &str| IrError {
         operation: Some(index),
@@ -83,37 +168,14 @@ pub(crate) fn validate(operations: &[LocatedOperation]) -> Result<Structure, IrE
         }
         predecessors.get_mut(&to).unwrap().push(from);
     }
-    let entry = blocks[0];
-    let mut reachable = BTreeSet::from([entry]);
-    let mut pending = vec![entry];
-    let mut successors: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
-    for (to, froms) in &predecessors {
-        for from in froms {
-            successors.entry(*from).or_default().push(*to);
-        }
-    }
-    while let Some(block) = pending.pop() {
-        for target in successors.get(&block).into_iter().flatten() {
-            if reachable.insert(*target) {
-                pending.push(*target);
-            }
-        }
-    }
-    for (block, at) in positions {
-        if !reachable.contains(&block) {
-            return Err(fail(at, "unreachable block"));
-        }
-    }
-    Ok(Structure {
-        explicit,
-        blocks,
-        predecessors,
-    })
+    Ok(Structure::new(explicit, blocks, predecessors))
 }
 
 /// Compute the locals definitely initialized at each block entry. The greatest
 /// fixed point intersects predecessor outputs; entry also has an empty external
 /// predecessor, so a backedge cannot establish first-entry initialization.
+/// Disconnected roots may read earlier declarations without establishing facts
+/// for executable code; all operand and type checks still apply.
 pub(crate) fn local_inputs(
     structure: &Structure,
     operations: &[LocatedOperation],
@@ -144,6 +206,10 @@ pub(crate) fn local_inputs(
         for (block, predecessors) in &structure.predecessors {
             let mut available = if *block == entry {
                 BTreeSet::new()
+            } else if structure.roots.contains(block) {
+                // Unexecuted header clauses can refer to already declared locals;
+                // ordinary operand/name/type validation still checks their uses.
+                universe.clone()
             } else {
                 outputs[&predecessors[0]].clone()
             };

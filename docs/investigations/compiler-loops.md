@@ -1,4 +1,4 @@
-# Compiler while loops
+# Compiler loops
 
 2026-10-10. Question: can cyclic semantic blocks preserve definite-local and
 stack/effect invariants while compiling zero/multiple loop iterations?
@@ -99,9 +99,36 @@ capture before the next session overwrites `scratch/simulator/`.
 Instruction-oracle checks cover zero/multiple iterations, nested branches/loops,
 early returns, repeated condition effects, fixed body-local slots, and empty edge
 stacks. Native/text paths agree. Initialization tests reject backedge-only or
-body-only availability and disconnected cycles, including shuffled block IDs.
+body-only availability, including shuffled block IDs.
 String loop types were checked structurally, not in this runtime specimen.
 Neither termination nor a nonzero iteration count is established.
+
+## For and post-test loops
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. The `CoreLoops` group in
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) compares
+complete SDK/generated applications. Counted `for` and post-test `continue`
+produce `9` and `3`; a false post-test still executes once. Markers establish
+initializer → test → body → update → test ordering. Unconditional `break`
+skips the update; returning from `do` skips its condition. Nested loops, omitted
+header clauses, initializer-local scope reuse, early value returns, and nullable
+guards also match [expected output](../../examples/compiler-object-tests/expected.txt).
+
+Both applications passed console comparison. Source/saved-IR/assembly output
+agreed, and both SDK/generated PRGs passed structured export/reassembly and
+own-key signing checks without raw CODE/DATA fallback. Artifacts are under
+`scratch/core-loops/check/`. Reproduce with the shared
+[console checker](../../scripts/README.md#console-specimen-check), selecting
+`compiler-object-tests` and its SDK-built PRG.
+
+A separate authored SDK probe used
+`for (var i=0; i<3; missing++) { break; }`. Compilation failed with exit 100
+and `Undefined symbol ':missing' detected.` (local artifacts:
+`scratch/compiler-loop-probe/`). Therefore skipped headers still require
+semantic checks. Our retained disconnected-block checks cover undefined names,
+bad operand/call types, conditional proofs, and private container builders;
+dead header edges do not change executable proofs. These are compiler
+validation guarantees, not claims about execution of dead instructions.
 
 [assignments]: compiler-assignments.md
 [scaffold]: control-flow.md#reproduction

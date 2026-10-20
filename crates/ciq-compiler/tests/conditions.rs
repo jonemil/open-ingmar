@@ -173,7 +173,6 @@ fn control_flow_rejects_bad_edges_terminators_and_cross_block_values() {
         ".block ^1\n.integer %3 1\n.return %3\n.integer %9 0\n.block ^2\n.integer %4 2\n.return %4",
         ".block ^1\n.integer %3 1\n.return %3\n.block ^1\n.integer %4 2\n.return %4",
         ".block ^1\n.integer %3 1\n.return %3\n.block ^2\n.return %0",
-        ".block ^1\n.integer %3 1\n.return %3\n.block ^2\n.integer %4 2\n.return %4\n.block ^3\n.integer %5 3\n.return %5",
     ] {
         let text = cfg(tail);
         assert!(parse_ir(&text).is_err(), "{text}");
@@ -615,12 +614,9 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
         .replace(".read %4 $0", ".integer %4 1");
     assert!(parse_ir(&header).is_err());
     let disconnected = "ciq-ir\n.function f\n.block ^0\n.jump ^3\n.block ^1\n.jump ^2\n.block ^2\n.jump ^1\n.block ^3\n.integer %0 1\n.return %0\n.end";
-    assert!(
-        parse_ir(disconnected)
-            .unwrap_err()
-            .message
-            .contains("unreachable")
-    );
+    let function = parse_ir(disconnected).unwrap();
+    assert_eq!(execute(&function, 0), 1);
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
     // An initializer inside a cyclic block must still precede its first local read.
     let bad = "ciq-ir\n.function f parameters=1\n.block ^0\n.jump ^1\n.block ^1\n.read %0 $0\n.local $0 %0\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^2\n.integer %4 1\n.return %4\n.end";
     assert!(parse_ir(bad).is_err());
@@ -840,4 +836,84 @@ fn logical_values_materialize_boolean_results_and_retest_assignments() {
     for n in [0, 1, 2, 3, 4] {
         assert_eq!(execute(&f, n), n.min(3));
     }
+}
+
+#[test]
+fn for_and_post_test_loops_have_distinct_latches_and_correct_scope() {
+    for (source, expected) in [
+        (
+            "function f() { var sum=0; for(var i=0; 6>i; i=i+1) { if(i==1){continue;} if(i==5){break;} sum=sum+i; } return sum; }",
+            9,
+        ),
+        (
+            "function f() { var n=0; do { n=n+1; if(3>n){continue;} break; } while(true); return n; }",
+            3,
+        ),
+        (
+            "function f() { var n=0; do {n=n+1;} while(false); return n; }",
+            1,
+        ),
+        ("function f() { var n=0; for(;2>n;){n=n+1;}return n; }", 2),
+        ("function f() { for(;;){break;}return 41; }", 41),
+        ("function f() { for(;;){return 41;} }", 41),
+        ("function f() { do {return 41;} while(false); }", 41),
+        (
+            "function f() { for(var i=0;2>i;i=i+1){break;}var i=41;return i; }",
+            41,
+        ),
+        (
+            "function f() { var n=0; for(var i=0;3>i;i=i+1){var j=0;do{j=j+1;if(j==2){continue;}n=n+1;}while(3>j);}return n; }",
+            6,
+        ),
+    ] {
+        let function = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(execute(&function, 0), expected, "{source}");
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(
+            function.lower(),
+            ciq_assembly::Program::parse(&function.assembly()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn loop_header_scope_and_unexecuted_clauses_still_receive_diagnostics() {
+    for source in [
+        "function f() {for(var i=0;3>i;i=i+1){}return i;}",
+        "function f() {for(var i=0;3>i;i=i+1){var i=2;}return 0;}",
+        "function f() {var i=0;for(var i=0;3>i;i=i+1){}return 0;}",
+        "function f() {for(var i=0;3>i;missing++){break;}return 0;}",
+        "function f() {for(var i=0;3>i;i=false){break;}return 0;}",
+        "function f() {do{break;}while(missing);return 0;}",
+        "function f() {do{break;}while(1);return 0;}",
+        "function f() {do{var n=0;}while(n==0);return 0;}",
+        "function f() {for(var i=0;3>i;var j=0){}return 0;}",
+        "function f() {do{}while(false)return 0;}",
+        "function f() {for(;;)break;return 0;}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let source = "function f() {for(;;){continue;}}";
+    let function = compile(source).unwrap();
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert!(compile("function f() as Toybox.Lang.Number {for(;;){continue;}}").is_err());
+}
+
+#[test]
+fn disconnected_blocks_stay_checked_without_changing_executable_proofs() {
+    let valid = "ciq-ir\n.function f\n.block ^0\n.integer %0 41\n.local $0 %0\n.jump ^2\n.block ^1\n.read %1 $0\n.discard %1\n.jump ^2\n.block ^2\n.read %2 $0\n.return %2\n.end\n";
+    let function = parse_ir(valid).unwrap();
+    assert_eq!(execute(&function, 0), 41);
+    assert!(parse_ir(&valid.replace(".read %1 $0", ".read %1 $9")).is_err());
+    assert!(
+        parse_ir(&valid.replace(
+            ".read %1 $0\n.discard %1",
+            ".boolean %1 false\n.assign $0 %1"
+        ))
+        .is_err()
+    );
+    let void_tail = "ciq-ir\n.function f\n.block ^0\n.integer %0 41\n.return %0\n.block ^1\n.return-void\n.end\n";
+    let function = parse_ir(void_tail).unwrap();
+    assert_eq!(execute(&function, 0), 41);
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
 }

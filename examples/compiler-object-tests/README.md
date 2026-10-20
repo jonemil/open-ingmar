@@ -19,6 +19,10 @@ preserve Null and false assertions at runtime, and evaluate an effectful operand
 once. Source conditional values retain one exact class with optional Null;
 nested choices and effect markers check lazy arm evaluation.
 
+`CoreLoops` groups `for` and `do/while`: initializer/update ordering, omitted
+clauses, scoped locals, nested break/continue targets, early returns, and skipped
+headers. Markers check effects as well as numeric results.
+
 From the repository root:
 
 ```sh

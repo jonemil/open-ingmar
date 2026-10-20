@@ -126,6 +126,18 @@ pub(crate) enum Statement {
     Continue {
         span: Span,
     },
+    For {
+        initialize: Option<Box<Statement>>,
+        condition: Option<Expression>,
+        update: Option<Box<Statement>>,
+        body: Vec<Statement>,
+        span: Span,
+    },
+    DoWhile {
+        body: Vec<Statement>,
+        condition: Expression,
+        span: Span,
+    },
     While {
         condition: Expression,
         body: Vec<Statement>,
@@ -156,7 +168,9 @@ impl Statement {
             | Self::If { span, .. }
             | Self::Break { span }
             | Self::Continue { span }
-            | Self::While { span, .. } => *span,
+            | Self::While { span, .. }
+            | Self::For { span, .. }
+            | Self::DoWhile { span, .. } => *span,
             Self::BaseInitialize { span, .. } => *span,
         }
     }
@@ -1761,10 +1775,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a prefix statement update outside the recursive block parser frame.
-    fn prefix_update(&mut self, start: usize, increment: bool) -> Result<Statement, Diagnostic> {
+    fn prefix_update(
+        &mut self,
+        start: usize,
+        increment: bool,
+        terminator: char,
+    ) -> Result<Statement, Diagnostic> {
         self.token()?;
         let target = self.expression(0)?;
-        self.finish_update(target, increment, start)
+        self.finish_update(target, increment, start, terminator)
     }
 
     /// Check an update target and require its statement terminator.
@@ -1773,16 +1792,166 @@ impl<'a> Parser<'a> {
         target: Expression,
         increment: bool,
         start: usize,
+        terminator: char,
     ) -> Result<Statement, Diagnostic> {
         self.assignment_target(&target, start)?;
         let end = self
-            .expect(Kind::Punctuation(';'), "';' (updates are statements)")?
+            .expect(
+                Kind::Punctuation(terminator),
+                "statement or loop-clause terminator (updates are statements)",
+            )?
             .span
             .end;
         Ok(Statement::Update {
             target,
             increment,
             span: Span { start, end },
+        })
+    }
+
+    /// Parse a local declaration, assignment, update, or call up to its delimiter.
+    /// For headers reuse statement semantics without permitting control flow.
+    fn simple_statement(
+        &mut self,
+        terminator: char,
+        allow_local: bool,
+    ) -> Result<Statement, Diagnostic> {
+        let start = {
+            self.peek()?;
+            self.lookahead.as_ref().unwrap().span.start
+        };
+        if self.peek()? == Kind::Word("var") {
+            if !allow_local {
+                return Err(self.error(start, "loop update cannot declare a local"));
+            }
+            self.token()?;
+            let token = self.identifier()?;
+            self.reject_binding(&token)?;
+            let Kind::Word(name) = token.kind else {
+                unreachable!()
+            };
+            self.expect(
+                Kind::Punctuation('='),
+                "'=' (locals require an initializer)",
+            )?;
+            let initializer = self.expression(0)?;
+            let end = self
+                .expect(
+                    Kind::Punctuation(terminator),
+                    "statement or loop-clause terminator",
+                )?
+                .span
+                .end;
+            return Ok(Statement::Local(LocalDeclaration {
+                name: name.into(),
+                initializer,
+                span: Span { start, end },
+            }));
+        }
+        if let Kind::Step(increment) = self.peek()? {
+            return self.prefix_update(start, increment, terminator);
+        }
+        Ok({
+            let expression = self.expression(0)?;
+            if let Kind::Step(increment) = self.peek()? {
+                self.token()?;
+                self.finish_update(expression, increment, start, terminator)?
+            } else if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
+                let assignment = self.token()?.kind;
+                self.assignment_target(&expression, start)?;
+                let value = self.expression(0)?;
+                let end = self
+                    .expect(
+                        Kind::Punctuation(terminator),
+                        "statement or loop-clause terminator",
+                    )?
+                    .span
+                    .end;
+                self.assignment_statement(expression, assignment, value, Span { start, end })?
+            } else {
+                let end = self
+                    .expect(
+                        Kind::Punctuation(terminator),
+                        "statement or loop-clause terminator",
+                    )?
+                    .span
+                    .end;
+                if matches!(
+                    expression.kind,
+                    ExpressionKind::ValueCall { .. } | ExpressionKind::ImplicitMethodCall(_)
+                ) {
+                    Statement::ValueCall {
+                        expression,
+                        span: Span { start, end },
+                    }
+                } else {
+                    let ExpressionKind::ModuleCall {
+                        module,
+                        member,
+                        mut arguments,
+                    } = expression.kind
+                    else {
+                        return Err(self.error(
+                            start,
+                            "only assignment and calls are supported as expression statements",
+                        ));
+                    };
+                    if matches!(
+                        module.as_str(),
+                        "Application.AppBase" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
+                    ) {
+                        if member != "initialize" || !arguments.is_empty() {
+                            return Err(self.error(
+                                start,
+                                "only a zero-argument native base initialize call is supported",
+                            ));
+                        }
+                        Statement::BaseInitialize {
+                            span: Span { start, end },
+                            base: if module == "Application.AppBase" {
+                                crate::ClassBase::ApplicationAppBase
+                            } else if module == "WatchUi.View" {
+                                crate::ClassBase::WatchUiView
+                            } else {
+                                crate::ClassBase::WatchUiBehaviorDelegate
+                            },
+                        }
+                    } else if module == "System" {
+                        if member == "println" {
+                            if arguments.len() != 1 {
+                                return Err(
+                                    self.error(start, "expected System.println with one argument")
+                                );
+                            }
+                            Statement::Println {
+                                argument: arguments.remove(0),
+                                span: Span { start, end },
+                            }
+                        } else {
+                            Statement::NativeModuleCall {
+                                module: "Toybox.System".into(),
+                                member,
+                                arguments,
+                                span: Span { start, end },
+                            }
+                        }
+                    } else if module == "WatchUi" {
+                        Statement::NativeModuleCall {
+                            module: "Toybox.WatchUi".into(),
+                            member,
+                            arguments,
+                            span: Span { start, end },
+                        }
+                    } else {
+                        Statement::Call {
+                            module,
+                            member,
+                            arguments,
+                            span: Span { start, end },
+                        }
+                    }
+                }
+            }
         })
     }
 
@@ -1802,7 +1971,7 @@ impl<'a> Parser<'a> {
             // A print's call node or assignment target already counts its sink.
             if matches!(
                 self.peek()?,
-                Kind::Word("var" | "return" | "if" | "while" | "break" | "continue")
+                Kind::Word("var" | "return" | "if" | "while" | "for" | "do" | "break" | "continue")
             ) {
                 self.expressions += 1;
             }
@@ -1810,25 +1979,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(start, "function exceeds 1024-operation limit"));
             }
             let statement = match self.peek()? {
-                Kind::Word("var") => {
-                    self.token()?;
-                    let token = self.identifier()?;
-                    self.reject_binding(&token)?;
-                    let Kind::Word(name) = token.kind else {
-                        unreachable!()
-                    };
-                    self.expect(
-                        Kind::Punctuation('='),
-                        "'=' (locals require an initializer)",
-                    )?;
-                    let initializer = self.expression(0)?;
-                    let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                    Statement::Local(LocalDeclaration {
-                        name: name.into(),
-                        initializer,
-                        span: Span { start, end },
-                    })
-                }
+                Kind::Word("var") => self.simple_statement(';', true)?,
                 Kind::Word("return") => {
                     self.token()?;
                     let value = if self.peek()? == Kind::Punctuation(';') {
@@ -1853,6 +2004,56 @@ impl<'a> Parser<'a> {
                         Statement::Continue {
                             span: Span { start, end },
                         }
+                    }
+                }
+                Kind::Word("for") => {
+                    self.token()?;
+                    self.expect(Kind::Punctuation('('), "'('")?;
+                    let initialize = if self.peek()? == Kind::Punctuation(';') {
+                        self.token()?;
+                        None
+                    } else {
+                        Some(Box::new(self.simple_statement(';', true)?))
+                    };
+                    let condition = if self.peek()? == Kind::Punctuation(';') {
+                        None
+                    } else {
+                        Some(self.expression(0)?)
+                    };
+                    self.expect(Kind::Punctuation(';'), "';' after for condition")?;
+                    let update = if self.peek()? == Kind::Punctuation(')') {
+                        self.token()?;
+                        None
+                    } else {
+                        Some(Box::new(self.simple_statement(')', false)?))
+                    };
+                    let (body, body_span) = self.block(depth + 1)?;
+                    Statement::For {
+                        initialize,
+                        condition,
+                        update,
+                        body,
+                        span: Span {
+                            start,
+                            end: body_span.end,
+                        },
+                    }
+                }
+                Kind::Word("do") => {
+                    self.token()?;
+                    let (body, _) = self.block(depth + 1)?;
+                    self.expect(Kind::Word("while"), "'while' after do body")?;
+                    self.expect(Kind::Punctuation('('), "'('")?;
+                    let condition = self.expression(0)?;
+                    self.expect(Kind::Punctuation(')'), "')'")?;
+                    let end = self
+                        .expect(Kind::Punctuation(';'), "';' after do/while")?
+                        .span
+                        .end;
+                    Statement::DoWhile {
+                        body,
+                        condition,
+                        span: Span { start, end },
                     }
                 }
                 Kind::Word("while") => {
@@ -1892,102 +2093,7 @@ impl<'a> Parser<'a> {
                         },
                     }
                 }
-                Kind::Step(increment) => self.prefix_update(start, increment)?,
-                Kind::End => return Err(self.error(start, "expected '}' before end of input")),
-                _ => {
-                    let expression = self.expression(0)?;
-                    if let Kind::Step(increment) = self.peek()? {
-                        self.token()?;
-                        self.finish_update(expression, increment, start)?
-                    } else if matches!(self.peek()?, Kind::Punctuation('=') | Kind::Compound(_)) {
-                        let assignment = self.token()?.kind;
-                        self.assignment_target(&expression, start)?;
-                        let value = self.expression(0)?;
-                        let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        self.assignment_statement(
-                            expression,
-                            assignment,
-                            value,
-                            Span { start, end },
-                        )?
-                    } else {
-                        let end = self.expect(Kind::Punctuation(';'), "';'")?.span.end;
-                        if matches!(
-                            expression.kind,
-                            ExpressionKind::ValueCall { .. }
-                                | ExpressionKind::ImplicitMethodCall(_)
-                        ) {
-                            Statement::ValueCall {
-                                expression,
-                                span: Span { start, end },
-                            }
-                        } else {
-                            let ExpressionKind::ModuleCall {
-                                module,
-                                member,
-                                mut arguments,
-                            } = expression.kind
-                            else {
-                                return Err(self.error(start, "only assignment and calls are supported as expression statements"));
-                            };
-                            if matches!(
-                                module.as_str(),
-                                "Application.AppBase" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
-                            ) {
-                                if member != "initialize" || !arguments.is_empty() {
-                                    return Err(self.error(
-                                        start,
-                                        "only a zero-argument native base initialize call is supported",
-                                    ));
-                                }
-                                Statement::BaseInitialize {
-                                    span: Span { start, end },
-                                    base: if module == "Application.AppBase" {
-                                        crate::ClassBase::ApplicationAppBase
-                                    } else if module == "WatchUi.View" {
-                                        crate::ClassBase::WatchUiView
-                                    } else {
-                                        crate::ClassBase::WatchUiBehaviorDelegate
-                                    },
-                                }
-                            } else if module == "System" {
-                                if member == "println" {
-                                    if arguments.len() != 1 {
-                                        return Err(self.error(
-                                            start,
-                                            "expected System.println with one argument",
-                                        ));
-                                    }
-                                    Statement::Println {
-                                        argument: arguments.remove(0),
-                                        span: Span { start, end },
-                                    }
-                                } else {
-                                    Statement::NativeModuleCall {
-                                        module: "Toybox.System".into(),
-                                        member,
-                                        arguments,
-                                        span: Span { start, end },
-                                    }
-                                }
-                            } else if module == "WatchUi" {
-                                Statement::NativeModuleCall {
-                                    module: "Toybox.WatchUi".into(),
-                                    member,
-                                    arguments,
-                                    span: Span { start, end },
-                                }
-                            } else {
-                                Statement::Call {
-                                    module,
-                                    member,
-                                    arguments,
-                                    span: Span { start, end },
-                                }
-                            }
-                        }
-                    }
-                }
+                _ => self.simple_statement(';', true)?,
             };
             statements.push(statement);
         }

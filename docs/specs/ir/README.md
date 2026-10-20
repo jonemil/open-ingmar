@@ -741,18 +741,29 @@ ciq-ir
 
 All new directives accept the existing optional source span. A body containing
 block/branch/jump operations must begin with `.block`. Every block must end in
-`.return`, `.branch`, `.jump`, or `.jump-value`, with no operations after its
-terminator until the next block. Targets may name earlier or later blocks. Every
-block must be reachable from entry; missing targets, duplicate blocks,
-disconnected cycles, and implicit fallthrough are rejected. The final block
-returns. A body without these operations uses an implicit single block.
+`.return`, `.return-void`, `.branch`, `.jump`, or `.jump-value`, with no
+operations after its terminator until the next block. Targets may name earlier
+or later blocks. Every target must be declared; missing targets, duplicate
+blocks, and implicit
+fallthrough are rejected. The final block returns. A body without these
+operations uses an implicit single block.
+
+Disconnected blocks retain validation for source headers that cannot execute,
+such as an update after an unconditionally breaking body. Walk successors from
+entry first, then each unvisited block in textual order to form checking
+components. Edges into an earlier component do not contribute initialization,
+refinement, or builder-state facts there. Each component starts with no branch
+refinements or private builders; unfinished builders cannot leave it. Name,
+type, operand-use, target, and call checks still apply to every block. A
+disconnected `.return-void` epilogue does not affect result inference or conflict
+with a value result. Value returns retain their ordinary result checks.
 
 Expression definitions still precede their uses, are globally unique, and have
 exactly one use, restricted to their defining block. Locals can cross edges, but
-reads and assignments require the unique initializer to execute on every
-incoming path. Its declaration must also precede the textual use. Availability
-is the fixed-point intersection described below. A local initialized in only one
-arm cannot be read or assigned in a sibling or join. Typed [expression
+entry-reachable reads and assignments require the unique initializer to execute
+on every incoming path. Its declaration must also precede the textual use.
+Availability is the fixed-point intersection described below. A local initialized
+in only one arm cannot be read or assigned in a sibling or join. Typed [expression
 joins](#expression-joins) carry incoming values through fresh block parameters.
 Other cross-block value IDs remain unsupported. Local slots are allocated across
 the entire function, including mutually exclusive paths.
@@ -770,10 +781,11 @@ subset](../frontend/README.md).
 
 ### Cyclic control flow
 
-Backward branch/jump targets are permitted. The graph is checked for
-reachability by walking from the first block, including cycles. Having a
-predecessor alone does not make a block reachable. The final declared block must
-still end in `.return`; this does not prove every runtime path terminates.
+Backward branch/jump targets are permitted. Entry reachability is determined by
+walking from the first block, including cycles. Having a predecessor alone does
+not make a block executable. The final declared block must still end in a return;
+this does not prove every runtime path terminates. A function without a reachable
+return currently requires a Void result contract.
 
 Definite-local sets are computed to a greatest fixed point. Start incoming and
 outgoing sets at the universe of declared local IDs. For every block, intersect
@@ -783,7 +795,10 @@ predecessor, so its incoming set is always empty. Repeat until sets stop
 changing. Scan each block's operations from its final incoming set, adding
 initializers only when encountered. Reads/assignments require membership at
 their position and an earlier textual declaration; assignments do not add
-initialization.
+initialization. Disconnected component roots instead start with declared locals
+available, permitting references in unexecuted headers; earlier textual
+declaration and type checks still apply. Intersections use only predecessors
+within the component, so dead edges cannot affect executable initialization.
 
 This accepts common initialized locals carried around a loop and rejects values
 initialized only on its backedge. Local initializer IDs remain globally unique;

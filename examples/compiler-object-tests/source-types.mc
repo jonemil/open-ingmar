@@ -77,6 +77,7 @@ module NullableSourceTests {
         holder.run();
         NullableSourceCasts.run();
         SourceJoins.run();
+        CoreLoops.run();
     }
 }
 
@@ -193,5 +194,61 @@ module SourceJoins {
         var guarded = SourceJoins.fromObject(new Probe());
         if (guarded != null) { System.println(guarded.value()); }
         System.println(SourceJoins.fromObject(new NumberOrder()) == null);
+    }
+}
+
+module CoreLoops {
+    function begin() { System.println("loop-init"); return 0; }
+    function test(n as Number) as Boolean { System.println("loop-test"); return n < 2; }
+    function step(n as Number) { System.println("loop-step"); return n + 1; }
+    function falseMark() as Boolean { System.println("bad-do-test"); return false; }
+    function returnDo() { do { return 41; } while(CoreLoops.falseMark()); }
+    function returnFor() { for(;;) { return 42; } }
+    function proof(value as Probe or Null) as Void {
+        if (value != null) {
+            do { break; } while(CoreLoops.falseMark());
+            System.println(value.value());
+        }
+    }
+    function run() as Void {
+        var sum = 0;
+        for (var i = 0; i < 6; i++) {
+            if (i == 1) { continue; }
+            if (i == 5) { break; }
+            sum += i;
+        }
+        System.println(sum);
+        var n = 0;
+        do { n++; if (n < 3) { continue; } break; } while(true);
+        System.println(n);
+        var once = 0;
+        do { once++; } while(false);
+        System.println(once);
+        for (var trace = CoreLoops.begin(); CoreLoops.test(trace); trace = CoreLoops.step(trace)) {
+            System.println(trace);
+        }
+        for (var j = 0; j < 2; j = CoreLoops.step(j)) { break; }
+        var j = 7;
+        System.println(j);
+        var k = 0;
+        for (; k < 2;) { k++; }
+        System.println(k);
+        for (;;) { break; }
+        System.println("for-empty");
+        var count = 0;
+        for (var outer = 0; outer < 3; outer++) {
+            var inner = 0;
+            do { inner++; if (inner == 2) { continue; } count++; } while(inner < 3);
+        }
+        System.println(count);
+        System.println(CoreLoops.returnDo());
+        System.println(CoreLoops.returnFor());
+        var nullable = "8".toNumber();
+        do {
+            if (nullable == null) { break; }
+            System.println(nullable);
+            nullable = null;
+        } while(nullable != null);
+        CoreLoops.proof(new Probe());
     }
 }

@@ -271,8 +271,9 @@ control-operation = ".block" block-id
 ```
 
 An implicit single block ends with a return. Explicit blocks require explicit
-terminators, reachable targets, and the [CFG validation](README.md#control-flow)
-rules. Block parameters do not authorize arbitrary cross-block value uses.
+terminators, declared targets, and the [CFG validation](README.md#control-flow)
+rules. Disconnected blocks remain checked. Block parameters do not authorize
+arbitrary cross-block value uses.
 
 ## Type tags
 

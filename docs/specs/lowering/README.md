@@ -203,6 +203,17 @@ body effects stay in the body. Every edge has an empty evaluation stack. These
 use branch/jump directives; cyclic initialization checks are specified in [IR
 text](../ir/README.md#cyclic-control-flow).
 
+`for` uses the same layout, preceded by its initializer and followed by an
+update block when present. Continuing body paths, including `continue`, target
+the update before returning to the test. An absent condition uses an
+unconditional jump to the body, without a placeholder Boolean. `do/while`
+enters the body first; its continuing paths and `continue` target the post-test.
+`break` always targets the innermost loop's exit.
+
+Unexecuted update/post-test blocks remain in IR and assembly for semantic
+checking. An unreachable final exit has a void-return epilogue. These forms use
+existing jumps, branches, and returns; no flag local or new VM opcode is needed.
+
 ### Expression joins
 
 Lower a value edge to its operand and `goto`; the parameter emits no load, copy,

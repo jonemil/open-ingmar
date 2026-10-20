@@ -2895,17 +2895,21 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ReturnVoid => {
-                    if declared_result
-                        .as_ref()
-                        .is_some_and(|ty| *ty != ReturnType::Void)
-                    {
-                        return Err(fail("void return does not match function result contract"));
-                    }
-                    if return_type
-                        .replace(ReturnType::Void)
-                        .is_some_and(|previous| previous != ReturnType::Void)
-                    {
-                        return Err(fail("function cannot mix value and void returns"));
+                    if structure.reachable(structure.blocks[index]) {
+                        if declared_result
+                            .as_ref()
+                            .is_some_and(|ty| *ty != ReturnType::Void)
+                        {
+                            return Err(fail(
+                                "void return does not match function result contract",
+                            ));
+                        }
+                        if return_type
+                            .replace(ReturnType::Void)
+                            .is_some_and(|previous| previous != ReturnType::Void)
+                        {
+                            return Err(fail("function cannot mix value and void returns"));
+                        }
                     }
                     if !structure.explicit && index + 1 != operations.len() {
                         return Err(fail("return must be the final operation"));
@@ -3013,6 +3017,19 @@ impl Function {
                     return Err(fail("duplicate value definition"));
                 }
             }
+        }
+        if return_type.is_none() {
+            if declared_result
+                .as_ref()
+                .is_some_and(|ty| *ty != ReturnType::Void)
+            {
+                return Err(IrError {
+                    operation: None,
+                    message: "non-returning functions currently require a Void result contract"
+                        .into(),
+                });
+            }
+            return_type = Some(ReturnType::Void);
         }
         for (index, inferred) in inferred_types {
             if let Operation::BlockParameter { value_type, .. } = &mut operations[index].operation {

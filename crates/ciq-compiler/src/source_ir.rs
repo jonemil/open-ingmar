@@ -1969,6 +1969,76 @@ impl Builder<'_> {
         Ok(())
     }
 
+    /// Lower a loop through explicit test/body/update/exit blocks. Retain dead
+    /// header clauses for semantic checking; continue selects the actual latch.
+    fn loop_statement(
+        &mut self,
+        condition: Option<parser::Expression>,
+        body: Vec<parser::Statement>,
+        update: Option<parser::Statement>,
+        post_test: bool,
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<bool, Diagnostic> {
+        let test = self.block_id();
+        let body_block = self.block_id();
+        let exit = self.block_id();
+        let latch = if update.is_some() {
+            self.block_id()
+        } else {
+            test
+        };
+        self.push(
+            Operation::Jump {
+                target: if post_test { body_block } else { test },
+            },
+            Some(span),
+        );
+        if !post_test {
+            self.push(Operation::Block { block: test }, None);
+        }
+        let mut condition = condition;
+        if !post_test {
+            if let Some(condition) = condition.take() {
+                self.condition(condition, locals, body_block, exit)?;
+            } else {
+                self.push(Operation::Jump { target: body_block }, Some(span));
+            }
+        }
+        self.push(Operation::Block { block: body_block }, None);
+        self.loops.push(LoopTargets {
+            break_to: exit,
+            continue_to: latch,
+        });
+        let body_terminates = self.sequence(body, &mut locals.clone())?;
+        self.loops.pop();
+        if !body_terminates {
+            self.push(Operation::Jump { target: latch }, Some(span));
+        }
+        if let Some(update) = update {
+            self.push(Operation::Block { block: latch }, None);
+            self.sequence(vec![update], &mut locals.clone())?;
+            self.push(Operation::Jump { target: test }, Some(span));
+        }
+        if post_test {
+            self.push(Operation::Block { block: test }, None);
+            self.condition(
+                condition.expect("post-test loops have a condition"),
+                locals,
+                body_block,
+                exit,
+            )?;
+        }
+        self.push(Operation::Block { block: exit }, None);
+        let terminated = !crate::control_flow::prefix(&self.operations).reachable(exit);
+        if terminated {
+            // A retained dead test can still target this epilogue. It produces
+            // no runtime return and must not change the function result type.
+            self.push(Operation::ReturnVoid, Some(span));
+        }
+        Ok(terminated)
+    }
+
     /// Emit a statement sequence and report whether all paths terminate the
     /// current block with return, break, or continue. Declarations stay scoped
     /// to the sequence; loop jumps select the innermost test or exit.
@@ -2204,24 +2274,34 @@ impl Builder<'_> {
                 parser::Statement::While {
                     condition, body, ..
                 } => {
-                    let test = self.block_id();
-                    let body_block = self.block_id();
-                    let exit = self.block_id();
-                    self.push(Operation::Jump { target: test }, Some(span));
-                    self.push(Operation::Block { block: test }, None);
-                    self.condition(condition, locals, body_block, exit)?;
-                    self.push(Operation::Block { block: body_block }, None);
-                    self.loops.push(LoopTargets {
-                        break_to: exit,
-                        continue_to: test,
-                    });
-                    let body_terminates = self.sequence(body, &mut locals.clone())?;
-                    self.loops.pop();
-                    if !body_terminates {
-                        self.push(Operation::Jump { target: test }, Some(span));
+                    terminated =
+                        self.loop_statement(Some(condition), body, None, false, locals, span)?;
+                }
+                parser::Statement::For {
+                    initialize,
+                    condition,
+                    update,
+                    body,
+                    ..
+                } => {
+                    let mut scoped = locals.clone();
+                    if let Some(initialize) = initialize {
+                        self.sequence(vec![*initialize], &mut scoped)?;
                     }
-                    self.push(Operation::Block { block: exit }, None);
-                    // The condition may initially be false, even when the body returns.
+                    terminated = self.loop_statement(
+                        condition,
+                        body,
+                        update.map(|statement| *statement),
+                        false,
+                        &scoped,
+                        span,
+                    )?;
+                }
+                parser::Statement::DoWhile {
+                    body, condition, ..
+                } => {
+                    terminated =
+                        self.loop_statement(Some(condition), body, None, true, locals, span)?;
                 }
                 parser::Statement::If {
                     condition,
@@ -2405,7 +2485,10 @@ fn build_body(
     if ast.statements.iter().any(|s| {
         matches!(
             s,
-            parser::Statement::If { .. } | parser::Statement::While { .. }
+            parser::Statement::If { .. }
+                | parser::Statement::While { .. }
+                | parser::Statement::For { .. }
+                | parser::Statement::DoWhile { .. }
         )
     }) {
         builder.push(Operation::Block { block: BlockId(0) }, None);
@@ -2565,7 +2648,9 @@ fn has_value_return(statements: &[parser::Statement]) -> bool {
         parser::Statement::If {
             on_true, on_false, ..
         } => has_value_return(on_true) || has_value_return(on_false),
-        parser::Statement::While { body, .. } => has_value_return(body),
+        parser::Statement::While { body, .. }
+        | parser::Statement::For { body, .. }
+        | parser::Statement::DoWhile { body, .. } => has_value_return(body),
         _ => false,
     })
 }

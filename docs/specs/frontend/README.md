@@ -1476,12 +1476,13 @@ rules](#short-circuit-expressions).
 
 ### Statement arms and joins
 
-Conditions may appear between statements; combined `if`/`while` nesting is
+Conditions may appear between statements; combined conditional/loop nesting is
 limited to 64 levels. Empty arms are allowed; `else if` without braces is not
 accepted. Each arm has its own local scope. Every value-returning path must
 satisfy the declared result contract; Void fallthrough inserts a return.
 Statements after `return`, `break`, `continue`, or a conditional whose arms both
-terminate are rejected as unreachable. A value-returning path with no return is
+terminate, or a loop with no reachable exit, are rejected as unreachable.
+A value-returning path with no return is
 rejected at the function's closing brace.
 
 Continuing arms jump to a shared block after both arms. Returning or
@@ -1502,7 +1503,7 @@ See
 [nested-conditions.mc](../../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator
 evidence](../../investigations/compiler-nested-conditions.md). Full language
-scoping, other loop forms and standalone blocks remain future work.
+scoping and standalone blocks remain future work.
 
 ### Local reassignment
 
@@ -1589,8 +1590,7 @@ evidence](../../investigations/compiler-compound-locals.md).
 `while (<condition>) { <statements> }` evaluates its condition before each
 iteration. The condition must produce a Boolean, with the same Boolean/type
 rules as `if`. Braces are required; the body may be empty or contain locals,
-assignments, prints, nested conditions/loops, and early returns. `for` and
-`do/while` are unsupported.
+assignments, prints, nested conditions/loops, and early returns.
 
 Body locals are visible within that body and nested scopes, but not after the
 loop or in its condition. Their existing slots are initialized anew on each
@@ -1608,17 +1608,57 @@ limit. "Bounded subset" refers to supported syntax and compilation limits.
 See [loops.mc](../../../examples/compiler-probe/loops.mc) and
 [zero/multiple-iteration simulator evidence](../../investigations/compiler-loops.md).
 
+### For and post-test loops
+
+`for (initializer; condition; update) { body }` executes its initializer once,
+then tests before each iteration and executes its update after a continuing
+body. Each header clause is optional; an absent condition means unconditional
+iteration. The initializer accepts one initialized local declaration or one
+assignment, update, or call statement without its trailing semicolon. The update
+accepts one such effect but no declaration. Comma-separated clauses are not
+supported. See the connected [statement grammar](grammar.md#statements).
+
+A local declared in the initializer is visible to the condition, body, and
+update, but not after the loop. Body locals are not visible in either header
+clause. Existing fixed-type and no-shadowing rules apply; a name can be reused
+after its loop scope ends.
+
+`do { body } while (condition);` executes its body before testing. The condition
+must be Boolean and cannot refer to body-local declarations. Braces and the
+trailing semicolon are required. `for` conditions, when present, also require
+Boolean. No loop form proves constant condition outcomes or imposes an iteration
+limit.
+
+All header clauses are name- and type-checked, including an update skipped by
+an unconditional break/return or a post-test skipped by a terminating body.
+Their [disconnected IR blocks](../ir/README.md#control-flow) preserve those
+checks without contributing proofs to executable paths. A function with no
+reachable return currently requires a Void result contract; declared value
+results for non-returning functions remain unsupported. A post-test body that
+always returns may satisfy a value result without a reachable condition/exit.
+
+Disconnected headers currently start without enclosing branch refinements.
+For example, a skipped update using a nullable Number needs its own null guard
+or explicit cast even inside an enclosing `if (n != null)`. Executable headers
+retain the usual incoming proofs; preserving lexical proofs for skipped headers
+is a remaining frontend checking requirement.
+
+See the grouped `CoreLoops` specimen in
+[source-types.mc](../../../examples/compiler-object-tests/source-types.mc) and
+[SDK/generated evidence](../../investigations/compiler-loops.md#for-and-post-test-loops).
+
 ### Loop control
 
-`break;` exits the innermost enclosing `while`; `continue;` jumps to its test,
-reevaluating the condition before another iteration. Both require semicolons and
+`break;` exits the innermost enclosing loop. `continue;` jumps to the test for
+`while`/`do`, or to the update and then test for `for`. Both require semicolons and
 an enclosing loop, including when nested within conditional arms. They terminate
 their current path and carry no expression values across the edge. A nested
 loop's controls never target an outer loop. Labeled controls are unsupported.
 
-A loop may still run zero times, so its body cannot satisfy the function's
-fallthrough return requirement. Mixed returning/breaking/continuing arms omit a
-join when all paths terminate, but the loop's false-condition exit remains.
+A pre-test loop with a condition may run zero times, so its body cannot satisfy
+the function's fallthrough return requirement. Mixed
+returning/breaking/continuing arms omit a join when all paths terminate. A
+false-condition exit remains unless the condition is absent or unreachable.
 Skipped declarations stay scoped to their body/arm; initialized enclosing locals
 retain their slots and fixed types. These statements emit existing `.jump`
 operations.

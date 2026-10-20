@@ -72,7 +72,6 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
         ".call-discard M run %0\n.return-void",
         ".call-discard M\n.return-void",
         ".return-void %0",
-        ".block ^0\n.integer %0 1\n.return %0\n.block ^1\n.return-void",
         ".block ^0\n.integer %0 1\n.integer %1 1\n.equal %2 %0 %1\n.branch %2 ^1 ^2\n.block ^1\n.return-void\n.block ^2\n.integer %3 1\n.return %3",
         ".integer %0 1\n.integer %1 2\n.call-discard M run %1 %0\n.return-void",
     ] {

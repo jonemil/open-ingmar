@@ -111,39 +111,7 @@ pub(crate) fn prefix_inputs(operations: &[LocatedOperation]) -> BTreeMap<BlockId
     }) {
         return BTreeMap::new();
     }
-    let mut blocks = Vec::new();
-    let mut current = BlockId(0);
-    let mut predecessors: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
-    let mut explicit = false;
-    for located in operations {
-        if let Operation::Block { block } = located.operation {
-            current = block;
-            explicit = true;
-        }
-        predecessors.entry(current).or_default();
-        blocks.push(current);
-        let targets = match located.operation {
-            Operation::Branch {
-                on_true, on_false, ..
-            } => vec![on_true, on_false],
-            Operation::Jump { target } | Operation::JumpValue { target, .. } => vec![target],
-            _ => Vec::new(),
-        };
-        for target in targets {
-            let incoming = predecessors.entry(target).or_default();
-            if !incoming.contains(&current) {
-                incoming.push(current);
-            }
-        }
-    }
-    inputs(
-        &Structure {
-            explicit,
-            blocks,
-            predecessors,
-        },
-        operations,
-    )
+    inputs(&crate::control_flow::prefix(operations), operations)
 }
 
 /// Compute storage refinements at block entries by intersecting incoming facts.
@@ -228,7 +196,7 @@ pub(crate) fn inputs(
     loop {
         let mut changed = false;
         for (block, predecessors) in &structure.predecessors {
-            let mut incoming = if *block == entry || predecessors.is_empty() {
+            let mut incoming = if *block == entry || structure.roots.contains(block) {
                 BTreeSet::new()
             } else {
                 outputs[&(predecessors[0], *block)].clone()

@@ -133,9 +133,12 @@ pub(crate) fn validate(
     for (index, block) in structure.blocks.iter().enumerate() {
         blocks.entry(*block).or_default().push(index);
     }
-    let entry = structure.blocks[0];
-    let mut inputs = BTreeMap::from([(entry, BTreeMap::<BuilderId, u32>::new())]);
-    let mut pending = VecDeque::from([entry]);
+    let mut inputs = structure
+        .roots
+        .iter()
+        .map(|root| (*root, BTreeMap::<BuilderId, u32>::new()))
+        .collect::<BTreeMap<_, _>>();
+    let mut pending = VecDeque::from(structure.roots.clone());
     while let Some(block) = pending.pop_front() {
         let mut active = inputs[&block].clone();
         let mut successors = vec![];
@@ -271,6 +274,15 @@ pub(crate) fn validate(
             }
         }
         for next in successors {
+            if !structure.same_component(block, next) {
+                if !active.is_empty() {
+                    return Err(fail(
+                        blocks[&block][0],
+                        "component exit leaves an unfinished container builder",
+                    ));
+                }
+                continue;
+            }
             if let Some(previous) = inputs.get(&next) {
                 if previous != &active {
                     return Err(fail(
