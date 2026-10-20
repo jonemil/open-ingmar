@@ -61,6 +61,28 @@ Save `scratch/simulator/monkeydo.log` after each run. The retained full logs are
 Source/text checks reject invalid elements/API contexts and malformed allocation
 text. Construction uses the common operation, nesting, and frame budgets.
 
+## Container separators
+
+Isolated authored-source probes on 2026-10-20 use SDK 9.2.0, fr265, `-O 0`.
+Compile one statement at a time inside an AppBase `onStart(state)` wrapper
+using `scripts/build-example.sh`, with the ordinary console manifest/resources.
+
+**Observed:** `[1,2,].size()`, `[1,2,]b.size()`, and
+`{"a"=>1,"b"=>2,}.size()` compile. Trailing commas in function parameters,
+ordinary calls, constructors, local declarations, and `for` initializer/update
+lists fail SDK parsing. Examples are `function f(a,b,)`, `f(1,2,)`,
+`new Token(1,)`, `var a=1,b=2,;`, `for(var a=0,b=1,;a<1;a++)`, and
+`for(var a=0;a<1;a++,)`. Comma-only `[,]` and `{,}` also fail parsing.
+
+The [shared object's `CoreLists` group][lists] checks constant and computed
+Array/ByteArray/Dictionary construction, trailing comments, and branching Array
+elements. It retains ordered effect markers and result reads. The source
+[grammar](../specs/frontend/grammar.md#lexical-rules-and-literals) defines the
+accepted separators independently of literal element/type contracts.
+SDK and generated applications match its expected output; both PRGs reconstruct
+without raw CODE/DATA fallback.
+
 [example]: ../../examples/compiler-array-literals/README.md
+[lists]: ../../examples/compiler-object-tests/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
 [plan]: ../plan.md

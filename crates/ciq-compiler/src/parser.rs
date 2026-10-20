@@ -1362,6 +1362,9 @@ impl<'a> Parser<'a> {
                 break;
             }
             self.token()?;
+            if self.peek()? == Kind::Punctuation('}') {
+                break;
+            }
         }
         let close = self.expect(Kind::Punctuation('}'), "'}'")?;
         self.node(
@@ -1460,6 +1463,9 @@ impl<'a> Parser<'a> {
             };
             while self.peek()? == Kind::Punctuation(',') {
                 self.token()?;
+                if self.peek()? == Kind::Punctuation(']') {
+                    break;
+                }
                 elements.push(self.expression(depth + 1)?);
             }
             let close = self.expect(Kind::Punctuation(']'), "']'")?;

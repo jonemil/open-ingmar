@@ -2377,7 +2377,8 @@ non-null `Array<Char>` and may receive postfix reads/calls. Number literals
 follow the [Number-array contract](#number-arrays); View literals follow the
 [native object contract](../sdk/README.md#native-views); String literals follow the
 [String-array contract](#string-arrays). Other element types, mixed
-types, nested arrays, and trailing commas are rejected. Empty literals follow
+types, and nested arrays are rejected. Container separators follow the
+[literal grammar](grammar.md#lexical-rules-and-literals). Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
 Homogeneous nonempty lists of Number, Char, or String tokens become typed IR
@@ -2815,10 +2816,11 @@ optional Null. Without context, a non-null value establishes the value type; any
 Null makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
 Null keys, mixed scalar kinds without an expected interface, numeric alias, or
-Object contract, container-valued entries outside the Object value profile, and
-trailing commas are unsupported. Nested Dictionary literal syntax is also
-unsupported, including inside entry call arguments. Ordinary calls and Array
-reads may produce scalar entries.
+Object contract, and container-valued entries outside the Object value profile
+are unsupported. Container separators follow the
+[literal grammar](grammar.md#lexical-rules-and-literals). Nested Dictionary
+literal syntax is also unsupported, including inside entry call arguments.
+Ordinary calls and Array reads may produce scalar entries.
 
 Literal-only entries use `hpush` and a [scalar DATA
 constant](../formats/data.md#dictionary-constants). Signed Number tokens use the

@@ -121,7 +121,7 @@ fn malformed_constants_and_unsupported_value_types_fail_before_lowering() {
         "{\"x\" => 1, \"y\" => \"bad\"}",
         "{\"x\" => {}}",
         "{\"x\" => [1]}",
-        "{\"x\" => 1,}",
+        "{\"x\" => 1,,}",
         "{\"x\" = 1}",
     ] {
         assert!(

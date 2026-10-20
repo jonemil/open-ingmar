@@ -46,6 +46,9 @@ leading-dot forms, NaN type/comparisons/Array storage, and a radix field default
 `CoreEscapes` checks source control/quote escapes, Unicode code units, String
 surrogate pairs and embedded NUL, and Char array storage.
 
+`CoreLists` checks trailing commas in Array, ByteArray, and Dictionary literals,
+including constant records and ordered effectful/branching construction.
+
 From the repository root:
 
 ```sh

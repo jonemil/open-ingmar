@@ -99,3 +99,60 @@ fn comments_and_unicode_diagnostics_keep_correct_source_locations() {
     assert_eq!((error.line, error.column), (1, 35));
     assert!(error.message.contains("unsupported character"));
 }
+
+#[test]
+fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
+    for source in [
+        "function f() { return [1,2,][1]; }",
+        "function f() { return [M.first(),M.second(),][1]; }",
+        "function f(choose as Toybox.Lang.Boolean) { return [choose ? 1 : 2,3,][0]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return ['a','b',]; }",
+        "function f() as Toybox.Lang.ByteArray { return [1,255,]b; }",
+        "function f() as Toybox.Lang.ByteArray { return [M.first(),M.second(),]b; }",
+        "function f() as Toybox.Lang.Dictionary { return {\"one\"=>1,\"two\"=>2,}; }",
+        "function f() as Toybox.Lang.Dictionary { return {\"one\"=>M.first(),\"two\"=>M.second(),}; }",
+    ] {
+        let function = compile(source).unwrap();
+        let ordinary = compile(&source.replace(",]", "]").replace(",}", "}")).unwrap();
+        assert_eq!(
+            function
+                .operations()
+                .iter()
+                .map(|op| &op.operation)
+                .collect::<Vec<_>>(),
+            ordinary
+                .operations()
+                .iter()
+                .map(|op| &op.operation)
+                .collect::<Vec<_>>(),
+            "{source}"
+        );
+        assert_eq!(
+            function,
+            ciq_compiler::parse_ir(&function.to_ir_text()).unwrap()
+        );
+        let assembly = function.lower();
+        assert_eq!(
+            assembly,
+            ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+        );
+    }
+    compile("function f() { return [1, /* end */ ][0]; }").unwrap();
+    compile("function f() as Toybox.Lang.Dictionary { return {\"a\" => 1, // end\n}; }").unwrap();
+    for source in [
+        "function f() { return [,]; }",
+        "function f() { return [1,,]; }",
+        "function f() { return [,]b; }",
+        "function f() { return [1,,2]b; }",
+        "function f() as Toybox.Lang.Dictionary { return {,}; }",
+        "function f() as Toybox.Lang.Dictionary { return {\"a\"=>1,,}; }",
+        "function f() as Toybox.Lang.Dictionary { return {\"a\"=>,}; }",
+        "function f() { return M.value(1,); }",
+        "function f(n,) { return n; }",
+        "function f() { var a=1,; return a; }",
+        "function f() { for(var a=0,;a<1;a++){ return a; } return 1; }",
+        "function f() { for(var a=0;a<1;a++,){ return a; } return 1; }",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}

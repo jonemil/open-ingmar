@@ -85,6 +85,7 @@ module NullableSourceTests {
         CoreSwitch.run();
         CoreLiterals.run();
         CoreEscapes.run();
+        CoreLists.run();
     }
 }
 
@@ -546,5 +547,33 @@ module CoreEscapes {
         System.println(chars[0].toNumber());
         System.println(chars[1].toNumber());
         System.println(chars[2].toNumber());
+    }
+}
+
+module CoreLists {
+    function show(value as Number or Null) as Void {
+        if (value != null) { System.println(value); } else { System.println(-1); }
+    }
+    function run() as Void {
+        System.println("container-commas");
+        var numbers = [1, 2, /* last */ ];
+        System.println(numbers.size());
+        System.println(numbers[1]);
+        var chars = ['a', 'b',];
+        System.println(chars[1].toNumber());
+        var bytes = [1, 255,]b;
+        System.println(bytes.size());
+        System.println(bytes[1]);
+        var words = {"one" => 1, "two" => 2,};
+        System.println(words.size());
+        CoreLists.show(words["two"]);
+        var computed = [CoreHeaders.mark("array-first", 3), CoreHeaders.mark("array-last", 4),];
+        System.println(computed[1]);
+        var computedBytes = [CoreHeaders.mark("byte-first", 5), CoreHeaders.mark("byte-last", 6),]b;
+        System.println(computedBytes[1]);
+        var computedWords = {"one" => CoreHeaders.mark("dictionary-first", 7), "two" => CoreHeaders.mark("dictionary-last", 8),};
+        CoreLists.show(computedWords["two"]);
+        var branching = [true ? CoreHeaders.mark("array-branch", 9) : 0,];
+        System.println(branching[0]);
     }
 }

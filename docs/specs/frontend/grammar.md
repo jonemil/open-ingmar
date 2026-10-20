@@ -165,9 +165,9 @@ named-call = call-name "(" argument-list? ")"
 call-name = path | "self" "." identifier
 call-expression = named-call | primary member-call | "(" call-expression ")"
 native-constant = path
-array-literal = "[" argument-list? "]" "b"?
+array-literal = "[" (argument-list ","?)? "]" "b"?
 dictionary-literal = "{" (expression "=>" expression
-                           ("," expression "=>" expression)*)? "}"
+                           ("," expression "=>" expression)* ","?)? "}"
 construction = "new" path "(" argument-list? ")"
              | "new" "[" expression "]" "b"?
 argument-list = expression ("," expression)*
@@ -357,18 +357,20 @@ typedef using var while
 restrict saved IR or assembly names. Additional reserved owner/native names
 follow [name
 resolution](README.md#declarations-and-name-resolution) and
-[class rules](README.md#source-classes). Whitespace, `//` comments, and non-nested `/* ... */`
-comments are accepted. Commas separate lists; trailing commas are unsupported.
+[class rules](README.md#source-classes). Whitespace, `//` comments, and non-nested
+`/* ... */` comments are accepted. Nonempty Array, ByteArray, and Dictionary
+literals accept one trailing comma, including comments before the closing
+delimiter. It adds no element or entry. Empty literals cannot contain a comma;
+missing elements/values and repeated commas are rejected. Other lists, including
+parameters, calls, constructors, local declarations, and `for` clauses, reject
+trailing commas. See [separator evidence](../../investigations/compiler-array-literals.md#container-separators).
 
-Number literals are decimal signed i32, including -2147483648. Long literals end
-in `l`/`L` and fit signed i64. Fractional/exponent literals default to Float;
-`d` selects Double, including `1d`. A fraction needs digits on both sides of the
-point; `e`/`E` exponents allow an optional sign and require digits. Negative
-literal tokens permit whitespace/comments between minus and digits. Floating
+Decimal integer magnitudes fit signed i32/i64, including the minimum values
+under unary minus; other radices follow the bit-pattern rules above. Negative
+literal forms permit whitespace/comments between minus and magnitude. Floating
 parsing rounds to IEEE 754, rejects infinity from overflow, and allows underflow
-to zero. Negative literals preserve signed zero. Hexadecimal/underscore numeric
-forms and other suffixes are unsupported. Overflow diagnostics point to the
-literal start; [numeric semantics](README.md#numbers-and-numeric-aliases)
+to zero. Negative floating literals preserve signed zero. Overflow diagnostics
+point to the literal start; [numeric semantics](README.md#numbers-and-numeric-aliases)
 distinguish literal rounding from arithmetic and conversion behavior.
 
 String and Char literals share escapes for backspace (`\b`), form feed (`\f`),
