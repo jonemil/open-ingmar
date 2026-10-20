@@ -2058,6 +2058,9 @@ impl Builder<'_> {
                 ));
             }
             match statement {
+                parser::Statement::Block { body, .. } => {
+                    terminated = self.sequence(body, &mut locals.clone())?;
+                }
                 parser::Statement::Update {
                     target, increment, ..
                 } => {
@@ -2482,15 +2485,7 @@ fn build_body(
         loops: Vec::new(),
     };
     // Logical value expressions add an entry block when they first need flow.
-    if ast.statements.iter().any(|s| {
-        matches!(
-            s,
-            parser::Statement::If { .. }
-                | parser::Statement::While { .. }
-                | parser::Statement::For { .. }
-                | parser::Statement::DoWhile { .. }
-        )
-    }) {
+    if has_control_flow(&ast.statements) {
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
     if !builder.sequence(ast.statements, &mut BTreeMap::new())? {
@@ -2642,13 +2637,26 @@ pub(crate) fn declared_signature(ast: &parser::ParsedFunction) -> CallSignature 
     }
 }
 
+/// Detect graph-producing statements through lexical scopes, which emit no blocks.
+fn has_control_flow(statements: &[parser::Statement]) -> bool {
+    statements.iter().any(|s| match s {
+        parser::Statement::If { .. }
+        | parser::Statement::While { .. }
+        | parser::Statement::For { .. }
+        | parser::Statement::DoWhile { .. } => true,
+        parser::Statement::Block { body, .. } => has_control_flow(body),
+        _ => false,
+    })
+}
+
 fn has_value_return(statements: &[parser::Statement]) -> bool {
     statements.iter().any(|s| match s {
         parser::Statement::Return { value: Some(_), .. } => true,
         parser::Statement::If {
             on_true, on_false, ..
         } => has_value_return(on_true) || has_value_return(on_false),
-        parser::Statement::While { body, .. }
+        parser::Statement::Block { body, .. }
+        | parser::Statement::While { body, .. }
         | parser::Statement::For { body, .. }
         | parser::Statement::DoWhile { body, .. } => has_value_return(body),
         _ => false,

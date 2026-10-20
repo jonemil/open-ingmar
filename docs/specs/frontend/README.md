@@ -1434,7 +1434,11 @@ self/forward/unknown reads and uninitialized declarations are rejected. An arm's
 locals are visible within that arm and nested arms, but not in a sibling or
 after the condition. Disjoint arms may reuse a name; each declaration receives a
 distinct semantic local and VM slot. A later outer declaration may also reuse a
-name that has gone out of scope. Standalone braced blocks are unsupported.
+name that has gone out of scope. A standalone braced block introduces the same
+local scope: declarations disappear on exit, and writes to enclosing locals
+persist. Empty and nested blocks are allowed. Scope exit does not reuse local
+slots or add runtime reference-release instructions. A block preserves its
+body's return/break/continue behavior and does not create a loop-control target.
 Reassignment follows the fixed-type rules below.
 
 Locals retain stored state; repeated expression reads produce distinct
@@ -1476,13 +1480,16 @@ rules](#short-circuit-expressions).
 
 ### Statement arms and joins
 
-Conditions may appear between statements; combined conditional/loop nesting is
-limited to 64 levels. Empty arms are allowed; `else if` without braces is not
-accepted. Each arm has its own local scope. Every value-returning path must
-satisfy the declared result contract; Void fallthrough inserts a return.
-Statements after `return`, `break`, `continue`, or a conditional whose arms both
-terminate, or a loop with no reachable exit, are rejected as unreachable.
-A value-returning path with no return is
+Conditions may appear between statements; combined conditional/loop/scoped-block
+nesting is limited to 64 levels, counting each `else if` link as a nested
+conditional. Empty arms are allowed. `else if` chains evaluate conditions in
+order until one is true, then execute only that arm; a final `else` is optional.
+Each selected body still requires braces. Each arm has its own local scope.
+Every value-returning path must satisfy the declared result contract; Void
+fallthrough inserts a return.
+Statements after a terminating construct are rejected as unreachable, including
+a scoped block whose body terminates, a conditional whose arms both terminate,
+or a loop with no reachable exit. A value-returning path with no return is
 rejected at the function's closing brace.
 
 Continuing arms jump to a shared block after both arms. Returning or
@@ -1493,17 +1500,19 @@ do not define a result at the join. Enclosing locals can carry results using
 assignment; no phi values or shared stack values are introduced.
 
 The semantic 1024-operation limit includes generated block markers and
-terminators. The 255 parameter/local slots count all declarations across the
-function, including mutually exclusive arms; slots are not reused. Local
-initializers, prints, comparison operands, and module call arguments retain
+terminators. Parsing also bounds source nodes; standalone blocks count even
+when empty and generate no operations. The 255 parameter/local slots count all
+declarations across the function, including mutually exclusive arms; slots are
+not reused. Local initializers, prints, comparison operands, and module call
+arguments retain
 source evaluation order within the selected path. Common initializers run once
 before the branch. These forms use the control-flow IR directives.
 
 See
 [nested-conditions.mc](../../../examples/compiler-probe/nested-conditions.mc)
 and [nested/continuing-arm simulator
-evidence](../../investigations/compiler-nested-conditions.md). Full language
-scoping and standalone blocks remain future work.
+evidence](../../investigations/compiler-nested-conditions.md). Broader language
+scoping and shadowing rules remain future work.
 
 ### Local reassignment
 

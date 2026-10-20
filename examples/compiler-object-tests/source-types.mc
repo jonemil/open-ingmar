@@ -78,6 +78,7 @@ module NullableSourceTests {
         NullableSourceCasts.run();
         SourceJoins.run();
         CoreLoops.run();
+        CoreScopes.run();
     }
 }
 
@@ -250,5 +251,53 @@ module CoreLoops {
             nullable = null;
         } while(nullable != null);
         CoreLoops.proof(new Probe());
+    }
+}
+
+module CoreScopes {
+    function test(value as Number, expected as Number) as Boolean {
+        System.println("scope-test");
+        System.println(expected);
+        return value == expected;
+    }
+    function choose(value as Number) as Number {
+        {
+            if (CoreScopes.test(value, 0)) { { return 41; } }
+            else if (CoreScopes.test(value, 1)) { return 42; }
+            else { return 43; }
+        }
+    }
+    function guarded(value as Number or Null) as Void {
+        {
+            if (value == null) { System.println("scope-null"); }
+            else if (value > 0) { System.println(value + 1); }
+            else { System.println(value - 1); }
+        }
+    }
+    function run() as Void {
+        var sum = 0;
+        { var step = 1; sum += step; }
+        { var step = 2; sum += step; }
+        System.println(sum);
+        var step = 4;
+        sum += step;
+        System.println(sum);
+        System.println(CoreScopes.choose(0));
+        System.println(CoreScopes.choose(1));
+        System.println(CoreScopes.choose(2));
+        var total = 0;
+        {
+            for (var i = 0; i < 4; i++) {
+                {
+                    if (i == 1) { continue; }
+                    else if (i == 3) { break; }
+                    else { total += i; }
+                }
+            }
+        }
+        System.println(total);
+        CoreScopes.guarded(null);
+        CoreScopes.guarded(2);
+        CoreScopes.guarded(0);
     }
 }

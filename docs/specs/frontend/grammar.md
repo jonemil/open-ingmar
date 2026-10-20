@@ -77,14 +77,15 @@ Each leaf statement below names its expression or target rules.
 block = "{" statement* "}"
 statement = local-statement | assignment-statement | update-statement
           | call-statement | return-statement | if-statement | while-statement
-          | for-statement | do-statement
+          | for-statement | do-statement | block
           | break-statement | continue-statement
 local-statement = local-clause ";"
 assignment-statement = assignment-clause ";"
 update-statement = update-clause ";"
 call-statement = call-expression ";"
 return-statement = "return" expression? ";"
-if-statement = "if" "(" expression ")" block ("else" block)?
+if-statement = "if" "(" expression ")" block
+               ("else" (block | if-statement))?
 while-statement = "while" "(" expression ")" block
 for-statement = "for" "(" for-initializer? ";" expression? ";"
                 loop-effect? ")" block
@@ -107,9 +108,11 @@ Semantic checking restricts each target/operator pair; this syntax does not
 permit every assignment form for every type. Locals require initializers and
 have no explicit source annotation. Update operators are statements only. Calls
 include module/self/receiver calls, intrinsic System.println, and supported
-native base initialization. Arbitrary expression statements, standalone nested
-blocks, unbraced arms, `else if`, `switch`, and exception statements are
-unsupported. A `for` header permits at most one initializer and one update;
+native base initialization. Conditional and loop bodies require braces; an
+`else` may instead introduce another `if-statement`. Standalone blocks are
+statements and introduce local scopes. Arbitrary expression statements,
+unbraced bodies, `switch`, and exception statements are unsupported.
+A `for` header permits at most one initializer and one update;
 comma-separated lists and declarations in its update are unsupported. Present
 loop conditions must be Boolean. [Statement
 contracts](README.md#statements-and-control-flow) define scope, reachability,

@@ -23,6 +23,9 @@ nested choices and effect markers check lazy arm evaluation.
 clauses, scoped locals, nested break/continue targets, early returns, and skipped
 headers. Markers check effects as well as numeric results.
 
+`CoreScopes` checks standalone blocks, local-name reuse, and `else if` selection
+with effect markers, nullable guards, early returns, and enclosing loop controls.
+
 From the repository root:
 
 ```sh

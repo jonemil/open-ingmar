@@ -195,6 +195,12 @@ block-local values and initialization on every path. See
 [conditions.mc](../../../examples/compiler-probe/conditions.mc) and
 [initial simulator evidence](../../investigations/compiler-conditions.md).
 
+An `else if` uses the same branch layout inside the preceding false arm, so its
+condition executes only when earlier tests fail. Standalone source blocks only
+scope names: they add no IR/VM blocks or instructions, and propagate their
+body's termination and enclosing loop targets. Control flow inside such a scope
+still establishes the function's explicit entry block.
+
 ### While loops
 
 Lowering uses explicit test/body/exit blocks and a symbolic backward jump from

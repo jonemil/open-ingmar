@@ -31,13 +31,14 @@ fn execute(function: &Function, argument: i32) -> i32 {
             Opcode::Ipush1 => stack.push(ins.operands()[0] as i8 as i32),
             Opcode::Lgetv => stack.push(locals[ins.operands()[0] as usize]),
             Opcode::Lputv => locals[ins.operands()[0] as usize] = stack.pop().unwrap(),
-            Opcode::Addv | Opcode::Subv | Opcode::Eq | Opcode::Gt => {
+            Opcode::Addv | Opcode::Subv | Opcode::Eq | Opcode::Lt | Opcode::Gt => {
                 let right = stack.pop().unwrap();
                 let left = stack.pop().unwrap();
                 stack.push(match ins.opcode() {
                     Opcode::Addv => left + right,
                     Opcode::Subv => left - right,
                     Opcode::Eq => i32::from(left == right),
+                    Opcode::Lt => i32::from(left < right),
                     _ => i32::from(left > right),
                 });
             }
@@ -748,10 +749,93 @@ fn optional_else_preserves_false_path_scope_and_return_requirements() {
     for source in [
         "function f(x) { if (x == 0) { return 1; } }",
         "function f(x) { if (x == 0) { var n = 1; } return n; }",
-        "function f(x) { if (x == 0) { return 1; } else if (x > 0) { return 2; } return 3; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
+}
+
+#[test]
+fn scoped_blocks_and_else_if_preserve_values_and_pipeline_round_trips() {
+    for (source, outcomes) in [
+        (
+            "function f(x){var n=1;{var step=x;n+=step;}{var step=2;n+=step;}return n;}",
+            [3, 4, 5],
+        ),
+        (
+            "function f(x){{if(x==0){return 41;}else if(x==1){return 42;}else{return 43;}}}",
+            [41, 42, 43],
+        ),
+        (
+            "function f(x){var n=1;if(x==0){n=7;}else if(x==1){n=9;}return n;}",
+            [7, 9, 1],
+        ),
+        (
+            "function f(x){var n=0;for(var i=0;i<4;i++){{if(i==1){continue;}else if(i==3){break;}else{n+=i;}}}return n+x;}",
+            [2, 3, 4],
+        ),
+        (
+            "function f(x){var n=x;{} {while(n>0){{n-=1;}}}return n;}",
+            [0, 0, 0],
+        ),
+    ] {
+        let function = compile(source).unwrap();
+        for (argument, expected) in outcomes.into_iter().enumerate() {
+            assert_eq!(execute(&function, argument as i32), expected, "{source}");
+        }
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(
+            function.lower(),
+            ciq_assembly::Program::parse(&function.assembly()).unwrap()
+        );
+    }
+    let flat = compile("function f(){var n=41;return n;}").unwrap();
+    let scoped = compile("function f(){{var n=41;return n;}}").unwrap();
+    assert_eq!(flat.assembly(), scoped.assembly());
+
+    let source = "function f(n as Toybox.Lang.Number or Null){{if(n==null){return 0;}else if(n>0){return n+1;}else{return n-1;}}}";
+    let unit = ciq_compiler::compile_sources(&[source]).unwrap();
+    assert_eq!(
+        unit,
+        ciq_compiler::parse_unit_ir(&unit.to_ir_text()).unwrap()
+    );
+}
+
+#[test]
+fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
+    for source in [
+        "function f(){{var n=1;}return n;}",
+        "function f(x){{var x=1;}return 0;}",
+        "function f(){var n=1;{var n=2;}return n;}",
+        "function f(){{return 1;}return 2;}",
+        "function f(){{for(;;){return 1;}}return 2;}",
+        "function f(){{continue;}return 1;}",
+        "function f(){{break;}return 1;}",
+        "function f(x){if(x==0){return 1;}else if(x==1){return 2;}else{return 3;}return 4;}",
+        "function f(x){if(x==0){var n=1;}else if(n==1){return 2;}return 3;}",
+        "function f(x){if(x==0){return 1;}else if(x>0) return 2;return 3;}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    for depth in [64, 65] {
+        let blocks = format!(
+            "function f(){{{}return 1;{}}}",
+            "{".repeat(depth),
+            "}".repeat(depth)
+        );
+        let chain = format!(
+            "function f(x){{{}{{return 2;}}}}",
+            "if(x==0){return 1;}else ".repeat(depth)
+        );
+        for source in [blocks, chain] {
+            let result = compile(&source);
+            assert_eq!(result.is_ok(), depth == 64, "{source}: {result:?}");
+            if let Err(error) = result {
+                assert!(error.message.contains("nesting"));
+            }
+        }
+    }
+    let empty_blocks = format!("function f(){{{}return 1;}}", "{}".repeat(1025));
+    assert!(compile(&empty_blocks).unwrap_err().message.contains("1024"));
 }
 
 #[test]

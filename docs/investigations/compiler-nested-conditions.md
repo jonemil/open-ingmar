@@ -80,6 +80,34 @@ nested-false 6dc9cd21b8b5e67159182d5bacbbcd8211f0bd6372348488ebfdaffebe97a492
 joining      c6a749b39d5d83abd13988c794a57275dcf63e4593d80ca52bd5aaf0c4f4f718
 ```
 
+## Standalone scopes and else-if chains
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. An authored SDK probe accepts sibling
+standalone blocks reusing a local name and an `else if` chain. The grouped
+`CoreScopes` specimen in
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) then
+compares complete SDK/generated applications:
+
+- Sibling locals contribute `3`; reusing the name after scope exit produces `7`.
+- Effect markers show later conditions execute only after earlier tests fail;
+  selected returns are `41`, `42`, and `43`.
+- Scoped loop controls produce `2`, and nullable guards select `scope-null`,
+  `3`, and `-1` without evaluating invalid nullable arithmetic.
+
+Both programs match [expected output](../../examples/compiler-object-tests/expected.txt).
+Source/saved-IR/assembly agree; SDK/generated PRGs pass structured
+export/reassembly without raw CODE/DATA fallback and own-key signing checks.
+Use the shared [console checker](../../scripts/README.md#console-specimen-check)
+with `compiler-object-tests` and its SDK-built PRG. Local artifacts:
+`scratch/core-scopes/check/`; the minimal acceptance probe and build log are in
+`scratch/compiler-block-probe/`.
+
+Focused compiler checks cover out-of-scope names, existing no-shadowing rules,
+unreachable statements after scoped returns, nested loop targets, and 64/65-level
+nesting boundaries. Plain scoped and unscoped bodies emit the same assembly;
+scoping introduces no VM operation. These tests do not establish unrestricted
+Monkey C shadowing or unbraced-body support.
+
 ## Reproduction
 
 Build the original control-flow PRG using [its instructions][scaffold]. Use new

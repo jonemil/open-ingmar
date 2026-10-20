@@ -126,6 +126,10 @@ pub(crate) enum Statement {
     Continue {
         span: Span,
     },
+    Block {
+        body: Vec<Statement>,
+        span: Span,
+    },
     For {
         initialize: Option<Box<Statement>>,
         condition: Option<Expression>,
@@ -168,6 +172,7 @@ impl Statement {
             | Self::If { span, .. }
             | Self::Break { span }
             | Self::Continue { span }
+            | Self::Block { span, .. }
             | Self::While { span, .. }
             | Self::For { span, .. }
             | Self::DoWhile { span, .. } => *span,
@@ -1955,6 +1960,39 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse an if/else chain, representing each else-if as a nested false arm.
+    /// Each link counts toward the shared nesting and source-operation limits.
+    fn if_statement(&mut self, depth: usize) -> Result<Statement, Diagnostic> {
+        let start = self.expect(Kind::Word("if"), "'if'")?.span.start;
+        self.expressions += 1;
+        if self.expressions > crate::MAX_OPERATIONS {
+            return Err(self.error(start, "function exceeds 1024-operation limit"));
+        }
+        self.expect(Kind::Punctuation('('), "'('")?;
+        let condition = self.expression(0)?;
+        self.expect(Kind::Punctuation(')'), "')'")?;
+        let (on_true, true_span) = self.block(depth + 1)?;
+        let (on_false, end) = if self.peek()? == Kind::Word("else") {
+            self.token()?;
+            if self.peek()? == Kind::Word("if") {
+                let nested = self.if_statement(depth + 1)?;
+                let end = nested.span().end;
+                (vec![nested], end)
+            } else {
+                let (body, span) = self.block(depth + 1)?;
+                (body, span.end)
+            }
+        } else {
+            (Vec::new(), true_span.end)
+        };
+        Ok(Statement::If {
+            condition,
+            on_true,
+            on_false,
+            span: Span { start, end },
+        })
+    }
+
     /// Parse a braced statement sequence, bounding control-flow nesting and total
     /// source operations before semantic construction.
     fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), Diagnostic> {
@@ -1971,7 +2009,8 @@ impl<'a> Parser<'a> {
             // A print's call node or assignment target already counts its sink.
             if matches!(
                 self.peek()?,
-                Kind::Word("var" | "return" | "if" | "while" | "for" | "do" | "break" | "continue")
+                Kind::Word("var" | "return" | "while" | "for" | "do" | "break" | "continue")
+                    | Kind::Punctuation('{')
             ) {
                 self.expressions += 1;
             }
@@ -1979,6 +2018,10 @@ impl<'a> Parser<'a> {
                 return Err(self.error(start, "function exceeds 1024-operation limit"));
             }
             let statement = match self.peek()? {
+                Kind::Punctuation('{') => {
+                    let (body, span) = self.block(depth + 1)?;
+                    Statement::Block { body, span }
+                }
                 Kind::Word("var") => self.simple_statement(';', true)?,
                 Kind::Word("return") => {
                     self.token()?;
@@ -2071,28 +2114,7 @@ impl<'a> Parser<'a> {
                         },
                     }
                 }
-                Kind::Word("if") => {
-                    self.token()?;
-                    self.expect(Kind::Punctuation('('), "'('")?;
-                    let condition = self.expression(0)?;
-                    self.expect(Kind::Punctuation(')'), "')'")?;
-                    let (on_true, true_span) = self.block(depth + 1)?;
-                    let (on_false, body_span) = if self.peek()? == Kind::Word("else") {
-                        self.token()?;
-                        self.block(depth + 1)?
-                    } else {
-                        (Vec::new(), true_span)
-                    };
-                    Statement::If {
-                        condition,
-                        on_true,
-                        on_false,
-                        span: Span {
-                            start,
-                            end: body_span.end,
-                        },
-                    }
-                }
+                Kind::Word("if") => self.if_statement(depth)?,
                 _ => self.simple_statement(';', true)?,
             };
             statements.push(statement);
