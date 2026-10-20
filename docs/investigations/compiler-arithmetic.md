@@ -28,7 +28,7 @@ instructions execute; results are not folded into literals.
 
 These specimens establish integer addition/subtraction and operand order, not
 general frames, overflow, promotion, or a full VM representation. Current syntax,
-limits, and lowering are in [the source spec](../specs/compiler-subset.md).
+limits, and lowering are in [the source spec](../specs/frontend/README.md).
 
 ## Reproduction
 

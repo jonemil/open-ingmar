@@ -320,22 +320,19 @@ pub fn build_console_application(
         }
         (entry, true)
     };
-    if matches!(
+    if !matches!(
         entry.return_type(),
-        ReturnType::NullableInteger
-            | ReturnType::NullableString
-            | ReturnType::NullableLong
-            | ReturnType::NullableDouble
-            | ReturnType::NullableFloat
-            | ReturnType::NullableBoolean
-            | ReturnType::NullableWeakReference
-            | ReturnType::NullableMethod
-            | ReturnType::NullableSymbol
-            | ReturnType::NullableChar
-            | ReturnType::TypedDictionary(_)
-            | ReturnType::Array(_)
-            | ReturnType::Object(_)
-            | ReturnType::Tuple(_)
+        ReturnType::Integer
+            | ReturnType::Long
+            | ReturnType::Float
+            | ReturnType::Double
+            | ReturnType::Numeric
+            | ReturnType::IntegerAlias
+            | ReturnType::Decimal
+            | ReturnType::String
+            | ReturnType::Boolean
+            | ReturnType::Char
+            | ReturnType::Void
     ) {
         return Err(error(
             "console entry requires a non-null scalar or Void result",

@@ -53,5 +53,5 @@ negation. The [logical value example](../compiler-logical-values/README.md)
 exercises assignments, arguments, and returns.
 See the [source contract][source] and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#short-circuit-expressions
+[source]: ../../docs/specs/frontend/operators.md#short-circuit-expressions
 [evidence]: ../../docs/investigations/compiler-short-circuit.md

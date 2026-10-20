@@ -25,5 +25,5 @@ No new opcode or DATA framing is needed: scalar Null uses its existing tag;
 String-containing records retain local pools. Current source inference is
 intentionally narrower than general nullable literal inference: direct literals
 use an explicit nullable expected contract. Existing Array references remain
-invariant. See the [source contract](../specs/compiler-subset.md#nullable-array-elements)
-and [Array IR](../specs/compiler-ir-text.md#constant-arrays).
+invariant. See the [source contract](../specs/frontend/containers.md#nullable-array-elements)
+and [Array IR](../specs/ir/containers.md#constant-arrays).

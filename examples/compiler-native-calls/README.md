@@ -62,6 +62,6 @@ run left to right before formatting their sum. See [source rules][source],
 [native call IR][ir], and
 [experiment evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#native-value-calls
-[ir]: ../../docs/specs/compiler-ir-text.md#native-value-calls
+[source]: ../../docs/specs/frontend/lang-values.md#native-value-calls
+[ir]: ../../docs/specs/ir/calls.md#native-value-calls
 [evidence]: ../../docs/investigations/compiler-native-calls.md

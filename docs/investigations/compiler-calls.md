@@ -34,11 +34,11 @@ not compiler constants. This matters for binding: the short field is not a
 substitute for the module symbol.
 
 Sources informing the independent implementation are
-[our instruction reference](../specs/instructions.md),
+[our instruction reference](../specs/vm/instructions.md),
 [local-variable evidence](compiler-locals.md), and this controlled SDK output.
 No external implementation code was incorporated.
-[Frontend contract](../specs/compiler-subset.md) and
-[IR text](../specs/compiler-ir-text.md) were extended before implementation.
+[Frontend contract](../specs/frontend/README.md) and
+[IR text](../specs/ir/model.md) were extended before implementation.
 
 ## Runtime specimen and independent output
 
@@ -105,7 +105,7 @@ print/string generation are still SDK-provided; this is not frontend support for
 Native/text checks covered ordered calls/results, symbolic module/member binding,
 and rejection of missing, ambiguous, conflicting, or reordered references.
 Synthetic callees make dropped/repeated calls observable; physical VM frames
-remain outside that evaluator. See [the IR contract](../specs/compiler-ir-text.md#module-calls-and-operation-order).
+remain outside that evaluator. See [the IR contract](../specs/ir/calls.md#module-calls-and-operation-order).
 
 ## Reproduction
 

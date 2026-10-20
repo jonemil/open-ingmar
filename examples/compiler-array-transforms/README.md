@@ -40,5 +40,5 @@ its end; null bounds select the corresponding edge, negative bounds count from
 the end, and out-of-range bounds clip to the array. The [source contract][spec]
 and [SDK evidence][evidence] describe the supported profile.
 
-[spec]: ../../docs/specs/compiler-subset.md#char-arrays
+[spec]: ../../docs/specs/frontend/containers.md#char-arrays
 [evidence]: ../../docs/investigations/compiler-array-transforms.md

@@ -42,7 +42,7 @@ updates the first instance to 11, then refers to the second instance and updates
 it to 10. The first stays at 11 until its drawing callbacks increment it again.
 Inspect the displayed number; update counts depend on session timing.
 
-The [source-call profile](../../docs/specs/compiler-classes.md#calls-on-constructed-source-objects)
+The [source-call profile](../../docs/specs/frontend/classes.md#calls-on-constructed-source-objects)
 requires a proven constructor class and preserves it through local copies and
 same-class reassignment. Generic View parameters/returns do not authorize source
 dispatch. Object-reference fields, constructor arguments, and input delegates

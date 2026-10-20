@@ -39,6 +39,6 @@ skips its right-hand helper, so `unexpected` must not appear. Calls returning
 nullable values execute without printing those values. See the [source
 contract][source], [IR contract][ir], and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#native-value-calls
-[ir]: ../../docs/specs/compiler-ir-text.md#native-value-calls
+[source]: ../../docs/specs/frontend/lang-values.md#native-value-calls
+[ir]: ../../docs/specs/ir/calls.md#native-value-calls
 [evidence]: ../../docs/investigations/compiler-native-statements.md

@@ -10,7 +10,7 @@ Independent Rust now supports all 38 observed opcodes. `ciq-mc` preserves
 operand bits and exposes a relative-target query; `ciq-assembly` binds typed
 `Code` operands and their `code:label` syntax after layout. Forward/backward
 displacements must fit signed 16 bits and target instructions. Numeric operands
-remain unchecked raw bits. [The label specification](../specs/code-labels.md)
+remain unchecked raw bits. [The label specification](../specs/assembly/labels.md)
 defines these rules.
 
 Project export reuses method/line labels and adds labels for verified branch or

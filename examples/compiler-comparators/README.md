@@ -10,11 +10,11 @@ SDK/generated `fr265` programs.
 The Object-rooted `TextOrder` class supplies `compareTo(Object) as Number`, the
 Comparable signature. Direct calls check negative, equal, and positive results.
 The library's `CompilationUnit::check_interface` checks this signature and its
-API levels; see [API contracts](../../docs/specs/api-declarations.md#declaration-model).
+API levels; see [API contracts](../../docs/specs/sdk/declarations.md#declaration-model).
 `InterfaceCalls` forwards Comparable and Comparator parameters/results through
 locals, calls their declared methods, and sorts through a Comparator value.
 Receiver/argument markers check evaluation order. See the
-[interface profile](../../docs/specs/compiler-subset.md#comparison-interface-values)
+[interface profile](../../docs/specs/frontend/interfaces.md#interfaces)
 for remaining limits, including mixed scalar-token key constants and general Object Arrays.
 `NativeComparables` checks all seven supported scalar witnesses, typed returns,
 scalar assignments, mixed interface/scalar conditional arms, and a Number guard.
@@ -36,7 +36,7 @@ and retrieved Comparators used for sorting.
 keys, inherited identity, native witnesses inserted at runtime, key enumeration,
 and removal. Comparison counters verify that hashing does not use the ordering
 methods. Mixed scalar-token key constants remain deferred; see the
-[key contract](../../docs/specs/compiler-subset.md#interface-dictionary-keys).
+[key contract](../../docs/specs/frontend/interfaces.md#interface-dictionary-keys).
 `InterfaceConstants` checks all scalar tags, Number/Char distinctions, independent
 constant loads versus shared aliases, nullable Comparable contents, and a
 Null-only Comparator constant used for default sorting.
@@ -54,4 +54,4 @@ The structural contract requires exact Object inputs and a non-null Number
 result. Source callbacks need no Comparator superclass. This profile retains
 exact source-class identity or an explicit Comparator contract; erased Object
 comparators remain unsupported. See the
-[sorting contract](../../docs/specs/compiler-subset.md#source-comparators).
+[sorting contract](../../docs/specs/frontend/containers.md#source-comparators).

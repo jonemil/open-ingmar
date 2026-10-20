@@ -8,6 +8,6 @@ Start with `DeveloperKey`, `PublicKey`, `resign`, and `verify` in the
 [API source](src/lib.rs). The [assembler CLI](../ciq-asm/README.md) exposes PRG
 signing commands; `ciq-package` handles archive-level signature workflows.
 
-See the [signature profile](../../docs/specs/developer-signatures.md) for
+See the [signature profile](../../docs/specs/formats/developer-signatures.md) for
 coverage, key encodings, supported variants, and limits. Keep private keys in
 ignored `keys/`, outside exports and packages.

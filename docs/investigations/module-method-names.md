@@ -64,7 +64,7 @@ exporter retains a short label for a unique member; repeated names gain an
 owner-qualified alias. The shared method target at CODE `0x03` remains numeric.
 DATA and line metadata use the same labels as CODE. Unknown or ambiguous
 ownership is retained conservatively. Full
-[naming rules](../specs/code-labels.md) include concatenation collision handling
+[naming rules](../specs/assembly/labels.md) include concatenation collision handling
 and reserved generated prefixes.
 
 Unchanged full export/import is byte identical. The signed edit changes exactly

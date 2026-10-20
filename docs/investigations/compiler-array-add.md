@@ -38,7 +38,7 @@ symbol table, and both simulator logs are retained under
 ## Compiler boundary
 
 This runtime probe covers Char-array append and alias visibility. Generic element
-substitution/type checks are specified in [API declarations](../specs/api-declarations.md).
+substitution/type checks are specified in [API declarations](../specs/sdk/declarations.md).
 [Bulk append/removal](compiler-array-mutation.md) has separate runtime evidence.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

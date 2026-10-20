@@ -12,9 +12,9 @@ cargo run -p ciq-package -- verify application.iq
 ```
 
 Extraction destinations must be new. The [library API](src/lib.rs) exposes
-`Package`, `Limits`, and packing functions. See [reading/extraction rules](../../docs/specs/package-reading.md),
-[verification](../../docs/specs/package-verification.md),
-[barrel packing](../../docs/specs/barrel-packing.md),
-[IQ repacking](../../docs/specs/iq-repacking.md), and
-[IQ creation](../../docs/specs/iq-creation.md) for command forms and limits.
+`Package`, `Limits`, and packing functions. See [reading/extraction rules](../../docs/specs/formats/package-reading.md),
+[verification](../../docs/specs/formats/package-verification.md),
+[barrel packing](../../docs/specs/formats/barrel-packing.md),
+[IQ repacking](../../docs/specs/formats/iq-repacking.md), and
+[IQ creation](../../docs/specs/formats/iq-creation.md) for command forms and limits.
 PRG reconstruction/signing remains separate from package operations.

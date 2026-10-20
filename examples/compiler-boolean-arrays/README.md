@@ -14,4 +14,4 @@ cargo run -p ciq-asm -- sign scratch/compiler-boolean-arrays/unsigned.prg scratc
 sh scripts/run-simulator-container.sh --prg scratch/compiler-boolean-arrays/generated.prg
 ```
 
-See the [source contracts](../../docs/specs/compiler-subset.md#boolean-arrays).
+See the [source contracts](../../docs/specs/frontend/containers.md#boolean-arrays).

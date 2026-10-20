@@ -3,7 +3,7 @@
 Date: 2026-10-08. Goal: represent every PRG section in an exported project and
 reconstruct a complete PRG without using the original as a template.
 
-The [section project](../specs/section-project.md) is now implemented.
+The [section project](../specs/formats/section-project.md) is now implemented.
 `ciq-dis all` exports every payload and an ordered `sections.ciq` manifest.
 Ordinary code becomes assembly if the complete stream decodes; unsupported code
 falls back to raw binary. Other sections are raw binary, including

@@ -14,6 +14,6 @@ cargo run -p ciq-asm -- sign scratch/compiler-conditionals/unsigned.prg scratch/
 sh scripts/run-simulator-container.sh --prg scratch/compiler-conditionals/generated.prg
 ```
 
-See [source syntax](../../docs/specs/compiler-subset.md#conditional-expressions),
-[typed IR joins](../../docs/specs/compiler-ir-text.md#expression-joins), and
+See [source syntax](../../docs/specs/frontend/operators.md#conditional-expressions),
+[typed IR joins](../../docs/specs/ir/values.md#expression-joins), and
 [SDK evidence](../../docs/investigations/compiler-conditionals.md).

@@ -23,5 +23,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[source contracts](../../docs/specs/compiler-subset.md) and
+[source contracts](../../docs/specs/frontend/README.md) and
 [SDK evidence](../../docs/investigations/compiler-numeric-unions.md).

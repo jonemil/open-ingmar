@@ -23,5 +23,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[field contracts](../../docs/specs/compiler-classes.md#numeric-alias-fields) and
+[field contracts](../../docs/specs/frontend/fields.md#numeric-alias-fields) and
 [evidence](../../docs/investigations/compiler-numeric-unions.md).

@@ -33,6 +33,12 @@ layer. The plan owns upcoming work; do not maintain completed-step lists or
 extension sequences in other pages. Examples own runnable commands/expected
 output; crate Rustdoc owns concrete API use.
 
+The [specifications index](specs/README.md) groups contracts by frontend, IR,
+lowering, assembly, VM, SDK, build, and container formats. Keep accepted Monkey
+C, IR, and assembly syntax in their respective grammar files. Semantic pages own
+behavior and validation, with links to grammar productions; binary-format pages
+own encoded records rather than another copy of editable assembly syntax.
+
 Give each rule one authoritative home. Other pages may introduce it briefly and
 link there. Shared source/IR validation contracts should be defined once, with
 representation-specific syntax and lowering documented where they belong. Keep
@@ -40,10 +46,10 @@ provisional formats current-only; Git history retains superseded designs.
 
 Specs describe supported profiles, not complete Garmin compatibility. Preserve
 unknowns and distinguish intended requirements from experimentally established
-rules. API/SDK/device versions scope compatibility evidence, not our local format
-history. Investigations are supporting evidence, not required implementation
-references or a parallel feature inventory. They can be retired when the spec,
-tests, and retained provenance adequately capture their value.
+rules. API/SDK/device versions scope compatibility evidence, not our local
+format history. Investigations are supporting evidence, not required
+implementation references or a parallel feature inventory. They can be retired
+when the spec, tests, and retained provenance adequately capture their value.
 
 ## Writing conventions
 
@@ -76,11 +82,10 @@ browser review and local link checking.
 
 Standard Cargo/Rustdoc builds produce API pages under
 `target/doc/<crate_name>/index.html`; see the [root build instructions][build].
-Public types and
-functions document the contracts needed to use each crate. Specifications and architecture
-provide broader project context in the repository; API docs must remain
-useful independently of those pages. Broken intra-doc links are build errors
-through the workspace Rustdoc lint.
+Public types and functions document the contracts needed to use each crate.
+Specifications and architecture provide broader project context in the
+repository; API docs must remain useful independently of those pages. Broken
+intra-doc links are build errors through the workspace Rustdoc lint.
 
 Published crates can use docs.rs for API documentation. Once the repository has
 a public URL, package metadata can identify it without coupling Rustdoc to its

@@ -55,4 +55,4 @@ See the [class contract][spec] and [plan](../plan.md).
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md
 [check]: ../../scripts/README.md#console-specimen-check
-[spec]: ../specs/compiler-classes.md#object-rooted-classes
+[spec]: ../specs/frontend/classes.md#object-rooted-classes

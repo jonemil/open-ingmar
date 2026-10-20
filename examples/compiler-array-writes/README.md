@@ -24,5 +24,5 @@ Char/View writes use the same contract; see the
 [typed-array example](../compiler-typed-array-writes/README.md). Bounds checks
 remain with the runtime;
 an index equal to the length does not append. See the
-[source contract](../../docs/specs/compiler-subset.md#array-element-writes)
+[source contract](../../docs/specs/frontend/statements.md#array-element-writes)
 and [investigation](../../docs/investigations/compiler-array-writes.md).

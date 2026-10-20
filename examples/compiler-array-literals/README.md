@@ -44,8 +44,8 @@ require a concrete context. Other element types await broader Array profiles.
 See the [source contract][source],
 [IR allocation][ir], and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#char-arrays
-[ir]: ../../docs/specs/compiler-ir-text.md#array-allocation
+[source]: ../../docs/specs/frontend/containers.md#char-arrays
+[ir]: ../../docs/specs/ir/containers.md#array-allocation
 [evidence]: ../../docs/investigations/compiler-array-literals.md
 
 [numbers]: ../compiler-number-array-literals/README.md

@@ -43,6 +43,6 @@ generated blank View. The [initial View example][initial] supplies the source
 callback; drawing remains subsequent work. See the [source contract][source]
 and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#native-views
+[source]: ../../docs/specs/sdk/profiles.md#native-views
 [evidence]: ../../docs/investigations/compiler-native-views.md
 [initial]: ../compiler-initial-view/README.md

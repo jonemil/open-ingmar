@@ -25,5 +25,5 @@ additional targets. Parameters and grouped local targets remain unsupported. Sav
 read/binary/assign operations. See the [source contract][source] and
 [investigation][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#local-compound-assignment
+[source]: ../../docs/specs/frontend/statements.md#local-compound-assignment
 [evidence]: ../../docs/investigations/compiler-compound-locals.md

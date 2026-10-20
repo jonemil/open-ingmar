@@ -118,5 +118,5 @@ proven. Array reverse/slice contracts are recorded in the
 
 [example]: ../../examples/compiler-array-reads/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
-[the instruction spec]: ../specs/instructions.md#agetv
+[the instruction spec]: ../specs/vm/instructions.md#agetv
 [plan]: ../plan.md

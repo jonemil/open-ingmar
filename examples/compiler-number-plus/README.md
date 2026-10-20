@@ -24,6 +24,6 @@ under an established null proof. Saved IR retains `.positive` for that check;
 lowering emits its operand without an additional VM operation.
 See the [source contract][source], [IR syntax][ir], and [SDK evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#arithmetic-and-lowering-contract
-[ir]: ../../docs/specs/compiler-ir-text.md
+[source]: ../../docs/specs/frontend/operators.md#expressions-and-operators
+[ir]: ../../docs/specs/ir/model.md
 [evidence]: ../../docs/investigations/compiler-number-plus.md

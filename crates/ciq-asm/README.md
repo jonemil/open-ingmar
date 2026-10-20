@@ -13,6 +13,6 @@ cargo run -p ciq-asm -- verify scratch/signed.prg -y keys/developer_key.der
 
 Output files must be new. Reconstruction preserves signatures unless `-y` is
 supplied. Create section projects with [ciq-dis](../ciq-dis/README.md).
-See [project rules](../../docs/specs/section-project.md),
-[signing](../../docs/specs/developer-signatures.md), and the
+See [project rules](../../docs/specs/formats/section-project.md),
+[signing](../../docs/specs/formats/developer-signatures.md), and the
 [CLI source](src/main.rs) for section/template commands.

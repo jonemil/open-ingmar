@@ -14,6 +14,58 @@ fn options(entry: &str) -> ConsoleApplication {
         entry: entry.into(),
     }
 }
+
+#[test]
+fn console_entry_results_follow_the_checked_println_domain() {
+    for (ty, value) in [
+        ("Number", "1"),
+        ("Long", "1l"),
+        ("Float", "1.5"),
+        ("Double", "1.5d"),
+        ("Numeric", "1"),
+        ("Integer", "1l"),
+        ("Decimal", "1.5"),
+        ("String", "\"hello\""),
+        ("Boolean", "true"),
+        ("Char", "'a'"),
+    ] {
+        let source =
+            format!("using Toybox.Lang as L; function main() as L.{ty} {{ return {value}; }}");
+        let unit = compile_sources(&[&source]).unwrap();
+        let resumed = parse_unit_ir(&unit.to_ir_text()).unwrap();
+        let direct = build_console_application(&unit, &options("main")).unwrap();
+        assert_eq!(
+            direct,
+            build_console_application(&resumed, &options("main")).unwrap()
+        );
+    }
+    for (ty, value) in [
+        ("Object", "1"),
+        ("Object or Null", "null"),
+        ("Symbol", ":token"),
+        ("ByteArray", "[]b"),
+        ("ByteArray or Null", "null"),
+        ("Method or Null", "null"),
+        ("WeakReference", "new L.WeakReference()"),
+        ("Numeric or Null", "null"),
+        ("Integer or Null", "null"),
+        ("Decimal or Null", "null"),
+        ("Array<L.Number>", "[]"),
+        ("Dictionary<L.String,L.Number>", "{}"),
+    ] {
+        let source =
+            format!("using Toybox.Lang as L; function main() as L.{ty} {{ return {value}; }}");
+        let unit = compile_sources(&[&source]).unwrap();
+        let resumed = parse_unit_ir(&unit.to_ir_text()).unwrap();
+        for checked in [&unit, &resumed] {
+            let error = build_console_application(checked, &options("main")).unwrap_err();
+            assert!(
+                error.to_string().contains("non-null scalar or Void"),
+                "{ty}: {error}"
+            );
+        }
+    }
+}
 fn word(bytes: &[u8]) -> u32 {
     u32::from_be_bytes(bytes.try_into().unwrap())
 }

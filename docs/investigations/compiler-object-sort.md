@@ -64,4 +64,4 @@ do not infer that nullable sorting has a safe signature from API acceptance of
 the Array alone.
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html#sort-instance_function
-[spec]: ../specs/compiler-subset.md#source-comparators
+[spec]: ../specs/frontend/containers.md#source-comparators

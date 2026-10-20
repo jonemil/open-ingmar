@@ -36,9 +36,9 @@ For SDK reproduction, reuse minimal-console's manifest/resources and set
 console specimen checker with `compiler-container-fields`. Captures:
 `scratch/check-container-fields/`.
 
-The [field contract](../specs/compiler-classes.md#object-and-container-fields)
+The [field contract](../specs/frontend/fields.md#object-and-container-fields)
 owns typing and initialization; the [Dictionary contract][dictionary] owns
 conditional joins. Nullable whole containers, typed nested containers, source
 inheritance, and broader declaration defaults are outside this evidence.
 
-[dictionary]: ../specs/compiler-subset.md#dictionary-values
+[dictionary]: ../specs/frontend/lang-dictionary.md#dictionary-values

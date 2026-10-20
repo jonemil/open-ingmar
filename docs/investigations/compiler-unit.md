@@ -9,7 +9,7 @@ calling convention. No external implementation was consulted or copied.
 ## Implementation and boundary
 
 Native, saved-unit-IR, and saved-assembly CODE agree. Declaration resolution is
-specified by the [unit contract](../specs/compiler-unit.md); recursive signatures
+specified by the [unit contract](../specs/frontend/declarations.md); recursive signatures
 were accepted structurally, not exercised at runtime here.
 
 ## Simulator observations

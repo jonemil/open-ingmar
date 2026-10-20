@@ -28,7 +28,7 @@ an active simulator alone does not confirm drawing. See the
 [interactive simulator instructions](../../scripts/README.md#use-the-simulator-interactively)
 for a GUI session.
 
-The [class contract](../../docs/specs/compiler-classes.md#source-views-and-drawing)
+The [class contract](../../docs/specs/sdk/callbacks.md#application-callback-profiles)
 requires a zero-argument initializer calling View.initialize first. FONT_MEDIUM
 retains its enum type; replacing it with the numeric literal 3 is rejected.
 Instance fields, input delegates, and portable layout remain subsequent work.

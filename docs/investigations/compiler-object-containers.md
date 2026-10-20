@@ -22,7 +22,7 @@ export and reconstruction using existing scalar framing and container calls.
 This establishes the tested ownership paths, not arbitrary alias-analysis or
 collection timing guarantees.
 
-The [current Object storage contract](../specs/compiler-subset.md#object-containers)
+The [current Object storage contract](../specs/frontend/containers.md#object-containers)
 owns erasure, nullability, invariance, and payload API checks. Typed nested
 parameter recovery, general Object keys, and Object-element sorting are outside
 this evidence. [Lang.format][lang] takes an erased Array; this container work

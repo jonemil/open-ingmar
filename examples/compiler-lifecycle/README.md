@@ -45,7 +45,7 @@ state selects
 accepts the native Dictionary-or-null contract without dictionary access,
 construction, or general object calls. The callbacks' void results are not printed.
 
-See [source callback rules](../../docs/specs/compiler-classes.md#source-startup-callback)
+See [source callback rules](../../docs/specs/sdk/callbacks.md#source-startup-callback)
 and [runtime evidence](../../docs/investigations/compiler-class.md).
 The [Boolean experiment](../../docs/investigations/compiler-booleans.md)
 records stored decisions and loop behavior.

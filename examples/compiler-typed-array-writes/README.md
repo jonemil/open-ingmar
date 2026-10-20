@@ -21,5 +21,5 @@ slots, which retain the native contract rather than exact source-class identity.
 
 See the [shared source contract][source] and [experiment][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#array-element-writes
+[source]: ../../docs/specs/frontend/statements.md#array-element-writes
 [evidence]: ../../docs/investigations/compiler-typed-array-writes.md

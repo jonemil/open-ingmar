@@ -22,5 +22,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the console with [expected.txt](expected.txt). See the
-[field contract](../../docs/specs/compiler-classes.md#object-and-container-fields)
+[field contract](../../docs/specs/frontend/fields.md#object-and-container-fields)
 and [evidence](../../docs/investigations/compiler-container-fields.md).

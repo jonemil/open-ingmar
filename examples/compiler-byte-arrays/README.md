@@ -37,7 +37,7 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[source contract](../../docs/specs/compiler-subset.md#bytearrays) and
+[source contract](../../docs/specs/frontend/lang-bytearray.md#bytearrays) and
 [SDK evidence](../../docs/investigations/byte-arrays.md).
 
 Invalid options/ranges and exception recovery are not executed by this example.

@@ -8,7 +8,7 @@ signed PRG integration, and official simulator execution are verified.
 ## Scope and evidence
 
 Implementation is independent Rust in `ciq-compiler`, against
-[our instruction reference](../specs/instructions.md),
+[our instruction reference](../specs/vm/instructions.md),
 [the earlier local-slot experiment](function-replacement.md), and
 [compiler arithmetic](compiler-arithmetic.md). No reference-project
 implementation was incorporated. SDK/compiler/simulator: 9.2.0; target `fr265`;
@@ -73,7 +73,7 @@ acceptance of all 255 structurally encodable locals.
 
 ## Representation and limits
 
-The [frontend specification](../specs/compiler-subset.md) permits initialized
+The [frontend specification](../specs/frontend/README.md) permits initialized
 `var` declarations before a final return, with earlier-local reads in arithmetic
 expressions. Names are resolved in declaration order. Self/forward/unknown reads
 and duplicate declarations produce source diagnostics. Reassignment,
@@ -90,7 +90,7 @@ previous arithmetic/literal output is unchanged. The current scheduling policy
 relies on pure expressions and absence of reassignment; effectful operations
 require explicit ordering before extension.
 
-[Provisional IR text](../specs/compiler-ir-text.md) adds
+[Provisional IR text](../specs/ir/model.md) adds
 `.local $<local-id> %<value-id>` and `.read %<result-id> $<local-id>`. Both use
 shared validation and optional source spans. No new crate, signing dependency,
 or application metadata generation is introduced. Limits: 255 locals, 1024 total

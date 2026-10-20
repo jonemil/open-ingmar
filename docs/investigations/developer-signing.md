@@ -19,7 +19,7 @@ Research references were inspected under ignored `references/`:
   [SHA-1](https://docs.rs/sha1/), and [SHA-256](https://docs.rs/sha2/).
 
 The Rust implementation was written independently against
-[our local specification](../specs/developer-signatures.md). It does not depend
+[our local specification](../specs/formats/developer-signatures.md). It does not depend
 on either research checkout. Cryptographic primitives use `rsa` 0.9.10, `sha1`
 0.10.7, `sha2` 0.10.9, and `rand_core` 0.6.4 with OS randomness. These are the
 workspace's first external Rust dependencies; format parsing remains

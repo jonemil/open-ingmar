@@ -104,6 +104,6 @@ null/object/array and native-call operations required by AppBase/View lifecycle
 bodies. Void return support does not itself provide class syntax or project
 configuration.
 
-[source]: ../specs/compiler-subset.md#void-functions-and-statement-calls
-[ir]: ../specs/compiler-ir-text.md#void-returns-and-statement-calls
+[source]: ../specs/frontend/statements.md#void-functions-and-statement-calls
+[ir]: ../specs/ir/calls.md#void-returns-and-statement-calls
 [example]: ../../examples/compiler-void/README.md

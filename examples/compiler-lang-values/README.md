@@ -37,10 +37,10 @@ true
 discarded
 ```
 
-See [function contracts](../../docs/specs/compiler-subset.md#function-type-contracts)
+See [function contracts](../../docs/specs/frontend/types.md#types-and-value-contracts)
 for annotation syntax and defaults, [unit validation][unit] for call checking,
 and [runtime evidence][evidence] for the SDK comparison. General dynamic type
 inference, nullable user results, and other Lang types remain unsupported.
 
-[unit]: ../../docs/specs/compiler-unit.md
+[unit]: ../../docs/specs/frontend/declarations.md
 [evidence]: ../../docs/investigations/compiler-lang-values.md

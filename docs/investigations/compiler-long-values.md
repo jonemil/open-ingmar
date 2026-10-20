@@ -98,7 +98,7 @@ in source and saved-IR tests, including Long's own `equals` since 1.3.0 rather
 than the inherited Object 1.0.0 declaration.
 
 Float/Double conversions and Long container/field storage remain outside this
-probe. See the [current contract](../specs/compiler-subset.md#long-values).
+probe. See the [current contract](../specs/frontend/numeric-values.md#long-values).
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html#weak-instance_function
 [api]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Long.html

@@ -13,8 +13,8 @@ watch-app project and does not have a Jungle/manifest.
 explicit integration with Hello World's application scaffold, own-key signing,
 and simulator runs for `41` and a changed source returning `42`.
 
-See [the supported grammar](../../docs/specs/compiler-subset.md) and
-[IR design](../../docs/specs/compiler-ir-text.md#semantic-model). Keep generated assembly and
+See [the supported grammar](../../docs/specs/frontend/README.md) and
+[IR design](../../docs/specs/ir/model.md#semantic-model). Keep generated assembly and
 binaries under ignored `scratch/`.
 
 You can also emit semantic IR with `--emit ir`, resume it with `--from ir`, or
@@ -89,7 +89,7 @@ not accept it yet. The [control-flow investigation][control-flow] explains
 scaffold integration and simulator-verified binary edits. Explicit exceptions
 remain unsupported by our frontend.
 
-[ref-complete-stop-resume-commands]: ../../docs/specs/compiler-ir-text.md#command-line-stages
+[ref-complete-stop-resume-commands]: ../../docs/specs/build/compiler-cli.md#compiler-cli-and-saved-stages
 
 [ref-the-arithmetic-experiment]: ../../docs/investigations/compiler-arithmetic.md
 [ref-the-parameter-argument-experiment]: ../../docs/investigations/compiler-arguments.md

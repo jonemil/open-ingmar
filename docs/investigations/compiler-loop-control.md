@@ -9,8 +9,8 @@ The experiment reuses the [control-flow scaffold][scaffold] and existing
 ## Implementation
 
 `break` and `continue` lower to existing jumps; there is no new opcode. The
-[source rules](../specs/compiler-subset.md#loop-control) and
-[IR graph rules](../specs/compiler-ir-text.md#cyclic-control-flow) define target
+[source rules](../specs/frontend/statements.md#loop-control) and
+[IR graph rules](../specs/ir/control-flow.md#cyclic-control-flow) define target
 selection, joins, and initialization.
 
 ## Simulator observations
@@ -102,6 +102,6 @@ establish loop termination or full Monkey C compatibility.
 
 [scaffold]: control-flow.md#reproduction
 [loops]: compiler-loops.md
-[source]: ../specs/compiler-subset.md#loop-control
-[design]: ../specs/compiler-ir-text.md#cyclic-control-flow
+[source]: ../specs/frontend/statements.md#loop-control
+[design]: ../specs/ir/control-flow.md#cyclic-control-flow
 [integration]: compiler-nested-conditions.md#reproduction

@@ -147,7 +147,7 @@ wrong-class assertion failure behavior was not executed.
 define seven NumberFormat values, two Endian values, and Numeric's four scalar
 alternatives. ByteArray's two numeric methods require API 3.1.0, with default
 offset zero and little endian. Current value/option contracts are in the
-[source specification](../specs/compiler-subset.md#bytearrays).
+[source specification](../specs/frontend/lang-bytearray.md#bytearrays).
 
 **Experimentally observed:** all seven formats round-trip with offset 1 and
 big endian. FLOAT prints `1.500000` and tests as Float. UINT32 with

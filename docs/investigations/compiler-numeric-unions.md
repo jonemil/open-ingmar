@@ -25,7 +25,7 @@ The generated application and SDK application match all
 [96 expected console lines](../../examples/compiler-numeric-unions/expected.txt).
 Both PRGs support structured CODE/DATA export and reconstruction; generated
 source, saved IR, and assembly paths produce the same unsigned application.
-The compiler's [current alias contracts](../specs/compiler-subset.md#numeric-values)
+The compiler's [current alias contracts](../specs/frontend/numeric-values.md#numeric-values)
 remain bounded; this specimen does not establish arbitrary union storage or
 runtime error behavior.
 
@@ -50,7 +50,7 @@ retain independent values. SDK and generated applications match all
 Structured export/reconstruction works for both applications with existing
 field opcodes and DATA records. Generated fields use Null metadata slots and
 source constructor writes; the compiler does not require the SDK's exact class
-layout. Current contracts are in the [field specification](../specs/compiler-classes.md#numeric-alias-fields).
+layout. Current contracts are in the [field specification](../specs/frontend/fields.md#numeric-alias-fields).
 
 For SDK reproduction, reuse the minimal-console manifest/resources with
 `../../examples/compiler-numeric-fields` as the source path from
@@ -78,7 +78,7 @@ SDK and generated applications match all
 [69 console lines](../../examples/compiler-numeric-containers/expected.txt),
 including ordered effects in computed Array and Dictionary literals. Both PRGs
 support structured CODE/DATA export/reconstruction using existing scalar record
-framing. See the [container contracts](../specs/compiler-subset.md#numeric-alias-containers).
+framing. See the [container contracts](../specs/frontend/numeric-values.md#numeric-alias-containers).
 For SDK reproduction, reuse the minimal-console manifest/resources with
 `../../examples/compiler-numeric-containers` as the source path from
 `scratch/compiler-numeric-containers/monkey.jungle`; the example owns its AppBase

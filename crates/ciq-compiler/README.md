@@ -19,15 +19,15 @@ compiling, signing, and running a complete application.
 `api::core()` exposes a bounded catalogue of core Lang types and native
 contracts with inherited lookup and introduction-level checks. It does not
 enable arbitrary API calls or perform complete target availability validation.
-See [API declaration design](../../docs/specs/api-declarations.md).
+See [API declarations](../../docs/specs/sdk/declarations.md).
 
 Supply `--target-api 1.0.0 --min-api 1.0.0` for explicit unguarded API-level
 checks on source or IR inputs. Library entry points with `_with_api` accept an
 `api::ApiContext`; typed models expose `validate_api`. See
-[input rules](../../docs/specs/compiler-ir-text.md#api-context-inputs).
+[input rules](../../docs/specs/sdk/context.md#api-checking-inputs).
 
 Start with `compile`, `compile_sources`, `Function`, and `CompilationUnit` in
-the [library API](src/lib.rs). See [compiler IR specification](../../docs/specs/compiler-ir-text.md#semantic-model),
-[source/CLI rules](../../docs/specs/compiler-subset.md),
-[unit rules](../../docs/specs/compiler-unit.md), and
-[IR syntax](../../docs/specs/compiler-ir-text.md).
+the [library API](src/lib.rs). See [compiler IR specification](../../docs/specs/ir/model.md#semantic-model),
+[source/CLI rules](../../docs/specs/frontend/README.md),
+[unit rules](../../docs/specs/frontend/declarations.md), and
+[IR syntax](../../docs/specs/ir/grammar.md).

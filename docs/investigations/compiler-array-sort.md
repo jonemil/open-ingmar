@@ -33,4 +33,4 @@ behavior. See the [current contract][spec],
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [example]: ../../examples/compiler-array-sort/README.md
 [check]: ../../scripts/README.md#console-specimen-check
-[spec]: ../specs/compiler-subset.md#default-array-sorting
+[spec]: ../specs/frontend/containers.md#default-array-sorting

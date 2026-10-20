@@ -9,10 +9,10 @@ and `-40` are verified.
 ## Scope and controlled observations
 
 SDK/compiler/simulator 9.2.0; `fr265`; `-O 0`. Independent Rust implementation
-against [our instruction reference](../specs/instructions.md),
+against [our instruction reference](../specs/vm/instructions.md),
 [local slots](compiler-locals.md), and [zero-argument calls](compiler-calls.md),
 without incorporating external implementation code. The
-[grammar/lowering contract](../specs/compiler-subset.md) was extended before
+[grammar/lowering contract](../specs/frontend/README.md) was extended before
 implementation.
 
 Controlled SDK Hello World probe:
@@ -112,8 +112,8 @@ independent function bodies; it does not implement module/project generation or
 Native/text checks covered parameter/local slot mapping, repeated reads, nested
 argument order, malformed signatures, binding failures, and resource limits.
 The test evaluator uses synthetic callees/context markers, not a full VM.
-Current contracts are in [source](../specs/compiler-subset.md) and
-[IR](../specs/compiler-ir-text.md#parameter-metadata-and-reads).
+Current contracts are in [source](../specs/frontend/README.md) and
+[IR](../specs/ir/values.md#parameter-metadata-and-reads).
 
 ## Reproduction
 

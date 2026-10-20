@@ -20,7 +20,7 @@ serializing the table and verifying exact equality with its payload.
 Unrepresentable or ambiguous tables retain raw payloads.
 
 This implementation follows
-[the symbol assembly specification](../specs/symbol-assembly.md). The allocation
+[the symbol assembly specification](../specs/assembly/symbols.md). The allocation
 policy is a local design choice, not a claim about Garmin's compiler. Numeric
 IDs stay mandatory; API binding and allocation of application-local IDs are not
 inferred from placement freedom. The manifest selects authoritative `symbols`

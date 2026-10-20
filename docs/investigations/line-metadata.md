@@ -14,7 +14,7 @@ entry framing and DEBUG string offsets, and showed which method/line PCs move
 when `probe()` grows. Their source attribution and pinned external references
 remain in that investigation and [the bootstrap](rust-bootstrap.md). This
 implementation is independently written Rust using
-[our metadata specification](../specs/line-numbers-and-debug.md), without
+[our metadata specification](../specs/formats/line-numbers-and-debug.md), without
 external repository dependencies.
 
 Experimentally observed here:

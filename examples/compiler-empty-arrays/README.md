@@ -61,5 +61,5 @@ same contexts but requires nullable elements, including when size is zero.
 See the
 [source contract][source] and [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#empty-array-literals
+[source]: ../../docs/specs/frontend/containers.md#empty-array-literals
 [evidence]: ../../docs/investigations/compiler-empty-arrays.md

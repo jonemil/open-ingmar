@@ -10,8 +10,8 @@ consulted or copied.
 ## Implementation and scope
 
 Test/body/exit graph construction and fixed-point initialization follow the
-[IR rules](../specs/compiler-ir-text.md#cyclic-control-flow); source scope follows
-[the while contract](../specs/compiler-subset.md#while-loops).
+[IR rules](../specs/ir/control-flow.md#cyclic-control-flow); source scope follows
+[the while contract](../specs/frontend/statements.md#while-loops).
 
 ## Simulator observations
 
@@ -105,7 +105,7 @@ Neither termination nor a nonzero iteration count is established.
 
 [assignments]: compiler-assignments.md
 [scaffold]: control-flow.md#reproduction
-[design]: ../specs/compiler-ir-text.md#cyclic-control-flow
-[source]: ../specs/compiler-subset.md#while-loops
-[ir]: ../specs/compiler-ir-text.md#cyclic-control-flow
+[design]: ../specs/ir/control-flow.md#cyclic-control-flow
+[source]: ../specs/frontend/statements.md#while-loops
+[ir]: ../specs/ir/control-flow.md#cyclic-control-flow
 [integration]: compiler-nested-conditions.md#reproduction

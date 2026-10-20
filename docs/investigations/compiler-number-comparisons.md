@@ -28,7 +28,7 @@ instructions:
 
 Opcode names/order were cross-checked against the previously pinned
 [optimizer opcode enum][enum]. Our implementation uses this repository's
-[comparison instruction reference](../specs/instructions.md#lt--lte--gte--ne).
+[comparison instruction reference](../specs/vm/instructions.md#lt--lte--gte--ne).
 No external implementation code was copied.
 
 Full SDK CODE decoding stops at CODE+`0x81` in parsed(), so the exporter keeps

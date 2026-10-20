@@ -1,9 +1,9 @@
 # Own-key IQ creation and edited program execution
 
 Date: 2026-10-10. Scope: stage 5 of
-[the package plan](../specs/package-reading.md), limited to the documented modern
+[the package plan](../specs/formats/package-reading.md), limited to the documented modern
 developer profile. Implementation follows our
-[creation rules](../specs/iq-creation.md), using the existing signing crate and
+[creation rules](../specs/formats/iq-creation.md), using the existing signing crate and
 7z writer. No dependencies changed. Garmin SDK/simulator 9.2.0 and device
 `fr265` supply the reference package and runtime oracle.
 

@@ -7,7 +7,7 @@ simulator is verified for `41` and `42`.
 
 ## Inputs and evidence
 
-The [instruction specifications](../specs/instructions.md) and
+The [instruction specifications](../specs/vm/instructions.md) and
 [arithmetic replacement](function-replacement.md) supplied the calling/encoding
 hypotheses. The experiment checks a context-independent global return, not a
 complete calling convention. Current IR and source contracts belong in the specs.

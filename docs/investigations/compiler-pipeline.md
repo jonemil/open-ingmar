@@ -8,8 +8,8 @@ scaffold; it did not test independent application generation.
 All 128 accepted literal inputs agreed across native/text models and CODE.
 Alternate value IDs/spans, malformed IR/assembly, external bindings, CLI stage
 resumption, and output preservation were checked. Shared-model responsibilities
-and current invariants are specified in [assembly](../specs/assembly.md) and
-[IR](../specs/compiler-ir-text.md).
+and current invariants are specified in [assembly](../specs/assembly/model.md) and
+[IR](../specs/ir/model.md).
 
 ## Reproduction and compatibility checks
 

@@ -4,7 +4,7 @@ Date: 2026-10-14. Environment: SDK 9.2.0, `fr265`, SDK specimens built with
 `-O 0`. Question: where do source → IR → VM assembly paths substitute workaround
 sequences for established VM instructions?
 
-Current semantic/lowering contracts are in [the IR spec](../specs/compiler-ir-text.md).
+Current semantic/lowering contracts are in [the IR spec](../specs/ir/model.md).
 This review compares controlled SDK/generated behavior; it does not require
 identical instruction sequences or layout.
 

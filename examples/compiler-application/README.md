@@ -45,5 +45,5 @@ module metadata. Source and saved unit IR produce identical unsigned PRGs with
 the same application options. See [CLI/profile rules][profile] and
 [runtime evidence][evidence]. Signing keys remain under ignored `keys/`.
 
-[profile]: ../../docs/specs/console-application.md
+[profile]: ../../docs/specs/build/application.md
 [evidence]: ../../docs/investigations/application-bootstrap.md

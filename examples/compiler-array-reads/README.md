@@ -46,5 +46,5 @@ other element types beyond [Number](../compiler-number-arrays/README.md) remain
 unsupported. See the [source contract][source] and
 [evidence][evidence].
 
-[source]: ../../docs/specs/compiler-subset.md#char-arrays
+[source]: ../../docs/specs/frontend/containers.md#char-arrays
 [evidence]: ../../docs/investigations/compiler-array-reads.md

@@ -5,7 +5,7 @@ our Rust tools mean, and which parts are actually established?
 
 ## Scope and sources
 
-The result is the [28-entry instruction reference](../specs/instructions.md). No
+The result is the [28-entry instruction reference](../specs/vm/instructions.md). No
 VM implementation or new opcode support was added. External sources informed
 independent descriptions; no source code was copied into the implementation.
 

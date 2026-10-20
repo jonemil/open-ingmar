@@ -60,7 +60,7 @@ Reproduce with the example's SDK build and the
 [console specimen check](../../scripts/README.md#console-specimen-check).
 Structured export/reassembly checks both PRGs without CODE/DATA raw fallback.
 The executable contracts live in the
-[source profile](../specs/compiler-subset.md#dictionary-values).
+[source profile](../specs/frontend/lang-dictionary.md#dictionary-values).
 
 Date: 2026-10-15. SDK 9.2.0, `fr265`, debug, `-O 0`.
 Question: how are Dictionaries created, accessed, and represented in bytecode?
@@ -108,7 +108,7 @@ After project assembly and own-key signing, the simulator prints
 `0, true, 41, null, 3, true, null, false, 2`, one per line. The other output is
 unchanged. Artifacts are `scratch/dictionary-constants/edited*`. This establishes
 editable constant contents, not fresh-versus-shared repeated-load behavior.
-The [constant format](../specs/data-dictionaries.md) records the verified framing.
+The [constant format](../specs/formats/data-dictionaries.md) records the verified framing.
 
 ## Compiler specimen
 
@@ -147,8 +147,8 @@ through the existing indexed and member-call opcodes; no additional opcode or
 DATA profile is needed for these operations.
 
 Current executable contracts are in the
-[source profile](../specs/compiler-subset.md#dictionary-values) and
-[IR allocation format](../specs/compiler-ir-text.md#dictionary-allocation).
+[source profile](../specs/frontend/lang-dictionary.md#dictionary-values) and
+[IR allocation format](../specs/ir/containers.md#ir-container-operations).
 
 ### String conversion
 

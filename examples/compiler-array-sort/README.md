@@ -17,4 +17,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-array-sort/generate
 Sorting requires API 5.0.0 and returns Void. Nullable/object elements remain
 unsupported. [Source comparators](../compiler-comparators/README.md) exercise
 custom ordering through checked source classes. See the
-[source contract](../../docs/specs/compiler-subset.md#default-array-sorting).
+[source contract](../../docs/specs/frontend/containers.md#default-array-sorting).

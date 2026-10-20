@@ -13,7 +13,7 @@ Additional inspected optimizer locations: `src/readprg/data.ts` (`fixupData`),
 `header.ts`, `linenum.ts`, and `exceptions.ts`. Plugin `doc/prg.md` supplies the
 header, entry-point, and exception layouts. These remain research references,
 not runtime dependencies; all new format implementation is independent Rust
-against [our specification](../specs/data-classes.md).
+against [our specification](../specs/formats/data-classes.md).
 
 Implemented `.class` / `.field` / `.endclass` blocks in the shared DATA source.
 They preserve complete keys, explicit/embedded types, ordered duplicate fields,

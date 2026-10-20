@@ -40,7 +40,7 @@ true
 
 The probe's CODE/DATA export structurally, its complete PRG reconstructs
 byte-for-byte with preserved signing material, and its repeat export matches
-the original export. The [instruction reference](../specs/instructions.md#invv)
+the original export. The [instruction reference](../specs/vm/instructions.md#invv)
 defines the supported encoding and observed type-dependent behavior.
 
 Our compiler already emits XOR with -1 for Number complement and comparison

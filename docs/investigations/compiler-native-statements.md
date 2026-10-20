@@ -75,5 +75,5 @@ General native Void dispatch remains future work in [the plan][plan].
 
 [example]: ../../examples/compiler-native-statements/README.md
 [wrapper]: compiler-boolean-negation.md#reference-and-specimen
-[ir]: ../specs/compiler-ir-text.md#native-value-calls
+[ir]: ../specs/ir/calls.md#native-value-calls
 [plan]: ../plan.md

@@ -10,7 +10,7 @@ as alternatives to the symbolic logical operators. It describes Number/Long `!`
 as complement, and broader logical behavior for non-Boolean operands.
 
 Comparing its arithmetic, relational, logical, bitwise, assignment, and ternary
-operator tables with our [source contract](../specs/compiler-subset.md) identified
+operator tables with our [source contract](../specs/frontend/README.md) identified
 missing keyword spellings and Number `!`. Existing type restrictions remain
 intentional; this review is not an exhaustive operand-pair compatibility claim.
 Wider numeric combinations have [separate evidence](compiler-wide-operators.md).

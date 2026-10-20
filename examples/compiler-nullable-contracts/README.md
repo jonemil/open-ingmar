@@ -27,6 +27,6 @@ exercise guarded arithmetic/method calls, pass-through results, and Null writes.
 Conditional results, retry loops, repeated guards, and local assignments retain
 their nullable contracts.
 
-See [source contracts](../../docs/specs/compiler-subset.md#function-type-contracts),
-[saved IR](../../docs/specs/compiler-ir-text.md#nullable-user-signatures), and
+See [source contracts](../../docs/specs/frontend/types.md#types-and-value-contracts),
+[saved IR](../../docs/specs/ir/values.md#nullable-user-signatures), and
 [experiment](../../docs/investigations/compiler-nullable-contracts.md).

@@ -59,5 +59,5 @@ argument
 true
 ```
 
-See [accepted contracts](../../docs/specs/compiler-subset.md#native-value-calls)
+See [accepted contracts](../../docs/specs/frontend/lang-values.md#native-value-calls)
 and the [full method review](../../docs/investigations/compiler-string-methods.md).

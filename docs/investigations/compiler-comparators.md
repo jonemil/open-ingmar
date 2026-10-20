@@ -250,9 +250,9 @@ or a shared ordering domain for arbitrary Comparable mixtures.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef
-[api]: ../specs/api-declarations.md#declaration-model
+[api]: ../specs/sdk/declarations.md#declaration-model
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html
 [example]: ../../examples/compiler-comparators/README.md
 [check]: ../../scripts/README.md#console-specimen-check
-[spec]: ../specs/compiler-subset.md#source-comparators
+[spec]: ../specs/frontend/containers.md#source-comparators
 [plan]: ../plan.md

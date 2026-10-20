@@ -24,5 +24,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[container contracts](../../docs/specs/compiler-subset.md#object-containers) and
+[container contracts](../../docs/specs/frontend/containers.md#object-containers) and
 [evidence](../../docs/investigations/compiler-object-containers.md).

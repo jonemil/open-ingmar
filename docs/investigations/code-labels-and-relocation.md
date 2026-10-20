@@ -8,7 +8,7 @@ and screen captures were inspected by the agent.
 
 ## Shared labels
 
-Independent Rust implements [CODE labels](../specs/code-labels.md) and
+Independent Rust implements [CODE labels](../specs/assembly/labels.md) and
 `value=code:label` method references. Labels share existing symbol/class/string
 naming conventions but a separate namespace. Full export replaces verified
 method targets with label references and emits the matching label before its
@@ -77,7 +77,7 @@ filename and function-name field points to a DEBUG record boundary. Controlled
 `probe` entries in baseline use filename offset 107 and function-name offset
 254, agreeing with the decoded source path and `probe` string. These are DEBUG
 offsets, not SYMBOLS IDs.
-[Local metadata specification](../specs/line-numbers-and-debug.md) records this
+[Local metadata specification](../specs/formats/line-numbers-and-debug.md) records this
 distinction.
 
 HEADER_VERSIONED, ENTRY_POINTS, IMPORTS, PERMISSIONS, EXCEPTIONS, SYMBOLS, and

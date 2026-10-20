@@ -40,7 +40,7 @@ View construction runs during AppBase initialization, before onStart. The contro
 adds 3 to its retained View's counter; drawing callbacks increment it further.
 Final displayed values depend on session timing. Inspect the screen and log.
 
-The [reference-field contract](../../docs/specs/compiler-classes.md#source-reference-fields)
+The [reference-field contract](../../docs/specs/frontend/fields.md#source-reference-fields)
 requires a straight-line initialization prefix and exact non-null source classes.
 The controller currently extends View to use the supported native class profile;
 it is not installed as a UI delegate. InputDelegate support is the next step.

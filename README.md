@@ -11,7 +11,7 @@ This is an independent project, unaffiliated with Garmin.
 The compiler uses semantic IR and symbolic assembly to generate complete console
 applications. Source classes, module/self calls, numeric operations, string
 literals/printing, locals, conditions, and loops are supported within the
-[documented source subset](docs/specs/compiler-subset.md). General project/Jungle
+[documented source subset](docs/specs/frontend/README.md). General project/Jungle
 builds, resource generation, and broader application profiles remain planned.
 See [the plan](docs/plan.md) and [architecture](docs/architecture.md).
 
@@ -38,8 +38,8 @@ cargo run -p ciq-package -- list application.iq
 ```
 
 Cargo builds each tool before running it. The examples below link to full
-workflows; [architecture](docs/architecture.md)
-describes library responsibilities and dependencies.
+workflows; [architecture](docs/architecture.md) describes library
+responsibilities and dependencies.
 
 ## Build and check
 
@@ -65,8 +65,8 @@ local developer key and run it in the official simulator. The example documents
 commands, expected output, and current lifecycle/View restrictions.
 
 Readable IR and assembly provide inspection and editing points in the compiler
-pipeline. See the [IR specification](docs/specs/compiler-ir-text.md) for its
-semantic model and saved text.
+pipeline. See the [IR specification](docs/specs/ir/model.md) for its semantic
+model and saved text.
 
 Browse [the examples](examples/README.md) for native calls, core Lang objects,
 operators, arrays, and source classes. Each example owns its build commands and
@@ -82,11 +82,11 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The [section project](docs/specs/section-project.md) contains an ordered manifest,
-assembly for supported code/metadata, and raw payloads for unsupported sections.
-Labels bind supported method, line, branch, and exception references; general
-relocation and opaque-reference fixups are incomplete. Equal lengths alone do
-not establish runtime validity.
+The [section project](docs/specs/formats/section-project.md) contains an ordered
+manifest, assembly for supported code/metadata, and raw payloads for unsupported
+sections. Labels bind supported method, line, branch, and exception references;
+general relocation and opaque-reference fixups are incomplete. Equal lengths
+alone do not establish runtime validity.
 
 Without `-y`, reconstruction preserves signing material. Supply your own key to
 replace signatures after reconstruction:
@@ -96,65 +96,55 @@ cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-signed.p
 cargo run -p ciq-asm -- verify scratch/minimal-signed.prg -y keys/developer_key.der
 ```
 
-Standalone `sign` and `verify` use the same [signing profile](docs/specs/developer-signatures.md).
-Inspection commands and editable section forms are documented in the specs below.
+Standalone `sign` and `verify` use the same [signing
+profile](docs/specs/formats/developer-signatures.md). Inspection commands and
+editable section forms are documented in the specs below.
 
 ## Packages and reference tools
 
 `ciq-package` lists, extracts, verifies, and packs supported barrel/IQ profiles.
 Extraction preserves ordinary member bytes, raw manifests, and unknown files,
-with path and resource limits. See [reading](docs/specs/package-reading.md),
-[barrel packing](docs/specs/barrel-packing.md),
-[IQ repacking](docs/specs/iq-repacking.md), and
-[own-key IQ creation](docs/specs/iq-creation.md).
+with path and resource limits. See
+[reading](docs/specs/formats/package-reading.md),
+[barrel packing](docs/specs/formats/barrel-packing.md),
+[IQ repacking](docs/specs/formats/iq-repacking.md), and
+[own-key IQ creation](docs/specs/formats/iq-creation.md).
 
 Use [SDK support scripts](scripts/README.md) for device downloads, reference
 builds, and simulator sessions. Simulator execution establishes runtime
-compatibility separately from successful parsing, encoding, or verification.
-The reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
+compatibility separately from successful parsing, encoding, or verification. The
+reference environment is SDK 9.2.0 and Forerunner 265 (`fr265`).
 
 ## Documentation
 
-- [Working instructions](AGENTS.md)
-- [Documentation conventions](docs/README.md)
-- [Plan](docs/plan.md)
-- [Architecture](docs/architecture.md)
-- [Research conventions](docs/research.md)
-- [Official Garmin reference reading map](docs/investigations/official-garmin-documentation.md)
-- [Developer signing](docs/specs/developer-signatures.md)
-- [Instruction reference](docs/specs/instructions.md)
-- [Symbol assembly and named operands](docs/specs/symbol-assembly.md)
-- [Shared CODE labels](docs/specs/code-labels.md)
-- [DEBUG strings and line mappings](docs/specs/line-numbers-and-debug.md)
-- [DATA class/module inspection](docs/specs/data-classes.md)
-- [DATA string assembly](docs/specs/data-strings.md)
-- [DATA scalar arrays](docs/specs/data-arrays.md)
-- [Resource string inspection](docs/specs/resources.md)
-- [Barrel package profile](docs/specs/barrel-package.md)
-- [IQ package/signing profile](docs/specs/iq-package.md)
-- [IQ verification commands and reports](docs/specs/package-verification.md)
-- [Package operations](docs/specs/package-reading.md)
-- [Monkey C source contracts](docs/specs/compiler-subset.md)
-- [Semantic IR and text](docs/specs/compiler-ir-text.md)
-- [API declarations](docs/specs/api-declarations.md)
-- [Assembly model and layout](docs/specs/assembly.md)
-- [Future project builds and Jungle support](docs/specs/project-builds.md)
-- [Investigation index](docs/investigations/README.md)
-- [Monkey C examples](examples/README.md)
-- [SDK support scripts](scripts/README.md)
+Start with [the specifications index](docs/specs/README.md) for the toolchain's
+contracts and stage boundaries.
+
+- [Plan](docs/plan.md) and [architecture](docs/architecture.md).
+- [Monkey C frontend](docs/specs/frontend/README.md), including core Lang.
+- [Semantic IR](docs/specs/ir/README.md), [lowering](docs/specs/lowering/README.md),
+  [assembly](docs/specs/assembly/README.md), and [VM bytecode](docs/specs/vm/README.md).
+- [SDK declarations/profiles](docs/specs/sdk/README.md),
+  [builds](docs/specs/build/README.md), and [container formats](docs/specs/formats/README.md).
+- [Examples](examples/README.md) and [support scripts](scripts/README.md).
+- [Investigation index](docs/investigations/README.md) and
+  [official Garmin reading map](docs/investigations/official-garmin-documentation.md).
+- [Working instructions](AGENTS.md), [documentation conventions](docs/README.md),
+  and [research conventions](docs/research.md).
 
 ## Local files and version control
 
 Keep developer keys in ignored `keys/`; scripts default to
-`keys/developer_key.der`. Download reference projects into ignored `references/`.
-Keep SDK distributions, device data, credentials, caches, generated binaries,
-and captures local; temporary experiment output belongs in `scratch/`.
+`keys/developer_key.der`. Download reference projects into ignored
+`references/`. Keep SDK distributions, device data, credentials, caches,
+generated binaries, and captures local; temporary experiment output belongs in
+`scratch/`.
 
 Version control includes our source, scripts, tests, documentation, container
 recipe, and independently created example resources. Documentation retains
-reproduction details without requiring local artifacts to exist. Review
-`git status --short --untracked-files=all` and `git diff --cached` before
-committing; ignore rules do not remove files already tracked by Git.
+reproduction details without requiring local artifacts to exist. Review `git
+status --short --untracked-files=all` and `git diff --cached` before committing;
+ignore rules do not remove files already tracked by Git.
 
 ## License and contributions
 

@@ -335,7 +335,7 @@ The script has offline verification using synthetic packages and mocked network
 responses. A real account login, Garmin's current browser redirect behavior, and
 authenticated downloads remain unverified. HTTP 401/403 or a login timeout will
 be reported without printing token responses. Protocol details are in
-[the local specification](../docs/specs/device-download.md).
+[the local specification](../docs/specs/build/device-download.md).
 
 ## Barrel builds and alternate Jungles
 
