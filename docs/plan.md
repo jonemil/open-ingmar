@@ -241,8 +241,7 @@ remain required core work. The frontend grammar records current acceptance.
   `instanceof`, and lexical `as` casts with their distinct contracts. Preserve SDK-rejected Char
   operations and expression updates as diagnosed compatibility restrictions;
   verify other forms rather than importing C semantics.
-- **Control flow and scopes:** add standalone empty statements. Keep bodies
-  braced following the SDK rejection probes. Preserve enclosing
+- **Control flow and scopes:** preserve enclosing
   lexical refinements when checking unexecuted loop headers, without adding dead
   edges to executable CFG proofs. Add `switch`, value
   and `case instanceof` matching,

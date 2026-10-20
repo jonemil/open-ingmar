@@ -128,6 +128,10 @@ updates](../frontend/README.md#increment-and-decrement).
 
 ### Local operations
 
+Declaration lists become sequential local initializers in the existing scope.
+Additional statement terminators are consumed during source parsing; they do
+not introduce IR operations, VM instructions, or extra frame slots.
+
 Lowering uses `lgetv <slot>; npush; lputv <slot>`: the value remains on the
 expression stack while the slot releases its reference. Source-generated hidden
 reference temporaries use this transfer on their final read; source locals keep

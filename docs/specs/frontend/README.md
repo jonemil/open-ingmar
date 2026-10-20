@@ -1432,7 +1432,13 @@ See the [example](../../../examples/compiler-conditionals/README.md) and
 ### Local declarations and reads
 
 `var <identifier> = <expression>;` initializes a local with a supported value
-contract. Expressions may read it repeatedly after initialization. Duplicate
+contract. A declaration list shares one `var`, as in `var a = 1, b = a + 2;`.
+Each initializer executes and binds its name before the next is checked or
+executed. Items may have different supported value types; each retains its own
+local identity and fixed type. Calls, container literals, and their internal
+commas remain ordinary initializer expressions. The whole list belongs to the
+current scope; it creates no nested scope. Expressions may read locals repeatedly
+after initialization. Duplicate
 declarations in one scope, shadowing an enclosing local or parameter,
 self/forward/unknown reads and uninitialized declarations are rejected. An arm's
 locals are visible within that arm and nested arms, but not in a sibling or
@@ -1483,6 +1489,14 @@ rules](#short-circuit-expressions).
 [VM lowering](../lowering/README.md#control-flow).
 
 ### Statement arms and joins
+
+Declarations, assignments, updates, calls, and the ending of `do/while` accept
+one or more semicolons, including comments/whitespace between them. Standalone
+scoped blocks may optionally have the same trailing terminators. Additional
+terminators add no IR operation, scope, or effect. This is not a general empty
+statement: a leading semicolon or a semicolon after an `if`/`while` body is
+rejected. Return/break/continue still require exactly one semicolon, as do `for`
+header separators. See the connected [statement grammar](grammar.md#statements).
 
 Conditions may appear between statements; combined conditional/loop/scoped-block
 nesting is limited to 64 levels, counting each `else if` link as a nested
@@ -1641,8 +1655,8 @@ clause. Existing fixed-type and no-shadowing rules apply; a name can be reused
 after its loop scope ends.
 
 `do { body } while (condition);` executes its body before testing. The condition
-must be Boolean and cannot refer to body-local declarations. Braces and the
-trailing semicolon are required. `for` conditions, when present, also require
+must be Boolean and cannot refer to body-local declarations. Braces and at least
+one trailing semicolon are required. `for` conditions, when present, also require
 Boolean. No loop form proves constant condition outcomes or imposes an iteration
 limit.
 

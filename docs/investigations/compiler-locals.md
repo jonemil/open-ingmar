@@ -5,6 +5,41 @@ through repeated reads, while keeping semantic local identities separate from VM
 slots? Result: SDK slot comparison, native/text pipeline equivalence, own-key
 signed PRG integration, and official simulator execution are verified.
 
+## Declaration lists and extra terminators
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Authored probes in AppBase.onStart
+accept `var a=1,b=a+2;`: later declarations observe earlier initialized names.
+Additional terminator probes distinguish these forms:
+
+| Form | SDK result |
+|---|---|
+| `var i=0;;;`, `i=1;;;`, `i++;;;`, `System.println(i);;` | Accepted |
+| `do {} while(false);;` | Accepted |
+| `{var a=1;};` | Accepted |
+| Leading `;` or `{;}` | Rejected |
+| `if(true){};`, `while(false){};` | Rejected |
+| `return 1;;`, `break;;`, `continue;;` | Rejected |
+
+Thus extra terminators do not establish general standalone empty statements.
+The initial probe that accepted a semicolon had a preceding declaration;
+these isolated inputs resolve that ambiguity. `{1=>2};` is separately rejected
+as an unused expression, so `{var a=1;};` is evidence for a scoped-block suffix,
+not Dictionary expression-statement support. Complete authored `.mc` inputs
+and build logs are under `scratch/compiler-unbraced/`; copy a case into its
+`source/app.mc` and run `sh scripts/build-example.sh scratch/compiler-unbraced`.
+
+`CoreDeclarations` in the shared
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) groups
+dependent call initializers, Number/String/Array/nullable local types, repeated
+terminators, and sibling/outer name reuse. SDK/generated output matches the
+checked-in expected text. Source, saved IR, and assembly agree; both PRGs pass
+structured reconstruction without raw CODE/DATA fallback and own-key signing
+checks. Reproduce with the shared
+[console checker](../../scripts/README.md#console-specimen-check) selecting
+`compiler-object-tests`; artifacts are `scratch/core-declarations/check-final/`.
+Focused checks compare grouped/separate assembly and reject duplicate, forward,
+self, out-of-scope, malformed, and over-limit declarations.
+
 ## Scope and evidence
 
 Implementation is independent Rust in `ciq-compiler`, against

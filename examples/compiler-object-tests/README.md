@@ -33,6 +33,9 @@ dependent initializers/updates, continue/break paths, and indexed writes.
 infinite-loop functions. Selected finite branches exercise caller contracts
 without executing the infinite loops.
 
+`CoreDeclarations` groups ordered local declarations, heterogeneous initializer
+types, scope/name reuse, nullable copies, and repeated statement terminators.
+
 From the repository root:
 
 ```sh

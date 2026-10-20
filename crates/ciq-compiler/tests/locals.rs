@@ -120,7 +120,7 @@ fn invalid_local_source_is_rejected_with_locations() {
         "var x = 1; var x = 2; return x;",
         "var return = 41; return 41;",
         "var var = 41; return 41;",
-        "var x = 1, y = 2; return x;",
+        "var x = y, y = 2; return x;",
         "var x = 1; return y;",
         "return 1; var x = 2;",
         "{ var x = 1; } return x;",
@@ -134,6 +134,75 @@ fn invalid_local_source_is_rejected_with_locations() {
     assert_eq!((error.line, error.column), (2, 13));
     assert!(error.message.contains("not yet initialized"));
     assert!(compile("function var() { return 1; }").is_err());
+}
+
+#[test]
+fn declaration_lists_share_scope_order_and_lowering_with_individual_declarations() {
+    let flat = compile("function probe(){var x=1;var y=x+2;var z=y+x;return z;}").unwrap();
+    let grouped = compile("function probe(){var x=1,y=x+2,z=y+x;;;return z;}").unwrap();
+    assert_eq!(flat.assembly(), grouped.assembly());
+    assert_eq!(grouped, parse_ir(&grouped.to_ir_text()).unwrap());
+    for body in [
+        "var x=1,x=2;return x;",
+        "var x=1,y=y;return x;",
+        "var x=1,var y=2;return x;",
+        "var x=1,;return x;",
+        "var x=1,y;return x;",
+        "{var x=1,y=x+1;}return y;",
+    ] {
+        assert!(
+            compile(&format!("function probe(){{{body}}}")).is_err(),
+            "{body}"
+        );
+    }
+    let names = (0..256)
+        .map(|i| format!("n{i}=0"))
+        .collect::<Vec<_>>()
+        .join(",");
+    assert!(
+        compile(&format!("function probe(){{var {names};return 0;}}"))
+            .unwrap_err()
+            .message
+            .contains("255-local limit")
+    );
+}
+
+#[test]
+fn extra_semicolons_terminate_effects_without_creating_empty_statements() {
+    for (flat, extra) in [
+        ("{var x=1;}return 0;", "{var x=1;};;;return 0;"),
+        (
+            "var x=1;x+=2;x++;return x;",
+            "var x=1;;;x+=2;;;x++;;;return x;",
+        ),
+        (
+            "System.println(1);return 0;",
+            "System.println(1);/*extra*/;;return 0;",
+        ),
+        (
+            "var x=0;do{x++;}while(false);return x;",
+            "var x=0;do{x++;}while(false);;;return x;",
+        ),
+    ] {
+        let flat = compile(&format!("function probe(){{{flat}}}")).unwrap();
+        let extra = compile(&format!("function probe(){{{extra}}}")).unwrap();
+        assert_eq!(flat.assembly(), extra.assembly());
+        assert_eq!(extra, parse_ir(&extra.to_ir_text()).unwrap());
+    }
+    for body in [
+        ";return 0;",
+        "if(true){;}return 0;",
+        "if(true){};return 0;",
+        "return 0;;",
+        "for(;;){break;;}return 0;",
+        "for(;;){continue;;}return 0;",
+        "for(var i=0;;;i<2;i++){}return 0;",
+    ] {
+        assert!(
+            compile(&format!("function probe(){{{body}}}")).is_err(),
+            "{body}"
+        );
+    }
 }
 
 #[test]

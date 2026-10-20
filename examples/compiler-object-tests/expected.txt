@@ -128,6 +128,17 @@ header-index
 41
 nonreturning-types
 1
+local-first
+1
+local-second
+3
+3
+locals
+3
+4
+6
+8
+9
 4
 4
 true

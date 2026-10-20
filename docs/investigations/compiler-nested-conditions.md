@@ -116,14 +116,17 @@ Monkey C shadowing or unbraced-body support.
 `onStart`, with `i` declared and a final `System.exit()`. All fail compilation
 (exit 100), reporting a missing opening brace. A nested unbraced `if` likewise
 fails before any dangling-else interpretation. A bare semicolon as a `for`
-body is rejected; a standalone semicolon inside a braced function is accepted.
-These results distinguish required bodies from ordinary empty statements.
+body is rejected. Leading semicolons and `{;}` are also rejected. A semicolon
+following an existing declaration/call/update is instead an additional
+terminator; it does not establish general empty-statement support. The focused
+[terminator probes](compiler-locals.md#declaration-lists-and-extra-terminators)
+separate these contexts, including standalone scoped blocks.
 
 Complete authored inputs and build logs are under `scratch/compiler-unbraced/`.
 Rebuild a case by copying its saved `.mc` into that project's `source/app.mc`
 and running `sh scripts/build-example.sh scratch/compiler-unbraced`.
-Compiler regression tests retain rejection of unbraced forms; empty statements
-remain an implementation gap recorded in the plan.
+Compiler regression tests retain rejection of unbraced bodies and standalone
+empty statements.
 
 ## Reproduction
 

@@ -77,26 +77,28 @@ Each leaf statement below names its expression or target rules.
 block = "{" statement* "}"
 statement = local-statement | assignment-statement | update-statement
           | call-statement | return-statement | if-statement | while-statement
-          | for-statement | do-statement | block
+          | for-statement | do-statement | scoped-statement
           | break-statement | continue-statement
-local-statement = local-clause ";"
-assignment-statement = assignment-clause ";"
-update-statement = update-clause ";"
-call-statement = call-expression ";"
+scoped-statement = block statement-terminator?
+local-statement = local-clause statement-terminator
+assignment-statement = assignment-clause statement-terminator
+update-statement = update-clause statement-terminator
+call-statement = call-expression statement-terminator
+statement-terminator = ";"+
 return-statement = "return" expression? ";"
 if-statement = "if" "(" expression ")" block
                ("else" (block | if-statement))?
 while-statement = "while" "(" expression ")" block
 for-statement = "for" "(" for-initializer? ";" expression? ";"
                 for-effects? ")" block
-for-initializer = "var" initialized-local ("," initialized-local)* | for-effects
+for-initializer = local-clause | for-effects
 for-effects = loop-effect ("," loop-effect)*
 loop-effect = assignment-clause | update-clause
-local-clause = "var" initialized-local
+local-clause = "var" initialized-local ("," initialized-local)*
 initialized-local = identifier "=" expression
 assignment-clause = assign-target ("=" | compound-operator) expression
 update-clause = update-target ("++" | "--") | ("++" | "--") update-target
-do-statement = "do" block "while" "(" expression ")" ";"
+do-statement = "do" block "while" "(" expression ")" statement-terminator
 break-statement = "break" ";"
 continue-statement = "continue" ";"
 assign-target = identifier | "self" "." identifier | primary "[" expression "]"
@@ -113,7 +115,12 @@ include module/self/receiver calls, intrinsic System.println, and supported
 native base initialization. Conditional and loop bodies require braces; an
 `else` may instead introduce another `if-statement`. Standalone blocks are
 statements and introduce local scopes. Arbitrary expression statements,
-unbraced bodies, `switch`, and exception statements are unsupported.
+unbraced bodies, `switch`, and exception statements are unsupported. Extra
+semicolons are terminators only where `statement-terminator` occurs; there is no
+standalone empty statement. Return/break/continue take exactly one semicolon,
+and `for` header separators remain single semicolons. An optional terminator
+after a standalone scoped block does not permit semicolons after control-flow
+body blocks such as an `if` arm or `while` body.
 A `for` initializer permits one declaration list sharing a `var`, or an
 assignment/update list; its update permits only assignment/update lists.
 Standalone calls and trailing commas in either list are rejected. Calls inside

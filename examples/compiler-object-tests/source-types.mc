@@ -81,6 +81,7 @@ module NullableSourceTests {
         CoreScopes.run();
         CoreHeaders.run();
         CoreNonreturning.run();
+        CoreDeclarations.run();
     }
 }
 
@@ -362,5 +363,26 @@ module CoreNonreturning {
         System.println(CoreNonreturning.chooseString(true));
         var value = CoreNonreturning.chooseSource(true);
         System.println(value.value());
+    }
+}
+
+module CoreDeclarations {
+    function run() as Void {
+        var first = CoreHeaders.mark("local-first", 1),
+            second = CoreHeaders.mark("local-second", first + 2),
+            text = "locals";;;
+        System.println(second);;;
+        System.println(text);;;
+        var number = 0, deltas = [1, 2];;
+        number += deltas[1];;
+        number++;;;
+        System.println(number);;;
+        do { number++;;; } while (false);;;
+        System.println(number);
+        { var inner = 5, copy = inner + 1; System.println(copy); };;;
+        var inner = 7, copy = inner + 1;
+        System.println(copy);
+        var guarded = "8".toNumber(), same = guarded;
+        if (same != null) { System.println(same + 1); }
     }
 }

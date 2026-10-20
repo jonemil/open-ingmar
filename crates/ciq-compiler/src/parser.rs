@@ -1812,10 +1812,16 @@ impl<'a> Parser<'a> {
     /// the list parser. Return the statement's source end position.
     fn statement_end(&mut self, terminator: Option<char>) -> Result<usize, Diagnostic> {
         if let Some(terminator) = terminator {
-            return Ok(self
+            let mut end = self
                 .expect(Kind::Punctuation(terminator), "statement terminator")?
                 .span
-                .end);
+                .end;
+            if terminator == ';' {
+                while self.peek()? == Kind::Punctuation(';') {
+                    end = self.token()?.span.end;
+                }
+            }
+            return Ok(end);
         }
         if !matches!(self.peek()?, Kind::Punctuation(',' | ';' | ')')) {
             return Err(self.error(self.offset, "expected loop-clause delimiter"));
@@ -1860,21 +1866,15 @@ impl<'a> Parser<'a> {
             self.token()?;
             return Ok(statements);
         }
-        let declarations = allow_declarations && self.peek()? == Kind::Word("var");
-        let mut start = self.lookahead.as_ref().unwrap().span.start;
-        if declarations {
-            self.token()?;
+        if allow_declarations && self.peek()? == Kind::Word("var") {
+            return self.local_declarations(terminator, false);
         }
+        let mut start = self.lookahead.as_ref().unwrap().span.start;
         loop {
-            let statement = if declarations {
-                self.local_declaration(start, None)?
-            } else {
-                self.simple_statement(None, false)?
-            };
+            let statement = self.simple_statement(None)?;
             if !matches!(
                 statement,
-                Statement::Local(_)
-                    | Statement::Assign { .. }
+                Statement::Assign { .. }
                     | Statement::FieldAssign { .. }
                     | Statement::ArrayAssign { .. }
                     | Statement::ArrayCompound { .. }
@@ -1893,23 +1893,48 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a local declaration, assignment, update, or call. A missing
-    /// terminator leaves the delimiter for the for-header list parser.
-    fn simple_statement(
+    /// Parse initialized locals sharing one var keyword. A normal declaration
+    /// consumes repeated semicolons; a for initializer consumes one separator.
+    fn local_declarations(
         &mut self,
-        terminator: Option<char>,
-        allow_local: bool,
-    ) -> Result<Statement, Diagnostic> {
+        terminator: char,
+        repeated: bool,
+    ) -> Result<Vec<Statement>, Diagnostic> {
+        let mut start = self.expect(Kind::Word("var"), "'var'")?.span.start;
+        let mut declarations = Vec::new();
+        loop {
+            let mut declaration = self.local_declaration(start, None)?;
+            if self.peek()? != Kind::Punctuation(',') {
+                let end = if repeated {
+                    self.statement_end(Some(terminator))?
+                } else {
+                    self.expect(Kind::Punctuation(terminator), "declaration-list terminator")?
+                        .span
+                        .end
+                };
+                let Statement::Local(local) = &mut declaration else {
+                    unreachable!()
+                };
+                local.span.end = end;
+                declarations.push(declaration);
+                return Ok(declarations);
+            }
+            declarations.push(declaration);
+            self.token()?;
+            self.peek()?;
+            start = self.lookahead.as_ref().unwrap().span.start;
+        }
+    }
+
+    /// Parse an assignment, update, or call. A missing
+    /// terminator leaves the delimiter for the for-header list parser.
+    fn simple_statement(&mut self, terminator: Option<char>) -> Result<Statement, Diagnostic> {
         let start = {
             self.peek()?;
             self.lookahead.as_ref().unwrap().span.start
         };
         if self.peek()? == Kind::Word("var") {
-            if !allow_local {
-                return Err(self.error(start, "loop update cannot declare a local"));
-            }
-            self.token()?;
-            return self.local_declaration(start, terminator);
+            return Err(self.error(start, "declarations are not allowed in this clause"));
         }
         if let Kind::Step(increment) = self.peek()? {
             return self.prefix_update(start, increment, terminator);
@@ -2063,12 +2088,18 @@ impl<'a> Parser<'a> {
             if self.expressions > crate::MAX_OPERATIONS {
                 return Err(self.error(start, "function exceeds 1024-operation limit"));
             }
+            if self.peek()? == Kind::Word("var") {
+                statements.extend(self.local_declarations(';', true)?);
+                continue;
+            }
             let statement = match self.peek()? {
                 Kind::Punctuation('{') => {
-                    let (body, span) = self.block(depth + 1)?;
+                    let (body, mut span) = self.block(depth + 1)?;
+                    if self.peek()? == Kind::Punctuation(';') {
+                        span.end = self.statement_end(Some(';'))?;
+                    }
                     Statement::Block { body, span }
                 }
-                Kind::Word("var") => self.simple_statement(Some(';'), true)?,
                 Kind::Word("return") => {
                     self.token()?;
                     let value = if self.peek()? == Kind::Punctuation(';') {
@@ -2125,10 +2156,7 @@ impl<'a> Parser<'a> {
                     self.expect(Kind::Punctuation('('), "'('")?;
                     let condition = self.expression(0)?;
                     self.expect(Kind::Punctuation(')'), "')'")?;
-                    let end = self
-                        .expect(Kind::Punctuation(';'), "';' after do/while")?
-                        .span
-                        .end;
+                    let end = self.statement_end(Some(';'))?;
                     Statement::DoWhile {
                         body,
                         condition,
@@ -2151,7 +2179,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Kind::Word("if") => self.if_statement(depth)?,
-                _ => self.simple_statement(Some(';'), true)?,
+                _ => self.simple_statement(Some(';'))?,
             };
             statements.push(statement);
         }
