@@ -23,6 +23,6 @@ The compiler passes shift counts unchanged. The separate
 [count-boundary probe][evidence] records behavior for -1, 32, and 33 in the
 tested simulator. See the [source contract][source] and [IR syntax][ir].
 
-[source]: ../../docs/specs/frontend/operators.md#expressions-and-operators
-[ir]: ../../docs/specs/ir/model.md
+[source]: ../../docs/specs/frontend/README.md#expressions-and-operators
+[ir]: ../../docs/specs/ir/README.md#model-and-validation
 [evidence]: ../../docs/investigations/compiler-number-bits.md#count-boundaries

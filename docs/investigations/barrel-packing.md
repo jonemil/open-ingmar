@@ -6,9 +6,9 @@ equivalently?
 
 ## Implementation and provenance
 
-The implementation follows our [barrel profile](../specs/formats/barrel-package.md),
-[packing specification](../specs/formats/barrel-packing.md), and
-[package plan](../specs/formats/package-reading.md). No external research repository's
+The implementation follows our [barrel profile](../specs/formats/packages.md#barrel-format),
+[packing specification](../specs/formats/packages.md#barrel-packing), and
+[package plan](../specs/formats/packages.md#shared-reading-and-extraction). No external research repository's
 implementation was copied. Existing pinned `zip 6.0.0` (MIT) supplies
 ZIP/Deflate writing; no dependency or lockfile changes were needed. Codec
 versions, license/advisory review and Rust 1.85 baseline evidence are recorded

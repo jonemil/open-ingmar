@@ -27,5 +27,5 @@ cmp examples/compiler-number-comparisons/expected.txt scratch/simulator/monkeydo
 Expected output is [expected.txt](expected.txt). Each effectful comparison prints
 `left` before `right`; parsed inputs produce 34, 0, 0, and the loop ends at 3.
 String inequality uses identity rather than content. See
-[comparison contracts](../../docs/specs/frontend/statements.md#terminal-conditions)
+[comparison contracts](../../docs/specs/frontend/README.md#terminal-conditions)
 and [SDK/generated evidence](../../docs/investigations/compiler-number-comparisons.md).

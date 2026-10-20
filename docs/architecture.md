@@ -45,12 +45,12 @@ selects instructions and assigns frame storage; `Function::lower()` delegates to
 symbols, and literal references before encoding. See the
 [IR specification](specs/ir/README.md),
 [lowering specification](specs/lowering/README.md), and
-[assembly specification](specs/assembly/model.md).
+[assembly specification](specs/assembly/README.md#model-and-layout).
 
 The API catalogue supplies runtime-provided declarations and availability;
 operator rules and executable native profiles check supported uses before
 instruction selection. Declarations contain no runtime implementations or VM
-storage decisions. [API contracts](specs/sdk/declarations.md) distinguish these
+storage decisions. [API contracts](specs/sdk/README.md#api-declarations) distinguish these
 responsibilities and the target/deployment inputs.
 
 Compilation units collect source declarations across files before checking
@@ -72,8 +72,8 @@ remain deferred in [the plan](plan.md).
 
 Container reading/writing preserves ordered sections, duplicates, unknown IDs,
 and opaque bytes. Supported structured views must reconstruct their inputs
-without a template. The [PRG](specs/formats/prg-container.md),
-[section project](specs/formats/section-project.md), and section specs define exact
+without a template. The [PRG](specs/formats/README.md#prg-container),
+[section project](specs/formats/README.md#section-project), and section specs define exact
 preservation and binding rules. Numeric/raw preservation does not establish
 relocation safety; length-changing edits must account for all affected
 references and integrity fields, including opaque ones.
@@ -95,7 +95,7 @@ structured reconstruction, and runtime acceptance.
 Observed barrels distribute source/build metadata; IQ packages distribute device
 PRGs and signed package metadata. Package aliases are not VM symbols. PRG,
 cryptography, and archive responsibilities remain separate even when an export
-coordinates them. The [package profiles](specs/formats/package-reading.md)
+coordinates them. The [package profiles](specs/formats/packages.md#shared-reading-and-extraction)
 specify supported operations.
 
 A future project layer resolves Jungle/manifest inputs into source, resources,
@@ -103,5 +103,5 @@ dependencies, target constraints, and export settings. It must feed the
 compiler, resource generation, packaging, and signing through explicit resolved
 inputs, without putting configuration parsing in the frontend or archive
 library.
-[Project-build requirements](specs/build/project-builds.md) define that intended boundary;
+[Project-build requirements](specs/build/README.md#planned-project-builds-and-targets) define that intended boundary;
 [the plan](plan.md) owns sequencing.

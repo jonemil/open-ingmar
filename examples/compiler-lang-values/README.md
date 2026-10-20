@@ -37,10 +37,10 @@ true
 discarded
 ```
 
-See [function contracts](../../docs/specs/frontend/types.md#types-and-value-contracts)
+See [function contracts](../../docs/specs/frontend/README.md#types-and-nullability)
 for annotation syntax and defaults, [unit validation][unit] for call checking,
 and [runtime evidence][evidence] for the SDK comparison. General dynamic type
 inference, nullable user results, and other Lang types remain unsupported.
 
-[unit]: ../../docs/specs/frontend/declarations.md
+[unit]: ../../docs/specs/frontend/README.md#declarations-and-name-resolution
 [evidence]: ../../docs/investigations/compiler-lang-values.md

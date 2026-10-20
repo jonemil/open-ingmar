@@ -19,4 +19,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-wide-operators/gene
 The String conversion methods used to obtain nullable Long/Double values require
 API 3.1.0. Char forms themselves require 1.3.0. Wider Char ordering and floating
 Char addition are rejected by SDK checking and our compiler. See the
-[source contracts](../../docs/specs/frontend/operators.md#operator-contracts).
+[source contracts](../../docs/specs/frontend/README.md#operator-contracts).

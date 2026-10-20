@@ -77,8 +77,8 @@ claims apply only to the stated SDK/device profile.
 
 Native/text/PRG checks passed for primitive bytes/spans, wrong types, API context,
 malformed operands, null-proof invalidation, read/write order, and sign/call
-nesting. The [source contract](../specs/frontend/operators.md#expressions-and-operators)
-and [IR](../specs/ir/model.md) specify the checked identity.
+nesting. The [source contract](../specs/frontend/README.md#expressions-and-operators)
+and [IR](../specs/ir/README.md#model-and-validation) specify the checked identity.
 
 [example]: ../../examples/compiler-number-plus/README.md
 [output]: ../../examples/compiler-number-plus/expected.txt

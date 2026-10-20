@@ -61,7 +61,7 @@ union cases in this table have compile evidence only, not separate runtime runs.
 **Interpretation:** join alternatives without changing their runtime values.
 The SDK supports unions beyond our current value types. The bounded initial
 profile and planned IR representation belong in the
-[IR contract](../specs/ir/values.md#expression-joins).
+[IR contract](../specs/ir/README.md#expression-joins).
 
 ## VM and reconstruction
 

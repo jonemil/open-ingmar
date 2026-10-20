@@ -35,5 +35,5 @@ ell
 
 The tested runtime normalizes reversed and oversized ranges. Keep the nullable
 result contract: these observations do not prove all inputs succeed. See the
-[guard and index rules](../../docs/specs/frontend/types.md#nullable-results)
+[guard and index rules](../../docs/specs/frontend/README.md#nullable-results)
 and [experiment](../../docs/investigations/compiler-substring.md).

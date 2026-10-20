@@ -38,7 +38,7 @@ return            # CODE+0x3c
 the single hidden context slot, allowing a store/load of the integer sum. The
 original globals-resolution sequence is unnecessary for this arithmetic-only
 body. These choices follow
-[our instruction reference](../specs/vm/instructions.md), particularly the
+[our instruction reference](../specs/vm/README.md#instruction-reference), particularly the
 compiler-generated `onUpdate` local-frame pattern. The successful host run
 supports this combination of frame setup, integer addition, local slot 1
 store/load, and return. It does not establish the full calling convention or

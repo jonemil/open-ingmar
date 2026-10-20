@@ -94,10 +94,10 @@ Rust checks covered snapshots, nested/arm writes, early returns, fixed slots,
 type/scope errors, and native/text equivalence. Both typed and text IR reject
 stale reads and targets initialized on only one incoming path. Runtime evidence
 here covers integer/string reassignment on the stated device; other forms have
-separate records. Current [assignment rules](../specs/frontend/statements.md#local-reassignment)
+separate records. Current [assignment rules](../specs/frontend/README.md#local-reassignment)
 do not depend on this investigation's implementation stage.
 
-[design]: ../specs/ir/values.md#local-assignment
-[source]: ../specs/frontend/statements.md#local-reassignment
-[ir]: ../specs/ir/values.md#local-assignment
+[design]: ../specs/ir/README.md#local-assignment
+[source]: ../specs/frontend/README.md#local-reassignment
+[ir]: ../specs/ir/README.md#local-assignment
 [scaffold]: control-flow.md#reproduction

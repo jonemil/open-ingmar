@@ -18,5 +18,5 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-numeric-dictionarie
 Dictionary members require API 1.0.0, except `toString` since 1.0.1; the example's
 Array `indexOf` checks require 1.3.0. Nested/heterogeneous values and Null keys
 remain deferred. See the
-[source contracts](../../docs/specs/frontend/lang-dictionary.md#dictionary-values) and
+[source contracts](../../docs/specs/frontend/README.md#dictionaries) and
 [separate NaN probe](../../docs/investigations/compiler-numeric-dictionaries.md).

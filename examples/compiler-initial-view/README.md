@@ -34,5 +34,5 @@ adds source inheritance and drawing; input handling remains subsequent work.
 The [callback contract][source] requires a direct one-slot return literal;
 an arbitrary mutable View array is insufficient. See [runtime evidence][evidence].
 
-[source]: ../../docs/specs/sdk/callbacks.md#source-initial-view-callback
+[source]: ../../docs/specs/sdk/README.md#source-initial-view-callback
 [evidence]: ../../docs/investigations/compiler-initial-view.md

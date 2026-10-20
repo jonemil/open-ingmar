@@ -4,8 +4,8 @@ Reviewed 2026-10-11 against Garmin's [Number][number] and [Object][object] API
 pages. Runtime experiment: SDK/compiler/simulator 9.2.0, fr265, optimization
 disabled. Scope: contracts and native dispatch, not runtime implementation.
 
-Supported method contracts are defined in [the source spec](../specs/frontend/lang-values.md#native-value-calls);
-[API declarations](../specs/sdk/declarations.md#deferred-core-methods) record
+Supported method contracts are defined in [the source spec](../specs/frontend/README.md#native-value-calls);
+[API declarations](../specs/sdk/README.md#deferred-core-methods) record
 remaining prerequisites. This record retains public attribution and the tests
 that establish runtime behavior.
 

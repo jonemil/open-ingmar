@@ -51,5 +51,5 @@ element. All references to the receiver observe its mutations. The tested
 self-append copies the original elements once. See the [source contract][spec]
 and [evidence][evidence] for the supported profile and limits.
 
-[spec]: ../../docs/specs/frontend/containers.md#char-arrays
+[spec]: ../../docs/specs/frontend/README.md#char-arrays
 [evidence]: ../../docs/investigations/compiler-array-mutation.md

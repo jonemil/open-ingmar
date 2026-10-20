@@ -8,7 +8,7 @@ signed PRG integration, and official simulator execution are verified.
 ## Scope and evidence
 
 Implementation is independent Rust in `ciq-compiler`, against
-[our instruction reference](../specs/vm/instructions.md),
+[our instruction reference](../specs/vm/README.md#instruction-reference),
 [the earlier local-slot experiment](function-replacement.md), and
 [compiler arithmetic](compiler-arithmetic.md). No reference-project
 implementation was incorporated. SDK/compiler/simulator: 9.2.0; target `fr265`;
@@ -90,7 +90,7 @@ previous arithmetic/literal output is unchanged. The current scheduling policy
 relies on pure expressions and absence of reassignment; effectful operations
 require explicit ordering before extension.
 
-[Provisional IR text](../specs/ir/model.md) adds
+[Provisional IR text](../specs/ir/README.md#model-and-validation) adds
 `.local $<local-id> %<value-id>` and `.read %<result-id> $<local-id>`. Both use
 shared validation and optional source spans. No new crate, signing dependency,
 or application metadata generation is introduced. Limits: 255 locals, 1024 total

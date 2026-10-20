@@ -27,7 +27,7 @@ For SDK reproduction, use minimal-console's manifest/resources and
 specimen checker with `compiler-scalar-fields`. Captures:
 `scratch/check-scalar-fields/`.
 
-The [field contract](../specs/frontend/fields.md#typed-scalar-fields) owns our
+The [field contract](../specs/frontend/README.md#typed-scalar-fields) owns our
 required-initialization rules and declaration-default restrictions. This
 specimen does not establish arbitrary declaration initializers, direct mutable
 field narrowing, additional superclass layouts, or other runtime targets.

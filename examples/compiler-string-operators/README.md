@@ -62,5 +62,5 @@ v=7
 Use `.equals()` to compare String content. `==` compares identity on the
 validated profile: shared references compare true, but separately created
 equal-content strings compare false. See the
-[contracts](../../docs/specs/frontend/operators.md#operator-contracts) and
+[contracts](../../docs/specs/frontend/README.md#operator-contracts) and
 [experiment](../../docs/investigations/compiler-string-operators.md).

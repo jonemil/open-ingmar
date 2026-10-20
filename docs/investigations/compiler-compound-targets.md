@@ -96,7 +96,7 @@ read/binary/write assembly. Indexed checks cover Number operators, Char addition
 single receiver/index evaluation, one read/write, nullable guards, invalid types,
 read-before-RHS order, frame limits, and 64-level RHS nesting. Complete saved-IR,
 assembly, and unsigned-PRG paths agree. See the
-[current target contracts](../specs/frontend/statements.md#indexed-compound-assignment).
+[current target contracts](../specs/frontend/README.md#indexed-compound-assignment).
 
 [example]: ../../examples/compiler-compound-targets/README.md
 [output]: ../../examples/compiler-compound-targets/expected.txt

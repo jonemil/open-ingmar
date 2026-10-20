@@ -94,7 +94,7 @@ annotations only.
 
 ## Implementation and validation
 
-[Local specification](../specs/formats/data-classes.md) defines the independent parser
+[Local specification](../specs/formats/data.md#classes-and-modules) defines the independent parser
 and listing. `ciq-prg::data::classes` supplies an ordered record model. The
 existing DATA string walker shares its framing to avoid diverging header/count
 calculations. `ciq-dis classes` supplies read-only output; complete export

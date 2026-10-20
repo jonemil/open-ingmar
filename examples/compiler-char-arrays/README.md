@@ -51,5 +51,5 @@ Char-array construction. [Number arrays](../compiler-number-arrays/README.md)
 have a separate example. Nullable arrays and other element contracts remain
 unsupported. See the [source contract][source] and [evidence][evidence].
 
-[source]: ../../docs/specs/frontend/containers.md#char-arrays
+[source]: ../../docs/specs/frontend/README.md#char-arrays
 [evidence]: ../../docs/investigations/compiler-char-arrays.md

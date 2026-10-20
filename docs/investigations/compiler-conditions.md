@@ -13,7 +13,7 @@ The [checked-in source](../../examples/compiler-probe/conditions.mc) initializes
 and `49` on false. A second input changes only `==` to `>`.
 
 Current graph/type/initialization rules are in the
-[IR spec](../specs/ir/control-flow.md#ir-control-flow); this experiment tests the
+[IR spec](../specs/ir/README.md#control-flow); this experiment tests the
 terminal two-return input above.
 
 **Experimentally observed:** each generated CODE body is 27 bytes. Source-native
@@ -122,5 +122,5 @@ device. Effectful branch arms are covered structurally in Rust tests, not by
 this simulator experiment. Other source forms require their own specimens; current language support is
 specified separately.
 
-[source]: ../specs/frontend/statements.md#terminal-conditions
+[source]: ../specs/frontend/README.md#terminal-conditions
 [scaffold]: control-flow.md#reproduction

@@ -32,9 +32,9 @@ inferred-field-default = signed-number-literal | ":" identifier
 A compilation unit requires 1..=256 function/method bodies across its files.
 Classes require at least one method. Native bases are resolved Object, AppBase,
 View, and BehaviorDelegate identities; omission selects Object. Field types and
-permitted defaults are the [storage contracts](fields.md). Imports, owner
-collisions, module reopening, and file-local bindings follow
-[declaration resolution](declarations.md). There are no optional/default
+permitted defaults are the [storage contracts](README.md#instance-fields).
+Imports, owner collisions, module reopening, and file-local bindings follow
+[declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
 parameters, nested declarations, source superclass chains, or annotations.
 
 ## Type syntax
@@ -72,10 +72,10 @@ no imports. These semantic type domains mean:
 Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
 source value/result contract. Nullable opaque Dictionary is a lifecycle IR
 contract; it is not an ordinary source annotation. Fields have narrower,
-independently checked [type/default domains](fields.md). Nested type parameters,
-arbitrary unions, reversed `Null or T`, bare Null, and parenthesized type unions
-are unsupported. Generic containers are invariant; see [type rules](types.md)
-and the container semantic pages.
+independently checked [type/default domains](README.md#instance-fields). Nested
+type parameters, arbitrary unions, reversed `Null or T`, bare Null, and
+parenthesized type unions are unsupported. Generic containers are invariant; see
+[type rules](README.md#types-and-nullability) and the container semantic pages.
 
 ## Statements
 
@@ -103,8 +103,9 @@ have no explicit source annotation. Update operators are statements only. Calls
 include module/self/receiver calls, intrinsic System.println, and supported
 native base initialization. Arbitrary expression statements, standalone nested
 blocks, unbraced arms, `else if`, `for`, `do`, `switch`, and exception
-statements are unsupported. [Statement contracts](statements.md) define scope,
-reachability, loop targets, and evaluation order.
+statements are unsupported. [Statement
+contracts](README.md#statements-and-control-flow) define scope, reachability,
+loop targets, and evaluation order.
 
 ## Expressions and precedence
 
@@ -139,7 +140,7 @@ conditional arms associate right. Comparison/test operators do not chain. `1 + 2
 << 2` means `1 + (2 << 2)`, and `2 << 1 * 3` means `(2 << 1) * 3`. Casts bind
 after postfix/unary and before arithmetic; parenthesize a cast before postfix
 access. A cast target may consume `or Null`; other `or` uses logical precedence.
-[Operator semantics](operators.md) own accepted domains and target restrictions;
+[Operator semantics](README.md#expressions-and-operators) own accepted domains and target restrictions;
 paths and arbitrary method names alone do not prove support.
 
 Unary plus/minus accept one primary operand; repeated or mixed prefixes after
@@ -157,7 +158,7 @@ Cast targets accept Number, Long, Float, Double, Boolean, Char, String, Object,
 Symbol, Method, WeakReference, ByteArray, Numeric, Integer, Decimal,
 NumberFormat, Endian, opaque Dictionary, or exact constructible source classes.
 Nullable casts are limited to the scalar/core-reference and numeric-alias forms
-specified by [cast semantics](operators.md#lexical-casts). Parameterized
+specified by [cast semantics](README.md#lexical-casts). Parameterized
 containers, general unions, interfaces, and nullable source-class casts are
 unsupported. Native spellings resolve through the import environment.
 
@@ -166,8 +167,9 @@ unsupported. Native spellings resolve through the import environment.
 Identifiers use ASCII letters/underscore followed by ASCII letters, digits, or
 underscore. Declaration keywords, `self`, literal keywords, `new`, `as`,
 `instanceof`, `has`, `and`, and `or` cannot be ordinary identifiers. Additional
-reserved owner/native names follow [name resolution](declarations.md) and
-[class rules](classes.md). Whitespace, `//` comments, and non-nested `/* ... */`
+reserved owner/native names follow [name
+resolution](README.md#declarations-and-name-resolution) and
+[class rules](README.md#source-classes). Whitespace, `//` comments, and non-nested `/* ... */`
 comments are accepted. Commas separate lists; trailing commas are unsupported.
 
 Number literals are decimal signed i32, including -2147483648. Long literals end
@@ -178,8 +180,8 @@ literal tokens permit whitespace/comments between minus and digits. Floating
 parsing rounds to IEEE 754, rejects infinity from overflow, and allows underflow
 to zero. Negative literals preserve signed zero. Hexadecimal/underscore numeric
 forms and other suffixes are unsupported. Overflow diagnostics point to the
-literal start; [numeric semantics](numeric-values.md) distinguish literal
-rounding from arithmetic and conversion behavior.
+literal start; [numeric semantics](README.md#numbers-and-numeric-aliases)
+distinguish literal rounding from arithmetic and conversion behavior.
 
 String literals use double quotes, UTF-8, and `\n`, `\r`, `\t`, `\"`, `\\`. Raw
 newlines, unknown/unfinished escapes, and lengths above 65535 UTF-8 bytes are
@@ -190,13 +192,13 @@ literals, raw single quotes/backslashes/newlines, and supplementary characters
 are rejected. Neither form accepts `\0`, `\u`, or `\x`. IR and assembly have
 separate quoting rules. Char values require API 1.3.0 with explicit API context.
 See [Char evidence][chars] and [string
-contracts](lang-values.md#core-lang-values-and-methods).
+contracts](README.md#core-lang-values-and-methods).
 
 Expression/control-flow nesting is bounded at 64 and a semantic function at 1024
 operations including return. Parameters are limited to 254, parameters plus
 locals to 255. These are implementation/encoding limits, not validated device
-memory budgets. [API context](../sdk/context.md) applies availability checks
-separately from grammar acceptance.
+memory budgets. [API context](../sdk/README.md#api-context-inputs) applies
+availability checks separately from grammar acceptance.
 
 [numbers]: ../../investigations/compiler-number-literals.md
 [chars]: ../../investigations/compiler-char-literals.md

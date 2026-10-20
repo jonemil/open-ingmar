@@ -9,7 +9,7 @@ Source-derived starting point: [monkeyc-optimizer][ref-monkeyc-optimizer] at
 `2920dc88c23caadded9f66ee0613a7de6ab2d1ea`, MIT; `SymbolTable.parseSymbolTable`,
 `parse`, and `parseSymbol`. This describes a u16 count, u32 identifier/offset
 pairs, and length-prefixed names. Independent Rust code was written from the
-local [symbol specification](../specs/formats/symbols.md); no reference implementation
+local [symbol specification](../specs/formats/metadata.md#symbols); no reference implementation
 code was copied.
 
 The ordinary instruction operand roles were cross-checked against the same

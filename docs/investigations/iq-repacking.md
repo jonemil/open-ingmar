@@ -2,13 +2,13 @@
 
 Question: rebuild our SDK developer IQ package without a private key, preserving
 all signed bytes and identity. Scope: stage 4 of
-[the package plan](../specs/formats/package-reading.md); own-key IQ creation remains
+[the package plan](../specs/formats/packages.md#shared-reading-and-extraction); own-key IQ creation remains
 future work.
 
 ## Provenance and implementation
 
-Our Rust adapter follows the repository's [IQ profile](../specs/formats/iq-package.md)
-and [repacking rules](../specs/formats/iq-repacking.md). It shares tree inspection and
+Our Rust adapter follows the repository's [IQ profile](../specs/formats/packages.md#iq-format-and-signing)
+and [repacking rules](../specs/formats/packages.md#iq-repacking). It shares tree inspection and
 publication with the barrel writer. Pinned `sevenz-rust2 0.20.2` supplies
 encoding; its `compress` feature enables the already locked `lzma-rust2 0.16.5`
 encoder. Direct dependencies on that same LZMA version and `crc32fast 1.5.2`

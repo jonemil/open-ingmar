@@ -42,5 +42,5 @@ The check requires a fresh Xvfb display without a window manager and the default
 Forerunner 265 skin placement. It checks selection/redraw values 8, 9, 10 and
 retains logs plus a screenshot; inspect the image to confirm the visible 10.
 The helper is specific to this example. Use a new output directory per run.
-See [contracts](../../docs/specs/sdk/callbacks.md#source-behavior-delegate)
+See [contracts](../../docs/specs/sdk/README.md#source-behavior-delegate)
 and [SDK/generated evidence](../../docs/investigations/compiler-input-counter.md).

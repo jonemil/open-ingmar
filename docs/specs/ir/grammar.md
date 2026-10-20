@@ -93,8 +93,8 @@ Integer constants permit optional minus but no plus, hex, suffixes, or
 underscores; canonical negative zero is zero. Long constants similarly use
 decimal i64. Raw Float/Double/Char constants preserve bits, including values the
 source literal grammar cannot produce. Source numeric syntax is independent. See
-[values and storage](values.md), [control flow](control-flow.md), and
-[core source types](../frontend/types.md) for operand domains and validation.
+[values and storage](README.md#values-and-storage), [control flow](README.md#control-flow), and
+[core source types](../frontend/README.md#types-and-nullability) for operand domains and validation.
 
 ### Calls and objects
 
@@ -119,7 +119,7 @@ User-call and field-read result defaults are `integer`; canonical output omits
 that default. Native results come from executable API profiles, without a saved
 `result=` assertion. Source classes and bases must resolve under unit
 validation. Void calls use discard forms; they cannot define a value. See
-[calls](calls.md).
+[calls](README.md#calls-and-objects).
 
 ### Containers
 
@@ -148,7 +148,7 @@ validation. Void calls use discard forms; they cannot define a value. See
 ByteArrays reuse Array read/write/fill/finish operations with distinct validated
 types. Bare `0x` is an empty ByteArray payload. Fill groups require at least one
 value/pair. Builder identity is not an expression value. See
-[container validation](containers.md) for initialization, escape, constant,
+[container validation](README.md#containers-and-private-construction) for initialization, escape, constant,
 allocation, and option-record restrictions.
 
 Concrete Array constant payloads omit per-value tags: Number/Char use eight hex
@@ -172,8 +172,8 @@ satisfy a contract; syntactic framing does not broaden those domains.
 | `.jump-value` | `^target %value` |
 
 An implicit single block ends with a return. Explicit blocks require explicit
-terminators, reachable targets, and the [CFG validation](control-flow.md) rules.
-Block parameters do not authorize arbitrary cross-block value uses.
+terminators, reachable targets, and the [CFG validation](README.md#control-flow)
+rules. Block parameters do not authorize arbitrary cross-block value uses.
 
 ## Type tags
 
@@ -199,13 +199,13 @@ The Number parameter/call tag is `number-array`.
 
 Typed Dictionary tags are `dictionary(key=>value)` without whitespace inside the
 token. Key/value domains follow the [source
-contracts](../frontend/lang-dictionary.md), with additional supported
+contracts](../frontend/README.md#dictionaries), with additional supported
 core/interface/alias domains documented in their semantic pages. Keys exclude
 Null. Typed Dictionary tags work for signatures, user-call results, fields, and
 matching conditional joins; casts do not accept them. Join tags also admit
 `null` and the supported native references. A tag's existence in one context
 does not imply it is accepted in every other context.
-[Value operations](values.md) and [container operations](containers.md) own
+[Value operations](README.md#values-and-storage) and [container operations](README.md#containers-and-private-construction) own
 consumer-specific restrictions.
 
 ## Unit and class framing
@@ -224,7 +224,8 @@ An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require
 `receiver=instance`. Canonical output places global/module records first, then
 classes, retaining declaration order inside each group. Each nested function is
-validated before [unit ownership and call checks](unit.md).
+validated before [unit ownership and call
+checks](README.md#compilation-units-and-classes).
 
 | Field directive | Operands after the directive |
 |---|---|
@@ -245,8 +246,9 @@ Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 `string`, and their nullable forms. Alias tags are `integer-union`, `decimal`,
 `numeric`, and nullable forms. Interface tags are `comparable`, `comparator`,
 and nullable forms. Field records do not carry spans or arbitrary default
-expressions. [Field semantics](../frontend/fields.md) define required
-initialization, metadata defaults, availability, and exact storage checks.
+expressions. [Field semantics](../frontend/README.md#instance-fields) define
+required initialization, metadata defaults, availability, and exact storage
+checks.
 
 ## Examples
 

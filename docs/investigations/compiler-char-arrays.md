@@ -100,7 +100,7 @@ variance or mutation semantics. Compiler checks covered native/text/PRG equality
 wrong result/element contracts, and Char's 1.3.0 requirement even when the selected
 method dates from 1.0.0. [Element reads](compiler-array-reads.md),
 [Number arrays](compiler-number-arrays.md), and mutations have separate evidence;
-[the source spec](../specs/frontend/containers.md#char-arrays) owns current support.
+[the source spec](../specs/frontend/README.md#char-arrays) owns current support.
 
 [example]: ../../examples/compiler-char-arrays/README.md
 [string]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/String.html

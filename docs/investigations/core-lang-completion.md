@@ -32,7 +32,7 @@ operand-pair or exception-behavior audit. Keep SDK-rejected constructs distinct
 from unsupported valid language/API forms.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
-[inventory]: ../specs/sdk/declarations.md#deferred-core-methods
+[inventory]: ../specs/sdk/README.md#deferred-core-methods
 [gate]: ../plan.md#core-completion-gate
 
 ## Language-scope reconciliation

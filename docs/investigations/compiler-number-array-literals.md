@@ -22,7 +22,7 @@ whole-function checking still establishes validity and branch proofs.
 timing, or memory equivalence. The
 [lowering experiments](natural-lowering.md#array-construction) cover direct
 construction separately. Current accepted elements and contextual inference are
-specified in [the source contract](../specs/frontend/containers.md#number-arrays).
+specified in [the source contract](../specs/frontend/README.md#number-arrays).
 
 ## Reproduction
 

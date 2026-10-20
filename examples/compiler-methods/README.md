@@ -25,4 +25,4 @@ returns `Object or Null`; save and guard results before Object member calls.
 Concrete callback signatures and Method constructors remain deferred.
 [Source callbacks](../compiler-source-methods/README.md) exercise direct
 instance/self binding. See the
-[source contracts](../../docs/specs/frontend/lang-values.md#method-values-and-invocation).
+[source contracts](../../docs/specs/frontend/README.md#method-values-and-invocation).

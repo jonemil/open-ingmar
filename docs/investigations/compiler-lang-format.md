@@ -40,8 +40,8 @@ the simulator session returns 1. Inputs/build configuration are in
 This establishes the tested failure, not catchability, malformed-placeholder
 rules, or behavior on every device/runtime.
 
-The [source contract](../specs/sdk/profiles.md#native-module-and-ui-profiles) owns
+The [source contract](../specs/sdk/README.md#native-module-and-ui-profiles) owns
 assignability and construction rules; the [IR contract][ir] owns saved calls.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#format-instance_function
-[ir]: ../specs/ir/calls.md#native-module-values
+[ir]: ../specs/ir/README.md#native-module-values

@@ -54,5 +54,5 @@ Values crossing a branch use temporary locals. Their slots count toward the
 ordinary frame limit. A stored Boolean result does not carry a null proof for
 its original operands. See the [source contract][source] and [evidence][evidence].
 
-[source]: ../../docs/specs/frontend/operators.md#short-circuit-expressions
+[source]: ../../docs/specs/frontend/README.md#short-circuit-expressions
 [evidence]: ../../docs/investigations/compiler-logical-values.md

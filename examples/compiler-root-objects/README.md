@@ -19,4 +19,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-root-objects/genera
 Each constructed class declares an initializer; Object initialization has no
 native base call. Exact source annotations/reference fields retain class identity
 and its native base; opaque Object erasure loses source-member access. See the
-[class contract](../../docs/specs/frontend/classes.md#object-rooted-classes).
+[class contract](../../docs/specs/frontend/README.md#object-rooted-classes).

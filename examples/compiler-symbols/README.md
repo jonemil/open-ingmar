@@ -28,4 +28,4 @@ Symbol requires API 1.0.0; `weak()` requires 1.2.0 and `toNumber()` requires
 2.3.0. Nullable Symbol and container storage retain these method requirements.
 Pooled Symbol container payloads remain outside this specimen.
 [Method values/invocation](../compiler-methods/README.md) have a separate specimen. See the
-[source contracts](../../docs/specs/frontend/lang-values.md#symbol-values).
+[source contracts](../../docs/specs/frontend/README.md#symbol-values).

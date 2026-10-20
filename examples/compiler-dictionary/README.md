@@ -39,5 +39,5 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-dictionary/generate
 
 Broader callback consumers and wider numeric value groups remain
 planned. See
-[the source profile](../../docs/specs/frontend/lang-dictionary.md#dictionary-values) and
+[the source profile](../../docs/specs/frontend/README.md#dictionaries) and
 [SDK evidence](../../docs/investigations/compiler-dictionary.md).

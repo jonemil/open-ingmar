@@ -37,5 +37,5 @@ The shared reference and call result both observe the append. The native receive
 is evaluated before its argument, and each is evaluated once. The [source
 contract][spec] and [SDK evidence][evidence] describe the current boundary.
 
-[spec]: ../../docs/specs/frontend/containers.md#char-arrays
+[spec]: ../../docs/specs/frontend/README.md#char-arrays
 [evidence]: ../../docs/investigations/compiler-array-add.md

@@ -65,7 +65,7 @@ local developer key and run it in the official simulator. The example documents
 commands, expected output, and current lifecycle/View restrictions.
 
 Readable IR and assembly provide inspection and editing points in the compiler
-pipeline. See the [IR specification](docs/specs/ir/model.md) for its semantic
+pipeline. See the [IR specification](docs/specs/ir/README.md#model-and-validation) for its semantic
 model and saved text.
 
 Browse [the examples](examples/README.md) for native calls, core Lang objects,
@@ -82,7 +82,7 @@ cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console
 cargo run -p ciq-asm -- project scratch/minimal-project scratch/minimal-project.prg
 ```
 
-The [section project](docs/specs/formats/section-project.md) contains an ordered
+The [section project](docs/specs/formats/README.md#section-project) contains an ordered
 manifest, assembly for supported code/metadata, and raw payloads for unsupported
 sections. Labels bind supported method, line, branch, and exception references;
 general relocation and opaque-reference fixups are incomplete. Equal lengths
@@ -105,10 +105,10 @@ editable section forms are documented in the specs below.
 `ciq-package` lists, extracts, verifies, and packs supported barrel/IQ profiles.
 Extraction preserves ordinary member bytes, raw manifests, and unknown files,
 with path and resource limits. See
-[reading](docs/specs/formats/package-reading.md),
-[barrel packing](docs/specs/formats/barrel-packing.md),
-[IQ repacking](docs/specs/formats/iq-repacking.md), and
-[own-key IQ creation](docs/specs/formats/iq-creation.md).
+[reading](docs/specs/formats/packages.md#shared-reading-and-extraction),
+[barrel packing](docs/specs/formats/packages.md#barrel-packing),
+[IQ repacking](docs/specs/formats/packages.md#iq-repacking), and
+[own-key IQ creation](docs/specs/formats/packages.md#iq-creation).
 
 Use [SDK support scripts](scripts/README.md) for device downloads, reference
 builds, and simulator sessions. Simulator execution establishes runtime

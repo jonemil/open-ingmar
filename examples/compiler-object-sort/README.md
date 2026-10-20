@@ -23,5 +23,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[sorting contracts](../../docs/specs/frontend/containers.md#default-array-sorting)
+[sorting contracts](../../docs/specs/frontend/README.md#default-array-sorting)
 and [evidence](../../docs/investigations/compiler-object-sort.md).

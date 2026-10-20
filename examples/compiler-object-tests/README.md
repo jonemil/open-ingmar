@@ -20,5 +20,5 @@ cargo run -p ciq-asm -- sign scratch/compiler-object-tests/unsigned.prg scratch/
 sh scripts/run-simulator-container.sh --prg scratch/compiler-object-tests/generated.prg
 ```
 
-See the [source contract](../../docs/specs/frontend/operators.md#runtime-object-predicates)
+See the [source contract](../../docs/specs/frontend/README.md#runtime-object-predicates)
 and [runtime evidence](../../docs/investigations/compiler-object-tests.md).

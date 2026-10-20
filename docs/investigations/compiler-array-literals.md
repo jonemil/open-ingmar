@@ -24,8 +24,8 @@ is specified independently of the experiment.
 
 Allocation counts, memory use, and allocation-failure timing were not compared.
 [The lowering experiments](natural-lowering.md#array-construction) separately
-exercise direct stores; the [source](../specs/frontend/containers.md#char-arrays) and
-[IR](../specs/ir/containers.md#private-array-construction) specs own the
+exercise direct stores; the [source](../specs/frontend/README.md#char-arrays) and
+[IR](../specs/ir/README.md#private-array-construction) specs own the
 construction/initialization contracts.
 
 ## Reproduction

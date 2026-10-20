@@ -149,9 +149,9 @@ assets, views that draw, debug/symbol generation, other application/API profiles
 and Jungle/manifest resolution remain future work. Broader section/offset rules
 are still driven by concrete generated applications.
 
-[classes]: ../specs/formats/data-classes.md
+[classes]: ../specs/formats/data.md#classes-and-modules
 [instructions]: instruction-semantics.md
-[unit]: ../specs/frontend/declarations.md
-[design]: ../specs/build/application.md
-[profile]: ../specs/build/application.md
+[unit]: ../specs/frontend/README.md#declarations-and-name-resolution
+[design]: ../specs/build/README.md#complete-application-generation
+[profile]: ../specs/build/README.md#complete-application-generation
 [optimizer-header]: https://github.com/markw65/monkeyc-optimizer/blob/2920dc88c23caadded9f66ee0613a7de6ab2d1ea/src/readprg/header.ts

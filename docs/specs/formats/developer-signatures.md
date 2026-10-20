@@ -92,5 +92,5 @@ does not imply support for legacy IQ manifest profiles.
 and format without cryptographically verifying them. `verify(prg)` checks those
 fields with the shared detached-verification operations; the existing PRG
 signing/verification policy is unchanged. Package checks use these APIs as
-specified in [IQ verification](package-verification.md). No private key is
+specified in [IQ verification](packages.md#iq-verification). No private key is
 required by the package verifier.

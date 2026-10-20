@@ -39,6 +39,14 @@ C, IR, and assembly syntax in their respective grammar files. Semantic pages own
 behavior and validation, with links to grammar productions; binary-format pages
 own encoded records rather than another copy of editable assembly syntax.
 
+Within each specification category, start with one general reference
+(`README.md`) and a separate grammar where there is a textual language. Use
+headings and a short contents list to keep the general reference searchable.
+File length, an implementation helper module, or a new feature alone does not
+justify another document. Split only for an independently used contract or
+reader workflow with little shared material; keep the reason clear in the
+category overview. Consolidate shared rules before creating parallel files.
+
 Give each rule one authoritative home. Other pages may introduce it briefly and
 link there. Shared source/IR validation contracts should be defined once, with
 representation-specific syntax and lowering documented where they belong. Keep

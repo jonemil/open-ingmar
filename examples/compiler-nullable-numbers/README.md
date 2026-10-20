@@ -40,6 +40,6 @@ Unchecked nullable values cannot be printed, returned, passed to user functions,
 or used as Number operands. Every write invalidates a local's non-null proof;
 check again before using its replacement value.
 
-[source]: ../../docs/specs/frontend/types.md#nullable-results
-[ir]: ../../docs/specs/ir/values.md#nullable-results
+[source]: ../../docs/specs/frontend/README.md#nullable-results
+[ir]: ../../docs/specs/ir/README.md#nullable-results
 [evidence]: ../../docs/investigations/compiler-nullable-numbers.md

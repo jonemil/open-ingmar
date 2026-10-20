@@ -22,5 +22,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the complete console with [expected.txt](expected.txt). See the
-[module-call contract](../../docs/specs/sdk/profiles.md#native-module-and-ui-profiles)
+[module-call contract](../../docs/specs/sdk/README.md#native-module-and-ui-profiles)
 and [evidence](../../docs/investigations/compiler-lang-format.md).

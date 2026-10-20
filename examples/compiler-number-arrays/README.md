@@ -49,7 +49,7 @@ same element contract; [empty literals][empty] require a concrete context.
 See the
 [source profile][source], [IR profile][ir], and [evidence][evidence].
 
-[source]: ../../docs/specs/frontend/containers.md#number-arrays
-[ir]: ../../docs/specs/ir/containers.md#array-allocation
+[source]: ../../docs/specs/frontend/README.md#number-arrays
+[ir]: ../../docs/specs/ir/README.md#array-allocation
 [evidence]: ../../docs/investigations/compiler-number-arrays.md
 [empty]: ../compiler-empty-arrays/README.md

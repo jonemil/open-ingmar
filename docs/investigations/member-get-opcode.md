@@ -15,7 +15,7 @@ The same opcode appears in `self.count *= 2`.
 instruction `getv`. Ghidra plugin `doc/opcodes.md`, entry `0x0d`, and optimizer
 `src/readprg/opcodes.ts`, `Getv` and stack accounting, describe consumption of
 receiver and member symbol and production of a member value. No implementation
-code was copied. The [instruction reference](../specs/vm/instructions.md#getv)
+code was copied. The [instruction reference](../specs/vm/README.md#getv)
 records the supported encoding and interpretation.
 
 Specimen: `scratch/member-get-opcode/build/fr265/member-get-opcode.prg`.

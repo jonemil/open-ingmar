@@ -23,3 +23,11 @@ validation, preservation, and limits. Examples there illustrate the grammar;
 they do not define alternate accepted syntaxes. Investigation links retain
 supporting evidence and uncertainty without making research notes necessary
 implementation references.
+
+Each category opens with its general reference; Monkey C, IR, and assembly keep
+their grammars beside it. Headings divide related topics within those
+references. Builds keep the independently used device-download protocol
+separate. Formats separate DATA's shared record walk, metadata binding,
+archive/package operations, and cryptographic signing from the general
+PRG/project contract. These boundaries follow distinct consumers and formats
+rather than individual features or helpers.

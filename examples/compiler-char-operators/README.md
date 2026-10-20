@@ -49,5 +49,5 @@ right
 B
 ```
 
-See [the operand contracts](../../docs/specs/frontend/operators.md#operator-contracts)
+See [the operand contracts](../../docs/specs/frontend/README.md#operator-contracts)
 and [the experiment](../../docs/investigations/compiler-char-operators.md).

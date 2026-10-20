@@ -1,7 +1,7 @@
 # Rust package reader and extraction
 
 Date: 2026-10-10. Implements stage 1 of
-[the package design](../specs/formats/package-reading.md), following
+[the package design](../specs/formats/packages.md#shared-reading-and-extraction), following
 [the format investigation](package-formats.md). Scope: list and bounded
 extraction, preserving exact payloads. No package signing/writing or new
 simulator experiment. SDK specimens are the previously recorded SDK 9.2.0 /
@@ -137,7 +137,7 @@ late payload tests verify no published files remain after failure and no staging
 tree leaks.
 
 **Implementation limits:**
-[the reading specification](../specs/formats/package-reading.md) records the accepted
+[the reading specification](../specs/formats/packages.md#shared-reading-and-extraction) records the accepted
 archive profile, output lifecycle, default limits, Linux verification boundary,
 and unsupported ZIP64/encoded-header/coder-graph cases. This stage reads the
 observed canonical barrel manifest path rather than evaluating Jungle. Parsed

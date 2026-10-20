@@ -22,5 +22,5 @@ remain immutable. Char locals and array elements support increment; Char
 decrement and other numeric classes are outside this profile. See
 [the source contract][source] and [runtime evidence][evidence].
 
-[source]: ../../docs/specs/frontend/statements.md#increment-and-decrement
+[source]: ../../docs/specs/frontend/README.md#increment-and-decrement
 [evidence]: ../../docs/investigations/compiler-increments.md

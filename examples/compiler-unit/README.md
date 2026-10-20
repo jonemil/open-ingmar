@@ -24,7 +24,7 @@ then `47`, and returns `48`. The [simulator experiment][evidence] confirms this
 behavior when all four generated methods replace their SDK reference bodies.
 Reversing the arguments produces prints `2`, `1` and result `-40`.
 
-See [source/IR/CLI rules](../../docs/specs/frontend/declarations.md). The
+See [source/IR/CLI rules](../../docs/specs/frontend/README.md#declarations-and-name-resolution). The
 [console application example](../compiler-application/README.md) also generates
 a complete application from these same two files with `--entry probe`.
 

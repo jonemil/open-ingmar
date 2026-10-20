@@ -11,7 +11,7 @@ Independent `ciq-prg` now parses/writes ordered exception triples and their
 `.exception` source. Section projects resolve named offsets after
 CODE layout. Export shares method, line, and branch labels, adding verified
 exception boundaries. Raw malformed/duplicate sections and invalid numeric
-targets remain preserved. See [the exception specification](../specs/formats/exceptions.md).
+targets remain preserved. See [the exception specification](../specs/formats/metadata.md#exceptions).
 
 **Experimentally observed:** the original control-flow PRG exports/imports byte
 identically, including both exception entries and signatures. Exported source:

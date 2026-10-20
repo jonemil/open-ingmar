@@ -44,7 +44,7 @@ post-call print. Run each separately with the simulator session helper and
 inspect the exception class and marker order. Ordinary successful-output checks
 must not count these crashes as successful application execution.
 
-The [source contract](../specs/frontend/lang-values.md#comparison-object-arguments)
+The [source contract](../specs/frontend/README.md#comparison-object-arguments)
 owns static assignability/nullability and the runtime-domain distinction.
 
 [number]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Number.html#compareTo-instance_function

@@ -29,5 +29,5 @@ cmp examples/compiler-number-products/expected.txt scratch/simulator/monkeydo.lo
 ```
 
 Zero-divisor and minimum-Number/-1 failure probes are separate so they cannot
-hide later results. See [contracts](../../docs/specs/frontend/operators.md#expressions-and-operators)
+hide later results. See [contracts](../../docs/specs/frontend/README.md#expressions-and-operators)
 and [SDK/generated evidence](../../docs/investigations/compiler-number-products.md).

@@ -23,5 +23,5 @@ sh scripts/run-simulator-container.sh \
 ```
 
 Compare the console with [expected.txt](expected.txt). See the
-[field contract](../../docs/specs/frontend/fields.md#typed-scalar-fields) and
+[field contract](../../docs/specs/frontend/README.md#typed-scalar-fields) and
 [evidence](../../docs/investigations/compiler-scalar-fields.md).

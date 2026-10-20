@@ -16,4 +16,4 @@ cargo run -p ciq-asm -- sign scratch/compiler-nullable-arrays/unsigned.prg scrat
 sh scripts/run-simulator-container.sh --prg scratch/compiler-nullable-arrays/generated.prg
 ```
 
-See the [source contracts](../../docs/specs/frontend/containers.md#nullable-array-elements).
+See the [source contracts](../../docs/specs/frontend/README.md#nullable-array-elements).

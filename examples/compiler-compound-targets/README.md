@@ -24,6 +24,6 @@ support `+= Number`. Existing type and frame limits apply. Bounds can fail at
 the initial read or at the final write after RHS mutations. See the
 [indexed contract][indexed], [field contract][fields], and [evidence][evidence].
 
-[indexed]: ../../docs/specs/frontend/statements.md#indexed-compound-assignment
-[fields]: ../../docs/specs/frontend/fields.md#instance-storage
+[indexed]: ../../docs/specs/frontend/README.md#indexed-compound-assignment
+[fields]: ../../docs/specs/frontend/README.md#instance-fields
 [evidence]: ../../docs/investigations/compiler-compound-targets.md

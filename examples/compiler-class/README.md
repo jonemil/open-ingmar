@@ -48,5 +48,5 @@ native aliases resolve before IR construction; they do not change the generated
 application layout.
 
 Source, typed IR, and saved unit IR produce the same complete unsigned PRG.
-See [class rules](../../docs/specs/frontend/classes.md) and
+See [class rules](../../docs/specs/frontend/README.md#source-classes) and
 [simulator evidence](../../docs/investigations/compiler-class.md).

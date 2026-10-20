@@ -17,5 +17,5 @@ tags and Array opcodes suffice; no new binary profile is required.
 Source and saved IR enforce Boolean-only elements and API availability: types,
 construction, indexing, `size`, and `toString` at 1.0.0, other supported native
 Array methods at 1.3.0. Nullable Boolean, sorting, and inherited Object behavior
-remain outside this evidence. See the [source profile](../specs/frontend/containers.md#boolean-arrays)
-and [constant IR](../specs/ir/containers.md#constant-arrays).
+remain outside this evidence. See the [source profile](../specs/frontend/README.md#boolean-arrays)
+and [constant IR](../specs/ir/README.md#constant-arrays).

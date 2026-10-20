@@ -26,7 +26,7 @@ The [Array API][array] defines Array/String types, `size`, and `toString` at
 1.0.0; mutation/search/transforms used here start at 1.3.0. Source and saved IR
 check those levels separately. This profile does not establish nullable element
 arrays, heterogeneous/nested arrays, sorting, or inherited Object behavior.
-Current contracts are in the [source profile](../specs/frontend/containers.md#string-arrays)
-and [constant IR](../specs/ir/containers.md#constant-arrays).
+Current contracts are in the [source profile](../specs/frontend/README.md#string-arrays)
+and [constant IR](../specs/ir/README.md#constant-arrays).
 
 [array]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Array.html

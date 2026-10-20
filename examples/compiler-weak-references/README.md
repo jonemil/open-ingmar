@@ -25,4 +25,4 @@ WeakReference and its `get()`/`stillAlive()` methods require API 1.2.0. The
 container methods in this specimen raise its minimum to 1.3.0. Ordinary
 Object results retain opaque contracts; concrete Array/Dictionary methods need
 narrower types. See the
-[source contracts](../../docs/specs/frontend/lang-values.md#ordinary-weak-references).
+[source contracts](../../docs/specs/frontend/README.md#ordinary-weak-references).

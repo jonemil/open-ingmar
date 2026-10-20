@@ -58,7 +58,7 @@ patterns, or conversion thresholds. The isolated
 simulator observations, not portable failure/recovery or conversion guarantees.
 
 Keep general source unions, Null keys, and explicit nested container parameters
-deferred under the [bounded source contracts](specs/frontend/lang-dictionary.md#planned-dictionary-extensions).
+deferred under the [bounded source contracts](specs/frontend/README.md#planned-dictionary-extensions).
 Nullable Array elements currently need explicit context; broader literal
 inference can follow once mixed scalar/Null contracts are established.
 Sized Array allocation keeps nullable elements until a separate initialization
@@ -391,15 +391,15 @@ as appropriate; successful encoding or a running process is not runtime proof.
 Use [research conventions](research.md) and [support scripts](../scripts/README.md)
 for evidence and reproduction; do not keep completed-step lists in this plan.
 
-[builds]: specs/build/project-builds.md
-[constraints]: specs/build/project-builds.md#target-constraints-and-section-layout
+[builds]: specs/build/README.md#planned-project-builds-and-targets
+[constraints]: specs/build/README.md#target-constraints-and-section-layout
 [official-docs]: investigations/official-garmin-documentation.md
 [source]: specs/frontend/README.md
 [boundary]: investigations/string-address-boundary.md
 
-[api-design]: specs/sdk/declarations.md
+[api-design]: specs/sdk/README.md#api-declarations
 
-[core-gaps]: specs/sdk/declarations.md#deferred-core-methods
+[core-gaps]: specs/sdk/README.md#deferred-core-methods
 
 [weak-results]: investigations/compiler-immutable-weak.md
 

@@ -26,4 +26,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-long-values/generat
 
 Floating conversions are covered by [the floating example](../compiler-float-values/README.md).
 Long fields remain deferred. See the
-[source contract](../../docs/specs/frontend/numeric-values.md#long-values).
+[source contract](../../docs/specs/frontend/README.md#long-values).

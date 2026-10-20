@@ -166,7 +166,7 @@ xvfb-run -a -s '-screen 0 1280x1024x24' python3 scripts/simulator-session.py --p
 
 ## Next step and limits
 
-Implement [branch-label fixups](../specs/assembly/labels.md), then structured
+Implement [branch-label fixups](../specs/assembly/README.md#code-labels-and-fixups), then structured
 lossless exception sources. Validate through independent Rust tests and an
 assembler-produced simulator edit before extending frontend conditions.
 Displacement extremes, endpoint inclusivity, nested/typed catches, `finally`,

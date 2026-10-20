@@ -288,9 +288,9 @@ arity, and reordered effectful IR.
 
 [system-exit]: https://developer.garmin.com/connect-iq/api-docs/Toybox/System.html#exit-instance_function
 [app-stop]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/AppBase.html#onStop-instance_function
-[profile]: ../specs/frontend/classes.md
+[profile]: ../specs/frontend/README.md#source-classes
 [example]: ../../examples/compiler-class/README.md
 [objects]: https://developer.garmin.com/connect-iq/monkey-c/objects-and-memory/
-[names]: ../specs/frontend/declarations.md#native-name-declarations
+[names]: ../specs/frontend/README.md#native-name-declarations
 [appbase]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Application/AppBase.html#onStart-instance_function
 [lifecycle-example]: ../../examples/compiler-lifecycle/README.md

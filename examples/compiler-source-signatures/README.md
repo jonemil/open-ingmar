@@ -43,7 +43,7 @@ The factory and pass/echo calls preserve the first instance's identity; the same
 counter is updated and displayed. Further drawing callbacks increment it again,
 so final values depend on session timing. Inspect the screen as well as the log.
 
-The [signature contract](../../docs/specs/frontend/classes.md#source-class-signatures)
+The [signature contract](../../docs/specs/frontend/README.md#source-class-signatures)
 requires exact non-null source classes. `as HelloView` retains identity across
 calls; `as Toybox.WatchUi.View` exposes the generic base contract. Neither is a
 runtime cast. Object-reference fields and constructor arguments remain next work.

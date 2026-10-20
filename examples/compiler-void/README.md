@@ -43,8 +43,8 @@ accept `return;` or falling through the closing brace. Mixing those return forms
 is rejected. User-module statement calls accept integer arguments and discard
 integer or void results; a void call cannot appear in an expression.
 
-See [source rules](../../docs/specs/frontend/statements.md#void-functions-and-statement-calls),
-[IR](../../docs/specs/ir/calls.md#void-returns-and-statement-calls),
+See [source rules](../../docs/specs/frontend/README.md#void-functions-and-statement-calls),
+[IR](../../docs/specs/ir/README.md#void-returns-and-statement-calls),
 and [simulator evidence](../../docs/investigations/compiler-void.md). Application
 classes and receiver/object operations are still supplied by the generated
 bootstrap, rather than source class declarations.

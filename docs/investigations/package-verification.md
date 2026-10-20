@@ -1,6 +1,6 @@
 # IQ package signature verification implementation
 
-Date: 2026-10-10. Stage 2 of [the package design](../specs/formats/package-reading.md),
+Date: 2026-10-10. Stage 2 of [the package design](../specs/formats/packages.md#shared-reading-and-extraction),
 following [the reader](package-reading.md) and
 [independent format/signature research](package-formats.md). Scope: public-SPKI
 and detached-signature APIs, then read-only IQ verification. No writer,
@@ -10,8 +10,8 @@ private-key access to the user's key, SDK upload/install, or new simulator run.
 
 Implementation follows our
 [developer-signature specification](../specs/formats/developer-signatures.md),
-[IQ profile](../specs/formats/iq-package.md), and new
-[verification behavior](../specs/formats/package-verification.md). The existing
+[IQ profile](../specs/formats/packages.md#iq-format-and-signing), and new
+[verification behavior](../specs/formats/packages.md#iq-verification). The existing
 independent Python public-RSA experiment was re-run as an oracle; no external
 project implementation code was copied.
 

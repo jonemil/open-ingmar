@@ -15,7 +15,7 @@ operandless `0x49` after each of the first two element calls, then ordinary
 `aputvdup`. Ghidra plugin `doc/opcodes.md`, entry `0x49`, and optimizer
 `src/readprg/opcodes.ts`, `Aputvdup`, size and stack accounting, describe
 `[..., array, index, value] → [..., array]`. No implementation code was copied.
-The [instruction reference](../specs/vm/instructions.md#aputvdup) defines the
+The [instruction reference](../specs/vm/README.md#aputvdup) defines the
 supported encoding and evidence limits.
 
 Specimen: `scratch/array-fill-opcode/build/fr265/array-fill-opcode.prg`.

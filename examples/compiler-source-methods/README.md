@@ -17,4 +17,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-source-methods/gene
 
 Bindings remain erased Methods: invocation returns `Object or Null` and does
 not check the target signature. See the
-[source contract](../../docs/specs/frontend/lang-values.md#method-values-and-invocation).
+[source contract](../../docs/specs/frontend/README.md#method-values-and-invocation).

@@ -12,11 +12,12 @@ inline-declaration = symbol | string | array | bytearray | dictionary
 ```
 
 One record occupies one line; declaration blocks have their explicit end
-records. Operand count/kind/width follows the [opcode table](../vm/encoding.md)
-and typed reference rules. The [symbol declaration rules](#symbol-declarations)
-define identifiers, quoting, comments, and field separators for shared section
-sources. Numeric operands preserve raw bits, including signed displacements and
-floating immediates. There are no arithmetic expressions, includes, or macros.
+records. Operand count/kind/width follows the [opcode
+table](../vm/README.md#encoding) and typed reference rules. The [symbol
+declaration rules](#symbol-declarations) define identifiers, quoting, comments,
+and field separators for shared section sources. Numeric operands preserve raw
+bits, including signed displacements and floating immediates. There are no
+arithmetic expressions, includes, or macros.
 
 Assembly uses one mnemonic per line, followed by one operand per field: a
 hexadecimal bit pattern, a declared `@alias` in a known symbol-ID field, or
@@ -36,14 +37,14 @@ contains a supported symbol table, comments also annotate symbol operands using
 escaped names; assembly ignores those comments and reproduces the original
 operand bits. [Symbol declarations](#symbol-declarations) resolve named
 operands. Optional commas separate fields. [String
-declarations](../formats/data-strings.md) resolve DATA addresses; `apush &alias`
-resolves a separately typed
-[DATA constant-array declaration](../formats/data-arrays.md).
-[Shared CODE labels](labels.md) identify instruction boundaries and resolve
+declarations](../formats/data.md#strings-and-opaque-spans) resolve DATA
+addresses; `apush &alias` resolves a separately typed
+[DATA constant-array declaration](../formats/data.md#array-constants).
+[Shared CODE labels](README.md#code-labels-and-fixups) identify instruction boundaries and resolve
 signed 16-bit branch fixups. Includes and expressions are not implemented.
 `ciq-asm` can replace an entire ordinary code payload in a PRG template or
-reconstruct a [complete section project](../formats/section-project.md); it is
-not a Monkey C compiler.
+reconstruct a [complete section project](../formats/README.md#section-project);
+it is not a Monkey C compiler.
 
 ## Labels
 
@@ -148,7 +149,7 @@ The source model serializes independently of the borrowed inspection model.
 Parsed record offsets are inspection metadata; field offsets are recomputed from
 the serialized layout. The named forms below resolve typed class/string/symbol
 references. Numeric fallbacks remain supported;
-[shared code labels](labels.md) resolve method targets. Numeric values
+[shared code labels](README.md#code-labels-and-fixups) resolve method targets. Numeric values
 are not automatically relocated.
 
 Complete DATA walks export classes and strings only after checking that
@@ -232,21 +233,22 @@ Each `.entry` takes exactly two scalars: `null`, `boolean=true|false`,
 `double=0x<u64>`, or `string=&<local-alias>`. Reference order within the
 declaration is unrestricted; all strings resolve during encoding. The serializer
 derives lengths/counts and preserves declaration order. Outer placement follows
-the existing [DATA layout rules](../formats/data-strings.md).
+the existing [DATA layout rules](../formats/data.md#strings-and-opaque-spans).
 
 Section projects keep Dictionary declarations in authoritative DATA source.
-Standalone assembly may declare inline [DATA requirements](model.md). CODE uses
-`hpush &example`; `Operand::Dictionary` and a separate Dictionary binding map
-prevent confusion with Array/String aliases. The current layout profile permits
-only zero-prefix DATA addresses below `0x01000000`; numeric operands retain raw
-bits without implying a validated record reference.
+Standalone assembly may declare inline [DATA
+requirements](README.md#model-and-layout). CODE uses `hpush &example`;
+`Operand::Dictionary` and a separate Dictionary binding map prevent confusion
+with Array/String aliases. The current layout profile permits only zero-prefix
+DATA addresses below `0x01000000`; numeric operands retain raw bits without
+implying a validated record reference.
 
 ## Strings and opaque spans
 
 DATA source combines strings with [class
-declarations](../formats/data-classes.md) and opaque bytes, using the shared
-quoted-string escapes documented in
-[symbol assembly](../formats/symbols.md):
+declarations](../formats/data.md#classes-and-modules) and opaque bytes, using
+the shared quoted-string escapes documented in
+[symbol assembly](../formats/metadata.md#symbols):
 
 ```text
 .bytes at=0x00000000 ffc1

@@ -20,7 +20,7 @@ identifies its four-byte operand. No implementation code was copied.
 **Framing observation:** the outer and inner lengths both exclude the final zero
 terminator. The outer includes magic/inner-length fields; the inner starts with
 the root type/count. This distinction is necessary for walking subsequent
-records and is explicit in [the local format spec](../specs/formats/data-arrays.md).
+records and is explicit in [the local format spec](../specs/formats/data.md#array-constants).
 The external container description alone was insufficient to fix the boundaries.
 
 Focused specimen: `scratch/constant-array/build/fr265/constant-array.prg`.

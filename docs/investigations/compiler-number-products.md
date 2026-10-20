@@ -20,7 +20,7 @@ Inspection of our SDK-built specimen confirms single-byte, operand-free
 instructions `mulv` (`0x05`, CODE+`0x76`), `divv` (`0x06`, CODE+`0x88`), and
 `modv` (`0x09`, CODE+`0x9a`). Both disassembly and generated code use these
 encodings. The public contracts, controlled specimens, and
-[local instruction reference](../specs/vm/instructions.md) are the basis for our
+[local instruction reference](../specs/vm/README.md#instruction-reference) are the basis for our
 independent Rust implementation.
 
 Artifact SHA-256 values from this run (SDK signed PRG, then our unsigned PRG):

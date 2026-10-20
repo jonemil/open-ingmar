@@ -38,7 +38,7 @@ unchanged reconstruction; no original-key access is needed.
 The compiler already lowers null comparisons through supported comparison
 instructions. No new semantic IR operation or instruction-selection policy is
 required to support these SDK encodings in assembly/disassembly. The
-[instruction reference](../specs/vm/instructions.md#isnull) defines their encoding.
+[instruction reference](../specs/vm/README.md#isnull) defines their encoding.
 
 ## Reproduction
 

@@ -17,4 +17,4 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-float-values/genera
 ```
 
 Floating fields and general union types remain deferred. See the
-[source contract](../../docs/specs/frontend/numeric-values.md#numeric-values).
+[source contract](../../docs/specs/frontend/README.md#numbers-and-numeric-aliases).

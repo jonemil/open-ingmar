@@ -8,8 +8,8 @@ Start with `Prg::parse`, `Prg::sections`, and `Prg::to_bytes` in the
 symbols, debug records, line mappings, exceptions, resources, and section
 manifests.
 
-See [container framing](../../docs/specs/formats/prg-container.md),
-[section projects](../../docs/specs/formats/section-project.md),
-[Dictionary constants](../../docs/specs/formats/data-dictionaries.md), and
+See [container framing](../../docs/specs/formats/README.md#prg-container),
+[section projects](../../docs/specs/formats/README.md#section-project),
+[Dictionary constants](../../docs/specs/formats/data.md#dictionary-constants), and
 [architecture](../../docs/architecture.md) for supported formats and boundaries.
 Instruction encoding belongs to `ciq-mc`; signing belongs to `ciq-sign`.

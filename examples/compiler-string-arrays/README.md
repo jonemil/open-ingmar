@@ -16,4 +16,4 @@ cargo run -p ciq-asm -- sign scratch/compiler-string-arrays/unsigned.prg scratch
 sh scripts/run-simulator-container.sh --prg scratch/compiler-string-arrays/generated.prg
 ```
 
-See the [source contracts](../../docs/specs/frontend/containers.md#string-arrays).
+See the [source contracts](../../docs/specs/frontend/README.md#string-arrays).

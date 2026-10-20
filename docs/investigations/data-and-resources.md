@@ -94,13 +94,13 @@ runs in a particular human language.
 
 ## Assembly design and reproduction
 
-Implemented [DATA source](../specs/formats/data-strings.md) combines `.string` records
+Implemented [DATA source](../specs/formats/data.md#strings-and-opaque-spans) combines `.string` records
 with pinned `.bytes` opaque spans. Manifest `data` encoding chooses
 this source as authoritative. Code resolves `news &alias`; symbol references
 remain `@alias`. Strings in authored standalone DATA can omit placement for
 source-order allocation. Exports pin layout. Template assembly supports inline
 pinned strings and same-length edits. RESOURCES remains raw;
-[resource strings](../specs/formats/resources.md) have read-only inspection.
+[resource strings](../specs/formats/metadata.md#resources) have read-only inspection.
 
 ```sh
 cargo run -p ciq-dis -- all examples/minimal-console/build/fr265/minimal-console.prg scratch/string-project-minimal-v2

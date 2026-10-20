@@ -37,7 +37,7 @@ Later updates print increasing values. The two `7, 8` pairs check that modifying
 the first instance does not change the second instance's initial value. Inspect
 the displayed number too; update counts vary with session timing.
 
-The [field contract](../../docs/specs/frontend/fields.md#instance-storage)
+The [field contract](../../docs/specs/frontend/README.md#instance-fields)
 currently supports literal-initialized Number fields and explicit self access.
 General object-member calls, object-reference fields, and input delegates are
 subsequent work. See [SDK comparison evidence](../../docs/investigations/compiler-fields.md).

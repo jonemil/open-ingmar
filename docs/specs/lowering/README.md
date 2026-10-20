@@ -4,11 +4,6 @@
 `ciq-assembly::Program` directly. `Function::lower` delegates to it. Printing
 and reparsing IR or assembly is optional and must preserve the same result.
 
-- [Values and storage](values.md): immediates, frame slots, containers, ownership.
-- [Calls and objects](calls.md): receiver/member selection and invocation.
-- [Control flow](control-flow.md): branches, joins, and loops.
-- [Unit layout](unit-layout.md): owner-qualified CODE labels and body order.
-
 The frontend establishes source meaning; IR validation checks types, ownership,
 block-local single uses, and an effect schedule that the backend can honor.
 Lowering assigns VM storage and selects instructions without constant folding,
@@ -28,8 +23,309 @@ retaining the value on the evaluation stack. Source locals keep ordinary
 assignment/frame lifetimes; there is no general last-use destruction analysis.
 Ordinary CFG edges have empty stacks; value edges carry their one join argument.
 
-[VM encodings](../vm/encoding.md) and [instruction semantics](../vm/instructions.md)
+[VM encodings](../vm/README.md#encoding) and [instruction semantics](../vm/README.md#instruction-reference)
 are distinct from this compiler's instruction choices. Native API declarations
 supply identities and availability, not VM slots, imports, or implementations.
-[Application generation](../build/application.md) materializes DATA, symbols,
+[Application generation](../build/README.md#complete-application-generation) materializes DATA, symbols,
 imports, and container sections from the lowered unit.
+
+Contents:
+
+- [Values and storage](#values-and-storage)
+- [Control flow](#control-flow)
+- [Calls and objects](#calls-and-objects)
+- [Unit layout](#unit-layout)
+
+## Values and storage
+
+### Parameters and positional arguments
+
+Backend prologue counts parameters plus one context slot; parameter index 0
+loads slot 1, and local slots start after all parameters. Nonempty calls select
+the callable, emit `frpush`, evaluate arguments left to right, then `invokem
+<argument-count + 1>`. Empty calls keep `invokemz`. Function/call parameter
+counts are limited to 254 and parameters plus locals to 255, so existing u8
+fields/slot indexes fit. The 1024-operation and 64-level expression nesting
+limits remain. These encoding limits do not claim runtime validation at maximum
+counts.
+[SDK and runtime evidence](../../investigations/compiler-arguments.md) verifies two
+parameters, a following local, nested calls, and generated caller/callee
+execution with observable argument order.
+
+### Native name declarations
+
+`String { result, value }` defines a semantic string; `Println { value }` is an
+effectful sink without a result. Printing participates in the same conservative
+IR scheduling check as user calls. Lowering uses `news` for literals and `getmv;
+frpush; <argument>; invokem 2; popv` for printing. The dedicated
+`__ciq_sdk_System` alias binds only to `Toybox_System`; the member alias binds
+to `println`. This does not establish a general SDK naming convention.
+
+Lowering deduplicates literal content within each function, naming declarations
+`__ciq_string_<function>_<first-occurrence-index>`. These CODE declarations omit
+`at`; they describe required content without assigning DATA placement. Raw CODE
+needs `--data <data-source.mcasm>` in addition to `--symbols`. Matching and
+integration are described in [compiler
+commands](../build/README.md#compiler-commands-and-saved-stages) and
+[the runtime experiment](../../investigations/compiler-strings.md). [Application generation](../build/README.md#complete-application-generation) allocates DATA and method
+metadata; raw CODE consumers must supply them explicitly.
+
+### Array element writes
+
+Lowering evaluates the three operands and emits `aputv`. Logical expressions or
+array construction in any operand stage all three operands through hidden locals
+in order; these locals use the ordinary frame budget. Plain operands need no
+hidden slots. Bounds are a runtime obligation, with no clamping or static range
+rejection. The tested VM reports a fatal bounds error after all operand effects,
+including for an index equal to the length.
+
+Lowering emits receiver, index, value, then `aputv`, without a discarded result.
+Negative and out-of-range indices remain accepted inputs with runtime bounds
+obligations. The operation does not resize the array. API availability follows
+Array/Number/View (1.0.0), or Char (1.3.0); source literal construction or
+native operand calls may require a later API independently. Source staging
+across joins appears as ordinary typed locals in saved IR and uses the existing
+frame budget. See [source rules](../frontend/README.md#array-element-writes),
+[Number evidence](../../investigations/compiler-array-writes.md) and
+[Char/View evidence](../../investigations/compiler-typed-array-writes.md).
+
+### Dictionary constants
+
+Lowering declares an unplaced `Item::Dictionary` requirement and emits `hpush
+&alias`. Complete applications materialize it in DATA; native/text assembly uses
+the same model. `dictionary_bindings()` binds requirements against provided DATA
+by matching alias and ordered scalar contents, or otherwise by a unique content
+match. Local pool aliases resolve to text for comparison. Missing, ambiguous,
+incompatible, or conflicting bindings fail. See
+[DATA constants](../formats/data.md#dictionary-constants) and [assembly](../assembly/README.md#model-and-layout).
+
+### Array allocation
+
+Lowering emits `ipushz; newa`, with no symbol or DATA binding. Nonempty source
+literals use constant loads or the [private construction
+operations](../ir/README.md#private-array-construction). The explicit IR element
+type preserves empty allocation after source contextual typing. See
+[nonempty construction](../../investigations/compiler-array-literals.md) and
+[empty construction](../../investigations/compiler-empty-arrays.md).
+
+### Constant arrays
+
+Lowering emits an unplaced `.array` requirement and `apush &alias`. Complete
+applications materialize its [DATA record](../formats/data.md#array-constants),
+using a shared local pool entry for equal String text, and bind the outer tag
+offset. Raw CODE output requires an explicit matching DATA source; it does not
+allocate DATA. A new mutable array is loaded on every execution, even when the
+same record is referenced repeatedly. Source selection is limited to literal
+tokens matching the element contract; computed/effectful elements use private
+builders.
+
+### Number and Char steps
+
+Lowering emits the operand, `ipush1 0x01`, and `addv` or `subv`. Existing single
+use, block-local dependency, type, and effect-order checks apply. No extra
+native call or new VM opcode is needed. See [source
+updates](../frontend/README.md#increment-and-decrement).
+
+### Local operations
+
+Lowering uses `lgetv <slot>; npush; lputv <slot>`: the value remains on the
+expression stack while the slot releases its reference. Source-generated hidden
+reference temporaries use this transfer on their final read; source locals keep
+ordinary assignment/frame lifetimes. This is ownership scheduling, not early
+destruction of named locals based on last use.
+
+### Runtime object predicates
+
+Lowering evaluates the tested value, selects the runtime class with `getmv`,
+then emits `isa`. Lang class lookup binds the `Toybox_Lang` module identity,
+independently of PRG import-table placement. `Has` evaluates receiver then
+selector and emits `hasv`. No section offsets or native symbol IDs are stored in
+semantic IR.
+
+### Lexical casts
+
+Lowering emits only the operand. There is no cast opcode, runtime class test,
+conversion, or new PRG record. Assertions preserve one-use and effect-order
+rules and may consume an incoming stack value directly without setup. Their
+result type participates in subsequent native calls and instruction selection;
+source-class provenance does not pass through an opaque native assertion.
+
+### Source-class tests and casts
+
+Lowering a source test evaluates its operand, uses `getmv` with the unit's
+global class binding, and emits `isa`. The target is the emitted source class
+object, not its native base or a symbol ID alone. Source casts emit only their
+operand, like native lexical casts. No new VM instruction or DATA record is
+required.
+
+### Scalar instruction selection
+
+Number constants use `ipushz` for zero, otherwise the smallest signed
+`ipush1`/`ipush2`/`ipush3`/`ipush4` immediate. Long uses `lpushz`/`lpush`; Float
+uses `fpushz`/`fpush`; Double uses `dpushz`/`dpush`. Signed floating zero and
+bit-pattern preservation follow the [IR constant
+contracts](../ir/README.md#values-and-storage). Char uses `cpush`, Boolean
+`btpush`/`bfpush`, Null `npush`, and String `news`. The assembly encoder
+preserves explicit widths independently of these choices.
+
+Binary trees emit left operand, right operand, then the selected instruction:
+`addv`, `subv`, `mulv`, `divv`, `modv`, `andv`, `orv`, `xorv`, `shlv`, or
+`shrv`. Comparisons select `eq`, `ne`, `lt`, `lte`, `gt`, or `gte`; typed IR has
+already checked the operand/result domains. No folding or guards are added.
+Unary plus emits only its operand. Integer inversion/complement emits `invv`.
+Negation subtracts the operand from the appropriate typed positive zero; numeric
+alias negation uses Number zero. This differs from a negative-zero literal.
+
+Pure dependency traversal may differ from definition order, but initialization,
+returns, and other sinks remain ordered. Potentially failing division/remainder
+and effectful operations activate the [shared
+schedule](../ir/README.md#validation). Context-independent bodies may omit SDK
+global-resolution sequences; that does not establish valid frame setup for
+arbitrary bytecode.
+
+## Control flow
+
+### Terminal conditions
+
+Lowering emits an entry block, condition evaluation, and branch, then separate
+arm blocks. Both arms may read parameters and enclosing locals. The
+[IR rules](../ir/README.md#control-flow) validate
+block-local values and initialization on every path. See
+[conditions.mc](../../../examples/compiler-probe/conditions.mc) and
+[initial simulator evidence](../../investigations/compiler-conditions.md).
+
+### While loops
+
+Lowering uses explicit test/body/exit blocks and a symbolic backward jump from
+continuing body paths. Conditions are evaluated in the test block each visit;
+body effects stay in the body. Every edge has an empty evaluation stack. These
+use branch/jump directives; cyclic initialization checks are specified in [IR
+text](../ir/README.md#cyclic-control-flow).
+
+### Expression joins
+
+Lower a value edge to its operand and `goto`; the parameter emits no load, copy,
+placeholder initializer, or native call. Exactly one value arrives on the VM
+stack. Consume it in a return, discard, local initialization/assignment, branch,
+or another value jump. A prefix-free chain of unary operations or left operands
+of binary/comparison operations may precede that consumption. Operations that
+push call, field, or array setup must first stage the result in a local. Both
+stack-use validation and declaration/evaluation-order validation enforce this;
+no unrelated root may run before the parameter is consumed. Ordinary edges keep
+an empty stack. Surrounding operand staging shares the existing frame budget; a
+direct conditional return needs no additional local.
+
+## Calls and objects
+
+### Calls on constructed source objects
+
+Lowering evaluates the receiver, selects its method with `getsv`, prepares the
+argument context when needed, invokes it, and discards statement results. Native
+and text paths use identical lowering and ordinary member-symbol binding. See
+the [object-call example](../../../examples/compiler-object-calls/README.md) and
+[runtime evidence](../../investigations/compiler-object-calls.md).
+
+### User module calls
+
+Backend lowering selects `getmv @__ciq_module_<module> @__ciq_member_<member>;
+invokemz`, for zero arguments. Nonempty calls additionally use `frpush`,
+argument expressions in order, and `invokem <argument-count + 1>`. Module
+bindings must identify `globals/<module>`; the short `<module>` symbol is a
+distinct field identity. The compiler CLI supports `--symbols
+<symbol-source.mcasm>` for CODE emission: resolve generated aliases by unique
+stored names in the provided `.symbol` declarations, reject absent/ambiguous
+targets, and preserve ordinary aliases for assembly inputs. Library consumers
+can supply bindings through the assembly encoder. [Runtime
+evidence](../../investigations/compiler-calls.md) confirms return values and
+observable call order. Complete application generation creates module/method
+DATA from the unit; raw CODE consumers must provide those records themselves.
+
+### Native object construction
+
+Lowering emits `getmv @__ciq_sdk_WatchUi @__ciq_native_View; newc; dup 0; getsv
+@__ciq_native_initialize; dup 1; invokem 1; popv`. The instance remains on the
+stack after the initializer result is popped. Symbol sources bind those aliases
+to exactly one `Toybox_WatchUi`, class, and `initialize` declaration
+respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
+construction. See [constructor
+evidence](../../investigations/compiler-native-views.md).
+
+### Positional result construction
+
+Lowering allocates length one or two with `ipush1 <length>; newa`, then emits
+`dup 0; ipush1 <index>; <stored slot read>; aputv` for each slot. The result is
+published after all slots are filled. Array/View/InputDelegate exist at API
+1.0.0; View construction requires its initializer's 2.1.0 level. No allocation
+failure timing or memory equivalence with SDK lowering is implied. See
+[input evidence](../../investigations/compiler-input-counter.md).
+
+### Native module values
+
+Lowering selects `getmv @__ciq_sdk_Lang @__ciq_native_format`, `frpush`, the
+arguments in order, and `invokem` with receiver-inclusive arity. Explicit symbol
+sources bind `Toybox_Lang` and `format`; application generation supplies their
+native IDs. Concrete Array types survive the erased parameter boundary. See the
+[source contract](../sdk/README.md#native-module-and-ui-profiles) for literal context and
+callback effects.
+
+### Native module statements
+
+Lowering selects `getmv @__ciq_sdk_<module> @__ciq_native_<member>`, `invokemz`,
+and `popv`. Explicit symbol sources must contain one matching module/member
+identity; application generation supplies the observed native IDs. The operation
+is an ordered statement, not a CFG terminator. IR still requires its ordinary
+returns and branches; exit has no expression value. Wrong arity, unknown
+declarations, and unsupported native statement contracts are errors.
+
+### Native value calls
+
+Lowering emits `spush @__ciq_symbol_<name>`. Raw CODE binding resolves that
+alias by a unique stored name in the supplied symbol source. Complete
+application generation allocates the name in the shared identity map and retains
+its development name in SYMBOLS. Known native member names reuse their pinned
+IDs. These are existing assembly/SYMBOLS formats, not a new bytecode encoding.
+
+### Computed Dictionary construction
+
+Begin lowers to a Number push, `newd`, and private frame storage before entry
+effects. A fill evaluates/stores each pair before the next; non-final pairs use
+`aputvdup`, and the last uses `aputv`. Finish transfers the private reference
+and clears its frame slot using `lgetv; npush; lputv`. Source control flow
+stages key/value operands into locals and emits separate fill groups, preserving
+empty-stack ordinary edges and incoming-value consumption. Candidate inference
+is provisional; final IR checking validates each entry and its API/null proofs.
+Shared checks follow the [builder
+rules](../ir/README.md#private-container-checks).
+
+## Unit layout
+
+### Identity and CODE layout
+
+Semantic function names remain unqualified; declaration ownership is separate.
+Lowering emits all bodies into one assembly model in declaration order, using:
+
+```text
+global: __ciq_fn_g_<name-byte-length>_<name>
+member: __ciq_fn_m_<module-byte-length>_<module>_<name-byte-length>_<name>
+```
+
+Lengths are decimal; source names are ASCII. For example, global `probe` maps to
+`__ciq_fn_g_5_probe`, and `Numbers.difference` maps to
+`__ciq_fn_m_7_Numbers_10_difference`. Internal block and string aliases use that
+label as their prefix, preventing collisions across owners. Method metadata must
+bind to the declaration's CODE label, not just its source name.
+
+Calls still select symbolic module/member identities through `getmv` and the
+existing context/argument convention. CODE labels identify bodies; they do not
+replace module DATA method records. Symbol IDs and DATA literal placements
+remain explicit encoder inputs. Strings are deduplicated within each function;
+unit lowering does not merge literals across functions.
+
+### Class bodies
+
+Global/module bodies precede class bodies; each group preserves declaration
+order, and methods retain class order. Class labels are
+`__ciq_fn_c_<class-length>_<class>_<member-length>_<member>` with decimal byte
+lengths and ASCII names. Internal aliases use that prefix. Body indexes used in
+validation diagnostics follow this same order. All groups together have the
+unit's 1..=256-body limit. Serialized spans remain provenance only.

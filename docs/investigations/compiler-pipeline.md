@@ -8,8 +8,8 @@ scaffold; it did not test independent application generation.
 All 128 accepted literal inputs agreed across native/text models and CODE.
 Alternate value IDs/spans, malformed IR/assembly, external bindings, CLI stage
 resumption, and output preservation were checked. Shared-model responsibilities
-and current invariants are specified in [assembly](../specs/assembly/model.md) and
-[IR](../specs/ir/model.md).
+and current invariants are specified in [assembly](../specs/assembly/README.md#model-and-layout) and
+[IR](../specs/ir/README.md#model-and-validation).
 
 ## Reproduction and compatibility checks
 
@@ -93,12 +93,12 @@ names][ref-cargo-target-names]. These informed terminology; they are not
 compatibility requirements.
 
 Related evidence:
-[initial replacement](../investigations/function-replacement.md),
-[instruction semantics](../investigations/instruction-semantics.md),
-[MIR/module observations](../investigations/module-method-names.md),
-[locals](../investigations/compiler-locals.md),
-[module calls](../investigations/compiler-calls.md), and
-[parameters/arguments](../investigations/compiler-arguments.md).
+[initial replacement](function-replacement.md),
+[instruction semantics](instruction-semantics.md),
+[MIR/module observations](module-method-names.md),
+[locals](compiler-locals.md),
+[module calls](compiler-calls.md), and
+[parameters/arguments](compiler-arguments.md).
 
 [ref-llvm-ir]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/IR/CMakeLists.txt
 [ref-llvm-mc]: https://github.com/llvm/llvm-project/blob/main/llvm/lib/MC/CMakeLists.txt

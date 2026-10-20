@@ -21,8 +21,8 @@ jump to a shared block declared after both arms; returning arms do not contribut
 an edge. Both returning arms omit the join. Every function path must return;
 following unreachable statements are rejected.
 
-The [source specification](../specs/frontend/statements.md#statement-arms-and-joins)
-and [IR specification](../specs/ir/control-flow.md#ir-control-flow) record these
+The [source specification](../specs/frontend/README.md#statement-arms-and-joins)
+and [IR specification](../specs/ir/README.md#control-flow) record these
 rules. They are our bounded subset, not a claim of complete Monkey C scoping.
 
 ## Simulator specimens and observations
@@ -148,7 +148,7 @@ captures before the next session overwrites `scratch/simulator/`.
 Instruction-oracle checks cover both early-return directions, one/two-predecessor
 joins, initialized locals, empty edge stacks, and ordered effects. Native/text
 paths agree. Malformed graphs and source scope/type errors are rejected.
-[The source spec](../specs/frontend/statements.md#statement-arms-and-joins) owns the
+[The source spec](../specs/frontend/README.md#statement-arms-and-joins) owns the
 current grammar; these runtime observations remain limited to the stated inputs.
 
 [scaffold]: control-flow.md#reproduction
