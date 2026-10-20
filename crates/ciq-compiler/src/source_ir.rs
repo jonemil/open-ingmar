@@ -651,6 +651,14 @@ fn emit_call(
     })
 }
 
+/// Resolved destinations for the innermost source loop. Continue need not
+/// target the condition when another loop form supplies an update block.
+#[derive(Clone, Copy)]
+struct LoopTargets {
+    break_to: BlockId,
+    continue_to: BlockId,
+}
+
 struct Builder<'a> {
     source: &'a str,
     calls: &'a CallContext,
@@ -661,7 +669,7 @@ struct Builder<'a> {
     next_local: u32,
     named_locals: std::collections::BTreeSet<LocalId>,
     next_block: u32,
-    loops: Vec<(BlockId, BlockId)>,
+    loops: Vec<LoopTargets>,
 }
 
 impl Builder<'_> {
@@ -2185,7 +2193,7 @@ impl Builder<'_> {
                     terminated = true;
                 }
                 parser::Statement::Break { .. } | parser::Statement::Continue { .. } => {
-                    let &(test, exit) = self.loops.last().ok_or_else(|| {
+                    let targets = self.loops.last().ok_or_else(|| {
                         Diagnostic::at(
                             self.source,
                             span.start,
@@ -2193,9 +2201,9 @@ impl Builder<'_> {
                         )
                     })?;
                     let target = if matches!(statement, parser::Statement::Break { .. }) {
-                        exit
+                        targets.break_to
                     } else {
-                        test
+                        targets.continue_to
                     };
                     self.push(Operation::Jump { target }, Some(span));
                     terminated = true;
@@ -2210,7 +2218,10 @@ impl Builder<'_> {
                     self.push(Operation::Block { block: test }, None);
                     self.condition(condition, locals, body_block, exit)?;
                     self.push(Operation::Block { block: body_block }, None);
-                    self.loops.push((test, exit));
+                    self.loops.push(LoopTargets {
+                        break_to: exit,
+                        continue_to: test,
+                    });
                     let body_terminates = self.sequence(body, &mut locals.clone())?;
                     self.loops.pop();
                     if !body_terminates {

@@ -165,9 +165,19 @@ unsupported. Native spellings resolve through the import environment.
 ## Lexical rules and literals
 
 Identifiers use ASCII letters/underscore followed by ASCII letters, digits, or
-underscore. Declaration keywords, `self`, literal keywords, `new`, `as`,
-`instanceof`, `has`, `and`, and `or` cannot be ordinary identifiers. Additional
-reserved owner/native names follow [name
+underscore. The following words cannot be ordinary identifiers, including words
+whose associated constructs are not implemented:
+
+```text
+alias and as break case catch class const continue default do else enum extends
+false finally for function has hidden if import instanceof me module NaN native
+new null or private protected public return self static switch throw true try
+typedef using var while
+```
+
+`self` is accepted as a receiver expression. Source keyword reservation does not
+restrict saved IR or assembly names. Additional reserved owner/native names
+follow [name
 resolution](README.md#declarations-and-name-resolution) and
 [class rules](README.md#source-classes). Whitespace, `//` comments, and non-nested `/* ... */`
 comments are accepted. Commas separate lists; trailing commas are unsupported.

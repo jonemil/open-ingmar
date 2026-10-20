@@ -49,7 +49,7 @@ fn nullable_receivers_require_fresh_storage_proofs() {
     for body in [
         "return c.compareTo(1);",
         "if(c==null) { return c.compareTo(1); } else { return 0; }",
-        "var alias=c; if(c!=null) { return alias.compareTo(1); } else { return 0; }",
+        "var copy=c; if(c!=null) { return copy.compareTo(1); } else { return 0; }",
         "var guard=c!=null; if(guard) { return c.compareTo(1); } else { return 0; }",
         "var local=c; if(local!=null) { local=null; return local.compareTo(1); } else { return 0; }",
         "var local=c; var old=local; if(local!=null) { return old.compareTo(1); } else { return 0; }",

@@ -9,11 +9,6 @@ core changes. New UI classes, event objects, drawing APIs, and broader SDK
 modules belong to a later phase. Project/resource/package work stays in the
 backlog while these language foundations are the priority.
 
-Use the [implementation follow-up](#implementation-follow-up) to reduce concrete
-maintenance risks alongside core work. Start with keyword reservation and shared
-type spelling before expanding the next source-reference contract; do not make
-a broad compiler rewrite a prerequisite for every language feature.
-
 Choose increments by dependency, following the
 [class-focused strategy](#native-lang-strategy):
 
@@ -110,51 +105,6 @@ device capacity distinct. Grow the [API declarations][api-design] through
 core contracts; broader device/app/permission inputs and Application/System
 integration belong to the later project/SDK phase. A Jungle driver or complete
 API definition parser is not a prerequisite for this core work.
-
-## Implementation follow-up
-
-Keep the existing crate and source/IR/assembly boundaries. Apply the
-[implementation conventions](architecture.md#implementation-conventions) through
-small changes with preserved native/text behavior:
-
-1. **Keyword reservation.** `parser.rs::identifier` reserves only part of the
-   language vocabulary. Review probes accepted `function for() { return 41; }`
-   and `function probe() { var has = 41; return has; }`; `has` is already a
-   documented operator. Centralize source keyword classification, distinguish
-   reserved words from implemented constructs, and test declaration/name sites.
-   Keep source keyword restrictions separate from IR and assembly identifiers.
-   The [official reference][official-language] defines the language vocabulary;
-   rejecting a reserved identifier does not implement its associated statement.
-2. **Type spelling and context checks.** Consolidate repeated saved-type tag
-   readers/writers in `ir_text.rs`, `lib.rs`, `unit.rs`, and `joins.rs` around
-   the documented IR grammar. Reuse existing Array/Dictionary/alias conversions
-   rather than adding more lists. Preserve each consumer's accepted domain and
-   diagnostics; function result metadata, call results, fields, joins, and casts
-   intentionally differ. Cover supported types and rejected cross-context uses
-   through native/text round trips before extending nullable source identities.
-3. **IR directive parsing.** Replace the numeric `kind` dispatch in
-   `ir_text.rs` with named cases or direct operation parsers. Keep operand-count,
-   span, and diagnostic handling shared without introducing a generated parser
-   framework. Extract only the concerns that make the reader easier to follow.
-4. **Native binding ownership.** Review the pinned names/IDs in `application.rs`
-   and `runtime_types.rs` together. Give shared bindings one representation
-   when extending them; retain the explicit bootstrap profile and keep VM IDs
-   out of the API catalogue. Do not invent per-device binding configuration
-   without evidence that it is needed.
-5. **Control-flow extensions.** Reuse the existing CFG, scope, and initialization
-   machinery when implementing the language worklist. Give `continue` its
-   construct-specific destination (`for` update, `while`/`do` test), and keep
-   switch/loop break targets distinct. Review cleanup/unwinding when exceptions
-   arrive; ordinary jumps alone do not establish finally semantics. Builder-only
-   expression nodes currently live beside parsed expressions in `parser.rs`;
-   keep that distinction explicit and separate them only when a concrete
-   extension makes the shared representation obstructive.
-
-Assembly already shares native/text validation through `Program`; VM opcode
-bytes/widths come from one table. DATA constant codecs share framing and scalar
-values; package operations share archive/path limits; signing owns its messages
-and keys independently. Preserve those existing reuse points. New format or
-target profiles should extend their owners rather than add compiler-side copies.
 
 ## Core completion gate
 
@@ -292,9 +242,11 @@ remain required core work. The frontend grammar records current acceptance.
   verify other forms rather than importing C semantics.
 - **Control flow and scopes:** finish accepted if/else and standalone block
   forms; add `for` and `do/while`, their declaration/update scopes, and nested
-  break/continue targets. Add `switch`, value and `case instanceof` matching,
+  break/continue targets (`for` update, `while`/`do` test). Add `switch`, value
+  and `case instanceof` matching,
   fall-through, default placement, case/block scopes, definite initialization,
-  and interaction with surrounding loops. Keep return/reachability analysis
+  and interaction with surrounding loops; keep switch and loop break targets
+  distinct. Keep return/reachability analysis
   consistent across every construct.
 - **Types and dynamic behavior:** support implicit Any, Void/Null distinctions,
   general unions, changing local types and joins, casts/refinement, and guarded

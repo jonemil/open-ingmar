@@ -25,13 +25,14 @@ mod ir_text;
 mod joins;
 mod names;
 mod native;
+mod native_bindings;
 mod operators;
 mod parser;
-mod runtime_types;
 mod source_ir;
 mod source_objects;
 mod source_types;
 mod type_flow;
+mod type_text;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use unit::{
@@ -248,39 +249,10 @@ impl ArrayElement {
         if let Some((alias, nullable)) = NumericAlias::from_api_type(ty) {
             return Some(Self::Numeric { alias, nullable });
         }
-        [
-            Self::LangObject,
-            Self::NullableObject,
-            Self::Interface(InterfaceType::Comparable),
-            Self::Interface(InterfaceType::Comparator),
-            Self::NullableInterface(InterfaceType::Comparable),
-            Self::NullableInterface(InterfaceType::Comparator),
-            Self::Number,
-            Self::NullableNumber,
-            Self::Double,
-            Self::NullableDouble,
-            Self::Float,
-            Self::NullableFloat,
-            Self::Long,
-            Self::NullableLong,
-            Self::NullableChar,
-            Self::NullableBoolean,
-            Self::Symbol,
-            Self::NullableSymbol,
-            Self::Method,
-            Self::NullableMethod,
-            Self::WeakReference,
-            Self::NullableWeakReference,
-            Self::ByteArray,
-            Self::NullableByteArray,
-            Self::Char,
-            Self::Boolean,
-            Self::String,
-            Self::NullableString,
-            Self::Object(NativeClass::View),
-        ]
-        .into_iter()
-        .find(|element| element.api_type() == *ty)
+        type_text::ARRAY_ELEMENTS
+            .iter()
+            .copied()
+            .find(|element| element.api_type() == *ty)
     }
 
     fn text(self) -> &'static str {
@@ -317,66 +289,6 @@ impl ArrayElement {
             Self::Object(NativeClass::View) => "view",
             Self::Object(NativeClass::Dc) => "dc",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
-        }
-    }
-
-    fn array_text(self) -> &'static str {
-        match self {
-            Self::LangObject => "object-array",
-            Self::NullableObject => "nullable-object-array",
-            Self::Numeric {
-                alias: NumericAlias::Integer,
-                nullable: false,
-            } => "integer-union-array",
-            Self::Numeric {
-                alias: NumericAlias::Integer,
-                nullable: true,
-            } => "nullable-integer-union-array",
-            Self::Numeric {
-                alias: NumericAlias::Decimal,
-                nullable: false,
-            } => "decimal-array",
-            Self::Numeric {
-                alias: NumericAlias::Decimal,
-                nullable: true,
-            } => "nullable-decimal-array",
-            Self::Numeric {
-                alias: NumericAlias::Numeric,
-                nullable: false,
-            } => "numeric-array",
-            Self::Numeric {
-                alias: NumericAlias::Numeric,
-                nullable: true,
-            } => "nullable-numeric-array",
-            Self::Interface(InterfaceType::Comparable) => "comparable-array",
-            Self::Interface(InterfaceType::Comparator) => "comparator-array",
-            Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable-array",
-            Self::NullableInterface(InterfaceType::Comparator) => "nullable-comparator-array",
-            Self::Number => "number-array",
-            Self::Double => "double-array",
-            Self::NullableDouble => "nullable-double-array",
-            Self::Float => "float-array",
-            Self::NullableFloat => "nullable-float-array",
-            Self::Long => "long-array",
-            Self::NullableLong => "nullable-long-array",
-            Self::NullableNumber => "nullable-number-array",
-            Self::NullableChar => "nullable-char-array",
-            Self::NullableBoolean => "nullable-boolean-array",
-            Self::Char => "char-array",
-            Self::Symbol => "symbol-array",
-            Self::Method => "method-array",
-            Self::WeakReference => "weak-reference-array",
-            Self::NullableWeakReference => "nullable-weak-reference-array",
-            Self::ByteArray => "byte-array-array",
-            Self::NullableByteArray => "nullable-byte-array-array",
-            Self::NullableMethod => "nullable-method-array",
-            Self::NullableSymbol => "nullable-symbol-array",
-            Self::Boolean => "boolean-array",
-            Self::String => "string-array",
-            Self::NullableString => "nullable-string-array",
-            Self::Object(NativeClass::View) => "view-array",
-            Self::Object(NativeClass::Dc) => "dc-array",
-            Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate-array",
         }
     }
 }
@@ -2079,7 +1991,7 @@ impl Function {
                     operand,
                     ref class,
                 } => {
-                    if runtime_types::symbol(class).is_none() {
+                    if native_bindings::lang_class(class).is_none() {
                         return Err(fail("unsupported runtime class test"));
                     }
                     if let Some(context) = context {
@@ -3311,98 +3223,15 @@ impl Function {
                 " parameter-types={}",
                 self.parameter_types
                     .iter()
-                    .map(|t| {
-                        match t {
-                            ParameterType::SourceObject(class) => {
-                                return format!("source({class})");
-                            }
-                            ParameterType::NullableInteger => "nullable-integer",
-                            ParameterType::NullableLong => "nullable-long",
-                            ParameterType::NullableDouble => "nullable-double",
-                            ParameterType::NullableFloat => "nullable-float",
-                            ParameterType::NullableString => "nullable-string",
-                            ParameterType::NullableBoolean => "nullable-boolean",
-                            ParameterType::NullableChar => "nullable-char",
-                            ParameterType::NullableSymbol => "nullable-symbol",
-                            ParameterType::Integer => "integer",
-                            ParameterType::Long => "long",
-                            ParameterType::Double => "double",
-                            ParameterType::Float => "float",
-                            ParameterType::String => "string",
-                            ParameterType::Boolean => "boolean",
-                            ParameterType::Char => "char",
-                            ParameterType::TypedDictionary(ty) => return ty.text(),
-                            ParameterType::Dictionary => "dictionary",
-                            ParameterType::LangObject => "object",
-                            ParameterType::NullableObject => "nullable-object",
-                            ParameterType::WeakReference => "weak-reference",
-                            ParameterType::NumberFormat => "number-format",
-                            ParameterType::Endian => "endian",
-                            ParameterType::Numeric => "numeric",
-                            ParameterType::IntegerAlias => "integer-union",
-                            ParameterType::Decimal => "decimal",
-                            ParameterType::NullableNumeric => "nullable-numeric",
-                            ParameterType::NullableIntegerAlias => "nullable-integer-union",
-                            ParameterType::NullableDecimal => "nullable-decimal",
-                            ParameterType::ByteArray => "byte-array",
-                            ParameterType::NullableByteArray => "nullable-byte-array",
-                            ParameterType::NullableWeakReference => "nullable-weak-reference",
-                            ParameterType::Interface(interface) => interface.tag(),
-                            ParameterType::NullableInterface(InterfaceType::Comparable) => {
-                                "nullable-comparable"
-                            }
-                            ParameterType::NullableInterface(InterfaceType::Comparator) => {
-                                "nullable-comparator"
-                            }
-                            ParameterType::Method => "method",
-                            ParameterType::NullableMethod => "nullable-method",
-                            ParameterType::Symbol => "symbol",
-                            ParameterType::Object(NativeClass::View) => "view",
-                            ParameterType::Object(NativeClass::Dc) => "dc",
-                            ParameterType::Object(NativeClass::BehaviorDelegate) => {
-                                "behavior-delegate"
-                            }
-                            ParameterType::Array(element) => element.array_text(),
-                            ParameterType::NullableDictionary => "nullable-dictionary",
-                        }
-                        .to_owned()
-                    })
+                    .map(|t| type_text::parameter_tag(t).into_owned())
                     .collect::<Vec<_>>()
                     .join(":")
             )
         };
-        let result = match self.return_type {
-            ReturnType::LangObject
-            | ReturnType::NullableObject
-            | ReturnType::WeakReference
-            | ReturnType::NumberFormat
-            | ReturnType::Endian
-            | ReturnType::Numeric
-            | ReturnType::IntegerAlias
-            | ReturnType::Decimal
-            | ReturnType::NullableNumeric
-            | ReturnType::NullableIntegerAlias
-            | ReturnType::NullableDecimal
-            | ReturnType::ByteArray
-            | ReturnType::NullableByteArray
-            | ReturnType::NullableWeakReference
-            | ReturnType::Interface(_)
-            | ReturnType::NullableInterface(_)
-            | ReturnType::Method
-            | ReturnType::NullableMethod
-            | ReturnType::Symbol
-            | ReturnType::Dictionary
-            | ReturnType::TypedDictionary(_)
-            | ReturnType::NullableInteger
-            | ReturnType::NullableString
-            | ReturnType::NullableBoolean
-            | ReturnType::NullableSymbol
-            | ReturnType::NullableChar
-            | ReturnType::NullableLong
-            | ReturnType::NullableDouble
-            | ReturnType::NullableFloat
-            | ReturnType::SourceObject(_) => call_type_text(&self.return_type),
-            _ => String::new(),
+        let result = if type_text::explicit_function_result(&self.return_type) {
+            call_type_text(&self.return_type)
+        } else {
+            String::new()
         };
         let mut text = format!(
             "ciq-ir\n.function {}{parameters}{receiver}{parameter_types}{result}\n",
@@ -4080,88 +3909,9 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
 }
 
 fn call_type_text(result: &ReturnType) -> String {
-    match result {
-        ReturnType::Array(
-            element @ (ArrayElement::Interface(_)
-            | ArrayElement::NullableInterface(_)
-            | ArrayElement::Numeric { .. }
-            | ArrayElement::LangObject
-            | ArrayElement::NullableObject),
-        ) => return format!(" result={}", element.array_text()),
-        ReturnType::SourceObject(class) => return format!(" result=source({class})"),
-        ReturnType::Interface(interface) => return format!(" result={}", interface.tag()),
-        ReturnType::NullableInterface(interface) => {
-            return format!(" result=nullable-{}", interface.tag());
-        }
-        ReturnType::NullableInteger => " result=nullable-integer",
-        ReturnType::NullableLong => " result=nullable-long",
-        ReturnType::NullableDouble => " result=nullable-double",
-        ReturnType::NullableFloat => " result=nullable-float",
-        ReturnType::NullableString => " result=nullable-string",
-        ReturnType::NullableBoolean => " result=nullable-boolean",
-        ReturnType::NullableChar => " result=nullable-char",
-        ReturnType::NullableSymbol => " result=nullable-symbol",
-        ReturnType::Integer => "",
-        ReturnType::Long => " result=long",
-        ReturnType::Double => " result=double",
-        ReturnType::Float => " result=float",
-        ReturnType::String => " result=string",
-        ReturnType::Boolean => " result=boolean",
-        ReturnType::Char => " result=char",
-        ReturnType::TypedDictionary(ty) => return format!(" result={}", ty.text()),
-        ReturnType::Dictionary => " result=dictionary",
-        ReturnType::LangObject => " result=object",
-        ReturnType::NullableObject => " result=nullable-object",
-        ReturnType::WeakReference => " result=weak-reference",
-        ReturnType::NumberFormat => " result=number-format",
-        ReturnType::Endian => " result=endian",
-        ReturnType::Numeric => " result=numeric",
-        ReturnType::IntegerAlias => " result=integer-union",
-        ReturnType::Decimal => " result=decimal",
-        ReturnType::NullableNumeric => " result=nullable-numeric",
-        ReturnType::NullableIntegerAlias => " result=nullable-integer-union",
-        ReturnType::NullableDecimal => " result=nullable-decimal",
-        ReturnType::ByteArray => " result=byte-array",
-        ReturnType::NullableByteArray => " result=nullable-byte-array",
-        ReturnType::NullableWeakReference => " result=nullable-weak-reference",
-        ReturnType::Method => " result=method",
-        ReturnType::NullableMethod => " result=nullable-method",
-        ReturnType::Symbol => " result=symbol",
-        ReturnType::Object(NativeClass::View) => " result=view",
-        ReturnType::Object(NativeClass::Dc) => " result=dc",
-        ReturnType::Object(NativeClass::BehaviorDelegate) => " result=behavior-delegate",
-        ReturnType::Tuple(TupleShape::OneView) => " result=one-view",
-        ReturnType::Tuple(TupleShape::ViewDelegate) => " result=view-delegate",
-        ReturnType::Array(ArrayElement::Char) => " result=char-array",
-        ReturnType::Array(ArrayElement::Symbol) => " result=symbol-array",
-        ReturnType::Array(ArrayElement::Method) => " result=method-array",
-        ReturnType::Array(ArrayElement::ByteArray) => " result=byte-array-array",
-        ReturnType::Array(ArrayElement::NullableByteArray) => " result=nullable-byte-array-array",
-        ReturnType::Array(ArrayElement::WeakReference) => " result=weak-reference-array",
-        ReturnType::Array(ArrayElement::NullableWeakReference) => {
-            " result=nullable-weak-reference-array"
-        }
-        ReturnType::Array(ArrayElement::NullableMethod) => " result=nullable-method-array",
-        ReturnType::Array(ArrayElement::NullableSymbol) => " result=nullable-symbol-array",
-        ReturnType::Array(ArrayElement::Boolean) => " result=boolean-array",
-        ReturnType::Array(ArrayElement::Number) => " result=number-array",
-        ReturnType::Array(ArrayElement::Double) => " result=double-array",
-        ReturnType::Array(ArrayElement::NullableDouble) => " result=nullable-double-array",
-        ReturnType::Array(ArrayElement::Float) => " result=float-array",
-        ReturnType::Array(ArrayElement::NullableFloat) => " result=nullable-float-array",
-        ReturnType::Array(ArrayElement::Long) => " result=long-array",
-        ReturnType::Array(ArrayElement::NullableLong) => " result=nullable-long-array",
-        ReturnType::Array(ArrayElement::NullableNumber) => " result=nullable-number-array",
-        ReturnType::Array(ArrayElement::NullableChar) => " result=nullable-char-array",
-        ReturnType::Array(ArrayElement::NullableBoolean) => " result=nullable-boolean-array",
-        ReturnType::Array(ArrayElement::String) => " result=string-array",
-        ReturnType::Array(ArrayElement::NullableString) => " result=nullable-string-array",
-        ReturnType::Array(ArrayElement::Object(NativeClass::View)) => " result=view-array",
-        ReturnType::Array(ArrayElement::Object(NativeClass::Dc)) => " result=dc-array",
-        ReturnType::Array(ArrayElement::Object(NativeClass::BehaviorDelegate)) => {
-            " result=behavior-delegate-array"
-        }
-        ReturnType::Void => unreachable!("validated value calls cannot be void"),
+    if *result == ReturnType::Integer {
+        String::new()
+    } else {
+        format!(" result={}", type_text::result_tag(result))
     }
-    .to_owned()
 }

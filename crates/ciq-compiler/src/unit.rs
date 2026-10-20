@@ -2204,16 +2204,7 @@ fn parse_unit_ir_context(
                                 },
                             }
                         } else if parts[0] == ".field-array" {
-                            let Some(element) =
-                                crate::joins::parse_type(&format!("array-{}", parts[2])).and_then(
-                                    |ty| match ty {
-                                        crate::api::Type::Array(element) => {
-                                            crate::ArrayElement::from_api_type(&element)
-                                        }
-                                        _ => None,
-                                    },
-                                )
-                            else {
+                            let Some(element) = crate::type_text::element(&parts[2]) else {
                                 return Err(Diagnostic::at(
                                     text,
                                     method_at,

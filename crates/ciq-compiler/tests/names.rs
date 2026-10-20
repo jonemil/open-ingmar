@@ -123,3 +123,79 @@ fn unsupported_bindings_and_shadowing_have_source_diagnostics() {
         );
     }
 }
+
+#[test]
+fn source_keywords_are_reserved_even_before_their_construct_is_implemented() {
+    for word in [
+        "alias",
+        "and",
+        "as",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "default",
+        "do",
+        "else",
+        "enum",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "function",
+        "has",
+        "hidden",
+        "if",
+        "import",
+        "instanceof",
+        "me",
+        "module",
+        "NaN",
+        "native",
+        "new",
+        "null",
+        "or",
+        "private",
+        "protected",
+        "public",
+        "return",
+        "self",
+        "static",
+        "switch",
+        "throw",
+        "true",
+        "try",
+        "typedef",
+        "using",
+        "var",
+        "while",
+    ] {
+        for source in [
+            format!("function {word}() {{ return 1; }}"),
+            format!("function probe({word}) {{ return 1; }}"),
+            format!("function probe() {{ var {word} = 1; return 1; }}"),
+            format!("module {word} {{ function probe() {{ return 1; }} }}"),
+            format!("class {word} {{ function probe() {{ return 1; }} }}"),
+            format!("class Counter {{ var {word} = 1; function probe() {{ return 1; }} }}"),
+            format!("class Counter {{ function {word}() {{ return 1; }} }}"),
+            format!("using Toybox.Lang as {word}; function probe() {{ return 1; }}"),
+        ] {
+            let error = compile_sources(&[&source]).unwrap_err();
+            assert!(
+                error.to_string().contains("non-reserved identifier"),
+                "{source}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn source_keywords_do_not_restrict_saved_ir_or_assembly_names() {
+    let function =
+        ciq_compiler::parse_ir("ciq-ir\n.function for\n.integer %0 41\n.return %0\n.end\n")
+            .unwrap();
+    assert_eq!(function.name(), "for");
+    assert!(ciq_assembly::Program::parse("for:\nipush1 0x29\nreturn\n").is_ok());
+}

@@ -1,3 +1,55 @@
+/// Classify source keywords independently of the implemented grammar subset.
+/// IR/assembly identifiers have their own rules and do not use this restriction.
+fn reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "alias"
+            | "and"
+            | "as"
+            | "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "default"
+            | "do"
+            | "else"
+            | "enum"
+            | "extends"
+            | "false"
+            | "finally"
+            | "for"
+            | "function"
+            | "has"
+            | "hidden"
+            | "if"
+            | "import"
+            | "instanceof"
+            | "me"
+            | "module"
+            | "NaN"
+            | "native"
+            | "new"
+            | "null"
+            | "or"
+            | "private"
+            | "protected"
+            | "public"
+            | "return"
+            | "self"
+            | "static"
+            | "switch"
+            | "throw"
+            | "true"
+            | "try"
+            | "typedef"
+            | "using"
+            | "var"
+            | "while"
+    )
+}
+
 use crate::{Diagnostic, Span};
 
 // SourceClass bases in parsed annotations are placeholders. Unit declaration
@@ -797,34 +849,7 @@ impl<'a> Parser<'a> {
     fn identifier(&mut self) -> Result<Token<'a>, Diagnostic> {
         let token = self.token()?;
         match token.kind {
-            Kind::Word(name)
-                if !matches!(
-                    name,
-                    "self"
-                        | "function"
-                        | "module"
-                        | "class"
-                        | "extends"
-                        | "using"
-                        | "import"
-                        | "as"
-                        | "return"
-                        | "var"
-                        | "if"
-                        | "else"
-                        | "while"
-                        | "break"
-                        | "continue"
-                        | "true"
-                        | "false"
-                        | "null"
-                        | "new"
-                        | "and"
-                        | "or"
-                ) =>
-            {
-                Ok(token)
-            }
+            Kind::Word(name) if !reserved_word(name) => Ok(token),
             _ => Err(self.error(token.span.start, "expected a non-reserved identifier")),
         }
     }
@@ -899,7 +924,7 @@ impl<'a> Parser<'a> {
             self.token()?;
             let at = self.offset;
             let class = self.type_path()?;
-            if class.contains('.') && crate::runtime_types::symbol(&class).is_none() {
+            if class.contains('.') && crate::native_bindings::lang_class(&class).is_none() {
                 return Err(self.error(at, "instanceof requires a supported runtime class"));
             }
             let span = Span {
@@ -1533,28 +1558,7 @@ impl<'a> Parser<'a> {
             Kind::Punctuation('{') => self.dictionary_literal(token.span.start, depth),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),
             Kind::Word("false") => self.node(ExpressionKind::Boolean(false), token.span),
-            Kind::Word(name)
-                if !matches!(
-                    name,
-                    "function"
-                        | "module"
-                        | "class"
-                        | "extends"
-                        | "using"
-                        | "import"
-                        | "as"
-                        | "return"
-                        | "var"
-                        | "if"
-                        | "else"
-                        | "while"
-                        | "break"
-                        | "continue"
-                        | "true"
-                        | "false"
-                        | "null"
-                ) =>
-            {
+            Kind::Word(name) if name == "self" || !reserved_word(name) => {
                 self.named_atom(name, token.span, depth)
             }
             _ => Err(self.error(

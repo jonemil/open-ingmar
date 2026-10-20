@@ -75,7 +75,10 @@ bindings; `source_ir` constructs semantic operations. Candidate types and source
 origins help construction but are not validation proofs. `Function` validation
 checks per-body invariants; `unit` adds declaration, signature, field, and
 callback checks. `api` owns declarations, `native` owns executable profiles,
-and `operators` owns operand/result rules. `backend` selects VM instructions;
+`native_bindings` owns the pinned VM identities shared by runtime type tests and
+application generation, and `operators` owns operand/result rules. `type_text`
+shares saved-type spellings while retaining each consumer's accepted domain.
+`backend` selects VM instructions;
 `application` generates the bounded bootstrap and metadata. Keep these
 responsibilities separate even where they currently share a source file.
 

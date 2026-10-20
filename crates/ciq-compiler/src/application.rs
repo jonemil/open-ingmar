@@ -1,4 +1,8 @@
 //! Minimal console application metadata and lifecycle generation.
+use crate::native_bindings::{
+    APP_BASE, APPLICATION, BEHAVIOR_DELEGATE, GET_INITIAL_VIEW, GLOBALS, INIT, INITIALIZE, LANG,
+    OBJECT, ON_START, STATICS, TOYBOX, VIEW, WATCH_UI,
+};
 use crate::{CompilationUnit, ReturnType};
 use ciq_assembly::{Item, Operand, Program};
 use ciq_mc::Opcode;
@@ -13,67 +17,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
 };
-
-const STATICS: u32 = 0x00800002;
-const TOYBOX: u32 = 0x00800003;
-const SYSTEM: u32 = 0x00800005;
-const WATCH_UI: u32 = 0x00800011;
-const LANG: u32 = 0x00800007;
-const OBJECT: u32 = 0x0080004c;
-const APPLICATION: u32 = 0x00800015;
-const INIT: u32 = 0x00800018;
-const INITIALIZE: u32 = 0x0080005e;
-const TO_STRING: u32 = 0x008000af;
-const FORMAT: u32 = 0x0080009c;
-const ABS: u32 = 0x008000a6;
-const EQUALS: u32 = 0x008000b3;
-const HASH_CODE: u32 = 0x008000ad;
-const WEAK: u32 = 0x00800418;
-const STILL_ALIVE: u32 = 0x00800417;
-const METHOD: u32 = 0x008000b2;
-const INVOKE: u32 = 0x008000ac;
-const COMPARE_TO: u32 = 0x00800e50;
-const LENGTH: u32 = 0x008000bb;
-const SUBSTRING: u32 = 0x008000bd;
-const FIND: u32 = 0x008000bc;
-const TO_NUMBER: u32 = 0x008000a7;
-const TO_FLOAT: u32 = 0x008000a5;
-const TO_DOUBLE: u32 = 0x008000a8;
-const TO_LONG: u32 = 0x008000a9;
-const TO_LONG_WITH_BASE: u32 = 0x00800b1c;
-const TO_CHAR: u32 = 0x008004c6;
-const TO_CHAR_ARRAY: u32 = 0x008004c4;
-const TO_UTF8_ARRAY: u32 = 0x008004c5;
-const SIZE: u32 = 0x008000ae;
-const DICTIONARY_PUT: u32 = 0x008000b4;
-const DICTIONARY_GET: u32 = 0x008000b5;
-const DICTIONARY_KEYS: u32 = 0x008000b9;
-const DICTIONARY_VALUES: u32 = 0x008000ba;
-const HAS_KEY: u32 = 0x008000b6;
-const IS_EMPTY: u32 = 0x008000b8;
-const INDEX_OF: u32 = 0x008004bf;
-const ARRAY_ADD: u32 = 0x0080014e;
-const ARRAY_ADD_ALL: u32 = 0x008004be;
-const ARRAY_REMOVE: u32 = 0x008000b7;
-const ARRAY_REMOVE_ALL: u32 = 0x008004c0;
-const REVERSE: u32 = 0x008004c1;
-const SLICE: u32 = 0x008004c2;
-const SORT: u32 = 0x00800e51;
-const COMPARE: u32 = 0x00800150;
-const TO_NUMBER_WITH_BASE: u32 = 0x008004c3;
-const TO_LOWER: u32 = 0x008000be;
-const TO_UPPER: u32 = 0x008000bf;
-const PRINTLN: u32 = 0x00800067;
-const EXIT: u32 = 0x0080006d;
-const VIEW: u32 = 0x0080019f;
-const BEHAVIOR_DELEGATE: u32 = 0x00800064;
-const ON_SELECT: u32 = 0x008003f3;
-const REQUEST_UPDATE: u32 = 0x008001a2;
-const APP_BASE: u32 = 0x0080029c;
-const ON_START: u32 = 0x0080029f;
-const ON_STOP: u32 = 0x008002a1;
-const GET_INITIAL_VIEW: u32 = 0x008002a0;
-const GLOBALS: u32 = 0x008002e6;
 
 /// Application identity and a startup entry or source native onStart callback.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -372,70 +315,7 @@ pub fn build_console_application(
             "application declarations collide with a reserved bootstrap namespace",
         ));
     }
-    let mut ids = BTreeMap::from([
-        ("Object".into(), OBJECT),
-        ("initialize".to_owned(), INITIALIZE),
-        ("println".into(), PRINTLN),
-        ("exit".into(), EXIT),
-        ("toString".into(), TO_STRING),
-        ("format".into(), FORMAT),
-        ("abs".into(), ABS),
-        ("equals".into(), EQUALS),
-        ("hashCode".into(), HASH_CODE),
-        ("weak".into(), WEAK),
-        ("stillAlive".into(), STILL_ALIVE),
-        ("method".into(), METHOD),
-        ("invoke".into(), INVOKE),
-        ("compareTo".into(), COMPARE_TO),
-        ("length".into(), LENGTH),
-        ("substring".into(), SUBSTRING),
-        ("find".into(), FIND),
-        ("toNumber".into(), TO_NUMBER),
-        ("toLong".into(), TO_LONG),
-        ("toFloat".into(), TO_FLOAT),
-        ("toDouble".into(), TO_DOUBLE),
-        ("toLongWithBase".into(), TO_LONG_WITH_BASE),
-        ("toChar".into(), TO_CHAR),
-        ("toCharArray".into(), TO_CHAR_ARRAY),
-        ("toUtf8Array".into(), TO_UTF8_ARRAY),
-        ("size".into(), SIZE),
-        ("isEmpty".into(), IS_EMPTY),
-        ("get".into(), DICTIONARY_GET),
-        ("put".into(), DICTIONARY_PUT),
-        ("hasKey".into(), HAS_KEY),
-        ("keys".into(), DICTIONARY_KEYS),
-        ("values".into(), DICTIONARY_VALUES),
-        ("indexOf".into(), INDEX_OF),
-        ("add".into(), ARRAY_ADD),
-        ("addAll".into(), ARRAY_ADD_ALL),
-        ("remove".into(), ARRAY_REMOVE),
-        ("removeAll".into(), ARRAY_REMOVE_ALL),
-        ("reverse".into(), REVERSE),
-        ("slice".into(), SLICE),
-        ("sort".into(), SORT),
-        ("compare".into(), COMPARE),
-        ("toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
-        ("toLower".into(), TO_LOWER),
-        ("toUpper".into(), TO_UPPER),
-        ("decodeNumber".into(), 0x00800a25),
-        ("encodeNumber".into(), 0x00800a26),
-        ("offset".into(), 0x00800aa9),
-        ("endianness".into(), 0x00800aae),
-        ("View".into(), VIEW),
-        ("BehaviorDelegate".into(), BEHAVIOR_DELEGATE),
-        ("onSelect".into(), ON_SELECT),
-        ("requestUpdate".into(), REQUEST_UPDATE),
-        ("AppBase".into(), APP_BASE),
-        ("onStart".into(), ON_START),
-        ("onStop".into(), ON_STOP),
-        ("getInitialView".into(), GET_INITIAL_VIEW),
-        ("onShow".into(), 0x00800203),
-        ("onUpdate".into(), 0x00800204),
-        ("onHide".into(), 0x00800205),
-        ("setColor".into(), 0x0080020b),
-        ("clear".into(), 0x00800239),
-        ("drawText".into(), 0x00800246),
-    ]);
+    let mut ids = crate::native_bindings::member_ids();
     for class in unit.classes() {
         if ids.contains_key(&class.name) {
             return Err(error(
@@ -496,92 +376,7 @@ pub fn build_console_application(
         module_ids.insert(module.clone(), next);
         next += 1;
     }
-    let mut bindings = BTreeMap::from([
-        ("__ciq_sdk_System".into(), SYSTEM),
-        ("__ciq_sdk_Lang".into(), LANG),
-        ("__ciq_sdk_WatchUi".into(), WATCH_UI),
-        ("__ciq_native_View".into(), VIEW),
-        ("__ciq_native_BehaviorDelegate".into(), BEHAVIOR_DELEGATE),
-        ("__ciq_native_requestUpdate".into(), REQUEST_UPDATE),
-        ("__ciq_source_globals".into(), GLOBALS),
-        ("__ciq_native_setColor".into(), 0x0080020b),
-        ("__ciq_native_clear".into(), 0x00800239),
-        ("__ciq_native_drawText".into(), 0x00800246),
-        ("__ciq_native_AppBase".into(), APP_BASE),
-        ("__ciq_native_Object".into(), OBJECT),
-        ("__ciq_native_initialize".into(), INITIALIZE),
-        ("__ciq_member_println".into(), PRINTLN),
-        ("__ciq_native_exit".into(), EXIT),
-        ("__ciq_native_toString".into(), TO_STRING),
-        ("__ciq_native_format".into(), FORMAT),
-        ("__ciq_native_abs".into(), ABS),
-        ("__ciq_native_equals".into(), EQUALS),
-        ("__ciq_native_hashCode".into(), HASH_CODE),
-        ("__ciq_native_weak".into(), WEAK),
-        ("__ciq_native_stillAlive".into(), STILL_ALIVE),
-        ("__ciq_native_method".into(), METHOD),
-        ("__ciq_native_invoke".into(), INVOKE),
-        ("__ciq_native_compareTo".into(), COMPARE_TO),
-        ("__ciq_native_compare".into(), COMPARE),
-        ("__ciq_native_length".into(), LENGTH),
-        ("__ciq_native_substring".into(), SUBSTRING),
-        ("__ciq_native_find".into(), FIND),
-        ("__ciq_native_toNumber".into(), TO_NUMBER),
-        ("__ciq_native_toLong".into(), TO_LONG),
-        ("__ciq_native_toFloat".into(), TO_FLOAT),
-        ("__ciq_native_toDouble".into(), TO_DOUBLE),
-        ("__ciq_native_toLongWithBase".into(), TO_LONG_WITH_BASE),
-        ("__ciq_native_toChar".into(), TO_CHAR),
-        ("__ciq_native_toCharArray".into(), TO_CHAR_ARRAY),
-        ("__ciq_native_toUtf8Array".into(), TO_UTF8_ARRAY),
-        ("__ciq_native_size".into(), SIZE),
-        ("__ciq_native_isEmpty".into(), IS_EMPTY),
-        ("__ciq_native_get".into(), DICTIONARY_GET),
-        ("__ciq_native_put".into(), DICTIONARY_PUT),
-        ("__ciq_native_hasKey".into(), HAS_KEY),
-        ("__ciq_native_keys".into(), DICTIONARY_KEYS),
-        ("__ciq_native_values".into(), DICTIONARY_VALUES),
-        ("__ciq_native_indexOf".into(), INDEX_OF),
-        ("__ciq_native_add".into(), ARRAY_ADD),
-        ("__ciq_native_addAll".into(), ARRAY_ADD_ALL),
-        ("__ciq_native_remove".into(), ARRAY_REMOVE),
-        ("__ciq_native_removeAll".into(), ARRAY_REMOVE_ALL),
-        ("__ciq_native_reverse".into(), REVERSE),
-        ("__ciq_native_slice".into(), SLICE),
-        ("__ciq_native_sort".into(), SORT),
-        ("__ciq_native_toNumberWithBase".into(), TO_NUMBER_WITH_BASE),
-        ("__ciq_native_toLower".into(), TO_LOWER),
-        ("__ciq_native_toUpper".into(), TO_UPPER),
-        ("__ciq_native_decodeNumber".into(), 0x00800a25),
-        ("__ciq_native_encodeNumber".into(), 0x00800a26),
-        ("__ciq_app_globals".into(), GLOBALS),
-        ("__ciq_app_base".into(), APP_BASE),
-        ("__ciq_app_init".into(), INIT),
-        ("__ciq_app_initialize".into(), INITIALIZE),
-        ("__ciq_app_watch_ui".into(), WATCH_UI),
-        ("__ciq_app_view".into(), VIEW),
-    ]);
-    for name in [
-        "Object",
-        "Number",
-        "Long",
-        "Float",
-        "Double",
-        "Boolean",
-        "Char",
-        "String",
-        "Array",
-        "Dictionary",
-        "Symbol",
-        "Method",
-        "WeakReference",
-        "ByteArray",
-    ] {
-        bindings.insert(
-            format!("__ciq_type_{name}"),
-            crate::runtime_types::symbol(&format!("Toybox.Lang.{name}")).unwrap(),
-        );
-    }
+    let mut bindings = crate::native_bindings::code_bindings();
 
     for function in unit
         .declarations()
