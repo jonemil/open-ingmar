@@ -20,6 +20,8 @@ enum Directive {
     Assign,
     ReturnVoid,
     CallDiscard,
+    CallGlobal,
+    CallGlobalDiscard,
     CallSelf,
     CallSelfDiscard,
     BaseInitialize,
@@ -217,6 +219,8 @@ pub(crate) fn parse_ir_context(
         let call_width =
             || fields.len() - usize::from(fields.last().is_some_and(|f| f.starts_with("span=")));
         let (directive, width) = match fields.first().map(String::as_str) {
+            Some(".call-global") => (Directive::CallGlobal, call_width()),
+            Some(".call-global-discard") => (Directive::CallGlobalDiscard, call_width()),
             Some(".call-self") => (Directive::CallSelf, call_width()),
             Some(".call-self-discard") => (Directive::CallSelfDiscard, call_width()),
             Some(".return-void") => (Directive::ReturnVoid, 1),
@@ -328,8 +332,11 @@ pub(crate) fn parse_ir_context(
         };
         if ((directive == Directive::Call && width < 4)
             || (directive == Directive::CallDiscard && width < 3)
-            || (directive == Directive::CallSelf && width < 3)
-            || (directive == Directive::CallSelfDiscard && width < 2)
+            || (matches!(directive, Directive::CallSelf | Directive::CallGlobal) && width < 3)
+            || (matches!(
+                directive,
+                Directive::CallSelfDiscard | Directive::CallGlobalDiscard
+            ) && width < 2)
             || (directive == Directive::CallNative && width < 4))
             || (directive == Directive::CallNativeModuleDiscard && width < 3)
             || (directive == Directive::CallNativeModule && width < 4)
@@ -905,6 +912,25 @@ pub(crate) fn parse_ir_context(
                         "WatchUi.BehaviorDelegate" => crate::ClassBase::WatchUiBehaviorDelegate,
                         _ => return Err(fail(*at, "unsupported native initializer base")),
                     },
+                },
+                Directive::CallGlobal => {
+                    let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
+                    Operation::GlobalCall {
+                        result: parse_value(&fields[1])?,
+                        result_type,
+                        member: fields[2].clone(),
+                        arguments: fields[arguments_at..width]
+                            .iter()
+                            .map(|f| parse_value(f))
+                            .collect::<Result<_, _>>()?,
+                    }
+                }
+                Directive::CallGlobalDiscard => Operation::GlobalCallStatement {
+                    member: fields[1].clone(),
+                    arguments: fields[2..width]
+                        .iter()
+                        .map(|f| parse_value(f))
+                        .collect::<Result<_, _>>()?,
                 },
                 Directive::CallSelf => {
                     let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;

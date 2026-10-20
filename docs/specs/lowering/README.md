@@ -271,6 +271,12 @@ the [object-call example](../../../examples/compiler-object-calls/README.md) and
 
 ### User module calls
 
+Global calls use `getmv @__ciq_source_globals @__ciq_member_<member>` to select
+the global receiver and member. Bind the owner alias to `globals`. Their
+argument, invocation, and discarded-result sequences match module calls below;
+they do not use the current instance or module receiver. Complete application
+generation already provides global method records from unit declarations.
+
 Backend lowering selects `getmv @__ciq_module_<module> @__ciq_member_<member>;
 invokemz`, for zero arguments. Nonempty calls additionally use `frpush`,
 argument expressions in order, and `invokem <argument-count + 1>`. Module

@@ -192,6 +192,11 @@ impl Types {
                 result_type,
                 ..
             }
+            | Operation::GlobalCall {
+                result,
+                result_type,
+                ..
+            }
             | Operation::ModuleCall {
                 result,
                 result_type,

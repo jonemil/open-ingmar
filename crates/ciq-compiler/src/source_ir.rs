@@ -30,7 +30,7 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     }
 }
 
-/// Resolve an unqualified call to a declared member of the current owner.
+/// Resolve an unqualified call through owner members and global declarations.
 /// Keep inherited native dispatch and unsupported lexical callable values explicit.
 fn resolve_implicit_call(
     source: &str,
@@ -45,48 +45,50 @@ fn resolve_implicit_call(
     };
     let owner = if calls.class_bases.contains_key("self") {
         "self"
-    } else if let Some(module) = &calls.current_module {
-        module
     } else {
-        return Err(Diagnostic::at(
-            source,
-            span.start,
-            "unqualified calls require a supported module or instance owner",
-        ));
+        calls.current_module.as_deref().unwrap_or("")
     };
-    if calls.get(&(owner.into(), member.clone())).is_some() {
+    if !owner.is_empty() && calls.get(&(owner.into(), member.clone())).is_some() {
         return Ok(parser::ExpressionKind::OwnerCall {
             module: owner.into(),
             member,
             arguments,
         });
     }
-    if owner != "self" || (member != "method" && !calls.inherited_object_member(owner, &member)) {
+    if owner == "self" && (member == "method" || calls.inherited_object_member(owner, &member)) {
+        if locals.contains_key(&member)
+            || parameters.contains_key(&member)
+            || calls.field_types.contains_key(&member)
+        {
+            return Err(Diagnostic::at(
+                source,
+                span.start,
+                format!(
+                    "calling a local, parameter, or field named {member} is unsupported; use self.{member} explicitly"
+                ),
+            ));
+        }
+        return Ok(parser::ExpressionKind::ModuleCall {
+            module: "self".into(),
+            member,
+            arguments,
+        });
+    }
+    if owner == "self" && calls.field_types.contains_key(&member) {
         return Err(Diagnostic::at(
             source,
             span.start,
-            format!(
-                "unresolved owner member {member:?}; global fallback and lexical callable values are unsupported"
-            ),
+            "calling an instance field is unsupported; use an explicit global call to bypass it",
         ));
     }
-    if locals.contains_key(&member)
-        || parameters.contains_key(&member)
-        || calls.field_types.contains_key(&member)
-    {
-        return Err(Diagnostic::at(
-            source,
-            span.start,
-            format!(
-                "calling a local, parameter, or field named {member} is unsupported; use self.{member} explicitly"
-            ),
-        ));
+    if calls.get(&(String::new(), member.clone())).is_some() {
+        return Ok(parser::ExpressionKind::GlobalCall { member, arguments });
     }
-    Ok(parser::ExpressionKind::ModuleCall {
-        module: "self".into(),
-        member,
-        arguments,
-    })
+    Err(Diagnostic::at(
+        source,
+        span.start,
+        format!("unresolved function {member:?}; lexical callable values are unsupported"),
+    ))
 }
 
 /// Emit a checked zero-argument native constructor operation. Keep constructor
@@ -136,6 +138,7 @@ fn emit(
     match kind {
         kind @ (parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
+        | parser::ExpressionKind::GlobalCall { .. }
         | parser::ExpressionKind::OwnerCall { .. }) => {
             let operation = emit_call(
                 source,
@@ -349,6 +352,7 @@ fn emit_non_call(
         }
         parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
+        | parser::ExpressionKind::GlobalCall { .. }
         | parser::ExpressionKind::OwnerCall { .. }
         | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
         parser::ExpressionKind::Cast { operand, target } => {
@@ -550,6 +554,7 @@ fn emit_call(
     calls: &CallContext,
 ) -> Result<Operation, Diagnostic> {
     let (receiver, module, member, arguments) = match kind {
+        parser::ExpressionKind::GlobalCall { member, arguments } => (None, None, member, arguments),
         parser::ExpressionKind::OwnerCall {
             module,
             member,
@@ -659,14 +664,24 @@ fn emit_call(
             member,
             arguments,
         }
-    } else {
+    } else if let Some(module) = module {
         Operation::ModuleCall {
             result,
             result_type: calls
-                .get(&(module.clone().unwrap(), member.clone()))
+                .get(&(module.clone(), member.clone()))
                 .map(|signature| signature.result.clone())
                 .unwrap_or(crate::ReturnType::Integer),
-            module: module.unwrap(),
+            module,
+            member,
+            arguments,
+        }
+    } else {
+        Operation::GlobalCall {
+            result,
+            result_type: calls
+                .get(&(String::new(), member.clone()))
+                .map(|signature| signature.result.clone())
+                .unwrap_or(crate::ReturnType::Integer),
             member,
             arguments,
         }
@@ -1411,6 +1426,13 @@ impl Builder<'_> {
                     }
                 }
             }
+            E::GlobalCall { member, arguments } => {
+                let expected = self.call_argument_context("", &member);
+                E::GlobalCall {
+                    member,
+                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
+                }
+            }
             E::OwnerCall {
                 module,
                 member,
@@ -1578,6 +1600,16 @@ impl Builder<'_> {
             } = &last.operation
             {
                 last.operation = Operation::SelfCallStatement {
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
+            if let Operation::GlobalCall {
+                member, arguments, ..
+            } = &last.operation
+            {
+                last.operation = Operation::GlobalCallStatement {
                     member: member.clone(),
                     arguments: arguments.clone(),
                 };

@@ -280,6 +280,10 @@ pub(crate) enum ExpressionKind {
         member: String,
         arguments: Vec<Expression>,
     },
+    GlobalCall {
+        member: String,
+        arguments: Vec<Expression>,
+    },
     // Builder-resolved owner; lexical values cannot shadow this qualifier.
     OwnerCall {
         module: String,
@@ -359,6 +363,7 @@ impl Expression {
                 array.needs_materialization() || index.needs_materialization()
             }
             ExpressionKind::UnqualifiedCall { arguments, .. }
+            | ExpressionKind::GlobalCall { arguments, .. }
             | ExpressionKind::OwnerCall { arguments, .. }
             | ExpressionKind::ModuleCall { arguments, .. }
             | ExpressionKind::SourceNew { arguments, .. } => {
@@ -921,7 +926,7 @@ impl<'a> Parser<'a> {
             }
             Some(
                 c @ ('(' | ')' | '{' | '}' | '[' | ']' | ';' | '+' | '-' | '=' | '.' | ',' | '>'
-                | '<' | '!' | '*' | '/' | '%' | '&' | '|' | '^' | '~' | '?' | ':'),
+                | '<' | '!' | '*' | '/' | '%' | '&' | '|' | '^' | '~' | '?' | ':' | '$'),
             ) => {
                 self.offset += 1;
                 Kind::Punctuation(c)
@@ -1648,9 +1653,27 @@ impl<'a> Parser<'a> {
         self.node(kind, span)
     }
 
+    /// Parse an explicit global function call outside recursive atom frames.
+    fn global_atom(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
+        self.expect(Kind::Punctuation('.'), "'.' after global root")?;
+        let member = self.identifier()?;
+        let Kind::Word(member) = member.kind else {
+            unreachable!()
+        };
+        let (arguments, end) = self.call_arguments(start, depth)?;
+        self.node(
+            ExpressionKind::GlobalCall {
+                member: member.into(),
+                arguments,
+            },
+            Span { start, end },
+        )
+    }
+
     fn atom(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
         let token = self.token()?;
         match token.kind {
+            Kind::Punctuation('$') => self.global_atom(token.span.start, depth),
             Kind::Punctuation(':') => {
                 let word = self.identifier()?;
                 let Kind::Word(name) = word.kind else {
@@ -2070,7 +2093,9 @@ impl<'a> Parser<'a> {
                 let end = self.statement_end(terminator)?;
                 if matches!(
                     expression.kind,
-                    ExpressionKind::ValueCall { .. } | ExpressionKind::UnqualifiedCall { .. }
+                    ExpressionKind::ValueCall { .. }
+                        | ExpressionKind::UnqualifiedCall { .. }
+                        | ExpressionKind::GlobalCall { .. }
                 ) {
                     Statement::ValueCall {
                         expression,

@@ -392,13 +392,23 @@ existing qualifier-shadowing rules.
 If no declared owner member exists, instance bodies can use the supported
 inherited Object methods, including reflective `method(...)`, under their native
 contracts. For this inherited fallback, lexical name conflicts remain rejected.
-Other unresolved names, calls through lexical callable values, bare global
-calls, and global fallback from owners are unsupported. These are subset
-restrictions; the SDK can resolve global functions from owner bodies.
+Otherwise, unqualified lookup falls back to a collected global function. Global
+bodies use that same global lookup directly. A declared owner member keeps
+priority even when its signature rejects the arguments; an incompatible owner
+call does not select a global overload. A same-named instance field blocks
+fallback and is diagnosed as an unsupported callable value. Calls through
+lexical callable values and unresolved names remain unsupported.
 
-Owner calls share declared arity, argument/result checking, contextual literal
+`$.member(arguments)` selects the global function explicitly, bypassing owner
+lookup and local/parameter names. Only direct global function calls are supported
+after `$`; global value reads, module paths, and root-object values remain
+outside this profile. Unqualified resolution requires collected unit
+declarations; explicit calls in standalone IR/CODE retain external-callee
+obligations.
+
+User calls share declared arity, argument/result checking, contextual literal
 construction, and effect order with qualified calls. They become ordinary
-module/self call IR; Void results are statement-only and non-Void statement
+global/module/self call IR; Void results are statement-only and non-Void statement
 results are discarded. See [lookup evidence](../../investigations/compiler-unit.md#owner-relative-calls).
 
 IR contains `ModuleCall { result, result_type, module, member, arguments }`.
@@ -565,8 +575,8 @@ files before calls are checked.
 
 Forward and recursive calls are accepted; termination is not proven. Calls to
 undeclared external modules/members are rejected. `System.println` remains the
-separate intrinsic. Global functions can serve as entry methods but cannot yet
-be called by bare source names. General imports, nested/empty modules,
+separate intrinsic. Global functions can serve as entries and checked call
+targets under [owner lookup](#user-calls-and-owner-lookup). General imports, nested/empty modules,
 optional/default parameters, overloading, and arbitrary SDK calls remain
 unsupported.
 

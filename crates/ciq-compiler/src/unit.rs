@@ -44,6 +44,9 @@ impl<'a> Owner<'a> {
 
 fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owner<'a>, &'a str)> {
     match operation {
+        Operation::GlobalCall { member, .. } | Operation::GlobalCallStatement { member, .. } => {
+            Some((Owner::Global, member))
+        }
         Operation::ModuleCall { module, member, .. }
         | Operation::ModuleCallStatement { module, member, .. } => {
             Some((Owner::Module(module), member))
@@ -1474,6 +1477,12 @@ impl CompilationUnit {
                         arguments,
                         false,
                     ),
+                    Operation::GlobalCall {
+                        member, arguments, ..
+                    } => ((Owner::Global, member.as_str()), arguments, true),
+                    Operation::GlobalCallStatement { member, arguments } => {
+                        ((Owner::Global, member.as_str()), arguments, false)
+                    }
                     Operation::ModuleCall {
                         module,
                         member,
@@ -1608,7 +1617,8 @@ impl CompilationUnit {
                     }
                 }
                 let expected_result = match &located.operation {
-                    Operation::ModuleCall { result_type, .. }
+                    Operation::GlobalCall { result_type, .. }
+                    | Operation::ModuleCall { result_type, .. }
                     | Operation::ObjectCall { result_type, .. }
                     | Operation::SelfCall { result_type, .. } => Some(result_type),
                     _ => None,

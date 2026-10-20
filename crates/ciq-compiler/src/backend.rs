@@ -157,6 +157,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
             | Operation::LocalTake { result, .. }
+            | Operation::GlobalCall { result, .. }
             | Operation::ModuleCall { result, .. }
             | Operation::NativeModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
@@ -544,7 +545,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ref arguments,
             } => {
                 statement_call(
-                    Some(module),
+                    CallOwner::Module(module),
                     member,
                     arguments,
                     &definitions,
@@ -559,7 +560,22 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 ref arguments,
             } => {
                 statement_call(
-                    None,
+                    CallOwner::Instance,
+                    member,
+                    arguments,
+                    &definitions,
+                    (&slots, &builders, &function.value_types),
+                    &literal_aliases,
+                    &mut items,
+                );
+                continue;
+            }
+            Operation::GlobalCallStatement {
+                ref member,
+                ref arguments,
+            } => {
+                statement_call(
+                    CallOwner::Global,
                     member,
                     arguments,
                     &definitions,
@@ -869,18 +885,21 @@ fn expression(
                 }
                 | Operation::SelfCall {
                     member, arguments, ..
+                }
+                | Operation::GlobalCall {
+                    member, arguments, ..
                 } => {
                     tasks.push(Task::Invoke(arguments.len()));
                     if !arguments.is_empty() {
                         tasks.extend(arguments.iter().rev().map(|value| Task::Value(*value)));
                         tasks.push(Task::Context);
                     }
-                    let module = if let Operation::ModuleCall { module, .. } = definitions[&value] {
-                        Some(module.as_str())
-                    } else {
-                        None
+                    let owner = match definitions[&value] {
+                        Operation::ModuleCall { module, .. } => CallOwner::Module(module),
+                        Operation::GlobalCall { .. } => CallOwner::Global,
+                        _ => CallOwner::Instance,
                     };
-                    let Item::Instruction { opcode, operands } = call_target(module, member) else {
+                    let Item::Instruction { opcode, operands } = call_target(owner, member) else {
                         unreachable!()
                     };
                     (opcode, operands)
@@ -1093,15 +1112,24 @@ fn expression(
     }
 }
 
-fn call_target(module: Option<&str>, member: &str) -> Item {
+enum CallOwner<'a> {
+    Global,
+    Module(&'a str),
+    Instance,
+}
+
+fn call_target(owner: CallOwner<'_>, member: &str) -> Item {
     let member = Operand::Symbol(format!("__ciq_member_{member}"));
-    if let Some(module) = module {
-        instruction(
+    match owner {
+        CallOwner::Module(module) => instruction(
             Opcode::Getmv,
             vec![Operand::Symbol(format!("__ciq_module_{module}")), member],
-        )
-    } else {
-        instruction(Opcode::Getselfv, vec![member])
+        ),
+        CallOwner::Global => instruction(
+            Opcode::Getmv,
+            vec![Operand::Symbol("__ciq_source_globals".into()), member],
+        ),
+        CallOwner::Instance => instruction(Opcode::Getselfv, vec![member]),
     }
 }
 type Frame<'a> = (
@@ -1111,7 +1139,7 @@ type Frame<'a> = (
 );
 
 fn statement_call(
-    module: Option<&str>,
+    owner: CallOwner<'_>,
     member: &str,
     arguments: &[ValueId],
     definitions: &BTreeMap<ValueId, &Operation>,
@@ -1119,7 +1147,7 @@ fn statement_call(
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
-    items.push(call_target(module, member));
+    items.push(call_target(owner, member));
     if !arguments.is_empty() {
         items.push(instruction(Opcode::Frpush, vec![]));
         for value in arguments {

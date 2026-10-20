@@ -1296,6 +1296,18 @@ pub enum Operation {
         result: ValueId,
         index: usize,
     },
+    /// Invoke a global user function with a checked result contract.
+    GlobalCall {
+        result: ValueId,
+        result_type: ReturnType,
+        member: String,
+        arguments: Vec<ValueId>,
+    },
+    /// Invoke a global user function for effects and discard its VM result.
+    GlobalCallStatement {
+        member: String,
+        arguments: Vec<ValueId>,
+    },
     ModuleCall {
         result: ValueId,
         result_type: ReturnType,
@@ -2745,6 +2757,30 @@ impl Function {
                     operands.extend(arguments);
                     (Some(result), operands)
                 }
+                Operation::GlobalCall {
+                    ref member,
+                    ref arguments,
+                    ..
+                }
+                | Operation::GlobalCallStatement {
+                    ref member,
+                    ref arguments,
+                } => {
+                    validate_call_names(None, member).map_err(fail)?;
+                    validate_call_arguments(arguments, &types).map_err(fail)?;
+                    let result = if let Operation::GlobalCall {
+                        result,
+                        ref result_type,
+                        ..
+                    } = located.operation
+                    {
+                        types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
+                        Some(result)
+                    } else {
+                        None
+                    };
+                    (result, arguments.clone())
+                }
                 Operation::ModuleCall {
                     ref module,
                     ref member,
@@ -3060,6 +3096,7 @@ impl Function {
                 Operation::BlockParameter { .. }
                     | Operation::LocalTake { .. }
                     | Operation::DictionaryNew { .. }
+                    | Operation::GlobalCall { .. }
                     | Operation::ModuleCall { .. }
                     | Operation::Binary {
                         kind: BinaryOp::Divide | BinaryOp::Remainder,
@@ -3092,6 +3129,7 @@ impl Function {
                     | Operation::ObjectCallStatement { .. }
                     | Operation::NativeModuleCall { .. }
                     | Operation::NativeModuleCallStatement { .. }
+                    | Operation::GlobalCallStatement { .. }
                     | Operation::ModuleCallStatement { .. }
                     | Operation::SelfCall { .. }
                     | Operation::SelfCallStatement { .. }
@@ -3152,7 +3190,8 @@ impl Function {
                     } => std::iter::once(*receiver)
                         .chain(arguments.iter().copied())
                         .collect(),
-                    Operation::ModuleCallStatement { arguments, .. }
+                    Operation::GlobalCallStatement { arguments, .. }
+                    | Operation::ModuleCallStatement { arguments, .. }
                     | Operation::NativeModuleCallStatement { arguments, .. }
                     | Operation::SelfCallStatement { arguments, .. } => arguments.clone(),
                     Operation::Block { .. }
@@ -3226,6 +3265,7 @@ impl Function {
                                     ..
                                 }
                                 | Operation::SourceNew { arguments, .. }
+                                | Operation::GlobalCall { arguments, .. }
                                 | Operation::ModuleCall { arguments, .. }
                                 | Operation::NativeModuleCall { arguments, .. }
                                 | Operation::SelfCall { arguments, .. } => tasks.extend(
@@ -3794,6 +3834,32 @@ impl Function {
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>();
                     format!(".call-discard {module} {member}{arguments}")
+                }
+                Operation::GlobalCall {
+                    result,
+                    ref result_type,
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(
+                        ".call-global %{} {member}{}{arguments}",
+                        result.0,
+                        call_type_text(result_type)
+                    )
+                }
+                Operation::GlobalCallStatement {
+                    ref member,
+                    ref arguments,
+                } => {
+                    let arguments = arguments
+                        .iter()
+                        .map(|v| format!(" %{}", v.0))
+                        .collect::<String>();
+                    format!(".call-global-discard {member}{arguments}")
                 }
                 Operation::SelfCall {
                     result,

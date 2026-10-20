@@ -53,6 +53,10 @@ including constant records and ordered effectful/branching construction.
 discarded results, contextual Array arguments, instance mutation, native Object
 dispatch, and declared member priority over local/parameter names.
 
+`CoreGlobalCalls` and `GlobalCaller` check cross-owner global fallback, recursion,
+explicit `$.name` selection, owner priority, Void/discarded results, contextual
+Array arguments, and lazy effectful call arguments.
+
 From the repository root:
 
 ```sh

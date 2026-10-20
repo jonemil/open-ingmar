@@ -87,6 +87,7 @@ module NullableSourceTests {
         CoreEscapes.run();
         CoreLists.run();
         CoreCalls.run();
+        CoreGlobalCalls.run();
     }
 }
 
@@ -621,5 +622,44 @@ class OwnerToken {
         System.println(self.step(6));
         System.println(self.count);
         System.println(hashCode() == self.hashCode());
+    }
+}
+
+function globalStep(n) as Number { return n + 1; }
+function globalTotal(n) as Number {
+    if (n == 0) { return 0; }
+    return globalStep(n) + globalTotal(n - 1);
+}
+function globalNotify() as Void { System.println("global-void"); }
+function globalCount(values as Array<Number>) as Number { return values.size(); }
+function globalEffect(value) as Number { System.println(value); return value; }
+
+module CoreGlobalCalls {
+    function globalStep(n) as Number { return n * 2; }
+    function run() as Void {
+        System.println("global-calls");
+        System.println(globalStep(3));
+        System.println($.globalStep(3));
+        System.println(globalTotal(3));
+        globalNotify();
+        $.globalNotify();
+        globalStep(0);
+        $.globalStep(0);
+        System.println(globalCount([]));
+        System.println($.globalStep(true ? globalEffect(4) : globalEffect(99)));
+        var globalTotal = 88;
+        System.println(globalTotal(2));
+        var token = new GlobalCaller();
+        token.run();
+    }
+}
+class GlobalCaller {
+    function initialize() {}
+    function globalStep(n) as Number { return n * 3; }
+    function run() as Void {
+        System.println(globalStep(3));
+        System.println($.globalStep(3));
+        System.println(globalTotal(3));
+        globalNotify();
     }
 }

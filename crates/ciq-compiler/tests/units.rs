@@ -366,12 +366,74 @@ fn owner_relative_calls_reject_unresolved_targets_and_invalid_consumers() {
         "module M { function f() { return target(true); } function target(n) { return n; } }",
         "module M { function f() { return target(); } function target() as Void {} }",
         "module M { function f() { var value=1; return value(); } }",
-        "function helper(){return 1;} module M { function f(){return helper();} }",
-        "function f(){return f();}",
+        "function f(){return $.missing();}",
     ] {
         assert!(
             ciq_compiler::compile_sources(&[source]).is_err(),
             "{source}"
         );
+    }
+}
+
+#[test]
+fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
+    let first = r#"
+        function step(n) { return n + 1; }
+        function total(n) { if(n==0) { return 0; } return step(n) + total(n-1); }
+        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+        function notify() as Void { System.println(1); }
+        function title() as Toybox.Lang.String { return "x"; }
+        function token() as C { return new C(); }
+    "#;
+    let second = r#"
+        module M {
+            function step(n) { return n * 2; }
+            function run() { notify(); $.notify(); step(1); $.step(1); return total(3) + $.step(4) + count([]) + title().length() + token().run(); }
+        }
+        class C {
+            function initialize() {}
+            function step(n) { return n * 3; }
+            function run() { notify(); return total(3) + $.step(4) + step(4); }
+        }
+    "#;
+    let unit = compile_sources(&[first, second]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let assembly = unit.lower();
+    assert_eq!(assembly, Program::parse(&assembly.to_text()).unwrap());
+    assert!(
+        assembly
+            .to_text()
+            .contains("getmv @__ciq_source_globals @__ciq_member_step")
+    );
+    let text = unit.to_ir_text();
+    assert!(text.contains(".call-global "));
+    assert!(text.contains(".call-global-discard notify"));
+    assert!(parse_unit_ir(&text.replace("title result=string", "title")).is_err());
+    assert!(
+        parse_unit_ir(&text.replace(
+            ".call-global-discard notify",
+            ".call-global-discard missing"
+        ))
+        .is_err()
+    );
+    assert!(compile_sources(&["function f() { return f(); }"]).is_ok());
+    for source in [
+        "function g(n) { return n; } function f() { return g(); }",
+        "function g(n) { return n; } function f() { return g(true); }",
+        "function g() as Void {} function f() { return g(); }",
+        "function g() { return 1; } module M { function g(n){return n;} function f(){return g();} }",
+        "function f(){return $.missing();}",
+        "function g(){return 1;} class C { var g=1; function f(){return g();} }",
+        "function f(){return $f();}",
+        "function f(){return $.f;}",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "{source}");
+    }
+    for text in [
+        "ciq-ir\n.function f\n.call-global\n.end\n",
+        "ciq-ir\n.function f\n.call-global-discard\n.return-void\n.end\n",
+        "ciq-ir\n.function f\n.call-global %0 bad-name\n.return %0\n.end\n",
+    ] {
+        assert!(ciq_compiler::parse_ir(text).is_err(), "{text}");
     }
 }

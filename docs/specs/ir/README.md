@@ -1333,8 +1333,15 @@ ciq-ir
 Names and result expectations are not checked against a whole-program type
 environment in standalone mode: the scaffold must supply matching callees. Unit
 mode checks names, exact arity, argument types, and call result contracts.
-Source-instance calls follow the [receiver profile](#instance-receivers). Global
-unqualified calls remain unsupported.
+`.call-global` defines a positional call to a global user function, with the
+same argument/result contracts and effect ordering as `.call`. It carries a
+member name without a module or instance receiver. Unit validation resolves it
+only against global declarations, even inside a module or class body. Its
+symbolic owner is the global namespace `globals`; the member symbol retains its
+ordinary identifier. Typed IR uses `GlobalCall { result, result_type, member,
+arguments }`. Saved text preserves this ownership explicitly rather than
+depending on the caller's scope. Source-instance calls follow the
+[receiver profile](#instance-receivers).
 
 ### Void returns and statement calls
 
@@ -1343,9 +1350,11 @@ Void returns and effect-only calls use:
 - `.return-void`: terminate without a semantic result.
 - `.call-discard`:
   invoke a qualified user function for effects without defining a value.
+- `.call-global-discard`:
+  invoke a global user function for effects without defining a value.
 
-`.call-discard` may target any supported user result, including Void; the caller
-discards it. Argument IDs name earlier supported scalar, nullable, or Null
+Both discard forms may target any supported user result, including Void; the
+caller discards it. Argument IDs name earlier supported scalar, nullable, or Null
 values in the same block and each counts as a use. Calls use identifier rules,
 argument limits, and left-to-right effect scheduling already required by
 `.call`. Names, arity, and callee result contracts are checked in unit mode;

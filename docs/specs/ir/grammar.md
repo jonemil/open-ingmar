@@ -188,6 +188,8 @@ source literal grammar cannot produce. Source numeric syntax is independent. See
 call-operation = ".call" value-id module-name identifier
                  call-result-metadata? value-id*
                | ".call-discard" module-name identifier value-id*
+               | ".call-global" value-id identifier call-result-metadata? value-id*
+               | ".call-global-discard" identifier value-id*
                | ".call-self" value-id identifier call-result-metadata? value-id*
                | ".call-self-discard" identifier value-id*
                | ".call-object" value-id value-id identifier identifier

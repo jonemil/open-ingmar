@@ -184,10 +184,6 @@ bodies, the SDK first installs the module as the frame receiver. The same field
 spelling with no declared function also compiles in the SDK; compilation alone
 does not establish that such a value is callable at runtime.
 
-A global `helper()` referenced from a module body also compiles. Global calls
-and fallback remain outside our current profile; do not interpret our diagnostic
-as an SDK rejection.
-
 The [shared application's `CoreCalls`/`OwnerToken` groups][owner-example] exercise
 module/instance recursion, Void/discarded results, constructor-time self calls,
 instance mutation, inherited native dispatch, contextual empty Array arguments,
@@ -196,6 +192,27 @@ its expected output, and both PRGs reconstruct without raw CODE/DATA fallback.
 The source
 [lookup contract](../specs/frontend/README.md#user-calls-and-owner-lookup) owns
 resolution and remaining restrictions.
+
+## Global calls and root selection
+
+Further authored probes use the same SDK/target/settings. Declare global
+`step(n)` returning `n+1`, and `total(n)` recursively summing `step(n)` down to
+zero. A module and class each declare their own `step(n)` and print both
+`step(3)` and `$.step(3)`, then call unqualified `total(3)`.
+
+**Observed:** owner members win ordinary lookup, while `$.step` selects the
+global function and absent owner methods fall back to globals. Global recursion
+and Void calls work. Structured SDK export uses `getmv @globals @globalStep`
+for explicit root calls; unqualified global bodies can use `getselfv` because
+their frame receiver is already the global object. Our explicit global IR uses
+`getmv` independently of the caller's frame receiver.
+
+The [shared application's `CoreGlobalCalls`/`GlobalCaller` groups][owner-example]
+also check global-name locals, contextual empty Array arguments, lazy argument
+effects, and discarded results. SDK and generated console output agree. Both
+programs export/reconstruct without raw CODE/DATA fallback. Saved IR retains
+global ownership and checked result contracts; global lookup is not repeated
+relative to the caller when resuming IR.
 
 [owner-example]: ../../examples/compiler-object-tests/README.md
 [arguments]: compiler-arguments.md
