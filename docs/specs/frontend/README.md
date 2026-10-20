@@ -367,20 +367,39 @@ widening is introduced. See the
 
 ## Declarations and name resolution
 
-### User module calls
+### User calls and owner lookup
 
 Qualified calls resolve to a top-level user module in the compilation unit.
 Value calls require a supported non-Void result. Source bodies and ownership
 metadata are collected before call checking; callers need not precede callees.
 Arguments must satisfy the declared types and positional arity: a nullable
 parameter accepts Null, its scalar type, or the same union; scalar parameters
-require exact types. Global unqualified calls and nested modules remain
-unsupported. Calls through proven source-instance receivers follow the [class
+require exact types. Nested modules remain unsupported. Calls through proven
+source-instance receivers follow the [class
 contracts](#source-classes). Void module calls are supported as
 [statements](#void-functions-and-statement-calls). The separate
 [System.println statement](#strings-and-printing) prints supported
 scalars. Module/member names stay symbolic until encoding; neither IDs nor DATA
 method records are generated here.
+
+An unqualified `member(arguments)` resolves to a declared function in the current
+module, or a declared method on the current instance. Forward references and
+recursion use the collected signatures. A local/parameter with the same spelling
+does not replace that declared call target. A local named after the owning module
+also does not change an unqualified call; explicit qualified calls retain their
+existing qualifier-shadowing rules.
+
+If no declared owner member exists, instance bodies can use the supported
+inherited Object methods, including reflective `method(...)`, under their native
+contracts. For this inherited fallback, lexical name conflicts remain rejected.
+Other unresolved names, calls through lexical callable values, bare global
+calls, and global fallback from owners are unsupported. These are subset
+restrictions; the SDK can resolve global functions from owner bodies.
+
+Owner calls share declared arity, argument/result checking, contextual literal
+construction, and effect order with qualified calls. They become ordinary
+module/self call IR; Void results are statement-only and non-Void statement
+results are discarded. See [lookup evidence](../../investigations/compiler-unit.md#owner-relative-calls).
 
 IR contains `ModuleCall { result, result_type, module, member, arguments }`.
 [Call text](../ir/README.md#module-calls-and-operation-order) preserves the
@@ -2160,11 +2179,12 @@ declared source member named `method` keeps ordinary source-call priority. Bare
 `self` produces opaque Object and requires an instance body; it does not recover
 a source-class type or concrete callback signature. Existing `self.member(...)`
 source calls retain checked signatures. Bare `method(...)` requires an instance
-body; a local, parameter, or field named `method` prevents implicit lookup.
+body unless it names a declared module function. For inherited native lookup,
+a local, parameter, or field named `method` prevents implicit lookup.
 Calling such lexical values remains unsupported; use explicit `self.method(...)`
-for the instance member. Other unqualified function/member calls are outside
-this profile. Receiver capture still requires all required instance fields to be
-initialized.
+for the instance member. Declared source members follow the ordinary
+[owner lookup rules](#user-calls-and-owner-lookup). Receiver capture still
+requires all required instance fields to be initialized.
 
 Unlike the SDK checker, this erased lookup profile does not statically resolve a
 literal selector to a source target. A missing target or incompatible invocation

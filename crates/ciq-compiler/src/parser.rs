@@ -276,7 +276,16 @@ pub(crate) enum ExpressionKind {
     Float(u32),
     String(String),
     Local(String),
-    ImplicitMethodCall(Vec<Expression>),
+    UnqualifiedCall {
+        member: String,
+        arguments: Vec<Expression>,
+    },
+    // Builder-resolved owner; lexical values cannot shadow this qualifier.
+    OwnerCall {
+        module: String,
+        member: String,
+        arguments: Vec<Expression>,
+    },
     ModuleCall {
         module: String,
         member: String,
@@ -349,7 +358,8 @@ impl Expression {
             ExpressionKind::ArrayRead { array, index } => {
                 array.needs_materialization() || index.needs_materialization()
             }
-            ExpressionKind::ImplicitMethodCall(arguments)
+            ExpressionKind::UnqualifiedCall { arguments, .. }
+            | ExpressionKind::OwnerCall { arguments, .. }
             | ExpressionKind::ModuleCall { arguments, .. }
             | ExpressionKind::SourceNew { arguments, .. } => {
                 arguments.iter().any(Self::needs_materialization)
@@ -1697,15 +1707,21 @@ impl<'a> Parser<'a> {
     ) -> Result<Expression, Diagnostic> {
         let mut expression = if self.peek()? == Kind::Punctuation('.') {
             self.qualified_atom(name, span.start)?
-        } else if name == "method" && self.peek()? == Kind::Punctuation('(') {
-            self.node(ExpressionKind::ImplicitMethodCall(Vec::new()), span)?
+        } else if self.peek()? == Kind::Punctuation('(') {
+            self.node(
+                ExpressionKind::UnqualifiedCall {
+                    member: name.into(),
+                    arguments: Vec::new(),
+                },
+                span,
+            )?
         } else if name == "self" {
             return self.node(ExpressionKind::SelfValue, span);
         } else {
             return self.node(ExpressionKind::Local(name.into()), span);
         };
         if let ExpressionKind::ModuleCall { arguments, .. }
-        | ExpressionKind::ImplicitMethodCall(arguments) = &mut expression.kind
+        | ExpressionKind::UnqualifiedCall { arguments, .. } = &mut expression.kind
         {
             let (parsed, end) = self.call_arguments(span.start, depth)?;
             *arguments = parsed;
@@ -2054,7 +2070,7 @@ impl<'a> Parser<'a> {
                 let end = self.statement_end(terminator)?;
                 if matches!(
                     expression.kind,
-                    ExpressionKind::ValueCall { .. } | ExpressionKind::ImplicitMethodCall(_)
+                    ExpressionKind::ValueCall { .. } | ExpressionKind::UnqualifiedCall { .. }
                 ) {
                     Statement::ValueCall {
                         expression,

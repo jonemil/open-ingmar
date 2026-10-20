@@ -179,8 +179,9 @@ literal = number-literal | long-literal | float-literal | double-literal
 `call-expression` selects a call as the final expression, including parenthesized
 calls. An indexed result alone is not a call statement. `native-constant` is a
 qualified path resolving to a supported API constant, not arbitrary member
-access. Bare calls resolve only through the supported implicit-self lookup;
-module/native/self calls and native base initializers follow the call contracts.
+access. An unqualified `call-name` resolves through
+[owner lookup](README.md#user-calls-and-owner-lookup); qualified calls and native
+base initializers follow their respective call contracts.
 
 The levels above bind from weakest to strongest. Binary groups associate left;
 conditional arms associate right. Comparison/test operators do not chain. `1 + 2

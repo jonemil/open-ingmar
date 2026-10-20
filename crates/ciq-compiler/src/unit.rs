@@ -1995,9 +1995,11 @@ fn compile_sources_context(
                 )));
             }
             origins.push((source_index, ast.body_span.start));
+            let mut owner_calls = calls.clone();
+            owner_calls.current_module = module.clone();
             declarations.push(FunctionDeclaration {
                 module,
-                function: source_ir::build_with_calls(source, ast, context, None, &calls)
+                function: source_ir::build_with_calls(source, ast, context, None, &owner_calls)
                     .map_err(diagnostic)?,
             });
         }

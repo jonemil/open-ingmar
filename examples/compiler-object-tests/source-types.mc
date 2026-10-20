@@ -86,6 +86,7 @@ module NullableSourceTests {
         CoreLiterals.run();
         CoreEscapes.run();
         CoreLists.run();
+        CoreCalls.run();
     }
 }
 
@@ -575,5 +576,50 @@ module CoreLists {
         CoreLists.show(computedWords["two"]);
         var branching = [true ? CoreHeaders.mark("array-branch", 9) : 0,];
         System.println(branching[0]);
+    }
+}
+
+module CoreCalls {
+    function run() as Void {
+        System.println("owner-calls");
+        System.println(total(3));
+        notify();
+        step(1);
+        System.println(shadow(99));
+        System.println(qualifier());
+        System.println(count([]));
+        var token = new OwnerToken();
+        token.run();
+    }
+    function total(n) as Number {
+        if (n == 0) { return 0; }
+        return n + total(n - 1);
+    }
+    function step(n) as Number { return n * 2; }
+    function shadow(step) as Number { return step(4); }
+    function qualifier() as Number { var CoreCalls = 7; return step(CoreCalls); }
+    function count(values as Array<Number>) as Number { return values.size(); }
+    function notify() as Void { System.println("module-void"); }
+}
+
+class OwnerToken {
+    var count = 0;
+    function initialize() { self.count = 1; bump(); }
+    function bump() as Void { self.count += 1; }
+    function total(n) as Number {
+        if (n == 0) { return self.count; }
+        return n + total(n - 1);
+    }
+    function step(n) as Number { return n + self.count; }
+    function notify() as Void { System.println("instance-void"); }
+    function run() as Void {
+        notify();
+        System.println(total(3));
+        System.println(step(4));
+        var step = 17;
+        System.println(step(5));
+        System.println(self.step(6));
+        System.println(self.count);
+        System.println(hashCode() == self.hashCode());
     }
 }

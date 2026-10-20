@@ -218,9 +218,9 @@ remain required core work. The frontend grammar records current acceptance.
   initialization order, dependency cycles, definite initialization, lifetime,
   and access rules. Const reference bindings do not imply immutable contents.
 - **Namespaces and lookup:** nested/reopened modules, classes within modules,
-  qualified names, bare global/module/member calls, inherited lookup, static
-  lookup, `self`/`me`, and explicit global `$.name`. Complete `using` aliases,
-  `import` type visibility, lexical scope, shadowing, and cross-file resolution;
+  qualified names, bare global calls and global fallback from owners, inherited
+  lookup, static lookup, `self`/`me`, and explicit global `$.name`. Complete
+  `using` aliases, `import` type visibility, lexical scope, shadowing, and cross-file resolution;
   keep module behavior distinct from Object inheritance.
 - **Functions and calls:** untyped Any parameters/results, declared contracts,
   implicit returns/fallthrough, Void consumers, recursion, argument evaluation,

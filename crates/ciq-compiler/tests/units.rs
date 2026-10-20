@@ -315,3 +315,63 @@ fn cli_unit_sources_resume_ir_and_assembly_without_overwriting_outputs() {
     assert!(!output.status.success());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn owner_relative_calls_keep_signatures_context_and_text_pipelines() {
+    let source = r#"
+        module M {
+            function sum(n) { if(n == 0) { return 0; } return n + sum(n - 1); }
+            function step(n) { return n + 1; }
+            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+            function notify() as Void { System.println(1); }
+            function run(step) { var M = 7; notify(); step(1); return step(M) + sum(3) + count([]); }
+        }
+        class Token {
+            function initialize() {}
+            function sum(n) { if(n == 0) { return 0; } return n + sum(n - 1); }
+            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+            function notify() as Void { System.println(1); }
+            function run(sum) { notify(); sum(1); return sum(3) + count([]); }
+        }
+    "#;
+    let unit = ciq_compiler::compile_sources(&[source]).unwrap();
+    assert_eq!(
+        unit,
+        ciq_compiler::parse_unit_ir(&unit.to_ir_text()).unwrap()
+    );
+    let assembly = unit.lower();
+    assert_eq!(
+        assembly,
+        ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+    );
+    assert!(unit.declarations().iter().flat_map(|decl| decl.function.operations()).any(|op|
+        matches!(&op.operation, ciq_compiler::Operation::ModuleCallStatement { module, member, .. }
+            if module == "M" && member == "notify")));
+    let first =
+        "module First { function run() { return later(4); } function later(n) { return n; } }";
+    let other = "module Other { function later(n) as Toybox.Lang.String { return \"other\"; } }";
+    let unit = ciq_compiler::compile_sources(&[first, other]).unwrap();
+    assert_eq!(
+        unit,
+        ciq_compiler::parse_unit_ir(&unit.to_ir_text()).unwrap()
+    );
+}
+
+#[test]
+fn owner_relative_calls_reject_unresolved_targets_and_invalid_consumers() {
+    for source in [
+        "module M { function f() { return missing(); } }",
+        "class C { function initialize(){} function f() { return missing(); } }",
+        "module M { function f() { return target(); } function target(n) { return n; } }",
+        "module M { function f() { return target(true); } function target(n) { return n; } }",
+        "module M { function f() { return target(); } function target() as Void {} }",
+        "module M { function f() { var value=1; return value(); } }",
+        "function helper(){return 1;} module M { function f(){return helper();} }",
+        "function f(){return f();}",
+    ] {
+        assert!(
+            ciq_compiler::compile_sources(&[source]).is_err(),
+            "{source}"
+        );
+    }
+}

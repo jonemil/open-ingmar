@@ -30,9 +30,9 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     }
 }
 
-/// Resolve bare `method(...)` to the current receiver. Callable lexical values
-/// remain unsupported, so shadowing must not silently select the inherited method.
-fn resolve_implicit_method(
+/// Resolve an unqualified call to a declared member of the current owner.
+/// Keep inherited native dispatch and unsupported lexical callable values explicit.
+fn resolve_implicit_call(
     source: &str,
     kind: parser::ExpressionKind,
     locals: &BTreeMap<String, LocalId>,
@@ -40,29 +40,51 @@ fn resolve_implicit_method(
     calls: &CallContext,
     span: Span,
 ) -> Result<parser::ExpressionKind, Diagnostic> {
-    let parser::ExpressionKind::ImplicitMethodCall(arguments) = kind else {
+    let parser::ExpressionKind::UnqualifiedCall { member, arguments } = kind else {
         return Ok(kind);
     };
-    if !calls.class_bases.contains_key("self") {
+    let owner = if calls.class_bases.contains_key("self") {
+        "self"
+    } else if let Some(module) = &calls.current_module {
+        module
+    } else {
         return Err(Diagnostic::at(
             source,
             span.start,
-            "unqualified method calls require an instance receiver",
+            "unqualified calls require a supported module or instance owner",
+        ));
+    };
+    if calls.get(&(owner.into(), member.clone())).is_some() {
+        return Ok(parser::ExpressionKind::OwnerCall {
+            module: owner.into(),
+            member,
+            arguments,
+        });
+    }
+    if owner != "self" || (member != "method" && !calls.inherited_object_member(owner, &member)) {
+        return Err(Diagnostic::at(
+            source,
+            span.start,
+            format!(
+                "unresolved owner member {member:?}; global fallback and lexical callable values are unsupported"
+            ),
         ));
     }
-    if locals.contains_key("method")
-        || parameters.contains_key("method")
-        || calls.field_types.contains_key("method")
+    if locals.contains_key(&member)
+        || parameters.contains_key(&member)
+        || calls.field_types.contains_key(&member)
     {
         return Err(Diagnostic::at(
             source,
             span.start,
-            "calling a local, parameter, or field named method is unsupported; use self.method explicitly",
+            format!(
+                "calling a local, parameter, or field named {member} is unsupported; use self.{member} explicitly"
+            ),
         ));
     }
     Ok(parser::ExpressionKind::ModuleCall {
         module: "self".into(),
-        member: "method".into(),
+        member,
         arguments,
     })
 }
@@ -103,7 +125,7 @@ fn emit(
     operations: &mut Vec<LocatedOperation>,
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
-    let kind = resolve_implicit_method(
+    let kind = resolve_implicit_call(
         source,
         expression.kind,
         locals,
@@ -113,7 +135,8 @@ fn emit(
     )?;
     match kind {
         kind @ (parser::ExpressionKind::ValueCall { .. }
-        | parser::ExpressionKind::ModuleCall { .. }) => {
+        | parser::ExpressionKind::ModuleCall { .. }
+        | parser::ExpressionKind::OwnerCall { .. }) => {
             let operation = emit_call(
                 source,
                 kind,
@@ -164,7 +187,7 @@ fn emit_non_call(
     calls: &CallContext,
 ) -> Result<ValueId, Diagnostic> {
     let operation = match expression.kind {
-        parser::ExpressionKind::ImplicitMethodCall(_) => unreachable!("resolved implicit call"),
+        parser::ExpressionKind::UnqualifiedCall { .. } => unreachable!("resolved implicit call"),
         parser::ExpressionKind::DictionaryNew => Operation::DictionaryNew {
             dictionary_type: None,
             result: ValueId(operations.len() as u32),
@@ -326,6 +349,7 @@ fn emit_non_call(
         }
         parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
+        | parser::ExpressionKind::OwnerCall { .. }
         | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
         parser::ExpressionKind::Cast { operand, target } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
@@ -526,6 +550,11 @@ fn emit_call(
     calls: &CallContext,
 ) -> Result<Operation, Diagnostic> {
     let (receiver, module, member, arguments) = match kind {
+        parser::ExpressionKind::OwnerCall {
+            module,
+            member,
+            arguments,
+        } => (None, Some(module), member, arguments),
         parser::ExpressionKind::ValueCall {
             receiver,
             member,
@@ -1259,7 +1288,7 @@ impl Builder<'_> {
     ) -> Result<parser::Expression, Diagnostic> {
         use parser::ExpressionKind as E;
         let span = expression.span;
-        let kind = resolve_implicit_method(
+        let kind = resolve_implicit_call(
             self.source,
             expression.kind,
             locals,
@@ -1380,6 +1409,18 @@ impl Builder<'_> {
                         member,
                         arguments,
                     }
+                }
+            }
+            E::OwnerCall {
+                module,
+                member,
+                arguments,
+            } => {
+                let expected = self.call_argument_context(&module, &member);
+                E::OwnerCall {
+                    module,
+                    member,
+                    arguments: self.snapshot_arguments(arguments, locals, &expected)?,
                 }
             }
             kind => kind,
@@ -1537,6 +1578,20 @@ impl Builder<'_> {
             } = &last.operation
             {
                 last.operation = Operation::SelfCallStatement {
+                    member: member.clone(),
+                    arguments: arguments.clone(),
+                };
+                return Ok(());
+            }
+            if let Operation::ModuleCall {
+                module,
+                member,
+                arguments,
+                ..
+            } = &last.operation
+            {
+                last.operation = Operation::ModuleCallStatement {
+                    module: module.clone(),
                     member: member.clone(),
                     arguments: arguments.clone(),
                 };
@@ -2490,6 +2545,7 @@ pub(crate) struct CallContext {
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     parameter_types: Vec<crate::ParameterType>,
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
+    pub(crate) current_module: Option<String>,
 }
 impl CallContext {
     pub(crate) fn new() -> Self {

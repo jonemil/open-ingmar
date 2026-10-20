@@ -49,6 +49,10 @@ surrogate pairs and embedded NUL, and Char array storage.
 `CoreLists` checks trailing commas in Array, ByteArray, and Dictionary literals,
 including constant records and ordered effectful/branching construction.
 
+`CoreCalls` and `OwnerToken` check unqualified owner calls, recursion, Void and
+discarded results, contextual Array arguments, instance mutation, native Object
+dispatch, and declared member priority over local/parameter names.
+
 From the repository root:
 
 ```sh

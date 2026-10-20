@@ -160,5 +160,43 @@ reopened modules, recursive signatures, unique labels, text framing, the
 256-function bound, and CLI stop/resume without overwriting outputs. Runtime
 call order/frames/results use the simulator evidence above.
 
+## Owner-relative calls
+
+Authored-source probes on 2026-10-20 use SDK/simulator 9.2.0, fr265, `-O 0`.
+Build an ignored console AppBase wrapper with `scripts/build-example.sh` and
+place the tested module/class beside it. A minimal module probe is:
+
+```monkeyc
+module M {
+    function f(n) {
+        if (n == 0) { return 0; }
+        return step(n) + f(n - 1);
+    }
+    function step(n) { return n; }
+}
+```
+
+**Observed:** module and instance unqualified calls compile, including recursion
+and Void statement calls. `var step=1; return step(1);` and a parameter named
+`step` still compile when the owner declares `step(n)`. Structured export of
+these SDK programs shows `getselfv @step`, not a lexical value read. For module
+bodies, the SDK first installs the module as the frame receiver. The same field
+spelling with no declared function also compiles in the SDK; compilation alone
+does not establish that such a value is callable at runtime.
+
+A global `helper()` referenced from a module body also compiles. Global calls
+and fallback remain outside our current profile; do not interpret our diagnostic
+as an SDK rejection.
+
+The [shared application's `CoreCalls`/`OwnerToken` groups][owner-example] exercise
+module/instance recursion, Void/discarded results, constructor-time self calls,
+instance mutation, inherited native dispatch, contextual empty Array arguments,
+and member priority over locals/parameters. SDK and generated applications match
+its expected output, and both PRGs reconstruct without raw CODE/DATA fallback.
+The source
+[lookup contract](../specs/frontend/README.md#user-calls-and-owner-lookup) owns
+resolution and remaining restrictions.
+
+[owner-example]: ../../examples/compiler-object-tests/README.md
 [arguments]: compiler-arguments.md
 [arguments-reproduction]: compiler-arguments.md#reproduction
