@@ -16,6 +16,13 @@ fn long_literal_bits_survive_ir_assembly_and_vm_codec() {
         ("72623859790382856l", 0x0102030405060708),
         ("9223372036854775807l", i64::MAX),
         ("-9223372036854775808L", i64::MIN),
+        ("0xffffffffL", 4294967295),
+        ("077L", 63),
+        ("0xffffffffffffffffL", -1),
+        ("01777777777777777777777l", -1),
+        ("0x8000000000000000L", i64::MIN),
+        ("-0xffffffffffffffffL", 1),
+        ("-0x8000000000000000L", i64::MIN),
     ] {
         let f = compile_with_api(
             &format!("function f() as Toybox.Lang.Long {{ return {literal}; }}"),
@@ -92,6 +99,9 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f() { return 1l; }",
         "function f() as Toybox.Lang.Long { return 9223372036854775808l; }",
         "function f() as Toybox.Lang.Long { return -9223372036854775809l; }",
+        "function f() as Toybox.Lang.Long { return 0x10000000000000000L; }",
+        "function f() as Toybox.Lang.Long { return 02000000000000000000000L; }",
+        "function f() as Toybox.Lang.Long { return 08L; }",
         "function f() as Toybox.Lang.Long { return 2147483648; }",
         "function f() as Toybox.Lang.Long { return 1l & true; }",
         "function f() as Toybox.Lang.Boolean { return 1l == true; }",

@@ -100,7 +100,6 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         "-2147483649",
         "999999999999999999999999",
         "+2147483648",
-        "0xff",
         "1_000",
         "1l",
     ] {
@@ -126,4 +125,53 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
     }
     compile("function f() { return (-1).abs(); }").unwrap();
     assert!(parse_ir("ciq-ir\n.function f\n.integer %0 -\n.return %0\n.end\n").is_err());
+}
+
+#[test]
+fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
+    for (literal, value) in [
+        ("0xff", 255),
+        ("0xFF", 255),
+        ("077", 63),
+        ("00", 0),
+        ("0xffffffff", -1),
+        ("037777777777", -1),
+        ("0x80000000", i32::MIN),
+        ("020000000000", i32::MIN),
+        ("-0xffffffff", 1),
+        ("-037777777777", 1),
+        ("-0x80000000", i32::MIN),
+    ] {
+        let function = compile(&format!("function f(){{return {literal};}}")).unwrap();
+        assert!(
+            matches!(function.operations()[0].operation,ciq_compiler::Operation::Integer{value:actual,..} if actual==value),
+            "{literal}"
+        );
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(
+            function.lower().encode().unwrap(),
+            compile(&format!("function f(){{return {value};}}"))
+                .unwrap()
+                .lower()
+                .encode()
+                .unwrap()
+        );
+    }
+    for literal in [
+        "0x",
+        "0xg",
+        "0Xff",
+        "08",
+        "019",
+        "0b1",
+        "0x100000000",
+        "040000000000",
+        "-0x100000000",
+        "1_000",
+    ] {
+        assert!(
+            compile(&format!("function f(){{return {literal};}}")).is_err(),
+            "{literal}"
+        );
+    }
 }

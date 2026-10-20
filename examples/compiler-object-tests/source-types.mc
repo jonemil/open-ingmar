@@ -83,6 +83,7 @@ module NullableSourceTests {
         CoreNonreturning.run();
         CoreDeclarations.run();
         CoreSwitch.run();
+        CoreLiterals.run();
     }
 }
 
@@ -480,4 +481,44 @@ class SwitchToken {
         System.println("switch-equals");
         return true;
     }
+}
+
+module CoreLiterals {
+    function run() as Void {
+        System.println("numeric-literals");
+        System.println(0xFF);
+        System.println(0xffffffff);
+        System.println(-0xffffffff);
+        System.println(077);
+        System.println(037777777777);
+        System.println(-037777777777);
+        System.println(0xffffffffL);
+        System.println(0xffffffffffffffffL);
+        System.println(-0xffffffffffffffffL);
+        System.println(077L);
+        System.println(1.25f == 1.25);
+        System.println(.5 == 0.5);
+        System.println(.5d == 0.5d);
+        System.println(1f instanceof Float);
+        System.println(1d instanceof Double);
+        System.println(NaN instanceof Float);
+        System.println(NaN instanceof Double);
+        var nan = NaN;
+        System.println(nan == nan);
+        System.println(NaN != NaN);
+        var floats = [NaN, 1f];
+        System.println(floats[0] instanceof Float);
+        System.println(floats[0] == floats[0]);
+        var words = [0xffffffffffffffffL, 077L];
+        System.println(words[0]);
+        System.println(words[1]);
+        var holder = new LiteralHolder();
+        System.println(holder.value());
+    }
+}
+
+class LiteralHolder {
+    var marker = 0xffffffff;
+    function initialize() {}
+    function value() as Number { return self.marker; }
 }

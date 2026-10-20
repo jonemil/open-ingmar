@@ -115,16 +115,45 @@ runtime obligation; the declared result remains nullable.
 
 ## Numbers and numeric aliases
 
+### Integer literals
+
+Unsuffixed integers produce Number; `l`/`L` selects Long. Decimal magnitudes
+must fit the signed 32-bit or 64-bit range after applying a literal's sign,
+including the minimum signed value. Lowercase `0x` introduces hexadecimal;
+multiple integer digits beginning with zero select octal. Hex digits may use
+either case; octal digits exclude 8 and 9. Binary prefixes, uppercase `0X`, and
+digit separators are rejected. See the connected [literal grammar](grammar.md#lexical-rules-and-literals).
+
+Hexadecimal/octal magnitudes encode the full width's bit pattern, interpreted
+as signed. Thus `0xffffffff` is Number -1, but `0xffffffffL` is Long 4294967295.
+More than 32/64 significant bits is rejected. Negating such a literal wraps
+within its width: `-0xffffffff` is 1 and `-0x80000000` remains the minimum
+Number. This does not broaden decimal range or define general arithmetic
+overflow. Signed zero integer literals become zero. Saved IR retains canonical
+signed decimal values; source prefixes/suffixes do not extend IR or assembly
+syntax. [Literal evidence](../../investigations/compiler-number-literals.md#radix-and-floating-token-probes)
+records the SDK checks.
+
 ### Floating-point values
 
 Float and Double are distinct numeric scalars, available since API 1.0.0.
-Decimal literals with a fractional part or decimal exponent default to Float; a
-lowercase `d` suffix selects Double, including an integer mantissa such as `1d`.
-A fractional part requires digits on both sides of the point; an exponent uses
+Decimal literals with a fractional part or decimal exponent default to Float;
+lowercase `f` explicitly selects Float, including integer mantissas such as `1f`.
+Lowercase `d` selects Double, including `1d`. A fractional part requires digits
+after the point; leading-dot forms such as `.5` and `.5d` are accepted. A
+multi-digit integer part beginning with zero, uppercase `F`/`D`, and trailing
+points are rejected. An exponent uses
 `e`/`E`, optional sign, and at least one digit. Literal parsing rounds to IEEE
 754 binary32/binary64. Values rounding to infinity are rejected; underflow may
 round to zero. A negative literal preserves signed zero. Parenthesize a negative
 literal before calling a member, as for Number/Long.
+
+`NaN` is a Float constant with bits `0x7fc00000`; `-NaN` retains that canonical
+payload in the verified SDK profile. It is not a Double literal or a spelling
+accepted in saved IR, which uses the ordinary hexadecimal Float bits. Arrays,
+locals, calls, and comparisons use the existing Float contracts; no special
+operator or VM opcode is introduced. Runtime propagation, conversion, and
+comparison behavior remain runtime obligations.
 
 Explicit Float/Double parameters/results, local storage, module/instance calls,
 printing, conditional joins, and `or Null` contracts use the shared scalar
@@ -177,10 +206,10 @@ See the [grouped example](../../../examples/compiler-float-values/README.md) and
 ### Long values
 
 Long is a signed 64-bit scalar, distinct from Number, available since API 1.0.0.
-Decimal literals end in `l` or `L`; values must fit i64, including
-`-9223372036854775808l` and `9223372036854775807l`. An unsuffixed token retains
-Number's signed 32-bit limit. A minus immediately applied to a Long token forms
-a negative literal under the same spacing/postfix restrictions as Number. Unary
+Its [integer literal rules](#integer-literals) cover decimal signed magnitudes
+and radix bit patterns, selected with `l` or `L`. A minus immediately applied
+to a Long token forms a negative literal under the same spacing/postfix
+restrictions as Number. Unary
 plus and negation also accept Long expressions, preserving their width.
 
 Explicit `Toybox.Lang.Long` parameters/results, local copies/reassignment,
@@ -779,7 +808,7 @@ specify defaults, identity, ownership, and permitted values.
 
 ### Number instance fields
 
-Source classes may declare up to 256 fields with signed 32-bit decimal Number
+Source classes may declare up to 256 fields with Number
 literal initializers. These inferred fields have a fixed Number contract; typed
 declarations follow the [scalar-field contract](#typed-scalar-fields). Other
 inferred numeric literals and computed declaration initializers are unsupported.

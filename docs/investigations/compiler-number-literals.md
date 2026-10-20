@@ -58,13 +58,52 @@ The SDK probe also printed -1 for `-1.abs()` and 1 for `(-1).abs()`.
 and require parentheses around a negative literal used as a call receiver.
 The [negation follow-up][negation] adds general Number expression negation and
 reveals a deeper literal-postfix discrepancy; the explicit-parentheses
-restriction remains. Decrement syntax is unsupported.
+restriction remains; current update syntax follows the source specification.
 
-Source and IR accept decimal Numbers in `-2147483648..=2147483647`. IR stores
-i32 values; lowering emits zero specially and otherwise chooses the smallest
-signed immediate width. Negative zero canonicalizes to zero. Overflowing input,
-positive signs, hex/underscore/suffix forms, and malformed magnitudes are
-rejected by this current decimal profile.
+IR stores canonical decimal i32 values; lowering emits zero specially and
+otherwise chooses the smallest signed immediate width. Negative integer zero
+canonicalizes to zero. Its text grammar remains separate from the
+[current source literal profile](../specs/frontend/README.md#integer-literals).
+
+## Radix and floating token probes
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Authored literal probes establish:
+
+| Spelling | SDK observation |
+|---|---|
+| `0xff`, `0xFF`, `077`, `077L` | Accepted; values 255, 255, 63, 63 |
+| `0xffffffff` / `0xffffffffL` | Number -1 / Long 4294967295 |
+| `-0xffffffff` | CODE uses `ipush1 0x01` |
+| `0xffffffffffffffffL` | Accepted full-width Long pattern |
+| `-0x80000000`, `-0x8000000000000000L` | Minimum signed patterns retained |
+| `01777777777777777777777L` | CODE uses `lpush 0xffffffffffffffff` |
+| `1.5f`, `2f`, `.5`, `.5f`, `.5d` | Accepted decimal floating forms |
+| `NaN`, `-NaN` | CODE uses `fpush 0x7fc00000` |
+| `0XFF`, `0b101`, `08`, `01f`, `01d`, `01.5f`, `1.` | Rejected syntax/radix |
+| `1.5F`, `1.5D` | Rejected uppercase suffixes |
+| Decimal `2147483648`, `4294967295`, `9223372036854775808L` | Rejected signed ranges |
+| `0x100000000`, `040000000000`, `0x10000000000000000L` | Rejected width overflow |
+
+Complete `.mc`, build logs, and accepted PRGs are under
+`scratch/compiler-numeric-syntax/`. Copy a named `.mc` into its `source/app.mc`
+and run `sh scripts/build-example.sh scratch/compiler-numeric-syntax` to repeat.
+`nan-export/`, `nan-neg-export/`, `hex-export/`, and `boundary-export/` retain
+structured section exports of the decisive constant encodings. These are
+observations of authored SDK application output, not compiler disassembly.
+
+The `CoreLiterals` group in
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) matches
+SDK/generated expected output for radix values/negation, leading-dot and suffix
+types, NaN's Float type and unequal self-comparison, Float/Long Array storage,
+and a Number field default. Source/saved-IR/assembly agree; both PRGs pass
+structured reconstruction without raw CODE/DATA fallback and own-key signing
+checks. Use the shared [console checker](../../scripts/README.md#console-specimen-check)
+with `compiler-object-tests`; artifacts are `scratch/core-numeric-syntax/check/`.
+Typed codec tests retain exact bit patterns and reject invalid digits/ranges.
+These checks do not establish arbitrary NaN payload propagation or general
+arithmetic-overflow rules.
+
+## Decimal immediate reproduction
 
 Create ignored `group.jungle` selecting the [complete example][example] and the
 same wrapper/manifest/resources, then build with ordinary SDK checking:

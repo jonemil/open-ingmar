@@ -40,6 +40,9 @@ types, scope/name reuse, nullable copies, and repeated statement terminators.
 ordered effectful tests, default placement, fall-through, scoped locals, and
 switch/loop controls. Nullable value selectors are guarded before dispatch.
 
+`CoreLiterals` checks Number/Long radix patterns and negation, Float suffix and
+leading-dot forms, NaN type/comparisons/Array storage, and a radix field default.
+
 From the repository root:
 
 ```sh

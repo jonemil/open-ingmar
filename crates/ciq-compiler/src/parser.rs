@@ -52,6 +52,8 @@ fn reserved_word(name: &str) -> bool {
 
 use crate::{Diagnostic, Span};
 
+const NAN_LITERAL_BITS: u32 = 0x7fc00000;
+
 // SourceClass bases in parsed annotations are placeholders. Unit declaration
 // collection resolves them before signatures or bodies enter semantic IR.
 pub(crate) struct ParsedFunction {
@@ -392,6 +394,54 @@ struct Parser<'a> {
     dictionary_entry: bool,
     names: crate::names::Names,
     native_base: Option<crate::ClassBase>,
+}
+
+#[derive(Clone, Copy)]
+enum IntegerWidth {
+    Number,
+    Long,
+}
+
+/// Parse decimal signed magnitudes or radix bit patterns at the selected width.
+/// Nondecimal negation wraps at that width; decimal values must fit signed range.
+fn integer_value(digits: &str, negative: bool, width: IntegerWidth) -> Option<i64> {
+    let (digits, radix) = if let Some(hex) = digits.strip_prefix("0x") {
+        (hex, 16)
+    } else if digits.len() > 1 && digits.starts_with('0') {
+        (digits, 8)
+    } else {
+        (digits, 10)
+    };
+    let raw = u64::from_str_radix(digits, radix).ok()?;
+    if radix == 10 {
+        let signed = if negative {
+            -(raw as i128)
+        } else {
+            raw as i128
+        };
+        return match width {
+            IntegerWidth::Number => i32::try_from(signed).ok().map(i64::from),
+            IntegerWidth::Long => i64::try_from(signed).ok(),
+        };
+    }
+    Some(match width {
+        IntegerWidth::Number => {
+            let value = u32::try_from(raw).ok()? as i32;
+            i64::from(if negative {
+                value.wrapping_neg()
+            } else {
+                value
+            })
+        }
+        IntegerWidth::Long => {
+            let value = raw as i64;
+            if negative {
+                value.wrapping_neg()
+            } else {
+                value
+            }
+        }
+    })
 }
 
 impl<'a> Parser<'a> {
@@ -737,7 +787,31 @@ impl<'a> Parser<'a> {
                 }
                 Kind::String(&self.source[start..self.offset])
             }
-            Some(c) if c.is_ascii_digit() => {
+            Some('0')
+                if rest.starts_with("0x")
+                    || rest.as_bytes().get(1).is_some_and(u8::is_ascii_digit) =>
+            {
+                let length = if let Some(hex) = rest.strip_prefix("0x") {
+                    let count = hex.bytes().take_while(u8::is_ascii_hexdigit).count();
+                    if count == 0 {
+                        return Err(self.error(start, "hexadecimal literal requires digits"));
+                    }
+                    2 + count
+                } else {
+                    rest.bytes().take_while(u8::is_ascii_digit).count()
+                };
+                self.offset += length;
+                if matches!(rest.as_bytes().get(length), Some(b'l' | b'L')) {
+                    self.offset += 1;
+                    Kind::Long(&rest[..length])
+                } else {
+                    Kind::Integer(&rest[..length])
+                }
+            }
+            Some(c)
+                if c.is_ascii_digit()
+                    || (c == '.' && rest.as_bytes().get(1).is_some_and(u8::is_ascii_digit)) =>
+            {
                 let mut length = rest.bytes().take_while(u8::is_ascii_digit).count();
                 let mut real = false;
                 if rest.as_bytes().get(length) == Some(&b'.')
@@ -772,6 +846,9 @@ impl<'a> Parser<'a> {
                 if rest.as_bytes().get(length) == Some(&b'd') {
                     self.offset += 1;
                     Kind::Real(&rest[..length], true)
+                } else if rest.as_bytes().get(length) == Some(&b'f') {
+                    self.offset += 1;
+                    Kind::Real(&rest[..length], false)
                 } else if real {
                     Kind::Real(&rest[..length], false)
                 } else if matches!(rest.as_bytes().get(length), Some(b'l' | b'L')) {
@@ -1212,18 +1289,31 @@ impl<'a> Parser<'a> {
                 true,
             );
         }
+        if self.peek()? == Kind::Word("NaN") {
+            let magnitude = self.token()?;
+            if self.peek()? == Kind::Punctuation('.') {
+                return Err(self.error(
+                    sign.span.start,
+                    "parenthesize a negative literal before a member call",
+                ));
+            }
+            // The SDK keeps the canonical positive NaN payload for -NaN too.
+            return self.node(
+                ExpressionKind::Float(NAN_LITERAL_BITS),
+                Span {
+                    start: sign.span.start,
+                    end: magnitude.span.end,
+                },
+            );
+        }
         if let Kind::Integer(digits) = self.peek()? {
             let magnitude = self.token()?;
-            let value = digits
-                .parse::<i64>()
-                .ok()
-                .and_then(|value| i32::try_from(-value).ok())
-                .ok_or_else(|| {
-                    self.error(
-                        sign.span.start,
-                        "Number literal exceeds signed 32-bit range",
-                    )
-                })?;
+            let value = integer_value(digits, true, IntegerWidth::Number).ok_or_else(|| {
+                self.error(
+                    sign.span.start,
+                    "invalid Number literal or value exceeds 32-bit range",
+                )
+            })?;
             if self.peek()? == Kind::Punctuation('.') {
                 return Err(self.error(
                     sign.span.start,
@@ -1231,7 +1321,7 @@ impl<'a> Parser<'a> {
                 ));
             }
             return self.node(
-                ExpressionKind::Integer(value),
+                ExpressionKind::Integer(value as i32),
                 Span {
                     start: sign.span.start,
                     end: magnitude.span.end,
@@ -1493,19 +1583,20 @@ impl<'a> Parser<'a> {
         Ok((arguments, end))
     }
 
-    /// Parse a signed Long token without enlarging recursive expression frames.
-    /// Negative source literals may include i64::MIN and require a grouped receiver.
+    /// Parse a decimal or radix Long token, retaining its signed 64-bit pattern.
+    /// Negative literals require a grouped receiver, as for Number and Float.
     fn long_literal(
         &mut self,
         digits: &str,
         span: Span,
         negative: bool,
     ) -> Result<Expression, Diagnostic> {
-        let value = digits
-            .parse::<i128>()
-            .ok()
-            .and_then(|value| i64::try_from(if negative { -value } else { value }).ok())
-            .ok_or_else(|| self.error(span.start, "Long literal exceeds signed 64-bit range"))?;
+        let value = integer_value(digits, negative, IntegerWidth::Long).ok_or_else(|| {
+            self.error(
+                span.start,
+                "invalid Long literal or value exceeds 64-bit range",
+            )
+        })?;
         if negative && self.peek()? == Kind::Punctuation('.') {
             return Err(self.error(
                 span.start,
@@ -1579,14 +1670,16 @@ impl<'a> Parser<'a> {
             Kind::Long(digits) => self.long_literal(digits, token.span, false),
             Kind::Real(digits, double) => self.real_literal(digits, double, token.span, false),
             Kind::Integer(digits) => {
-                let value = digits.parse::<i32>().map_err(|_| {
-                    self.error(
-                        token.span.start,
-                        "Number literal exceeds signed 32-bit range",
-                    )
-                })?;
-                self.node(ExpressionKind::Integer(value), token.span)
+                let value =
+                    integer_value(digits, false, IntegerWidth::Number).ok_or_else(|| {
+                        self.error(
+                            token.span.start,
+                            "invalid Number literal or value exceeds 32-bit range",
+                        )
+                    })?;
+                self.node(ExpressionKind::Integer(value as i32), token.span)
             }
+            Kind::Word("NaN") => self.node(ExpressionKind::Float(NAN_LITERAL_BITS), token.span),
             Kind::Word("null") => self.node(ExpressionKind::Null, token.span),
             Kind::Punctuation('{') => self.dictionary_literal(token.span.start, depth),
             Kind::Word("true") => self.node(ExpressionKind::Boolean(true), token.span),

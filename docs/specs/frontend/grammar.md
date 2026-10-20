@@ -307,11 +307,20 @@ identifier = (ascii-letter | "_") (ascii-letter | digit | "_")*
 ascii-letter = ? ASCII A-Z or a-z ?
 digit = ? ASCII 0-9 ?
 digits = digit+
-number-literal = digits
-long-literal = digits ("l" | "L")
-float-literal = real-magnitude
-double-literal = (digits | real-magnitude) "d"
-real-magnitude = digits "." digits exponent? | digits exponent
+number-literal = integer-magnitude
+long-literal = integer-magnitude ("l" | "L")
+integer-magnitude = decimal-magnitude | hex-magnitude | octal-magnitude
+decimal-magnitude = "0" | nonzero-digit digit*
+nonzero-digit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+hex-magnitude = "0x" hex-digit+
+hex-digit = digit | "a" | "b" | "c" | "d" | "e" | "f"
+          | "A" | "B" | "C" | "D" | "E" | "F"
+octal-magnitude = "0" octal-digit+
+octal-digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+float-literal = real-magnitude | (decimal-magnitude | real-magnitude) "f" | "NaN"
+double-literal = (decimal-magnitude | real-magnitude) "d"
+real-magnitude = decimal-magnitude "." digits exponent?
+               | "." digits exponent? | decimal-magnitude exponent
 exponent = ("e" | "E") ("+" | "-")? digits
 symbol-literal = ":" identifier
 string-literal = '"' (string-character | string-escape)* '"'
@@ -326,6 +335,12 @@ char-escape = backslash ("n" | "r" | "t" | "'" | backslash)
 Minus is a unary source token, not part of the unsigned `number-literal`,
 `long-literal`, `float-literal`, or `double-literal` token. The unary rules and
 numeric range checks also admit the minimum signed Number/Long values.
+Decimal integers require signed range; hexadecimal/octal integers describe
+32-bit Number or 64-bit Long patterns. Their literal negation wraps at that
+width. Leading-zero integer magnitudes select octal, not decimal; `08`, `01f`,
+and `01.5` are rejected. Prefix `0X`, binary prefixes, separators, uppercase
+`F`/`D`, and a decimal point without following digits are unsupported.
+`NaN` denotes the canonical Float NaN; it has no Double suffix form.
 
 Identifiers use ASCII letters/underscore followed by ASCII letters, digits, or
 underscore. The following words cannot be ordinary identifiers, including words
