@@ -5,7 +5,7 @@
   with targeted searches, then read narrow excerpts rather than whole files.
 - Follow [docs/research.md](docs/research.md) for investigations and evidence,
   and [docs/architecture.md](docs/architecture.md) for implementation
-  boundaries.
+  boundaries and coding conventions.
 - Keep findings, designs, experiments, and outstanding questions in this
   repository's Markdown documentation. Update relevant docs when new evidence
   changes a conclusion. The plan covers upcoming work and discovered needs;

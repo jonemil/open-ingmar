@@ -68,6 +68,42 @@ VM backend could become `ciq-codegen`. Extract crates only when consumers or
 dependency boundaries justify them. A linker, LLVM, optimization, and a full VM
 remain deferred in [the plan](plan.md).
 
+## Implementation conventions
+
+Within `ciq-compiler`, `parser` and `names` handle source syntax and native-name
+bindings; `source_ir` constructs semantic operations. Candidate types and source
+origins help construction but are not validation proofs. `Function` validation
+checks per-body invariants; `unit` adds declaration, signature, field, and
+callback checks. `api` owns declarations, `native` owns executable profiles,
+and `operators` owns operand/result rules. `backend` selects VM instructions;
+`application` generates the bounded bootstrap and metadata. Keep these
+responsibilities separate even where they currently share a source file.
+
+- Reuse an existing rule at its owning layer before adding another type/member
+  whitelist. Keep context restrictions explicit: a parameter, field, join, and
+  cast need not admit identical types. Share spelling/conversion machinery
+  without silently broadening those contexts.
+- Source, typed IR, and saved IR must reach the same authoritative validation.
+  Candidate inference may be provisional; it must not authorize code that the
+  final function/unit checks cannot establish. Keep evaluation order, identity,
+  null proofs, and temporary ownership explicit through lowering.
+- Prefer named enums and exhaustive matches for compiler cases. Raw opcode
+  bytes, record tags, and field widths belong in their format definitions;
+  internal directive dispatch should not depend on unexplained numeric cases.
+- Distinguish language semantics, supported executable profiles, native binding
+  IDs, and target capacity. Fixed ABI/format constants are appropriate; they do
+  not belong in source-language rules. Keep native binding data separate from
+  API declarations, and identify the profile behind unverified target choices.
+- Introduce helpers or types for a repeated invariant or a concrete consumer.
+  Prefer ordinary functions and data over registries, plugin layers, or generic
+  pass frameworks without a demonstrated need. Do not infer an abstraction for
+  unknown language/VM behavior or extract crates merely because files grow.
+- Organize code by responsibilities that can be understood and checked together.
+  Module boundaries need not match documentation filenames. Refactor a bounded
+  concern with its relevant extension; avoid combining a semantic change with
+  an unrelated structural rewrite. Follow the existing
+  [validation policy](validation.md) for the affected scope.
+
 ## Preservation, layout, and signing
 
 Container reading/writing preserves ordered sections, duplicates, unknown IDs,
