@@ -12,6 +12,8 @@ projections. Its imported bare native names also cover signatures, casts,
 runtime tests, and container arguments. Nullable source parameters/results retain
 Object-, View-, and delegate-derived identities through calls and local copies;
 null checks permit source dispatch, and nullable locals can be reset to Null.
+Nullable source fields default to Null and retain snapshot identity after the
+field is cleared, including View and delegate references.
 
 From the repository root:
 

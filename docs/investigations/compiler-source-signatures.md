@@ -27,16 +27,21 @@ dispatch, cross-file declaration resolution, unrelated classes, generic View
 arguments/returns, Null, unknown signature classes, and edited IR claims.
 These are our bounded checking rules, not proof of Garmin's complete typing policy.
 
-## Nullable source signatures
+## Nullable source signatures and fields
 
 2026-10-20, SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`.
 The `NullableSourceTests` module in the [object-test specimen][nullable-example]
 declares `Probe or Null`, `LocalView or Null`, and `LocalDelegate or Null`
 parameters. It returns either a source instance or Null, forwards nullable
 results, copies them into locals, guards source calls, and resets locals to Null.
+`NullableSourceHolder` stores the same three source types in nullable fields,
+checks implicit/explicit Null defaults, copies reads, and clears the fields
+before using the snapshots. A typed getter forwards the nullable source contract.
 
 **Experimentally observed:** SDK and generated console output matches the
 expected text, including the added group `1, -1, 2, -2, 3, -3, 1, true, 1, true`.
+The field group prints `true, true, true, 1, 2, 3, 1, true`, confirming default
+Null slots and retained snapshot references after field clearing.
 Both captured displays show the ordinary application screen without an error
 dialog. SDK/generated CODE and DATA export structurally and reconstruct exactly;
 native, saved-IR, and assembly paths agree. No new opcode or DATA framing is
@@ -47,10 +52,10 @@ that directory's Jungle file pointing to the tracked sources and local
 manifest/resources. Then run the shared console checker with the resulting
 SDK PRG: `scripts/check-example.py prepare compiler-object-tests` with
 `--sdk-prg` and a fresh `--output`, followed by `simulate` in the SDK environment.
-This run is captured in `scratch/nullable-source/check/`.
+This run is captured in `scratch/nullable-source-fields/check/`.
 
-**Limits:** these observations cover signatures and inferred locals, not nullable
-source fields, container elements, conditional-value joins, inheritance, or
+**Limits:** these observations cover signatures, inferred locals, and nullable
+source fields, not container elements, conditional-value joins, inheritance, or
 nullable source casts. Missing-proof and unrelated-class rejections are our
 checking policy; they do not establish the SDK's full static-checking rules.
 

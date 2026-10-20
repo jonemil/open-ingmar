@@ -134,14 +134,14 @@ fn exact_references_resolve_across_files_without_erasing_native_bases() {
         let text = unit.to_ir_text();
         assert!(text.contains("parameter-types=source(C@Lang.Object)"));
         assert!(text.contains("result=source(C@Lang.Object)"));
-        assert!(text.contains(".field-reference target C@Lang.Object"));
+        assert!(text.contains(".field-reference target source(C@Lang.Object)"));
         assert_eq!(unit, parse_unit_ir(&text).unwrap());
         for changed in [
             text.replace("C@Lang.Object", "C@WatchUi.View"),
             text.replace("source(C@Lang.Object)", "source(Missing@Lang.Object)"),
             text.replace(
-                ".field-reference target C@Lang.Object",
-                ".field-reference target C@WatchUi.View",
+                ".field-reference target source(C@Lang.Object)",
+                ".field-reference target source(C@WatchUi.View)",
             ),
             text.replace(
                 "M make result=source(C@Lang.Object)",

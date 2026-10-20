@@ -60,9 +60,10 @@ permitted defaults are the [storage contracts](README.md#instance-fields).
 `field-default` is further restricted by its type: Symbol permits a literal
 Symbol or, when nullable, Null, also parenthesized. Other nullable
 scalar/core/interface/alias fields permit only literal `null`, without
-parentheses. Non-null fields have no initializer
-here except Symbol. Source-reference and container fields have no declaration
-default. Inferred fields accept only the Number/Symbol forms shown above.
+parentheses. Nullable source-reference fields also permit only literal `null`.
+Non-null fields have no initializer here except Symbol. Container fields have
+no declaration default. Inferred fields accept only the Number/Symbol forms
+shown above.
 Imports, owner collisions, module reopening, and file-local bindings follow
 [declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
 parameters, nested declarations, source superclass chains, or annotations.
@@ -219,7 +220,7 @@ bytearray-type = path
 array-type = path
 dictionary-type = path
 native-base = object-type | appbase-type | view-type | delegate-type
-field-type = field-named-type | nullable-lang-type "or" "Null"
+field-type = field-named-type | nullable-type "or" "Null"
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 field-named-type = nullable-lang-type | source-class-type
@@ -250,8 +251,8 @@ no imports. These semantic type domains mean:
   resolved native identities.
 - Native base: Object, AppBase, View, or BehaviorDelegate, as above.
 - Field named type: scalar/alias, core reference, interface, or exact
-  constructible source class. Only scalar/alias/core/interface fields may be
-  nullable. `field-default` restrictions are specified under Declarations.
+  constructible source class. These fields may be nullable; container fields
+  remain non-null. `field-default` restrictions are specified under Declarations.
 - Class target and cast target: the domains immediately below the expression
   grammar; a parsed path does not admit arbitrary type tests/assertions.
 

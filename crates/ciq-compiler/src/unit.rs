@@ -452,6 +452,9 @@ pub enum FieldKind {
     /// A null reference slot that source initialize must fill with this exact
     /// non-null source class before reads, self calls, or return.
     SourceObject(crate::SourceClass),
+    /// An exact source-class reference or Null, with a Null metadata default.
+    /// Reads are nullable snapshots; source dispatch requires a non-null proof.
+    NullableSourceObject(crate::SourceClass),
     /// A Null-initialized comparison-interface slot. Non-null fields must be
     /// filled by source initialize before reads, self calls, or return.
     Interface {
@@ -554,6 +557,9 @@ impl InstanceField {
                 }
             }
             FieldKind::SourceObject(class) => ReturnType::SourceObject(class.clone()),
+            FieldKind::NullableSourceObject(class) => {
+                ReturnType::NullableSourceObject(class.clone())
+            }
             FieldKind::Interface {
                 interface,
                 nullable,
@@ -887,7 +893,9 @@ impl CompilationUnit {
                 .fields
                 .iter()
                 .filter_map(|field| {
-                    if let FieldKind::SourceObject(target) = &field.kind {
+                    if let FieldKind::SourceObject(target)
+                    | FieldKind::NullableSourceObject(target) = &field.kind
+                    {
                         Some(target)
                     } else {
                         None
@@ -1350,8 +1358,14 @@ impl CompilationUnit {
                             ));
                         }
                         Operation::SelfFieldAssign { value, .. } => {
-                            if let FieldKind::SourceObject(class) = &declaration.kind {
-                                if origins.class(*value) != Some(class.as_str()) {
+                            if let FieldKind::SourceObject(class)
+                            | FieldKind::NullableSourceObject(class) = &declaration.kind
+                            {
+                                if !origins.accepts(
+                                    class.as_str(),
+                                    matches!(declaration.kind, FieldKind::NullableSourceObject(_)),
+                                    *value,
+                                ) {
                                     return Err(fail(
                                         Some(index),
                                         Some(operation),
@@ -1804,8 +1818,12 @@ impl CompilationUnit {
                             .map(|name| format!(" default=:{name}"))
                             .unwrap_or_default()
                     ),
-                    FieldKind::SourceObject(class) => {
-                        format!(".field-reference {} {class}\n", field.name)
+                    FieldKind::SourceObject(_) | FieldKind::NullableSourceObject(_) => {
+                        format!(
+                            ".field-reference {} {}\n",
+                            field.name,
+                            crate::type_text::result_tag(&field.result_type())
+                        )
                     }
                     FieldKind::Interface {
                         interface,
@@ -1933,7 +1951,9 @@ fn compile_sources_context(
             .iter_mut()
             .flat_map(|class| class.fields.iter_mut())
         {
-            if let FieldKind::SourceObject(class) = &mut field.kind {
+            if let FieldKind::SourceObject(class) | FieldKind::NullableSourceObject(class) =
+                &mut field.kind
+            {
                 resolve(class)?;
             }
         }
@@ -2361,15 +2381,21 @@ fn parse_unit_ir_context(
                                 nullable,
                             }
                         } else {
-                            FieldKind::SourceObject(
-                                crate::SourceClass::parse(&parts[2]).ok_or_else(|| {
-                                    Diagnostic::at(
+                            match crate::type_text::call_result(&parts[2]) {
+                                Ok(ReturnType::SourceObject(class)) => {
+                                    FieldKind::SourceObject(class)
+                                }
+                                Ok(ReturnType::NullableSourceObject(class)) => {
+                                    FieldKind::NullableSourceObject(class)
+                                }
+                                _ => {
+                                    return Err(Diagnostic::at(
                                         text,
                                         method_at,
-                                        "invalid source reference contract",
-                                    )
-                                })?,
-                            )
+                                        "invalid source reference field contract",
+                                    ));
+                                }
+                            }
                         };
                         instance_fields.push(InstanceField {
                             name: parts[1].clone(),

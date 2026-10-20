@@ -2160,6 +2160,7 @@ impl Function {
                             | ReturnType::NullableIntegerAlias
                             | ReturnType::NullableDecimal
                             | ReturnType::SourceObject(_)
+                            | ReturnType::NullableSourceObject(_)
                             | ReturnType::Symbol
                             | ReturnType::NullableSymbol
                             | ReturnType::Method

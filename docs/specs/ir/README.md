@@ -1560,12 +1560,15 @@ identity; assignment preserves the original local's class/nullability contract.
 Function validation checks return provenance and non-null receivers; unit
 validation resolves declarations and checks call contracts against their bodies.
 Its runtime representation is the ordinary reference or Null, with no added
-conversion instruction. Nullable source tags are not field, join, or cast tags.
+conversion instruction. Nullable source tags also describe field declarations
+and reads; they are not join or cast tags.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;
-`result=source(ClassName@Native.Base)` selects a source-reference read. Writes
-consume Number or a source reference without a result. Both require an instance
+`result=source(ClassName@Native.Base)` selects a non-null source-reference read;
+`result=nullable-source(ClassName@Native.Base)` selects its nullable snapshot.
+`.field-reference` uses these same tags for the storage declaration. Writes
+consume a value without a result. Both require an instance
 receiver and preserve observable order. Their symbolic field identities resolve
 through the enclosing unit class's
 [field declarations](../frontend/README.md#instance-fields).

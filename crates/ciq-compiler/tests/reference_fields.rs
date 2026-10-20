@@ -20,7 +20,7 @@ fn retained_references_and_constructor_arguments_preserve_complete_pipelines() {
         })
     );
     let text = unit.to_ir_text();
-    assert!(text.contains(".field-reference target HelloView@WatchUi.View"));
+    assert!(text.contains(".field-reference target source(HelloView@WatchUi.View)"));
     let resumed = parse_unit_ir(&text).unwrap();
     assert_eq!(unit, resumed);
     let options = ConsoleApplication {
@@ -109,11 +109,11 @@ fn reference_initialization_and_assignment_are_checked_before_exposure() {
     let text = unit.to_ir_text();
     for changed in [
         text.replace(
-            ".field-reference target HelloView@WatchUi.View",
-            ".field-reference target Missing@WatchUi.View",
+            ".field-reference target source(HelloView@WatchUi.View)",
+            ".field-reference target source(Missing@WatchUi.View)",
         ),
         text.replace(
-            ".field-reference target HelloView@WatchUi.View",
+            ".field-reference target source(HelloView@WatchUi.View)",
             ".field-number target 0",
         ),
         text.replace(

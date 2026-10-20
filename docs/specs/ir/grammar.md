@@ -60,7 +60,7 @@ field-body = ".field-number" identifier signed-decimal-i32
            | ".field-object" identifier ("object" | "nullable-object")
            | ".field-array" identifier element-tag
            | ".field-dictionary" identifier dictionary-tag
-           | ".field-reference" identifier source-identity
+           | ".field-reference" identifier (source-tag | nullable-source-tag)
            | ".field-interface" identifier interface-tag
            | ".field-symbol" identifier ("symbol" | "nullable-symbol")
              ("default=:" identifier)?
@@ -341,8 +341,9 @@ Exact source tags use `source(ClassName@Native.Base)` or
 Bases use `Lang.Object`, `WatchUi.View`, or `WatchUi.BehaviorDelegate` for
 constructible references. AppBase is a declaration/base identity, not a
 constructible ordinary source-reference type. Nullable source tags are accepted
-in parameter and function/call result metadata; field reads retain their
-separate non-null source profile. Source tags are not join or native cast tags.
+in parameter, function/call result metadata, and source-reference field
+declarations/reads. Field declarations use the same source tags as signatures.
+Source tags are not join or native cast tags.
 
 Array element tags use `number`, not `integer`, for Number; otherwise they use
 the shared scalar/core/interface/alias tags, nullable forms, or `view`. A

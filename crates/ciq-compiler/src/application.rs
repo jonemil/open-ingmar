@@ -84,6 +84,7 @@ fn instance_field(
         | crate::FieldKind::Array { .. }
         | crate::FieldKind::Dictionary { .. }
         | crate::FieldKind::SourceObject(_)
+        | crate::FieldKind::NullableSourceObject(_)
         | crate::FieldKind::Method { .. }
         | crate::FieldKind::WeakReference { .. }
         | crate::FieldKind::ByteArray { .. }

@@ -701,8 +701,8 @@ local's proof; joins and loop backedges retain only shared facts.
 A local initialized from a nullable source value permits the same class or Null
 on assignment. A fresh copy inside a proven branch has a non-null contract.
 The original local keeps its nullable storage contract after a check or write.
-Nullable source fields, Array elements, conditional-value joins, and lexical
-source casts remain unsupported; this does not introduce general source unions.
+Nullable source Array elements, conditional-value joins, and lexical source
+casts remain unsupported; this does not introduce general source unions.
 
 Module, self, and explicit object calls retain a declared source result,
 permitting subsequent source dispatch and same-class local assignment. Parameter
@@ -905,12 +905,14 @@ See the
 `var target as HelloView;` declares an exact source reference field for an
 Object-, View-, or BehaviorDelegate-derived class. The class must resolve across
 the unit, including forward declarations. The 256-field limit and name/conflict
-rules cover all supported fields together. These exact-source fields reject
-declaration initializers and Null unions. Comparison interfaces follow their
+rules cover all supported fields together. `var target as HelloView or Null;`
+declares a nullable slot; it may also use a literal `= null` default. Non-null
+source fields reject declaration initializers. Comparison interfaces follow their
 [own field rules](#comparison-interface-fields).
 
-Metadata creates a null slot (key bits zero, type `0x00`, value zero). A source
-initialize method is required to establish the non-null field contract. It must
+Metadata creates a null slot (key bits zero, type `0x00`, value zero). Nullable
+source fields need no source assignment before use. A source initialize method
+is required to establish a non-null field contract. It must
 assign every required non-null reference field before exposing `self` as an
 Object, binding a self callback, making a self call, branching, jumping, or
 returning. A reference read before that field's assignment is rejected.
@@ -931,6 +933,14 @@ source class. Field reads retain identity for ordinary instance calls and source
 returns. Access remains limited to `self.<field>`; a getter can forward the
 reference to another caller. Reads/writes preserve the existing evaluation-order
 rules. These contracts apply to typed and saved IR as well as source.
+
+Nullable writes accept the exact declared source class, its nullable form, or
+Null. Other classes and native erasure cannot satisfy the contract. Each read
+is a nullable snapshot retaining that class identity; copy it to a local and
+check the local before source dispatch. Checking `self.target != null` does
+not refine a subsequent field read, since it is a different read. Clearing or
+replacing a field leaves existing snapshots intact. Typed getter results can
+forward the nullable source contract through ordinary calls.
 
 See the
 [retained View example](../../../examples/compiler-reference-fields/README.md) and

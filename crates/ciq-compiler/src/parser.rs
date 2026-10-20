@@ -2504,14 +2504,31 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                                     "reference field requires a source class name",
                                 ));
                             }
+                            let nullable = if parser.peek()? == Kind::Word("or") {
+                                parser.token()?;
+                                parser.expect(Kind::Word("Null"), "'Null'")?;
+                                true
+                            } else {
+                                false
+                            };
+                            if nullable && parser.peek()? == Kind::Punctuation('=') {
+                                parser.token()?;
+                                parser
+                                    .expect(Kind::Word("null"), "literal null field initializer")?;
+                            }
                             parser.expect(
                                 Kind::Punctuation(';'),
                                 "';' after reference field declaration",
                             )?;
-                            crate::FieldKind::SourceObject(crate::SourceClass {
+                            let class = crate::SourceClass {
                                 name: class,
                                 base: crate::ClassBase::LangObject,
-                            })
+                            };
+                            if nullable {
+                                crate::FieldKind::NullableSourceObject(class)
+                            } else {
+                                crate::FieldKind::SourceObject(class)
+                            }
                         }
                     } else {
                         parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;

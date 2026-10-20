@@ -73,6 +73,8 @@ module NullableSourceTests {
         token = new Probe();
         while (token != null) { System.println(token.value()); token = null; }
         System.println(NullableSourceTests.choose(new Probe()) == null);
+        var holder = new NullableSourceHolder();
+        holder.run();
     }
 }
 
@@ -91,5 +93,40 @@ module ImportedTypes {
         var object = "hello" as Object;
         System.println((object as String).length());
         System.println(object instanceof String);
+    }
+}
+
+class NullableSourceHolder {
+    var token as Probe or Null;
+    var view as LocalView or Null = null;
+    var delegate as LocalDelegate or Null;
+    function initialize() {}
+    function load() as Probe or Null { return self.token; }
+    function snapshot(token as Probe) {
+        self.token = token;
+        var copy = self.load();
+        self.token = null;
+        if (copy != null) { return copy.value(); }
+        return -1;
+    }
+    function run() as Void {
+        System.println(self.token == null);
+        System.println(self.view == null);
+        System.println(self.delegate == null);
+        self.token = new Probe();
+        self.view = new LocalView();
+        self.delegate = new LocalDelegate();
+        var token = self.token;
+        var view = self.view;
+        var delegate = self.delegate;
+        self.token = null;
+        self.view = null;
+        self.delegate = null;
+        if (token != null) { System.println(token.value()); }
+        if (view != null) { System.println(view.value()); }
+        if (delegate != null) { System.println(delegate.value()); }
+        System.println(self.snapshot(new Probe()));
+        var again = self.load();
+        System.println(again == null);
     }
 }
