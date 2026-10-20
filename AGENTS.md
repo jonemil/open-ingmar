@@ -14,6 +14,8 @@
   document routine maintenance.
 - Follow [docs/README.md](docs/README.md) for authoritative documentation homes,
   readable prose, and concrete Rustdoc descriptions of behavior and requirements.
+  Extend existing references by default; split files only when doing so improves
+  readability or maintenance under that guide.
   Keep our provisional formats current-only; do not add compatibility paths for
   superseded local grammars.
 - Follow [validation policy](docs/validation.md): focused checks while iterating,

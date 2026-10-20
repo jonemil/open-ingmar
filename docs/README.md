@@ -42,10 +42,15 @@ own encoded records rather than another copy of editable assembly syntax.
 Within each specification category, start with one general reference
 (`README.md`) and a separate grammar where there is a textual language. Use
 headings and a short contents list to keep the general reference searchable.
-File length, an implementation helper module, or a new feature alone does not
-justify another document. Split only for an independently used contract or
-reader workflow with little shared material; keep the reason clear in the
-category overview. Consolidate shared rules before creating parallel files.
+Split only when the result improves readability, navigation, or maintenance.
+An independently used contract or reader workflow can justify a separate file;
+so can a reference whose size makes it unwieldy despite useful headings and
+contents links. There is no fixed line-count threshold. A new feature or an
+implementation helper module alone does not justify another document.
+Keep closely related rules together, preserve one authoritative home for shared
+rules, and avoid splits that require synchronized descriptions in several files.
+Make the purpose of retained splits clear in the category overview. Reconsider
+existing boundaries when they cause repetition or drift.
 
 Give each rule one authoritative home. Other pages may introduce it briefly and
 link there. Shared source/IR validation contracts should be defined once, with
