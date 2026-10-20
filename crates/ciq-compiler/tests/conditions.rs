@@ -839,6 +839,44 @@ fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
 }
 
 #[test]
+fn for_header_lists_execute_left_to_right_and_preserve_loop_control() {
+    for (source, expected) in [
+        (
+            "function f(){var sum=0;for(var i=0,j=i+1;i<3;i++,j+=i){sum+=j;}return sum;}",
+            7,
+        ),
+        (
+            "function f(){var sum=0;var i=0;var j=0;for(i=1,j=i+1;i<3;i++,j+=i){sum+=j;}return sum;}",
+            6,
+        ),
+        (
+            "function f(){var sum=0;for(var i=0,j=0;i<4;i++,j+=i){if(i==1){continue;}if(i==3){break;}sum+=j;}return sum;}",
+            3,
+        ),
+        (
+            "function f(){var i=0;var j=0;for(i++,++j;i<3;i++,j+=i){}return j;}",
+            6,
+        ),
+        (
+            "function f(){var i=0;var j=0;for(;i<3;i++,j+=i){break;}return j;}",
+            0,
+        ),
+        (
+            "function f(){for(var i=0,j=i+1;i<2;i++,j++){}var i=41;var j=1;return i+j;}",
+            42,
+        ),
+    ] {
+        let function = compile(source).unwrap();
+        assert_eq!(execute(&function, 0), expected, "{source}");
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(
+            function.lower(),
+            ciq_assembly::Program::parse(&function.assembly()).unwrap()
+        );
+    }
+}
+
+#[test]
 fn loop_control_rejects_outside_targets_reserved_names_and_unreachable_code() {
     for keyword in ["break", "continue"] {
         for source in [

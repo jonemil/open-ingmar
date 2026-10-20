@@ -26,6 +26,9 @@ headers. Markers check effects as well as numeric results.
 `CoreScopes` checks standalone blocks, local-name reuse, and `else if` selection
 with effect markers, nullable guards, early returns, and enclosing loop controls.
 
+`CoreHeaders` checks `for` declaration/effect lists with ordered call markers,
+dependent initializers/updates, continue/break paths, and indexed writes.
+
 From the repository root:
 
 ```sh

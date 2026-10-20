@@ -1622,13 +1622,17 @@ See [loops.mc](../../../examples/compiler-probe/loops.mc) and
 `for (initializer; condition; update) { body }` executes its initializer once,
 then tests before each iteration and executes its update after a continuing
 body. Each header clause is optional; an absent condition means unconditional
-iteration. The initializer accepts one initialized local declaration or one
-assignment, update, or call statement without its trailing semicolon. The update
-accepts one such effect but no declaration. Comma-separated clauses are not
-supported. See the connected [statement grammar](grammar.md#statements).
+iteration. The initializer accepts a comma-separated declaration list sharing
+one `var`, or a comma-separated assignment/update list. The update accepts only
+assignment/update lists. Each item completes before the next begins; a later
+initializer can read an earlier declaration, and a later update observes earlier
+writes. Calls inside expressions retain ordinary argument/effect order.
+Standalone calls, repeated `var` keywords, mixed declaration/effect lists, and
+trailing commas are rejected, matching the SDK header grammar. See the connected
+[statement grammar](grammar.md#statements).
 
-A local declared in the initializer is visible to the condition, body, and
-update, but not after the loop. Body locals are not visible in either header
+All initializer locals are visible to the condition, body, and update, but not
+after the loop. Body locals are not visible in either header
 clause. Existing fixed-type and no-shadowing rules apply; a name can be reused
 after its loop scope ends.
 
@@ -1659,8 +1663,8 @@ See the grouped `CoreLoops` specimen in
 ### Loop control
 
 `break;` exits the innermost enclosing loop. `continue;` jumps to the test for
-`while`/`do`, or to the update and then test for `for`. Both require semicolons and
-an enclosing loop, including when nested within conditional arms. They terminate
+`while`/`do`, or to the whole update list and then test for `for`. Both require
+semicolons and an enclosing loop, including when nested within conditional arms. They terminate
 their current path and carry no expression values across the edge. A nested
 loop's controls never target an outer loop. Labeled controls are unsupported.
 

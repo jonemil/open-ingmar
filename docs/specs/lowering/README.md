@@ -209,9 +209,11 @@ body effects stay in the body. Every edge has an empty evaluation stack. These
 use branch/jump directives; cyclic initialization checks are specified in [IR
 text](../ir/README.md#cyclic-control-flow).
 
-`for` uses the same layout, preceded by its initializer and followed by an
-update block when present. Continuing body paths, including `continue`, target
-the update before returning to the test. An absent condition uses an
+`for` uses the same layout, preceded by its initializer list and followed by an
+update block when present. Each list emits statements in source order using the
+shared expression/assignment lowering; expression joins can introduce their
+usual internal blocks. Continuing body paths, including `continue`, target the
+whole update list before returning to the test. An absent condition uses an
 unconditional jump to the body, without a placeholder Boolean. `do/while`
 enters the body first; its continuing paths and `continue` target the post-test.
 `break` always targets the innermost loop's exit.

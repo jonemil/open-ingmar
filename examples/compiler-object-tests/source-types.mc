@@ -79,6 +79,7 @@ module NullableSourceTests {
         SourceJoins.run();
         CoreLoops.run();
         CoreScopes.run();
+        CoreHeaders.run();
     }
 }
 
@@ -299,5 +300,42 @@ module CoreScopes {
         CoreScopes.guarded(null);
         CoreScopes.guarded(2);
         CoreScopes.guarded(0);
+    }
+}
+
+module CoreHeaders {
+    function mark(label as String, value as Number) as Number {
+        System.println(label);
+        System.println(value);
+        return value;
+    }
+    function index() as Number {
+        System.println("header-index");
+        return 0;
+    }
+    function run() as Void {
+        for (var i = CoreHeaders.mark("header-init-i", 0),
+                 j = CoreHeaders.mark("header-init-j", i + 1);
+             i < 3;
+             i = CoreHeaders.mark("header-step-i", i + 1),
+             j = CoreHeaders.mark("header-step-j", j + i)) {
+            if (i == 1) { continue; }
+            System.println(j);
+        }
+        var i = 0;
+        var j = 0;
+        for (i = CoreHeaders.mark("header-assign-i", 1),
+             j = CoreHeaders.mark("header-assign-j", i + 1);
+             i < 3; i++, j += i) {
+            System.println(j);
+        }
+        for (i = 0, j = 0; i < 2;
+             i = CoreHeaders.mark("bad-header-update", i + 1), j += i) {
+            break;
+        }
+        System.println(j);
+        var values = [0];
+        for (i = 0; i < 2; values[CoreHeaders.index()] += i, i++) {}
+        System.println(values[0]);
     }
 }

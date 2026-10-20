@@ -88,10 +88,12 @@ if-statement = "if" "(" expression ")" block
                ("else" (block | if-statement))?
 while-statement = "while" "(" expression ")" block
 for-statement = "for" "(" for-initializer? ";" expression? ";"
-                loop-effect? ")" block
-for-initializer = local-clause | loop-effect
-loop-effect = assignment-clause | update-clause | call-expression
-local-clause = "var" identifier "=" expression
+                for-effects? ")" block
+for-initializer = "var" initialized-local ("," initialized-local)* | for-effects
+for-effects = loop-effect ("," loop-effect)*
+loop-effect = assignment-clause | update-clause
+local-clause = "var" initialized-local
+initialized-local = identifier "=" expression
 assignment-clause = assign-target ("=" | compound-operator) expression
 update-clause = update-target ("++" | "--") | ("++" | "--") update-target
 do-statement = "do" block "while" "(" expression ")" ";"
@@ -112,8 +114,10 @@ native base initialization. Conditional and loop bodies require braces; an
 `else` may instead introduce another `if-statement`. Standalone blocks are
 statements and introduce local scopes. Arbitrary expression statements,
 unbraced bodies, `switch`, and exception statements are unsupported.
-A `for` header permits at most one initializer and one update;
-comma-separated lists and declarations in its update are unsupported. Present
+A `for` initializer permits one declaration list sharing a `var`, or an
+assignment/update list; its update permits only assignment/update lists.
+Standalone calls and trailing commas in either list are rejected. Calls inside
+initializer or assignment expressions remain supported. Present
 loop conditions must be Boolean. [Statement
 contracts](README.md#statements-and-control-flow) define scope, reachability,
 loop targets, and evaluation order.

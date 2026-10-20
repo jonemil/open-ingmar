@@ -1975,7 +1975,7 @@ impl Builder<'_> {
         &mut self,
         condition: Option<parser::Expression>,
         body: Vec<parser::Statement>,
-        update: Option<parser::Statement>,
+        update: Vec<parser::Statement>,
         post_test: bool,
         locals: &BTreeMap<String, LocalId>,
         span: Span,
@@ -1983,7 +1983,7 @@ impl Builder<'_> {
         let test = self.block_id();
         let body_block = self.block_id();
         let exit = self.block_id();
-        let latch = if update.is_some() {
+        let latch = if !update.is_empty() {
             self.block_id()
         } else {
             test
@@ -2015,9 +2015,9 @@ impl Builder<'_> {
         if !body_terminates {
             self.push(Operation::Jump { target: latch }, Some(span));
         }
-        if let Some(update) = update {
+        if !update.is_empty() {
             self.push(Operation::Block { block: latch }, None);
-            self.sequence(vec![update], &mut locals.clone())?;
+            self.sequence(update, &mut locals.clone())?;
             self.push(Operation::Jump { target: test }, Some(span));
         }
         if post_test {
@@ -2277,8 +2277,14 @@ impl Builder<'_> {
                 parser::Statement::While {
                     condition, body, ..
                 } => {
-                    terminated =
-                        self.loop_statement(Some(condition), body, None, false, locals, span)?;
+                    terminated = self.loop_statement(
+                        Some(condition),
+                        body,
+                        Vec::new(),
+                        false,
+                        locals,
+                        span,
+                    )?;
                 }
                 parser::Statement::For {
                     initialize,
@@ -2288,23 +2294,15 @@ impl Builder<'_> {
                     ..
                 } => {
                     let mut scoped = locals.clone();
-                    if let Some(initialize) = initialize {
-                        self.sequence(vec![*initialize], &mut scoped)?;
-                    }
-                    terminated = self.loop_statement(
-                        condition,
-                        body,
-                        update.map(|statement| *statement),
-                        false,
-                        &scoped,
-                        span,
-                    )?;
+                    self.sequence(initialize, &mut scoped)?;
+                    terminated =
+                        self.loop_statement(condition, body, update, false, &scoped, span)?;
                 }
                 parser::Statement::DoWhile {
                     body, condition, ..
                 } => {
                     terminated =
-                        self.loop_statement(Some(condition), body, None, true, locals, span)?;
+                        self.loop_statement(Some(condition), body, Vec::new(), true, locals, span)?;
                 }
                 parser::Statement::If {
                     condition,

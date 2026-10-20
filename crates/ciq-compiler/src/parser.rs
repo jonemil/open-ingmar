@@ -131,9 +131,9 @@ pub(crate) enum Statement {
         span: Span,
     },
     For {
-        initialize: Option<Box<Statement>>,
+        initialize: Vec<Statement>,
         condition: Option<Expression>,
-        update: Option<Box<Statement>>,
+        update: Vec<Statement>,
         body: Vec<Statement>,
         span: Span,
     },
@@ -1784,7 +1784,7 @@ impl<'a> Parser<'a> {
         &mut self,
         start: usize,
         increment: bool,
-        terminator: char,
+        terminator: Option<char>,
     ) -> Result<Statement, Diagnostic> {
         self.token()?;
         let target = self.expression(0)?;
@@ -1797,16 +1797,10 @@ impl<'a> Parser<'a> {
         target: Expression,
         increment: bool,
         start: usize,
-        terminator: char,
+        terminator: Option<char>,
     ) -> Result<Statement, Diagnostic> {
         self.assignment_target(&target, start)?;
-        let end = self
-            .expect(
-                Kind::Punctuation(terminator),
-                "statement or loop-clause terminator (updates are statements)",
-            )?
-            .span
-            .end;
+        let end = self.statement_end(terminator)?;
         Ok(Statement::Update {
             target,
             increment,
@@ -1814,11 +1808,96 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Parse a local declaration, assignment, update, or call up to its delimiter.
-    /// For headers reuse statement semantics without permitting control flow.
-    fn simple_statement(
+    /// Consume a required statement delimiter, or leave a header delimiter for
+    /// the list parser. Return the statement's source end position.
+    fn statement_end(&mut self, terminator: Option<char>) -> Result<usize, Diagnostic> {
+        if let Some(terminator) = terminator {
+            return Ok(self
+                .expect(Kind::Punctuation(terminator), "statement terminator")?
+                .span
+                .end);
+        }
+        if !matches!(self.peek()?, Kind::Punctuation(',' | ';' | ')')) {
+            return Err(self.error(self.offset, "expected loop-clause delimiter"));
+        }
+        Ok(self.lookahead.as_ref().unwrap().span.start)
+    }
+
+    /// Parse one initialized local after its optional leading var keyword.
+    fn local_declaration(
+        &mut self,
+        start: usize,
+        terminator: Option<char>,
+    ) -> Result<Statement, Diagnostic> {
+        let token = self.identifier()?;
+        self.reject_binding(&token)?;
+        let Kind::Word(name) = token.kind else {
+            unreachable!()
+        };
+        self.expect(
+            Kind::Punctuation('='),
+            "'=' (locals require an initializer)",
+        )?;
+        let initializer = self.expression(0)?;
+        let end = self.statement_end(terminator)?;
+        Ok(Statement::Local(LocalDeclaration {
+            name: name.into(),
+            initializer,
+            span: Span { start, end },
+        }))
+    }
+
+    /// Parse declarations or assignment/update effects in a for header, leaving
+    /// nested expression commas to their expression parsers. Consume its ending
+    /// semicolon or parenthesis; declaration lists share one var keyword.
+    fn for_header(
         &mut self,
         terminator: char,
+        allow_declarations: bool,
+    ) -> Result<Vec<Statement>, Diagnostic> {
+        let mut statements = Vec::new();
+        if self.peek()? == Kind::Punctuation(terminator) {
+            self.token()?;
+            return Ok(statements);
+        }
+        let declarations = allow_declarations && self.peek()? == Kind::Word("var");
+        let mut start = self.lookahead.as_ref().unwrap().span.start;
+        if declarations {
+            self.token()?;
+        }
+        loop {
+            let statement = if declarations {
+                self.local_declaration(start, None)?
+            } else {
+                self.simple_statement(None, false)?
+            };
+            if !matches!(
+                statement,
+                Statement::Local(_)
+                    | Statement::Assign { .. }
+                    | Statement::FieldAssign { .. }
+                    | Statement::ArrayAssign { .. }
+                    | Statement::ArrayCompound { .. }
+                    | Statement::Update { .. }
+            ) {
+                return Err(self.error(start, "for headers require declarations, assignments, or updates; standalone calls are unsupported"));
+            }
+            statements.push(statement);
+            if self.peek()? != Kind::Punctuation(',') {
+                self.expect(Kind::Punctuation(terminator), "loop-clause terminator")?;
+                return Ok(statements);
+            }
+            self.token()?;
+            self.peek()?;
+            start = self.lookahead.as_ref().unwrap().span.start;
+        }
+    }
+
+    /// Parse a local declaration, assignment, update, or call. A missing
+    /// terminator leaves the delimiter for the for-header list parser.
+    fn simple_statement(
+        &mut self,
+        terminator: Option<char>,
         allow_local: bool,
     ) -> Result<Statement, Diagnostic> {
         let start = {
@@ -1830,28 +1909,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(start, "loop update cannot declare a local"));
             }
             self.token()?;
-            let token = self.identifier()?;
-            self.reject_binding(&token)?;
-            let Kind::Word(name) = token.kind else {
-                unreachable!()
-            };
-            self.expect(
-                Kind::Punctuation('='),
-                "'=' (locals require an initializer)",
-            )?;
-            let initializer = self.expression(0)?;
-            let end = self
-                .expect(
-                    Kind::Punctuation(terminator),
-                    "statement or loop-clause terminator",
-                )?
-                .span
-                .end;
-            return Ok(Statement::Local(LocalDeclaration {
-                name: name.into(),
-                initializer,
-                span: Span { start, end },
-            }));
+            return self.local_declaration(start, terminator);
         }
         if let Kind::Step(increment) = self.peek()? {
             return self.prefix_update(start, increment, terminator);
@@ -1865,22 +1923,10 @@ impl<'a> Parser<'a> {
                 let assignment = self.token()?.kind;
                 self.assignment_target(&expression, start)?;
                 let value = self.expression(0)?;
-                let end = self
-                    .expect(
-                        Kind::Punctuation(terminator),
-                        "statement or loop-clause terminator",
-                    )?
-                    .span
-                    .end;
+                let end = self.statement_end(terminator)?;
                 self.assignment_statement(expression, assignment, value, Span { start, end })?
             } else {
-                let end = self
-                    .expect(
-                        Kind::Punctuation(terminator),
-                        "statement or loop-clause terminator",
-                    )?
-                    .span
-                    .end;
+                let end = self.statement_end(terminator)?;
                 if matches!(
                     expression.kind,
                     ExpressionKind::ValueCall { .. } | ExpressionKind::ImplicitMethodCall(_)
@@ -2022,7 +2068,7 @@ impl<'a> Parser<'a> {
                     let (body, span) = self.block(depth + 1)?;
                     Statement::Block { body, span }
                 }
-                Kind::Word("var") => self.simple_statement(';', true)?,
+                Kind::Word("var") => self.simple_statement(Some(';'), true)?,
                 Kind::Word("return") => {
                     self.token()?;
                     let value = if self.peek()? == Kind::Punctuation(';') {
@@ -2052,24 +2098,14 @@ impl<'a> Parser<'a> {
                 Kind::Word("for") => {
                     self.token()?;
                     self.expect(Kind::Punctuation('('), "'('")?;
-                    let initialize = if self.peek()? == Kind::Punctuation(';') {
-                        self.token()?;
-                        None
-                    } else {
-                        Some(Box::new(self.simple_statement(';', true)?))
-                    };
+                    let initialize = self.for_header(';', true)?;
                     let condition = if self.peek()? == Kind::Punctuation(';') {
                         None
                     } else {
                         Some(self.expression(0)?)
                     };
                     self.expect(Kind::Punctuation(';'), "';' after for condition")?;
-                    let update = if self.peek()? == Kind::Punctuation(')') {
-                        self.token()?;
-                        None
-                    } else {
-                        Some(Box::new(self.simple_statement(')', false)?))
-                    };
+                    let update = self.for_header(')', false)?;
                     let (body, body_span) = self.block(depth + 1)?;
                     Statement::For {
                         initialize,
@@ -2115,7 +2151,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Kind::Word("if") => self.if_statement(depth)?,
-                _ => self.simple_statement(';', true)?,
+                _ => self.simple_statement(Some(';'), true)?,
             };
             statements.push(statement);
         }

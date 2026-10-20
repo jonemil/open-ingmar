@@ -130,6 +130,43 @@ bad operand/call types, conditional proofs, and private container builders;
 dead header edges do not change executable proofs. These are compiler
 validation guarantees, not claims about execution of dead instructions.
 
+## For-header lists
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Authored probes compiled through
+`scripts/build-example.sh` establish these header forms (`i`/`j` are already
+declared for assignment/update probes):
+
+| Header form | SDK result |
+|---|---|
+| `var i=0,j=i+1` initializer | Accepted |
+| `i=1,j=i+1` initializer | Accepted |
+| `i++,++j` or `i+=1,j+=2` initializer | Accepted |
+| `i++,j=i+1` update | Accepted |
+| `var i=0,var j=1` initializer | Rejected |
+| Standalone `System.println(...)` in either clause/list | Rejected |
+| Trailing comma in either list | Rejected |
+
+The first probe group used a complete AppBase with `onStart`, these loops, and
+`System.exit()`. Logs are under `scratch/compiler-header-lists/`. Declaration
+lists treat every name as a declaration: `var i=0,j=1` with an existing `j`
+fails as a redefinition rather than assigning that variable.
+
+The `CoreHeaders` group in the shared
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) confirms
+left-to-right runtime behavior. Call markers show dependent declarations and
+updates observe earlier values. `continue` executes the entire update list;
+`break` skips every item. Indexed compound updates evaluate their index call
+once per visit, including when followed by a separate increment. Nested commas
+in call arguments remain expression syntax rather than header separators.
+
+SDK/generated applications match the checked-in expected output. Source, saved
+IR, and assembly paths agree; both PRGs pass structured reconstruction without
+raw CODE/DATA fallback and own-key signing checks. Reproduce using the shared
+[console checker](../../scripts/README.md#console-specimen-check), selecting
+`compiler-object-tests`. Artifacts: `scratch/core-header-lists/check/`.
+Focused negative tests also cover forward/duplicate/out-of-scope names, invalid
+later items even after an unconditional break, and declaration-slot limits.
+
 [assignments]: compiler-assignments.md
 [scaffold]: control-flow.md#reproduction
 [design]: ../specs/ir/README.md#cyclic-control-flow
