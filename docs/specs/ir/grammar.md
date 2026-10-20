@@ -109,16 +109,12 @@ parameter-type counts must match `parameters`. The maximum is 254 parameters;
 parameters plus locals may not exceed 255.
 
 An omitted function result is inferred from the validated operations. Canonical
-output writes a result tag when needed to preserve a non-inferable declaration;
-ordinary concrete scalar, Array, native-object, tuple, and Void results are
-inferred. Thus `declared-result-tag` is a subset of the value tags below, not a
-permission to write every value tag in `.function result=`. It accepts Object,
-WeakReference, ByteArray, Method, Symbol, interfaces, numeric aliases,
-NumberFormat, Endian, opaque/typed Dictionary, exact source references, and
-supported nullable scalar/core/interface/alias tags. Explicit non-null
-`integer`, `long`, `float`, `double`, `char`, `string`, `boolean`, Array, native
-View/delegate, tuple, and `void` result metadata are not parsed; returns express
-those contracts.
+output writes a result tag when needed to preserve a non-inferable declaration,
+including any non-Void result when the body has no value returns. Headers accept
+the same supported non-Void types as call results, including concrete scalars,
+Arrays, native objects, tuples, and source references. Ordinary returning bodies
+may omit inferable concrete results. Void is inferred; `result=void` is not
+accepted. Metadata does not waive return, call, class, or API validation.
 
 Every operation may append one final `span=` field. Spans use source byte
 offsets with start <= end; they are optional diagnostic provenance, not offsets
@@ -286,10 +282,7 @@ parameter-tag = common-tag | array-tag | source-tag | nullable-source-tag
               | "nullable-dictionary"
 call-result-tag = common-tag | array-tag | source-tag | nullable-source-tag
                 | "one-view" | "view-delegate"
-declared-result-tag = core-tag | nullable-core-tag | nullable-scalar-tag
-                    | numeric-alias-tag | interface-tag | enum-tag
-                    | "dictionary" | dictionary-tag | source-tag
-                    | nullable-source-tag
+declared-result-tag = call-result-tag
 common-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate"

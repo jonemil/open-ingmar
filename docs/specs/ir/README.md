@@ -784,8 +784,11 @@ subset](../frontend/README.md).
 Backward branch/jump targets are permitted. Entry reachability is determined by
 walking from the first block, including cycles. Having a predecessor alone does
 not make a block executable. The final declared block must still end in a return;
-this does not prove every runtime path terminates. A function without a reachable
-return currently requires a Void result contract.
+this does not prove every runtime path terminates. When no return establishes a
+result type, retain an explicit signature or default to Void. A disconnected
+void epilogue does not change that signature. Saved IR preserves non-Void
+contracts in [function metadata](grammar.md#text-and-value-definitions), even
+when an ordinary scalar result would otherwise be inferred from returns.
 
 Definite-local sets are computed to a greatest fixed point. Start incoming and
 outgoing sets at the universe of declared local IDs. For every block, intersect

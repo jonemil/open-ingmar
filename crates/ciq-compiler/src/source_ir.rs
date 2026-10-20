@@ -2449,6 +2449,7 @@ fn build_body(
         ));
     }
     let value_result = effective_result != crate::ReturnType::Void;
+    let has_result_return = has_value_return(&ast.statements);
     let result_type = ast.result_type;
     let annotations = ast.parameter_types;
     let candidate_parameters = callback
@@ -2575,7 +2576,9 @@ fn build_body(
         context,
         callback
             .as_ref()
-            .filter(|signature| !matches!(signature.result, crate::ReturnType::Tuple(_)))
+            .filter(|signature| {
+                !matches!(signature.result, crate::ReturnType::Tuple(_)) || !has_result_return
+            })
             .map(|signature| signature.result.clone())
             .or(result_type),
         true,

@@ -29,6 +29,10 @@ with effect markers, nullable guards, early returns, and enclosing loop controls
 `CoreHeaders` checks `for` declaration/effect lists with ordered call markers,
 dependent initializers/updates, continue/break paths, and indexed writes.
 
+`CoreNonreturning` keeps declared Number, String, and source-class results for
+infinite-loop functions. Selected finite branches exercise caller contracts
+without executing the infinite loops.
+
 From the repository root:
 
 ```sh

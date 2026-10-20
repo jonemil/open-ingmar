@@ -272,8 +272,8 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
     }
 }
 
-/// Report whether function metadata must preserve this declared result explicitly.
-/// Concrete scalars, native objects, Arrays, tuples and Void remain inferred.
+/// Report whether returns alone cannot reconstruct this declared result contract.
+/// Functions without value returns must also preserve non-Void results explicitly.
 pub(super) fn explicit_function_result(ty: &ReturnType) -> bool {
     !matches!(
         ty,
@@ -291,10 +291,11 @@ pub(super) fn explicit_function_result(ty: &ReturnType) -> bool {
     )
 }
 
-/// Parse only the declared-result header domain, preserving its distinct diagnostics.
+/// Parse a non-Void declared function result, preserving header diagnostics.
+/// Void remains inferred from void returns or the absence of a value contract.
 pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
     match call_result(tag) {
-        Ok(ty) if explicit_function_result(&ty) => Ok(ty),
+        Ok(ty) => Ok(ty),
         Err(
             message @ ("invalid source reference contract" | "unsupported Dictionary contract"),
         ) => Err(message),
@@ -393,7 +394,7 @@ mod tests {
     fn saved_type_contexts_keep_distinct_domains() {
         // parameter, declared function result, call result, API join, native cast
         for (tag, expected) in [
-            ("integer", [true, false, true, true, true]),
+            ("integer", [true, true, true, true, true]),
             ("nullable-integer", [true, true, true, true, true]),
             ("numeric", [true, true, true, true, true]),
             ("nullable-decimal", [true, true, true, true, true]),
@@ -411,12 +412,12 @@ mod tests {
                 "nullable-source(Counter@Lang.Object)",
                 [true, true, true, false, false],
             ),
-            ("number-array", [true, false, true, false, false]),
+            ("number-array", [true, true, true, false, false]),
             ("array-number", [false, false, false, true, false]),
             ("dc-array", [false; 5]),
             ("comparable", [true, true, true, true, false]),
-            ("view", [true, false, true, false, false]),
-            ("one-view", [false, false, true, false, false]),
+            ("view", [true, true, true, false, false]),
+            ("one-view", [false, true, true, false, false]),
             ("byte-options", [false, false, false, true, false]),
             ("null", [false, false, false, true, false]),
             ("void", [false; 5]),

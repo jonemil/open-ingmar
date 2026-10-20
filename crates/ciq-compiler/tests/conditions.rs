@@ -839,6 +839,19 @@ fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
 }
 
 #[test]
+fn control_flow_bodies_require_braces_as_in_the_sdk() {
+    for source in [
+        "function f(x){if(x==0)return 1;else return 2;}",
+        "function f(){var i=0;while(i<2)i++;return i;}",
+        "function f(){var i=0;for(i=0;i<2;i++);return i;}",
+        "function f(){var i=0;do i++;while(i<2);return i;}",
+        "function f(x){if(x==0)if(x==1){return 1;}else{return 2;}return 3;}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn for_header_lists_execute_left_to_right_and_preserve_loop_control() {
     for (source, expected) in [
         (
@@ -1018,7 +1031,10 @@ fn loop_header_scope_and_unexecuted_clauses_still_receive_diagnostics() {
     let source = "function f() {for(;;){continue;}}";
     let function = compile(source).unwrap();
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-    assert!(compile("function f() as Toybox.Lang.Number {for(;;){continue;}}").is_err());
+    let function = compile("function f() as Toybox.Lang.Number {for(;;){continue;}}").unwrap();
+    assert_eq!(function.return_type(), ciq_compiler::ReturnType::Integer);
+    assert!(function.to_ir_text().contains("result=integer"));
+    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
 }
 
 #[test]

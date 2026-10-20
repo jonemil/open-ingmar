@@ -80,6 +80,7 @@ module NullableSourceTests {
         CoreLoops.run();
         CoreScopes.run();
         CoreHeaders.run();
+        CoreNonreturning.run();
     }
 }
 
@@ -337,5 +338,29 @@ module CoreHeaders {
         var values = [0];
         for (i = 0; i < 2; values[CoreHeaders.index()] += i, i++) {}
         System.println(values[0]);
+    }
+}
+
+module CoreNonreturning {
+    function number() as Number { for (;;) {} }
+    function string() as String { for (;;) {} }
+    function source() as Probe { for (;;) {} }
+    function chooseNumber(flag as Boolean) as Number {
+        if (flag) { return 41; }
+        else { return CoreNonreturning.number(); }
+    }
+    function chooseString(flag as Boolean) as String {
+        if (flag) { return "nonreturning-types"; }
+        else { return CoreNonreturning.string(); }
+    }
+    function chooseSource(flag as Boolean) as Probe {
+        if (flag) { return new Probe(); }
+        else { return CoreNonreturning.source(); }
+    }
+    function run() as Void {
+        System.println(CoreNonreturning.chooseNumber(true));
+        System.println(CoreNonreturning.chooseString(true));
+        var value = CoreNonreturning.chooseSource(true);
+        System.println(value.value());
     }
 }

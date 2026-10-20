@@ -125,6 +125,9 @@ header-assign-j
 header-index
 header-index
 1
+41
+nonreturning-types
+1
 4
 4
 true

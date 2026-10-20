@@ -49,7 +49,11 @@ value returns have a Void contract. Every non-Number value result requires an
 explicit source annotation. Nullable exact source-class annotations remain
 unsupported. Each return must be assignable to its contract: a nullable result
 accepts its scalar type, Null, or the same union. Unrelated types, value/void
-mixtures, and missing returns are errors. Typed IR constructors infer uniform
+mixtures, and reachable paths missing returns are errors. A structurally
+non-returning body, such as `for (;;) {}`, may retain any supported declared
+result. An unannotated body without value returns still defaults to Void.
+Callers use the declared result; no interprocedural non-returning-call analysis
+is implied. Typed IR constructors infer uniform
 scalar/Void returns unless an explicit signature is supplied. Native callbacks
 retain their independently resolved signatures; annotations cannot override
 them.
@@ -1646,9 +1650,9 @@ All header clauses are name- and type-checked, including an update skipped by
 an unconditional break/return or a post-test skipped by a terminating body.
 Their [disconnected IR blocks](../ir/README.md#control-flow) preserve those
 checks without contributing proofs to executable paths. A function with no
-reachable return currently requires a Void result contract; declared value
-results for non-returning functions remain unsupported. A post-test body that
-always returns may satisfy a value result without a reachable condition/exit.
+reachable return retains its [declared result](#types-and-nullability). A
+post-test body that always returns may satisfy a value result without a
+reachable condition/exit.
 
 Disconnected headers currently start without enclosing branch refinements.
 For example, a skipped update using a nullable Number needs its own null guard

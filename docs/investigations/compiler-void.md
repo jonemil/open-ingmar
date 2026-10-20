@@ -27,6 +27,29 @@ This discard convention is runtime-tested below; semantic void does not become
 an expression value or an invented integer zero. Null/object/array values and
 source classes are not added in this step.
 
+## Non-returning result contracts
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Authored functions containing only
+`for (;;) {}` compile with explicit Number and source-class results. Logs and
+inputs are `scratch/compiler-unbraced/nonreturning-{number,source}.{mc,log}`.
+Therefore absence of a value return must not erase a declared result to Void.
+
+The `CoreNonreturning` group in
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) retains
+Number, String, and source-class result contracts for infinite-loop functions.
+Callers select finite branches, producing `41`, `nonreturning-types`, and `1`
+in both SDK/generated applications. Infinite loops are compiled and loaded but
+not executed; this is a contract/loading check, not a termination experiment.
+Source, saved IR, and assembly agree, and both PRGs pass structured
+reconstruction without raw CODE/DATA fallback and own-key signing checks.
+
+Reproduce with the shared [console checker](../../scripts/README.md#console-specimen-check)
+and `compiler-object-tests`; artifacts are in `scratch/core-nonreturning/check/`.
+Focused tests cover scalar/nullable/Array/source results, non-returning tuple
+callbacks, unresolved source classes, inconsistent caller metadata, and reachable
+void returns/fallthrough. Existing return/type/API checks remain required;
+the [IR contract](../specs/ir/README.md#cyclic-control-flow) owns the rules.
+
 ## Simulator observations
 
 The own-key signed application printed, in order:

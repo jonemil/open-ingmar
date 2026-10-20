@@ -108,6 +108,23 @@ nesting boundaries. Plain scoped and unscoped bodies emit the same assembly;
 scoping introduces no VM operation. These tests do not establish unrestricted
 Monkey C shadowing or unbraced-body support.
 
+## Required body braces
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Independent authored probes put
+`if (i==0) i=1;`, `while (i<1) i++;`,
+`for (i=0;i<1;i++) System.println(i);`, and `do i++; while(i<1);` inside
+`onStart`, with `i` declared and a final `System.exit()`. All fail compilation
+(exit 100), reporting a missing opening brace. A nested unbraced `if` likewise
+fails before any dangling-else interpretation. A bare semicolon as a `for`
+body is rejected; a standalone semicolon inside a braced function is accepted.
+These results distinguish required bodies from ordinary empty statements.
+
+Complete authored inputs and build logs are under `scratch/compiler-unbraced/`.
+Rebuild a case by copying its saved `.mc` into that project's `source/app.mc`
+and running `sh scripts/build-example.sh scratch/compiler-unbraced`.
+Compiler regression tests retain rejection of unbraced forms; empty statements
+remain an implementation gap recorded in the plan.
+
 ## Reproduction
 
 Build the original control-flow PRG using [its instructions][scaffold]. Use new

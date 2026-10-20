@@ -15,6 +15,73 @@ fn located(operation: Operation) -> LocatedOperation {
 }
 
 #[test]
+fn nonreturning_functions_preserve_declared_results_through_saved_ir() {
+    for (annotation, tag) in [
+        ("Number", "integer"),
+        ("Long", "long"),
+        ("Float", "float"),
+        ("Double", "double"),
+        ("String", "string"),
+        ("Boolean", "boolean"),
+        ("Char", "char"),
+        ("Number or Null", "nullable-integer"),
+        ("Array<Toybox.Lang.Number>", "number-array"),
+        ("Object", "object"),
+        ("Symbol", "symbol"),
+    ] {
+        let source = format!("function never() as Toybox.Lang.{annotation} {{for(;;){{}}}}");
+        let function = compile(&source).unwrap();
+        let text = function.to_ir_text();
+        assert!(text.contains(&format!(" result={tag}\n")), "{text}");
+        assert_eq!(function, parse_ir(&text).unwrap());
+        assert_eq!(
+            function.lower(),
+            Program::parse(&function.assembly()).unwrap()
+        );
+        // Losing the contract changes the signature, even though no value
+        // returns can expose that loss inside this body.
+        assert_ne!(
+            function.return_type(),
+            parse_ir(&text.replace(&format!(" result={tag}"), ""))
+                .unwrap()
+                .return_type()
+        );
+    }
+    for source in [
+        "function f() as Toybox.Lang.Number {for(;;){break;}}",
+        "function f() as Toybox.Lang.Number {for(;;){return;}}",
+        "function f() as Toybox.Lang.Number {while(true){}}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    assert!(parse_ir("ciq-ir\n.function f result=integer\n.return-void\n.end\n").is_err());
+}
+
+#[test]
+fn nonreturning_source_results_keep_unit_call_and_class_checks() {
+    let source = "class Token {function initialize(){}} module M {function never() as Token {for(;;){}} function forward() as Token {return M.never();} function discard() as Void {M.never();}}";
+    let unit = compile_sources(&[source]).unwrap();
+    let text = unit.to_ir_text();
+    assert_eq!(unit, parse_unit_ir(&text).unwrap());
+    assert_eq!(
+        unit.lower(),
+        Program::parse(&unit.lower().to_text()).unwrap()
+    );
+    let invalid = text.replace(
+        ".function never result=source(Token@Lang.Object)",
+        ".function never result=integer",
+    );
+    assert_ne!(invalid, text);
+    assert!(parse_unit_ir(&invalid).is_err());
+    let unresolved = "ciq-unit\n.owner global\nciq-ir\n.function never result=source(Missing@Lang.Object)\n.block ^0\n.jump ^0\n.block ^1\n.return-void\n.end\n";
+    assert!(parse_unit_ir(unresolved).is_err());
+    let source = "using Toybox.Application; class App extends Application.AppBase {function initialize(){AppBase.initialize();} function getInitialView(){for(;;){}}}";
+    let unit = compile_sources(&[source]).unwrap();
+    assert!(unit.to_ir_text().contains("result=one-view"));
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+}
+
+#[test]
 fn empty_explicit_and_falling_through_functions_have_void_returns() {
     for source in [
         "function f() {}",

@@ -227,9 +227,7 @@ remain required core work. The frontend grammar records current acceptance.
   and instance/static/module/global call forms. Complete Method construction,
   class/module receiver values, callback type syntax, lookup, and invocation
   through the shared type and core API contracts. Verify applicable VM/SDK
-  argument and frame limits, including the hidden receiver. Support declared
-  value results for non-returning functions, preserving their contracts through
-  saved IR rather than inferring Void from the absence of reachable returns.
+  argument and frame limits, including the hidden receiver.
 - **Classes and construction:** complete source superclass chains,
   inherited fields/methods, overrides and signature rules, parent-qualified
   method/initializer calls, static members, and public/private/protected/hidden
@@ -243,7 +241,8 @@ remain required core work. The frontend grammar records current acceptance.
   `instanceof`, and lexical `as` casts with their distinct contracts. Preserve SDK-rejected Char
   operations and expression updates as diagnosed compatibility restrictions;
   verify other forms rather than importing C semantics.
-- **Control flow and scopes:** extend unbraced statement bodies. Preserve enclosing
+- **Control flow and scopes:** add standalone empty statements. Keep bodies
+  braced following the SDK rejection probes. Preserve enclosing
   lexical refinements when checking unexecuted loop headers, without adding dead
   edges to executable CFG proofs. Add `switch`, value
   and `case instanceof` matching,

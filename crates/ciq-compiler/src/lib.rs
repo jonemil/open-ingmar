@@ -1412,7 +1412,7 @@ impl Function {
         self.parameter_count
     }
 
-    /// Return the validated result contract shared by all return terminators.
+    /// Return the validated result contract, including for non-returning bodies.
     pub fn return_type(&self) -> ReturnType {
         self.return_type.clone()
     }
@@ -1499,7 +1499,8 @@ impl Function {
 
     /// Construct function IR with explicit parameter and result contracts.
     /// Every return must be assignable to the result; nullable contracts accept
-    /// Null, their scalar type, or the same union. Other validation is unchanged.
+    /// Null, their scalar type, or the same union. A body without reachable
+    /// returns retains this contract; reachable void returns still require Void.
     pub fn with_signature(
         name: String,
         parameter_types: Vec<ParameterType>,
@@ -3019,17 +3020,7 @@ impl Function {
             }
         }
         if return_type.is_none() {
-            if declared_result
-                .as_ref()
-                .is_some_and(|ty| *ty != ReturnType::Void)
-            {
-                return Err(IrError {
-                    operation: None,
-                    message: "non-returning functions currently require a Void result contract"
-                        .into(),
-                });
-            }
-            return_type = Some(ReturnType::Void);
+            return_type = Some(declared_result.clone().unwrap_or(ReturnType::Void));
         }
         for (index, inferred) in inferred_types {
             if let Operation::BlockParameter { value_type, .. } = &mut operations[index].operation {
@@ -3320,8 +3311,14 @@ impl Function {
                     .join(":")
             )
         };
-        let result = if type_text::explicit_function_result(&self.return_type) {
-            call_type_text(&self.return_type)
+        let result = if type_text::explicit_function_result(&self.return_type)
+            || (self.return_type != ReturnType::Void
+                && !self
+                    .operations
+                    .iter()
+                    .any(|op| matches!(op.operation, Operation::Return { .. })))
+        {
+            format!(" result={}", type_text::result_tag(&self.return_type))
         } else {
             String::new()
         };
