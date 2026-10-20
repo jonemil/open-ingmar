@@ -208,9 +208,10 @@ Lang method inventory; a missing construct need not block a native method to
 remain required core work. The frontend grammar records current acceptance.
 
 - **Lexical forms and literals:** reconcile reserved identifiers, comments,
-  escapes, Unicode String/Char forms, and any remaining lexical contexts beyond
-  the verified numeric token profile. Distinguish reserved
-  but unused words such as `alias`/`native` from executable language features.
+  and remaining lexical contexts beyond the verified numeric and literal-escape
+  profiles. Resolve raw supplementary Char truncation and unpaired String
+  surrogate replacement before widening those explicit restrictions. Distinguish
+  reserved but unused words such as `alias`/`native` from executable features.
 - **Declarations and storage:** uninitialized/typed locals, multiple declaration
   forms, constants, named/anonymous enums, instance/module/global/static fields,
   and supported field value types. Establish default values, declaration versus

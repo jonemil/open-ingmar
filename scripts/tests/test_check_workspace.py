@@ -63,6 +63,33 @@ class WorkspaceChecks(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(CHECK.wait(self.output, 0), 1)
 
+    def test_audit_uses_copies_when_cargo_replaces_live_executables(self):
+        checks = CHECK.Checks(self.output)
+        root = Path(self.temp.name)
+        debug = root / 'target' / 'debug'
+        debug.mkdir(parents=True)
+        names = ('ciq-compiler', 'ciq-dis', 'ciq-asm', 'ciq-package')
+        for name in names:
+            (debug / name).write_bytes(b'fresh tool')
+            (debug / name).chmod(0o755)
+        args = argparse.Namespace(output=self.output, audit=True, sdk_index=None,
+                                  rustdoc=False, msrv=False)
+        def parallel(lanes):
+            argv = lanes[1][0][2]
+            binaries = Path(argv[argv.index('--bin-dir') + 1])
+            for name in names:
+                (debug / name).unlink()
+                (debug / name).write_bytes(b'replaced tool')
+                self.assertEqual((binaries / name).read_bytes(), b'fresh tool')
+                self.assertTrue(os.access(binaries / name, os.X_OK))
+            return 0
+        with patch.object(CHECK, 'ROOT', root), \
+             patch.object(CHECK, 'Checks', return_value=checks), \
+             patch.object(checks, 'job', return_value=0), \
+             patch.object(checks, 'parallel', side_effect=parallel), \
+             redirect_stdout(io.StringIO()):
+            self.assertEqual(CHECK.run(args), 0)
+
     def test_actual_process_status_logs_and_timings_are_preserved(self):
         checks = CHECK.Checks(self.output, timings=True)
         with redirect_stdout(io.StringIO()):

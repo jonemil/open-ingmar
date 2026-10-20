@@ -84,6 +84,7 @@ module NullableSourceTests {
         CoreDeclarations.run();
         CoreSwitch.run();
         CoreLiterals.run();
+        CoreEscapes.run();
     }
 }
 
@@ -521,4 +522,29 @@ class LiteralHolder {
     var marker = 0xffffffff;
     function initialize() {}
     function value() as Number { return self.marker; }
+}
+
+module CoreEscapes {
+    function run() as Void {
+        System.println("source-escapes");
+        System.println('\b'.toNumber());
+        System.println('\f'.toNumber());
+        System.println('\"'.toNumber());
+        System.println('\u0000'.toNumber());
+        System.println('\u00e9'.toNumber());
+        System.println('\u732B'.toNumber());
+        System.println('\uD83D'.toNumber());
+        System.println('\ude00'.toNumber());
+        System.println('\uFFFF'.toNumber());
+        System.println("\u0041\u00e9\u732B");
+        System.println("\uD83D\uDE00".equals("😀"));
+        System.println("\b\f".equals("\u0008\u000C"));
+        System.println("\'\"\\".equals("\u0027\u0022\u005c"));
+        System.println("a\u0000b".length());
+        System.println("\\u0041");
+        var chars = ['\u0041', '\uD83D', '\ude00'];
+        System.println(chars[0].toNumber());
+        System.println(chars[1].toNumber());
+        System.println(chars[2].toNumber());
+    }
 }

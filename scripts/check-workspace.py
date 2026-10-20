@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import select
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -164,6 +165,12 @@ def run(args):
             if code:
                 checks.finish(code)
                 return code
+            # Cargo tests may replace these executables while the audit runs.
+            # Copy them so both lanes use a stable, freshly built tool set.
+            binaries = checks.output / "bin"
+            binaries.mkdir()
+            for name in ("ciq-compiler", "ciq-dis", "ciq-asm", "ciq-package"):
+                shutil.copy2(ROOT / "target" / "debug" / name, binaries / name)
         rust = [
             ("workspace-tests", "rust.tests", ["cargo", "test", "--locked", "--workspace"]),
             ("clippy", "rust.lint-format", ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings"]),
@@ -178,7 +185,8 @@ def run(args):
             rust.append(("msrv", "rust.build", ["cargo", f"+{version}", "check", "--locked", "--workspace", "--all-targets"]))
         lanes = [rust]
         if args.audit:
-            argv = [sys.executable, "scripts/audit-examples.py", "--output", str(checks.output / "audit")]
+            argv = [sys.executable, "scripts/audit-examples.py", "--output", str(checks.output / "audit"),
+                    "--bin-dir", str(binaries)]
             if args.sdk_index:
                 argv += ["--sdk-index", str(args.sdk_index.resolve())]
             lanes.append([("example-audit", "example.audit", argv)])

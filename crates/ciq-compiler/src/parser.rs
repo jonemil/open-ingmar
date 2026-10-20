@@ -721,32 +721,17 @@ impl<'a> Parser<'a> {
             }
             Some('\'') => {
                 self.offset += 1;
-                let mut value = self.source[self.offset..]
-                    .chars()
-                    .next()
-                    .ok_or_else(|| self.error(start, "unterminated Char literal"))?;
-                self.offset += value.len_utf8();
-                if value == '\\' {
-                    let escape = self.source[self.offset..]
-                        .chars()
-                        .next()
-                        .ok_or_else(|| self.error(start, "unfinished Char escape"))?;
-                    self.offset += escape.len_utf8();
-                    value = match escape {
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        '\'' => '\'',
-                        '\\' => '\\',
-                        _ => return Err(self.error(start, "unsupported source Char escape")),
-                    };
-                } else if matches!(value, '\'' | '\n' | '\r') {
+                if self.source[self.offset..].starts_with(['\'', '\n', '\r']) {
                     return Err(self.error(
                         start,
                         "Char literals require one character without raw newlines",
                     ));
                 }
-                if u32::from(value) > 0xffff {
+                let mut characters = self.source[self.offset..].chars();
+                let value = literal_character(&mut characters)
+                    .map_err(|message| self.error(start, message))?;
+                self.offset = self.source.len() - characters.as_str().len();
+                if value > 0xffff {
                     return Err(self.error(
                         start,
                         "source Char literals currently require a BMP character",
@@ -756,7 +741,7 @@ impl<'a> Parser<'a> {
                     return Err(self.error(start, "Char literals require exactly one character"));
                 }
                 self.offset += 1;
-                Kind::Char(u32::from(value))
+                Kind::Char(value)
             }
             Some('"') => {
                 self.offset += 1;
@@ -769,7 +754,7 @@ impl<'a> Parser<'a> {
                     if c == '"' {
                         break;
                     }
-                    if c == '\n' || c == '\r' {
+                    if matches!(c, '\n' | '\r') {
                         return Err(
                             self.error(start, "string literals cannot contain raw newlines")
                         );
@@ -779,8 +764,10 @@ impl<'a> Parser<'a> {
                             .chars()
                             .next()
                             .ok_or_else(|| self.error(start, "unfinished string escape"))?;
-                        if !matches!(escaped, 'n' | 'r' | 't' | '"' | '\\') {
-                            return Err(self.error(self.offset, "unsupported source string escape"));
+                        if matches!(escaped, '\n' | '\r') {
+                            return Err(
+                                self.error(start, "string literals cannot contain raw newlines")
+                            );
                         }
                         self.offset += escaped.len_utf8();
                     }
@@ -1663,9 +1650,9 @@ impl<'a> Parser<'a> {
             }
             Kind::Char(value) => self.node(ExpressionKind::Char(value), token.span),
             Kind::String(literal) => {
-                let fields = ciq_prg::symbols::source::tokens(literal)
-                    .map_err(|error| self.error(token.span.start, error.to_string()))?;
-                self.node(ExpressionKind::String(fields[0][1..].into()), token.span)
+                let value = string_literal(literal)
+                    .map_err(|message| self.error(token.span.start, message))?;
+                self.node(ExpressionKind::String(value), token.span)
             }
             Kind::Long(digits) => self.long_literal(digits, token.span, false),
             Kind::Real(digits, double) => self.real_literal(digits, double, token.span, false),
@@ -2970,4 +2957,64 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
         }
     }
     Ok(unit)
+}
+
+/// Decode one source literal character or escape to its scalar/code-unit value.
+/// Unicode escapes contain exactly four hexadecimal digits; surrogate code
+/// units remain available for Char literals and String pair validation.
+fn literal_character(characters: &mut std::str::Chars<'_>) -> Result<u32, &'static str> {
+    let value = characters.next().ok_or("unterminated source literal")?;
+    if value != '\\' {
+        return Ok(u32::from(value));
+    }
+    Ok(
+        match characters
+            .next()
+            .ok_or("unfinished source literal escape")?
+        {
+            'b' => 8,
+            'f' => 12,
+            'n' => 10,
+            'r' => 13,
+            't' => 9,
+            '\'' => 39,
+            '"' => 34,
+            '\\' => 92,
+            'u' => {
+                let mut value = 0;
+                for _ in 0..4 {
+                    let digit = characters
+                        .next()
+                        .filter(char::is_ascii_hexdigit)
+                        .and_then(|c| c.to_digit(16))
+                        .ok_or("Unicode escape requires four hexadecimal digits")?;
+                    value = value * 16 + digit;
+                }
+                value
+            }
+            _ => return Err("unsupported source literal escape"),
+        },
+    )
+}
+
+/// Decode a complete quoted source String token to UTF-8, rejecting unpaired
+/// surrogate escapes instead of replacing them. Escapes are not recursive.
+fn string_literal(literal: &str) -> Result<String, &'static str> {
+    let mut characters = literal[1..literal.len() - 1].chars();
+    let mut value = String::new();
+    while !characters.as_str().is_empty() {
+        let mut scalar = literal_character(&mut characters)?;
+        if (0xd800..=0xdbff).contains(&scalar) {
+            if !characters.as_str().starts_with("\\u") {
+                return Err("String high surrogate requires a low-surrogate escape");
+            }
+            let low = literal_character(&mut characters)?;
+            if !(0xdc00..=0xdfff).contains(&low) {
+                return Err("String high surrogate requires a low-surrogate escape");
+            }
+            scalar = 0x10000 + ((scalar - 0xd800) << 10) + low - 0xdc00;
+        }
+        value.push(char::from_u32(scalar).ok_or("String literal contains an unpaired surrogate")?);
+    }
+    Ok(value)
 }

@@ -43,6 +43,9 @@ switch/loop controls. Nullable value selectors are guarded before dispatch.
 `CoreLiterals` checks Number/Long radix patterns and negation, Float suffix and
 leading-dot forms, NaN type/comparisons/Array storage, and a radix field default.
 
+`CoreEscapes` checks source control/quote escapes, Unicode code units, String
+surrogate pairs and embedded NUL, and Char array storage.
+
 From the repository root:
 
 ```sh

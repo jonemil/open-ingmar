@@ -1867,11 +1867,11 @@ evidence](../../investigations/compiler-compound-targets.md).
 
 ### Strings and printing
 
-Double-quoted literals accept UTF-8 characters and source escapes `\n`, `\r`,
-`\t`, `\"`, and `\\`. Raw newlines, unfinished/unknown escapes, and values
-longer than 65535 UTF-8 bytes are rejected. Empty strings are allowed. Source
-Unicode escape syntax is not supported; IR/assembly use their own documented
-escape syntax.
+Double-quoted literals produce UTF-8 strings under the
+[literal grammar and decoding rules](grammar.md#lexical-rules-and-literals). Source decoding
+is independent of IR/assembly quoting: those writers serialize the decoded
+value using their own escapes. Empty strings and embedded NUL are preserved;
+values longer than 65535 decoded UTF-8 bytes are rejected.
 
 String literals, native conversion results, and string-valued local reads can
 initialize locals or supply `System.println(expression);`. Print statements may
@@ -1981,7 +1981,9 @@ operators. See the
 [Boolean group evidence](../../investigations/compiler-boolean-methods.md).
 
 Char values originate from literals or Number's zero-argument `toChar()` and are
-distinct from Number. They support `toLower()`/`toUpper()` returning Char,
+distinct from Number. The [literal rules](grammar.md#lexical-rules-and-literals) distinguish
+raw BMP scalars from escaped UTF-16 code units, including surrogate values.
+They support `toLower()`/`toUpper()` returning Char,
 `toNumber()` returning Number, and `toString()` returning String. Char's direct
 `compareTo` follows the [shared Object argument
 contract](#comparison-object-arguments) since API 5.0.0. Inherited `equals`

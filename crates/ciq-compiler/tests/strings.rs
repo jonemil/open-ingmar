@@ -169,6 +169,69 @@ fn utf8_literal_size_and_string_escape_limits_are_checked() {
 }
 
 #[test]
+fn source_escapes_decode_before_ir_and_assembly_serialization() {
+    for (literal, value) in [
+        (r#""\b\f\n\r\t\'\"\\""#, "\u{8}\u{c}\n\r\t'\"\\"),
+        (r#""\u0041\u00e9\u732B""#, "Aé猫"),
+        (r#""é猫😀""#, "é猫😀"),
+        (r#""\uD83D\ude00""#, "😀"),
+        (r#""a\u0000b""#, "a\0b"),
+        (r#""\u0022\u0027\u005c""#, "\"'\\"),
+        (r#""\uFFFF""#, "\u{ffff}"),
+        (r#""\\u0041""#, r"\u0041"),
+    ] {
+        let source = format!("function f() as Toybox.Lang.String {{ return {literal}; }}");
+        let function = compile(&source).unwrap();
+        let op = &function.operations()[0];
+        assert!(
+            matches!(&op.operation, ciq_compiler::Operation::String { value: actual, .. } if actual == value)
+        );
+        let span = op.span.unwrap();
+        assert_eq!(&source[span.start..span.end], literal);
+        assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
+        let assembly = function.lower();
+        assert_eq!(Program::parse(&assembly.to_text()).unwrap(), assembly);
+    }
+    for literal in [
+        r#""\u041""#,
+        r#""\u00gg""#,
+        r#""\u{41}""#,
+        r#""\U00000041""#,
+        r#""\x41""#,
+        r#""\0""#,
+        r#""\101""#,
+        r#""\q""#,
+        r#""\/""#,
+        r#""\uD83D""#,
+        r#""\uDE00""#,
+        r#""\uD83D\u0041""#,
+        r#""\uD83D\uD83D""#,
+        r#""\uD83Dx""#,
+        r#""\uD83D\u041""#,
+        "\"a\\\nb\"",
+        "\"a\\\rb\"",
+        "\"unfinished\\",
+    ] {
+        assert!(
+            compile(&format!(
+                "function f() as Toybox.Lang.String {{ return {literal}; }}"
+            ))
+            .is_err(),
+            "{literal:?}"
+        );
+    }
+    // The bound applies to decoded UTF-8 bytes, not source spelling or UTF-16 units.
+    let source = |count| {
+        format!(
+            "function f() as Toybox.Lang.String {{ return \"{}\"; }}",
+            r"\u00e9".repeat(count)
+        )
+    };
+    compile(&source(32767)).unwrap();
+    assert!(compile(&source(32768)).is_err());
+}
+
+#[test]
 fn assigned_strings_preserve_types_bindings_slots_and_pipeline_parity() {
     let function = compile(include_str!(
         "../../../examples/compiler-probe/assignments.mc"

@@ -18,8 +18,10 @@ meaning as in the [example audit](#example-toolchain-audit); omit it to use the
 audit's specimen discovery. The runner does not rebuild SDK specimens or run
 simulators, and it is not added to CI.
 
-With `--audit`, it builds the required tools first, then runs the audit alongside
-the serial Cargo checks. This avoids concurrent Cargo commands contending for
+With `--audit`, it builds and copies the required tools into the output's `bin/`
+directory, then runs the audit alongside the serial Cargo checks. Copies keep
+the audit executable paths stable while Cargo replaces build outputs.
+This avoids concurrent Cargo commands contending for
 the same build directory. Every selected lane must succeed; one failing lane
 stops its remaining checks while independent lanes finish. Logs and an atomically
 updated `report.json` retain each job's actual status and category. When the user

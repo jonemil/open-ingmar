@@ -41,15 +41,48 @@ Our mnemonic is `cpush`; it names the observed Char push instruction.
 
 The supplementary character becomes a UTF-16 high surrogate in this SDK build,
 whereas Number-to-Char conversion preserves 128512 in the earlier probe.
-**Design decision:** source literals require one BMP Unicode scalar until this
+**Design decision:** raw source Chars require one BMP Unicode scalar until this
 discrepancy is resolved. Do not truncate a supplementary source character.
 Combining sequences containing multiple scalars are also rejected.
 
-A separate `\0` literal produced the SDK error “Undefined symbol ':oNumber'”.
-Removing that line allowed the remaining probe to compile. Our source subset
-accepts only the verified escapes above; `\0`, `\u`, and `\x` syntax is
-unsupported. The original combined probe also contained `\u0041`; its behavior
-was not isolated, so no SDK Unicode-escape conclusion follows from that failure.
+## Source escape probes
+
+Isolated probes on 2026-10-20 use SDK/simulator 9.2.0, fr265, `-O 0`.
+Create an ignored project with the ordinary console manifest/resources and an
+AppBase wrapper whose `onStart(state)` executes one statement and calls
+`System.exit()`. Compile with `scripts/build-example.sh`. For Char probes,
+print the literal's `.toNumber()`; for Strings, print or compare the value.
+
+**Observed:** both quote forms accept `\b`, `\f`, `\n`, `\r`, `\t`, `\'`,
+`\"`, `\\`, and `\uNNNN` with exactly four hexadecimal digits. Unicode Chars
+preserve code units: `\u0000` → 0, `\u00e9` → 233, `\u732B` → 29483,
+`\uD83D` → 55357, `\ude00` → 56832, and `\uFFFF` → 65535. Unlike a raw
+supplementary Char, these surrogate values are explicit source code units.
+
+String `"\uD83D\uDE00"` exports as UTF-8 `😀`. An isolated `"\uD83D"`
+compiles but exports as `"?"` in DATA. **Design decision:** accept valid pairs
+and reject unpaired String surrogates rather than silently replacing them.
+Keep the raw supplementary Char restriction above. These are explicit subset
+boundaries, not claims that the SDK rejects either form.
+
+Isolated String probes reject `\x41`, `\0`, `\101`, `\u{41}`, `\q`, `\/`,
+backslash-newline continuation, and short `\u041`. Char probes reject
+`\x41`, `\0`, `\q`, short `\u041`, and two-unit `'\uD83D\uDE00'`.
+Several invalid forms produce misleading parser/symbol
+diagnostics; the isolated compile failure establishes rejection, not a useful
+error taxonomy.
+
+The [shared object specimen][escape-example] groups the accepted forms,
+surrogate Char Array storage, escaped versus raw Unicode String content,
+embedded NUL length, and non-recursive backslash decoding. String content checks
+use `.equals()`: `==` can distinguish identical contents stored at different
+addresses. On this simulator, `"a\u0000b".length()` reports 1 despite the
+three-byte stored value; preserving the value does not imply that native String
+methods process bytes after NUL. Use the specimen's
+console checker for SDK/generated runtime comparison and structured CODE/DATA
+reconstruction. Both applications match the expected output, and both PRGs
+reconstruct without raw CODE/DATA fallback. See the
+[current literal contract][literal-contract].
 
 ## Raw IR bits and complete application
 
@@ -89,3 +122,5 @@ The SDK example's complete section export and reconstruction were byte identical
 including the Char push instructions and preserved signing material.
 
 [example]: ../../examples/compiler-char-literals/README.md
+[escape-example]: ../../examples/compiler-object-tests/README.md
+[literal-contract]: ../specs/frontend/grammar.md#lexical-rules-and-literals

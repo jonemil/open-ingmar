@@ -323,13 +323,13 @@ real-magnitude = decimal-magnitude "." digits exponent?
                | "." digits exponent? | decimal-magnitude exponent
 exponent = ("e" | "E") ("+" | "-")? digits
 symbol-literal = ":" identifier
-string-literal = '"' (string-character | string-escape)* '"'
+string-literal = '"' (string-character | literal-escape)* '"'
 string-character = ? Unicode scalar except double quote, backslash, CR, LF ?
 backslash = ? U+005C ?
-string-escape = backslash ("n" | "r" | "t" | '"' | backslash)
-char-literal = "'" (char-character | char-escape) "'"
+literal-escape = backslash ("b" | "f" | "n" | "r" | "t" | "'" | '"'
+                         | backslash | "u" hex-digit hex-digit hex-digit hex-digit)
+char-literal = "'" (char-character | literal-escape) "'"
 char-character = ? BMP Unicode scalar except single quote, backslash, CR, LF ?
-char-escape = backslash ("n" | "r" | "t" | "'" | backslash)
 ```
 
 Minus is a unary source token, not part of the unsigned `number-literal`,
@@ -371,16 +371,27 @@ forms and other suffixes are unsupported. Overflow diagnostics point to the
 literal start; [numeric semantics](README.md#numbers-and-numeric-aliases)
 distinguish literal rounding from arithmetic and conversion behavior.
 
-String literals use double quotes, UTF-8, and `\n`, `\r`, `\t`, `\"`, `\\`. Raw
-newlines, unknown/unfinished escapes, and lengths above 65535 UTF-8 bytes are
-rejected; empty strings are allowed. Char literals use single quotes around
-exactly one BMP Unicode scalar, with escapes `\n`, `\r`, `\t`, `\'`, `\\`.
-Double quotes may be unescaped inside Char literals. Empty/multiple-character
-literals, raw single quotes/backslashes/newlines, and supplementary characters
-are rejected. Neither form accepts `\0`, `\u`, or `\x`. IR and assembly have
-separate quoting rules. Char values require API 1.3.0 with explicit API context.
-See [Char evidence][chars] and [string
-contracts](README.md#core-lang-values-and-methods).
+String and Char literals share escapes for backspace (`\b`), form feed (`\f`),
+newline, carriage return, tab, both quotes, backslash, and one UTF-16 code unit
+(`\uNNNN`, exactly four hexadecimal digits). Decoding occurs once: escaped
+quotes/backslashes do not delimit literals or introduce further escapes.
+Neither form accepts `\0`, octal escapes, `\x`, `\U`, braced Unicode escapes,
+or backslash-newline continuation. Raw CR/LF and unfinished/unknown escapes
+are rejected.
+
+Strings decode to valid UTF-8. A high-surrogate escape must immediately precede
+a low-surrogate escape; the pair produces one supplementary scalar. Unpaired
+surrogates are rejected rather than replaced. Empty strings and embedded NUL
+are allowed. The 65535-byte limit applies to decoded UTF-8, not source spelling
+or UTF-16 code-unit count.
+
+Chars contain exactly one raw BMP scalar or one escape. A Unicode escape
+preserves its 16-bit value, including NUL and individual surrogates. Raw
+supplementary characters and multiple code units are rejected; a surrogate pair
+is therefore a String form only. Double quotes may be unescaped in Chars, and
+single quotes in Strings. Char values require API 1.3.0 with explicit API
+context. IR and assembly retain their separate quoting rules. See
+[literal evidence][chars] and [value contracts](README.md#core-lang-values-and-methods).
 
 Expression/control-flow nesting is bounded at 64 and a semantic function at 1024
 operations including return. Parameters are limited to 254, parameters plus
