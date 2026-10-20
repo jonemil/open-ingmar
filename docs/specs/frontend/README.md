@@ -669,26 +669,40 @@ binding; no native Object allocation/initialization hook is invoked. See the
 ### Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
-an unqualified constructible source class name:
+an unqualified constructible source class name, optionally followed by `or Null`:
 
 ```text
 function pass(view as HelloView) as HelloView { return view; }
+function maybe(view as HelloView or Null) as HelloView or Null { return view; }
 ```
 
 The name must resolve to a declared Object-, View-, or BehaviorDelegate-derived
 class in the unit, including forward or cross-file declarations. AppBase
-references, arbitrary native classes, nullable source references,
-Array<ClassName>, aliases, and qualified source-class names are unsupported.
+references, arbitrary native classes, Array<ClassName>, aliases, and qualified
+source-class names are unsupported.
 Native annotations use canonical, qualified-alias, or imported bare names
 through the shared native type environment.
 
-Source contracts are exact and non-null. Arguments and every value return must
-retain the declared source class through construction, typed parameters,
+Source contracts preserve exact class identity. Arguments and every value return
+must retain the declared source class through construction, typed parameters,
 declared results, local copies, positive source-class tests, or explicit source
 assertions. The [source-target contract](#source-class-targets) distinguishes
 runtime proofs from caller assertions. A different source class, Null, or an
-erased native reference cannot satisfy the contract. Native contracts may accept
-a source instance through its base while erasing its exact class identity.
+erased native reference cannot satisfy a non-null contract. Native contracts may
+accept a source instance through its base while erasing its exact class identity.
+
+Nullable source contracts accept that exact class, its nullable form, or Null;
+they reject unrelated source classes and erased native references. Parameters,
+declared call results, and local copies retain both class and nullability.
+Source dispatch and non-null source consumers require a non-null proof on the
+read, using the shared [branch rules](#runtime-object-predicates). Checking an
+alias does not prove the original storage non-null. Writes invalidate that
+local's proof; joins and loop backedges retain only shared facts.
+A local initialized from a nullable source value permits the same class or Null
+on assignment. A fresh copy inside a proven branch has a non-null contract.
+The original local keeps its nullable storage contract after a check or write.
+Nullable source fields, Array elements, conditional-value joins, and lexical
+source casts remain unsupported; this does not introduce general source unions.
 
 Module, self, and explicit object calls retain a declared source result,
 permitting subsequent source dispatch and same-class local assignment. Parameter
@@ -697,7 +711,8 @@ signatures; source annotations cannot replace those contracts. No runtime cast
 is emitted.
 
 `ParameterType::SourceObject(SourceClass)` and
-`ReturnType::SourceObject(SourceClass)` carry the source name and native base
+`ReturnType::SourceObject(SourceClass)`, with their `NullableSourceObject`
+variants, carry the source name and native base
 separately. Source declaration collection resolves both across all input files
 before checking bodies. API checking projects to that base; exact source
 assignability is checked separately. Function validation checks names and return
@@ -708,7 +723,8 @@ Single-function source compilation rejects source-class annotations because it
 has no declarations from which to resolve their native bases.
 
 Saved parameter tags and function/call result tags use
-`source(ClassName@Native.Base)`. Result contracts must be explicit in saved
+`source(ClassName@Native.Base)` or `nullable-source(ClassName@Native.Base)`.
+Result contracts must be explicit in saved
 function text to retain the source identity. See the [signature
 example](../../../examples/compiler-source-signatures/README.md) and [runtime
 evidence](../../investigations/compiler-source-signatures.md).

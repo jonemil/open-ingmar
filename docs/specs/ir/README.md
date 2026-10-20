@@ -1553,6 +1553,15 @@ arguments/results are checked through the [source signature
 rules](../frontend/README.md#source-class-signatures); the tag does not cast an
 erased native reference.
 
+`nullable-source(ClassName@Native.Base)` carries the same exact class requirement
+while admitting Null. It is valid in parameter and function/call result metadata.
+Null branches refine fresh parameter/local reads without erasing source
+identity; assignment preserves the original local's class/nullability contract.
+Function validation checks return provenance and non-null receivers; unit
+validation resolves declarations and checks call contracts against their bodies.
+Its runtime representation is the ordinary reference or Null, with no added
+conversion instruction. Nullable source tags are not field, join, or cast tags.
+
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;
 `result=source(ClassName@Native.Base)` selects a source-reference read. Writes

@@ -18,8 +18,11 @@ fn signature_matches(implementation: &Function, required: &crate::api::Method) -
             .iter()
             .zip(&required.parameters)
             .all(|(actual, expected)| {
-                !matches!(actual, crate::ParameterType::SourceObject(_))
-                    && &actual.api_type() == expected
+                !matches!(
+                    actual,
+                    crate::ParameterType::SourceObject(_)
+                        | crate::ParameterType::NullableSourceObject(_)
+                ) && &actual.api_type() == expected
             })
         && required.result == implementation.return_type().api_type()
 }
@@ -944,14 +947,18 @@ impl CompilationUnit {
         let exit_callers = exit_callers(&bodies);
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let source_result = match function.return_type() {
-                ReturnType::SourceObject(class) => Some(class),
+                ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class) => {
+                    Some(class)
+                }
                 _ => None,
             };
             let source_classes = function
                 .parameter_types()
                 .iter()
                 .filter_map(|ty| {
-                    if let crate::ParameterType::SourceObject(class) = ty {
+                    if let crate::ParameterType::SourceObject(class)
+                    | crate::ParameterType::NullableSourceObject(class) = ty
+                    {
                         Some(class)
                     } else {
                         None
@@ -1154,7 +1161,11 @@ impl CompilationUnit {
                     None
                 })
                 .collect::<BTreeMap<_, _>>();
-            let inputs = crate::type_flow::prefix_inputs(function.operations());
+            // Replay all branch proofs from the validated graph. Candidate
+            // prefix inference deliberately computes a narrower set of facts.
+            let structure = crate::control_flow::validate(function.operations())
+                .expect("function already has a validated CFG");
+            let inputs = crate::type_flow::inputs(&structure, function.operations());
             let mut facts = Default::default();
             for located in function.operations() {
                 crate::type_flow::update(&mut facts, &inputs, &located.operation);
@@ -1548,8 +1559,14 @@ impl CompilationUnit {
                         .map_err(|message| fail(Some(index), Some(operation), message))?;
                         continue;
                     }
-                    if let crate::ParameterType::SourceObject(class) = parameter {
-                        if origins.class(*argument) != Some(class.as_str()) {
+                    if let crate::ParameterType::SourceObject(class)
+                    | crate::ParameterType::NullableSourceObject(class) = parameter
+                    {
+                        if !origins.accepts(
+                            class.as_str(),
+                            matches!(parameter, crate::ParameterType::NullableSourceObject(_)),
+                            *argument,
+                        ) {
                             return Err(fail(
                                 Some(index),
                                 Some(operation),
@@ -1899,11 +1916,15 @@ fn compile_sources_context(
                 .flat_map(|class| class.methods.iter_mut()),
         ) {
             for parameter in ast.parameter_types.iter_mut().flatten() {
-                if let crate::ParameterType::SourceObject(class) = parameter {
+                if let crate::ParameterType::SourceObject(class)
+                | crate::ParameterType::NullableSourceObject(class) = parameter
+                {
                     resolve(class)?;
                 }
             }
-            if let Some(ReturnType::SourceObject(class)) = &mut ast.result_type {
+            if let Some(ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class)) =
+                &mut ast.result_type
+            {
                 resolve(class)?;
             }
         }

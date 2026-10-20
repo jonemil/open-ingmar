@@ -468,6 +468,8 @@ pub enum ReturnType {
     Object(NativeClass),
     /// Exact non-null source class, resolved within a compilation unit.
     SourceObject(SourceClass),
+    /// Exact source class or Null; source dispatch requires a non-null proof.
+    NullableSourceObject(SourceClass),
     Tuple(TupleShape),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
@@ -537,6 +539,8 @@ pub enum ParameterType {
     Object(NativeClass),
     /// Exact non-null source class, resolved within a compilation unit.
     SourceObject(SourceClass),
+    /// Exact source class or Null; source dispatch requires a non-null proof.
+    NullableSourceObject(SourceClass),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
@@ -587,6 +591,9 @@ impl ParameterType {
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
+            Self::NullableSourceObject(class) => {
+                api::Type::named(class.base.api_name()).with_null()
+            }
             Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
@@ -637,6 +644,9 @@ impl ReturnType {
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
+            Self::NullableSourceObject(class) => {
+                api::Type::named(class.base.api_name()).with_null()
+            }
             Self::Tuple(shape) => shape.api_type(),
             Self::Array(element) => ValueType::Array(*element).api_type(),
             Self::Void => api::Type::Void,
@@ -705,6 +715,8 @@ enum ValueType {
     Object(NativeClass),
     Tuple(TupleShape),
     FontDefinition,
+    /// Nullable native projection of an exact source View/delegate contract.
+    NullableNativeObject(NativeClass),
     Array(ArrayElement),
     Null,
     NullableDictionary,
@@ -715,6 +727,7 @@ impl ValueType {
     fn without_null(self) -> Self {
         match self {
             Self::NullableInterface(interface) => Self::Interface(interface),
+            Self::NullableNativeObject(class) => Self::Object(class),
             Self::NullableInteger => Self::Integer,
             Self::NullableNumeric => Self::Numeric,
             Self::NullableIntegerAlias => Self::IntegerAlias,
@@ -805,6 +818,7 @@ impl ValueType {
                 api::Type::Null,
             ]),
             Self::Object(class) => api::Type::named(class.name()),
+            Self::NullableNativeObject(class) => api::Type::named(class.name()).with_null(),
             Self::Tuple(shape) => shape.api_type(),
             Self::FontDefinition => api::Type::named("Toybox.Graphics.FontDefinition"),
             Self::Array(element) => api::Type::Array(Box::new(element.api_type())),
@@ -851,6 +865,12 @@ impl ValueType {
                 name => NativeClass::from_name(name).map(Self::Object),
             },
             api::Type::Null => Some(Self::Null),
+            _ if *ty == Self::NullableNativeObject(NativeClass::View).api_type() => {
+                Some(Self::NullableNativeObject(NativeClass::View))
+            }
+            _ if *ty == Self::NullableNativeObject(NativeClass::BehaviorDelegate).api_type() => {
+                Some(Self::NullableNativeObject(NativeClass::BehaviorDelegate))
+            }
             _ if *ty == InterfaceType::Comparable.api_type(true) => {
                 Some(Self::NullableInterface(InterfaceType::Comparable))
             }
@@ -1570,14 +1590,16 @@ impl Function {
         infer_joins: bool,
     ) -> Result<Self, IrError> {
         let source_parameters = parameter_types.iter().filter_map(|ty| {
-            if let ParameterType::SourceObject(class) = ty {
+            if let ParameterType::SourceObject(class) | ParameterType::NullableSourceObject(class) =
+                ty
+            {
                 Some(class.as_str())
             } else {
                 None
             }
         });
         let source_result = declared_result.as_ref().and_then(|ty| {
-            if let ReturnType::SourceObject(class) = ty {
+            if let ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class) = ty {
                 Some(class.as_str())
             } else {
                 None
@@ -1590,8 +1612,8 @@ impl Function {
             })?;
         }
         if parameter_types.iter().any(|ty| {
-            matches!(ty, ParameterType::SourceObject(class) if class.base.constructed_type().is_none())
-        }) || matches!(&declared_result, Some(ReturnType::SourceObject(class)) if class.base.constructed_type().is_none())
+            matches!(ty, ParameterType::SourceObject(class) | ParameterType::NullableSourceObject(class) if class.base.constructed_type().is_none())
+        }) || matches!(&declared_result, Some(ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class)) if class.base.constructed_type().is_none())
         {
             return Err(IrError {
                 operation: None,
@@ -2058,6 +2080,7 @@ impl Function {
                                     | ValueType::NullableDouble
                                     | ValueType::NullableFloat
                                     | ValueType::NullableObject
+                                    | ValueType::NullableNativeObject(_)
                                     | ValueType::NullableDictionary),
                                 ) = declared
                                 {
@@ -2766,6 +2789,7 @@ impl Function {
                                 | ValueType::IntegerAlias
                                 | ValueType::Decimal
                                 | ValueType::NullableObject
+                                | ValueType::NullableNativeObject(_)
                                 | ValueType::NullableNumeric
                                 | ValueType::NullableIntegerAlias
                                 | ValueType::NullableDecimal
@@ -2845,8 +2869,14 @@ impl Function {
                 }
                 Operation::Return { value } => {
                     let result = if let Some(contract) = &declared_result {
-                        if let ReturnType::SourceObject(class) = contract {
-                            if origins.class(value) != Some(class.as_str()) {
+                        if let ReturnType::SourceObject(class)
+                        | ReturnType::NullableSourceObject(class) = contract
+                        {
+                            if !origins.accepts(
+                                class.as_str(),
+                                matches!(contract, ReturnType::NullableSourceObject(_)),
+                                value,
+                            ) {
                                 return Err(fail(
                                     "return does not preserve its declared source class",
                                 ));
@@ -3901,6 +3931,14 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
             validate_call_names(None, class.as_str())?;
             ValueType::from_api_type(&api::Type::named(class.base.api_name()))
                 .ok_or("source reference requires a constructible native base")
+        }
+        ReturnType::NullableSourceObject(class) => {
+            validate_call_names(None, class.as_str())?;
+            if class.base.constructed_type().is_none() {
+                return Err("source reference requires a constructible native base");
+            }
+            ValueType::from_api_type(&api::Type::named(class.base.api_name()).with_null())
+                .ok_or("unsupported nullable source projection")
         }
         ReturnType::Tuple(shape) => Ok(ValueType::Tuple(shape)),
         ReturnType::Array(element) => Ok(ValueType::Array(element)),

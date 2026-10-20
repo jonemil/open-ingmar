@@ -25,6 +25,7 @@ module Tests {
     function run() as Void {
         ImportedTypes.run();
         SourceTests.run();
+        NullableSourceTests.run();
         Lexical.run();
         Refine.run();
         Tests.show(3); Tests.show("x"); Tests.absent(null); Tests.absent("x");

@@ -186,10 +186,13 @@ retain enum identity; `dictionary` is opaque. User-call tuple results also use
 `one-view` and `view-delegate`. Native reference tags include `view`,
 `behavior-delegate`, and callback-only `dc`/`nullable-dictionary`.
 
-Exact source tags use `source(ClassName@Native.Base)` with ASCII class names.
+Exact source tags use `source(ClassName@Native.Base)` or
+`nullable-source(ClassName@Native.Base)` with ASCII class names.
 Bases use `Lang.Object`, `WatchUi.View`, or `WatchUi.BehaviorDelegate` for
 constructible references. AppBase is a declaration/base identity, not a
-constructible ordinary source-reference type. No nullable source tag exists.
+constructible ordinary source-reference type. Nullable source tags are accepted
+in parameter and function/call result metadata; field reads retain their
+separate non-null source profile. Source tags are not join or native cast tags.
 
 Array element tags use `number`, not `integer`, for Number; otherwise they use
 the shared scalar/core/interface/alias tags, nullable forms, or `view`. A

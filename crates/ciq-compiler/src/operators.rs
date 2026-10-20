@@ -217,6 +217,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
                 crate::ValueType::NullableNumeric
                     | crate::ValueType::NullableIntegerAlias
                     | crate::ValueType::NullableDecimal
+                    | crate::ValueType::NullableNativeObject(_)
             )
         )
     };

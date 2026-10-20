@@ -1,4 +1,4 @@
-# Source View contracts across calls
+# Source-class reference contracts
 
 SDK 9.2.0 and independently generated fr265 applications produce matching logs
 and displayed counters when source View references cross module and self calls.
@@ -27,6 +27,33 @@ dispatch, cross-file declaration resolution, unrelated classes, generic View
 arguments/returns, Null, unknown signature classes, and edited IR claims.
 These are our bounded checking rules, not proof of Garmin's complete typing policy.
 
+## Nullable source signatures
+
+2026-10-20, SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`.
+The `NullableSourceTests` module in the [object-test specimen][nullable-example]
+declares `Probe or Null`, `LocalView or Null`, and `LocalDelegate or Null`
+parameters. It returns either a source instance or Null, forwards nullable
+results, copies them into locals, guards source calls, and resets locals to Null.
+
+**Experimentally observed:** SDK and generated console output matches the
+expected text, including the added group `1, -1, 2, -2, 3, -3, 1, true, 1, true`.
+Both captured displays show the ordinary application screen without an error
+dialog. SDK/generated CODE and DATA export structurally and reconstruct exactly;
+native, saved-IR, and assembly paths agree. No new opcode or DATA framing is
+needed for these nullable references.
+
+Reproduce with `scripts/build-example.sh scratch/compiler-object-tests`, using
+that directory's Jungle file pointing to the tracked sources and local
+manifest/resources. Then run the shared console checker with the resulting
+SDK PRG: `scripts/check-example.py prepare compiler-object-tests` with
+`--sdk-prg` and a fresh `--output`, followed by `simulate` in the SDK environment.
+This run is captured in `scratch/nullable-source/check/`.
+
+**Limits:** these observations cover signatures and inferred locals, not nullable
+source fields, container elements, conditional-value joins, inheritance, or
+nullable source casts. Missing-proof and unrelated-class rejections are our
+checking policy; they do not establish the SDK's full static-checking rules.
+
 ## Reproduction
 
 Build/sign our application using the example's commands. Create
@@ -51,3 +78,4 @@ the displayed value. Retained logs/captures are `sdk.log`, `generated.log`,
 `sdk-screen.png`, and `generated-screen.png` under `scratch/compiler-source-signatures/`.
 
 [example]: ../../examples/compiler-source-signatures/README.md
+[nullable-example]: ../../examples/compiler-object-tests/README.md

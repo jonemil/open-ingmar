@@ -3,10 +3,19 @@
 use crate::{LocalId, Operation, ValueId};
 use std::collections::BTreeMap;
 
+/// Exact class requirement carried by a value or invariant local storage.
+#[derive(Clone)]
+struct Contract {
+    name: String,
+    nullable: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct Origins {
-    values: BTreeMap<ValueId, String>,
-    locals: BTreeMap<LocalId, Option<String>>,
+    values: BTreeMap<ValueId, Contract>,
+    nulls: std::collections::BTreeSet<ValueId>,
+    null_locals: std::collections::BTreeSet<LocalId>,
+    locals: BTreeMap<LocalId, Option<Contract>>,
     parameters: Vec<crate::ParameterType>,
 }
 
@@ -32,51 +41,99 @@ impl Origins {
             receiver, class, ..
         } = operation
         {
-            if self.values.get(receiver) != Some(class) {
+            if self.class(*receiver) != Some(class.as_str()) {
                 return Err("object call class does not match the receiver's source contract");
             }
         }
         match operation {
             Operation::SourceCast { result, class, .. } => {
-                self.values.insert(*result, class.name.clone());
+                self.values.insert(
+                    *result,
+                    Contract {
+                        name: class.name.clone(),
+                        nullable: false,
+                    },
+                );
             }
             Operation::ParameterRead { result, index } => {
-                if let Some(crate::ParameterType::SourceObject(class)) = self.parameters.get(*index)
+                if let Some(
+                    crate::ParameterType::SourceObject(class)
+                    | crate::ParameterType::NullableSourceObject(class),
+                ) = self.parameters.get(*index)
                 {
-                    self.values.insert(*result, class.name.clone());
+                    self.values.insert(
+                        *result,
+                        Contract {
+                            name: class.name.clone(),
+                            nullable: matches!(
+                                self.parameters[*index],
+                                crate::ParameterType::NullableSourceObject(_)
+                            ),
+                        },
+                    );
                 }
             }
             Operation::SelfFieldRead {
                 result,
-                result_type: crate::ReturnType::SourceObject(class),
+                result_type,
                 ..
             }
             | Operation::ModuleCall {
                 result,
-                result_type: crate::ReturnType::SourceObject(class),
+                result_type,
                 ..
             }
             | Operation::SelfCall {
                 result,
-                result_type: crate::ReturnType::SourceObject(class),
+                result_type,
                 ..
             }
             | Operation::ObjectCall {
                 result,
-                result_type: crate::ReturnType::SourceObject(class),
+                result_type,
                 ..
             } => {
-                self.values.insert(*result, class.name.clone());
+                if let crate::ReturnType::SourceObject(class)
+                | crate::ReturnType::NullableSourceObject(class) = result_type
+                {
+                    self.values.insert(
+                        *result,
+                        Contract {
+                            name: class.name.clone(),
+                            nullable: matches!(
+                                result_type,
+                                crate::ReturnType::NullableSourceObject(_)
+                            ),
+                        },
+                    );
+                }
+            }
+            Operation::Null { result } => {
+                self.nulls.insert(*result);
+            }
+            Operation::BlockParameter { result, value_type }
+                if *value_type == crate::api::Type::Null =>
+            {
+                self.nulls.insert(*result);
             }
             Operation::SourceNew { result, class, .. } => {
-                self.values.insert(*result, class.clone());
+                self.values.insert(
+                    *result,
+                    Contract {
+                        name: class.clone(),
+                        nullable: false,
+                    },
+                );
             }
             Operation::LocalInitialize { local, value } => {
                 self.locals.insert(*local, self.values.get(value).cloned());
+                if self.nulls.contains(value) {
+                    self.null_locals.insert(*local);
+                }
             }
             Operation::LocalAssign { local, value } => {
                 if let Some(Some(class)) = self.locals.get(local) {
-                    if self.values.get(value) != Some(class) {
+                    if !self.accepts(&class.name, class.nullable, *value) {
                         return Err(
                             "source-object local assignment must preserve its constructor class",
                         );
@@ -86,6 +143,9 @@ impl Origins {
             Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
                 if let Some(Some(class)) = self.locals.get(local) {
                     self.values.insert(*result, class.clone());
+                }
+                if self.null_locals.contains(local) {
+                    self.nulls.insert(*result);
                 }
             }
             _ => {}
@@ -103,7 +163,23 @@ impl Origins {
                     | Operation::LocalTake { result, .. } => *result,
                     _ => unreachable!(),
                 };
-                self.values.insert(result, class.name);
+                self.values.insert(
+                    result,
+                    Contract {
+                        name: class.name,
+                        nullable: false,
+                    },
+                );
+            } else if facts.contains(&crate::type_flow::Fact::NonNull(place)) {
+                let result = match operation {
+                    Operation::ParameterRead { result, .. }
+                    | Operation::LocalRead { result, .. }
+                    | Operation::LocalTake { result, .. } => *result,
+                    _ => unreachable!(),
+                };
+                if let Some(contract) = self.values.get_mut(&result) {
+                    contract.nullable = false;
+                }
             }
         }
         Ok(())
@@ -154,11 +230,26 @@ impl Origins {
 
     /// Return an exact source-class identity, if the value retains one.
     pub(crate) fn class(&self, value: ValueId) -> Option<&str> {
-        self.values.get(&value).map(String::as_str)
+        self.values
+            .get(&value)
+            .filter(|contract| !contract.nullable)
+            .map(|contract| contract.name.as_str())
     }
+    /// Check exact source assignability, admitting Null only for nullable storage.
+    pub(crate) fn accepts(&self, class: &str, nullable: bool, value: ValueId) -> bool {
+        (nullable && self.nulls.contains(&value))
+            || self
+                .values
+                .get(&value)
+                .is_some_and(|actual| actual.name == class && (nullable || !actual.nullable))
+    }
+
     /// Return the invariant source class established by local initialization.
     pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
-        self.locals.get(&local).and_then(|class| class.as_deref())
+        self.locals
+            .get(&local)
+            .and_then(|class| class.as_ref())
+            .map(|class| class.name.as_str())
     }
 }
 
@@ -176,5 +267,10 @@ pub(crate) fn class(
         crate::type_flow::update(&mut facts, &inputs, &located.operation);
         let _ = origins.observe(&located.operation, &facts);
     }
-    origins.class(value).map(str::to_owned)
+    // Source selection uses the possible class; final validation requires a
+    // non-null receiver and recomputes CFG facts from the complete body.
+    origins
+        .values
+        .get(&value)
+        .map(|contract| contract.name.clone())
 }

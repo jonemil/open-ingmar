@@ -2276,13 +2276,15 @@ pub(crate) fn build(
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    if ast
-        .parameter_types
-        .iter()
-        .flatten()
-        .any(|ty| matches!(ty, crate::ParameterType::SourceObject(_)))
-        || matches!(&ast.result_type, Some(crate::ReturnType::SourceObject(_)))
-    {
+    if ast.parameter_types.iter().flatten().any(|ty| {
+        matches!(
+            ty,
+            crate::ParameterType::SourceObject(_) | crate::ParameterType::NullableSourceObject(_)
+        )
+    }) || matches!(
+        &ast.result_type,
+        Some(crate::ReturnType::SourceObject(_) | crate::ReturnType::NullableSourceObject(_))
+    ) {
         return Err(Diagnostic::at(
             source,
             ast.body_span.start,

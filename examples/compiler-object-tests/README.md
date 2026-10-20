@@ -9,7 +9,9 @@ scalar/reference assertions, nullable targets, erasure/recovery, runtime identit
 and one-time operand effects. [source-types.mc](source-types.mc) checks cross-file
 source targets, guarded calls, exact return contracts, and Object/View/delegate
 projections. Its imported bare native names also cover signatures, casts,
-runtime tests, and container arguments.
+runtime tests, and container arguments. Nullable source parameters/results retain
+Object-, View-, and delegate-derived identities through calls and local copies;
+null checks permit source dispatch, and nullable locals can be reset to Null.
 
 From the repository root:
 

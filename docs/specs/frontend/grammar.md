@@ -64,8 +64,9 @@ no imports. These semantic type domains mean:
 - Named value: the scalar/alias, core reference, and interface domains, plus
   Lang.NumberFormat, Lang.Endian, opaque Lang.Dictionary, WatchUi.View,
   WatchUi.BehaviorDelegate, or an exact constructible source-class name.
-- Nullable: scalar/alias, core reference, and interface domains. Nullable exact
-  source-class, Array, and typed Dictionary references are unsupported.
+- Nullable: scalar/alias, core reference, interface, and exact constructible
+  source-class domains. Nullable Array and typed Dictionary references are
+  unsupported.
 - View, Array, Dictionary, Symbol, Method, and ByteArray productions use their
   resolved native identities.
 

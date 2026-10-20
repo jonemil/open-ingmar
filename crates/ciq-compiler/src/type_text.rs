@@ -221,6 +221,11 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("nullable-source(") && tag.ends_with(')') {
+        return SourceClass::parse(&tag[16..tag.len() - 1])
+            .map(ReturnType::NullableSourceObject)
+            .ok_or("invalid source reference contract");
+    }
     if tag.starts_with("source(") && tag.ends_with(')') {
         return SourceClass::parse(&tag[7..tag.len() - 1])
             .map(ReturnType::SourceObject)
@@ -255,6 +260,9 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
     }
     match call_result(tag) {
         Ok(ReturnType::SourceObject(class)) => Ok(ParameterType::SourceObject(class)),
+        Ok(ReturnType::NullableSourceObject(class)) => {
+            Ok(ParameterType::NullableSourceObject(class))
+        }
         Ok(ReturnType::TypedDictionary(ty)) => Ok(ParameterType::TypedDictionary(ty)),
         Ok(ReturnType::Array(element)) => Ok(ParameterType::Array(element)),
         Err(
@@ -300,6 +308,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
         ReturnType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ReturnType::TypedDictionary(ty) => Cow::Owned(ty.text()),
         ReturnType::SourceObject(class) => Cow::Owned(format!("source({class})")),
+        ReturnType::NullableSourceObject(class) => Cow::Owned(format!("nullable-source({class})")),
         ReturnType::Tuple(crate::TupleShape::OneView) => Cow::Borrowed("one-view"),
         ReturnType::Tuple(crate::TupleShape::ViewDelegate) => Cow::Borrowed("view-delegate"),
         ReturnType::Void => unreachable!("Void has no value-result tag"),
@@ -319,6 +328,9 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
         ParameterType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ParameterType::TypedDictionary(ty) => Cow::Owned(ty.text()),
         ParameterType::SourceObject(class) => Cow::Owned(format!("source({class})")),
+        ParameterType::NullableSourceObject(class) => {
+            Cow::Owned(format!("nullable-source({class})"))
+        }
         ParameterType::NullableDictionary => Cow::Borrowed("nullable-dictionary"),
         _ => Cow::Borrowed(
             NAMED
@@ -344,6 +356,7 @@ pub(super) fn join(tag: &str) -> Option<Type> {
     match call_result(tag).ok()? {
         ReturnType::Dictionary
         | ReturnType::SourceObject(_)
+        | ReturnType::NullableSourceObject(_)
         | ReturnType::Object(_)
         | ReturnType::Tuple(_)
         | ReturnType::Array(_)
@@ -392,6 +405,10 @@ mod tests {
             ("nullable-dictionary", [true, false, false, false, false]),
             (
                 "source(Counter@Lang.Object)",
+                [true, true, true, false, false],
+            ),
+            (
+                "nullable-source(Counter@Lang.Object)",
                 [true, true, true, false, false],
             ),
             ("number-array", [true, false, true, false, false]),

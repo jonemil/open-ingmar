@@ -39,6 +39,43 @@ class LocalDelegate extends WatchUi.BehaviorDelegate {
     function value() { return 3; }
 }
 
+module NullableSourceTests {
+    function pass(token as Probe or Null) as Probe or Null { return token; }
+    function choose(token as Probe or Null) as Probe or Null {
+        if (token == null) { return new Probe(); }
+        return null;
+    }
+    function read(token as Probe or Null) as Number {
+        var copy = NullableSourceTests.pass(token);
+        if (copy != null) { return copy.value(); }
+        return -1;
+    }
+    function view(token as LocalView or Null) as Number {
+        if (token != null) { return token.value(); }
+        return -2;
+    }
+    function delegate(token as LocalDelegate or Null) as Number {
+        if (token != null) { return token.value(); }
+        return -3;
+    }
+    function run() as Void {
+        System.println(NullableSourceTests.read(new Probe()));
+        System.println(NullableSourceTests.read(null));
+        System.println(NullableSourceTests.view(new LocalView()));
+        System.println(NullableSourceTests.view(null));
+        System.println(NullableSourceTests.delegate(new LocalDelegate()));
+        System.println(NullableSourceTests.delegate(null));
+        var token = NullableSourceTests.choose(null);
+        var copy = token;
+        if (copy != null) { System.println(copy.value()); }
+        copy = null;
+        System.println(copy == null);
+        token = new Probe();
+        while (token != null) { System.println(token.value()); token = null; }
+        System.println(NullableSourceTests.choose(new Probe()) == null);
+    }
+}
+
 module ImportedTypes {
     function number(value as Object) as Number { return value as Number + 1; }
     function array(values as Array<String>) as Number { return values.size(); }
