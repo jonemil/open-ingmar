@@ -265,6 +265,15 @@ global-void
 4
 9
 global-void
+root-module-calls
+180
+module-void
+0
+8
+10
+module-void
+6
+12
 4
 4
 true

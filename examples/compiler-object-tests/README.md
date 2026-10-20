@@ -57,6 +57,10 @@ dispatch, and declared member priority over local/parameter names.
 explicit `$.name` selection, owner priority, Void/discarded results, contextual
 Array arguments, and lazy effectful call arguments.
 
+`RootModuleCalls` and `RootModuleCaller` check `$.Module.member(...)` in
+module/instance bodies, including local/parameter qualifier conflicts,
+Void/discarded results, contextual Array arguments, and lazy effects.
+
 From the repository root:
 
 ```sh

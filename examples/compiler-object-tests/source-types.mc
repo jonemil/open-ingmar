@@ -88,6 +88,7 @@ module NullableSourceTests {
         CoreLists.run();
         CoreCalls.run();
         CoreGlobalCalls.run();
+        RootModuleCalls.run();
     }
 }
 
@@ -661,5 +662,28 @@ class GlobalCaller {
         System.println($.globalStep(3));
         System.println(globalTotal(3));
         globalNotify();
+    }
+}
+
+module RootModuleCalls {
+    function run() as Void {
+        System.println("root-module-calls");
+        var CoreCalls = 90;
+        System.println($.CoreCalls.step(CoreCalls));
+        $.CoreCalls.notify();
+        $.CoreCalls.step(0);
+        System.println($.CoreCalls.count([]));
+        System.println($.RootModuleCalls.shadow(4));
+        var token = new RootModuleCaller();
+        token.run(5);
+        System.println($.CoreCalls.step(true ? globalEffect(6) : globalEffect(99)));
+    }
+    function shadow(CoreCalls) as Number { return $.CoreCalls.step(CoreCalls); }
+}
+class RootModuleCaller {
+    function initialize() {}
+    function run(CoreCalls) as Void {
+        System.println($.CoreCalls.step(CoreCalls));
+        $.CoreCalls.notify();
     }
 }

@@ -400,9 +400,14 @@ fallback and is diagnosed as an unsupported callable value. Calls through
 lexical callable values and unresolved names remain unsupported.
 
 `$.member(arguments)` selects the global function explicitly, bypassing owner
-lookup and local/parameter names. Only direct global function calls are supported
-after `$`; global value reads, module paths, and root-object values remain
-outside this profile. Unqualified resolution requires collected unit
+lookup and local/parameter names. `$.Module.member(arguments)` selects a function
+in a top-level user module with the same protection from qualifier shadowing.
+Both forms retain ordinary call signatures, argument contexts, and effect order.
+The module form resolves to existing module-call IR; a root prefix is not needed
+after source names have been resolved. Instance methods cannot be selected as
+module functions through the root. Global value reads, nested module/native
+paths, root-object values, and class/static paths remain outside this profile.
+Unqualified resolution requires collected unit
 declarations; explicit calls in standalone IR/CODE retain external-callee
 obligations.
 

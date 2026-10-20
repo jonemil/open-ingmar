@@ -437,3 +437,60 @@ fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
         assert!(ciq_compiler::parse_ir(text).is_err(), "{text}");
     }
 }
+
+#[test]
+fn root_module_calls_bypass_lexical_qualifiers_and_keep_contracts() {
+    let module = r#"module M {
+        function step(n) { return n + 1; }
+        function notify() as Void { System.println(1); }
+        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+    }"#;
+    let callers = r#"
+        function run(M) { $.M.notify(); $.M.step(1); return $.M.step(M) + $.M.count([]); }
+        module Other { function run() { var M = 7; return $.M.step(M); } }
+        class C {
+            function initialize() {}
+            function run(M) { $.M.notify(); return $.M.step(M); }
+        }
+    "#;
+    let unit = compile_sources(&[module, callers]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let assembly = unit.lower();
+    assert_eq!(assembly, Program::parse(&assembly.to_text()).unwrap());
+    assert!(
+        assembly
+            .to_text()
+            .contains("getmv @__ciq_module_M @__ciq_member_step")
+    );
+    for caller in [
+        "function f(){return $.M.missing();}",
+        "function f(){return $.M.step();}",
+        "function f(){return $.M.step(true);}",
+        "function f(){return $.M.notify();}",
+        "function f(){return $.M;}",
+        "function f(){return $.M.step;}",
+        "function f(){return $.M.N.step(1);}",
+        "function f(){return $.M.();}",
+    ] {
+        assert!(compile_sources(&[module, caller]).is_err(), "{caller}");
+    }
+    assert!(
+        compile_sources(&[
+            "class C { function initialize(){} function step(){return 1;} } function f(){return $.C.step();}"
+        ])
+        .is_err()
+    );
+    for depth in [64, 65] {
+        let caller = format!(
+            "function f() {{ return {}1{}; }}",
+            "$.M.step(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let result = compile_sources(&[module, &caller]);
+        if depth == 64 {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().diagnostic.message.contains("nesting"));
+        }
+    }
+}

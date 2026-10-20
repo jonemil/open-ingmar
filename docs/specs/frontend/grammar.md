@@ -162,7 +162,8 @@ atom = literal | identifier | "self" | self-field
      | "(" expression ")" | array-literal | dictionary-literal | construction
 self-field = "self" "." identifier
 named-call = call-name "(" argument-list? ")"
-call-name = path | "self" "." identifier | "$" "." identifier
+call-name = path | "self" "." identifier | root-call-name
+root-call-name = "$" "." identifier ("." identifier)?
 call-expression = named-call | primary member-call | "(" call-expression ")"
 native-constant = path
 array-literal = "[" (argument-list ","?)? "]" "b"?

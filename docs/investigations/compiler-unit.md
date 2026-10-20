@@ -214,6 +214,22 @@ programs export/reconstruct without raw CODE/DATA fallback. Saved IR retains
 global ownership and checked result contracts; global lookup is not repeated
 relative to the caller when resuming IR.
 
+### Root-qualified modules
+
+An isolated 2026-10-20 probe with the same SDK/target/settings declares
+`Numbers.step(n)` returning `n+1`. A module function takes a parameter named
+`Numbers`, a class method declares local `Numbers=7`, and the AppBase entry
+declares local `Numbers=9`. Each calls `$.Numbers.step(Numbers)`.
+**Observed:** the SDK accepts these calls despite the qualifier conflicts.
+
+The [shared application's root-module groups][owner-example] exercise module
+and instance bodies, with Void and discarded calls, contextual empty Arrays,
+and lazy argument effects. SDK and generated output agree; both PRGs
+reconstruct without raw CODE/DATA fallback. Compiler unit tests also cover
+global bodies. Source and resumed IR retain module identity; the root prefix
+does not require a new VM instruction or an IR ownership marker beyond the
+existing explicit module name.
+
 [owner-example]: ../../examples/compiler-object-tests/README.md
 [arguments]: compiler-arguments.md
 [arguments-reproduction]: compiler-arguments.md#reproduction

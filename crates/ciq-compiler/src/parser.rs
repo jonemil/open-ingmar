@@ -284,7 +284,7 @@ pub(crate) enum ExpressionKind {
         member: String,
         arguments: Vec<Expression>,
     },
-    // Builder-resolved owner; lexical values cannot shadow this qualifier.
+    // Fixed owner identity; lexical values cannot shadow this qualifier.
     OwnerCall {
         module: String,
         member: String,
@@ -1653,18 +1653,36 @@ impl<'a> Parser<'a> {
         self.node(kind, span)
     }
 
-    /// Parse an explicit global function call outside recursive atom frames.
+    /// Parse a root-qualified function call outside recursive atom frames.
     fn global_atom(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
         self.expect(Kind::Punctuation('.'), "'.' after global root")?;
-        let member = self.identifier()?;
-        let Kind::Word(member) = member.kind else {
+        let first = self.identifier()?;
+        let Kind::Word(first) = first.kind else {
             unreachable!()
+        };
+        let (module, member) = if self.peek()? == Kind::Punctuation('.') {
+            self.token()?;
+            let member = self.identifier()?;
+            let Kind::Word(member) = member.kind else {
+                unreachable!()
+            };
+            (Some(first), member)
+        } else {
+            (None, first)
         };
         let (arguments, end) = self.call_arguments(start, depth)?;
         self.node(
-            ExpressionKind::GlobalCall {
-                member: member.into(),
-                arguments,
+            if let Some(module) = module {
+                ExpressionKind::OwnerCall {
+                    module: module.into(),
+                    member: member.into(),
+                    arguments,
+                }
+            } else {
+                ExpressionKind::GlobalCall {
+                    member: member.into(),
+                    arguments,
+                }
             },
             Span { start, end },
         )
@@ -2096,6 +2114,7 @@ impl<'a> Parser<'a> {
                     ExpressionKind::ValueCall { .. }
                         | ExpressionKind::UnqualifiedCall { .. }
                         | ExpressionKind::GlobalCall { .. }
+                        | ExpressionKind::OwnerCall { .. }
                 ) {
                     Statement::ValueCall {
                         expression,
