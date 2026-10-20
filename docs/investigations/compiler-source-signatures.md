@@ -56,8 +56,27 @@ This run is captured in `scratch/nullable-source-fields/check/`.
 
 **Limits:** these observations cover signatures, inferred locals, and nullable
 source fields, not container elements, conditional-value joins, inheritance, or
-nullable source casts. Missing-proof and unrelated-class rejections are our
+general unions. Missing-proof and unrelated-class rejections are our
 checking policy; they do not establish the SDK's full static-checking rules.
+
+## Nullable source assertions
+
+2026-10-20, SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`.
+`NullableSourceCasts` in the same specimen checks `value as Probe or Null`,
+Object-erased View/delegate recovery, Null operands, and chained assertions.
+
+**Experimentally observed:** SDK/generated runs match the expected group
+`1, true, true, 2, 3, source-cast-effect, 1, true, true, true, 1`.
+The effect marker appears once. A Number asserted as nullable Probe still tests
+as Number; an unrelated View retains its original class. The probe avoids
+dispatch through false assertions. Structured SDK/generated PRG reconstruction
+and saved-stage equivalence pass. Captures are under
+`scratch/nullable-source-casts/check/`, using the same reproduction procedure.
+
+**Interpretation:** nullable source assertions retain static identity and Null
+without runtime conversion or validation, consistent with the existing lexical
+cast contract. This does not establish source inheritance, general union casts,
+or recovery safety after an incorrect assertion.
 
 ## Reproduction
 

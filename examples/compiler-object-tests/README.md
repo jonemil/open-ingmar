@@ -14,6 +14,9 @@ Object-, View-, and delegate-derived identities through calls and local copies;
 null checks permit source dispatch, and nullable locals can be reset to Null.
 Nullable source fields default to Null and retain snapshot identity after the
 field is cleared, including View and delegate references.
+Nullable source casts recover these exact identities from opaque references,
+preserve Null and false assertions at runtime, and evaluate an effectful operand
+once.
 
 From the repository root:
 

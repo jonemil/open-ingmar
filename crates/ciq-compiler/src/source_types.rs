@@ -296,7 +296,18 @@ impl Types {
                         operators::binary_result(*kind, &candidate(left), &candidate(right))
                     }),
             ),
-            Operation::SourceCast { result, class, .. } => (*result, class.base.constructed_type()),
+            Operation::SourceCast {
+                result,
+                class,
+                nullable,
+                ..
+            } => (
+                *result,
+                class
+                    .base
+                    .constructed_type()
+                    .map(|ty| if *nullable { ty.with_null() } else { ty }),
+            ),
             Operation::Cast { result, target, .. } => (*result, Some(target.clone())),
             Operation::SourceInstanceOf { result, .. }
             | Operation::InstanceOf { result, .. }

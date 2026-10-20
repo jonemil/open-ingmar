@@ -174,10 +174,10 @@ names, enum aliases, Null, and dynamic class values are not runtime class tests.
 Cast targets accept Number, Long, Float, Double, Boolean, Char, String, Object,
 Symbol, Method, WeakReference, ByteArray, Numeric, Integer, Decimal,
 NumberFormat, Endian, opaque Dictionary, or exact constructible source classes.
-Nullable casts are limited to the scalar/core-reference and numeric-alias forms
-specified by [cast semantics](README.md#lexical-casts). Parameterized
-containers, general unions, interfaces, and nullable source-class casts are
-unsupported. Native spellings resolve through the import environment.
+Nullable casts accept the scalar/core-reference, numeric-alias, and exact source
+forms specified by [cast semantics](README.md#lexical-casts). Parameterized
+containers, general unions, and interfaces remain unsupported. Native spellings
+resolve through the import environment.
 
 ## Type syntax
 
@@ -227,8 +227,8 @@ field-named-type = nullable-lang-type | source-class-type
 class-target = runtime-class-type | source-class-type
 runtime-class-type = path
 cast-target = cast-named-type | nullable-cast-type "or" "Null"
-cast-named-type = nullable-cast-type | enum-type | dictionary-type | source-class-type
-nullable-cast-type = scalar-or-alias | core-reference
+cast-named-type = nullable-cast-type | enum-type | dictionary-type
+nullable-cast-type = scalar-or-alias | core-reference | source-class-type
 ```
 
 Paths resolve through the native-name environment; canonical `Toybox` paths need

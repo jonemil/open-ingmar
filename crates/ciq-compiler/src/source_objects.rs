@@ -3,6 +3,22 @@
 use crate::{LocalId, Operation, ValueId};
 use std::collections::BTreeMap;
 
+/// Read an unresolved bare source-class cast target and its optional Null arm.
+/// Native paths and other unions remain outside source declaration resolution.
+pub(crate) fn target_contract(ty: &crate::api::Type) -> Option<(&str, bool)> {
+    let (ty, nullable) = match ty {
+        crate::api::Type::Union(parts) => match parts.as_slice() {
+            [ty, crate::api::Type::Null] => (ty, true),
+            _ => return None,
+        },
+        ty => (ty, false),
+    };
+    match ty {
+        crate::api::Type::Named(name) if !name.contains('.') => Some((name, nullable)),
+        _ => None,
+    }
+}
+
 /// Exact class requirement carried by a value or invariant local storage.
 #[derive(Clone)]
 struct Contract {
@@ -46,12 +62,17 @@ impl Origins {
             }
         }
         match operation {
-            Operation::SourceCast { result, class, .. } => {
+            Operation::SourceCast {
+                result,
+                class,
+                nullable,
+                ..
+            } => {
                 self.values.insert(
                     *result,
                     Contract {
                         name: class.name.clone(),
-                        nullable: false,
+                        nullable: *nullable,
                     },
                 );
             }

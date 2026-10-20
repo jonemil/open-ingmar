@@ -43,7 +43,7 @@ fn scoped_proofs_do_not_escape_to_aliases_writes_or_unchecked_paths() {
         "function f(o as Toybox.Lang.Object) { var c=o as C; var erased=c as Toybox.Lang.Object; return erased.value(); }",
         "function f(o as Toybox.Lang.Object) { return (o as Missing).value(); }",
         "function f(o as Toybox.Lang.Object) as Toybox.Lang.Boolean { return o instanceof Missing; }",
-        "function f(o as Toybox.Lang.Object) { var c=o as C or Null; }",
+        "function f(o as Toybox.Lang.Object) { var c=o as C or Null; return c.value(); }",
         "function f(o as Toybox.Lang.Object) { var C=1; return (o as C).value(); }",
         "function f(o as Toybox.Lang.Object, C) as Toybox.Lang.Boolean { return o instanceof C; }",
     ] {

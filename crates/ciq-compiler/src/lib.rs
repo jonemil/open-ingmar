@@ -1224,6 +1224,8 @@ pub enum Operation {
         result: ValueId,
         operand: ValueId,
         class: SourceClass,
+        /// Retain Null in the asserted contract; later dispatch needs a proof.
+        nullable: bool,
     },
     /// Test a value against a unit-resolved source class's runtime class object.
     SourceInstanceOf {
@@ -1957,14 +1959,23 @@ impl Function {
                     result,
                     operand,
                     ref class,
+                    ..
                 }
                 | Operation::SourceInstanceOf {
                     result,
                     operand,
                     ref class,
                 } => {
-                    let projection =
-                        call_result_type(ReturnType::SourceObject(class.clone())).map_err(fail)?;
+                    let nullable = matches!(
+                        located.operation,
+                        Operation::SourceCast { nullable: true, .. }
+                    );
+                    let projection = call_result_type(if nullable {
+                        ReturnType::NullableSourceObject(class.clone())
+                    } else {
+                        ReturnType::SourceObject(class.clone())
+                    })
+                    .map_err(fail)?;
                     if class.base.constructed_type().is_none() {
                         return Err(fail(
                             "source type target requires a constructible class base",
@@ -3335,7 +3346,13 @@ impl Function {
                     result,
                     operand,
                     ref class,
-                } => format!(".cast %{} %{} source({class})", result.0, operand.0),
+                    nullable,
+                } => format!(
+                    ".cast %{} %{} {}source({class})",
+                    result.0,
+                    operand.0,
+                    if nullable { "nullable-" } else { "" }
+                ),
                 Operation::SourceInstanceOf {
                     result,
                     operand,

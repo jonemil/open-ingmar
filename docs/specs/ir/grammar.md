@@ -172,7 +172,8 @@ comparison-operation = comparison-directive value-id value-id value-id
 comparison-directive = ".equal" | ".not-equal" | ".less" | ".less-equal"
                      | ".greater" | ".greater-equal"
 predicate-operation = ".instanceof" value-id value-id (class-path | source-tag)
-                    | ".cast" value-id value-id (cast-tag | source-tag)
+                    | ".cast" value-id value-id
+                      (cast-tag | source-tag | nullable-source-tag)
                     | ".has" value-id value-id value-id
 sink-operation = (".discard" | ".println" | ".return") value-id
                | ".return-void"
@@ -322,9 +323,9 @@ cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```
 
-The contexts deliberately differ. Source casts use the separate non-null
-`source-tag` alternative in `predicate-operation`; a nullable source tag is not
-a cast target. Field-read result metadata further restricts `call-result-tag`
+The contexts deliberately differ. Source casts use `source-tag` or
+`nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the
+non-null source target tag. Field-read result metadata further restricts `call-result-tag`
 under [field validation](README.md#calls-and-objects).
 
 The spelling `integer` means Number; `integer-union` means Lang.Integer.
@@ -343,7 +344,8 @@ constructible references. AppBase is a declaration/base identity, not a
 constructible ordinary source-reference type. Nullable source tags are accepted
 in parameter, function/call result metadata, and source-reference field
 declarations/reads. Field declarations use the same source tags as signatures.
-Source tags are not join or native cast tags.
+Source tags are not join or native API cast tags; `.cast` resolves them as
+separate source assertion contracts.
 
 Array element tags use `number`, not `integer`, for Number; otherwise they use
 the shared scalar/core/interface/alias tags, nullable forms, or `view`. A

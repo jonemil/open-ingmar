@@ -410,12 +410,17 @@ pub(crate) fn parse_ir_context(
             None
         };
         let operation = if matches!(directive, Directive::Instanceof | Directive::Cast)
-            && fields[3].starts_with("source(")
-            && fields[3].ends_with(')')
+            && (fields[3].starts_with("source(") || fields[3].starts_with("nullable-source("))
         {
-            let tag = &fields[3];
-            let class = crate::SourceClass::parse(&tag[7..tag.len() - 1])
-                .ok_or_else(|| fail(*at, "invalid source type target"))?;
+            let (class, nullable) = match crate::type_text::call_result(&fields[3]) {
+                Ok(crate::ReturnType::SourceObject(class)) => (class, false),
+                Ok(crate::ReturnType::NullableSourceObject(class))
+                    if directive == Directive::Cast =>
+                {
+                    (class, true)
+                }
+                _ => return Err(fail(*at, "invalid source type target")),
+            };
             let result = parse_value(&fields[1])?;
             let operand = parse_value(&fields[2])?;
             if directive == Directive::Instanceof {
@@ -429,6 +434,7 @@ pub(crate) fn parse_ir_context(
                     result,
                     operand,
                     class,
+                    nullable,
                 }
             }
         } else {

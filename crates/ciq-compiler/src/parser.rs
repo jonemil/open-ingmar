@@ -1051,7 +1051,7 @@ impl<'a> Parser<'a> {
                 }
             }
             if crate::casts::type_tag(&target).is_none()
-                && !matches!(&target, crate::api::Type::Named(name) if !name.contains('.'))
+                && crate::source_objects::target_contract(&target).is_none()
             {
                 return Err(self.error(at, "unsupported lexical cast target"));
             }

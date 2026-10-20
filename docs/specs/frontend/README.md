@@ -701,8 +701,8 @@ local's proof; joins and loop backedges retain only shared facts.
 A local initialized from a nullable source value permits the same class or Null
 on assignment. A fresh copy inside a proven branch has a non-null contract.
 The original local keeps its nullable storage contract after a check or write.
-Nullable source Array elements, conditional-value joins, and lexical source
-casts remain unsupported; this does not introduce general source unions.
+Nullable source Array elements and conditional-value joins remain unsupported;
+this does not introduce general source unions.
 
 Module, self, and explicit object calls retain a declared source result,
 permitting subsequent source dispatch and same-class local assignment. Parameter
@@ -1283,10 +1283,16 @@ retains its exact class requirement. An opaque Object local narrowed only for a
 branch keeps its original assignment contract; a later write invalidates its
 proof.
 
+`value as ClassName or Null` asserts the same exact class while retaining Null
+in its contract. It preserves the operand, including Null or a falsely asserted
+runtime class. A local initialized from this assertion retains nullable source
+identity; check that local before dispatch, or use an explicit non-null source
+assertion. This is a caller assertion, not runtime validation or conversion.
+
 Class operands are named declarations, not dynamic class values. The bounded
 profile rejects local/parameter shadowing of a source target. Qualified/nested
-source names, source inheritance, AppBase targets, and nullable source-class
-assertions remain unsupported. Unit validation checks target identity and base;
+source names, source inheritance, and AppBase targets remain unsupported.
+Unit validation checks target identity and base;
 standalone function IR retains that declaration-resolution obligation.
 
 ### Lexical casts

@@ -124,3 +124,71 @@ fn saved_ir_cannot_forge_nullable_class_or_non_null_proofs() {
         );
     }
 }
+
+#[test]
+fn nullable_source_casts_preserve_identity_and_require_fresh_non_null_proofs() {
+    check(
+        r#"
+        function f(value as Toybox.Lang.Object or Null) as Token or Null {
+            var token = value as Token or Null;
+            var copy = token;
+            if (copy != null) { copy.value(); }
+            token = null;
+            return token;
+        }
+        function g(value as Toybox.Lang.Object) {
+            var token = value as Token or Null;
+            if (token instanceof Token) { return token.value(); }
+            return 0;
+        }
+        function h(value as Toybox.Lang.Object or Null) {
+            return ((value as Token or Null) as Token).value();
+        }
+    "#,
+    );
+    for source in [
+        "function f(value as Toybox.Lang.Object or Null) { return (value as Token or Null).value(); }",
+        "function f(value as Toybox.Lang.Object or Null) { var t = value as Token or Null; var c = t; if (t != null) { return c.value(); } return 0; }",
+        "function f(value as Toybox.Lang.Object or Null) { var t = value as Token or Null; if (t != null) { t = null; return t.value(); } return 0; }",
+        "function f(value as Toybox.Lang.Object) { var Token = 1; return value as Token or Null; }",
+        "function f(value as Toybox.Lang.Object) { return value as Missing or Null; }",
+        "class App extends Toybox.Application.AppBase { function f(value as Toybox.Lang.Object) { return value as App or Null; } }",
+        "function f(value as Toybox.Lang.Object) { return value as Null or Token; }",
+    ] {
+        assert!(compile_sources(&[source, CLASSES]).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn nullable_source_cast_has_no_machine_conversion_and_saved_targets_are_checked() {
+    let pass = check("function f(value as Token or Null) as Token or Null { return value; }");
+    let cast = check(
+        "function f(value as Token or Null) as Token or Null { return value as Token or Null; }",
+    );
+    assert_eq!(pass.lower().to_text(), cast.lower().to_text());
+    let text = cast.to_ir_text();
+    assert!(
+        text.lines().any(|line| line.starts_with(".cast ")
+            && line.contains("nullable-source(Token@Lang.Object)"))
+    );
+    for target in [
+        "nullable-source(Missing@Lang.Object)",
+        "nullable-source(Token@WatchUi.View)",
+        "nullable-source()",
+        "nullable-source(Token@Application.AppBase)",
+    ] {
+        let changed = text
+            .lines()
+            .map(|line| {
+                if line.starts_with(".cast ") {
+                    line.replace("nullable-source(Token@Lang.Object)", target)
+                } else {
+                    line.into()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(parse_unit_ir(&changed).is_err(), "{changed}");
+    }
+    assert!(parse_ir("ciq-ir\n.function f parameters=1 parameter-types=nullable-object\n.parameter %0 0\n.instanceof %1 %0 nullable-source(Token@Lang.Object)\n.return %1\n.end\n").is_err());
+}

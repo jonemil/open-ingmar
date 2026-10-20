@@ -15,7 +15,7 @@ Choose increments by dependency, following the
 **Object and structural contracts.** Establish member/signature proofs and API
 guards through explicit contracts. Extend source
 type targets alongside nested names and source superclass chains. Extend nullable
-source references to containers, conditional-value joins, and casts only with
+source references to containers and conditional-value joins only with
 their corresponding storage/refinement contracts.
 Keep lexical `as` assertions separate from runtime tests and conversions.
 Native Object-typed parameters should retain their declared domains; do not

@@ -329,28 +329,21 @@ fn emit_non_call(
         | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
         parser::ExpressionKind::Cast { operand, target } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
-            if let crate::api::Type::Named(name) = &target {
-                if !name.contains('.') {
-                    if locals.contains_key(name) || parameters.contains_key(name) {
-                        return Err(Diagnostic::at(
-                            source,
-                            expression.span.start,
-                            "source cast target is shadowed by a local or parameter",
-                        ));
-                    }
-                    Operation::SourceCast {
-                        result: ValueId(operations.len() as u32),
-                        operand,
-                        class: calls.source_class(name).map_err(|message| {
-                            Diagnostic::at(source, expression.span.start, message)
-                        })?,
-                    }
-                } else {
-                    Operation::Cast {
-                        result: ValueId(operations.len() as u32),
-                        operand,
-                        target,
-                    }
+            if let Some((name, nullable)) = crate::source_objects::target_contract(&target) {
+                if locals.contains_key(name) || parameters.contains_key(name) {
+                    return Err(Diagnostic::at(
+                        source,
+                        expression.span.start,
+                        "source cast target is shadowed by a local or parameter",
+                    ));
+                }
+                Operation::SourceCast {
+                    result: ValueId(operations.len() as u32),
+                    operand,
+                    class: calls.source_class(name).map_err(|message| {
+                        Diagnostic::at(source, expression.span.start, message)
+                    })?,
+                    nullable,
                 }
             } else {
                 Operation::Cast {

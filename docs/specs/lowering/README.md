@@ -155,8 +155,9 @@ source-class provenance does not pass through an opaque native assertion.
 Lowering a source test evaluates its operand, uses `getmv` with the unit's
 global class binding, and emits `isa`. The target is the emitted source class
 object, not its native base or a symbol ID alone. Source casts emit only their
-operand, like native lexical casts. No new VM instruction or DATA record is
-required.
+operand, like native lexical casts, including nullable source assertions. Null
+and falsely asserted runtime identities remain unchanged. No new VM instruction
+or DATA record is required.
 
 ### Scalar instruction selection
 

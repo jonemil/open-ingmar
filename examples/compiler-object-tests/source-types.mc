@@ -75,6 +75,7 @@ module NullableSourceTests {
         System.println(NullableSourceTests.choose(new Probe()) == null);
         var holder = new NullableSourceHolder();
         holder.run();
+        NullableSourceCasts.run();
     }
 }
 
@@ -128,5 +129,36 @@ class NullableSourceHolder {
         System.println(self.snapshot(new Probe()));
         var again = self.load();
         System.println(again == null);
+    }
+}
+
+module NullableSourceCasts {
+    function effect() as Object or Null {
+        System.println("source-cast-effect");
+        return new Probe();
+    }
+    function cast(value as Object or Null) as Probe or Null {
+        return value as Probe or Null;
+    }
+    function run() as Void {
+        var token = NullableSourceCasts.cast(new Probe());
+        if (token != null) { System.println(token.value()); }
+        token = NullableSourceCasts.cast(null);
+        System.println(token == null);
+        var direct = null as Probe or Null;
+        System.println(direct == null);
+        var view = new LocalView() as Object;
+        var recovered = view as LocalView or Null;
+        if (recovered != null) { System.println(recovered.value()); }
+        var delegate = new LocalDelegate() as Object;
+        var local = delegate as LocalDelegate or Null;
+        if (local != null) { System.println(local.value()); }
+        var effect = NullableSourceCasts.effect() as Probe or Null;
+        if (effect != null) { System.println(effect.value()); }
+        System.println((3 as Probe or Null) instanceof Number);
+        System.println((new LocalView() as Probe or Null) instanceof LocalView);
+        System.println(NullableSourceCasts.cast(null) == null or false);
+        var asserted = (new Probe() as Probe or Null) as Probe;
+        System.println(asserted.value());
     }
 }

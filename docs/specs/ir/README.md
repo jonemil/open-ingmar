@@ -656,6 +656,13 @@ proof. The [source contract](../frontend/README.md#source-class-targets) owns
 scope, assignability, and caller obligations. Class facts stay typed in memory;
 text is only the save/resume representation.
 
+`SourceCast` also carries a `nullable` flag. Its saved target is
+`nullable-source(ClassName@Native.Base)` when true, otherwise
+`source(ClassName@Native.Base)`. The nullable form retains the exact identity
+with a nullable native projection; source dispatch requires a non-null proof
+on a later read. It does not narrow other storage or change the runtime value.
+`SourceInstanceOf` has no nullable target flag: Null does not match the class.
+
 [VM lowering](../lowering/README.md#source-class-tests-and-casts).
 ### Arithmetic definitions
 
@@ -1561,7 +1568,8 @@ Function validation checks return provenance and non-null receivers; unit
 validation resolves declarations and checks call contracts against their bodies.
 Its runtime representation is the ordinary reference or Null, with no added
 conversion instruction. Nullable source tags also describe field declarations
-and reads; they are not join or cast tags.
+and reads, and selects a nullable source assertion in `.cast`. Source tags are
+not join tags or native API cast tags.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;
