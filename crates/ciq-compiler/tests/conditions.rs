@@ -852,6 +852,97 @@ fn control_flow_bodies_require_braces_as_in_the_sdk() {
 }
 
 #[test]
+fn switch_dispatch_and_control_targets_survive_saved_stages() {
+    for source in [
+        "function f(x){switch(x){case 0:return 41;case 1:return 42;default:return 43;}}",
+        "function f(x){var n=0;switch(x){case 0:n+=1;case 1:n+=2;break;default:n=9;}return n;}",
+        "function f(x){switch(x){default:return 13;case 0:return 41;case 1:return 42;}}",
+        "function f(x){switch(x){case 0:case 1:return 7;default:return 9;}}",
+        "function f(x){var n=9;switch(x){case 0:n=1;break;case 1:n=2;break;}return n;}",
+        "function f(x){switch(x){case 0:return 1;case 0:return 2;default:return 3;}}",
+        "function f(x){var n=0;switch(x){case 0:n+=1;default:n+=3;case 1:n+=2;}return n;}",
+        "function f(x){switch(x){case x+1:return 1;case x:return 2;default:return 3;}}",
+        "function f(x){var n=0;for(var i=0;i<4;i++){switch(i){case 1:continue;case 3:break;default:n+=i;}n+=10;}return n+x;}",
+        "function f(x){var n=0;switch(x){case 0:for(var i=0;i<3;i++){n++;break;}return n;default:return 9;}}",
+        "function f(x){var n=0;switch(x){case 0:switch(x){case 0:break;}n++;break;default:n=9;}return n;}",
+        "function f(x){switch(x){case 0:{var n=1;return n;}default:{var n=2;return n;}}}",
+    ] {
+        let function = compile(source).unwrap();
+        assert!(function.to_ir_text().contains("equals"));
+        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(
+            function.lower(),
+            ciq_assembly::Program::parse(&function.assembly()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn switches_retain_type_guards_and_unit_obligations() {
+    for source in [
+        "function f(n as Toybox.Lang.Object){switch(n){case instanceof Toybox.Lang.Number:return n+1;case instanceof Toybox.Lang.String:return n.length();default:return 0;}}",
+        "function f(n as Toybox.Lang.Number or Null){if(n==null){return 0;}switch(n){case 4:return 5;default:return n+1;}}",
+        "class Token{function initialize(){} function value(){return 1;}} function f(n as Toybox.Lang.Object){switch(n){case instanceof Token:return n.value();default:return 0;}}",
+        "module M {function selector(){return 1;} function test(n){return n;} function f(){switch(M.selector()){case M.test(0):return 1;case M.test(1):return 2;default:return 3;}}}",
+        "function f(x){switch(x){default:System.println(x);}}",
+    ] {
+        let unit = ciq_compiler::compile_sources(&[source]).unwrap();
+        assert_eq!(
+            unit,
+            ciq_compiler::parse_unit_ir(&unit.to_ir_text()).unwrap()
+        );
+        assert_eq!(
+            unit.lower(),
+            ciq_assembly::Program::parse(&unit.lower().to_text()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn switch_scope_initialization_labels_and_nesting_are_checked() {
+    for source in [
+        "function f(n as Toybox.Lang.Number or Null){switch(n){case null:return 0;default:return n+1;}}",
+        "function f(x){switch(x){}return 0;}",
+        "function f(x){switch(x){return 1;}return 0;}",
+        "function f(x){switch(x){default:return 1;default:return 2;}}",
+        "function f(x){switch(x){case 0:return 1;}}",
+        "function f(x){switch(x){case 0:continue;default:break;}return 0;}",
+        "function f(x){switch(x){case 0:break;return 1;}return 0;}",
+        "function f(x){switch(x){default:return 1;}return 2;}",
+        "function f(x){switch(x){case 0:var n=1;break;case 1:var n=2;break;}return 0;}",
+        "function f(x){switch(x){case 0:var n=1;case 1:return n;default:return 0;}}",
+        "function f(x){switch(x){case 0:var n=1;break;}return n;}",
+        "function f(){switch(missing){default:return 0;}}",
+        "function f(x){switch(x){case missing:return 1;default:return 0;}}",
+        "function f(x){switch(x){case instanceof Unknown:return 1;default:return 0;}}",
+        "function f(x){switch(x){case 0 return 1;default:return 0;}}",
+        "function f(n as Toybox.Lang.Object){switch(n){case instanceof Toybox.Lang.String:System.println(n);case instanceof Toybox.Lang.Number:return n+1;default:return 0;}}",
+    ] {
+        assert!(
+            ciq_compiler::compile_sources(&[source]).is_err(),
+            "{source}"
+        );
+    }
+    for depth in [64, 65] {
+        let source = format!(
+            "function f(x){{{}return 1;{}}}",
+            "switch(x){default:".repeat(depth),
+            "}".repeat(depth)
+        );
+        let result = compile(&source);
+        assert_eq!(result.is_ok(), depth == 64, "{result:?}");
+        if let Err(error) = result {
+            assert!(error.message.contains("nesting"));
+        }
+    }
+    let source = format!(
+        "function f(x){{switch(x){{{}default:return 0;}}}}",
+        "case 0:".repeat(1025)
+    );
+    assert!(compile(&source).unwrap_err().message.contains("1024"));
+}
+
+#[test]
 fn for_header_lists_execute_left_to_right_and_preserve_loop_control() {
     for (source, expected) in [
         (

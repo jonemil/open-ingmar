@@ -243,12 +243,10 @@ remain required core work. The frontend grammar records current acceptance.
   verify other forms rather than importing C semantics.
 - **Control flow and scopes:** preserve enclosing
   lexical refinements when checking unexecuted loop headers, without adding dead
-  edges to executable CFG proofs. Add `switch`, value
-  and `case instanceof` matching,
-  fall-through, default placement, case/block scopes, definite initialization,
-  and interaction with surrounding loops; keep switch and loop break targets
-  distinct. Keep return/reachability analysis
-  consistent across every construct.
+  edges to executable CFG proofs. Extend case operand, receiver, and type-proof
+  domains with broader types and lookup; retain direct-entry initialization and
+  shared facts through fall-through. Keep return/reachability analysis consistent
+  as truthiness and exception handling expand.
 - **Types and dynamic behavior:** support implicit Any, Void/Null distinctions,
   general unions, changing local types and joins, casts/refinement, and guarded
   member/API availability. Add typedefs, concrete class values, named/anonymous

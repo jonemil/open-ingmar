@@ -1498,7 +1498,7 @@ statement: a leading semicolon or a semicolon after an `if`/`while` body is
 rejected. Return/break/continue still require exactly one semicolon, as do `for`
 header separators. See the connected [statement grammar](grammar.md#statements).
 
-Conditions may appear between statements; combined conditional/loop/scoped-block
+Conditions may appear between statements; combined conditional/loop/switch/block
 nesting is limited to 64 levels, counting each `else if` link as a nested
 conditional. Empty arms are allowed. `else if` chains evaluate conditions in
 order until one is true, then execute only that arm; a final `else` is optional.
@@ -1680,9 +1680,11 @@ See the grouped `CoreLoops` specimen in
 
 ### Loop control
 
-`break;` exits the innermost enclosing loop. `continue;` jumps to the test for
+`break;` exits the innermost enclosing loop or switch. `continue;` skips switches
+and jumps to the enclosing loop's test for
 `while`/`do`, or to the whole update list and then test for `for`. Both require
-semicolons and an enclosing loop, including when nested within conditional arms. They terminate
+semicolons and an appropriate enclosing construct, including when nested within
+conditional arms. They terminate
 their current path and carry no expression values across the edge. A nested
 loop's controls never target an outer loop. Labeled controls are unsupported.
 
@@ -1696,6 +1698,48 @@ operations.
 
 See [loop-control.mc](../../../examples/compiler-probe/loop-control.mc) and
 [simulator evidence](../../investigations/compiler-loop-control.md).
+
+### Switch statements
+
+`switch (selector) { case value: statements ... default: statements }` selects
+an ordered case group and then executes bodies in textual order until a break,
+return, continue, or the end. The selector's value is fixed before case tests;
+case expressions execute in order only until the first match. At most one
+`default` may appear anywhere; it is selected only when all tests fail. Falling
+through a default group still executes its body. Consecutive labels share a
+fall-through destination, and duplicate value cases are accepted. Empty switches
+and statements before the first label are rejected. See the connected
+[switch grammar](grammar.md#statements).
+
+A value label tests `selector.equals(caseValue)`, using normal native or source
+method dispatch. This includes String content equality and user overrides;
+`==` is not substituted. Existing `equals` receiver/argument/result and API
+contracts apply. In particular, an unproved nullable receiver is rejected for
+value cases. A Null argument to `equals` is not a null-check proof. Type-only
+switches can instead use the supported `case instanceof ClassName` targets,
+with the existing runtime class and nullable-operand contracts.
+
+Case groups share one lexical switch scope. A declaration becomes visible to
+later textual groups but must be initialized on every path to a read, including
+direct case entry; fall-through alone cannot establish availability there.
+Duplicate declarations across groups are rejected. Explicit braced blocks
+isolate their locals and allow sibling name reuse. Switch locals do not escape
+the switch. Enclosing assignments persist after exit.
+
+Type cases use ordinary class-test proofs for a local/parameter selector.
+Fall-through joins retain only shared facts, and writes invalidate local proofs.
+A computed selector is saved privately; its proof does not narrow a separate
+source expression. The SDK specimen uses explicit casts because SDK 9.2.0 does
+not narrow its original Object parameter inside type-case bodies.
+
+`break` targets the nearest switch or loop; `continue` targets the nearest loop,
+including its update list for `for`. A switch without default has a possible
+unmatched exit. With a default and every path returning, no additional source
+return is required; exhaustive class coverage without default is not inferred.
+Case bodies and labels count toward the existing nesting/node/operation limits.
+Source, saved IR, and unit checking share initialization, signature, and effect
+checks. See [lowering](../lowering/README.md#switch-dispatch) and
+[SDK evidence](../../investigations/compiler-nested-conditions.md#switch-selection-and-dispatch).
 
 ### Void functions and statement calls
 

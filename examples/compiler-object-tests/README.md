@@ -36,6 +36,10 @@ without executing the infinite loops.
 `CoreDeclarations` groups ordered local declarations, heterogeneous initializer
 types, scope/name reuse, nullable copies, and repeated statement terminators.
 
+`CoreSwitch` covers value/type cases, String content and custom `equals`,
+ordered effectful tests, default placement, fall-through, scoped locals, and
+switch/loop controls. Nullable value selectors are guarded before dispatch.
+
 From the repository root:
 
 ```sh

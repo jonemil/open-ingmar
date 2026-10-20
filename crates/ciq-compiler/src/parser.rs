@@ -126,6 +126,11 @@ pub(crate) enum Statement {
     Continue {
         span: Span,
     },
+    Switch {
+        selector: Expression,
+        cases: Vec<SwitchCase>,
+        span: Span,
+    },
     Block {
         body: Vec<Statement>,
         span: Span,
@@ -172,6 +177,7 @@ impl Statement {
             | Self::If { span, .. }
             | Self::Break { span }
             | Self::Continue { span }
+            | Self::Switch { span, .. }
             | Self::Block { span, .. }
             | Self::While { span, .. }
             | Self::For { span, .. }
@@ -185,6 +191,18 @@ pub(crate) struct LocalDeclaration {
     pub name: String,
     pub initializer: Expression,
     pub span: Span,
+}
+
+pub(crate) struct SwitchCase {
+    pub pattern: CasePattern,
+    pub body: Vec<Statement>,
+    pub span: Span,
+}
+
+pub(crate) enum CasePattern {
+    Value(Expression),
+    Class(String),
+    Default,
 }
 
 pub(crate) struct Expression {
@@ -941,11 +959,7 @@ impl<'a> Parser<'a> {
         let left = self.arithmetic(depth)?;
         if self.peek()? == Kind::Word("instanceof") {
             self.token()?;
-            let at = self.offset;
-            let class = self.type_path()?;
-            if class.contains('.') && crate::native_bindings::lang_class(&class).is_none() {
-                return Err(self.error(at, "instanceof requires a supported runtime class"));
-            }
+            let class = self.runtime_class()?;
             let span = Span {
                 start: left.span.start,
                 end: self.offset,
@@ -2031,6 +2045,73 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a runtime class target shared by expressions and switch type cases.
+    fn runtime_class(&mut self) -> Result<String, Diagnostic> {
+        let at = self.offset;
+        let class = self.type_path()?;
+        if class.contains('.') && crate::native_bindings::lang_class(&class).is_none() {
+            return Err(self.error(at, "instanceof requires a supported runtime class"));
+        }
+        Ok(class)
+    }
+
+    /// Parse ordered case groups with shared switch scope. Labels end the
+    /// preceding sequence; nested blocks and switches consume their own labels.
+    fn switch_statement(&mut self, depth: usize) -> Result<Statement, Diagnostic> {
+        let start = self.expect(Kind::Word("switch"), "'switch'")?.span.start;
+        self.expect(Kind::Punctuation('('), "'('")?;
+        let selector = self.expression(0)?;
+        self.expect(Kind::Punctuation(')'), "')'")?;
+        self.expect(Kind::Punctuation('{'), "'{' after switch selector")?;
+        let mut cases = Vec::new();
+        let mut default = false;
+        while self.peek()? != Kind::Punctuation('}') {
+            let label = self.token()?;
+            self.expressions += 1;
+            if self.expressions > crate::MAX_OPERATIONS {
+                return Err(self.error(label.span.start, "function exceeds 1024-operation limit"));
+            }
+            let pattern = match label.kind {
+                Kind::Word("case") => {
+                    if self.peek()? == Kind::Word("instanceof") {
+                        self.token()?;
+                        CasePattern::Class(self.runtime_class()?)
+                    } else {
+                        CasePattern::Value(self.expression(0)?)
+                    }
+                }
+                Kind::Word("default") if !default => {
+                    default = true;
+                    CasePattern::Default
+                }
+                Kind::Word("default") => {
+                    return Err(self.error(label.span.start, "duplicate switch default"));
+                }
+                _ => return Err(self.error(label.span.start, "expected switch case or default")),
+            };
+            let colon = self.expect(Kind::Punctuation(':'), "':' after switch label")?;
+            let body = self.statements(depth + 1, true)?;
+            let end = body.last().map_or(colon.span.end, |s| s.span().end);
+            cases.push(SwitchCase {
+                pattern,
+                body,
+                span: Span {
+                    start: label.span.start,
+                    end,
+                },
+            });
+        }
+        let end = self.token()?.span.end;
+        if cases.is_empty() {
+            return Err(self.error(start, "switch requires at least one case or default"));
+        }
+        Ok(Statement::Switch {
+            selector,
+            cases,
+            span: Span { start, end },
+        })
+    }
+
     /// Parse an if/else chain, representing each else-if as a nested false arm.
     /// Each link counts toward the shared nesting and source-operation limits.
     fn if_statement(&mut self, depth: usize) -> Result<Statement, Diagnostic> {
@@ -2071,17 +2152,28 @@ impl<'a> Parser<'a> {
             .expect(Kind::Punctuation('{'), "'{' (blocks require braces)")?
             .span
             .start;
+        let statements = self.statements(depth, false)?;
+        let end = self.expect(Kind::Punctuation('}'), "'}'")?.span.end;
+        Ok((statements, Span { start, end }))
+    }
+
+    /// Parse statements until a closing brace or, within a switch, its next
+    /// label. All constructs share scope-independent nesting and node limits.
+    fn statements(&mut self, depth: usize, case_body: bool) -> Result<Vec<Statement>, Diagnostic> {
         if depth > 64 {
-            return Err(self.error(start, "control-flow nesting exceeds 64 levels"));
+            return Err(self.error(self.offset, "control-flow nesting exceeds 64 levels"));
         }
         let mut statements = Vec::new();
-        while self.peek()? != Kind::Punctuation('}') {
+        while self.peek()? != Kind::Punctuation('}')
+            && !(case_body && matches!(self.peek()?, Kind::Word("case" | "default")))
+        {
             let start = self.lookahead.as_ref().unwrap().span.start;
             // A print's call node or assignment target already counts its sink.
             if matches!(
                 self.peek()?,
-                Kind::Word("var" | "return" | "while" | "for" | "do" | "break" | "continue")
-                    | Kind::Punctuation('{')
+                Kind::Word(
+                    "var" | "return" | "while" | "for" | "do" | "break" | "continue" | "switch"
+                ) | Kind::Punctuation('{')
             ) {
                 self.expressions += 1;
             }
@@ -2179,12 +2271,12 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Kind::Word("if") => self.if_statement(depth)?,
+                Kind::Word("switch") => self.switch_statement(depth)?,
                 _ => self.simple_statement(Some(';'))?,
             };
             statements.push(statement);
         }
-        let end = self.token()?.span.end;
-        Ok((statements, Span { start, end }))
+        Ok(statements)
     }
 
     fn expect(&mut self, expected: Kind<'a>, description: &str) -> Result<Token<'a>, Diagnostic> {

@@ -226,6 +226,22 @@ Unexecuted update/post-test blocks remain in IR and assembly for semantic
 checking. An unreachable final exit has a void-return epilogue. These forms use
 existing jumps, branches, and returns; no flag local or new VM opcode is needed.
 
+### Switch dispatch
+
+Emit ordered `equals` calls or class tests and ordinary branches to case bodies.
+Each continuing body jumps to the next textual group; the final group exits.
+Default is the unmatched destination regardless of its textual position. Break
+uses the nearest structured exit; continue searches through switches for a loop
+latch. No new IR directive, flag local, or VM switch opcode is introduced.
+
+Local/parameter selectors are stable during dispatch under the supported
+no-closure/no-assignment-expression profile, so their storage can be read for
+each test. This preserves class proofs for source reads. Computed selectors are
+evaluated once into a private local before tests. A default-only switch still
+evaluates and discards its selector. The reference SDK keeps a selector on its
+stack with `dup`; our empty-stack control-flow edges use frame storage instead.
+Calls use the existing native/source method selection and argument staging.
+
 ### Expression joins
 
 Lower a value edge to its operand and `goto`; the parameter emits no load, copy,

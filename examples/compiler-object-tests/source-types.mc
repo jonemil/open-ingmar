@@ -82,6 +82,7 @@ module NullableSourceTests {
         CoreHeaders.run();
         CoreNonreturning.run();
         CoreDeclarations.run();
+        CoreSwitch.run();
     }
 }
 
@@ -384,5 +385,99 @@ module CoreDeclarations {
         System.println(copy);
         var guarded = "8".toNumber(), same = guarded;
         if (same != null) { System.println(same + 1); }
+    }
+}
+
+module CoreSwitch {
+    function custom() as Number {
+        switch (new SwitchToken()) { case 0: return 51; default: return 52; }
+    }
+    function numeric(value as Number) as Number {
+        switch (value) {
+            case 0: System.println("switch-zero");
+            case 1: return 11;
+            default: return 19;
+        }
+    }
+    function defaultFirst(value as Number) as Number {
+        switch (value) { default: return 29; case 0: return 20; }
+    }
+    function middle(value as Number) as Number {
+        var n = 0;
+        switch (value) {
+            case 0: n += 1;
+            default: n += 3;
+            case 1: n += 2;
+        }
+        return n;
+    }
+    function dynamic() as Number {
+        switch (CoreHeaders.mark("switch-selector", 2)) {
+            default: return 30;
+            case CoreHeaders.mark("switch-case-a", 1): return 31;
+            case CoreHeaders.mark("switch-case-b", 2): return 32;
+            case CoreHeaders.mark("bad-switch-case", 3): return 33;
+        }
+    }
+    function tag(value as Object) as Number {
+        switch (value) {
+            case instanceof Number: return (value as Number) + 1;
+            case instanceof String: return (value as String).length();
+            case instanceof Probe: return (value as Probe).value();
+            default: return 0;
+        }
+    }
+    function nullable(value as Number or Null) as Number {
+        if (value == null) { return 0; }
+        switch (value) { case 4: return 5; default: return value + 1; }
+    }
+    function word(value as String) as Number {
+        switch (value) { case "ab": return 1; default: return 0; }
+    }
+    function loops() as Number {
+        var sum = 0;
+        for (var i = 0; i < 4; i++) {
+            switch (i) { case 1: continue; case 3: break; default: sum += i; }
+            sum += 10;
+        }
+        return sum;
+    }
+    function scopes(value as Number) as Number {
+        switch (value) {
+            case 0: { var n = 40; return n; }
+            default: { var n = 41; return n; }
+        }
+    }
+    function run() as Void {
+        System.println(CoreSwitch.numeric(0));
+        System.println(CoreSwitch.numeric(1));
+        System.println(CoreSwitch.numeric(2));
+        System.println(CoreSwitch.defaultFirst(0));
+        System.println(CoreSwitch.defaultFirst(2));
+        System.println(CoreSwitch.middle(0));
+        System.println(CoreSwitch.middle(1));
+        System.println(CoreSwitch.middle(2));
+        System.println(CoreSwitch.dynamic());
+        System.println(CoreSwitch.tag(4));
+        System.println(CoreSwitch.tag("abc"));
+        System.println(CoreSwitch.tag(new Probe()));
+        System.println(CoreSwitch.tag(true));
+        System.println(CoreSwitch.nullable(null));
+        System.println(CoreSwitch.nullable(4));
+        System.println(CoreSwitch.word("ab"));
+        var prefix = "a";
+        System.println(CoreSwitch.word(prefix + "b"));
+        System.println(CoreSwitch.loops());
+        System.println(CoreSwitch.scopes(0));
+        System.println(CoreSwitch.scopes(1));
+        System.println(CoreSwitch.custom());
+    }
+}
+
+class SwitchToken {
+    function initialize() {}
+    function equals(other as Object or Null) as Boolean {
+        System.println("switch-equals");
+        return true;
     }
 }

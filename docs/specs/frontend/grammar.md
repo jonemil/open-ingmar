@@ -70,14 +70,14 @@ parameters, nested declarations, source superclass chains, or annotations.
 
 ## Statements
 
-`function` contains a `block`; conditionals and loops recursively contain blocks.
+`function` contains a `block`; conditionals, loops, and switches contain statements.
 Each leaf statement below names its expression or target rules.
 
 ```text
 block = "{" statement* "}"
 statement = local-statement | assignment-statement | update-statement
           | call-statement | return-statement | if-statement | while-statement
-          | for-statement | do-statement | scoped-statement
+          | for-statement | do-statement | switch-statement | scoped-statement
           | break-statement | continue-statement
 scoped-statement = block statement-terminator?
 local-statement = local-clause statement-terminator
@@ -99,6 +99,10 @@ initialized-local = identifier "=" expression
 assignment-clause = assign-target ("=" | compound-operator) expression
 update-clause = update-target ("++" | "--") | ("++" | "--") update-target
 do-statement = "do" block "while" "(" expression ")" statement-terminator
+switch-statement = "switch" "(" expression ")" "{" case-group+ "}"
+case-group = case-label statement*
+case-label = "case" expression ":" | "case" "instanceof" class-target ":"
+           | "default" ":"
 break-statement = "break" ";"
 continue-statement = "continue" ";"
 assign-target = identifier | "self" "." identifier | primary "[" expression "]"
@@ -115,7 +119,10 @@ include module/self/receiver calls, intrinsic System.println, and supported
 native base initialization. Conditional and loop bodies require braces; an
 `else` may instead introduce another `if-statement`. Standalone blocks are
 statements and introduce local scopes. Arbitrary expression statements,
-unbraced bodies, `switch`, and exception statements are unsupported. Extra
+unbraced bodies and exception statements are unsupported. A switch has at least
+one label and at most one `default`, at any position. Repeated value labels are
+permitted. Label boundaries end the preceding group's statement sequence; an
+explicit block within a group remains one scoped statement. Extra
 semicolons are terminators only where `statement-terminator` occurs; there is no
 standalone empty statement. Return/break/continue take exactly one semicolon,
 and `for` header separators remain single semicolons. An optional terminator

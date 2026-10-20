@@ -644,12 +644,12 @@ fn emit_call(
     })
 }
 
-/// Resolved destinations for the innermost source loop. Continue need not
-/// target the condition when another loop form supplies an update block.
+/// Resolved break destination and optional loop latch for a structured construct.
+/// Switches intercept break while continue searches for the enclosing loop.
 #[derive(Clone, Copy)]
-struct LoopTargets {
+struct ControlTargets {
     break_to: BlockId,
-    continue_to: BlockId,
+    continue_to: Option<BlockId>,
 }
 
 struct Builder<'a> {
@@ -662,7 +662,7 @@ struct Builder<'a> {
     next_local: u32,
     named_locals: std::collections::BTreeSet<LocalId>,
     next_block: u32,
-    loops: Vec<LoopTargets>,
+    controls: Vec<ControlTargets>,
 }
 
 impl Builder<'_> {
@@ -2006,12 +2006,12 @@ impl Builder<'_> {
             }
         }
         self.push(Operation::Block { block: body_block }, None);
-        self.loops.push(LoopTargets {
+        self.controls.push(ControlTargets {
             break_to: exit,
-            continue_to: latch,
+            continue_to: Some(latch),
         });
         let body_terminates = self.sequence(body, &mut locals.clone())?;
-        self.loops.pop();
+        self.controls.pop();
         if !body_terminates {
             self.push(Operation::Jump { target: latch }, Some(span));
         }
@@ -2039,9 +2039,110 @@ impl Builder<'_> {
         Ok(terminated)
     }
 
+    /// Lower ordered case tests and fall-through bodies. Local/parameter selectors
+    /// stay stable during dispatch; other expressions are evaluated into one
+    /// temporary before testing. Case bodies share one lexical switch scope.
+    fn switch_statement(
+        &mut self,
+        selector: parser::Expression,
+        cases: Vec<parser::SwitchCase>,
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<bool, Diagnostic> {
+        let exit = self.block_id();
+        let mut fallback = exit;
+        let mut tests = Vec::new();
+        let mut bodies = Vec::new();
+        for case in cases {
+            let block = self.block_id();
+            match case.pattern {
+                parser::CasePattern::Default => fallback = block,
+                pattern => tests.push((pattern, block, case.span)),
+            }
+            bodies.push((block, case.body, case.span));
+        }
+        if tests.is_empty() {
+            let value = self.value(selector, locals)?;
+            self.push(Operation::Discard { value }, Some(span));
+            self.push(Operation::Jump { target: fallback }, Some(span));
+        } else {
+            // Case expressions cannot rebind a caller's lexical local/parameter.
+            // Reuse that storage so instanceof facts apply to source reads.
+            let selector = if matches!(selector.kind, parser::ExpressionKind::Local(_)) {
+                selector
+            } else {
+                self.snapshot(selector, locals)?
+            };
+            let count = tests.len();
+            for (index, (pattern, target, case_span)) in tests.into_iter().enumerate() {
+                let operand = parser::Expression {
+                    kind: match &selector.kind {
+                        parser::ExpressionKind::Local(name) => {
+                            parser::ExpressionKind::Local(name.clone())
+                        }
+                        parser::ExpressionKind::Temporary(local) => {
+                            parser::ExpressionKind::Temporary(*local)
+                        }
+                        _ => unreachable!("switch selector is stable storage"),
+                    },
+                    span: selector.span,
+                };
+                let kind = match pattern {
+                    parser::CasePattern::Value(value) => parser::ExpressionKind::ValueCall {
+                        receiver: Box::new(operand),
+                        member: "equals".into(),
+                        arguments: vec![value],
+                    },
+                    parser::CasePattern::Class(class) => parser::ExpressionKind::InstanceOf {
+                        operand: Box::new(operand),
+                        class,
+                    },
+                    parser::CasePattern::Default => unreachable!("default has no test"),
+                };
+                let next = if index + 1 == count {
+                    fallback
+                } else {
+                    self.block_id()
+                };
+                self.condition(
+                    parser::Expression {
+                        kind,
+                        span: case_span,
+                    },
+                    locals,
+                    target,
+                    next,
+                )?;
+                if next != fallback {
+                    self.push(Operation::Block { block: next }, None);
+                }
+            }
+        }
+        self.controls.push(ControlTargets {
+            break_to: exit,
+            continue_to: None,
+        });
+        let mut scoped = locals.clone();
+        let mut bodies = bodies.into_iter().peekable();
+        while let Some((block, body, case_span)) = bodies.next() {
+            self.push(Operation::Block { block }, None);
+            if !self.sequence(body, &mut scoped)? {
+                let target = bodies.peek().map_or(exit, |next| next.0);
+                self.push(Operation::Jump { target }, Some(case_span));
+            }
+        }
+        self.controls.pop();
+        self.push(Operation::Block { block: exit }, None);
+        let terminated = !crate::control_flow::prefix(&self.operations).reachable(exit);
+        if terminated {
+            self.push(Operation::ReturnVoid, Some(span));
+        }
+        Ok(terminated)
+    }
+
     /// Emit a statement sequence and report whether all paths terminate the
     /// current block with return, break, or continue. Declarations stay scoped
-    /// to the sequence; loop jumps select the innermost test or exit.
+    /// to the supplied name map; controls select a loop latch or structured exit.
     fn sequence(
         &mut self,
         statements: Vec<parser::Statement>,
@@ -2259,20 +2360,28 @@ impl Builder<'_> {
                     terminated = true;
                 }
                 parser::Statement::Break { .. } | parser::Statement::Continue { .. } => {
-                    let targets = self.loops.last().ok_or_else(|| {
+                    let target = if matches!(statement, parser::Statement::Break { .. }) {
+                        self.controls.last().map(|targets| targets.break_to)
+                    } else {
+                        self.controls
+                            .iter()
+                            .rev()
+                            .find_map(|targets| targets.continue_to)
+                    }
+                    .ok_or_else(|| {
                         Diagnostic::at(
                             self.source,
                             span.start,
-                            "break/continue requires an enclosing loop",
+                            "break requires a loop or switch; continue requires a loop",
                         )
                     })?;
-                    let target = if matches!(statement, parser::Statement::Break { .. }) {
-                        targets.break_to
-                    } else {
-                        targets.continue_to
-                    };
                     self.push(Operation::Jump { target }, Some(span));
                     terminated = true;
+                }
+                parser::Statement::Switch {
+                    selector, cases, ..
+                } => {
+                    terminated = self.switch_statement(selector, cases, locals, span)?;
                 }
                 parser::Statement::While {
                     condition, body, ..
@@ -2481,7 +2590,7 @@ fn build_body(
         next_local: 0,
         named_locals: std::collections::BTreeSet::new(),
         next_block: 1,
-        loops: Vec::new(),
+        controls: Vec::new(),
     };
     // Logical value expressions add an entry block when they first need flow.
     if has_control_flow(&ast.statements) {
@@ -2642,6 +2751,7 @@ pub(crate) fn declared_signature(ast: &parser::ParsedFunction) -> CallSignature 
 fn has_control_flow(statements: &[parser::Statement]) -> bool {
     statements.iter().any(|s| match s {
         parser::Statement::If { .. }
+        | parser::Statement::Switch { .. }
         | parser::Statement::While { .. }
         | parser::Statement::For { .. }
         | parser::Statement::DoWhile { .. } => true,
@@ -2656,6 +2766,9 @@ fn has_value_return(statements: &[parser::Statement]) -> bool {
         parser::Statement::If {
             on_true, on_false, ..
         } => has_value_return(on_true) || has_value_return(on_false),
+        parser::Statement::Switch { cases, .. } => {
+            cases.iter().any(|case| has_value_return(&case.body))
+        }
         parser::Statement::Block { body, .. }
         | parser::Statement::While { body, .. }
         | parser::Statement::For { body, .. }

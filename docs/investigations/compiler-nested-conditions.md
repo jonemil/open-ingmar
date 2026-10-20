@@ -108,6 +108,59 @@ nesting boundaries. Plain scoped and unscoped bodies emit the same assembly;
 scoping introduces no VM operation. These tests do not establish unrestricted
 Monkey C shadowing or unbraced-body support.
 
+## Switch selection and dispatch
+
+2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Garmin's
+[language reference][switch-guide] describes ordered cases, optional default,
+fall-through, and `case instanceof`. Authored acceptance probes establish:
+
+- Dynamic value expressions, duplicate value labels, and default before a case
+  compile. An empty switch and duplicate default are rejected.
+- Case groups share a scope: redeclaring the same bare local in another group
+  is rejected. A read bypassing an earlier initializer fails with a possibly
+  uninitialized diagnostic. Switch locals are invisible after the switch.
+- `continue` within a switch nested in `for` compiles and targets the loop.
+
+Complete probe inputs/logs are in `scratch/compiler-switch/`. Copy a named
+`.mc` into its `source/app.mc` and run
+`sh scripts/build-example.sh scratch/compiler-switch` to rebuild it.
+
+The grouped `CoreSwitch` specimen in
+[source-types.mc](../../examples/compiler-object-tests/source-types.mc) compares
+complete SDK/generated applications. Markers establish selector evaluation
+before ordered case effects, skipping later tests after a match, and selection
+of a matching case after an earlier textual default. Numeric outputs establish
+fall-through across default and correct loop/switch break/continue targets.
+Computed and literal equal-content Strings match the same value case. A source
+`equals` override prints `switch-equals` and selects its case, confirming dynamic
+dispatch rather than identity comparison.
+
+An isolated failure within the initial specimen used
+`switch (value) { case null: return 0; default: return value + 1; }` with
+`value as Number or Null` and a Null argument. The SDK app crashed with
+Unexpected Type Error at `nullable()`; retained output is under
+`scratch/core-switch/ready/runtime/sdk/`. Structured SDK CODE shows selector
+duplication, `getsv @equals`, `invokem`, and a conditional branch, explaining why
+Null cannot serve as a value-case receiver. The corrected tracked specimen
+guards Null before switching. Our ordinary method checks reject an unproved
+nullable receiver for value cases instead of generating that failure.
+
+SDK 9.2.0 also rejects arithmetic/member access on its original Object parameter
+inside type-case bodies without casts; explicit casts let the reference app
+compile. Our existing branch proofs accept safe local/parameter type-case reads
+and reject refinements lost through fall-through joins.
+
+Both final applications match checked-in expected output. Source/saved-IR/
+assembly agree, and SDK/generated PRGs pass structured reconstruction without
+raw CODE/DATA fallback plus own-key signing checks. Use the shared
+[console checker](../../scripts/README.md#console-specimen-check) selecting
+`compiler-object-tests`; final artifacts are `scratch/core-switch/equals/`.
+Focused checks cover declaration availability, unmatched return paths, nested
+switch/loop targets, shared and explicitly braced scopes, unknown targets,
+malformed labels, and nesting/node limits.
+
+[switch-guide]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/#switch-casestatements
+
 ## Required body braces
 
 2026-10-20, SDK 9.2.0, `fr265`, `-O0`. Independent authored probes put
