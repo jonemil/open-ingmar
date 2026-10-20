@@ -57,6 +57,13 @@ link there. Shared source/IR validation contracts should be defined once, with
 representation-specific syntax and lowering documented where they belong. Keep
 provisional formats current-only; Git history retains superseded designs.
 
+Write grammars from document entry points down to declarations, statements or
+records, expressions/operands, and lexical leaves. Define every referenced rule
+or explicitly identify its lexical/semantic domain. When splitting grammar
+blocks across sections, name the parent production that reaches each block.
+Examples and directive tables supplement these connected rules; they do not
+replace missing productions. Keep syntax distinct from validation restrictions.
+
 Specs describe supported profiles, not complete Garmin compatibility. Preserve
 unknowns and distinguish intended requirements from experimentally established
 rules. API/SDK/device versions scope compatibility evidence, not our local

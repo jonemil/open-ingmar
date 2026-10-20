@@ -4,11 +4,28 @@ This grammar describes the accepted frontend profile. `?`, `*`, and `+` mean
 optional, repeated, and one-or-more; quoted text denotes source tokens. Named
 semantic domains below restrict productions: parsing a path does not authorize
 arbitrary native calls or types. Examples in the semantic pages illustrate these
-productions rather than defining additional syntax.
+productions rather than defining additional syntax. `? description ?` marks an
+explicit lexical character class. Whitespace between grammar symbols is
+concatenation, not a required source space; the lexer separates source tokens.
+
+Read from the entry rule through these sections:
+
+- [Declarations](#declarations): `source-input` → files → declarations/functions.
+- [Statements](#statements): function `block` → individual statement forms.
+- [Expressions](#expressions-and-precedence): statement operands → precedence
+  levels → calls, indexing, construction, and literals.
+- [Types](#type-syntax): parameter/result/field annotations and expression targets.
+- [Lexical rules](#lexical-rules-and-literals): paths, identifiers, and literals.
+
+Every unquoted rule name has a production below. A production such as
+`native-base = path` defines its spelling; the accompanying domain restriction
+specifies which resolved names it admits. Grammar acceptance alone does not
+establish availability, assignability, or executable API support.
 
 ## Declarations
 
 ```text
+source-input = single-file | unit-file
 single-file = native-declaration* function
 unit-file = native-declaration* declaration*
 declaration = function | module | class
@@ -17,82 +34,62 @@ class = "class" identifier ("extends" native-base)?
         "{" native-declaration* (field | function)+ "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
-native-module = "Toybox.Application" | "Toybox.System" | "Toybox.WatchUi"
-              | "Toybox.Graphics" | "Toybox.Lang"
+native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
+                             | "Graphics" | "Lang")
 function = "function" identifier "(" parameter-list? ")"
            ("as" result-type)? block
 parameter-list = parameter ("," parameter)*
 parameter = identifier ("as" value-type)?
 field = "var" identifier "=" inferred-field-default ";"
       | "var" identifier "as" field-type ("=" field-default)? ";"
-inferred-field-default = signed-number-literal | ":" identifier
+inferred-field-default = number-literal | "-" number-literal | symbol-literal
                        | "(" inferred-field-default ")"
+field-default = "null" | symbol-literal | "(" field-default ")"
 ```
+
+The compile mode selects `single-file` (one function) or `unit-file` (one file
+of a multi-file unit); the alternatives are not an automatic mode detector.
+Both consume the complete input. `function` is shared by global functions,
+module functions, and class methods. Its `block` expands in [Statements](#statements).
+`native-base`, `field-type`, and `result-type` expand in [Type syntax](#type-syntax).
 
 A compilation unit requires 1..=256 function/method bodies across its files.
 Classes require at least one method. Native bases are resolved Object, AppBase,
 View, and BehaviorDelegate identities; omission selects Object. Field types and
 permitted defaults are the [storage contracts](README.md#instance-fields).
+`field-default` is further restricted by its type: Symbol permits a literal
+Symbol or, when nullable, Null, also parenthesized. Other nullable
+scalar/core/interface/alias fields permit only literal `null`, without
+parentheses. Non-null fields have no initializer
+here except Symbol. Source-reference and container fields have no declaration
+default. Inferred fields accept only the Number/Symbol forms shown above.
 Imports, owner collisions, module reopening, and file-local bindings follow
 [declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
 parameters, nested declarations, source superclass chains, or annotations.
 
-## Type syntax
-
-```text
-value-type = named-value-type | nullable-type "or" "Null"
-           | array-type "<" array-element ">"
-           | dictionary-type "<" dictionary-key "," dictionary-value ">"
-result-type = value-type | "Void"
-array-element = scalar-or-alias | core-reference | interface-type
-              | (scalar-or-alias | core-reference | interface-type) "or" "Null"
-              | view-type
-dictionary-key = scalar-or-alias | symbol-type | method-type | bytearray-type
-               | interface-type
-dictionary-value = scalar-or-alias | core-reference | interface-type
-                 | (scalar-or-alias | core-reference | interface-type) "or" "Null"
-path = identifier ("." identifier)*
-```
-
-Paths resolve through the native-name environment; canonical `Toybox` paths need
-no imports. These semantic type domains mean:
-
-- Scalar/alias: Number, Long, Float, Double, String, Boolean, Char, Numeric,
-  Integer, Decimal in Lang.
-- Core reference: Lang.Object, Symbol, Method, WeakReference, ByteArray.
-- Interface: Lang.Comparable or Lang.Comparator.
-- Named value: the scalar/alias, core reference, and interface domains, plus
-  Lang.NumberFormat, Lang.Endian, opaque Lang.Dictionary, WatchUi.View,
-  WatchUi.BehaviorDelegate, or an exact constructible source-class name.
-- Nullable: scalar/alias, core reference, interface, and exact constructible
-  source-class domains. Nullable Array and typed Dictionary references are
-  unsupported.
-- View, Array, Dictionary, Symbol, Method, and ByteArray productions use their
-  resolved native identities.
-
-Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
-source value/result contract. Nullable opaque Dictionary is a lifecycle IR
-contract; it is not an ordinary source annotation. Fields have narrower,
-independently checked [type/default domains](README.md#instance-fields). Nested
-type parameters, arbitrary unions, reversed `Null or T`, bare Null, and
-parenthesized type unions are unsupported. Generic containers are invariant; see
-[type rules](README.md#types-and-nullability) and the container semantic pages.
-
 ## Statements
+
+`function` contains a `block`; `if-statement` and `while-statement` recursively
+contain blocks. Each leaf statement below names its expression or target rules.
 
 ```text
 block = "{" statement* "}"
-statement = "var" identifier "=" expression ";"
-          | assign-target "=" expression ";"
-          | assign-target compound-operator expression ";"
-          | update-target ("++" | "--") ";"
-          | ("++" | "--") update-target ";"
-          | call-expression ";"
-          | "return" expression? ";"
-          | "if" "(" expression ")" block ("else" block)?
-          | "while" "(" expression ")" block
-          | "break" ";" | "continue" ";"
+statement = local-statement | assignment-statement | update-statement
+          | call-statement | return-statement | if-statement | while-statement
+          | break-statement | continue-statement
+local-statement = "var" identifier "=" expression ";"
+assignment-statement = assign-target "=" expression ";"
+                     | assign-target compound-operator expression ";"
+update-statement = update-target ("++" | "--") ";"
+                 | ("++" | "--") update-target ";"
+call-statement = call-expression ";"
+return-statement = "return" expression? ";"
+if-statement = "if" "(" expression ")" block ("else" block)?
+while-statement = "while" "(" expression ")" block
+break-statement = "break" ";"
+continue-statement = "continue" ";"
 assign-target = identifier | "self" "." identifier | primary "[" expression "]"
+              | "(" assign-target ")"
 update-target = assign-target
 compound-operator = "+=" | "-=" | "*=" | "/=" | "%="
                   | "&=" | "|=" | "^=" | "<<=" | ">>="
@@ -110,6 +107,11 @@ loop targets, and evaluation order.
 
 ## Expressions and precedence
 
+Statements reach this section through `expression`, `assign-target`, or
+`call-expression`. `expression` descends from weakest precedence to `primary`.
+`primary` then expands atoms and postfixes; grouping and arguments recurse into
+`expression`. Types used by tests/casts expand in [Type syntax](#type-syntax).
+
 ```text
 expression = logical-or ("?" expression ":" expression)?
 logical-or = logical-and (("||" | "or") logical-and)*
@@ -120,21 +122,34 @@ arithmetic = product (("+" | "-" | "|" | "^") product)*
 product = cast (("*" | "/" | "%" | "&" | "<<" | ">>") cast)*
 cast = unary ("as" cast-target)*
 unary = "!" unary | "~" unary | ("+" | "-") primary | primary
-primary = atom ("." identifier "(" argument-list? ")"
-               | "[" expression "]")*
-atom = literal | identifier | "self" | "self" "." identifier
-     | path "(" argument-list? ")" | native-constant
+primary = atom postfix*
+postfix = member-call | index-access
+member-call = "." identifier "(" argument-list? ")"
+index-access = "[" expression "]"
+atom = literal | identifier | "self" | self-field
+     | named-call | native-constant
      | "(" expression ")" | array-literal | dictionary-literal | construction
+self-field = "self" "." identifier
+named-call = call-name "(" argument-list? ")"
+call-name = path | "self" "." identifier
+call-expression = named-call | primary member-call | "(" call-expression ")"
+native-constant = path
 array-literal = "[" argument-list? "]" "b"?
 dictionary-literal = "{" (expression "=>" expression
                            ("," expression "=>" expression)*)? "}"
 construction = "new" path "(" argument-list? ")"
              | "new" "[" expression "]" "b"?
 argument-list = expression ("," expression)*
-literal = signed-number-literal | long-literal | float-literal | double-literal
-        | string-literal | char-literal | ":" identifier
+literal = number-literal | long-literal | float-literal | double-literal
+        | string-literal | char-literal | symbol-literal
         | "true" | "false" | "null"
 ```
+
+`call-expression` selects a call as the final expression, including parenthesized
+calls. An indexed result alone is not a call statement. `native-constant` is a
+qualified path resolving to a supported API constant, not arbitrary member
+access. Bare calls resolve only through the supported implicit-self lookup;
+module/native/self calls and native base initializers follow the call contracts.
 
 The levels above bind from weakest to strongest. Binary groups associate left;
 conditional arms associate right. Comparison/test operators do not chain. `1 + 2
@@ -163,7 +178,123 @@ specified by [cast semantics](README.md#lexical-casts). Parameterized
 containers, general unions, interfaces, and nullable source-class casts are
 unsupported. Native spellings resolve through the import environment.
 
+## Type syntax
+
+Referenced by declaration `parameter`, `function`, and `field`, and by
+expression `construction`, `comparison`, and `cast`. The `*-type` and target
+rules below define paths; the domains following them restrict name resolution.
+
+```text
+value-type = named-value-type | nullable-type "or" "Null"
+           | array-type "<" array-element ">"
+           | dictionary-type "<" dictionary-key "," dictionary-value ">"
+result-type = value-type | "Void"
+array-element = scalar-or-alias | core-reference | interface-type
+              | (scalar-or-alias | core-reference | interface-type) "or" "Null"
+              | view-type
+dictionary-key = scalar-or-alias | symbol-type | method-type | bytearray-type
+               | interface-type
+dictionary-value = scalar-or-alias | core-reference | interface-type
+                 | (scalar-or-alias | core-reference | interface-type) "or" "Null"
+named-value-type = scalar-or-alias | core-reference | interface-type | enum-type
+                 | dictionary-type | view-type | delegate-type | source-class-type
+nullable-type = nullable-lang-type | source-class-type
+nullable-lang-type = scalar-or-alias | core-reference | interface-type
+scalar-or-alias = scalar-type | numeric-alias-type
+scalar-type = path
+numeric-alias-type = path
+core-reference = object-type | symbol-type | method-type | weakref-type
+               | bytearray-type
+interface-type = path
+enum-type = path
+object-type = path
+view-type = path
+delegate-type = path
+appbase-type = path
+source-class-type = identifier
+symbol-type = path
+method-type = path
+weakref-type = path
+bytearray-type = path
+array-type = path
+dictionary-type = path
+native-base = object-type | appbase-type | view-type | delegate-type
+field-type = field-named-type | nullable-lang-type "or" "Null"
+           | array-type "<" array-element ">"
+           | dictionary-type "<" dictionary-key "," dictionary-value ">"
+field-named-type = nullable-lang-type | source-class-type
+class-target = runtime-class-type | source-class-type
+runtime-class-type = path
+cast-target = cast-named-type | nullable-cast-type "or" "Null"
+cast-named-type = nullable-cast-type | enum-type | dictionary-type | source-class-type
+nullable-cast-type = scalar-or-alias | core-reference
+```
+
+Paths resolve through the native-name environment; canonical `Toybox` paths need
+no imports. These semantic type domains mean:
+
+- Scalar: Number, Long, Float, Double, String, Boolean, or Char in Lang.
+  Numeric alias: Lang.Numeric, Lang.Integer, or Lang.Decimal.
+- Core reference: Lang.Object, Symbol, Method, WeakReference, ByteArray.
+- Interface: Lang.Comparable or Lang.Comparator.
+- Enum: Lang.NumberFormat or Lang.Endian.
+- Object, View, delegate, and AppBase type leaves resolve to Lang.Object,
+  WatchUi.View, WatchUi.BehaviorDelegate, and Application.AppBase respectively.
+- Source class: an exact constructible source-class name from this unit.
+- Dictionary type by itself denotes an opaque Lang.Dictionary; its parameterized
+  form specifies the bounded key/value contracts.
+- Nullable: scalar/alias, core reference, interface, and exact constructible
+  source-class domains. Nullable Array and typed Dictionary references are
+  unsupported.
+- View, Array, Dictionary, Symbol, Method, and ByteArray productions use their
+  resolved native identities.
+- Native base: Object, AppBase, View, or BehaviorDelegate, as above.
+- Field named type: scalar/alias, core reference, interface, or exact
+  constructible source class. Only scalar/alias/core/interface fields may be
+  nullable. `field-default` restrictions are specified under Declarations.
+- Class target and cast target: the domains immediately below the expression
+  grammar; a parsed path does not admit arbitrary type tests/assertions.
+
+Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
+source value/result contract. Nullable opaque Dictionary is a lifecycle IR
+contract; it is not an ordinary source annotation. Fields have narrower,
+independently checked [type/default domains](README.md#instance-fields). Nested
+type parameters, arbitrary unions, reversed `Null or T`, bare Null, and
+parenthesized type unions are unsupported. Generic containers are invariant; see
+[type rules](README.md#types-and-nullability) and the container semantic pages.
+
 ## Lexical rules and literals
+
+These are the leaves used by declarations, types, and expressions. Numeric
+suffixes, decimal points, exponent signs, and escape sequences are contiguous
+within one token. The grammar's character classes exclude the delimiters listed
+in their descriptions.
+
+```text
+path = identifier ("." identifier)*
+identifier = (ascii-letter | "_") (ascii-letter | digit | "_")*
+ascii-letter = ? ASCII A-Z or a-z ?
+digit = ? ASCII 0-9 ?
+digits = digit+
+number-literal = digits
+long-literal = digits ("l" | "L")
+float-literal = real-magnitude
+double-literal = (digits | real-magnitude) "d"
+real-magnitude = digits "." digits exponent? | digits exponent
+exponent = ("e" | "E") ("+" | "-")? digits
+symbol-literal = ":" identifier
+string-literal = '"' (string-character | string-escape)* '"'
+string-character = ? Unicode scalar except double quote, backslash, CR, LF ?
+backslash = ? U+005C ?
+string-escape = backslash ("n" | "r" | "t" | '"' | backslash)
+char-literal = "'" (char-character | char-escape) "'"
+char-character = ? BMP Unicode scalar except single quote, backslash, CR, LF ?
+char-escape = backslash ("n" | "r" | "t" | "'" | backslash)
+```
+
+Minus is a unary source token, not part of the unsigned `number-literal`,
+`long-literal`, `float-literal`, or `double-literal` token. The unary rules and
+numeric range checks also admit the minimum signed Number/Long values.
 
 Identifiers use ASCII letters/underscore followed by ASCII letters, digits, or
 underscore. The following words cannot be ordinary identifiers, including words

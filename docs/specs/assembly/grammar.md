@@ -1,15 +1,49 @@
 # Assembly text grammar
 
+Assembly has several entry points, selected by the command or section encoding;
+there is no automatic detector that mixes section languages. This page defines
+all of them and their shared declarations.
+
+Notation: `|` selects alternatives; `?`, `*`, and `+` mean optional, repeated,
+and one-or-more. Quotes denote literal text; `? description ?` is an explicit
+lexical character class. Each `newline` ends one logical record. Blank/comment
+lines may occur between records; the final record may end at EOF. Declaration
+blocks include their header/body/end records explicitly.
+
+Read top down from [Assembly syntax](#assembly-syntax), then follow the named
+record rule to its section. Each section names the parent rule that reaches it.
+[Lexical leaves](#lexical-leaves) define identifiers, numeric fields, quoting,
+and record separators. All unquoted rule names are defined on this page.
+
 ## Assembly syntax
 
 ```text
-code-source = (label | instruction | inline-declaration | blank-or-comment)*
-label = identifier ":"
+assembly-source = code-source | data-source | symbol-source | debug-source
+                | exception-source | line-source
+code-source = code-record*
+code-record = label newline | instruction newline | inline-declaration
+inline-declaration = symbol-declaration newline | string-declaration newline
+                   | array-declaration | bytearray-declaration
+                   | dictionary-declaration
+data-source = data-record*
+data-record = string-declaration newline | opaque-span newline
+            | class-declaration | array-declaration | bytearray-declaration
+            | dictionary-declaration
+symbol-source = (symbol-declaration newline)*
+debug-source = (string-declaration newline)*
+exception-source = (exception-record newline)*
+line-source = (line-record newline)*
 instruction = mnemonic operand*
-operand = "0x" hex-digits | "@" symbol-alias | "&" literal-alias
-        | "code:" label-name
-inline-declaration = symbol | string | array | bytearray | dictionary
+operand = hex-integer | symbol-reference | literal-reference | code-reference
+symbol-reference = "@" identifier
+literal-reference = "&" identifier
+code-reference = "code:" identifier
 ```
+
+`code-source` is `.mcasm` input. DATA, SYMBOLS, DEBUG, EXCEPTIONS, and
+LINE_NUMBERS section sources select the other entries. Inline DATA declarations
+are a subset of `data-source`: classes and opaque spans are not inline CODE
+items. The prefixes `@`, `&`, and `code:` form a single operand field.
 
 One record occupies one line; declaration blocks have their explicit end
 records. Operand count/kind/width follows the [opcode
@@ -48,6 +82,12 @@ it is not a Monkey C compiler.
 
 ## Labels
 
+Reached from `code-record`; labels are not DATA or metadata declarations.
+
+```text
+label = identifier ":"
+```
+
 A label is an identifier followed by `:`, on its own line (comments allowed). It
 emits no bytes and denotes the next instruction's CODE-relative offset.
 Identifier rules match other aliases. Duplicate/invalid labels, mixed
@@ -63,6 +103,15 @@ return
 ```
 
 ## Array declarations
+
+Reached from `inline-declaration` or `data-record`. `pool-record` and
+`data-scalar` expand in [Editable local pools](#editable-local-pools).
+
+```text
+array-declaration = ".array" identifier placement? newline
+                    (pool-record | array-element)* ".endarray" newline
+array-element = ".element" data-scalar newline
+```
 
 ```text
 .array values
@@ -96,6 +145,15 @@ bounded zero-prefix address profile; this is not a proven universal VM limit.
 
 ## ByteArray declarations
 
+Reached from `inline-declaration` or `data-record`; byte lines use a different
+rule from DATA `opaque-span` records.
+
+```text
+bytearray-declaration = ".bytearray" identifier placement? newline
+                        (pool-record | byte-line)* ".endbytearray" newline
+byte-line = ".bytes" hex-bytes newline
+```
+
 ```text
 .bytearray bytes at=0x00000000
 .bytes 00017f80ffff80
@@ -116,6 +174,26 @@ placement profile applies; raw u32 operands preserve other bit patterns without
 asserting runtime validity.
 
 ## Class assembly
+
+Reached only from `data-record`. Named and numeric reference alternatives
+share this one header/field grammar; the
+[named-reference section](#named-declarations-and-references) explains their role
+restrictions and resolution.
+
+```text
+class-declaration = class-header newline (class-field newline)*
+                    ".endclass" newline
+class-header = ".class" identifier? placement? "version=" hex-integer
+               "extends=" raw-header-reference "statics=" raw-header-reference
+               "parent=" symbol-header-reference "module=" symbol-header-reference
+               "app_flags=" hex-integer
+raw-header-reference = "none" | hex-integer
+symbol-header-reference = raw-header-reference | symbol-reference
+class-field = ".field" field-key "type=" hex-integer "value=" field-value
+field-key = "key=" hex-integer | "symbol=" symbol-reference "bits=" hex-integer
+field-value = hex-integer | class-reference | literal-reference | code-reference
+class-reference = "%" identifier
+```
 
 Evidence: [serialization and relocation
 investigation](../../investigations/class-assembly.md). Complete supported DATA
@@ -162,6 +240,9 @@ the right calling convention, and does not enable relocation.
 
 ## Named declarations and references
 
+The `class-header`, `field-key`, and `field-value` alternatives above define
+these named forms; this section adds no separate declaration production.
+
 Evidence: [named class investigation](../../investigations/named-classes.md). An
 optional alias follows `.class`, before optional `at`. Aliases obey
 symbol/string identifier rules but use a separate class namespace.
@@ -204,6 +285,17 @@ plain `parse`/`encode` operate without such bindings.
 
 ## Editable local pools
 
+Reached from Array, Dictionary, or ByteArray bodies. `string-declaration` is
+shared with DATA/DEBUG sources; its placement has a pool-relative meaning here.
+`data-scalar` is shared by `array-element` and `dictionary-entry`.
+
+```text
+pool-record = ".pool" newline | string-declaration newline
+data-scalar = "null" | "number=" hex-integer | "char=" hex-integer
+            | "float=" hex-integer | "long=" hex-integer | "double=" hex-integer
+            | "boolean=" boolean | "string=" literal-reference
+```
+
 Inside `.array` or `.dictionary`, `.string <alias> "text" [at=0x...]` declares a
 local pool entry. Its optional placement is relative to the pool, not DATA; it
 must match consecutive layout. Aliases must be valid and unique within that
@@ -215,6 +307,15 @@ references; all aliases resolve during encoding. Preserve pool order, unused
 entries, duplicate text, and shared references when writing an existing record.
 
 ## Dictionary declarations
+
+Reached from `inline-declaration` or `data-record`; each entry contains
+exactly two `data-scalar` fields from the shared pool/scalar grammar.
+
+```text
+dictionary-declaration = ".dictionary" identifier placement? newline
+                         (pool-record | dictionary-entry)* ".enddictionary" newline
+dictionary-entry = ".entry" data-scalar data-scalar newline
+```
 
 ```text
 .dictionary example at=0x00000000
@@ -244,6 +345,15 @@ DATA addresses below `0x01000000`; numeric operands retain raw bits without
 implying a validated record reference.
 
 ## Strings and opaque spans
+
+`string-declaration` is reached from inline CODE, DATA, DEBUG, or a local
+pool; `opaque-span` is reached only from `data-record`.
+
+```text
+string-declaration = ".string" identifier quoted-string placement?
+placement = "at=" hex-integer
+opaque-span = ".bytes" placement hex-bytes
+```
 
 DATA source combines strings with [class
 declarations](../formats/data.md#classes-and-modules) and opaque bytes, using
@@ -276,6 +386,14 @@ This policy preserves existing layout while allowing deterministic assembly of
 independently authored string-only data.
 
 ## Exception records
+
+Reached from `exception-source`; attribute order is part of the grammar.
+
+```text
+exception-record = ".exception" "begin=" exception-target
+                   "end=" exception-target "handler=" exception-target
+exception-target = hex-integer | code-reference
+```
 
 Section projects support `exceptions` encoding. Each line has exactly the
 following directive and attributes, in this order:
@@ -311,6 +429,18 @@ establish general relocation safety. See
 [implementation and runtime evidence](../../investigations/exception-assembly.md).
 
 ## DEBUG strings and line mappings
+
+`debug-source` uses `string-declaration` from
+[Strings and opaque spans](#strings-and-opaque-spans).
+`line-source` reaches the following `line-record`; neither source admits CODE
+instructions or DATA class/container blocks.
+
+```text
+line-record = ".line" "pc=" line-pc "file=" debug-reference
+              "function=" debug-reference "line=" decimal-u32
+line-pc = hex-integer | code-reference
+debug-reference = hex-integer | literal-reference
+```
 
 DEBUG source accepts only `.string` declarations, using the DATA string grammar
 and independent aliases:
@@ -358,6 +488,16 @@ offsets, or opaque payloads.
 
 ## Symbol declarations
 
+Reached from `symbol-source` or `inline-declaration`. Constraints may be
+ordered freely; validation requires exactly one `id` and at most one of each
+optional key.
+
+```text
+symbol-declaration = ".symbol" identifier quoted-string symbol-constraint+
+symbol-constraint = "id=" hex-integer | "name_at=" hex-integer
+                  | "entry_index=" decimal-usize
+```
+
 The same declaration syntax is used in a standalone symbol file, an exported
 project's symbol section, or inline with instructions:
 
@@ -392,3 +532,37 @@ Optional constraints control separate properties:
 payload. `entry_index` is a decimal zero-based index in the ID/offset table.
 Both may be omitted or supplied independently. The entry count determines the
 table size; offsets cannot overlap it.
+
+## Lexical leaves
+
+Shared by all entries and declaration blocks above. Field whitespace and optional
+commas separate tokens; punctuation inside attributes/references is contiguous.
+A `#` begins a comment outside quoted text. Comments and blank lines do not emit
+records. Spaces around a label's colon are not accepted: `label` is one field.
+
+```text
+identifier = (ascii-letter | "_") (ascii-letter | digit | "_")*
+ascii-letter = ? ASCII A-Z or a-z ?
+digit = ? ASCII 0-9 ?
+hex-digit = ? ASCII 0-9, A-F, or a-f ?
+hex-integer = "0x" hex-digit+
+hex-bytes = (hex-digit hex-digit)+
+decimal-u32 = digit+
+decimal-usize = digit+
+boolean = "true" | "false"
+mnemonic = ? concrete instruction mnemonic from the VM opcode table ?
+quoted-string = '"' (string-character | escape)* '"'
+string-character = ? Unicode scalar except double quote, backslash, CR, LF ?
+backslash = ? U+005C ?
+escape = backslash ('"' | backslash | "n" | "r" | "t" | "0"
+                 | "u{" hex-digit+ "}")
+newline = ? logical line boundary, LF or CRLF; EOF may end the final record ?
+```
+
+The [VM opcode table](../vm/README.md#encoding) is the authoritative mnemonic and
+operand-width inventory. Its selected mnemonic restricts operand count, kind,
+and bit width. Other `hex-integer` fields have the widths specified in their
+sections: a shared spelling does not widen a u8/u16/u24/u32/u64 field.
+`\u{...}` names a valid Unicode scalar. Identifiers are case-sensitive and
+independent of source-language keywords. The same identifier spelling can exist
+in separate namespaces; resolution follows the declaration/reference role.
