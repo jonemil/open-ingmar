@@ -22,7 +22,7 @@ pub(crate) fn target_contract(ty: &crate::api::Type) -> Option<(&str, bool)> {
 /// Exact class requirement carried by a value or invariant local storage.
 #[derive(Clone)]
 struct Contract {
-    name: String,
+    class: crate::SourceClass,
     nullable: bool,
 }
 
@@ -71,7 +71,7 @@ impl Origins {
                 self.values.insert(
                     *result,
                     Contract {
-                        name: class.name.clone(),
+                        class: class.clone(),
                         nullable: *nullable,
                     },
                 );
@@ -85,7 +85,7 @@ impl Origins {
                     self.values.insert(
                         *result,
                         Contract {
-                            name: class.name.clone(),
+                            class: class.clone(),
                             nullable: matches!(
                                 self.parameters[*index],
                                 crate::ParameterType::NullableSourceObject(_)
@@ -120,7 +120,7 @@ impl Origins {
                     self.values.insert(
                         *result,
                         Contract {
-                            name: class.name.clone(),
+                            class: class.clone(),
                             nullable: matches!(
                                 result_type,
                                 crate::ReturnType::NullableSourceObject(_)
@@ -133,15 +133,35 @@ impl Origins {
                 self.nulls.insert(*result);
             }
             Operation::BlockParameter { result, value_type }
-                if *value_type == crate::api::Type::Null =>
+                if *value_type == crate::JoinType::Api(crate::api::Type::Null) =>
             {
                 self.nulls.insert(*result);
             }
-            Operation::SourceNew { result, class, .. } => {
+            Operation::BlockParameter {
+                result,
+                value_type: crate::JoinType::Source { class, nullable },
+            } => {
                 self.values.insert(
                     *result,
                     Contract {
-                        name: class.clone(),
+                        class: class.clone(),
+                        nullable: *nullable,
+                    },
+                );
+            }
+            Operation::SourceNew {
+                result,
+                class,
+                base,
+                ..
+            } => {
+                self.values.insert(
+                    *result,
+                    Contract {
+                        class: crate::SourceClass {
+                            name: class.clone(),
+                            base: *base,
+                        },
                         nullable: false,
                     },
                 );
@@ -153,8 +173,8 @@ impl Origins {
                 }
             }
             Operation::LocalAssign { local, value } => {
-                if let Some(Some(class)) = self.locals.get(local) {
-                    if !self.accepts(&class.name, class.nullable, *value) {
+                if let Some(Some(contract)) = self.locals.get(local) {
+                    if !self.accepts(&contract.class, contract.nullable, *value) {
                         return Err(
                             "source-object local assignment must preserve its constructor class",
                         );
@@ -187,7 +207,7 @@ impl Origins {
                 self.values.insert(
                     result,
                     Contract {
-                        name: class.name,
+                        class,
                         nullable: false,
                     },
                 );
@@ -249,20 +269,35 @@ impl Origins {
             .collect()
     }
 
+    /// Return the exact source contract retained by a value, if any.
+    pub(crate) fn join_contract(&self, value: ValueId) -> Option<crate::JoinType> {
+        self.values
+            .get(&value)
+            .map(|contract| crate::JoinType::Source {
+                class: contract.class.clone(),
+                nullable: contract.nullable,
+            })
+    }
+
     /// Return an exact source-class identity, if the value retains one.
     pub(crate) fn class(&self, value: ValueId) -> Option<&str> {
         self.values
             .get(&value)
             .filter(|contract| !contract.nullable)
-            .map(|contract| contract.name.as_str())
+            .map(|contract| contract.class.as_str())
     }
     /// Check exact source assignability, admitting Null only for nullable storage.
-    pub(crate) fn accepts(&self, class: &str, nullable: bool, value: ValueId) -> bool {
+    pub(crate) fn accepts(
+        &self,
+        class: &crate::SourceClass,
+        nullable: bool,
+        value: ValueId,
+    ) -> bool {
         (nullable && self.nulls.contains(&value))
             || self
                 .values
                 .get(&value)
-                .is_some_and(|actual| actual.name == class && (nullable || !actual.nullable))
+                .is_some_and(|actual| &actual.class == class && (nullable || !actual.nullable))
     }
 
     /// Return the invariant source class established by local initialization.
@@ -270,7 +305,7 @@ impl Origins {
         self.locals
             .get(&local)
             .and_then(|class| class.as_ref())
-            .map(|class| class.name.as_str())
+            .map(|contract| contract.class.as_str())
     }
 }
 
@@ -293,5 +328,5 @@ pub(crate) fn class(
     origins
         .values
         .get(&value)
-        .map(|contract| contract.name.clone())
+        .map(|contract| contract.class.name.clone())
 }

@@ -35,6 +35,7 @@ mod type_flow;
 mod type_text;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
+pub use joins::JoinType;
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
     NumericAlias, ScalarFieldType, SourceDiagnostic, UnitError, compile_sources,
@@ -966,7 +967,7 @@ pub enum Operation {
     /// Consume it before call/field/array setup, staging in a local when needed.
     BlockParameter {
         result: ValueId,
-        value_type: api::Type,
+        value_type: JoinType,
     },
     /// Transfer one value to a parameterized block, consuming it in this block.
     JumpValue {
@@ -1715,30 +1716,62 @@ impl Function {
                 return Err(fail("source span ends before it starts"));
             }
             let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
+            let inferred_operation = if infer_joins {
+                if let Operation::BlockParameter { result, .. } = located.operation {
+                    let inferred = joins::infer_type(
+                        &incoming_values[&structure.blocks[index]],
+                        &types,
+                        &origins,
+                    )
+                    .map_err(fail)?;
+                    inferred_types.insert(index, inferred.clone());
+                    Some(Operation::BlockParameter {
+                        result,
+                        value_type: inferred,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
             origins
-                .observe(&located.operation, &refinements)
+                .observe(
+                    inferred_operation.as_ref().unwrap_or(&located.operation),
+                    &refinements,
+                )
                 .map_err(fail)?;
             let (result, operands) = match located.operation {
                 Operation::BlockParameter {
                     result,
                     ref value_type,
                 } => {
-                    let inferred;
-                    let value_type = if infer_joins {
-                        inferred =
-                            joins::infer_type(&incoming_values[&structure.blocks[index]], &types)
-                                .map_err(fail)?;
-                        inferred_types.insert(index, inferred.clone());
-                        &inferred
-                    } else {
-                        value_type
-                    };
-                    types.insert(result, ValueType::from_api_type(value_type).unwrap());
+                    let value_type = inferred_types.get(&index).unwrap_or(value_type);
+                    if let (JoinType::Source { class, .. }, Some(context)) = (value_type, context) {
+                        context
+                            .check_class(api::core(), class.base.api_name())
+                            .map_err(|message| IrError {
+                                operation: Some(index),
+                                message,
+                            })?;
+                    }
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&value_type.api_type()).unwrap(),
+                    );
                     (Some(result), vec![])
                 }
                 Operation::JumpValue { target, value } => {
+                    let contract = &join_types[&target];
+                    let source_matches = match contract {
+                        JoinType::Source { class, nullable } => {
+                            origins.accepts(class, *nullable, value)
+                        }
+                        _ => true,
+                    };
                     if !infer_joins
-                        && !native::accepts(&join_types[&target], &type_of(value).api_type())
+                        && (!source_matches
+                            || !native::accepts(&contract.api_type(), &type_of(value).api_type()))
                     {
                         return Err(fail(
                             "edge value does not match target block parameter type",
@@ -2885,7 +2918,7 @@ impl Function {
                         | ReturnType::NullableSourceObject(class) = contract
                         {
                             if !origins.accepts(
-                                class.as_str(),
+                                class,
                                 matches!(contract, ReturnType::NullableSourceObject(_)),
                                 value,
                             ) {
@@ -3312,7 +3345,7 @@ impl Function {
                 } => format!(
                     ".block-value %{} {}",
                     result.0,
-                    joins::type_tag(value_type).unwrap()
+                    joins::contract_tag(value_type).unwrap()
                 ),
                 Operation::JumpValue { target, value } => {
                     format!(".jump-value ^{} %{}", target.0, value.0)

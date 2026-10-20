@@ -16,7 +16,8 @@ Nullable source fields default to Null and retain snapshot identity after the
 field is cleared, including View and delegate references.
 Nullable source casts recover these exact identities from opaque references,
 preserve Null and false assertions at runtime, and evaluate an effectful operand
-once.
+once. Source conditional values retain one exact class with optional Null;
+nested choices and effect markers check lazy arm evaluation.
 
 From the repository root:
 

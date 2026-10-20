@@ -821,14 +821,14 @@ impl Builder<'_> {
         );
         let value_type = self
             .types
-            .value_type(left)
-            .zip(self.types.value_type(right))
-            .and_then(|(left, right)| crate::joins::result(left, right))
+            .join_contract(left)
+            .zip(self.types.join_contract(right))
+            .and_then(|(left, right)| crate::joins::contract_result(&left, &right))
             .ok_or_else(|| {
                 Diagnostic::at(
                     self.source,
                     span.start,
-                    "conditional arms require matching core types or scalar/Null alternatives",
+                    "conditional arms require compatible core types or the same source class, optionally with Null",
                 )
             })?;
         self.push(Operation::Block { block: join }, None);

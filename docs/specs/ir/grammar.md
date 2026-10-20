@@ -319,6 +319,7 @@ dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
 join-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
+         | source-tag | nullable-source-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```
@@ -344,8 +345,8 @@ constructible references. AppBase is a declaration/base identity, not a
 constructible ordinary source-reference type. Nullable source tags are accepted
 in parameter, function/call result metadata, and source-reference field
 declarations/reads. Field declarations use the same source tags as signatures.
-Source tags are not join or native API cast tags; `.cast` resolves them as
-separate source assertion contracts.
+Source tags also serve as exact block-value join contracts; they are not native
+API cast tags. `.cast` resolves them as separate source assertion contracts.
 
 Array element tags use `number`, not `integer`, for Number; otherwise they use
 the shared scalar/core/interface/alias tags, nullable forms, or `view`. A

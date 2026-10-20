@@ -4,6 +4,98 @@ use std::collections::BTreeMap;
 
 pub(crate) use crate::type_text::{join as parse_type, join_tag as type_tag};
 
+/// A block parameter's value contract, independent of VM stack representation.
+/// Source contracts retain exact identity in addition to their native projection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JoinType {
+    /// An API value type within the supported conditional-join profile.
+    Api(Type),
+    /// An exact constructible source class, optionally admitting Null.
+    Source {
+        class: crate::SourceClass,
+        nullable: bool,
+    },
+}
+
+impl JoinType {
+    /// Return the API projection used for native operand and availability checks.
+    /// Exact source assignability is checked separately on each incoming edge.
+    pub fn api_type(&self) -> Type {
+        match self {
+            Self::Api(ty) => ty.clone(),
+            Self::Source { class, nullable } => {
+                let ty = Type::named(class.base.api_name());
+                if *nullable { ty.with_null() } else { ty }
+            }
+        }
+    }
+}
+
+impl From<Type> for JoinType {
+    fn from(ty: Type) -> Self {
+        Self::Api(ty)
+    }
+}
+
+/// Parse a saved block-value contract without erasing source identity.
+pub(crate) fn parse_contract(tag: &str) -> Option<JoinType> {
+    match crate::type_text::call_result(tag) {
+        Ok(crate::ReturnType::SourceObject(class)) => Some(JoinType::Source {
+            class,
+            nullable: false,
+        }),
+        Ok(crate::ReturnType::NullableSourceObject(class)) => Some(JoinType::Source {
+            class,
+            nullable: true,
+        }),
+        _ => parse_type(tag).map(JoinType::Api),
+    }
+}
+
+/// Print a supported block contract, rejecting invalid source names or bases.
+pub(crate) fn contract_tag(ty: &JoinType) -> Option<std::borrow::Cow<'static, str>> {
+    match ty {
+        JoinType::Api(ty) => type_tag(ty),
+        JoinType::Source { class, nullable } => {
+            if crate::SourceClass::parse(&class.to_string()).as_ref() != Some(class) {
+                return None;
+            }
+            Some(crate::type_text::result_tag(&if *nullable {
+                crate::ReturnType::NullableSourceObject(class.clone())
+            } else {
+                crate::ReturnType::SourceObject(class.clone())
+            }))
+        }
+    }
+}
+
+/// Merge exact source/Null alternatives, or reuse the ordinary API join rules.
+/// Distinct source classes and implicit source erasure do not form a join.
+pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinType> {
+    match (left, right) {
+        (JoinType::Api(left), JoinType::Api(right)) => result(left, right).map(JoinType::Api),
+        (
+            JoinType::Source {
+                class: left,
+                nullable: a,
+            },
+            JoinType::Source {
+                class: right,
+                nullable: b,
+            },
+        ) if left == right => Some(JoinType::Source {
+            class: left.clone(),
+            nullable: *a || *b,
+        }),
+        (JoinType::Source { class, .. }, JoinType::Api(Type::Null))
+        | (JoinType::Api(Type::Null), JoinType::Source { class, .. }) => Some(JoinType::Source {
+            class: class.clone(),
+            nullable: true,
+        }),
+        _ => None,
+    }
+}
+
 /// Join supported alternatives without converting either runtime value.
 pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     if left == right && type_tag(left).is_some() {
@@ -83,17 +175,21 @@ pub(crate) fn incoming_values(operations: &[LocatedOperation]) -> BTreeMap<Block
 pub(crate) fn infer_type(
     incoming: &[ValueId],
     types: &BTreeMap<ValueId, ValueType>,
-) -> Result<Type, &'static str> {
+    origins: &crate::source_objects::Origins,
+) -> Result<JoinType, &'static str> {
     let mut joined = None;
     for value in incoming {
-        let ty = types
+        let api_type = types
             .get(value)
             .ok_or("source join requires earlier incoming values")?
             .api_type();
+        let ty = origins
+            .join_contract(*value)
+            .unwrap_or(JoinType::Api(api_type));
         joined = Some(match joined {
-            None if type_tag(&ty).is_some() => ty,
-            Some(previous) => result(&previous, &ty).ok_or(
-                "conditional arms require matching core types or scalar/Null alternatives",
+            None if contract_tag(&ty).is_some() => ty,
+            Some(previous) => contract_result(&previous, &ty).ok_or(
+                "conditional arms require compatible core types or the same source class, optionally with Null",
             )?,
             _ => return Err("unsupported conditional arm type"),
         });
@@ -105,7 +201,7 @@ pub(crate) fn infer_type(
 /// Ordinary branches/jumps carry no values; a value jump supplies exactly one.
 pub(crate) fn validate(
     operations: &[LocatedOperation],
-) -> Result<BTreeMap<BlockId, Type>, IrError> {
+) -> Result<BTreeMap<BlockId, JoinType>, IrError> {
     let fail = |index, message: &str| IrError {
         operation: Some(index),
         message: message.into(),
@@ -121,7 +217,7 @@ pub(crate) fn validate(
                     "block parameter must immediately follow its block marker",
                 ));
             };
-            if index == 1 || type_tag(value_type).is_none() {
+            if index == 1 || contract_tag(value_type).is_none() {
                 return Err(fail(index, "entry or unsupported block parameter type"));
             }
             parameters.insert(*block, value_type.clone());

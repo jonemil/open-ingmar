@@ -342,7 +342,7 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     }
 }
 
-/// Parse a join tag, retaining its prefix notation and excluding call-only contracts.
+/// Parse an API join tag, retaining its prefix notation; source joins use `JoinType`.
 pub(super) fn join(tag: &str) -> Option<Type> {
     if tag == "null" {
         return Some(Type::Null);
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn saved_type_contexts_keep_distinct_domains() {
-        // parameter, declared function result, call result, join, native cast
+        // parameter, declared function result, call result, API join, native cast
         for (tag, expected) in [
             ("integer", [true, false, true, true, true]),
             ("nullable-integer", [true, true, true, true, true]),

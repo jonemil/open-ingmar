@@ -76,6 +76,7 @@ module NullableSourceTests {
         var holder = new NullableSourceHolder();
         holder.run();
         NullableSourceCasts.run();
+        SourceJoins.run();
     }
 }
 
@@ -160,5 +161,37 @@ module NullableSourceCasts {
         System.println(NullableSourceCasts.cast(null) == null or false);
         var asserted = (new Probe() as Probe or Null) as Probe;
         System.println(asserted.value());
+    }
+}
+
+module SourceJoins {
+    function choose(flag as Boolean) as Probe or Null {
+        return flag ? new Probe() : null;
+    }
+    function fromObject(value as Object) as Probe or Null {
+        return value instanceof Probe ? value : null;
+    }
+    function left() as Probe { System.println("source-join-left"); return new Probe(); }
+    function right() as Probe { System.println("source-join-right"); return new Probe(); }
+    function run() as Void {
+        var same = true ? new Probe() : new Probe();
+        System.println(same.value());
+        var maybe = SourceJoins.choose(false);
+        System.println(maybe == null);
+        maybe = SourceJoins.choose(true);
+        if (maybe != null) { System.println(maybe.value()); }
+        var nested = false ? null : (true ? new Probe() : null);
+        if (nested != null) { System.println(nested.value()); }
+        var view = true ? new LocalView() : null;
+        if (view != null) { System.println(view.value()); }
+        var delegate = false ? null : new LocalDelegate();
+        if (delegate != null) { System.println(delegate.value()); }
+        var first = true ? SourceJoins.left() : SourceJoins.right();
+        System.println(first.value());
+        var second = false ? SourceJoins.left() : SourceJoins.right();
+        System.println(second.value());
+        var guarded = SourceJoins.fromObject(new Probe());
+        if (guarded != null) { System.println(guarded.value()); }
+        System.println(SourceJoins.fromObject(new NumberOrder()) == null);
     }
 }

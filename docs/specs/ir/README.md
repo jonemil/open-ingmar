@@ -474,6 +474,9 @@ not part of this IR.
 Conditional expressions use a single typed block parameter, independently of
 mutable locals. Native IR uses `BlockParameter { result, value_type }`
 immediately after `Block`; incoming edges use `JumpValue { target, value }`.
+`value_type` is `JoinType::Api(Type)` for ordinary API contracts or
+`JoinType::Source { class, nullable }` for an exact source reference. The latter
+keeps identity separate from its API projection.
 Text syntax is:
 
 ```text
@@ -490,14 +493,10 @@ definitions, and unused/reused values are errors in native and text
 construction. The parameter defines a fresh block-local value; the predecessor's
 value ID does not cross the edge.
 
-Type tags are `integer`, `long`, `float`, `double`, `char`, `boolean`, `string`,
-`null`, `byte-array`, `nullable-byte-array`, `nullable-integer`,
-`nullable-long`, `nullable-float`, `nullable-double`, `nullable-string`,
-`nullable-boolean`, `nullable-char`, `symbol`, `nullable-symbol`, `method`,
-`nullable-method`, `weak-reference`, and `nullable-weak-reference`. Array tags
-prefix the [allocation element tag](#array-allocation) with `array-`, for
-example `array-nullable-number`, `array-string`, `array-comparable`, or
-`array-view`. All supported element contracts have a corresponding join tag.
+The [join grammar](grammar.md#type-tags) defines admitted contracts and tags.
+Array tags prefix the element tag with `array-`, such as `array-string` or
+`array-view`. Source contracts use `source(Class@Base)` or
+`nullable-source(Class@Base)`.
 Incoming Arrays must match the invariant element contract exactly; non-null and
 nullable elements do not widen to a common Array type. Tags describe element
 nullability, not nullable Array references. Availability checks apply to the
@@ -505,14 +504,19 @@ parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 [VM lowering](../lowering/README.md#expression-joins).
 
-Source joins use matching supported types or scalar/Null alternatives; see
+Source joins use compatible API types, scalar/Null alternatives, or one exact
+source class with optional Null; see
 [conditional expressions](../frontend/README.md#conditional-expressions) for
 source inference and restrictions. Source construction resolves each join from
 checked incoming operand types, including full-graph null proofs and local
 writes. It stores the resolved type explicitly in the immutable function and its
 text output. Native/text IR retain their declared parameter types and check
 incoming values against them; parsing does not infer or silently narrow them.
-Native IR may declare a compatible nullable parameter explicitly. Nullable edge
+Native IR may declare a compatible nullable parameter explicitly. Each source
+edge must preserve the declared class, native base, and nullability. Unit checking
+resolves the join's source declaration, including a nullable join fed only Null.
+A source join result retains its contract through copies, calls, and field
+assignment; an API projection alone cannot authorize source dispatch. Nullable edge
 proofs still concern source storage and intersect at joins; an incoming value
 does not create a proof about that storage. See [SDK
 evidence](../../investigations/compiler-conditionals.md).

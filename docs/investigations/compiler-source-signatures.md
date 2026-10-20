@@ -78,6 +78,24 @@ without runtime conversion or validation, consistent with the existing lexical
 cast contract. This does not establish source inheritance, general union casts,
 or recovery safety after an incorrect assertion.
 
+## Source conditional values
+
+2026-10-20, SDK/compiler/simulator 9.2.0, `fr265`, `-O 0`.
+`SourceJoins` in the [object-test specimen][nullable-example] selects matching
+source instances, source-or-Null results, nested choices, and guarded Object
+reads. View and delegate choices retain the selected instance's source methods.
+
+**Experimentally observed:** SDK/generated output matches the group
+`1, true, 1, 1, 2, 3, source-join-left, 1, source-join-right, 1, 1, true`.
+Only the selected arm's marker appears for each effectful choice. Saved IR
+retains source join tags, and SDK/generated PRGs reconstruct structurally without
+new opcodes or DATA framing. Reproduce using the same shared console checker;
+captures are under `scratch/source-joins/check/`.
+
+**Limits:** this verifies matching exact classes and optional Null, not unrelated
+source unions, inheritance joins, or container element variance. Rejection of
+source/native mixtures without explicit erasure is our bounded checking policy.
+
 ## Reproduction
 
 Build/sign our application using the example's commands. Create

@@ -216,6 +216,10 @@ no unrelated root may run before the parameter is consumed. Ordinary edges keep
 an empty stack. Surrounding operand staging shares the existing frame budget; a
 direct conditional return needs no additional local.
 
+Exact source joins use the same stack transfer. Their class/nullability contract
+adds validation metadata, not a conversion, class lookup, or additional load.
+Null remains Null, and only the selected source reference reaches the join.
+
 ## Calls and objects
 
 ### Calls on constructed source objects

@@ -1362,7 +1362,7 @@ impl CompilationUnit {
                             | FieldKind::NullableSourceObject(class) = &declaration.kind
                             {
                                 if !origins.accepts(
-                                    class.as_str(),
+                                    class,
                                     matches!(declaration.kind, FieldKind::NullableSourceObject(_)),
                                     *value,
                                 ) {
@@ -1398,7 +1398,11 @@ impl CompilationUnit {
                     }
                 }
                 if let Operation::SourceCast { class, .. }
-                | Operation::SourceInstanceOf { class, .. } = &located.operation
+                | Operation::SourceInstanceOf { class, .. }
+                | Operation::BlockParameter {
+                    value_type: crate::JoinType::Source { class, .. },
+                    ..
+                } = &located.operation
                 {
                     if !self.classes.iter().any(|declaration| {
                         declaration.name == class.name && declaration.base == class.base
@@ -1577,7 +1581,7 @@ impl CompilationUnit {
                     | crate::ParameterType::NullableSourceObject(class) = parameter
                     {
                         if !origins.accepts(
-                            class.as_str(),
+                            class,
                             matches!(parameter, crate::ParameterType::NullableSourceObject(_)),
                             *argument,
                         ) {

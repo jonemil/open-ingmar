@@ -972,7 +972,7 @@ pub(crate) fn parse_ir_context(
                 },
                 Directive::BlockValue => Operation::BlockParameter {
                     result: parse_value(&fields[1])?,
-                    value_type: crate::joins::parse_type(&fields[2])
+                    value_type: crate::joins::parse_contract(&fields[2])
                         .ok_or_else(|| fail(*at, "unsupported block value type"))?,
                 },
                 Directive::JumpValue => Operation::JumpValue {

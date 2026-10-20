@@ -701,8 +701,8 @@ local's proof; joins and loop backedges retain only shared facts.
 A local initialized from a nullable source value permits the same class or Null
 on assignment. A fresh copy inside a proven branch has a non-null contract.
 The original local keeps its nullable storage contract after a check or write.
-Nullable source Array elements and conditional-value joins remain unsupported;
-this does not introduce general source unions.
+Nullable source Array elements remain unsupported; this does not introduce
+general source unions.
 
 Module, self, and explicit object calls retain a declared source result,
 permitting subsequent source dispatch and same-class local assignment. Parameter
@@ -1393,10 +1393,19 @@ content nullability and interface identity; selection preserves the chosen
 reference without copying or conversion. Scalar alternatives may also join with
 Null or their existing nullable type, producing the corresponding
 scalar-or-Null. No Char-to-Number promotion, general heterogeneous union,
-nullable Array reference, class join, Void arm, or non-Boolean truthiness is
-supported. Expected container context from a declaration, assignment, call, or
+nullable Array reference, unrelated-class join, Void arm, or non-Boolean
+truthiness is supported. Expected container context from a declaration,
+assignment, call, or
 return reaches direct literals and supported sized Array allocations in both
 arms; no element contract is inferred solely from a sibling arm.
+
+Exact source references may join only with the same resolved class (including
+its native base) or Null. Matching non-null arms retain a non-null source
+contract; a nullable arm or Null yields that class `or Null`. Nested joins,
+local copies, and explicit source function results preserve this identity.
+Different source classes, or a source/native mixture, require explicit erasure
+before joining; their shared native base does not establish a common source
+class. A nullable result still needs a non-null proof before source dispatch.
 
 Join inference uses checked incoming operand types after the complete graph's
 null-flow analysis. A direct nullable read under a non-null proof contributes

@@ -216,7 +216,10 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
                 ciq_compiler::Operation::BlockParameter { value_type, .. } => Some(value_type),
                 _ => None,
             })
-            .all(|ty| *ty == ciq_compiler::api::Type::named("Toybox.Lang.Number"))
+            .all(|ty| *ty
+                == ciq_compiler::JoinType::Api(ciq_compiler::api::Type::named(
+                    "Toybox.Lang.Number"
+                )))
     );
     assert!(parse_ir(&text.replace(".not-equal", ".equal")).is_err());
 }

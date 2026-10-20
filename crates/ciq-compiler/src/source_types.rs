@@ -90,7 +90,9 @@ impl Types {
                         .unwrap_or_else(|| Type::named("Toybox.Lang.Dictionary")),
                 ),
             ),
-            Operation::BlockParameter { result, value_type } => (*result, Some(value_type.clone())),
+            Operation::BlockParameter { result, value_type } => {
+                (*result, Some(value_type.api_type()))
+            }
             Operation::ArrayBegin {
                 builder,
                 element_type,
@@ -373,6 +375,12 @@ impl Types {
     }
     pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
         self.origins.local_class(local)
+    }
+    /// Return candidate source identity or the ordinary API value contract.
+    pub(crate) fn join_contract(&self, value: ValueId) -> Option<crate::JoinType> {
+        self.origins
+            .join_contract(value)
+            .or_else(|| self.values.get(&value).cloned().map(crate::JoinType::Api))
     }
     pub(crate) fn value_type(&self, value: ValueId) -> Option<&Type> {
         self.values.get(&value)
