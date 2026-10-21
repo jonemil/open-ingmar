@@ -1313,6 +1313,28 @@ impl CompilationUnit {
                         .map_err(|message| fail(Some(index), Some(operation), message))?;
                     }
                 }
+                if let Operation::ParameterAssign {
+                    index: parameter,
+                    value,
+                } = located.operation
+                {
+                    if let crate::ParameterType::Interface(interface)
+                    | crate::ParameterType::NullableInterface(interface) =
+                        function.parameter_types()[parameter]
+                    {
+                        self.check_interface_value(
+                            function,
+                            &origins,
+                            value,
+                            interface,
+                            matches!(
+                                function.parameter_types()[parameter],
+                                crate::ParameterType::NullableInterface(_)
+                            ),
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                }
                 if let Operation::LocalAssign { local, value } = located.operation {
                     if let Some(ty) = interface_locals.get(&local) {
                         let (crate::ValueType::Interface(interface)

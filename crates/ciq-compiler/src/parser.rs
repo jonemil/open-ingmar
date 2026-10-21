@@ -1997,6 +1997,12 @@ impl<'a> Parser<'a> {
         let Kind::Word(name) = token.kind else {
             unreachable!()
         };
+        if self.peek()? == Kind::Word("as") {
+            return Err(self.error(
+                start,
+                "local variable types are inferred; explicit local annotations are unsupported",
+            ));
+        }
         self.expect(
             Kind::Punctuation('='),
             "'=' (locals require an initializer)",

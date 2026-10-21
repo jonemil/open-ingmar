@@ -355,6 +355,15 @@ below the parameter count; repeated reads and unused declared parameters are
 allowed. Source parameter names are resolved by the frontend, not stored in IR.
 Position is independent of value/local IDs and VM slots.
 
+`.assign-parameter <index> <value>` replaces the signature position's stored
+value and defines no result. Typed IR uses `ParameterAssign { index, value }`.
+The index must be within the signature; the operand must satisfy its declared
+type, exact source identity, and structural interface requirements. Source and
+saved IR share these checks. The write invalidates null/class facts for that
+parameter and participates in ordinary effect scheduling. It does not change
+the signature or count as a local. Earlier value definitions remain snapshots;
+fresh `.parameter` reads observe the replacement under current CFG facts.
+
 Call argument IDs refer to earlier value definitions and count as uses; their
 order is significant. The call-containing evaluation-order validator includes
 argument trees and nested calls. Up to 254 arguments are encodable; this is a
@@ -425,11 +434,12 @@ the same DATA bindings. See
 
 ### Local assignment
 
-Source local compounds use ordinary `.read`, a binary directive, and `.assign`.
+Source compounds use ordinary `.read`/`.parameter`, a binary directive, and
+`.assign`/`.assign-parameter` for local/parameter targets respectively.
 There is no compound IR directive. Shared validation checks operand contracts,
 result assignability, null proofs, and read-before-RHS/write ordering. Staged
 RHS expressions use the existing typed local/snapshot representation. See
-[source rules](../frontend/README.md#local-compound-assignment) and
+[source rules](../frontend/README.md#local-and-parameter-compound-assignment) and
 [evidence](../../investigations/compiler-compound-locals.md).
 
 `.assign` consumes an earlier value and replaces an initialized local. No

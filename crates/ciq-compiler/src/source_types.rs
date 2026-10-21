@@ -187,6 +187,11 @@ impl Types {
                     .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));
                 return;
             }
+            Operation::ParameterAssign { index, .. } => {
+                self.facts
+                    .retain(|fact| fact.place() != crate::type_flow::Place::Parameter(*index));
+                return;
+            }
             Operation::SelfFieldRead {
                 result,
                 result_type,

@@ -96,8 +96,9 @@ native-call results. Unchecked nullable values cannot be printed or used as
 non-null operands/receivers. They may be passed to matching nullable parameters
 and returned under matching nullable result contracts. Scalar parameters/results
 still require a non-null value. Fresh parameter reads on the non-null path use
-the scalar type directly. Parameter slots cannot be assigned in this subset.
-Local writes do not invalidate parameter facts, even when their numeric
+the scalar type directly. Parameter writes invalidate facts for that parameter;
+fresh reads need a new proof before non-null or narrowed uses. Local writes
+do not invalidate parameter facts, even when their numeric
 local/parameter IDs match. Other unions remain outside this profile. Conversion,
 search, and slicing behavior is supplied by the runtime, not folded by the
 compiler. See
@@ -433,6 +434,19 @@ Parameters use the [type/default rules](#types-and-nullability). Identities are
 zero-based positions, distinct from locals/value IDs; repeated reads define
 fresh values. Duplicate names and local/parameter shadowing are rejected. Unit
 validation checks callee arity and argument/result contracts.
+
+Parameters support statement assignment, compound assignment, and supported
+increment/decrement operators. A write preserves the declared parameter domain
+(including the default Number domain), exact source identity, and container
+invariance. Interface writes require a checked implementation. It replaces the
+callee's parameter value without rebinding the caller's variable. Replacing a
+reference differs from mutating the referenced object, whose aliases still
+observe ordinary object mutations.
+
+Evaluate the RHS before storing; earlier reads keep their snapshots and later
+reads observe the replacement. Writes invalidate that parameter's null/class
+refinements, including on loop backedges. They use the existing parameter slot
+and allocate no source local. See [assignment evidence](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
 
 [IR parameter operations](../ir/README.md#parameter-metadata-and-reads)
 retain positional identity and typed argument order; the [IR
@@ -1514,6 +1528,11 @@ slots or add runtime reference-release instructions. A block preserves its
 body's return/break/continue behavior and does not create a loop-control target.
 Reassignment follows the fixed-type rules below.
 
+Local types are inferred from initializers. Explicit `var name as Type = value`
+annotations are rejected, matching SDK 9.2.0; these are distinct from supported
+parameter/result/field annotations and expression casts. See the
+[declaration probes](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
+
 Locals retain stored state; repeated expression reads produce distinct
 single-use values. The [IR storage rules](../ir/README.md#local-operations) own
 initialization/availability checking, and [frame
@@ -1598,8 +1617,9 @@ scoping and shadowing rules remain future work.
 ### Local reassignment
 
 `<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
-The local target must be a bare identifier. Parameters, unknown/forward names,
-and arm locals used outside their scope are rejected. Assignment is a statement,
+The local target must be a bare identifier. Unknown/forward names and arm locals
+used outside their scope are rejected. Parameters follow the
+[parameter storage contract](#parameters-and-positional-arguments). Assignment is a statement,
 not an expression. Local compound and increment/decrement statements are
 specified below. Class methods additionally support [explicit self field
 assignment](#instance-fields).
@@ -1628,10 +1648,10 @@ Assignment-containing IR uses the conservative schedule specified in
 `target++;` and `++target;` add one to a numeric scalar or Char, preserving its
 type. `target--;` and `--target;` subtract one from a numeric scalar; Char
 decrement is rejected. The two operator characters must be contiguous. Accepted
-targets are bare initialized numeric/Char locals, explicit `self` numeric/Char
+targets are bare numeric/Char locals or parameters, explicit `self` numeric/Char
 fields, and supported numeric/Char indexed elements. Storage write-back must
 preserve the field/element contract. Char requires API 1.3.0, as for other Char
-expressions. Parameters, grouped local targets, other value/element types, and
+expressions. Grouped local targets, other value/element types, and
 unknown or out-of-scope names are rejected. A nullable operand needs an
 established non-null proof at the read. Existing assignment contracts still
 govern its write.
@@ -1649,20 +1669,21 @@ boundaries wrap from maximum to minimum on increment and minimum to maximum on
 decrement. See [SDK/runtime
 evidence](../../investigations/compiler-increments.md).
 
-### Local compound assignment
+### Local and parameter compound assignment
 
-A bare in-scope initialized local supports `+=`, `-=`, `*=`, `/=`, `%=`, `&=`,
+A bare in-scope initialized local or parameter supports `+=`, `-=`, `*=`, `/=`, `%=`, `&=`,
 `|=`, `^=`, `<<=`, and `>>=` as statements. Operator characters must be
-contiguous. Parameters, grouped local targets, and unknown or out-of-scope names
+contiguous. Grouped local targets and unknown or out-of-scope names
 are rejected. Field/indexed compound targets are specified below. Assignment
 expressions, logical compounds, and unsigned-right-shift compounds remain
 unsupported.
 
-`n op= rhs;` reads the existing local once, evaluates `rhs` once, applies the
+`n op= rhs;` reads the existing storage once, evaluates `rhs` once, applies the
 corresponding supported binary operator, then writes the result to the existing
 slot. The whole RHS is parsed before applying the implicit operator: `n *= 1 +
 2` means `n = n * (1 + 2)`. Existing binary contracts and fixed local types
-apply: all ten operators accept non-null Number pairs; String `+=` uses
+apply, with parameters retaining their signature contract: all ten operators
+accept non-null Number pairs; String `+=` uses
 supported scalar concatenation, and Char `+=` accepts Number/Long. Number `+=
 Char` and Char `+= Char` fail because their results change the local type. No
 new coercion, folding, or runtime guard is introduced.

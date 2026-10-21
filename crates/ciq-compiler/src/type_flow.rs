@@ -5,7 +5,7 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Storage identity used by branch proofs, independent of VM frame slots.
-/// Parameters have no write operation; writes invalidate only the named local.
+/// Writes invalidate facts only for the named local or parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Place {
     Local(LocalId),
@@ -88,12 +88,12 @@ pub(crate) fn update(
     inputs: &BTreeMap<BlockId, BTreeSet<Fact>>,
     operation: &Operation,
 ) {
-    match operation {
-        Operation::Block { block } => *facts = inputs.get(block).cloned().unwrap_or_default(),
-        Operation::LocalInitialize { local, .. } | Operation::LocalAssign { local, .. } => {
-            facts.retain(|fact| fact.place() != Place::Local(*local))
-        }
-        _ => (),
+    if let Some(place) = write_place(operation) {
+        facts.retain(|fact| fact.place() != place);
+        return;
+    }
+    if let Operation::Block { block } = operation {
+        *facts = inputs.get(block).cloned().unwrap_or_default();
     }
 }
 
@@ -116,7 +116,7 @@ pub(crate) fn prefix_inputs(operations: &[LocatedOperation]) -> BTreeMap<BlockId
 
 /// Compute storage refinements at block entries by intersecting incoming facts.
 /// Null equality/inequality and positive instanceof edges establish facts; Not
-/// reverses the tested edge. Writes invalidate that local's facts. Stored Boolean
+/// reverses the tested edge. Writes invalidate that storage's facts. Stored Boolean
 /// conditions carry no proof, and entry has no external guarantees.
 pub(crate) fn inputs(
     structure: &Structure,
@@ -135,6 +135,10 @@ pub(crate) fn inputs(
     let mut universe = BTreeSet::new();
     for (at, located) in operations.iter().enumerate() {
         let block = structure.blocks[at];
+        if let Some(place) = write_place(&located.operation) {
+            kills.get_mut(&block).unwrap().insert(place);
+            universe.insert(Fact::NonNull(place));
+        }
         match located.operation {
             Operation::Null { result }
             | Operation::LocalRead { result, .. }
@@ -148,10 +152,6 @@ pub(crate) fn inputs(
                 if let Some(place) = read_place(&located.operation) {
                     universe.insert(Fact::NonNull(place));
                 }
-            }
-            Operation::LocalInitialize { local, .. } | Operation::LocalAssign { local, .. } => {
-                kills.get_mut(&block).unwrap().insert(Place::Local(local));
-                universe.insert(Fact::NonNull(Place::Local(local)));
             }
             Operation::Branch {
                 condition,
@@ -280,12 +280,26 @@ fn guard_place(
         _ => return None,
     };
     let place = read_place(&operations[read].operation)?;
-    if read >= comparison || comparison >= consumer
+    if read >= comparison
+        || comparison >= consumer
         || structure.blocks[read] != structure.blocks[branch]
         || structure.blocks[comparison] != structure.blocks[branch]
-        || operations[read + 1..branch].iter().any(|op| matches!(op.operation,
-            Operation::LocalAssign { local: changed, .. } | Operation::LocalInitialize { local: changed, .. } if place == Place::Local(changed))) {
+        || operations[read + 1..branch]
+            .iter()
+            .any(|op| write_place(&op.operation) == Some(place))
+    {
         return None;
     }
     Some((place, non_null, class))
+}
+
+/// Return frame storage whose previous refinement is invalidated by this write.
+fn write_place(operation: &Operation) -> Option<Place> {
+    match operation {
+        Operation::LocalInitialize { local, .. } | Operation::LocalAssign { local, .. } => {
+            Some(Place::Local(*local))
+        }
+        Operation::ParameterAssign { index, .. } => Some(Place::Parameter(*index)),
+        _ => None,
+    }
 }

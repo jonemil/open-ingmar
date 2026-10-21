@@ -392,6 +392,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::LocalAssign { local, value } => {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
+            Operation::ParameterAssign { index, value } => {
+                (value, Opcode::Lputv, vec![Operand::Bits(index as u64 + 1)])
+            }
             Operation::Return { value } => (value, Opcode::Return, vec![]),
             Operation::Discard { value } => (value, Opcode::Popv, vec![]),
             Operation::NativeBaseInitialize { base } => {

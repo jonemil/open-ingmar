@@ -92,7 +92,7 @@ fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
 #[test]
 fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() {
     for source in [
-        "function f(n) { n++; }",
+        "function f(n as Toybox.Lang.String) { n++; }",
         "function f() { unknown++; }",
         "function f() { var n = 1; (n)++; }",
         "function f() { var n = 1; ++(n); }",

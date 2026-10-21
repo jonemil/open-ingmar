@@ -95,7 +95,7 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f(n) { n += 1; return n; }",
+        "function f(n) { n += true; return n; }",
         "function f() { missing += 1; return 0; }",
         "function f() { if (true) { var n = 1; } n += 1; return 0; }",
         "function f() { var n = 1; (n) += 1; return n; }",

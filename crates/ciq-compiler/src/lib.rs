@@ -1296,6 +1296,12 @@ pub enum Operation {
         result: ValueId,
         index: usize,
     },
+    /// Replace a parameter's frame value while preserving its declared contract.
+    /// Later reads observe the replacement; earlier value snapshots remain valid.
+    ParameterAssign {
+        index: usize,
+        value: ValueId,
+    },
     /// Invoke a global user function with a checked result contract.
     GlobalCall {
         result: ValueId,
@@ -2732,6 +2738,36 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::Discard { value } => (None, vec![value]),
+                Operation::ParameterAssign { index, value } => {
+                    let expected = parameter_types
+                        .get(index)
+                        .ok_or_else(|| fail("parameter index is outside the function signature"))?;
+                    let target = expected.api_type();
+                    if !native::accepts(&target, &type_of(value).api_type())
+                        && !origins.deferred_interface(&target, value)
+                    {
+                        return Err(fail(
+                            "parameter assignment type does not match its signature",
+                        ));
+                    }
+                    if let ParameterType::SourceObject(class)
+                    | ParameterType::NullableSourceObject(class) = expected
+                    {
+                        if !origins.accepts(
+                            class,
+                            matches!(expected, ParameterType::NullableSourceObject(_)),
+                            value,
+                        ) {
+                            return Err(fail(
+                                "parameter assignment must preserve its declared source class",
+                            ));
+                        }
+                    }
+                    refinements.retain(|fact: &type_flow::Fact| {
+                        fact.place() != type_flow::Place::Parameter(index)
+                    });
+                    (None, vec![value])
+                }
                 Operation::NativeCall {
                     result,
                     receiver,
@@ -3136,6 +3172,7 @@ impl Function {
                     | Operation::Println { .. }
                     | Operation::Discard { .. }
                     | Operation::LocalAssign { .. }
+                    | Operation::ParameterAssign { .. }
                     | Operation::SelfFieldRead { .. }
                     | Operation::SelfFieldAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
@@ -3173,6 +3210,7 @@ impl Function {
                     Operation::ArrayFill { value, .. }
                     | Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
+                    | Operation::ParameterAssign { value, .. }
                     | Operation::SelfFieldAssign { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value }
@@ -3899,6 +3937,9 @@ impl Function {
                 }
                 Operation::LocalAssign { local, value } => {
                     format!(".assign ${} %{}", local.0, value.0)
+                }
+                Operation::ParameterAssign { index, value } => {
+                    format!(".assign-parameter {index} %{}", value.0)
                 }
                 Operation::LocalRead { result, local } => {
                     format!(".read %{} ${}", result.0, local.0)

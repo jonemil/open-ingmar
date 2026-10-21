@@ -18,6 +18,7 @@ enum Directive {
     Equal,
     Greater,
     Assign,
+    AssignParameter,
     ReturnVoid,
     CallDiscard,
     CallGlobal,
@@ -325,6 +326,7 @@ pub(crate) fn parse_ir_context(
             Some(".null") => (Directive::Null, 2),
             Some(".call-native") => (Directive::CallNative, call_width()),
             Some(".assign") => (Directive::Assign, 3),
+            Some(".assign-parameter") => (Directive::AssignParameter, 3),
             Some(".base-initialize") => (Directive::BaseInitialize, 2),
             _ => {
                 return Err(fail(*at, "unknown IR directive"));
@@ -964,6 +966,18 @@ pub(crate) fn parse_ir_context(
                     local: parse_local(&fields[1])?,
                     value: parse_value(&fields[2])?,
                 },
+                Directive::AssignParameter => {
+                    let digits = &fields[1];
+                    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+                        return Err(fail(*at, "parameter index requires decimal usize"));
+                    }
+                    Operation::ParameterAssign {
+                        index: digits
+                            .parse()
+                            .map_err(|_| fail(*at, "parameter index requires decimal usize"))?,
+                        value: parse_value(&fields[2])?,
+                    }
+                }
                 Directive::DictionaryConstant => {
                     if width < 5 {
                         return Err(fail(*at, "Dictionary constant requires a type and entries"));

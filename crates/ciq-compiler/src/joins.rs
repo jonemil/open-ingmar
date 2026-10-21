@@ -274,6 +274,7 @@ pub(crate) fn validate_stack_uses(
                 | Operation::Discard { .. }
                 | Operation::LocalInitialize { .. }
                 | Operation::LocalAssign { .. }
+                | Operation::ParameterAssign { .. }
                 | Operation::JumpValue { .. }
                 | Operation::Branch { .. } => break,
                 _ => return Err(IrError {

@@ -97,6 +97,38 @@ here covers integer/string reassignment on the stated device; other forms have
 separate records. Current [assignment rules](../specs/frontend/README.md#local-reassignment)
 do not depend on this investigation's implementation stage.
 
+## Parameter writes and local annotations
+
+Authored SDK/compiler/simulator 9.2.0 probes on 2026-10-20 use fr265 and `-O 0`.
+Compile an AppBase console wrapper with `scripts/build-example.sh` and these
+global helpers:
+
+```monkeyc
+function advance(n as Number) as Number { n=2; n+=3; n++; return n; }
+function guarded(n as Number or Null) as Number {
+    if(n!=null){n=null;}
+    n=7;
+    if(n!=null){return n;}
+    return -1;
+}
+```
+
+**Observed:** parameter writes compile. The [shared application's parameter
+groups][parameters] additionally cover String/Float/Char writes, nullable
+snapshots, for-header writes, replacing Array and nullable source-object
+parameters, branch effects, and an instance method. SDK and generated output
+agree; callers retain their original scalar/reference bindings. Both PRGs
+reconstruct without raw CODE/DATA fallback. Our lowering stores directly into
+the existing parameter slots rather than copying them into locals.
+
+A separate source with explicit local Number, String/Boolean, Array, and
+nullable source-class annotations fails SDK compilation with the diagnostic
+“Invalid explicit typing of a local variable. Local variable types are inferred.”
+The frontend rejects these forms; supported parameter/result/field annotations
+do not imply typed-local syntax. Uninitialized-local semantics were not
+established by this probe.
+
+[parameters]: ../../examples/compiler-object-tests/README.md
 [design]: ../specs/ir/README.md#local-assignment
 [source]: ../specs/frontend/README.md#local-reassignment
 [ir]: ../specs/ir/README.md#local-assignment

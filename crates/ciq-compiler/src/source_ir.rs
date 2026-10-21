@@ -2017,6 +2017,34 @@ impl Builder<'_> {
         Ok(())
     }
 
+    /// Resolve a named assignment target to initialized local or parameter storage.
+    fn named_place(
+        &self,
+        name: &str,
+        locals: &BTreeMap<String, LocalId>,
+        span: Span,
+    ) -> Result<crate::type_flow::Place, Diagnostic> {
+        locals
+            .get(name)
+            .copied()
+            .map(crate::type_flow::Place::Local)
+            .or_else(|| {
+                self.parameters
+                    .get(name)
+                    .copied()
+                    .map(crate::type_flow::Place::Parameter)
+            })
+            .ok_or_else(|| {
+                Diagnostic::at(
+                    self.source,
+                    span.start,
+                    format!(
+                        "assignment requires an in-scope initialized local or parameter {name:?}"
+                    ),
+                )
+            })
+    }
+
     /// Emit a statement update with one target read and one checked write.
     /// Indexed targets retain captured array/index values across the operation.
     fn update(
@@ -2039,11 +2067,16 @@ impl Builder<'_> {
         }
         let operation = match &target.kind {
             E::Local(name) => {
-                let local = locals.get(name).copied().ok_or_else(|| Diagnostic::at(
-                    self.source, span.start, "update requires an in-scope initialized local; parameter updates are unsupported",
-                ))?;
+                let place = self.named_place(name, locals, span)?;
                 let value = self.value(step(target), locals)?;
-                Operation::LocalAssign { local, value }
+                match place {
+                    crate::type_flow::Place::Local(local) => {
+                        Operation::LocalAssign { local, value }
+                    }
+                    crate::type_flow::Place::Parameter(index) => {
+                        Operation::ParameterAssign { index, value }
+                    }
+                }
             }
             E::SelfField(name) => {
                 let field = name.clone();
@@ -2348,22 +2381,25 @@ impl Builder<'_> {
                     self.push(Operation::Println { value }, Some(span));
                 }
                 parser::Statement::Assign { name, value, .. } => {
-                    let local = locals.get(&name).copied().ok_or_else(|| {
-                        Diagnostic::at(
-                            self.source,
-                            span.start,
-                            if self.parameters.contains_key(&name) {
-                                "parameter assignment is not supported".into()
-                            } else {
-                                format!(
-                                    "assignment requires an in-scope initialized local {name:?}"
-                                )
-                            },
-                        )
-                    })?;
-                    let expected = self.types.local_type(local).and_then(construction_type);
+                    let place = self.named_place(&name, locals, span)?;
+                    let expected = match place {
+                        crate::type_flow::Place::Local(local) => {
+                            self.types.local_type(local).and_then(construction_type)
+                        }
+                        crate::type_flow::Place::Parameter(index) => {
+                            construction_type(&self.calls.parameter_types[index].api_type())
+                        }
+                    };
                     let value = self.value_with_context(value, locals, expected)?;
-                    self.push(Operation::LocalAssign { local, value }, Some(span));
+                    let operation = match place {
+                        crate::type_flow::Place::Local(local) => {
+                            Operation::LocalAssign { local, value }
+                        }
+                        crate::type_flow::Place::Parameter(index) => {
+                            Operation::ParameterAssign { index, value }
+                        }
+                    };
+                    self.push(operation, Some(span));
                 }
                 parser::Statement::BaseInitialize { span, base } => {
                     self.push(Operation::NativeBaseInitialize { base }, Some(span));

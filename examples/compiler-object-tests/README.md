@@ -61,6 +61,10 @@ Array arguments, and lazy effectful call arguments.
 module/instance bodies, including local/parameter qualifier conflicts,
 Void/discarded results, contextual Array arguments, and lazy effects.
 
+`ParameterWrites` and `ParameterWriter` check direct/compound/update writes,
+nullable guards and snapshots, loop headers, reference replacement, contextual
+Array construction, branch effects, and instance receiver preservation.
+
 From the repository root:
 
 ```sh

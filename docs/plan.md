@@ -212,11 +212,13 @@ remain required core work. The frontend grammar records current acceptance.
   profiles. Resolve raw supplementary Char truncation and unpaired String
   surrogate replacement before widening those explicit restrictions. Distinguish
   reserved but unused words such as `alias`/`native` from executable features.
-- **Declarations and storage:** uninitialized/typed locals, multiple declaration
+- **Declarations and storage:** uninitialized locals, inferred local types, multiple declaration
   forms, constants, named/anonymous enums, instance/module/global/static fields,
   and supported field value types. Establish default values, declaration versus
   initialization order, dependency cycles, definite initialization, lifetime,
   and access rules. Const reference bindings do not imply immutable contents.
+  Keep explicit local annotations rejected following the
+  [SDK declaration probes](investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
 - **Namespaces and lookup:** nested/reopened modules, classes within modules,
   qualified names, inherited lookup, static lookup, `self`/`me`, and explicit
   global `$.name` values and nested paths beyond supported function/module calls.

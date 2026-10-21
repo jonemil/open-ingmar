@@ -89,6 +89,7 @@ module NullableSourceTests {
         CoreCalls.run();
         CoreGlobalCalls.run();
         RootModuleCalls.run();
+        ParameterWrites.run();
     }
 }
 
@@ -686,4 +687,47 @@ class RootModuleCaller {
         System.println($.CoreCalls.step(CoreCalls));
         $.CoreCalls.notify();
     }
+}
+
+module ParameterWrites {
+    function number(n) as Number { n=2; n+=3; n++; --n; return n; }
+    function text(s as String) as String { s+="!"; return s; }
+    function character(c as Char) as Char { c++; return c; }
+    function floating(n as Float) as Float { n+=0.5; n++; return n; }
+    function nullable(n as Number or Null) as Number {
+        if(n!=null){var old=n; n=null; System.println(old);}
+        if(n==null){n=7;}
+        if(n!=null){return n;}
+        return -1;
+    }
+    function loop(n) as Number {var sum=0; for(n=0;n<3;n++){sum+=n;} return sum;}
+    function array(values as Array<Number>) as Number {values=[4,5]; return values[0];}
+    function object(token as Probe or Null) as Number {
+        token=null; token=new Probe();
+        if(token!=null){return token.value();}
+        return -1;
+    }
+    function branch(n, flag as Boolean) as Number {n+=flag ? globalEffect(2) : globalEffect(99); return n;}
+    function run() as Void {
+        System.println("parameter-writes");
+        var n=41;
+        System.println(number(n));
+        System.println(n);
+        System.println(text("hi"));
+        System.println(character('A').toNumber());
+        System.println(floating(1.5)==3.0);
+        System.println(nullable(3));
+        System.println(loop(88));
+        var values=[1,2];
+        System.println(array(values));
+        System.println(values[0]);
+        System.println(object(null));
+        System.println(branch(4,true));
+        var token=new ParameterWriter();
+        System.println(token.step(5));
+    }
+}
+class ParameterWriter {
+    function initialize(){}
+    function step(n) as Number {n+=1; return n;}
 }

@@ -440,9 +440,9 @@ fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
 }
 
 #[test]
-fn source_assignments_reject_type_changes_parameters_and_escaping_names() {
+fn source_assignments_reject_type_changes_and_escaping_names() {
     for source in [
-        "function f(x) { x = 1; return x; }",
+        "function f(x) { x = \"bad\"; return x; }",
         "function f() { n = 1; var n = 2; return n; }",
         "function f(x) { if (x == 0) { var n = 1; } else { n = 2; } return 1; }",
         "function f(x) { if (x == 0) { var n = 1; } else {} n = 2; return 1; }",

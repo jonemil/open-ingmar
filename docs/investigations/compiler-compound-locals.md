@@ -62,7 +62,7 @@ Native/text checks compare all ten compounds with explicit read/binary/write COD
 including staged RHS effects, nullable proofs, fixed local types, and frame limits.
 They reject a saved read moved after RHS effects; call nesting retains 64 levels.
 An SDK-only probe rejects `n += (n = 20)` as an assignment-expression syntax error.
-The [source spec](../specs/frontend/README.md#local-compound-assignment) owns the
+The [source spec](../specs/frontend/README.md#local-and-parameter-compound-assignment) owns the
 current contracts; [field/indexed probes](compiler-compound-targets.md) are separate.
 
 [example]: ../../examples/compiler-compound-locals/README.md

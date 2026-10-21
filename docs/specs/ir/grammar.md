@@ -153,6 +153,7 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier
 storage-operation = ".parameter" value-id decimal-usize
+                  | ".assign-parameter" decimal-usize value-id
                   | (".local" | ".assign") local-id value-id
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata?

@@ -48,6 +48,11 @@ counts are limited to 254 and parameters plus locals to 255, so existing u8
 fields/slot indexes fit. The 1024-operation and 64-level expression nesting
 limits remain. These encoding limits do not claim runtime validation at maximum
 counts.
+
+Parameter writes evaluate the RHS, then emit `lputv <index + 1>`. They reuse the
+existing parameter slot, leave the hidden receiver in slot 0 intact, and
+allocate no local copy. A write affects this frame's value; earlier evaluation
+stack values and caller variables retain their own copies/references.
 [SDK and runtime evidence](../../investigations/compiler-arguments.md) verifies two
 parameters, a following local, nested calls, and generated caller/callee
 execution with observable argument order.
