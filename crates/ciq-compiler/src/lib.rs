@@ -1,11 +1,13 @@
 //! Restricted Monkey C frontend.
 //!
-//! [`compile`] parses Monkey C source and [`parse_ir`] parses saved IR text.
-//! Both produce a validated [`Function`], which [`backend::lower`] converts
-//! into typed VM assembly. Typed IR construction uses the same validation.
-//! [`compile_sources`] collects global/module functions and instance classes
-//! into a [`CompilationUnit`] and checks module/current-receiver calls.
+//! [`compile_sources`] parses one or more Monkey C files into a validated
+//! [`CompilationUnit`], resolving declarations and checking user calls.
 //! [`parse_unit_ir`] resumes the same validated unit from saved text.
+//! For isolated bodies, [`compile`] and [`parse_ir`] produce a [`Function`]
+//! without unit ownership/callee checks. These fragment entry points support
+//! external symbol binding and focused lowering; they do not compile a program.
+//! Source entries share one declaration parser. [`backend::lower`] converts
+//! validated function IR into typed VM assembly.
 //! [`application::build_console_application`] adds generated lifecycle/metadata
 //! and returns an unsigned PRG for the supported console bootstrap profile.
 
@@ -4210,29 +4212,41 @@ impl Function {
     }
 }
 
-/// Parse one supported Monkey C function into validated semantic IR.
+/// Compile an isolated Monkey C function into validated function IR.
 ///
-/// Resolves supported leading native name declarations and their aliases
-/// before IR construction. Source-class annotations require `compile_sources`
-/// so the native base can be resolved from declarations.
-/// Resolves parameters and scoped locals, lowers conditions and while loops
-/// (including innermost break/continue) to blocks, and retains source spans.
-/// Omitted parameter/result annotations select Any. Empty and bare-return
-/// bodies return Null; explicit Void remains separate. Value-returning bodies
-/// require value returns on every returning path, checked against their result
-/// contract. Unreachable statements and local/parameter shadowing are rejected.
-/// Local reads require definite assignment; writes may change inferred types.
-/// Unsupported syntax, unresolved names, and invalid IR produce source
-/// diagnostics rather than partial output. VM instruction selection and symbol
-/// binding occur later.
+/// Uses the same declaration parser as [`compile_sources`], then requires exactly
+/// one global function with optional leading native imports/aliases. Checks
+/// types, local initialization, control flow, and effect order and retains source
+/// spans. User module calls may remain unresolved for later external symbol
+/// binding; callee signatures and ownership are not validated here.
+/// Use [`compile_sources`] for programs, source-class types, and checked user
+/// calls. Unsupported syntax or invalid function IR produces a diagnostic.
 pub fn compile(source: &str) -> Result<Function, Diagnostic> {
-    source_ir::build(source, parser::parse(source)?, None)
+    compile_fragment(source, None)
 }
 
-/// Parse a supported function and check unguarded API references against explicit
-/// target and deployment levels before lowering support. No device is inferred.
+/// Compile an isolated function with explicit unguarded API-level checks.
+/// Has the same fragment and unresolved-callee restrictions as [`compile`].
+/// No device is inferred; use [`compile_sources_with_api`] for a program.
 pub fn compile_with_api(source: &str, context: api::ApiContext) -> Result<Function, Diagnostic> {
-    source_ir::build(source, parser::parse(source)?, Some(context))
+    compile_fragment(source, Some(context))
+}
+
+fn compile_fragment(
+    source: &str,
+    context: Option<api::ApiContext>,
+) -> Result<Function, Diagnostic> {
+    let parsed = parser::declarations(source)?;
+    if !parsed.classes.is_empty() || parsed.functions.len() != 1 || parsed.functions[0].0.is_some()
+    {
+        return Err(Diagnostic::at(
+            source,
+            0,
+            "function fragment requires exactly one global function; use compile_sources for declarations",
+        ));
+    }
+    let (_, function) = parsed.functions.into_iter().next().unwrap();
+    source_ir::build(source, function, context)
 }
 
 fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'static str> {

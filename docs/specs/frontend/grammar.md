@@ -25,9 +25,8 @@ establish availability, assignability, or executable API support.
 ## Declarations
 
 ```text
-source-input = single-file | unit-file
-single-file = native-declaration* function
-unit-file = native-declaration* declaration*
+source-input = source-file
+source-file = native-declaration* declaration*
 declaration = function | module | class
 module = "module" identifier "{" native-declaration* function+ "}"
 class = "class" identifier ("extends" native-base)?
@@ -47,12 +46,14 @@ inferred-field-default = number-literal | "-" number-literal | symbol-literal
 field-default = "null" | symbol-literal | "(" field-default ")"
 ```
 
-The compile mode selects `single-file` (one function) or `unit-file` (one file
-of a multi-file unit); the alternatives are not an automatic mode detector.
-Both consume the complete input. `function` is shared by global functions,
-module functions, and class methods. Its `block` expands in [Statements](#statements).
+`source-file` consumes the complete input. `function` is shared by global
+functions, module functions, and class methods. Its `block` expands in
+[Statements](#statements).
 `native-base`, `field-type`, and `result-type` expand in [Type syntax](#type-syntax).
 
+All source entry points use this file grammar. The fragment entry additionally
+requires exactly one global function and no classes or module-owned functions;
+this is an input-shape restriction, not a separate parser or language grammar.
 A compilation unit requires 1..=256 function/method bodies across its files.
 Object-rooted classes may omit all methods; the frontend supplies their default
 initializer when absent. Other bases require at least one method. Synthesized

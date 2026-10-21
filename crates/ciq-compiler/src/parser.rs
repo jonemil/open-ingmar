@@ -2441,22 +2441,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
-    let mut parser = Parser {
-        source,
-        offset: 0,
-        lookahead: None,
-        expressions: 0,
-        dictionary_entry: false,
-        names: crate::names::Names::default(),
-        native_base: None,
-    };
-    parser.imports()?;
-    let function = parser.function()?;
-    parser.expect(Kind::End, "end of input (only one function is supported)")?;
-    Ok(function)
-}
-
 impl Parser<'_> {
     /// Parse one existing signature atom, including bounded container parameters.
     fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
@@ -2650,8 +2634,9 @@ pub(crate) struct ParsedClass {
     pub methods: Vec<ParsedFunction>,
 }
 
-/// Parse global/module functions and native-derived class methods/Number fields.
-/// Collects source ownership without binding calls or selecting VM instructions.
+/// Parse one source file into owned declarations, retaining function bodies.
+/// Resolves file-local native names without binding user calls or selecting
+/// VM instructions. Both fragment and compilation-unit inputs use this parser.
 pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
     let mut parser = Parser {
         source,

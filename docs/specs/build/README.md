@@ -81,8 +81,11 @@ cargo run -p ciq-compiler -- --unit --from ir scratch/unit.ciqir scratch/resumed
 `--from ir` and `--from assembly` require one input. Assembly is the existing
 shared format, so `--unit` is unnecessary when resuming it. `--emit code`
 accepts the existing explicit `--symbols`/`--data` bindings and emits raw CODE,
-not a PRG. All outputs must be new files. Without `--unit`, the original
-single-function CLI behavior is unchanged.
+not a PRG. All outputs must be new files. Without `--unit`, input is an isolated
+function fragment, permitting user module references supplied later through
+symbol bindings. That path checks the body but does not check callee
+declarations/signatures or unit ownership. Use `--unit` for complete source
+inputs, including a program contained in one file.
 
 See [the example](../../../examples/compiler-unit/README.md) and
 [simulator evidence](../../investigations/compiler-unit.md).

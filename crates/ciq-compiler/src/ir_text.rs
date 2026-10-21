@@ -104,6 +104,8 @@ use crate::{
 ///
 /// Applies the same validation as typed [`Function`] construction. Invalid
 /// syntax or semantic operations produce diagnostics at input byte offsets.
+/// This reads a function fragment, without checking unit ownership or callee
+/// declarations. Use [`crate::parse_unit_ir`] to resume a complete unit.
 pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
     parse_ir_context(source, None)
 }

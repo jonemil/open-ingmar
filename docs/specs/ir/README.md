@@ -74,8 +74,13 @@ content contracts. Fields and lexical casts retain their existing domains.
 
 `Function::new` validates explicitly constructed operations; `compile(source)`
 constructs an immutable Function through the same validator. `parse_ir` resumes
-saved text with those checks. Public IR types are provisional. None of these
-entry points may bypass semantic validation before lowering.
+saved function text with those checks. These are body-level entry points, not
+complete-program validation: user module callees may remain external and require
+later symbol binding. `compile_sources` and `parse_unit_ir` additionally require
+declared callees and check their contracts. The unit text reader uses the same
+function reader for its nested bodies. Public IR types are provisional. None of
+these entry points may bypass their applicable semantic validation before
+lowering.
 
 Definitions are unique; operands refer to earlier definitions and every defined
 expression value has exactly one use in its own block. Local initialization

@@ -26,8 +26,11 @@ checks on source or IR inputs. Library entry points with `_with_api` accept an
 `api::ApiContext`; typed models expose `validate_api`. See
 [input rules](../../docs/specs/sdk/README.md#api-context-inputs).
 
-Start with `compile`, `compile_sources`, `Function`, and `CompilationUnit` in
-the [library API](src/lib.rs). See [compiler IR specification](../../docs/specs/ir/README.md#semantic-model),
+Start with `compile_sources` and `CompilationUnit` in the [library API](src/lib.rs)
+for one or more source files with checked user calls. `compile` and `parse_ir`
+handle isolated `Function` fragments with externally bound module calls; they do
+not check unit ownership or callee signatures. Both source entries share the
+declaration parser. See [compiler IR specification](../../docs/specs/ir/README.md#model-and-validation),
 [source/CLI rules](../../docs/specs/frontend/README.md),
 [unit rules](../../docs/specs/frontend/README.md#declarations-and-name-resolution), and
 [IR syntax](../../docs/specs/ir/grammar.md).

@@ -7,11 +7,17 @@ The frontend parses a restricted Monkey C profile, resolves declarations and
 native names, and constructs validated semantic IR. This is a supported subset,
 not a replacement definition of the complete Monkey C language.
 
-The default source entry point accepts one function. Unit mode collects multiple
-files and owners before checking cross-function references. Neither mode
-resolves Jungle projects. Diagnostics identify input byte offsets and one-based
-line and column; columns count Unicode scalar values. Callers supply filenames.
-Unsupported input is diagnosed rather than silently producing partial functions.
+`compile_sources` collects declarations from one or more files into a
+`CompilationUnit` before resolving owners and checking cross-function references.
+The lower-level `compile` entry accepts one global function and produces a
+`Function` fragment. It permits unresolved user module calls for external symbol
+binding, without checking their declarations or signatures. Both entries use the
+same file/declaration parser; the fragment restriction is checked after parsing.
+The CLI selects units with `--unit`; its default is a function fragment.
+Neither entry resolves Jungle projects. Diagnostics identify input byte offsets
+and one-based line and column; columns count Unicode scalar values. Callers
+supply filenames. Unsupported input is diagnosed rather than silently producing
+partial functions.
 
 Source contracts are independent of [IR serialization](../ir/grammar.md),
 [VM lowering](../lowering/README.md), and [application generation](../build/README.md#complete-application-generation).

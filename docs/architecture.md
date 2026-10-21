@@ -71,7 +71,11 @@ remain deferred in [the plan](plan.md).
 ## Implementation conventions
 
 Within `ciq-compiler`, `parser` and `names` handle source syntax and native-name
-bindings; `source_ir` constructs semantic operations. Candidate types and source
+bindings. One declaration parser returns a `ParsedUnit` for each source file;
+unit compilation collects these before resolution. The isolated-function entry
+selects one global body from that same result, retaining external-call binding
+without unit ownership/signature validation. `source_ir` constructs semantic
+operations. Candidate types and source
 origins help construction but are not validation proofs. `Function` validation
 checks per-body invariants, using `local_flow` to check inferred variable reads
 against possible writes at each CFG point and sharing narrowing facts with
