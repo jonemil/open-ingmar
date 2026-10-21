@@ -159,9 +159,8 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
             }
         }
     }
-    let comparable = crate::InterfaceType::Comparable.api_type(false);
-    (crate::native::accepts(&comparable, left) && crate::native::accepts(&comparable, right))
-        .then_some(comparable)
+    let ty = crate::unions::normalize(vec![left.clone(), right.clone()]);
+    (ValueType::from_api_type(&ty).is_some() && type_tag(&ty).is_some()).then_some(ty)
 }
 
 /// Collect source join operands without changing their predecessor identities.

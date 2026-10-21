@@ -92,8 +92,8 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
         "function f() as Toybox.Lang.String or Null { }",
         "function f() as Toybox.Lang.Number { return null; }",
         "function f() as Toybox.Lang.Number { return null; }",
-        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number { return 0; }",
-        "function f(x as Null or Toybox.Lang.Number) as Toybox.Lang.Number { return 0; }",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number { return x; }",
+        "function f(x as Null or Toybox.Lang.Number) as Toybox.Lang.Number { return x; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

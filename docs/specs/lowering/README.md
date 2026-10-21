@@ -10,6 +10,11 @@ Lowering assigns VM storage and selects instructions without constant folding,
 extra runtime guards, or substitutions for unsupported source features. Assembly
 then resolves identities and placement; it does not select operations.
 
+Native union contracts are erased during lowering. Operations use the same VM
+instructions as their concrete alternatives; only explicit source type/Null tests
+emit runtime tests. Union normalization and static narrowing add no conversions,
+wrapper allocation, or implicit guards.
+
 Slot zero is the context/receiver; parameters begin at one. Ordinary locals
 follow parameters in declaration/initialization order, including locals on
 mutually

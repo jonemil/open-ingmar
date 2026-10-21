@@ -34,6 +34,7 @@ mod source_objects;
 mod source_types;
 mod type_flow;
 mod type_text;
+mod unions;
 mod unit;
 pub use ir_text::{parse_ir, parse_ir_with_api};
 pub use joins::JoinType;
@@ -414,6 +415,10 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// A normalized union of supported native value contracts.
+    Union(api::Type),
+    /// The Null value alone.
+    Null,
     /// Dynamic value, including Null, with operations checked at runtime.
     Any,
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
@@ -487,6 +492,10 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// A normalized union of supported native value contracts.
+    Union(api::Type),
+    /// The Null value alone.
+    Null,
     /// Dynamic value, including Null, with operations checked at runtime.
     Any,
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
@@ -563,6 +572,8 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Union(ty) => ty.clone(),
+            Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
@@ -617,6 +628,8 @@ impl ReturnType {
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Union(ty) => ty.clone(),
+            Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
@@ -666,8 +679,9 @@ impl ReturnType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
+    Union(api::Type),
     /// Dynamic value, including Null, with operations checked at runtime.
     Any,
     ByteArrayOptions,
@@ -738,8 +752,15 @@ enum ValueType {
 
 impl ValueType {
     /// Return the non-null alternative of a supported nullable value.
-    fn without_null(self) -> Self {
-        match self {
+    fn without_null(&self) -> Self {
+        match self.clone() {
+            Self::Union(api::Type::Union(parts)) => Self::from_api_type(&crate::unions::normalize(
+                parts
+                    .into_iter()
+                    .filter(|ty| *ty != api::Type::Null)
+                    .collect(),
+            ))
+            .unwrap_or_else(|| self.clone()),
             Self::NullableInterface(interface) => Self::Interface(interface),
             Self::NullableNativeObject(class) => Self::Object(class),
             Self::NullableInteger => Self::Integer,
@@ -758,13 +779,14 @@ impl ValueType {
             Self::NullableByteArray => Self::ByteArray,
             Self::NullableObject => Self::LangObject,
             Self::NullableDictionary => Self::Dictionary,
-            _ => self,
+            _ => self.clone(),
         }
     }
 
     /// Map a supported value category to its core API type without changing storage.
-    fn api_type(self) -> api::Type {
+    fn api_type(&self) -> api::Type {
         match self {
+            Self::Union(ty) => ty.clone(),
             Self::Any => api::Type::Any,
             Self::ByteArrayOptions => api::Type::byte_options(),
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
@@ -848,6 +870,13 @@ impl ValueType {
     /// Adapt an API type to the fixed executable value subset; other types
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if let api::Type::Union(parts) = ty {
+            let normalized = crate::unions::normalize(parts.clone());
+            if normalized != *ty {
+                return Self::from_api_type(&normalized);
+            }
+        }
+
         match ty {
             api::Type::Any => Some(Self::Any),
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
@@ -913,6 +942,14 @@ impl ValueType {
             _ if *ty == api::Type::integer().with_null() => Some(Self::NullableIntegerAlias),
             _ if *ty == api::Type::decimal().with_null() => Some(Self::NullableDecimal),
             _ if *ty == Self::NullableByteArray.api_type() => Some(Self::NullableByteArray),
+            api::Type::Union(parts)
+                if parts.len() >= 2
+                    && parts
+                        .iter()
+                        .all(|ty| crate::unions::parameter(ty.clone()).is_some()) =>
+            {
+                Some(Self::Union(crate::unions::normalize(parts.clone())))
+            }
             _ => None,
         }
     }
@@ -1645,6 +1682,38 @@ impl Function {
         declared_result: Option<ReturnType>,
         infer_joins: bool,
     ) -> Result<Self, IrError> {
+        let invalid = || IrError {
+            operation: None,
+            message: "unsupported union contract".into(),
+        };
+        let parameter_types = parameter_types
+            .into_iter()
+            .map(|ty| match ty {
+                ParameterType::Union(ty) => {
+                    crate::unions::parameter(crate::unions::normalize(vec![ty])).ok_or_else(invalid)
+                }
+                ty => Ok(ty),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let declared_result = declared_result
+            .map(|ty| match ty {
+                ReturnType::Union(ty) => {
+                    crate::unions::result(crate::unions::normalize(vec![ty])).ok_or_else(invalid)
+                }
+                ty => Ok(ty),
+            })
+            .transpose()?;
+        for located in &mut operations {
+            if let Operation::BlockParameter { value_type, .. }
+            | Operation::VariableRead { value_type, .. }
+            | Operation::LocalDeclare { value_type, .. } = &mut located.operation
+            {
+                if let JoinType::Api(api::Type::Union(parts)) = value_type {
+                    *value_type = JoinType::Api(crate::unions::normalize(parts.clone()));
+                }
+            }
+        }
+
         let source_parameters = parameter_types.iter().filter_map(|ty| {
             if let ParameterType::SourceObject(class) | ParameterType::NullableSourceObject(class) =
                 ty
@@ -1772,7 +1841,7 @@ impl Function {
             if located.span.is_some_and(|span| span.start > span.end) {
                 return Err(fail("source span ends before it starts"));
             }
-            let type_of = |v| types.get(&v).copied().unwrap_or(ValueType::Integer);
+            let type_of = |v| types.get(&v).cloned().unwrap_or(ValueType::Integer);
             let inferred_operation = if infer_joins {
                 if let Operation::BlockParameter { result, .. } = located.operation {
                     let inferred = joins::infer_type(
@@ -2163,7 +2232,7 @@ impl Function {
                                     ),
                                     Operation::LocalRead { local, .. }
                                     | Operation::LocalTake { local, .. } => {
-                                        local_types.get(&local).copied()
+                                        local_types.get(&local).cloned()
                                     }
                                     Operation::ParameterRead { index, .. } => parameter_types
                                         .get(index)
@@ -2351,20 +2420,22 @@ impl Function {
                             .function(api::core(), "Toybox.System", "println")
                             .map_err(|message| fail(&message))?;
                     }
-                    if !matches!(
-                        type_of(value),
-                        ValueType::Any
-                            | ValueType::Integer
-                            | ValueType::Numeric
-                            | ValueType::IntegerAlias
-                            | ValueType::Decimal
-                            | ValueType::String
-                            | ValueType::Boolean
-                            | ValueType::Char
-                            | ValueType::Long
-                            | ValueType::Float
-                            | ValueType::Double
-                    ) {
+                    if !crate::unions::printable(&type_of(value).api_type())
+                        && !matches!(
+                            type_of(value),
+                            ValueType::Any
+                                | ValueType::Integer
+                                | ValueType::Numeric
+                                | ValueType::IntegerAlias
+                                | ValueType::Decimal
+                                | ValueType::String
+                                | ValueType::Boolean
+                                | ValueType::Char
+                                | ValueType::Long
+                                | ValueType::Float
+                                | ValueType::Double
+                        )
+                    {
                         return Err(fail("println requires a supported non-null scalar"));
                     }
                     (None, vec![value])
@@ -2663,6 +2734,10 @@ impl Function {
                     index,
                 } => {
                     let element = match type_of(array) {
+                        ValueType::Union(ref ty) => {
+                            unions::index_read(ty, &type_of(index).api_type())
+                                .map_err(|e| fail(&e))?
+                        }
                         ValueType::Any => api::Type::Any,
                         ValueType::Array(element) => element.api_type(),
                         ValueType::ByteArray => ArrayElement::Number.api_type(),
@@ -2672,7 +2747,7 @@ impl Function {
                             ));
                         }
                     };
-                    if type_of(array) != ValueType::Any
+                    if !matches!(type_of(array), ValueType::Any | ValueType::Union(_))
                         && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
                     {
                         return Err(fail("array reads require a non-null Number index"));
@@ -2686,6 +2761,15 @@ impl Function {
                     value,
                 } => {
                     let element = match type_of(array) {
+                        ValueType::Union(ref ty) => {
+                            unions::index_write(
+                                ty,
+                                &type_of(index).api_type(),
+                                &type_of(value).api_type(),
+                            )
+                            .map_err(|e| fail(&e))?;
+                            api::Type::Any
+                        }
                         ValueType::Any => api::Type::Any,
                         ValueType::Array(element) => element.api_type(),
                         ValueType::ByteArray => api::Type::Union(vec![
@@ -2698,7 +2782,7 @@ impl Function {
                             ));
                         }
                     };
-                    if type_of(array) != ValueType::Any
+                    if !matches!(type_of(array), ValueType::Any | ValueType::Union(_))
                         && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
                     {
                         return Err(fail("array writes require a non-null Number index"));
@@ -3028,7 +3112,9 @@ impl Function {
                             && !source_interface
                             && !(matches!(
                                 local_types[&local],
-                                ValueType::LangObject
+                                ValueType::Union(_)
+                                    | ValueType::Null
+                                    | ValueType::LangObject
                                     | ValueType::Numeric
                                     | ValueType::IntegerAlias
                                     | ValueType::Decimal
@@ -3091,7 +3177,7 @@ impl Function {
                     if matches!(located.operation, Operation::LocalTake { .. }) {
                         available_locals.remove(&local);
                     }
-                    let ty = local_types[&local];
+                    let ty = local_types[&local].clone();
                     types.insert(
                         result,
                         type_flow::refine(ty, type_flow::Place::Local(local), &refinements),
@@ -3155,6 +3241,7 @@ impl Function {
                             ValueType::NullableNumeric => ReturnType::NullableNumeric,
                             ValueType::NullableIntegerAlias => ReturnType::NullableIntegerAlias,
                             ValueType::NullableDecimal => ReturnType::NullableDecimal,
+                            ValueType::Union(ref ty) => ReturnType::Union(ty.clone()),
                             ValueType::Any => ReturnType::Any,
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
@@ -4177,7 +4264,8 @@ fn validate_call_arguments(
         types.get(v).is_some_and(|t| {
             !matches!(
                 t,
-                ValueType::Any
+                ValueType::Union(_)
+                    | ValueType::Any
                     | ValueType::Integer
                     | ValueType::String
                     | ValueType::Boolean
@@ -4231,6 +4319,8 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::Union(ty) => ValueType::from_api_type(&ty).ok_or("unsupported union result"),
+        ReturnType::Null => Ok(ValueType::Null),
         ReturnType::Any => Ok(ValueType::Any),
         ReturnType::NullableInteger => Ok(ValueType::NullableInteger),
         ReturnType::NullableLong => Ok(ValueType::NullableLong),

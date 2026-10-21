@@ -83,7 +83,6 @@ fn char_operator_profiles_reject_unverified_pairs_and_edited_consumers() {
         "function f() as Void { System.println('A' - \"B\"); }",
         "function f() as Void { System.println('A' == true); }",
         "function f() as Void { System.println('A' > true); }",
-        "function f() as Void { System.println('A' == null); }",
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return c + n; }",
         "function f() as Toybox.Lang.Char { var c = 'A'; c = c + 'B'; return c; }",
     ] {

@@ -130,7 +130,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
             "{expression}"
         );
     }
-    for expression in ["'A' + n", "n == 'A'"] {
+    for expression in ["'A' + n", "n < 'A'"] {
         assert!(
             compile(&format!(
                 "function f(n as Toybox.Lang.Long or Null) as Void {{ System.println({expression}); }}"

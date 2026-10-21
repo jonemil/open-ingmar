@@ -1,10 +1,14 @@
-# Numeric alias arithmetic
+# Numeric aliases and native unions
 
 [app.mc](app.mc) checks all 16 Number/Long/Float/Double pairings through
 `Lang.Numeric` parameters, integer-only operations through `Lang.Integer`, and
 floating results through `Lang.Decimal`. Nullable signatures, guards, local
 writes, compound updates, unary signs, and ByteArray decoding exercise the same
 contracts without explicit conversions.
+
+The `NativeUnions` group checks Number/String signatures, common methods,
+both branches of class/Null tests, changing locals and loop exits, conditional
+joins, standalone Null, and guarded nullable Array references.
 
 API minimum: 3.1.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 

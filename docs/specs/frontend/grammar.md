@@ -222,7 +222,8 @@ expression `construction`, `comparison`, and `cast`. The `*-type` and target
 rules below define paths; the domains following them restrict name resolution.
 
 ```text
-value-type = named-value-type | nullable-type "or" "Null"
+value-type = value-atom ("or" value-atom)*
+value-atom = named-value-type | "Null"
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 result-type = value-type | "Void"
@@ -280,9 +281,11 @@ no imports. These semantic type domains mean:
 - Source class: an exact constructible source-class name from this unit.
 - Dictionary type by itself denotes an opaque Lang.Dictionary; its parameterized
   form specifies the bounded key/value contracts.
-- Nullable: scalar/alias, core reference, interface, and exact constructible
-  source-class domains. Nullable Array and typed Dictionary references are
-  unsupported.
+- Signature unions: up to 254 value atoms, including Null and supported native
+  container references. Exact source-class atoms may combine only with the same
+  class and Null; mixed or distinct source-class unions remain unsupported.
+- Nullable field domains: scalar/alias, core reference, interface, and exact
+  constructible source class. Container fields remain non-null.
 - View, Array, Dictionary, Symbol, Method, and ByteArray productions use their
   resolved native identities.
 - Native base: Object, AppBase, View, or BehaviorDelegate, as above.
@@ -293,11 +296,10 @@ no imports. These semantic type domains mean:
   grammar; a parsed path does not admit arbitrary type tests/assertions.
 
 Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
-source value/result contract. Nullable opaque Dictionary is a lifecycle IR
-contract; it is not an ordinary source annotation. Fields have narrower,
-independently checked [type/default domains](README.md#instance-fields). Nested
-type parameters, arbitrary unions, reversed `Null or T`, bare Null, and
-parenthesized type unions are unsupported. Generic containers are invariant; see
+source value/result contract. Bare Null and either order of native union atoms
+are accepted in signatures. Fields and lexical casts retain their narrower,
+independently checked domains; signature union syntax does not extend them.
+Nested type parameters and parenthesized type unions remain unsupported. Generic containers are invariant; see
 [type rules](README.md#types-and-nullability) and the container semantic pages.
 
 ## Lexical rules and literals

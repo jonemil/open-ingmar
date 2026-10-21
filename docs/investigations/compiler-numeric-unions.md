@@ -22,12 +22,11 @@ run. Negating each of the four classes through one Numeric function preserves
 its result width. UINT32 decoding followed by `+ 1` yields Long `4294967296`.
 
 The generated application and SDK application match all
-[96 expected console lines](../../examples/compiler-numeric-unions/expected.txt).
+[expected console lines](../../examples/compiler-numeric-unions/expected.txt).
 Both PRGs support structured CODE/DATA export and reconstruction; generated
 source, saved IR, and assembly paths produce the same unsigned application.
 The compiler's [current alias contracts](../specs/frontend/README.md#numbers-and-numeric-aliases)
-remain bounded; this specimen does not establish arbitrary union storage or
-runtime error behavior.
+retain the scalar promotion rules; this does not establish runtime error behavior.
 
 For SDK reproduction, reuse the minimal-console manifest/resources and point
 `base.sourcePath` to `../../examples/compiler-numeric-unions` from
@@ -36,6 +35,22 @@ AppBase class. Build with `scripts/build-example.sh`, then use
 `scripts/check-example.py prepare compiler-numeric-unions --sdk-prg <SDK PRG>
 --output <fresh directory>` and `simulate <prepared directory>` in the Rust and
 SDK environments. Current captures are in `scratch/check-numeric-unions-v2/`.
+
+## Native union signatures and narrowing
+
+The same authored example now includes `NativeUnions`. SDK/compiler/simulator
+9.2.0 / fr265 accept Number-or-String signatures, common `toString`, arithmetic
+with union results, both branches of `instanceof`, Null-first three-way unions,
+standalone Null signatures, nullable Array references, and loop-exit narrowing.
+Char equality with Null evaluates false. These observations concern our authored
+source, not the SDK/compiler implementation.
+
+SDK and generated apps match all 114 expected console lines. Source, saved IR,
+and saved assembly produce the same unsigned generated PRG. Both SDK and
+generated PRGs pass structured CODE/DATA export and byte-preserving unsigned
+reconstruction; no required raw fallback occurs. Current captures are in
+`scratch/unions/check/`; reproduce with the specimen checker commands above.
+This specimen does not establish exact source-class unions or union fields.
 
 ## Field storage
 

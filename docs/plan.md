@@ -37,8 +37,11 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support arbitrary `A or B` source unions in annotations, storage, calls,
-  returns, and conditional joins, including union normalization and narrowing.
+- [ ] Preserve exact source-class alternatives in general unions through
+  annotations, storage, calls, returns, conditional joins, and narrowing;
+  retain each identity and required interface/initialization witnesses.
+- [ ] Support union instance-field declarations, defaults, required
+  initialization, reads, and writes, including nullable container references.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
   diagnose recursive aliases.
 - [ ] Parse named and anonymous `interface` types with method and field members;
@@ -120,8 +123,6 @@ implemented contracts; investigations retain evidence, not another backlog.
   `instanceof`; verify which interface/parameterized targets the SDK accepts.
 - [ ] Make `has` refine guarded member/API availability while keeping member
   existence separate from callable signature proof.
-- [ ] Accept supported nullable/union operands at shared arithmetic, comparison,
-  compound-assignment, and update sites after the required flow proofs.
 - [ ] Preserve enclosing lexical refinements while checking unreachable loop
   updates and post-tests; accept unassigned operands in provably unexecuted
   headers where the SDK does, without inventing a runtime value. Keep those
@@ -149,8 +150,8 @@ executable profiles.
 
 ### Object
 
-- [ ] Dispatch `toString`, `equals`, and `hashCode` on newly admitted Any/union,
-  source-subclass, Exception, and ResourceId values using their
+- [ ] Dispatch `toString`, `equals`, and `hashCode` on source-subclass,
+  Exception, and ResourceId values using their
   resolved runtime contracts; preserve overrides and appropriate Null checks.
 - [ ] Extend `method(Symbol)` to inherited/static and module/global members;
   resolve lexical conflicts using ordinary owner/member lookup.
@@ -186,12 +187,8 @@ executable profiles.
   `reverse`, and typed `sort` callbacks.
 - [ ] Support explicit nested Array/Dictionary element parameters and nested
   literal construction; preserve inner contracts through the same methods.
-- [ ] Support nullable Array references in signatures, fields, assignments,
-  conditional joins, and guarded indexing/member calls.
 - [ ] Infer heterogeneous and scalar/Null literal elements, including `[]`
   without immediate call/return context; support their evolving local use.
-- [ ] Complete conditional Array joins beyond the current Number/Char profile,
-  preserving each arm's selected reference and invariant element contract.
 - [ ] Support sorting nullable elements through a checked custom comparator,
   after resolving the Comparator signature discrepancy above.
 - [ ] Check multidimensional `new [sizes]` and native Array constructor syntax;
@@ -207,8 +204,6 @@ executable profiles.
 - [ ] Preserve exact source-class values through storage, `get`, and `values`.
 - [ ] Support explicit nested key/value parameters and nested Dictionary/Array
   literals; retain inner contracts through lookup, writes, and enumeration.
-- [ ] Support nullable typed Dictionary references and Dictionary/Null or opaque
-  Dictionary conditional joins with guarded calls/indexing.
 - [ ] Infer empty, Any-valued, and heterogeneous Dictionary literals without
   immediate context under the language's changing-local/union rules.
 - [ ] Support indexed compound assignment and numeric updates with single

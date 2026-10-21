@@ -8,6 +8,7 @@ use std::borrow::Cow;
 // Canonical spellings common to ordinary parameter and call-result contracts.
 const NAMED: &[(&str, ParameterType, ReturnType)] = &[
     ("any", ParameterType::Any, ReturnType::Any),
+    ("null", ParameterType::Null, ReturnType::Null),
     ("integer", ParameterType::Integer, ReturnType::Integer),
     ("long", ParameterType::Long, ReturnType::Long),
     ("float", ParameterType::Float, ReturnType::Float),
@@ -223,6 +224,29 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("union(") {
+        let body = tag
+            .strip_prefix("union(")
+            .and_then(|s| s.strip_suffix(')'))
+            .ok_or("invalid union tag")?;
+        let parts = body.split('|').collect::<Vec<_>>();
+        if parts.len() < 2
+            || parts.len() > crate::MAX_PARAMETERS
+            || parts.iter().any(|p| {
+                p.starts_with("union(")
+                    || p.starts_with("source(")
+                    || p.starts_with("nullable-source(")
+            })
+        {
+            return Err("invalid native union alternatives");
+        }
+        let types = parts
+            .iter()
+            .map(|p| call_result(p).map(|r| r.api_type()))
+            .collect::<Result<Vec<_>, _>>()?;
+        return crate::unions::result(crate::unions::normalize(types))
+            .ok_or("unsupported union contract");
+    }
     if tag.starts_with("nullable-source(") && tag.ends_with(')') {
         return SourceClass::parse(&tag[16..tag.len() - 1])
             .map(ReturnType::NullableSourceObject)
@@ -267,6 +291,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         }
         Ok(ReturnType::TypedDictionary(ty)) => Ok(ParameterType::TypedDictionary(ty)),
         Ok(ReturnType::Array(element)) => Ok(ParameterType::Array(element)),
+        Ok(ReturnType::Union(ty)) => Ok(ParameterType::Union(ty)),
         Err(
             message @ ("invalid source reference contract" | "unsupported Dictionary contract"),
         ) => Err(message),
@@ -308,6 +333,7 @@ pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
 /// Print a call-result tag without adding metadata keys or erasing source identity.
 pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
     match ty {
+        ReturnType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ReturnType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ReturnType::TypedDictionary(ty) => Cow::Owned(ty.text()),
         ReturnType::SourceObject(class) => Cow::Owned(format!("source({class})")),
@@ -328,6 +354,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 /// Print parameter metadata using the same spellings as its reader.
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     match ty {
+        ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ParameterType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ParameterType::TypedDictionary(ty) => Cow::Owned(ty.text()),
         ParameterType::SourceObject(class) => Cow::Owned(format!("source({class})")),
@@ -370,6 +397,9 @@ pub(super) fn join(tag: &str) -> Option<Type> {
 
 /// Print a supported join type without broadening its accepted domain.
 pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
+    if matches!(ty, Type::Union(_)) && named_result(ty).is_none() {
+        return Some(Cow::Owned(crate::unions::text(ty)));
+    }
     if *ty == Type::Null {
         return Some(Cow::Borrowed("null"));
     }
@@ -412,6 +442,19 @@ pub(super) fn local_contract_tag(ty: &crate::JoinType) -> Option<Cow<'static, st
     })
 }
 
+pub(crate) fn named_parameter(ty: &Type) -> Option<ParameterType> {
+    NAMED
+        .iter()
+        .find(|(_, p, _)| p.api_type() == *ty)
+        .map(|(_, p, _)| p.clone())
+}
+pub(crate) fn named_result(ty: &Type) -> Option<ReturnType> {
+    NAMED
+        .iter()
+        .find(|(_, _, r)| r.api_type() == *ty)
+        .map(|(_, _, r)| r.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,7 +488,7 @@ mod tests {
             ("view", [true, true, true, false, false]),
             ("one-view", [false, true, true, false, false]),
             ("byte-options", [false, false, false, true, false]),
-            ("null", [false, false, false, true, false]),
+            ("null", [true, true, true, true, false]),
             ("void", [false; 5]),
         ] {
             assert_eq!(

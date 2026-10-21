@@ -80,6 +80,8 @@ callback checks. `api` owns declarations, `native` owns executable profiles,
 `native_bindings` owns the pinned VM identities shared by runtime type tests and
 application generation, and `operators` owns operand/result rules. `type_text`
 shares saved-type spellings while retaining each consumer's accepted domain.
+`unions` normalizes native alternatives and adapts them to supported contracts;
+source identities remain separate from native API projections.
 `backend` selects VM instructions;
 `application` generates the bounded bootstrap and metadata. Keep these
 responsibilities separate even where they currently share a source file.

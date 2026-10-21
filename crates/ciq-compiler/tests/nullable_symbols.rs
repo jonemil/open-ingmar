@@ -85,7 +85,6 @@ fn symbol_members_and_selectors_require_fresh_null_proofs() {
         "function f(s as Toybox.Lang.Symbol or Null) {var local=s;if(s!=null){return local.toNumber();}return 0;}",
         "function f(s as Toybox.Lang.Symbol or Null) {var present=s!=null;if(present){return s.toNumber();}return 0;}",
         "function f(s as Toybox.Lang.Symbol or Null) {var local=:alpha;local=s;return local.toNumber();}",
-        "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.Boolean {return s==:alpha;}",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

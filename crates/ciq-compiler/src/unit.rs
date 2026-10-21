@@ -70,18 +70,21 @@ fn requests_exit(operation: &Operation) -> bool {
 /// Treat erased comparison/element callbacks as possible shutdown requests.
 /// No exact body remains available for the reference-initialization proof.
 fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
-    let interface_keys = |ty| {
-        matches!(
-            ty,
-            crate::ValueType::TypedDictionary(crate::DictionaryType {
-                key: crate::DictionaryKey::Interface(_),
-                ..
-            })
-        )
+    let interface_keys = |ty: &crate::ValueType| {
+        crate::unions::alternatives(&ty.api_type()).iter().any(|p| {
+            matches!(
+                crate::DictionaryType::from_api_type(p),
+                Some(crate::DictionaryType {
+                    key: crate::DictionaryKey::Interface(_),
+                    ..
+                })
+            )
+        })
     };
     match operation {
+        Operation::ArrayRead{array,..}|Operation::ArrayWrite{array,..} if matches!(function.value_types[array],crate::ValueType::Union(_))=>interface_keys(&function.value_types[array]),
         Operation::DictionaryRead { dictionary, .. }
-        | Operation::DictionaryWrite { dictionary, .. } => interface_keys(function.value_types[dictionary]),
+        | Operation::DictionaryWrite { dictionary, .. } => interface_keys(&function.value_types[dictionary]),
         Operation::DictionaryFill { builder, .. } => function.operations().iter().any(|located| {
             matches!(located.operation, Operation::DictionaryBegin { builder: id, dictionary_type, .. }
                 if id == *builder && matches!(dictionary_type.key, crate::DictionaryKey::Interface(_)))
@@ -99,8 +102,10 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
             member,
             arguments,
         } => {
+            let receiver_type=function.value_types[receiver].api_type();
+            crate::unions::alternatives(&receiver_type).iter().filter_map(crate::ValueType::from_api_type).any(|ty| {
             matches!(
-                function.value_types[receiver],
+                ty,
                 crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
             ) || (member == "sort"
                 && arguments.iter().any(|a| {
@@ -109,23 +114,24 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                         crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
                     )
                 }))
-                || matches!(function.value_types[receiver], crate::ValueType::Array(
+                || matches!(ty, crate::ValueType::Array(
                     crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
-                || matches!(function.value_types[receiver], crate::ValueType::Array(crate::ArrayElement::LangObject)
+                || matches!(ty, crate::ValueType::Array(crate::ArrayElement::LangObject)
                     if member == "sort" && arguments.iter().any(|argument|
                         matches!(function.value_types[argument], crate::ValueType::Null
                             | crate::ValueType::NullableInterface(crate::InterfaceType::Comparator))))
-                || matches!(function.value_types[receiver], crate::ValueType::TypedDictionary(
+                || matches!(ty, crate::ValueType::TypedDictionary(
                     crate::DictionaryType {value: crate::DictionaryValue::Interface(_) | crate::DictionaryValue::NullableInterface(_), ..})
                     if member == "toString")
-                || (interface_keys(function.value_types[receiver])
+                || (interface_keys(&ty)
                     && matches!(member.as_str(), "get" | "put" | "hasKey" | "remove" | "toString"))
-                || matches!(function.value_types[receiver], crate::ValueType::Dictionary
+                || matches!(ty, crate::ValueType::Dictionary
                     | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
                     | crate::ValueType::NullableObject if member == "toString")
-                || matches!(function.value_types[receiver], crate::ValueType::Method
+                || matches!(ty, crate::ValueType::Method
                     | crate::ValueType::NullableMethod if member == "invoke")
+            })
         }
         _ => false,
     }
@@ -1016,12 +1022,6 @@ impl CompilationUnit {
                         ),
                     ));
                 }
-            } else if function
-                .parameter_types()
-                .contains(&crate::ParameterType::NullableDictionary)
-            {
-                return Err(fail(Some(index), None,
-                    "nullable-dictionary parameters are supported only for native lifecycle callbacks".into()));
             }
             let base_calls = function
                 .operations()
@@ -1175,7 +1175,7 @@ impl CompilationUnit {
                         }
                     }
                     if let Operation::LocalInitialize { local, value } = located.operation {
-                        let ty = function.value_types[&value];
+                        let ty = function.value_types[&value].clone();
                         if matches!(
                             ty,
                             crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)

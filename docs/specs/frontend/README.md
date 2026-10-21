@@ -46,8 +46,8 @@ The [IR dynamic contract](../ir/README.md#dynamic-values) defines these shared
 rules. Annotations accept the
 [value-type domains](grammar.md#type-syntax), resolved through canonical names,
 imports, and module aliases. Constructible source-class annotations preserve
-[exact identity](#source-class-signatures). Nullable forms append
-`or Null` only for the listed nullable domains; general unions are unsupported.
+[exact identity](#source-class-signatures). Native signatures also accept the
+[union contracts](#native-unions) below.
 
 An unannotated function exposes Any even when every return has one concrete
 type. A body with no value returns supplies Null on bare return or fallthrough;
@@ -69,6 +69,37 @@ cannot override callback contracts.
 
 Bare `Any` is not accepted source annotation syntax in the tested SDK profile;
 omitted annotations provide the dynamic contract.
+
+### Native unions
+
+Parameter and result annotations accept `A or B` chains of supported native
+value types, including Null and existing parameterized Array/Dictionary types.
+Bare Null is also a signature contract. Fields and lexical `as` assertions keep
+their separately specified type domains. Exact source classes may currently
+combine only with the same class and Null; they cannot participate in general
+native unions.
+
+Normalization flattens alternatives, removes duplicates, and orders them
+consistently. Numeric aliases and existing nullable types retain their established
+representations. Any absorbs other value alternatives; Void is never a union
+alternative. No subtype subsumption or implicit scalar conversion is performed.
+A union admits assignment only when every source alternative fits its contract.
+Array elements and Dictionary keys/values remain invariant: a union of container
+references does not widen their mutable content types.
+
+Calls, local writes, returns, and conditional joins preserve native alternatives.
+Each possible receiver must support a member/index operation and accept its
+arguments. Operators check every possible operand pairing; their result is the
+normalized union of the possible results. Thus Number-or-String supports `+ 1`
+with a Number-or-String result, but not `- 1`. A nullable receiver needs a
+non-null proof before ordinary member/index use. API availability is checked
+for every alternative, including unused signature contracts.
+
+Direct local/parameter `instanceof` tests retain matching alternatives on the
+true edge and exclude covered alternatives on the false edge. Direct Null tests
+likewise distinguish Null from non-Null. Negation reverses the edges; writes
+invalidate proofs. Aliases and stored Boolean tests do not transfer proofs.
+Empty intersections do not introduce a bottom type or mark code unreachable.
 
 ### Nullable results
 
@@ -330,7 +361,7 @@ VM instructions without inserting conversions. Alias negation uses Number zero
 subtraction, with result width selected by runtime promotion.
 
 Printing accepts non-null numeric aliases. Native member calls must be valid for
-every alternative and have one common result contract, including `toString`,
+every alternative and retain the normalized result contract, including `toString`,
 `format`, and numeric conversions. Direct `instanceof Number/Long/Float/Double`
 branches refine fresh alias local/parameter reads under the existing branch
 rules. Nullable aliases require a current non-null proof before arithmetic,
@@ -341,8 +372,8 @@ Conditional joins infer the narrowest supported numeric alias covering both
 arms, including concrete Number/Long or Float/Double alternatives; adding a
 Null arm makes it nullable.
 [Class fields](#numeric-alias-fields) retain these same alias
-contracts. Arbitrary source unions and general union inference remain
-unsupported.
+contracts. Other supported native alternatives use the shared
+[union rules](#native-unions).
 
 #### Numeric alias containers
 
@@ -1330,8 +1361,9 @@ Source fields/methods and inherited native methods can be tested.
 Both predicates have the existing comparison precedence below arithmetic and
 above logical AND/OR; chained comparisons are unsupported. Ordinary
 short-circuit and conditional evaluation rules apply. `has` establishes no
-member-signature or API-availability proof. Guarded newer APIs, general union
-refinement, and broader cast targets remain planned.
+member-signature or API-availability proof. Guarded newer APIs and broader cast
+targets remain planned. Native union refinement uses direct `instanceof` and
+Null tests, independently of `has`.
 
 #### Object refinement
 
@@ -1488,15 +1520,10 @@ right. The condition must be Boolean. Evaluate it once, then evaluate only the
 selected arm. Both arms must type-check even with a constant condition. Preserve
 operand/argument order when an enclosing expression has earlier effects.
 
-Supported arm types match exactly: numeric scalars, Char, Boolean, String, Null,
-or an invariant Array/typed Dictionary with supported content contracts.
-Container arms must have exactly the same element or key/value types, including
-content nullability and interface identity; selection preserves the chosen
-reference without copying or conversion. Scalar alternatives may also join with
-Null or their existing nullable type, producing the corresponding
-scalar-or-Null. No Char-to-Number promotion, general heterogeneous union,
-nullable Array reference, unrelated-class join, Void arm, or non-Boolean
-truthiness is supported. Expected container context from a declaration,
+Native arms use the [union rules](#native-unions), retaining each selected
+value/reference without copying or conversion. Different invariant container
+contracts can remain separate union alternatives; neither content type is widened.
+Void arms and non-Boolean truthiness remain unsupported. Expected container context from a declaration,
 assignment, call, or
 return reaches direct literals and supported sized Array allocations in both
 arms; no element contract is inferred solely from a sibling arm.
@@ -1560,9 +1587,10 @@ after the loop. Re-executing a declaration in a loop resets assignment status.
 Local types are inferred from values reaching each read, including sequential
 assignments and branch/loop joins. A write replaces the local's current inferred
 contract; it does not change earlier snapshots. Joins retain compatible exact,
-nullable, numeric-alias, or comparison-interface contracts. Other heterogeneous
-values expose Object, optionally nullable, until checked narrowing establishes a
-more specific type. General source union annotations remain unsupported.
+nullable, numeric-alias, or comparison-interface contracts. Other supported
+native alternatives retain normalized unions. Exact source-class mixtures
+remain outside general union support; opaque projections cannot recover an
+unproven source identity.
 An unused unassigned declaration has an inert
 Null storage contract in saved IR, with no readable runtime default.
 Explicit `var name as Type = value`
@@ -2371,7 +2399,8 @@ values. Compatible values may pass to Object parameters/results and replace
 opaque Object locals; a nullable Object local also accepts Null. Erasure cannot
 be reversed into a typed Array/Dictionary or a scalar. Object joins accept
 matching opaque contracts and Object/Null alternatives; matching WeakReference
-arms also join. These rules do not introduce heterogeneous container joins.
+arms also join. Other native alternatives follow the shared union rules;
+reference joins do not widen mutable container contents.
 
 The declared Object type does not establish a WeakReference result from
 `Object.weak()`: the runtime value might be an immutable scalar. That receiver
@@ -2509,8 +2538,9 @@ ordinary token whitespace permitted. Array parameters and results retain the
 element contract; source array results require an explicit annotation. Locals
 may store, copy, and reassign matching Char-array values, and user calls may
 pass/return them. [Number elements](#number-arrays) have a separate supported
-profile. Raw Array annotations, other element types, and nullable arrays are
-unsupported. Element contracts are invariant; Char arrays are not widened to
+profile. Raw Array annotations remain unsupported. Other supported element domains
+are described in the following sections. Nullable Array references follow the
+[union rules](#native-unions). Element contracts are invariant; Char arrays are not widened to
 mutable arrays of Object.
 
 Char-array receivers support `size()` returning Number, `toString()` returning
@@ -2633,9 +2663,8 @@ retain the element type. For example, `Float += Number` is valid but `Float +=
 Long` would produce Double and is rejected. Nullable elements cannot be compound
 targets without a supported direct non-null read contract. Non-null elements
 support [default sorting](#default-array-sorting) and
-[source comparators](#source-comparators). Broader callback consumers, nested
-containers, nullable Array references, and whole-array expression joins outside
-the existing Number/Char profile remain deferred. See the
+[source comparators](#source-comparators). Broader callback consumers and nested containers remain deferred. Whole-array
+joins and nullable references use the [union rules](#native-unions). See the
 [example](../../../examples/compiler-numeric-arrays/README.md) and
 [record/runtime evidence](../../investigations/compiler-numeric-arrays.md).
 
@@ -2644,8 +2673,8 @@ the existing Number/Char profile remain deferred. See the
 `Toybox.Lang.Array<Toybox.Lang.String>` is an invariant non-null String-element
 contract. Parameters/results preserve that type; indexed reads produce String
 and writes require String. Nullable source values require a non-null proof
-before construction, writes, or native arguments. Mixed types, Null elements,
-nested arrays, and nullable Array receivers remain unsupported for this profile.
+before construction, writes, or native arguments. Mixed element inference and nested arrays remain unsupported for this profile.
+Nullable Array references require a non-null proof before receiver use.
 Nullable String elements have a [separate contract](#nullable-array-elements).
 
 Homogeneous literals such as `["one", "two"]` use pooled DATA constants.
@@ -2785,8 +2814,8 @@ element so differing operand types do not change an existing local's contract.
 
 Existing Array references cannot widen or narrow their element contracts.
 Unannotated literals retain the non-null inference rules; `[null]` and `[1,
-null]` without nullable context remain rejected. Nested arrays and nullable
-Array receivers remain deferred.
+null]` without nullable context remain rejected. Nested arrays remain deferred.
+Nullable Array references require a non-null proof before receiver use.
 
 Store a nullable read in a local and guard a fresh local read before scalar
 operators, methods, or printing. A present false Boolean is distinct from Null.
@@ -2802,9 +2831,8 @@ Reassigning that scalar invalidates its null proof. See the
 references with invariant erased element contracts. Dictionary values likewise
 accept `Lang.Object` or `Lang.Object or Null` with any supported key contract;
 Object keys remain unsupported. Canonical names, imports, and Lang aliases work
-in signatures and contextual construction. General source unions, explicit
-nested parameters, and exact source-class element/value contracts remain
-separate requirements.
+in signatures and contextual construction. Explicit nested parameters and exact
+source-class element/value contracts remain separate requirements.
 
 Object slots accept supported scalar classes, numeric aliases, source/native
 objects, comparison interfaces, and container/Method/WeakReference references.
@@ -3000,14 +3028,13 @@ conversion. Indexed compound assignments and increments remain unsupported.
 
 Chaining and discarded results use existing native-call rules. Native callback
 Dictionary-or-Null state supports these opaque methods under a non-null proof;
-unguarded access is rejected. Its nullable declaration/assignment rules remain
-unchanged. Ordinary source nullable Dictionary annotations are not yet
-supported.
+unguarded access is rejected. Ordinary nullable Dictionary signatures and
+reference assignments use the [union rules](#native-unions).
 
 Matching typed Dictionary conditional arms retain their exact invariant
 key/value contract and selected reference. Different contracts, opaque
-Dictionary joins, and Dictionary/Null joins remain unsupported. Conditional
-literals receive an available declared contract in each arm.
+Dictionary joins, and Dictionary/Null joins retain native union alternatives.
+Conditional literals receive an available declared contract in each arm.
 
 Dictionary `==`/`!=`, direct printing, `new Dictionary()`, and the other methods
 remain unsupported. No key or value contract is inferred from an empty literal
@@ -3021,8 +3048,8 @@ These are intended contracts, not executable support yet. Do not infer key/value
 contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
-General source unions, Null keys, and explicit nested parameter contracts need
-separate rules before acceptance. Nested references stored as
+Null keys and explicit nested parameter contracts need separate rules before
+acceptance. Native reference unions do not change literal content inference. Nested references stored as
 [Object values](#object-containers) remain erased. Object `method` follows the
 [bounded Method profile](#method-values-and-invocation);
 ordinary `weak` follows the [bounded reference
@@ -3236,8 +3263,8 @@ An interface parameter or call result retains its contract through inferred
 locals, aliases, and same-interface assignment and conditional joins. A
 Comparable local also accepts a verified scalar assignment. A conditional with a
 Comparable arm and a verified scalar arm retains Comparable in either arm order.
-Different verified scalar witnesses also join as Comparable when no narrower
-numeric contract covers them. There is no
+Different scalar witnesses retain a native union when no narrower numeric
+alias covers them; each alternative can still satisfy a Comparable consumer. There is no
 implicit conversion between Comparable and Comparator. Writes to fixed interface
 storage defer their source signature proof to unit validation, including after
 IR reload. Inferred local bindings may change type; a later interface consumer
@@ -3251,8 +3278,7 @@ operand order. The shared branch rules cover early returns, conditional arms,
 and loops; writes invalidate local proofs, and aliases/stored Boolean guards do
 not transfer them. A conditional combining an interface and Null produces the
 corresponding nullable interface. Existing nullable-interface arms can also
-accept compatible scalar/interface alternatives; this does not enable general
-union inference.
+accept compatible scalar/interface alternatives under the shared union rules.
 
 `Array.sort` accepts Comparator-or-Null directly: Null selects default ordering,
 and a non-null instance supplies custom ordering. This does not permit calling

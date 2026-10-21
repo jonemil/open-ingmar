@@ -2458,6 +2458,122 @@ pub(crate) fn parse(source: &str) -> Result<ParsedFunction, Diagnostic> {
 }
 
 impl Parser<'_> {
+    /// Parse one existing signature atom, including bounded container parameters.
+    fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
+        let at = self.offset;
+        let ty = match self.type_path()?.as_str() {
+            "Null" => crate::ParameterType::Null,
+            "Toybox.Lang.Number" => crate::ParameterType::Integer,
+            "Toybox.Lang.Object" => crate::ParameterType::LangObject,
+            "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
+            "Toybox.Lang.ByteArray" => crate::ParameterType::ByteArray,
+            "Toybox.Lang.Comparable" => {
+                crate::ParameterType::Interface(crate::InterfaceType::Comparable)
+            }
+            "Toybox.Lang.Comparator" => {
+                crate::ParameterType::Interface(crate::InterfaceType::Comparator)
+            }
+            "Toybox.Lang.Method" => crate::ParameterType::Method,
+            "Toybox.Lang.Symbol" => crate::ParameterType::Symbol,
+            "Toybox.Lang.Long" => crate::ParameterType::Long,
+            "Toybox.Lang.Double" => crate::ParameterType::Double,
+            "Toybox.Lang.Float" => crate::ParameterType::Float,
+            "Toybox.Lang.Numeric" => crate::ParameterType::Numeric,
+            "Toybox.Lang.Integer" => crate::ParameterType::IntegerAlias,
+            "Toybox.Lang.Decimal" => crate::ParameterType::Decimal,
+            "Toybox.Lang.NumberFormat" => crate::ParameterType::NumberFormat,
+            "Toybox.Lang.Endian" => crate::ParameterType::Endian,
+            "Toybox.Lang.String" => crate::ParameterType::String,
+            "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
+            "Toybox.Lang.Char" => crate::ParameterType::Char,
+            "Toybox.Lang.Dictionary" => self
+                .dictionary_annotation()?
+                .map(crate::ParameterType::TypedDictionary)
+                .unwrap_or(crate::ParameterType::Dictionary),
+            "Toybox.WatchUi.View" => crate::ParameterType::Object(crate::NativeClass::View),
+            "Toybox.WatchUi.BehaviorDelegate" => {
+                crate::ParameterType::Object(crate::NativeClass::BehaviorDelegate)
+            }
+            "Toybox.Graphics.Dc" => crate::ParameterType::Object(crate::NativeClass::Dc),
+            "Toybox.Lang.Array" => crate::ParameterType::Array(self.array_annotation()?),
+            name if !name.contains('.')
+                && !matches!(
+                    name,
+                    "Number"
+                        | "Long"
+                        | "String"
+                        | "Boolean"
+                        | "Char"
+                        | "Array"
+                        | "Object"
+                        | "View"
+                        | "Dc"
+                        | "Void"
+                ) =>
+            {
+                crate::ParameterType::SourceObject(crate::SourceClass {
+                    name: name.into(),
+                    base: crate::ClassBase::LangObject,
+                })
+            }
+            _ => return Err(self.error(at, "unsupported parameter type annotation")),
+        };
+        Ok(ty)
+    }
+
+    /// Parse `or` alternatives, normalizing native unions without erasing a
+    /// source class into its native base. General source-class unions are deferred.
+    fn parameter_annotation(&mut self, at: usize) -> Result<crate::ParameterType, Diagnostic> {
+        let first = self.parameter_atom()?;
+        if self.peek()? != Kind::Word("or") {
+            return Ok(first);
+        }
+        let mut parts = vec![first];
+        while self.peek()? == Kind::Word("or") {
+            self.token()?;
+            if parts.len() >= crate::MAX_PARAMETERS {
+                return Err(self.error(at, "type union exceeds 254 alternatives"));
+            }
+            parts.push(self.parameter_atom()?);
+        }
+        let sources = parts
+            .iter()
+            .filter_map(|p| match p {
+                crate::ParameterType::SourceObject(c)
+                | crate::ParameterType::NullableSourceObject(c) => Some(c.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if let Some(class) = sources.first() {
+            let same_class_or_null = parts.iter().all(|part| match part {
+                crate::ParameterType::Null => true,
+                crate::ParameterType::SourceObject(other)
+                | crate::ParameterType::NullableSourceObject(other) => other == class,
+                _ => false,
+            });
+            if same_class_or_null {
+                let nullable = parts.iter().any(|part| {
+                    matches!(
+                        part,
+                        crate::ParameterType::Null | crate::ParameterType::NullableSourceObject(_)
+                    )
+                });
+                return Ok(if nullable {
+                    crate::ParameterType::NullableSourceObject(class.clone())
+                } else {
+                    crate::ParameterType::SourceObject(class.clone())
+                });
+            }
+            return Err(self.error(
+                at,
+                "unions containing different source-class contracts are not supported",
+            ));
+        }
+        crate::unions::parameter(crate::unions::normalize(
+            parts.iter().map(crate::ParameterType::api_type).collect(),
+        ))
+        .ok_or_else(|| self.error(at, "unsupported native union annotation"))
+    }
     fn function(&mut self) -> Result<ParsedFunction, Diagnostic> {
         self.expressions = 0;
         self.expect(Kind::Word("function"), "'function'")?;
@@ -2491,106 +2607,7 @@ impl Parser<'_> {
                 parameter_types.push(if self.peek()? == Kind::Word("as") {
                     self.token()?;
                     let at = self.offset;
-                    let ty = match self.type_path()?.as_str() {
-                        "Toybox.Lang.Number" => crate::ParameterType::Integer,
-                        "Toybox.Lang.Object" => crate::ParameterType::LangObject,
-                        "Toybox.Lang.WeakReference" => crate::ParameterType::WeakReference,
-                        "Toybox.Lang.ByteArray" => crate::ParameterType::ByteArray,
-                        "Toybox.Lang.Comparable" => {
-                            crate::ParameterType::Interface(crate::InterfaceType::Comparable)
-                        }
-                        "Toybox.Lang.Comparator" => {
-                            crate::ParameterType::Interface(crate::InterfaceType::Comparator)
-                        }
-                        "Toybox.Lang.Method" => crate::ParameterType::Method,
-                        "Toybox.Lang.Symbol" => crate::ParameterType::Symbol,
-                        "Toybox.Lang.Long" => crate::ParameterType::Long,
-                        "Toybox.Lang.Double" => crate::ParameterType::Double,
-                        "Toybox.Lang.Float" => crate::ParameterType::Float,
-                        "Toybox.Lang.Numeric" => crate::ParameterType::Numeric,
-                        "Toybox.Lang.Integer" => crate::ParameterType::IntegerAlias,
-                        "Toybox.Lang.Decimal" => crate::ParameterType::Decimal,
-                        "Toybox.Lang.NumberFormat" => crate::ParameterType::NumberFormat,
-                        "Toybox.Lang.Endian" => crate::ParameterType::Endian,
-                        "Toybox.Lang.String" => crate::ParameterType::String,
-                        "Toybox.Lang.Boolean" => crate::ParameterType::Boolean,
-                        "Toybox.Lang.Char" => crate::ParameterType::Char,
-                        "Toybox.Lang.Dictionary" => self
-                            .dictionary_annotation()?
-                            .map(crate::ParameterType::TypedDictionary)
-                            .unwrap_or(crate::ParameterType::Dictionary),
-                        "Toybox.WatchUi.View" => {
-                            crate::ParameterType::Object(crate::NativeClass::View)
-                        }
-                        "Toybox.WatchUi.BehaviorDelegate" => {
-                            crate::ParameterType::Object(crate::NativeClass::BehaviorDelegate)
-                        }
-                        "Toybox.Graphics.Dc" => {
-                            crate::ParameterType::Object(crate::NativeClass::Dc)
-                        }
-                        "Toybox.Lang.Array" => {
-                            crate::ParameterType::Array(self.array_annotation()?)
-                        }
-                        name if !name.contains('.')
-                            && !matches!(
-                                name,
-                                "Number"
-                                    | "Long"
-                                    | "String"
-                                    | "Boolean"
-                                    | "Char"
-                                    | "Array"
-                                    | "Object"
-                                    | "View"
-                                    | "Dc"
-                                    | "Void"
-                            ) =>
-                        {
-                            crate::ParameterType::SourceObject(crate::SourceClass {
-                                name: name.into(),
-                                base: crate::ClassBase::LangObject,
-                            })
-                        }
-                        _ => return Err(self.error(at, "unsupported parameter type annotation")),
-                    };
-                    Some(if self.peek()? == Kind::Word("or") {
-                        self.token()?;
-                        self.expect(Kind::Word("Null"), "'Null'")?;
-                        match ty {
-                            crate::ParameterType::SourceObject(class) => {
-                                crate::ParameterType::NullableSourceObject(class)
-                            }
-                            crate::ParameterType::Interface(interface) => {
-                                crate::ParameterType::NullableInterface(interface)
-                            }
-                            crate::ParameterType::Integer => crate::ParameterType::NullableInteger,
-                            crate::ParameterType::Numeric => crate::ParameterType::NullableNumeric,
-                            crate::ParameterType::IntegerAlias => {
-                                crate::ParameterType::NullableIntegerAlias
-                            }
-                            crate::ParameterType::Decimal => crate::ParameterType::NullableDecimal,
-                            crate::ParameterType::LangObject => {
-                                crate::ParameterType::NullableObject
-                            }
-                            crate::ParameterType::Long => crate::ParameterType::NullableLong,
-                            crate::ParameterType::Double => crate::ParameterType::NullableDouble,
-                            crate::ParameterType::Float => crate::ParameterType::NullableFloat,
-                            crate::ParameterType::String => crate::ParameterType::NullableString,
-                            crate::ParameterType::Boolean => crate::ParameterType::NullableBoolean,
-                            crate::ParameterType::Char => crate::ParameterType::NullableChar,
-                            crate::ParameterType::Symbol => crate::ParameterType::NullableSymbol,
-                            crate::ParameterType::Method => crate::ParameterType::NullableMethod,
-                            crate::ParameterType::ByteArray => {
-                                crate::ParameterType::NullableByteArray
-                            }
-                            crate::ParameterType::WeakReference => {
-                                crate::ParameterType::NullableWeakReference
-                            }
-                            _ => return Err(self.error(at, "unsupported nullable parameter type")),
-                        }
-                    } else {
-                        ty
-                    })
+                    Some(self.parameter_annotation(at)?)
                 } else {
                     None
                 });
@@ -2604,91 +2621,22 @@ impl Parser<'_> {
         let result_type = if self.peek()? == Kind::Word("as") {
             self.token()?;
             let at = self.offset;
-            let ty = match self.type_path()?.as_str() {
-                "Toybox.Lang.Number" => crate::ReturnType::Integer,
-                "Toybox.Lang.Object" => crate::ReturnType::LangObject,
-                "Toybox.Lang.WeakReference" => crate::ReturnType::WeakReference,
-                "Toybox.Lang.ByteArray" => crate::ReturnType::ByteArray,
-                "Toybox.Lang.Comparable" => {
-                    crate::ReturnType::Interface(crate::InterfaceType::Comparable)
-                }
-                "Toybox.Lang.Comparator" => {
-                    crate::ReturnType::Interface(crate::InterfaceType::Comparator)
-                }
-                "Toybox.Lang.Method" => crate::ReturnType::Method,
-                "Toybox.Lang.Symbol" => crate::ReturnType::Symbol,
-                "Toybox.Lang.Long" => crate::ReturnType::Long,
-                "Toybox.Lang.Double" => crate::ReturnType::Double,
-                "Toybox.Lang.Float" => crate::ReturnType::Float,
-                "Toybox.Lang.Numeric" => crate::ReturnType::Numeric,
-                "Toybox.Lang.Integer" => crate::ReturnType::IntegerAlias,
-                "Toybox.Lang.Decimal" => crate::ReturnType::Decimal,
-                "Toybox.Lang.NumberFormat" => crate::ReturnType::NumberFormat,
-                "Toybox.Lang.Endian" => crate::ReturnType::Endian,
-                "Toybox.Lang.String" => crate::ReturnType::String,
-                "Toybox.Lang.Boolean" => crate::ReturnType::Boolean,
-                "Toybox.Lang.Char" => crate::ReturnType::Char,
-                "Toybox.Lang.Dictionary" => self
-                    .dictionary_annotation()?
-                    .map(crate::ReturnType::TypedDictionary)
-                    .unwrap_or(crate::ReturnType::Dictionary),
-                "Toybox.WatchUi.View" => crate::ReturnType::Object(crate::NativeClass::View),
-                "Toybox.WatchUi.BehaviorDelegate" => {
-                    crate::ReturnType::Object(crate::NativeClass::BehaviorDelegate)
-                }
-                "Toybox.Lang.Array" => crate::ReturnType::Array(self.array_annotation()?),
-                "Void" => crate::ReturnType::Void,
-                name if !name.contains('.')
-                    && !matches!(
-                        name,
-                        "Number"
-                            | "Long"
-                            | "String"
-                            | "Boolean"
-                            | "Char"
-                            | "Array"
-                            | "Object"
-                            | "View"
-                            | "Dc"
-                    ) =>
-                {
-                    crate::ReturnType::SourceObject(crate::SourceClass {
-                        name: name.into(),
-                        base: crate::ClassBase::LangObject,
-                    })
-                }
-                _ => return Err(self.error(at, "unsupported result type annotation")),
-            };
-            Some(if self.peek()? == Kind::Word("or") {
+            if self.peek()? == Kind::Word("Void") {
                 self.token()?;
-                self.expect(Kind::Word("Null"), "'Null'")?;
-                match ty {
-                    crate::ReturnType::SourceObject(class) => {
+                Some(crate::ReturnType::Void)
+            } else {
+                let parameter = self.parameter_annotation(at)?;
+                Some(match parameter {
+                    crate::ParameterType::SourceObject(class) => {
+                        crate::ReturnType::SourceObject(class)
+                    }
+                    crate::ParameterType::NullableSourceObject(class) => {
                         crate::ReturnType::NullableSourceObject(class)
                     }
-                    crate::ReturnType::Interface(interface) => {
-                        crate::ReturnType::NullableInterface(interface)
-                    }
-                    crate::ReturnType::Integer => crate::ReturnType::NullableInteger,
-                    crate::ReturnType::Numeric => crate::ReturnType::NullableNumeric,
-                    crate::ReturnType::IntegerAlias => crate::ReturnType::NullableIntegerAlias,
-                    crate::ReturnType::Decimal => crate::ReturnType::NullableDecimal,
-                    crate::ReturnType::LangObject => crate::ReturnType::NullableObject,
-                    crate::ReturnType::Long => crate::ReturnType::NullableLong,
-                    crate::ReturnType::Double => crate::ReturnType::NullableDouble,
-                    crate::ReturnType::Float => crate::ReturnType::NullableFloat,
-                    crate::ReturnType::String => crate::ReturnType::NullableString,
-                    crate::ReturnType::Boolean => crate::ReturnType::NullableBoolean,
-                    crate::ReturnType::Char => crate::ReturnType::NullableChar,
-                    crate::ReturnType::Symbol => crate::ReturnType::NullableSymbol,
-                    crate::ReturnType::Method => crate::ReturnType::NullableMethod,
-                    crate::ReturnType::ByteArray => crate::ReturnType::NullableByteArray,
-                    crate::ReturnType::WeakReference => crate::ReturnType::NullableWeakReference,
-                    _ => return Err(self.error(at, "unsupported nullable result type")),
-                }
-            } else {
-                ty
-            })
+                    other => crate::unions::result(other.api_type())
+                        .ok_or_else(|| self.error(at, "unsupported result type annotation"))?,
+                })
+            }
         } else {
             None
         };

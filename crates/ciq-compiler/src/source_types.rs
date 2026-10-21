@@ -132,7 +132,7 @@ impl Types {
                 native::constant(module, member, None)
                     .ok()
                     .and_then(|(ty, _)| crate::ValueType::from_api_type(&ty))
-                    .map(crate::ValueType::api_type),
+                    .map(|ty| ty.api_type()),
             ),
             Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
             Operation::TupleNew { result, elements } => {
@@ -264,11 +264,18 @@ impl Types {
                         .ok()
                     }),
             ),
-            Operation::ArrayRead { result, array, .. } => (
+            Operation::ArrayRead {
+                result,
+                array,
+                index,
+            } => (
                 *result,
                 self.values
                     .get(array)
                     .and_then(|ty| match candidate(ty).as_ref() {
+                        Type::Union(_) => self.values.get(index).and_then(|key| {
+                            crate::unions::index_read(candidate(ty).as_ref(), key).ok()
+                        }),
                         Type::Any => Some(Type::Any),
                         Type::Array(element) => Some((**element).clone()),
                         Type::Named(name) if name == "Toybox.Lang.ByteArray" => {

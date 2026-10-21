@@ -6,6 +6,11 @@ use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
 pub(crate) fn not_result(operand: &Type) -> Option<Type> {
+    if let Type::Union(parts) = operand {
+        return Some(crate::unions::normalize(
+            parts.iter().map(not_result).collect::<Option<Vec<_>>>()?,
+        ));
+    }
     if *operand == Type::Any {
         return Some(Type::Any);
     }
@@ -20,6 +25,14 @@ pub(crate) fn not_result(operand: &Type) -> Option<Type> {
 
 /// Resolve Number/Long complement without widening its width or admitting Null.
 pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
+    if let Type::Union(parts) = operand {
+        return Some(crate::unions::normalize(
+            parts
+                .iter()
+                .map(complement_result)
+                .collect::<Option<Vec<_>>>()?,
+        ));
+    }
     if *operand == Type::Any {
         return Some(Type::Any);
     }
@@ -34,6 +47,11 @@ pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
 
 /// Resolve unary signs without changing numeric width or admitting Null.
 pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+    if let Type::Union(parts) = operand {
+        return Some(crate::unions::normalize(
+            parts.iter().map(sign_result).collect::<Option<Vec<_>>>()?,
+        ));
+    }
     if *operand == Type::Any {
         return Some(Type::Any);
     }
@@ -54,6 +72,14 @@ fn numeric(ty: &Type) -> bool {
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
 pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+    if let Type::Union(parts) = operand {
+        return Some(crate::unions::normalize(
+            parts
+                .iter()
+                .map(|part| step_result(part, increment))
+                .collect::<Option<Vec<_>>>()?,
+        ));
+    }
     if *operand == Type::Any {
         return Some(Type::Any);
     }
@@ -77,32 +103,14 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::Any);
     }
-    if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
+    if matches!(left, Type::Union(_)) || matches!(right, Type::Union(_)) {
         let mut results = Vec::new();
-        for a in left
-            .numeric_alternatives()
-            .unwrap_or(std::slice::from_ref(left))
-        {
-            for b in right
-                .numeric_alternatives()
-                .unwrap_or(std::slice::from_ref(right))
-            {
-                let result = binary_result(kind, a, b)?;
-                if !results.contains(&result) {
-                    results.push(result);
-                }
+        for a in crate::unions::alternatives(left) {
+            for b in crate::unions::alternatives(right) {
+                results.push(binary_result(kind, a, b)?);
             }
         }
-        if results.len() == 1 {
-            return results.pop();
-        }
-        return [Type::integer(), Type::decimal(), Type::numeric()]
-            .into_iter()
-            .find(|ty| {
-                results
-                    .iter()
-                    .all(|actual| crate::native::accepts(ty, actual))
-            });
+        return Some(crate::unions::normalize(results));
     }
     if matches!(
         kind,
@@ -184,20 +192,21 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::named("Toybox.Lang.Boolean"));
     }
-    if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
-        for a in left
-            .numeric_alternatives()
-            .unwrap_or(std::slice::from_ref(left))
-        {
-            for b in right
-                .numeric_alternatives()
-                .unwrap_or(std::slice::from_ref(right))
-            {
+    if kind.is_equality()
+        && ((*left == Type::Null && crate::ValueType::from_api_type(right).is_some())
+            || (*right == Type::Null && crate::ValueType::from_api_type(left).is_some()))
+    {
+        return Some(Type::named("Toybox.Lang.Boolean"));
+    }
+    if matches!(left, Type::Union(_)) || matches!(right, Type::Union(_)) {
+        for a in crate::unions::alternatives(left) {
+            for b in crate::unions::alternatives(right) {
                 comparison_result(kind, a, b)?;
             }
         }
         return Some(Type::named("Toybox.Lang.Boolean"));
     }
+
     let char_numeric = |ty: &Type| matches!(ty, Type::Named(name) if matches!(name.as_str(), "Toybox.Lang.Number" | "Toybox.Lang.Char"));
     let char_equality = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.Char") && numeric(right))
@@ -208,77 +217,10 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     let symbols = kind.is_equality() && *left == Type::named("Toybox.Lang.Symbol") && left == right;
     let booleans =
         kind.is_equality() && *left == Type::named("Toybox.Lang.Boolean") && left == right;
-    let nullable_object = Type::Union(vec![Type::named("Toybox.Lang.Object"), Type::Null]);
-    let nullable_dictionary = Type::Union(vec![Type::named("Toybox.Lang.Dictionary"), Type::Null]);
-    let nullable_number = Type::Union(vec![Type::named("Toybox.Lang.Number"), Type::Null]);
-    let nullable_string = Type::Union(vec![Type::named("Toybox.Lang.String"), Type::Null]);
-    let nullable_boolean = Type::Union(vec![Type::named("Toybox.Lang.Boolean"), Type::Null]);
-    let nullable_char = Type::Union(vec![Type::named("Toybox.Lang.Char"), Type::Null]);
-    let nullable_symbol = Type::Union(vec![Type::named("Toybox.Lang.Symbol"), Type::Null]);
-    let nullable_method = Type::Union(vec![Type::named("Toybox.Lang.Method"), Type::Null]);
-    let nullable_byte_array = Type::Union(vec![Type::named("Toybox.Lang.ByteArray"), Type::Null]);
-    let nullable_weak_reference =
-        Type::Union(vec![Type::named("Toybox.Lang.WeakReference"), Type::Null]);
-    let nullable_float = Type::Union(vec![Type::named("Toybox.Lang.Float"), Type::Null]);
-    let nullable_double = Type::Union(vec![Type::named("Toybox.Lang.Double"), Type::Null]);
-    let nullable_long = Type::Union(vec![Type::named("Toybox.Lang.Long"), Type::Null]);
-    let interface = |ty: &Type| {
-        matches!(
-            crate::ValueType::from_api_type(ty),
-            Some(crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_))
-        )
-    };
-    let interface_null = kind.is_equality()
-        && ((*left == Type::Null && interface(right)) || (interface(left) && *right == Type::Null));
-    let alias_nullable = |ty: &Type| {
-        matches!(
-            crate::ValueType::from_api_type(ty),
-            Some(
-                crate::ValueType::NullableNumeric
-                    | crate::ValueType::NullableIntegerAlias
-                    | crate::ValueType::NullableDecimal
-                    | crate::ValueType::NullableNativeObject(_)
-            )
-        )
-    };
-    let null_check = kind.is_equality()
-        && ((*left == Type::Null && alias_nullable(right))
-            || (*right == Type::Null && alias_nullable(left)))
-        || kind.is_equality()
-            && ((left == &Type::Null
-                && (right == &Type::Null
-                    || right == &nullable_object
-                    || right == &nullable_dictionary
-                    || right == &nullable_number
-                    || right == &nullable_string
-                    || right == &nullable_boolean
-                    || right == &nullable_weak_reference
-                    || right == &nullable_byte_array
-                    || right == &nullable_method
-                    || right == &nullable_symbol
-                    || right == &nullable_char
-                    || right == &nullable_float
-                    || right == &nullable_double
-                    || right == &nullable_long))
-                || ((left == &nullable_object
-                    || left == &nullable_dictionary
-                    || left == &nullable_number
-                    || left == &nullable_string
-                    || left == &nullable_boolean
-                    || left == &nullable_weak_reference
-                    || left == &nullable_byte_array
-                    || left == &nullable_method
-                    || left == &nullable_symbol
-                    || left == &nullable_char
-                    || left == &nullable_float
-                    || left == &nullable_double
-                    || left == &nullable_long)
-                    && right == &Type::Null));
     let strings = kind.is_equality()
         && ((*left == Type::named("Toybox.Lang.String") && string_operand(right, false))
             || (*right == Type::named("Toybox.Lang.String") && string_operand(left, false)));
-    (numbers || symbols || booleans || null_check || interface_null || strings)
-        .then(|| Type::named("Toybox.Lang.Boolean"))
+    (numbers || symbols || booleans || strings).then(|| Type::named("Toybox.Lang.Boolean"))
 }
 
 fn string_operand(ty: &Type, boolean: bool) -> bool {
@@ -315,22 +257,14 @@ mod tests {
         let types = [
             ValueType::Integer,
             ValueType::Long,
-            ValueType::NullableLong,
             ValueType::Float,
-            ValueType::NullableFloat,
             ValueType::Double,
-            ValueType::NullableDouble,
-            ValueType::NullableInteger,
             ValueType::String,
-            ValueType::NullableString,
             ValueType::Boolean,
-            ValueType::NullableBoolean,
-            ValueType::NullableChar,
             ValueType::Char,
             ValueType::Array(crate::ArrayElement::Char),
             ValueType::Array(crate::ArrayElement::Number),
             ValueType::Null,
-            ValueType::NullableDictionary,
         ];
         let numeric_types = [
             ValueType::Integer,
@@ -340,8 +274,8 @@ mod tests {
         ];
         use ValueType::{Double as D, Float as F, Integer as N, Long as L};
         let promotion = [[N, L, F, D], [L, L, D, D], [F, D, F, D], [D, D, D, D]];
-        for left in types {
-            for right in types {
+        for left in types.iter().cloned() {
+            for right in types.iter().cloned() {
                 let lhs = left.api_type();
                 let rhs = right.api_type();
                 for op in [
@@ -357,7 +291,7 @@ mod tests {
                     BinaryOp::ShiftRight,
                 ] {
                     let result = binary_result(op, &lhs, &rhs);
-                    let expected = match (op, left, right) {
+                    let expected = match (op, &left, &right) {
                         (BinaryOp::Add, ValueType::String, other)
                         | (BinaryOp::Add, other, ValueType::String)
                             if matches!(
@@ -388,15 +322,15 @@ mod tests {
                             | BinaryOp::Divide,
                             left,
                             right,
-                        ) if numeric_types.contains(&left) && numeric_types.contains(&right) => {
-                            let l = numeric_types.iter().position(|ty| *ty == left).unwrap();
-                            let r = numeric_types.iter().position(|ty| *ty == right).unwrap();
-                            Some(promotion[l][r])
+                        ) if numeric_types.contains(left) && numeric_types.contains(right) => {
+                            let l = numeric_types.iter().position(|ty| ty == left).unwrap();
+                            let r = numeric_types.iter().position(|ty| ty == right).unwrap();
+                            Some(promotion[l][r].clone())
                         }
                         (_, left, right)
                             if matches!(left, ValueType::Integer | ValueType::Long)
                                 && matches!(right, ValueType::Integer | ValueType::Long)
-                                && (left == ValueType::Long || right == ValueType::Long) =>
+                                && (*left == ValueType::Long || *right == ValueType::Long) =>
                         {
                             Some(ValueType::Long)
                         }
@@ -412,7 +346,7 @@ mod tests {
                     };
                     assert_eq!(
                         result,
-                        expected.map(ValueType::api_type),
+                        expected.map(|ty| ty.api_type()),
                         "{op:?}: {left:?}, {right:?}"
                     );
                 }
@@ -425,35 +359,11 @@ mod tests {
                     ComparisonOp::NotEqual,
                 ] {
                     let result = comparison_result(op, &lhs, &rhs);
-                    let null_check = op.is_equality()
-                        && matches!(
-                            (left, right),
-                            (
-                                ValueType::Null,
-                                ValueType::Null
-                                    | ValueType::NullableDictionary
-                                    | ValueType::NullableInteger
-                                    | ValueType::NullableString
-                                    | ValueType::NullableBoolean
-                                    | ValueType::NullableChar
-                                    | ValueType::NullableFloat
-                                    | ValueType::NullableDouble
-                                    | ValueType::NullableLong
-                            ) | (
-                                ValueType::NullableDictionary
-                                    | ValueType::NullableInteger
-                                    | ValueType::NullableString
-                                    | ValueType::NullableBoolean
-                                    | ValueType::NullableChar
-                                    | ValueType::NullableFloat
-                                    | ValueType::NullableDouble
-                                    | ValueType::NullableLong,
-                                ValueType::Null
-                            )
-                        );
+                    let null_check =
+                        op.is_equality() && (left == ValueType::Null || right == ValueType::Null);
                     let strings = op.is_equality()
                         && matches!(
-                            (left, right),
+                            (&left, &right),
                             (
                                 ValueType::String,
                                 ValueType::Integer

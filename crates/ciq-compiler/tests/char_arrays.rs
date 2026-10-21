@@ -77,7 +77,7 @@ fn char_arrays_preserve_element_contracts_and_complete_pipelines() {
 fn char_array_contracts_reject_wrong_elements_receivers_and_unsupported_consumers() {
     for source in [
         "function f(a as Toybox.Lang.Array) as Toybox.Lang.Number { return a.size(); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char> or Null) as Toybox.Lang.Number { return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char> or Null) as Toybox.Lang.Number { return a[0].toNumber(); }",
         "function f() as Toybox.Lang.Number { return 1.toCharArray(); }",
         "function f() as Toybox.Lang.Number { return \"A\".toCharArray(1); }",
         "function f() as Toybox.Lang.Number { return \"A\".toCharArray().size(1); }",

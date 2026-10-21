@@ -79,7 +79,7 @@ fn constructed_references_keep_invariant_contracts_and_observable_order() {
         "function f() as Toybox.Lang.Number { return new Toybox.WatchUi.View(); }",
         "function f(v as Toybox.WatchUi.View) as Void { System.println(v); }",
         "function f(v as Toybox.WatchUi.View) as Toybox.Lang.Number { return v.hashCode(); }",
-        "function f(v as Toybox.WatchUi.View or Null) as Toybox.Lang.Number { return 0; }",
+        "function f(v as Toybox.WatchUi.View or Null) as Toybox.Lang.String { return v.toString(); }",
         "import Toybox.WatchUi; function f(View as Toybox.Lang.Number) as Toybox.Lang.Number { return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");

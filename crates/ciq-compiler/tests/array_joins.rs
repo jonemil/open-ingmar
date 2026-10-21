@@ -65,11 +65,11 @@ fn check_join(source: &str, tag: &str) {
 #[test]
 fn joins_preserve_invariance_and_do_not_enable_container_casts() {
     for source in [
-        "function f() { return true ? [1] : [1l]; }",
-        "function f() { return true ? [true] : [1]; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { return true ? a : b; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { return true ? a : null; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>, b as Toybox.Lang.Array<Toybox.Lang.Number>) { return true ? a : b; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? [1] : [1l]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? [true] : [1]; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number or Null>) as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? a : b; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return true ? a : null; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? a : b; }",
         "function f(a as Toybox.Lang.Object) { return a as Toybox.Lang.Array<Toybox.Lang.Number>; }",
     ] {
         assert!(compile(source).is_err(), "{source}");

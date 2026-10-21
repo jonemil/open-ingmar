@@ -53,6 +53,23 @@ invariants and operation-family contracts are collected here;
 [grammar](grammar.md) owns serialization, and [lowering](../lowering/README.md)
 owns instruction selection.
 
+### Native union contracts
+
+`ParameterType::Union(Type)` and `ReturnType::Union(Type)` retain normalized
+native API alternatives when no established named contract applies. Standalone
+Null is a signature type too. Saved signatures, fixed local contracts, and
+block-value metadata use the [union tags](grammar.md#type-tags); reload validates
+and normalizes their alternatives. Source-class identities, Void, and callback
+tuples are excluded from generic union atoms.
+
+The [frontend union rules](../frontend/README.md#native-unions) own assignment,
+operation, and narrowing semantics. IR validation recomputes these checks from
+operands and CFG facts; edited result/read metadata cannot invent a type proof.
+Both branch edges carry direct class/Null refinements, and storage writes kill
+those facts. Every possible native receiver/operand must support an operation;
+result alternatives are normalized. Container reference unions retain invariant
+content contracts. Fields and lexical casts retain their existing domains.
+
 ### Validation
 
 `Function::new` validates explicitly constructed operations; `compile(source)`
@@ -398,9 +415,9 @@ replacing a slot's alternatives on assignment and combining them at incoming
 edges. Read contracts must accept the resulting view, refined only by shared
 runtime-class/non-null facts. Metadata cannot assert a type unsupported by the
 incoming values. Exact source identities, supported numeric aliases, comparison
-interfaces, and nullable joins retain their contracts; other heterogeneous
-alternatives use Object, optionally nullable. This is a conservative read view,
-not general source union support. A write invalidates old storage proofs;
+interfaces, and nullable joins retain their contracts; other supported native
+alternatives retain normalized unions. Exact source-class mixtures still require
+separate identity/provenance support. A write invalidates old storage proofs;
 previously captured values retain their own contracts and identity.
 
 Source construction selects inferred storage when writes change the local's
@@ -606,14 +623,15 @@ Array tags prefix the element tag with `array-`, such as `array-string` or
 `array-view`. Source contracts use `source(Class@Base)` or
 `nullable-source(Class@Base)`.
 Incoming Arrays must match the invariant element contract exactly; non-null and
-nullable elements do not widen to a common Array type. Tags describe element
-nullability, not nullable Array references. Availability checks apply to the
+nullable elements do not widen to a common Array type. A union instead retains
+each distinct container contract as an alternative. Array tags describe element
+nullability; nullable references use union tags. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 [VM lowering](../lowering/README.md#expression-joins).
 
-Source joins use compatible API types, scalar/Null alternatives, or one exact
-source class with optional Null; see
+Source joins use normalized native alternatives or one exact source class
+with optional Null; see
 [conditional expressions](../frontend/README.md#conditional-expressions) for
 source inference and restrictions. Source construction resolves each join from
 checked incoming operand types, including full-graph null proofs and local
@@ -1328,16 +1346,20 @@ function has no calls, prints, or writes.
 
 Index values are not range-checked, clamped, or adjusted by the compiler.
 Negative and other out-of-range Numbers remain accepted IR inputs whose reads
-may fail at runtime. Other element types, String/dictionary receivers, and
-nullable arrays remain unsupported. See the
+may fail at runtime. Supported Array element domains follow the frontend
+container contracts. ByteArray and typed Dictionary indexing share this IR
+operation with their separately checked key/result rules. Union receivers must
+satisfy every alternative; nullable references require a non-null proof. String
+indexing remains unsupported. See the
 [source profile](../frontend/README.md#char-arrays) and
 [runtime evidence](../../investigations/compiler-array-reads.md).
 
 ### Array element writes
 
 `.array-write` is a statement with no result. It consumes a non-null supported
-array, non-null Number index, and a value matching the invariant Number, Char,
-or native View element type. Source View instances project to native View; array
+array, non-null Number index, and a value matching its invariant element
+contract. ByteArray and typed Dictionary writes use their checked indexed
+contracts; a union receiver requires a valid write for every alternative. Source View instances project to native View; array
 slots retain no exact source-class identity. Shared validation recomputes these
 types and null proofs, checks defined block-local single-use operands, and
 preserves their left-to-right evaluation order. Writes activate the effect-order

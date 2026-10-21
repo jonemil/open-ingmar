@@ -284,9 +284,10 @@ reach these rules. Tags are single whitespace-free fields: punctuation and
 prefixes concatenate inside the field.
 
 ```text
-parameter-tag = common-tag | array-tag | source-tag | nullable-source-tag
-              | "nullable-dictionary"
-call-result-tag = common-tag | array-tag | source-tag | nullable-source-tag
+parameter-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
+native-parameter-tag = common-tag | array-tag | "null" | "nullable-dictionary"
+union-tag = "union(" native-parameter-tag ("|" native-parameter-tag)+ ")"
+call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
                 | "one-view" | "view-delegate"
 declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
@@ -316,7 +317,7 @@ dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
                    | "symbol" | "method" | "byte-array"
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
-join-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
+join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
          | source-tag | nullable-source-tag
@@ -324,6 +325,13 @@ local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```
+
+A union tag has 2 through 254 alternatives before normalization. Nested union
+tags, source identities, Void, and callback tuple shapes are not union atoms.
+Parsing normalizes alternatives and serialization uses an existing named tag
+when one represents the normalized type. Null is a standalone native signature
+tag. A union is one whitespace-free token, including when an atom contains
+Dictionary punctuation. These tags do not extend field or cast domains.
 
 The contexts deliberately differ. Source casts use `source-tag` or
 `nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the
@@ -337,7 +345,7 @@ The spelling `integer` means Number; `integer-union` means Lang.Integer.
 `nullable-` form where the consumer allows it. `number-format` and `endian`
 retain enum identity; `dictionary` is opaque. User-call tuple results also use
 `one-view` and `view-delegate`. Native reference tags include `view`,
-`behavior-delegate`, and callback-only `dc`/`nullable-dictionary`.
+`behavior-delegate`, and callback-only `dc`. `nullable-dictionary` also serves ordinary signatures.
 
 Exact source tags use `source(ClassName@Native.Base)` or
 `nullable-source(ClassName@Native.Base)` with ASCII class names.
@@ -352,7 +360,8 @@ API cast tags. `.cast` resolves them as separate source assertion contracts.
 Array element tags use `number`, not `integer`, for Number; otherwise they use
 the shared scalar/core/interface/alias tags, nullable forms, or `view`. A
 parameter or call-result Array tag appends `-array` to its element tag; a join
-tag prepends `array-`. Nullability belongs to elements, not the Array reference.
+tag prepends `array-`. These Array tags describe element nullability. A nullable reference uses a
+union with Null, such as `union(number-array|null)`.
 The Number parameter/call tag is `number-array`.
 
 Typed Dictionary tags are `dictionary(key=>value)` without whitespace inside the

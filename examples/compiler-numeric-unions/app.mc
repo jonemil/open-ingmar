@@ -83,6 +83,58 @@ module UnionOps {
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { UnionOps.run(); System.exit(); }
+    function onStart(state) { UnionOps.run(); NativeUnions.run(); System.exit(); }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
+}
+
+module NativeUnions {
+    function take(x as Lang.Number or Lang.String) as Lang.Number {
+        if (x instanceof Lang.Number) { return x + 1; }
+        else { return x.length(); }
+    }
+    function common(x as Lang.Number or Lang.String) as Lang.String {
+        return x.toString();
+    }
+    function nullable(x as Null or Lang.String or Lang.Number) as Lang.Number {
+        if (x == null) { return 0; }
+        if (x instanceof Lang.String) { return x.length(); }
+        return x + 1;
+    }
+    function plus(x as Lang.Number or Lang.String) as Lang.Number or Lang.String {
+        return x + 1;
+    }
+    function arrayOrText(x as Lang.Array<Lang.Number> or Lang.String) as Lang.Number {
+        if (x instanceof Lang.Array) { return x[0]; }
+        return x.length();
+    }
+    function optionalArray(x as Lang.Array<Lang.Number> or Null) as Lang.Number {
+        if (x != null) { return x[0]; }
+        return 0;
+    }
+    function loop(x as Lang.Number or Lang.String) as Lang.Number {
+        var current = x;
+        while (current instanceof Lang.Number) { current = "done"; }
+        return current.length();
+    }
+    function zero(x as Null) as Null { return x; }
+    function run() as Void {
+        System.println("native-unions");
+        System.println(NativeUnions.take(41));
+        System.println(NativeUnions.take("four"));
+        System.println(NativeUnions.common(9));
+        System.println(NativeUnions.common("ok"));
+        System.println(NativeUnions.nullable(null));
+        System.println(NativeUnions.nullable(4));
+        System.println(NativeUnions.nullable("abc"));
+        System.println(NativeUnions.plus(41));
+        System.println(NativeUnions.plus("x"));
+        System.println(NativeUnions.arrayOrText([42]));
+        System.println(NativeUnions.arrayOrText("abc"));
+        System.println(NativeUnions.optionalArray([7]));
+        System.println(NativeUnions.optionalArray(null));
+        System.println(NativeUnions.loop(1));
+        System.println(NativeUnions.loop("hi"));
+        System.println(NativeUnions.zero(null) == null);
+        System.println('A' == null);
+    }
 }

@@ -23,13 +23,18 @@ pub(crate) enum ClassTarget {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Fact {
     NonNull(Place),
+    Null(Place),
+    NotClass(Place, ClassTarget),
     Class(Place, ClassTarget),
 }
 impl Fact {
     /// Return the local or parameter described by this fact.
     pub(crate) fn place(&self) -> Place {
         match self {
-            Self::NonNull(place) | Self::Class(place, _) => *place,
+            Self::NonNull(place)
+            | Self::Null(place)
+            | Self::NotClass(place, _)
+            | Self::Class(place, _) => *place,
         }
     }
 }
@@ -52,6 +57,47 @@ pub(crate) fn refine(
     place: Place,
     facts: &BTreeSet<Fact>,
 ) -> crate::ValueType {
+    if facts.contains(&Fact::Null(place)) {
+        return crate::ValueType::Null;
+    }
+    if let crate::api::Type::Union(parts) = ty.api_type() {
+        let mut parts = parts;
+        for fact in facts {
+            match fact {
+                Fact::NonNull(at) if *at == place => {
+                    parts.retain(|part| *part != crate::api::Type::Null)
+                }
+                Fact::Class(at, ClassTarget::Native(class)) if *at == place => {
+                    let target = crate::api::Type::named(class);
+                    parts = parts
+                        .into_iter()
+                        .filter_map(|part| {
+                            if crate::native::accepts(&target, &part) {
+                                Some(part)
+                            } else if crate::native::accepts(&part, &target)
+                                && crate::ValueType::from_api_type(&target).is_some()
+                            {
+                                Some(target.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                }
+                Fact::NotClass(at, ClassTarget::Native(class)) if *at == place => {
+                    let target = crate::api::Type::named(class);
+                    parts.retain(|part| !crate::native::accepts(&target, part));
+                }
+                _ => {}
+            }
+        }
+        if !parts.is_empty() {
+            if let Some(refined) = crate::ValueType::from_api_type(&crate::unions::normalize(parts))
+            {
+                return refined;
+            }
+        }
+    }
     if let Some(class) = source_class(place, facts) {
         return crate::ValueType::from_api_type(&crate::api::Type::named(class.base.api_name()))
             .expect("source class base has a value projection");
@@ -163,25 +209,30 @@ pub(crate) fn inputs(
                 on_false,
             } => {
                 let guard = guard_place(condition, at, structure, operations, &definitions);
-                if let Some((place, _, Some(class))) = &guard {
-                    universe.insert(Fact::Class(*place, class.clone()));
-                }
-                // Both outcomes reaching one block provide no branch proof.
+                // Each edge records its own positive or negative proof.
                 for (target, outcome) in [(on_true, true), (on_false, false)] {
-                    edges.insert(
-                        (block, target),
-                        guard
-                            .as_ref()
-                            .filter(|(_, edge, _)| on_true != on_false && outcome == *edge)
-                            .map(|(place, _, class)| {
-                                let mut facts = BTreeSet::from([Fact::NonNull(*place)]);
-                                if let Some(class) = class {
+                    let mut facts = BTreeSet::new();
+                    if on_true != on_false {
+                        if let Some((place, edge, class)) = &guard {
+                            match (outcome == *edge, class) {
+                                (true, Some(class)) => {
+                                    facts.insert(Fact::NonNull(*place));
                                     facts.insert(Fact::Class(*place, class.clone()));
                                 }
-                                facts
-                            })
-                            .unwrap_or_default(),
-                    );
+                                (false, Some(class)) => {
+                                    facts.insert(Fact::NotClass(*place, class.clone()));
+                                }
+                                (true, None) => {
+                                    facts.insert(Fact::NonNull(*place));
+                                }
+                                (false, None) => {
+                                    facts.insert(Fact::Null(*place));
+                                }
+                            }
+                        }
+                    }
+                    universe.extend(facts.iter().cloned());
+                    edges.insert((block, target), facts);
                 }
             }
             Operation::Jump { target } | Operation::JumpValue { target, .. } => {

@@ -156,14 +156,12 @@ pub(crate) fn value_call(
             }
         }
     }
-    if let Some(alternatives) = receiver.numeric_alternatives() {
-        let result = value_call(&alternatives[0], member, arguments, context)?;
-        for alternative in &alternatives[1..] {
-            if value_call(alternative, member, arguments, context)? != result {
-                return Err("Numeric call requires one common result contract".into());
-            }
-        }
-        return Ok(result);
+    if let api::Type::Union(parts) = receiver {
+        let results = parts
+            .iter()
+            .map(|part| value_call(part, member, arguments, context))
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(crate::unions::normalize(results));
     }
     if let api::Type::Named(name) = receiver {
         if let Some(interface) = crate::InterfaceType::from_name(name) {

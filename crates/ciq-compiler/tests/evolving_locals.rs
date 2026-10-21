@@ -39,7 +39,7 @@ fn flow_read_metadata_is_checked_not_trusted() {
     assert_ne!(text, changed);
     assert!(parse_ir(&changed).is_err());
     for source in [
-        "function f(b as Toybox.Lang.Boolean){var x=1;if(b){x=\"hi\";}return x+1;}",
+        "function f(b as Toybox.Lang.Boolean){var x=1;if(b){x=\"hi\";}return x-1;}",
         "function f(b as Toybox.Lang.Boolean){var x=1;while(b){x=\"hi\";System.println(x-1);}return 0;}",
         "function f(){var x=1;x=\"hi\";return x-1;}",
     ] {
