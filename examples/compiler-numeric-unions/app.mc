@@ -83,7 +83,7 @@ module UnionOps {
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); MixedUnions.run(); System.exit(); }
+    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); MixedUnions.run(); CommonCalls.run(); System.exit(); }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
 }
 
@@ -142,6 +142,11 @@ module NativeUnions {
 class UnionToken extends Lang.Object {
     function initialize() {}
     function count() as Lang.Number { return 7; }
+    function shared(n as Lang.Number) as Lang.Number { return n + 7; }
+    function copy() as UnionToken { return new UnionToken(); }
+    function items(values as Lang.Array<Lang.Number>) as Lang.Number { return values.size(); }
+    function touch(tag as Lang.String) as Void { System.println(tag + "-token"); }
+    function optional() as Void { System.println("void"); }
     function compare(a as Lang.Object, b as Lang.Object) as Lang.Number {
         return (a as Lang.Number) - (b as Lang.Number);
     }
@@ -149,6 +154,11 @@ class UnionToken extends Lang.Object {
 class UnionMarker extends Lang.Object {
     function initialize() {}
     function size() as Lang.Number { return 9; }
+    function shared(n as Lang.Number) as Lang.String { return n.toString() + "!"; }
+    function copy() as UnionMarker { return new UnionMarker(); }
+    function items(values as Lang.Array<Lang.Number>) as Lang.Number { return values.size(); }
+    function touch(tag as Lang.String) as Void { System.println(tag + "-marker"); }
+    function optional() as Lang.Number { System.println("number"); return 9; }
     function compare(a as Lang.Object, b as Lang.Object) as Lang.Number {
         return (b as Lang.Number) - (a as Lang.Number);
     }
@@ -243,5 +253,33 @@ module MixedUnions {
         System.println(MixedUnions.recover(new UnionMarker()));
         System.println(MixedUnions.sorted(new UnionToken()));
         System.println(MixedUnions.sorted(new UnionMarker()));
+    }
+}
+
+module CommonCalls {
+    function make(flag as Lang.Boolean) as UnionToken or UnionMarker {
+        System.println("receiver");
+        return SourceUnions.pick(flag);
+    }
+    function argument() as Lang.Number { System.println("argument"); return 2; }
+    function read(value as UnionToken or UnionMarker) as Lang.Number or Lang.String {
+        return value.shared(2);
+    }
+    function act(value as UnionToken or UnionMarker) as Void {
+        value.touch("touch");
+        value.optional();
+    }
+    function run() as Void {
+        System.println("common-calls");
+        System.println(CommonCalls.make(true).shared(CommonCalls.argument()));
+        System.println(CommonCalls.make(false).shared(CommonCalls.argument()));
+        System.println(CommonCalls.read(SourceUnions.pick(true)));
+        System.println(CommonCalls.read(SourceUnions.pick(false)));
+        System.println(SourceUnions.pick(true).copy().shared(1));
+        System.println(SourceUnions.pick(false).copy().shared(1));
+        System.println(SourceUnions.pick(true).items([]));
+        System.println(SourceUnions.pick(false).items([1, 2]));
+        CommonCalls.act(SourceUnions.pick(true));
+        CommonCalls.act(SourceUnions.pick(false));
     }
 }

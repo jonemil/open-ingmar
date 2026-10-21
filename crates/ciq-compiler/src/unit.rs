@@ -55,12 +55,24 @@ fn source_callee<'a>(owner: Owner<'a>, operation: &'a Operation) -> Option<(Owne
         Operation::SelfCall { member, .. } | Operation::SelfCallStatement { member, .. } => {
             Some((owner, member))
         }
-        Operation::ObjectCall { class, member, .. }
-        | Operation::ObjectCallStatement { class, member, .. } => {
-            Some((Owner::Class(class), member))
-        }
         Operation::SourceNew { class, .. } => Some((Owner::Class(class), "initialize")),
         _ => None,
+    }
+}
+
+/// List every possible source body; each contributes call effects and contracts.
+fn source_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<'a>, &'a str)> {
+    match operation {
+        Operation::ObjectCall {
+            classes, member, ..
+        }
+        | Operation::ObjectCallStatement {
+            classes, member, ..
+        } => classes
+            .iter()
+            .map(|class| (Owner::Class(class.as_str()), member.as_str()))
+            .collect(),
+        _ => source_callee(owner, operation).into_iter().collect(),
     }
 }
 
@@ -189,8 +201,9 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || erased_callbacks(function, &located.operation)
-                    || source_callee(owner, &located.operation)
-                        .is_some_and(|key| exits.contains(&key))
+                    || source_callees(owner, &located.operation)
+                        .iter()
+                        .any(|key| exits.contains(key))
                     || comparator_callee(function, &located.operation, bodies)
                         .is_some_and(|key| exits.contains(&key))
             }) {
@@ -1055,8 +1068,9 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || source_callee(owner, &located.operation)
-                                .is_some_and(|key| exit_callers.contains(&key))
+                            || source_callees(owner, &located.operation)
+                                .iter()
+                                .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
                                 .is_some_and(|key| exit_callers.contains(&key)))
                     {
@@ -1549,169 +1563,137 @@ impl CompilationUnit {
                         ));
                     }
                 }
-                let (key, arguments, value_call) = match &located.operation {
-                    Operation::SourceNew {
-                        class, arguments, ..
-                    } => (
-                        (Owner::Class(class.as_str()), "initialize"),
-                        arguments,
-                        false,
-                    ),
-                    Operation::ObjectCall {
-                        class,
-                        member,
-                        arguments,
-                        ..
-                    } => (
-                        (Owner::Class(class.as_str()), member.as_str()),
-                        arguments,
-                        true,
-                    ),
-                    Operation::ObjectCallStatement {
-                        class,
-                        member,
-                        arguments,
-                        ..
-                    } => (
-                        (Owner::Class(class.as_str()), member.as_str()),
-                        arguments,
-                        false,
-                    ),
-                    Operation::GlobalCall {
-                        member, arguments, ..
-                    } => ((Owner::Global, member.as_str()), arguments, true),
-                    Operation::GlobalCallStatement { member, arguments } => {
-                        ((Owner::Global, member.as_str()), arguments, false)
-                    }
-                    Operation::ModuleCall {
-                        module,
-                        member,
-                        arguments,
-                        ..
-                    } => (
-                        (Owner::Module(module.as_str()), member.as_str()),
-                        arguments,
-                        true,
-                    ),
-                    Operation::ModuleCallStatement {
-                        module,
-                        member,
-                        arguments,
-                    } => (
-                        (Owner::Module(module.as_str()), member.as_str()),
-                        arguments,
-                        false,
-                    ),
-                    Operation::SelfCall {
-                        member, arguments, ..
-                    } => ((owner, member.as_str()), arguments, true),
-                    Operation::SelfCallStatement { member, arguments } => {
-                        ((owner, member.as_str()), arguments, false)
-                    }
+                let (arguments, value_call) = match &located.operation {
+                    Operation::ObjectCall { arguments, .. }
+                    | Operation::GlobalCall { arguments, .. }
+                    | Operation::ModuleCall { arguments, .. }
+                    | Operation::SelfCall { arguments, .. } => (arguments, true),
+                    Operation::ObjectCallStatement { arguments, .. }
+                    | Operation::GlobalCallStatement { arguments, .. }
+                    | Operation::ModuleCallStatement { arguments, .. }
+                    | Operation::SelfCallStatement { arguments, .. }
+                    | Operation::SourceNew { arguments, .. } => (arguments, false),
                     _ => continue,
                 };
-                if matches!(
-                    located.operation,
-                    Operation::SelfCall { .. } | Operation::SelfCallStatement { .. }
-                ) && !matches!(owner, Owner::Class(_))
-                {
-                    return Err(fail(
-                        Some(index),
-                        Some(operation),
-                        "self calls require a class method".into(),
-                    ));
-                }
-                let Some((parameters, result)) = signatures.get(&key) else {
-                    return Err(fail(
-                        Some(index),
-                        Some(operation),
-                        format!("unresolved function {}.{}", key.0.name(), key.1),
-                    ));
-                };
-                if matches!(key.0, Owner::Class(_))
-                    && crate::native::callback(
-                        self.classes
-                            .iter()
-                            .find(|c| key.0 == Owner::Class(c.name.as_str()))
-                            .map(|c| c.base)
-                            .unwrap_or(ClassBase::ApplicationAppBase),
-                        key.1,
-                    )
-                    .is_some()
-                {
-                    return Err(fail(
-                        Some(index),
-                        Some(operation),
-                        format!(
-                            "{} is a native lifecycle callback, not a user-call target",
-                            key.1
-                        ),
-                    ));
-                }
-                if value_call && *result == ReturnType::Void {
-                    return Err(fail(
-                        Some(index),
-                        Some(operation),
-                        format!(
-                            "void function {}.{} cannot be used as a value",
-                            key.0.name(),
-                            key.1
-                        ),
-                    ));
-                }
-                let count = parameters.len();
-                if count != arguments.len() {
-                    return Err(fail(
-                        Some(index),
-                        Some(operation),
-                        format!(
-                            "{}.{} expects {count} arguments, got {}",
-                            key.0.name(),
-                            key.1,
-                            arguments.len()
-                        ),
-                    ));
-                }
-                for (argument, parameter) in arguments.iter().zip(*parameters) {
-                    if let crate::ParameterType::Interface(interface)
-                    | crate::ParameterType::NullableInterface(interface) = parameter
+                let mut joined_result = None;
+                for key in source_callees(owner, &located.operation) {
+                    if matches!(
+                        located.operation,
+                        Operation::SelfCall { .. } | Operation::SelfCallStatement { .. }
+                    ) && !matches!(owner, Owner::Class(_))
                     {
-                        self.check_interface_value(
-                            function,
-                            &origins,
-                            *argument,
-                            *interface,
-                            matches!(parameter, crate::ParameterType::NullableInterface(_)),
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "self calls require a class method".into(),
+                        ));
+                    }
+                    let Some((parameters, result)) = signatures.get(&key) else {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!("unresolved function {}.{}", key.0.name(), key.1),
+                        ));
+                    };
+                    if matches!(key.0, Owner::Class(_))
+                        && crate::native::callback(
+                            self.classes
+                                .iter()
+                                .find(|c| key.0 == Owner::Class(c.name.as_str()))
+                                .map(|c| c.base)
+                                .unwrap_or(ClassBase::ApplicationAppBase),
+                            key.1,
                         )
-                        .map_err(|message| fail(Some(index), Some(operation), message))?;
-                        continue;
-                    }
-                    if let Some(expected) = parameter.source_contract() {
-                        if self
-                            .check_source_value(function, &origins, *argument, &expected)
-                            .is_err()
-                        {
-                            return Err(fail(
-                                Some(index),
-                                Some(operation),
-                                "argument does not preserve the declared source alternatives"
-                                    .into(),
-                            ));
-                        }
-                    }
-                    if !crate::native::accepts(
-                        &parameter.api_type(),
-                        &function.value_types[argument].api_type(),
-                    ) {
+                        .is_some()
+                    {
                         return Err(fail(
                             Some(index),
                             Some(operation),
                             format!(
-                                "{}.{} argument type does not match parameter contract",
+                                "{} is a native lifecycle callback, not a user-call target",
+                                key.1
+                            ),
+                        ));
+                    }
+                    if value_call && *result == ReturnType::Void {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!(
+                                "void function {}.{} cannot be used as a value",
                                 key.0.name(),
                                 key.1
                             ),
                         ));
+                    }
+                    let count = parameters.len();
+                    if count != arguments.len() {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            format!(
+                                "{}.{} expects {count} arguments, got {}",
+                                key.0.name(),
+                                key.1,
+                                arguments.len()
+                            ),
+                        ));
+                    }
+                    for (argument, parameter) in arguments.iter().zip(*parameters) {
+                        if let crate::ParameterType::Interface(interface)
+                        | crate::ParameterType::NullableInterface(interface) = parameter
+                        {
+                            self.check_interface_value(
+                                function,
+                                &origins,
+                                *argument,
+                                *interface,
+                                matches!(parameter, crate::ParameterType::NullableInterface(_)),
+                            )
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                            continue;
+                        }
+                        if let Some(expected) = parameter.source_contract() {
+                            if self
+                                .check_source_value(function, &origins, *argument, &expected)
+                                .is_err()
+                            {
+                                return Err(fail(
+                                    Some(index),
+                                    Some(operation),
+                                    "argument does not preserve the declared source alternatives"
+                                        .into(),
+                                ));
+                            }
+                        }
+                        if !crate::native::accepts(
+                            &parameter.api_type(),
+                            &function.value_types[argument].api_type(),
+                        ) {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                format!(
+                                    "{}.{} argument type does not match parameter contract",
+                                    key.0.name(),
+                                    key.1
+                                ),
+                            ));
+                        }
+                    }
+                    if value_call {
+                        joined_result = Some(match joined_result {
+                            None => result.clone(),
+                            Some(previous) => crate::joins::call_result(&previous, result)
+                                .ok_or_else(|| {
+                                    fail(
+                                        Some(index),
+                                        Some(operation),
+                                        "source callees have no common value result contract"
+                                            .into(),
+                                    )
+                                })?,
+                        });
                     }
                 }
                 let expected_result = match &located.operation {
@@ -1721,15 +1703,11 @@ impl CompilationUnit {
                     | Operation::SelfCall { result_type, .. } => Some(result_type),
                     _ => None,
                 };
-                if expected_result.is_some_and(|expected| expected != result) {
+                if expected_result != joined_result.as_ref() {
                     return Err(fail(
                         Some(index),
                         Some(operation),
-                        format!(
-                            "{}.{} call result type does not match callee contract",
-                            key.0.name(),
-                            key.1
-                        ),
+                        "call result type does not match resolved callee contracts".into(),
                     ));
                 }
             }

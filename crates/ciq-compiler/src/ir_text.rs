@@ -484,7 +484,7 @@ pub(crate) fn parse_ir_context(
                     Operation::ObjectCall {
                         result: parse_value(&fields[1])?,
                         receiver: parse_value(&fields[2])?,
-                        class: fields[3].clone(),
+                        classes: fields[3].split('|').map(str::to_owned).collect(),
                         member: fields[4].clone(),
                         result_type,
                         arguments: fields[arguments_at..width]
@@ -502,7 +502,7 @@ pub(crate) fn parse_ir_context(
                     }
                     Operation::ObjectCallStatement {
                         receiver: parse_value(&fields[1])?,
-                        class: fields[2].clone(),
+                        classes: fields[2].split('|').map(str::to_owned).collect(),
                         member: fields[3].clone(),
                         arguments: fields[4..width]
                             .iter()

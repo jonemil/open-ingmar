@@ -110,6 +110,34 @@ pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinT
     }
 }
 
+/// Join possible source callee results without changing their runtime values.
+/// Void and value results cannot form a value-producing contract.
+pub(crate) fn call_result(
+    left: &crate::ReturnType,
+    right: &crate::ReturnType,
+) -> Option<crate::ReturnType> {
+    if left == right {
+        return Some(left.clone());
+    }
+    if *left == crate::ReturnType::Void || *right == crate::ReturnType::Void {
+        return None;
+    }
+    let a = left
+        .source_contract()
+        .map(crate::SourceUnion::join)
+        .unwrap_or_else(|| JoinType::Api(left.api_type()));
+    let b = right
+        .source_contract()
+        .map(crate::SourceUnion::join)
+        .unwrap_or_else(|| JoinType::Api(right.api_type()));
+    let joined = contract_result(&a, &b)?;
+    if let Some(c) = joined.source_contract() {
+        Some(c.result())
+    } else {
+        crate::unions::result(joined.api_type())
+    }
+}
+
 /// Join supported alternatives without converting either runtime value.
 pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     if *left == Type::Any || *right == Type::Any {

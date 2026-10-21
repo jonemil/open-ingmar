@@ -88,6 +88,24 @@ raw fallback. Reproduce with the existing specimen-checker commands; captures
 are in `scratch/unions/mixed-check/`. This does not establish common
 source-member calls through an unrefined class set or union fields.
 
+## Common source member calls
+
+`CommonCalls` adds common methods to the two authored classes. SDK/compiler/
+simulator 9.2.0 / fr265, target 5.2.0 and minimum 5.0.0 accept calls through their
+union without class guards. One member returns Number or String according to the
+actual instance; another returns its own source class and permits a subsequent
+common call. Both classes accept contextual Array arguments. Statement calls
+accept one target returning Void and another returning Number.
+
+SDK and generated applications match all 152 expected lines. Explicit receiver
+and argument prints occur once each, in that order, before the selected method
+result. Source, saved IR, and assembly generate identical unsigned applications;
+both SDK and generated PRGs pass structured CODE/DATA reconstruction without
+required raw fallback. Reproduce with the existing specimen-checker commands;
+captures are in `scratch/union-calls/check/`. These cases establish directly
+declared common members of exact source-class sets, not unconstrained dynamic
+source lookup or source/native own-member mixtures.
+
 ## Field storage
 
 SDK/compiler/simulator 9.2.0 / fr265 also accept

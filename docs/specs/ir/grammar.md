@@ -196,13 +196,14 @@ call-operation = ".call" value-id module-name identifier
                | ".call-global-discard" identifier value-id*
                | ".call-self" value-id identifier call-result-metadata? value-id*
                | ".call-self-discard" identifier value-id*
-               | ".call-object" value-id value-id identifier identifier
+               | ".call-object" value-id value-id class-set identifier
                  call-result-metadata? value-id*
-               | ".call-object-discard" value-id identifier identifier value-id*
+               | ".call-object-discard" value-id class-set identifier value-id*
                | ".call-native" value-id value-id identifier value-id*
                | ".call-native-discard" value-id identifier value-id*
                | ".call-native-module" value-id module-name identifier value-id*
                | ".call-native-module-discard" module-name identifier value-id*
+class-set = identifier ("|" identifier)*
 call-result-metadata = "result=" call-result-tag
 object-operation = ".new-native" value-id class-path
                  | ".new-source" value-id identifier native-base value-id*

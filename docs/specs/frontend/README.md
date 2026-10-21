@@ -611,7 +611,7 @@ calls, control flow, or return. Field read/result claims and assignments must
 match the owning declaration; generic native references cannot forge a source
 field contract.
 
-Calls on constructed source references resolve to their proven class's declared
+Calls on constructed source references resolve to their proven classes' declared
 methods. Function validation preserves exact constructor identity through local
 copies and same-class assignment; unit validation checks ordinary method
 contracts and prohibits native callback invocation through any receiver. See the
@@ -707,43 +707,47 @@ accepted but termination is not proven.
 
 `new ClassName(arguments)` establishes an exact constructor class alongside its
 native Object, View, or BehaviorDelegate value contract. Local initialization
-and copies preserve this identity. A local initialized from a source
-construction may subsequently receive only a reference with the same proven
-constructor class; assignments from another source class, a generic native View
-parameter, or an erased return are rejected. Different instances of the same
-class are permitted, including conditional and loop assignments. Local aliases
-refer to the same runtime instance; reassignment changes only the local
-reference.
+and copies preserve this identity. Inferred local writes and joins retain the
+possible exact classes and native alternatives under the shared
+[storage rules](#local-declarations-and-reads). An opaque native alternative does
+not establish a source class. Local aliases refer to the same runtime instance;
+reassignment changes only the local reference.
 
-`receiver.method(arguments)` calls a declared method of the proven source class.
-The receiver may be a construction, local/copy, or typed source
-parameter/result. Forward method declarations and multiple source files are
-supported. Value calls must match the declared result contract; statement calls
-discard any supported result, including Void. Arguments use the existing
-scalar/nullable/array contracts and limits. Receiver evaluation precedes
-argument evaluation, in source order. Empty Array arguments receive context from
-the selected source signature.
+`receiver.method(arguments)` calls a declared method of every possible source
+class in a proven non-null, source-only receiver contract. The receiver may be a
+construction, local/copy, conditional result, or typed source parameter/result.
+Forward declarations and multiple source files are supported. Each class must
+declare the member, and every argument must satisfy every target's arity and
+parameter contract, including exact identities and interface witnesses.
+
+Value calls use the shared join of all target result contracts, preserving
+native and exact source alternatives without conversion. Every target must
+return a value and have a supported join. Statement calls discard any supported
+result, including mixtures of Void and value-returning methods. Receiver
+evaluation precedes arguments, once each in source order. Contextual container
+literals use a shared concrete parameter contract; other targets may accept Any.
+Conflicting concrete parameter contracts supply no common construction context.
 
 Unit validation rejects missing methods, wrong argument/result contracts, and
 ordinary calls to native lifecycle callbacks, even through a different receiver.
 Object-rooted classes may resolve supported inherited Object members below.
 Other undeclared native/source inheritance remains unsupported. Source
-inheritance, arbitrary receiver field access, and general dynamic dispatch
-remain unsupported.
+inheritance and arbitrary receiver field access remain unsupported.
 
 Exact constructor identity is a flow-sensitive local refinement, not a new
 native API type. Generic View parameters, declared View returns, and Array<View>
 element reads expose only their base contract. They cannot authorize
 source-method calls. Assigning a known source instance to a local establishes
-its identity for subsequent reads; joining different classes erases that exact
-identity until a runtime type test establishes it. No runtime cast is emitted.
+its identity for subsequent reads; joins retain the possible exact class set.
+No runtime cast or class-selection branch is emitted for common calls.
 
-`ObjectCall` and `ObjectCallStatement` record a receiver value, class name,
-member, and arguments; value calls also record the result contract. Function
-validation reconstructs source identity from construction, source signatures,
-and local operations and requires an exact match with the claimed class. Unit
-validation resolves the declaration. This prevents saved IR from forging a
-source class for a native reference.
+[Source-call IR](../ir/README.md#source-construction-and-native-constants) retains
+all possible classes and the joined result contract. Validation reconstructs
+receiver provenance and resolves every target; text metadata cannot omit a
+class, narrow a result, or authorize a native reference as an exact source class.
+Shutdown effects propagate from every possible source body through recursive
+call chains. A required-field initializer cannot call a method that may request
+shutdown until its required fields are initialized.
 
 [VM lowering](../lowering/README.md#calls-and-objects).
 
@@ -865,10 +869,11 @@ alternatives and the source bases. Aliases and stored Booleans do not transfer
 facts, and writes kill them.
 There is no bottom type: contradictory tests do not establish unreachable code.
 
-Source method dispatch requires a single proven, non-null class. A guard can
-establish it for a parameter or fresh local read. An unrefined union cannot yet
-call a common source-declared member even if every class declares it. Supported
-native methods use the union's native projection and existing receiver checks.
+Source method dispatch accepts a proven non-null exact class set under the
+[common-call rules](#calls-on-constructed-source-objects). A guard is required
+when only some alternatives declare a source member, or native alternatives
+remain in the receiver. Supported native methods use the union's native
+projection and existing receiver checks.
 Structural interface consumers require every retained source class and native
 alternative to satisfy the required signature, including after saved IR reload. A nullable source contract
 can satisfy a nullable interface, but not a non-null interface without a proof.

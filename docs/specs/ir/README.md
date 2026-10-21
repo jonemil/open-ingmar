@@ -1706,12 +1706,22 @@ Source instance calls use:
 [Directive syntax](grammar.md#operation-syntax) is defined in the grammar.
 
 Optional spans follow the existing syntax; omitted result types mean Integer.
-The receiver's exact source class must follow construction, source signatures,
-local operations, a positive source-class test, or an explicit source assertion,
-independently of the class written in the call. Unit validation checks the
-selected class method's arity, parameter/result types, and callback
-restrictions. Both forms preserve receiver-before-argument evaluation order.
-Statement calls define no semantic result. Standalone function parsing retains
+`ObjectCall` and `ObjectCallStatement` carry a `classes: Vec<String>` target
+set, serialized as one whitespace-free `A|B` field (a singleton remains `A`).
+Construction and parsing sort/deduplicate the set and require 1..=254 valid
+names. Receiver provenance must prove exactly that non-null source-only set,
+independently of the claimed names; omitting a possible class is invalid.
+
+Unit validation resolves every target and checks its arity, parameters, and
+lifecycle-callback restrictions. Arguments must satisfy all signatures. A value
+call's result metadata must equal the shared join of every declared result;
+Void and unsupported joins are rejected. Statement calls define no semantic
+result and permit different result types, including Void/value mixtures.
+Contextual literals use a common concrete parameter contract when all targets
+accept it, including Any parameters. Every possible target contributes shutdown
+effects, including through recursive calls and initializer checks. The target
+set adds static obligations, not runtime branching. Both forms preserve one
+receiver evaluation before arguments in source order. Standalone function parsing retains
 declaration-resolution obligations; it does not authorize arbitrary receiver
 casts. See the [source-call
 contract](../frontend/README.md#calls-on-constructed-source-objects).
@@ -1763,9 +1773,9 @@ Actual native alternatives can satisfy only native contracts. Fixed local and
 block-edge checks resolve deferred witnesses too; inferred read metadata cannot
 claim a witness by changing its type tag. Structural interface consumers check
 both retained classes and native alternatives. Unknown multiple callback bodies
-retain conservative initialization/shutdown effects. Fields, general union
-casts, and common source-member dispatch through an unrefined set remain
-unsupported.
+retain conservative initialization/shutdown effects. Direct common source calls
+instead track every exact body as specified above. Fields and general union
+casts remain unsupported.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

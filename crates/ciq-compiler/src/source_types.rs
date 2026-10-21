@@ -429,6 +429,9 @@ impl Types {
     pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
         self.origins.local_class(local)
     }
+    pub(crate) fn local_contract(&self, local: LocalId) -> Option<&crate::SourceUnion> {
+        self.origins.local_contract(local)
+    }
     /// Return candidate source identity or the ordinary API value contract.
     pub(crate) fn join_contract(&self, value: ValueId) -> Option<crate::JoinType> {
         self.origins

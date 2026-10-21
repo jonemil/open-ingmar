@@ -37,9 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Resolve common source-declared member calls through an unrefined
-  source-class union; check every class's signature and propagate all possible
-  callee effects while preserving one receiver evaluation.
 - [ ] Support union instance-field declarations, defaults, required
   initialization, reads, and writes, including nullable container references.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and

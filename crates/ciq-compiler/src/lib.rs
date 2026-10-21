@@ -1076,19 +1076,19 @@ pub enum Operation {
         builder: BuilderId,
     },
     /// Invoke a source instance method on a receiver with proven constructor
-    /// class. Unit validation checks ownership and the declared call contract.
+    /// classes. Unit validation checks ownership and the declared call contract.
     ObjectCall {
         result: ValueId,
         result_type: ReturnType,
         receiver: ValueId,
-        class: String,
+        classes: Vec<String>,
         member: String,
         arguments: Vec<ValueId>,
     },
     /// Invoke a proven source instance method and discard its runtime result.
     ObjectCallStatement {
         receiver: ValueId,
-        class: String,
+        classes: Vec<String>,
         member: String,
         arguments: Vec<ValueId>,
     },
@@ -1714,6 +1714,12 @@ impl Function {
             })
             .transpose()?;
         for located in &mut operations {
+            if let Operation::ObjectCall { classes, .. }
+            | Operation::ObjectCallStatement { classes, .. } = &mut located.operation
+            {
+                classes.sort();
+                classes.dedup();
+            }
             if let Operation::BlockParameter { value_type, .. }
             | Operation::VariableRead { value_type, .. }
             | Operation::LocalDeclare { value_type, .. } = &mut located.operation
@@ -2081,24 +2087,30 @@ impl Function {
                 }
                 Operation::ObjectCall {
                     receiver,
-                    ref class,
+                    ref classes,
                     ref member,
                     ref arguments,
                     ..
                 }
                 | Operation::ObjectCallStatement {
                     receiver,
-                    ref class,
+                    ref classes,
                     ref member,
                     ref arguments,
                 } => {
-                    validate_call_names(Some(class), member).map_err(fail)?;
+                    if classes.is_empty() || classes.len() > MAX_PARAMETERS {
+                        return Err(fail("source call requires 1..=254 target classes"));
+                    }
+                    for class in classes {
+                        validate_call_names(Some(class), member).map_err(fail)?;
+                    }
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     if !matches!(
                         type_of(receiver),
                         ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
                             | ValueType::Any
                             | ValueType::LangObject
+                            | ValueType::Union(_)
                     ) {
                         return Err(fail(
                             "source object calls require a supported non-null object receiver",
@@ -3822,7 +3834,7 @@ impl Function {
                     result,
                     ref result_type,
                     receiver,
-                    ref class,
+                    ref classes,
                     ref member,
                     ref arguments,
                 } => {
@@ -3831,15 +3843,16 @@ impl Function {
                         .map(|v| format!(" %{}", v.0))
                         .collect::<String>();
                     format!(
-                        ".call-object %{} %{} {class} {member}{}{args}",
+                        ".call-object %{} %{} {} {member}{}{args}",
                         result.0,
                         receiver.0,
+                        classes.join("|"),
                         call_type_text(result_type)
                     )
                 }
                 Operation::ObjectCallStatement {
                     receiver,
-                    ref class,
+                    ref classes,
                     ref member,
                     ref arguments,
                 } => {
@@ -3848,8 +3861,9 @@ impl Function {
                         .map(|v| format!(" %{}", v.0))
                         .collect::<String>();
                     format!(
-                        ".call-object-discard %{} {class} {member}{args}",
-                        receiver.0
+                        ".call-object-discard %{} {} {member}{args}",
+                        receiver.0,
+                        classes.join("|")
                     )
                 }
                 Operation::NativeCallStatement {

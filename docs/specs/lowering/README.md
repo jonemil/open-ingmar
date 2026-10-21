@@ -292,7 +292,10 @@ Null remains Null, and only the selected source reference reaches the join.
 
 Lowering evaluates the receiver, selects its method with `getsv`, prepares the
 argument context when needed, invokes it, and discards statement results. Native
-and text paths use identical lowering and ordinary member-symbol binding. See
+and text paths use identical lowering and ordinary member-symbol binding.
+Multiple proven source targets use this same sequence: `getsv` selects the
+implementation from the actual receiver. Static class sets and result unions
+emit no class tests, conversions, or additional receiver evaluations. See
 the [object-call example](../../../examples/compiler-object-calls/README.md) and
 [runtime evidence](../../investigations/compiler-object-calls.md).
 

@@ -631,28 +631,44 @@ fn emit_call(
     let receiver = receiver
         .map(|value| emit(source, value, locals, parameters, operations, calls))
         .transpose()?;
-    let class = receiver.and_then(|value| {
-        crate::source_objects::class(operations, value, calls.parameter_types.clone())
-    });
-    let class = class.filter(|class| {
-        (member != "method" && !calls.inherited_object_member(class, &member))
-            || calls.get(&(class.clone(), member.clone())).is_some()
-    });
+    let classes = receiver
+        .and_then(|value| {
+            crate::source_objects::contract(operations, value, calls.parameter_types.clone())
+                .filter(|c| c.native().is_empty())
+                .map(|c| {
+                    c.classes()
+                        .iter()
+                        .map(|c| c.name.clone())
+                        .collect::<Vec<_>>()
+                })
+        })
+        .filter(|classes| {
+            classes.iter().any(|class| {
+                (member != "method" && !calls.inherited_object_member(class, &member))
+                    || calls.get(&(class.clone(), member.clone())).is_some()
+            })
+        });
     let arguments = arguments
         .into_iter()
         .map(|argument| emit(source, argument, locals, parameters, operations, calls))
         .collect::<Result<Vec<_>, _>>()?;
     let result = ValueId(operations.len() as u32);
     Ok(if let Some(receiver) = receiver {
-        if let Some(class) = class {
+        if let Some(classes) = classes {
+            let mut results = classes.iter().filter_map(|class| {
+                calls
+                    .get(&(class.clone(), member.clone()))
+                    .map(|s| s.result.clone())
+            });
+            let result_type = results
+                .next()
+                .and_then(|first| results.try_fold(first, |a, b| crate::joins::call_result(&a, &b)))
+                .unwrap_or(crate::ReturnType::Void);
             Operation::ObjectCall {
                 result,
-                result_type: calls
-                    .get(&(class.clone(), member.clone()))
-                    .map(|signature| signature.result.clone())
-                    .unwrap_or(crate::ReturnType::Integer),
+                result_type,
                 receiver,
-                class,
+                classes,
                 member,
                 arguments,
             }
@@ -1584,8 +1600,41 @@ impl Builder<'_> {
         let parser::ExpressionKind::Temporary(local) = receiver.kind else {
             return Vec::new();
         };
-        if let Some(class) = self.types.local_class(local) {
-            return self.call_argument_context(class, member);
+        if let Some(contract) = self
+            .types
+            .local_contract(local)
+            .filter(|c| c.native().is_empty())
+        {
+            let signatures = contract
+                .classes()
+                .iter()
+                .filter_map(|c| self.calls.get(&(c.name.clone(), member.into())))
+                .collect::<Vec<_>>();
+            if signatures.len() == contract.classes().len() {
+                if let Some(first) = signatures.first() {
+                    return first
+                        .parameters
+                        .iter()
+                        .enumerate()
+                        .map(|(i, first_type)| {
+                            let ty = signatures
+                                .iter()
+                                .filter_map(|s| s.parameters.get(i))
+                                .find(|ty| **ty != crate::ParameterType::Any)
+                                .unwrap_or(first_type);
+                            signatures
+                                .iter()
+                                .all(|s| {
+                                    s.parameters.get(i).is_some_and(|other| {
+                                        other == ty || *other == crate::ParameterType::Any
+                                    })
+                                })
+                                .then(|| construction_type(&ty.api_type()))
+                                .flatten()
+                        })
+                        .collect();
+                }
+            }
         }
         self.types
             .local_type(local)
@@ -1697,7 +1746,7 @@ impl Builder<'_> {
             }
             if let Operation::ObjectCall {
                 receiver,
-                class,
+                classes,
                 member,
                 arguments,
                 ..
@@ -1705,7 +1754,7 @@ impl Builder<'_> {
             {
                 last.operation = Operation::ObjectCallStatement {
                     receiver: *receiver,
-                    class: class.clone(),
+                    classes: classes.clone(),
                     member: member.clone(),
                     arguments: arguments.clone(),
                 };

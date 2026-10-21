@@ -68,13 +68,21 @@ impl Origins {
         facts: &std::collections::BTreeSet<crate::type_flow::Fact>,
     ) -> Result<(), &'static str> {
         if let Operation::ObjectCall {
-            receiver, class, ..
+            receiver, classes, ..
         }
         | Operation::ObjectCallStatement {
-            receiver, class, ..
+            receiver, classes, ..
         } = operation
         {
-            if self.class(*receiver) != Some(class.as_str()) {
+            let actual = self.values.get(receiver);
+            if !actual.is_some_and(|c| {
+                !c.nullable
+                    && c.native.is_empty()
+                    && c.classes
+                        .iter()
+                        .map(|c| c.name.as_str())
+                        .eq(classes.iter().map(String::as_str))
+            }) {
                 return Err("object call class does not match the receiver's source contract");
             }
         }
@@ -290,13 +298,6 @@ impl Origins {
         self.values.get(&value).cloned().map(Contract::join)
     }
 
-    /// Return the exact non-null class only when every alternative agrees.
-    pub(crate) fn class(&self, value: ValueId) -> Option<&str> {
-        self.values
-            .get(&value)
-            .filter(|c| !c.nullable && c.classes.len() == 1 && c.native.is_empty())
-            .map(|c| c.classes[0].as_str())
-    }
     /// Return retained class alternatives and nullability for unit witnesses.
     pub(crate) fn contract(&self, value: ValueId) -> Option<&crate::SourceUnion> {
         self.values.get(&value)
@@ -332,6 +333,9 @@ impl Origins {
             .filter(|contract| contract.classes.len() == 1 && contract.native.is_empty())
             .map(|contract| contract.classes[0].as_str())
     }
+    pub(crate) fn local_contract(&self, local: LocalId) -> Option<&Contract> {
+        self.locals.get(&local).and_then(Option::as_ref)
+    }
     pub(crate) fn set_variable_contract(&mut self, local: LocalId, ty: &crate::JoinType) {
         self.locals.insert(local, ty.source_contract());
         self.null_locals.remove(&local);
@@ -343,11 +347,11 @@ impl Origins {
 
 /// Infer a receiver's source class from typed parameters and emitted operations.
 /// Candidate source lowering leaves any invalid assignment to final validation.
-pub(crate) fn class(
+pub(crate) fn contract(
     operations: &[crate::LocatedOperation],
     value: ValueId,
     parameters: Vec<crate::ParameterType>,
-) -> Option<String> {
+) -> Option<crate::SourceUnion> {
     let mut origins = Origins::new(parameters);
     let inputs = crate::type_flow::prefix_inputs(operations);
     let mut facts = Default::default();
@@ -355,11 +359,16 @@ pub(crate) fn class(
         crate::type_flow::update(&mut facts, &inputs, &located.operation);
         let _ = origins.observe(&located.operation, &facts);
     }
-    // Source selection uses the possible class; final validation requires a
-    // non-null receiver and recomputes CFG facts from the complete body.
-    origins
-        .values
-        .get(&value)
-        .filter(|contract| contract.classes.len() == 1 && contract.native.is_empty())
-        .map(|contract| contract.classes[0].name.clone())
+    origins.contract(value).cloned()
+}
+
+/// Select one candidate class, leaving non-null proof to final validation.
+pub(crate) fn class(
+    operations: &[crate::LocatedOperation],
+    value: ValueId,
+    parameters: Vec<crate::ParameterType>,
+) -> Option<String> {
+    contract(operations, value, parameters)
+        .filter(|c| c.classes.len() == 1 && c.native.is_empty())
+        .map(|c| c.classes[0].name.clone())
 }

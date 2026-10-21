@@ -12,7 +12,10 @@ joins, standalone Null, and guarded nullable Array references. The `SourceUnions
 group checks exact class alternatives, forwarding, both guard edges, changing
 locals, loop exits, and structural Comparator witnesses for sorting. The
 `MixedUnions` group combines source classes with native scalars, containers,
-Object, and Comparator; guards recover exact or native-only contracts.
+Object, and Comparator; guards recover exact or native-only contracts. The
+`CommonCalls` group checks common methods without class guards, joined scalar
+and source-class results, contextual arrays, discarded Void/value calls, and
+observable receiver/argument evaluation order.
 
 API minimum: 5.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 
