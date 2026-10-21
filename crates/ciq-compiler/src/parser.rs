@@ -2720,188 +2720,42 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
                     };
                     let kind = if parser.peek()? == Kind::Word("as") {
                         parser.token()?;
-                        let class = parser.type_path()?;
-                        if let Some(ty) = crate::ScalarFieldType::from_name(&class) {
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            if parser.peek()? == Kind::Punctuation('=') {
-                                if !nullable {
-                                    return Err(parser.error(
-                                        token.span.start,
-                                        "non-null scalar fields must be assigned in initialize",
-                                    ));
-                                }
-                                parser.token()?;
-                                parser
-                                    .expect(Kind::Word("null"), "literal null field initializer")?;
-                            }
-                            parser.expect(Kind::Punctuation(';'), "';' after scalar field")?;
-                            crate::FieldKind::Scalar { ty, nullable }
-                        } else if class == "Toybox.Lang.Object" {
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            if parser.peek()? == Kind::Punctuation('=') {
-                                if !nullable {
-                                    return Err(parser.error(
-                                        token.span.start,
-                                        "non-null Object fields must be assigned in initialize",
-                                    ));
-                                }
-                                parser.token()?;
-                                parser
-                                    .expect(Kind::Word("null"), "literal null field initializer")?;
-                            }
-                            parser.expect(Kind::Punctuation(';'), "';' after Object field")?;
-                            crate::FieldKind::LangObject { nullable }
-                        } else if class == "Toybox.Lang.Array" || class == "Toybox.Lang.Dictionary"
-                        {
-                            let kind = if class == "Toybox.Lang.Array" {
-                                crate::FieldKind::Array {
-                                    element: parser.array_annotation()?,
-                                }
-                            } else {
-                                let dictionary_type =
-                                    parser.dictionary_annotation()?.ok_or_else(|| {
-                                        parser.error(
-                                            token.span.start,
-                                            "Dictionary fields require key/value annotations",
-                                        )
-                                    })?;
-                                crate::FieldKind::Dictionary { dictionary_type }
-                            };
-                            parser.expect(
-                                Kind::Punctuation(';'),
-                                "';' after non-null container field; initialize it in initialize",
-                            )?;
-                            kind
-                        } else if let Some(alias) = crate::NumericAlias::from_name(&class) {
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            if parser.peek()? == Kind::Punctuation('=') {
-                                if !nullable {
-                                    return Err(parser.error(
-                                        token.span.start,
-                                        "non-null numeric alias fields must be assigned in initialize",
-                                    ));
-                                }
-                                parser.token()?;
-                                parser
-                                    .expect(Kind::Word("null"), "literal null field initializer")?;
-                            }
-                            parser
-                                .expect(Kind::Punctuation(';'), "';' after numeric alias field")?;
-                            crate::FieldKind::Numeric { alias, nullable }
-                        } else if class == "Toybox.Lang.Symbol" {
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            let initial = if parser.peek()? == Kind::Punctuation('=') {
-                                parser.token()?;
+                        let parameter = parser.parameter_annotation(token.span.start)?;
+                        let result = parameter
+                            .source_contract()
+                            .map(crate::SourceUnion::result)
+                            .or_else(|| crate::unions::result(parameter.api_type()))
+                            .ok_or_else(|| {
+                                parser.error(token.span.start, "unsupported field type")
+                            })?;
+                        let mut kind = crate::FieldKind::from_result(result).ok_or_else(|| {
+                            parser.error(token.span.start, "unsupported field type")
+                        })?;
+                        if parser.peek()? == Kind::Punctuation('=') {
+                            parser.token()?;
+                            if let crate::FieldKind::Symbol { initial, nullable } = &mut kind {
                                 let value = parser.expression(0)?;
                                 match value.kind {
-                                    ExpressionKind::Symbol(name) => Some(name),
-                                    ExpressionKind::Null if nullable => None,
-                                    _ => return Err(parser.error(value.span.start, "Symbol fields require a literal Symbol or permitted null default")),
+                                    ExpressionKind::Symbol(name) => *initial=Some(name),
+                                    ExpressionKind::Null if *nullable => {},
+                                    _ => return Err(parser.error(value.span.start,"Symbol fields require a literal Symbol or permitted null default")),
                                 }
                             } else {
-                                None
-                            };
-                            parser.expect(
-                                Kind::Punctuation(';'),
-                                "';' after Symbol field declaration",
-                            )?;
-                            crate::FieldKind::Symbol { initial, nullable }
-                        } else if class == "Toybox.Lang.Method"
-                            || class == "Toybox.Lang.WeakReference"
-                            || class == "Toybox.Lang.ByteArray"
-                            || crate::InterfaceType::from_name(&class).is_some()
-                        {
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            if parser.peek()? == Kind::Punctuation('=') {
-                                if !nullable {
+                                if !crate::native::accepts(
+                                    &parameter.api_type(),
+                                    &crate::api::Type::Null,
+                                ) {
                                     return Err(parser.error(
                                         token.span.start,
-                                        "non-null reference fields must be assigned in initialize",
+                                        "non-null fields must be assigned in initialize",
                                     ));
                                 }
-                                parser.token()?;
                                 parser
                                     .expect(Kind::Word("null"), "literal null field initializer")?;
-                            }
-                            parser.expect(
-                                Kind::Punctuation(';'),
-                                "';' after reference field declaration",
-                            )?;
-                            if class == "Toybox.Lang.Method" {
-                                crate::FieldKind::Method { nullable }
-                            } else if class == "Toybox.Lang.WeakReference" {
-                                crate::FieldKind::WeakReference { nullable }
-                            } else if class == "Toybox.Lang.ByteArray" {
-                                crate::FieldKind::ByteArray { nullable }
-                            } else {
-                                crate::FieldKind::Interface {
-                                    interface: crate::InterfaceType::from_name(&class).unwrap(),
-                                    nullable,
-                                }
-                            }
-                        } else {
-                            if class.contains('.') {
-                                return Err(parser.error(
-                                    token.span.start,
-                                    "reference field requires a source class name",
-                                ));
-                            }
-                            let nullable = if parser.peek()? == Kind::Word("or") {
-                                parser.token()?;
-                                parser.expect(Kind::Word("Null"), "'Null'")?;
-                                true
-                            } else {
-                                false
-                            };
-                            if nullable && parser.peek()? == Kind::Punctuation('=') {
-                                parser.token()?;
-                                parser
-                                    .expect(Kind::Word("null"), "literal null field initializer")?;
-                            }
-                            parser.expect(
-                                Kind::Punctuation(';'),
-                                "';' after reference field declaration",
-                            )?;
-                            let class = crate::SourceClass {
-                                name: class,
-                                base: crate::ClassBase::LangObject,
-                            };
-                            if nullable {
-                                crate::FieldKind::NullableSourceObject(class)
-                            } else {
-                                crate::FieldKind::SourceObject(class)
                             }
                         }
+                        parser.expect(Kind::Punctuation(';'), "';' after field declaration")?;
+                        kind
                     } else {
                         parser.expect(Kind::Punctuation('='), "'=' and a Number literal")?;
                         let value = parser.expression(0)?;

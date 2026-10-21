@@ -74,8 +74,8 @@ omitted annotations provide the dynamic contract.
 
 Parameter and result annotations accept `A or B` chains of supported native
 value types, including Null and existing parameterized Array/Dictionary types.
-Bare Null is also a signature contract. Fields and lexical `as` assertions keep
-their separately specified type domains. [Exact source-class unions](#source-class-signatures)
+Bare Null is also a signature/field contract. [Field unions](#union-fields)
+share these value domains; lexical `as` assertions retain separate restrictions. [Exact source-class unions](#source-class-signatures)
 retain identities separately, including when mixed with native alternatives.
 
 Normalization flattens alternatives, removes duplicates, and orders them
@@ -379,8 +379,9 @@ contracts. Other supported native alternatives use the shared
 The numeric aliases are supported as invariant Array element and Dictionary
 key/value contracts. Array elements and Dictionary values may additionally
 include Null; keys remain non-null. Canonical names, imports, and aliases share
-these contracts in parameters, results, locals, and conditional joins. This does
-not add nullable Array/Dictionary references or container fields.
+these contracts in parameters, results, locals, conditional joins, and fields.
+Nullable container references follow the shared union rules independently of
+content nullability.
 
 Explicit literal context may admit different scalar classes within the selected
 alias. Without context, a computed value already typed as a numeric alias can
@@ -854,8 +855,9 @@ that identity or an assignable native alternative; a structural interface match
 requires its class's verified signature. An opaque native reference can match
 only native alternatives, never an exact source identity. Null requires a
 nullable contract. These checks apply at parameters, returns, fixed storage,
-and explicit block-value edges; saved metadata cannot invent a witness. Union
-fields and general union casts remain outside this profile.
+and explicit block-value edges; saved metadata cannot invent a witness.
+[Field storage](#union-fields) shares these contracts; general union casts
+remain outside this profile.
 
 Conditional joins and inferred local writes preserve these exact alternatives.
 Direct source `instanceof` tests select a class on the true edge and exclude it
@@ -991,10 +993,47 @@ local first. The same checks apply to typed and saved IR.
 Application generation records each field with key bits zero, type `0x01`, and
 the initial Number's 32-bit pattern. Fields are sorted with other class members.
 The runtime supplies a separate field value for each constructed instance;
-constant initialization precedes its source initialize method. Reads lower to
-`getselfv`; writes to `getself`, `spush`, RHS instructions, then `putv`. See the
+constant initialization precedes its source initialize method. The shared
+[field lowering](../lowering/README.md#instance-fields) applies to every contract. See the
 [counter example](../../../examples/compiler-fields/README.md) and
 [instance isolation evidence](../../investigations/compiler-fields.md).
+
+### Union fields
+
+Typed instance fields use the shared signature value grammar and normalization,
+including native unions, exact source-class sets, mixed source/native sets,
+standalone Null, and nullable Array/Dictionary references. Container contents
+remain invariant. Callback tuples, Void, and Graphics.Dc are not field contracts.
+Every alternative retains its API requirement even in an unused field.
+
+Generic value fields have ordinary Null metadata slots. If the contract admits
+Null, omission of an initializer supplies that default; literal `= null` is also
+accepted. Otherwise `initialize` must assign a valid value before reads, self
+exposure/calls, control flow, shutdown-capable calls, or return, under the shared
+required-field rules. Declaration initializers remain restricted to existing
+Number/Symbol metadata forms and nullable Null defaults; a general union has no
+scalar, container, or computed declaration initializer.
+
+Writes check every actual alternative against the field contract. Exact classes
+can satisfy their declared identity, an assignable native arm, or a verified
+structural interface arm; opaque references cannot claim an exact identity.
+Reads retain the declared union even immediately after a narrower write. Save a
+fresh read in a local and guard it for narrower operations. Field writes do not
+change a saved snapshot's contract, value, or source identity. Guarding one field
+read does not narrow a later field read. Source-only class sets also support
+common member calls under the ordinary [call rules](#calls-on-constructed-source-objects).
+
+Direct container literals receive construction context when a union provides a
+unique supported concrete container contract, including through Null or
+non-container alternatives. Incompatible container alternatives provide no
+shared context. Opaque native Array alternatives do not choose element types;
+existing container references never change their invariant content contracts.
+The same context rule serves signatures, returns, local writes, and fields.
+
+[IR field records](../ir/grammar.md#unit-and-class-framing) retain the full contract;
+[lowering](../lowering/README.md#instance-fields) uses ordinary field operations.
+See the [union example](../../../examples/compiler-numeric-unions/README.md) and
+[field evidence](../../investigations/compiler-numeric-unions.md#union-fields).
 
 ### Typed scalar fields
 
@@ -1061,9 +1100,10 @@ conditional arms; this does not broaden unrelated literal inference.
 
 Initialization and field limits follow the [typed-field
 rules](#typed-scalar-fields). Object fields may have literal Null defaults only
-when nullable. Containers require assignment in `initialize`; declaration
-defaults, opaque unparameterized Dictionary fields, and nullable whole-container
-fields remain unsupported. Payload types retain their API requirements even for
+when nullable. Non-null containers require assignment in `initialize`;
+nullable references default to Null and also permit literal `= null`.
+Opaque unparameterized Dictionary fields use their ordinary opaque contract;
+that erasure cannot recover key/value types. Payload types retain their API requirements even for
 unused fields.
 
 Fields hold strong references. Replacing a field releases its ownership, while

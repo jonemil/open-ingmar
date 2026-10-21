@@ -215,6 +215,16 @@ schedule](../ir/README.md#validation). Context-independent bodies may omit SDK
 global-resolution sequences; that does not establish valid frame setup for
 arbitrary bytecode.
 
+### Instance fields
+
+A read selects the current instance field with `getselfv`. A write emits
+`getself`, the field symbol with `spush`, its RHS, then `putv`, preserving the
+existing expression staging rules. Class member binding resolves the same field
+identity for every supported contract. Union types and snapshots add static
+checks; lowering emits no conversion, discriminator, or implicit runtime guard.
+Generic value-field metadata starts as Null, with required source constructor
+writes supplying non-null initial values.
+
 ## Control flow
 
 ### Terminal conditions

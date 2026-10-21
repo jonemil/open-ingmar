@@ -106,6 +106,24 @@ captures are in `scratch/union-calls/check/`. These cases establish directly
 declared common members of exact source-class sets, not unconstrained dynamic
 source lookup or source/native own-member mixtures.
 
+## Union fields
+
+`UnionFields` adds native scalar, exact source-class, mixed, nullable Array,
+nullable typed/opaque Dictionary, container-reference union, and Comparator
+field contracts. SDK/compiler/simulator 9.2.0 / fr265, target 5.2.0 and minimum
+5.0.0 accept the authored declarations and writes. Nullable slots begin as Null;
+non-null slots are filled in the constructor. Separate instances retain separate
+scalar state. A saved scalar, source/native value, or container snapshot remains
+usable after the field is replaced or cleared. Empty Array/Dictionary writes
+receive typed field context, and a source Comparator can satisfy a mixed field.
+
+SDK and generated applications match all 167 expected lines. Source, saved IR,
+and assembly produce identical generated unsigned applications. Both SDK and
+generated PRGs pass structured CODE/DATA reconstruction without required raw
+fallback. Reproduce with the existing specimen checker; captures are in
+`scratch/union-fields/check/`. This does not establish general declaration
+initializers: the example uses Null defaults and constructor writes.
+
 ## Field storage
 
 SDK/compiler/simulator 9.2.0 / fr265 also accept

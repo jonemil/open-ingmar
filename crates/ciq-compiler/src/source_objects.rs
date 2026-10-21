@@ -315,16 +315,6 @@ impl Origins {
                     .get(&value)
                     .is_some_and(|ty| expected.accepts_api(ty)))
     }
-    /// Check exact source assignability, admitting Null only for nullable storage.
-    pub(crate) fn accepts(
-        &self,
-        class: &crate::SourceClass,
-        nullable: bool,
-        value: ValueId,
-    ) -> bool {
-        self.accepts_contract(&Contract::single(class.clone(), nullable), value)
-    }
-
     /// Return the invariant source class established by local initialization.
     pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
         self.locals

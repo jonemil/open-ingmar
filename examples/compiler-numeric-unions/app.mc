@@ -83,7 +83,7 @@ module UnionOps {
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); MixedUnions.run(); CommonCalls.run(); System.exit(); }
+    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); MixedUnions.run(); CommonCalls.run(); UnionFields.run(); System.exit(); }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
 }
 
@@ -281,5 +281,73 @@ module CommonCalls {
         System.println(SourceUnions.pick(false).items([1, 2]));
         CommonCalls.act(SourceUnions.pick(true));
         CommonCalls.act(SourceUnions.pick(false));
+    }
+}
+
+class UnionFieldBox extends Lang.Object {
+    var scalar as Lang.Number or Lang.String;
+    var source as UnionToken or UnionMarker;
+    var mixed as UnionToken or Lang.String or Null;
+    var array as Lang.Array<Lang.Number> or Null = null;
+    var dictionary as Lang.Dictionary<Lang.String, Lang.Number> or Null;
+    var arrays as Lang.Array<Lang.Number> or Lang.Array<Lang.Long>;
+    var opaque as Lang.Dictionary or Null;
+    var comparator as UnionToken or Lang.Comparator;
+    function initialize() {
+        self.scalar = 41;
+        self.source = new UnionToken();
+        self.arrays = [1];
+        self.comparator = new UnionMarker();
+    }
+    function peek() as Lang.Number or Lang.String { return self.scalar; }
+    function run() as Void {
+        System.println(self.mixed == null);
+        System.println(self.array == null);
+        System.println(self.dictionary == null);
+        var snapshot = self.scalar;
+        self.scalar = "text";
+        if (snapshot instanceof Lang.Number) { System.println(snapshot + 1); }
+        System.println(self.scalar.toString());
+        System.println(self.source.shared(2));
+        self.source = new UnionMarker();
+        System.println(self.source.copy().shared(2));
+        self.mixed = "abc";
+        var mixed = self.mixed;
+        self.mixed = null;
+        if (mixed != null) {
+            if (mixed instanceof UnionToken) { System.println(mixed.count()); }
+            else { System.println(mixed.length()); }
+        }
+        self.array = [];
+        var array = self.array;
+        if (array != null) {
+            array.add(42);
+            self.array = null;
+            System.println(array[0]);
+        }
+        self.dictionary = {};
+        var dictionary = self.dictionary;
+        if (dictionary != null) {
+            dictionary["one"] = 7;
+            var number = dictionary["one"];
+            if (number != null) { System.println(number); }
+        }
+        self.opaque = {};
+        var opaque = self.opaque;
+        if (opaque != null) { System.println(opaque.size()); }
+        self.arrays = [2l];
+        System.println(self.arrays[0].toString());
+        var comparator = self.comparator;
+        if (comparator instanceof UnionToken) { System.println(comparator.count()); }
+        else { var values = [1, 3, 2]; values.sort(comparator); System.println(values[0]); }
+    }
+}
+module UnionFields {
+    function run() as Void {
+        System.println("union-fields");
+        var first = new UnionFieldBox();
+        var second = new UnionFieldBox();
+        first.run();
+        System.println(second.peek());
     }
 }

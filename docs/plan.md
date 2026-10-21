@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support union instance-field declarations, defaults, required
-  initialization, reads, and writes, including nullable container references.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
   diagnose recursive aliases.
 - [ ] Parse named and anonymous `interface` types with method and field members;
@@ -62,8 +60,9 @@ implemented contracts; investigations retain evidence, not another backlog.
   lookup, and enum annotations.
 - [ ] Support global and module `var` fields, typed/untyped defaults, reads, and
   writes; implement initialization order and diagnose initialization cycles.
-- [ ] Support computed instance-field declaration initializers and inferred field
-  types beyond Number/Symbol literals; preserve per-instance evaluation order.
+- [ ] Support scalar/String/container and computed instance-field declaration
+  initializers for typed and inferred fields; infer declaration types beyond
+  Number/Symbol defaults and preserve per-instance evaluation order.
 - [ ] Resolve bare field names in instance methods with the SDK's local,
   parameter, field, and outer-owner shadowing rules.
 - [ ] Support field reads/writes through another source instance, including

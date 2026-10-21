@@ -186,10 +186,8 @@ fn field_initialization_and_saved_edits_are_rechecked() {
         }
     }
     assert!(
-        compile_sources(&[
-            "class C {var value as Lang.Dictionary;function initialize(){self.value={};}}"
-        ])
-        .is_err()
+        compile_sources(&["class C {var value as Lang.Dictionary;function initialize(){}}"])
+            .is_err()
     );
 }
 

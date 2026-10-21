@@ -54,7 +54,8 @@ checks](README.md#compilation-units-and-classes).
 
 ```text
 field-record = field-body newline
-field-body = ".field-number" identifier signed-decimal-i32
+field-body = ".field-value" identifier call-result-tag
+           | ".field-number" identifier signed-decimal-i32
            | ".field-scalar" identifier scalar-field-tag
            | ".field-numeric" identifier numeric-alias-tag
            | ".field-object" identifier ("object" | "nullable-object")
@@ -74,7 +75,12 @@ Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 `string`, and their nullable forms. Alias tags are `integer-union`, `decimal`,
 `numeric`, and nullable forms. Interface tags are `comparable`, `comparator`,
 and nullable forms. Field records do not carry spans or arbitrary default
-expressions. [Field semantics](../frontend/README.md#instance-fields) define
+expressions. `.field-value` carries the full ordinary value contract, including
+native/source/mixed unions and nullable container references. Void, tuples, and
+Graphics.Dc are excluded, including as union alternatives. Parsing and typed
+construction canonicalize contracts with an existing specialized field form to
+that form. Generic fields retain Null metadata defaults; required initialization
+follows whether their contract admits Null. [Field semantics](../frontend/README.md#instance-fields) define
 required initialization, metadata defaults, availability, and exact storage
 checks.
 
@@ -336,7 +342,8 @@ tags, source identities, Void, and callback tuple shapes are not union atoms.
 Parsing normalizes alternatives and serialization uses an existing named tag
 when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
-Dictionary punctuation. These tags do not extend field or cast domains.
+Dictionary punctuation. Fields admit these value tags under the field
+restrictions above; cast domains remain separate.
 
 Source-union tags contain 2 through 254 atoms, including at least one exact
 source class, and at most 254 alternatives after normalization. Classes sort by
@@ -345,8 +352,8 @@ Numeric aliases expand; duplicates collapse. Pure source singleton sets use
 ordinary source/nullable-source tags. Any absorbs the union. Exact identities
 are retained alongside opaque Object alternatives rather than subsumed.
 Nested union tags, Void, tuples, and nullable-source atoms are rejected. These
-tags are admitted in signatures, block values, and local contracts, but not
-fields or casts.
+tags are admitted in signatures, block values, local contracts, and fields.
+General union casts remain unsupported.
 
 The contexts deliberately differ. Source casts use `source-tag` or
 `nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the

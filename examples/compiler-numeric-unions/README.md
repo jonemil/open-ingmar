@@ -15,7 +15,10 @@ locals, loop exits, and structural Comparator witnesses for sorting. The
 Object, and Comparator; guards recover exact or native-only contracts. The
 `CommonCalls` group checks common methods without class guards, joined scalar
 and source-class results, contextual arrays, discarded Void/value calls, and
-observable receiver/argument evaluation order.
+observable receiver/argument evaluation order. `UnionFields` checks Null defaults,
+constructor writes, exact/mixed/native field contracts, guarded nullable
+containers, snapshots across field replacement, interface witnesses, and instance
+isolation.
 
 API minimum: 5.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 

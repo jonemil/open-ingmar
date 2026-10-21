@@ -4,7 +4,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ConstructionType {
     ByteOptions,
     Array(crate::ArrayElement),
@@ -14,6 +14,16 @@ enum ConstructionType {
 /// Extract a supported container contract for contextual literal construction.
 fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     match ty {
+        crate::api::Type::Union(parts) => {
+            // An opaque Array alternative does not select its element type;
+            // let literals infer their own contract for overload-like profiles.
+            let mut candidates = parts
+                .iter()
+                .filter(|ty| !matches!(ty, crate::api::Type::Named(_)))
+                .filter_map(construction_type);
+            let first = candidates.next()?;
+            candidates.all(|other| other == first).then_some(first)
+        }
         crate::api::Type::Options(_) if *ty == crate::api::Type::byte_options() => {
             Some(ConstructionType::ByteOptions)
         }

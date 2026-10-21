@@ -1740,6 +1740,11 @@ impl Function {
                     *result_type = contract.clone().result();
                 }
             }
+            if let Operation::SelfFieldRead { result_type, .. } = &mut located.operation {
+                if let Some(canonical) = FieldKind::value_contract(result_type.clone()) {
+                    *result_type = canonical;
+                }
+            }
         }
 
         let source_contracts = parameter_types
@@ -2333,45 +2338,7 @@ impl Function {
                         return Err(fail("self field reads require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if !matches!(
-                        result_type,
-                        ReturnType::Integer
-                            | ReturnType::LangObject
-                            | ReturnType::NullableObject
-                            | ReturnType::Array(_)
-                            | ReturnType::TypedDictionary(_)
-                            | ReturnType::NullableInteger
-                            | ReturnType::Long
-                            | ReturnType::NullableLong
-                            | ReturnType::Float
-                            | ReturnType::NullableFloat
-                            | ReturnType::Double
-                            | ReturnType::NullableDouble
-                            | ReturnType::Boolean
-                            | ReturnType::NullableBoolean
-                            | ReturnType::Char
-                            | ReturnType::NullableChar
-                            | ReturnType::String
-                            | ReturnType::NullableString
-                            | ReturnType::Numeric
-                            | ReturnType::IntegerAlias
-                            | ReturnType::Decimal
-                            | ReturnType::NullableNumeric
-                            | ReturnType::NullableIntegerAlias
-                            | ReturnType::NullableDecimal
-                            | ReturnType::SourceObject(_)
-                            | ReturnType::NullableSourceObject(_)
-                            | ReturnType::Symbol
-                            | ReturnType::NullableSymbol
-                            | ReturnType::Method
-                            | ReturnType::WeakReference
-                            | ReturnType::ByteArray
-                            | ReturnType::NullableByteArray
-                            | ReturnType::NullableWeakReference
-                            | ReturnType::NullableMethod
-                            | ReturnType::Interface(_)
-                            | ReturnType::NullableInterface(_)
-                    ) {
+                    if FieldKind::from_result(result_type.clone()).is_none() {
                         return Err(fail("unsupported instance field result contract"));
                     }
                     types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);

@@ -77,7 +77,8 @@ fn instance_field(
             initial: Some(name),
             ..
         } => (8, ids[name]),
-        crate::FieldKind::Symbol { initial: None, .. }
+        crate::FieldKind::Value { .. }
+        | crate::FieldKind::Symbol { initial: None, .. }
         | crate::FieldKind::Numeric { .. }
         | crate::FieldKind::Scalar { .. }
         | crate::FieldKind::LangObject { .. }

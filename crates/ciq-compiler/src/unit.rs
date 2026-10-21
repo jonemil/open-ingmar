@@ -291,16 +291,6 @@ pub enum NumericAlias {
 }
 
 impl NumericAlias {
-    /// Resolve a canonical Lang typedef name; concrete scalar classes are excluded.
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "Toybox.Lang.Integer" => Some(Self::Integer),
-            "Toybox.Lang.Decimal" => Some(Self::Decimal),
-            "Toybox.Lang.Numeric" => Some(Self::Numeric),
-            _ => None,
-        }
-    }
-
     /// Return the saved-IR tag for this non-null alias.
     fn tag(self) -> &'static str {
         self.value_tag(false)
@@ -379,20 +369,6 @@ pub enum ScalarFieldType {
 }
 
 impl ScalarFieldType {
-    /// Resolve a canonical API scalar name without accepting aliases or unions.
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        Some(match name.strip_prefix("Toybox.Lang.")? {
-            "Number" => Self::Number,
-            "Long" => Self::Long,
-            "Float" => Self::Float,
-            "Double" => Self::Double,
-            "Boolean" => Self::Boolean,
-            "Char" => Self::Char,
-            "String" => Self::String,
-            _ => return None,
-        })
-    }
-
     fn tag(self) -> &'static str {
         match self {
             Self::Number => "integer",
@@ -442,6 +418,9 @@ impl ScalarFieldType {
 /// A supported field's default and initialization requirement.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldKind {
+    /// A supported value contract with a Null metadata slot. Contracts admitting
+    /// Null have that default; others require constructor initialization.
+    Value { value_type: ReturnType },
     /// A Number copied from class metadata into each new instance.
     Number(i32),
     /// A Null-initialized concrete scalar slot. Non-null fields require source
@@ -489,7 +468,92 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
+    /// Normalize a field value contract, excluding callback-only types.
+    pub(crate) fn value_contract(ty: ReturnType) -> Option<ReturnType> {
+        let ty = if let Some(contract) = ty.source_contract() {
+            contract.result()
+        } else {
+            crate::unions::result(crate::unions::normalize(vec![ty.api_type()]))?
+        };
+        if matches!(ty, ReturnType::Void | ReturnType::Tuple(_))
+            || crate::unions::alternatives(&ty.api_type())
+                .iter()
+                .any(|part| *part == crate::api::Type::named("Toybox.Graphics.Dc"))
+        {
+            return None;
+        }
+        Some(ty)
+    }
+
+    /// Adapt a signature value contract to canonical field storage. Callback
+    /// tuples, Void, and Graphics.Dc are not ordinary field value contracts.
+    pub(crate) fn from_result(ty: ReturnType) -> Option<Self> {
+        let ty = Self::value_contract(ty)?;
+        for scalar in [
+            ScalarFieldType::Number,
+            ScalarFieldType::Long,
+            ScalarFieldType::Float,
+            ScalarFieldType::Double,
+            ScalarFieldType::Boolean,
+            ScalarFieldType::Char,
+            ScalarFieldType::String,
+        ] {
+            for nullable in [false, true] {
+                if scalar.result_type(nullable) == ty {
+                    return Some(Self::Scalar {
+                        ty: scalar,
+                        nullable,
+                    });
+                }
+            }
+        }
+        for alias in [
+            NumericAlias::Integer,
+            NumericAlias::Decimal,
+            NumericAlias::Numeric,
+        ] {
+            for nullable in [false, true] {
+                if alias.result_type(nullable) == ty {
+                    return Some(Self::Numeric { alias, nullable });
+                }
+            }
+        }
+        Some(match ty {
+            ReturnType::LangObject => Self::LangObject { nullable: false },
+            ReturnType::NullableObject => Self::LangObject { nullable: true },
+            ReturnType::Array(element) => Self::Array { element },
+            ReturnType::TypedDictionary(dictionary_type) => Self::Dictionary { dictionary_type },
+            ReturnType::Symbol => Self::Symbol {
+                initial: None,
+                nullable: false,
+            },
+            ReturnType::NullableSymbol => Self::Symbol {
+                initial: None,
+                nullable: true,
+            },
+            ReturnType::Method => Self::Method { nullable: false },
+            ReturnType::NullableMethod => Self::Method { nullable: true },
+            ReturnType::WeakReference => Self::WeakReference { nullable: false },
+            ReturnType::NullableWeakReference => Self::WeakReference { nullable: true },
+            ReturnType::ByteArray => Self::ByteArray { nullable: false },
+            ReturnType::NullableByteArray => Self::ByteArray { nullable: true },
+            ReturnType::Interface(interface) => Self::Interface {
+                interface,
+                nullable: false,
+            },
+            ReturnType::NullableInterface(interface) => Self::Interface {
+                interface,
+                nullable: true,
+            },
+            ReturnType::SourceObject(class) => Self::SourceObject(class),
+            ReturnType::NullableSourceObject(class) => Self::NullableSourceObject(class),
+            value_type => Self::Value { value_type },
+        })
+    }
     fn requires_initialization(&self) -> bool {
+        if let Self::Value { value_type } = self {
+            return !crate::native::accepts(&value_type.api_type(), &crate::api::Type::Null);
+        }
         matches!(
             self,
             Self::SourceObject(_)
@@ -539,6 +603,7 @@ pub struct InstanceField {
 impl InstanceField {
     pub(crate) fn result_type(&self) -> ReturnType {
         match &self.kind {
+            FieldKind::Value { value_type } => value_type.clone(),
             FieldKind::Number(_) => ReturnType::Integer,
             FieldKind::LangObject { nullable } => {
                 if *nullable {
@@ -733,8 +798,20 @@ impl CompilationUnit {
     /// Class errors use flattened body indexes after all global/module functions.
     pub fn with_classes(
         declarations: Vec<FunctionDeclaration>,
-        classes: Vec<ClassDeclaration>,
+        mut classes: Vec<ClassDeclaration>,
     ) -> Result<Self, UnitError> {
+        for class in &mut classes {
+            for field in &mut class.fields {
+                if let FieldKind::Value { value_type } = &field.kind {
+                    field.kind =
+                        FieldKind::from_result(value_type.clone()).ok_or_else(|| UnitError {
+                            declaration: None,
+                            operation: None,
+                            message: "unsupported field value contract".into(),
+                        })?;
+                }
+            }
+        }
         let unit = Self {
             declarations,
             classes,
@@ -917,15 +994,8 @@ impl CompilationUnit {
             let references = class
                 .fields
                 .iter()
-                .filter_map(|field| {
-                    if let FieldKind::SourceObject(target)
-                    | FieldKind::NullableSourceObject(target) = &field.kind
-                    {
-                        Some(target)
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(|field| field.result_type().source_contract())
+                .flat_map(|contract| contract.classes)
                 .collect::<Vec<_>>();
             for target in &references {
                 if !self.classes.iter().any(|declaration| {
@@ -1451,41 +1521,13 @@ impl CompilationUnit {
                             ));
                         }
                         Operation::SelfFieldAssign { value, .. } => {
-                            if let FieldKind::SourceObject(class)
-                            | FieldKind::NullableSourceObject(class) = &declaration.kind
-                            {
-                                if !origins.accepts(
-                                    class,
-                                    matches!(declaration.kind, FieldKind::NullableSourceObject(_)),
-                                    *value,
-                                ) {
-                                    return Err(fail(
-                                        Some(index),
-                                        Some(operation),
-                                        "field assignment must preserve the declared source class"
-                                            .into(),
-                                    ));
-                                }
-                            }
-                            if let FieldKind::Interface {
-                                interface,
-                                nullable,
-                            } = declaration.kind
-                            {
-                                self.check_interface_value(
-                                    function, &origins, *value, interface, nullable,
-                                )
-                                .map_err(|message| fail(Some(index), Some(operation), message))?;
-                            } else if !crate::native::accepts(
-                                &declaration.result_type().api_type(),
-                                &function.value_types[value].api_type(),
-                            ) {
-                                return Err(fail(
-                                    Some(index),
-                                    Some(operation),
-                                    "field assignment type does not match its declaration".into(),
-                                ));
-                            }
+                            self.check_field_value(
+                                function,
+                                &origins,
+                                *value,
+                                &declaration.result_type(),
+                            )
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
                         }
                         _ => {}
                     }
@@ -1715,6 +1757,53 @@ impl CompilationUnit {
         Ok(())
     }
 
+    /// Check a field write against its full value contract. Exact class
+    /// provenance and structural interface witnesses remain separate from the
+    /// native projection, including when interfaces occur inside native unions.
+    fn check_field_value(
+        &self,
+        function: &Function,
+        origins: &crate::source_objects::Origins,
+        value: crate::ValueId,
+        expected: &ReturnType,
+    ) -> Result<(), String> {
+        if function.value_types[&value] == crate::ValueType::Any {
+            return Ok(());
+        }
+        if let Some(contract) = expected.source_contract() {
+            return self.check_source_value(function, origins, value, &contract);
+        }
+        let target = expected.api_type();
+        if let Some(actual) = origins.contract(value) {
+            if actual.nullable() && !crate::native::accepts(&target, &crate::api::Type::Null) {
+                return Err("nullable field assignment requires a non-null proof".into());
+            }
+            let natives = actual
+                .native()
+                .iter()
+                .all(|ty| crate::native::accepts(&target, ty));
+            let classes = actual.classes().iter().all(|class| {
+                crate::native::accepts(&target, &crate::api::Type::named(class.base.api_name()))
+                    || crate::unions::alternatives(&target).iter().any(|ty| {
+                        if let Some(crate::ValueType::Interface(interface)) =
+                            crate::ValueType::from_api_type(ty)
+                        {
+                            self.check_interface_signature(class.as_str(), interface.name())
+                                .is_ok()
+                        } else {
+                            false
+                        }
+                    })
+            });
+            if natives && classes {
+                return Ok(());
+            }
+        } else if crate::native::accepts(&target, &function.value_types[&value].api_type()) {
+            return Ok(());
+        }
+        Err("field assignment type or interface witness does not match its declaration".into())
+    }
+
     /// Check a class-containing boundary against actual native alternatives and
     /// exact identities, resolving every deferred structural interface witness.
     fn check_source_value(
@@ -1899,6 +1988,11 @@ impl CompilationUnit {
             text.push_str(&format!(".class {} {}\n", class.name, class.base.text()));
             for field in &class.fields {
                 text.push_str(&match &field.kind {
+                    FieldKind::Value { value_type } => format!(
+                        ".field-value {} {}\n",
+                        field.name,
+                        crate::type_text::result_tag(value_type)
+                    ),
                     FieldKind::Number(initial) => {
                         format!(".field-number {} {initial}\n", field.name)
                     }
@@ -2119,10 +2213,12 @@ fn compile_sources_context(
             .iter_mut()
             .flat_map(|class| class.fields.iter_mut())
         {
-            if let FieldKind::SourceObject(class) | FieldKind::NullableSourceObject(class) =
-                &mut field.kind
-            {
-                resolve(class)?;
+            if let Some(mut contract) = field.result_type().source_contract() {
+                for class in &mut contract.classes {
+                    resolve(class)?;
+                }
+                field.kind =
+                    FieldKind::from_result(contract.result()).expect("resolved field contract");
             }
         }
     }
@@ -2372,7 +2468,8 @@ fn parse_unit_ir_context(
                     if parts.first().is_some_and(|part| {
                         matches!(
                             part.as_str(),
-                            ".field-number"
+                            ".field-value"
+                                | ".field-number"
                                 | ".field-object"
                                 | ".field-array"
                                 | ".field-dictionary"
@@ -2396,7 +2493,18 @@ fn parse_unit_ir_context(
                                 "expected a three-part field declaration before methods, at most 256 fields",
                             ));
                         }
-                        let kind = if parts[0] == ".field-number" {
+                        let kind = if parts[0] == ".field-value" {
+                            crate::type_text::call_result(&parts[2])
+                                .ok()
+                                .and_then(FieldKind::from_result)
+                                .ok_or_else(|| {
+                                    Diagnostic::at(
+                                        text,
+                                        method_at,
+                                        "unsupported field value contract",
+                                    )
+                                })?
+                        } else if parts[0] == ".field-number" {
                             FieldKind::Number(parts[2].parse::<i32>().map_err(|_| {
                                 Diagnostic::at(text, method_at, "invalid Number field initializer")
                             })?)

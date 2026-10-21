@@ -1774,8 +1774,25 @@ block-edge checks resolve deferred witnesses too; inferred read metadata cannot
 claim a witness by changing its type tag. Structural interface consumers check
 both retained classes and native alternatives. Unknown multiple callback bodies
 retain conservative initialization/shutdown effects. Direct common source calls
-instead track every exact body as specified above. Fields and general union
-casts remain unsupported.
+instead track every exact body as specified above. Field contracts retain these
+same alternatives; general union casts remain unsupported.
+
+`FieldKind::Value { value_type: ReturnType }` carries field contracts without an
+existing specialized storage form, including general unions and nullable
+container references. `.field-value name tag` uses the ordinary saved value tag.
+Typed construction and parsing normalize aliases/unions and reuse specialized
+field forms where applicable. Callback tuples, Void, and Graphics.Dc alternatives
+are rejected. Unit declaration validation resolves every exact class/native-base
+pair, including unused union fields; API checks visit every retained type.
+
+Field-read result metadata normalizes in both typed and parsed IR and must equal
+the declaration's full contract. It does
+not record a last-written subtype or grant a proof for another field read.
+Writes check assignability and every required structural interface witness.
+Generic field metadata contains Null; non-null contracts participate in the
+existing required-initialization prefix checks. The
+[frontend field rules](../frontend/README.md#union-fields) own defaults, snapshot
+semantics, and contextual construction. No union discriminator is stored.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

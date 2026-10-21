@@ -62,10 +62,10 @@ View, and BehaviorDelegate identities; omission selects Object. Field types and
 permitted defaults are the [storage contracts](README.md#instance-fields).
 `field-default` is further restricted by its type: Symbol permits a literal
 Symbol or, when nullable, Null, also parenthesized. Other nullable
-scalar/core/interface/alias fields permit only literal `null`, without
-parentheses. Nullable source-reference fields also permit only literal `null`.
-Non-null fields have no initializer here except Symbol. Container fields have
-no declaration default. Inferred fields accept only the Number/Symbol forms
+value contracts, including unions and container references, permit only literal
+`null`, without parentheses. A union that canonicalizes to Symbol/nullable Symbol
+uses the Symbol default rule; other unions containing Symbol still permit only
+Null defaults. Non-null fields have no initializer here except Symbol. Inferred fields accept only the Number/Symbol forms
 shown above.
 Imports, owner collisions, module reopening, and file-local bindings follow
 [declaration resolution](README.md#declarations-and-name-resolution). There are no optional/default
@@ -236,8 +236,6 @@ dictionary-value = scalar-or-alias | core-reference | interface-type
                  | (scalar-or-alias | core-reference | interface-type) "or" "Null"
 named-value-type = scalar-or-alias | core-reference | interface-type | enum-type
                  | dictionary-type | view-type | delegate-type | source-class-type
-nullable-type = nullable-lang-type | source-class-type
-nullable-lang-type = scalar-or-alias | core-reference | interface-type
 scalar-or-alias = scalar-type | numeric-alias-type
 scalar-type = path
 numeric-alias-type = path
@@ -257,10 +255,7 @@ bytearray-type = path
 array-type = path
 dictionary-type = path
 native-base = object-type | appbase-type | view-type | delegate-type
-field-type = field-named-type | nullable-type "or" "Null"
-           | array-type "<" array-element ">"
-           | dictionary-type "<" dictionary-key "," dictionary-value ">"
-field-named-type = nullable-lang-type | source-class-type
+field-type = value-type
 class-target = runtime-class-type | source-class-type
 runtime-class-type = path
 cast-target = cast-named-type | nullable-cast-type "or" "Null"
@@ -285,21 +280,21 @@ no imports. These semantic type domains mean:
   container references and exact source-class atoms. Class-containing unions
   preserve exact identities separately from native alternatives. The normalized
   set is also limited to 254 alternatives, including expanded aliases and Null.
-- Nullable field domains: scalar/alias, core reference, interface, and exact
-  constructible source class. Container fields remain non-null.
+- Fields share signature value atoms and union normalization, including nullable
+  container references, native references/enums, exact source sets, and mixed sets.
+  Callback-only Graphics.Dc is excluded even inside a union.
 - View, Array, Dictionary, Symbol, Method, and ByteArray productions use their
   resolved native identities.
 - Native base: Object, AppBase, View, or BehaviorDelegate, as above.
-- Field named type: scalar/alias, core reference, interface, or exact
-  constructible source class. These fields may be nullable; container fields
-  remain non-null. `field-default` restrictions are specified under Declarations.
+- `field-default` restrictions are specified under Declarations; nullable
+  references describe the field itself independently of container contents.
 - Class target and cast target: the domains immediately below the expression
   grammar; a parsed path does not admit arbitrary type tests/assertions.
 
 Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
 source value/result contract. Bare Null and either order of native union atoms
-are accepted in signatures. Fields and lexical casts retain their narrower,
-independently checked domains; signature union syntax does not extend them.
+are accepted in signatures and fields. Lexical casts retain their separately
+checked domains; general union signature/field syntax does not extend casts.
 Nested type parameters and parenthesized type unions remain unsupported. Generic containers are invariant; see
 [type rules](README.md#types-and-nullability) and the container semantic pages.
 
