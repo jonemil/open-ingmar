@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Infer changing local types across sequential assignments, rather than
-  fixing every local to its initializer's type; compute branch and loop joins.
 - [ ] Use Any for unannotated parameters and results instead of the current
   Number/Void defaults; support dynamic argument, member, and result checking.
 - [ ] Support arbitrary `A or B` source unions in annotations, storage, calls,

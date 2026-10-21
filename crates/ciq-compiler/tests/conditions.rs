@@ -130,8 +130,8 @@ fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
     }
     assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
     for source in [
-        "function f() { var flag = true; flag = 1; return 0; }",
-        "function f() { var n = 1; n = false; return 0; }",
+        "function f() { var flag = true; flag = 1; if(flag){return 1;}return 0; }",
+        "function f() { var n = 1; n = false; return n+1; }",
         "function f() { return true + 1; }",
         "function f() { return false; }",
         "function f() { if (true == 1) { return 1; } else { return 2; } }",
@@ -440,14 +440,13 @@ fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
 }
 
 #[test]
-fn source_assignments_reject_type_changes_and_escaping_names() {
+fn source_assignments_reject_wrong_consumers_and_escaping_names() {
     for source in [
         "function f(x) { x = \"bad\"; return x; }",
         "function f() { n = 1; var n = 2; return n; }",
         "function f(x) { if (x == 0) { var n = 1; } else { n = 2; } return 1; }",
         "function f(x) { if (x == 0) { var n = 1; } else {} n = 2; return 1; }",
         "function f() { var n = 1; n = \"string\"; return n; }",
-        "function f() { var n = \"string\"; n = 1; return 1; }",
         "function f(x) { var n = 1; n = x > 0; return n; }",
         "function f() { var n = 1; return n = 2; }",
         "function f() { var n = 1; (n) = 2; return n; }",
@@ -456,10 +455,10 @@ fn source_assignments_reject_type_changes_and_escaping_names() {
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let source = "function f() { var n = 1;\n n = \"string\"; return n; }";
+    let source = "function f(n) {\n n = \"string\"; return n; }";
     let error = compile(source).unwrap_err();
     assert_eq!((error.line, error.column), (2, 2));
-    assert!(error.message.contains("preserve"));
+    assert!(error.message.contains("parameter"));
 }
 
 #[test]
@@ -1109,7 +1108,7 @@ fn loop_header_scope_and_unexecuted_clauses_still_receive_diagnostics() {
         "function f() {for(var i=0;3>i;i=i+1){var i=2;}return 0;}",
         "function f() {var i=0;for(var i=0;3>i;i=i+1){}return 0;}",
         "function f() {for(var i=0;3>i;missing++){break;}return 0;}",
-        "function f() {for(var i=0;3>i;i=false){break;}return 0;}",
+        "function f() {for(var i=0;3>i;i=missing){break;}return 0;}",
         "function f() {do{break;}while(missing);return 0;}",
         "function f() {do{break;}while(1);return 0;}",
         "function f() {do{var n=0;}while(n==0);return 0;}",

@@ -64,13 +64,13 @@ fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
         "function f() { var n = \"41\".toNumber(); if (n == null) { return n + 1; } else { return 0; } }",
         "function f() { var n = \"41\".toNumber(); if (n == null) { System.println(0); } else { System.println(n); } return n; }",
         "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = 7; return n; }",
+        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n+1; }",
         "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = \"bad\".toNumber(); return n; }",
         "function f() { var n = \"41\".toNumber(); var other = \"7\".toNumber(); if (n == null) { return 0; } return other; }",
         "function f() { var n = \"41\".toNumber(); while (n == null) { break; } return n; }",
         "function f() { var n = \"41\".toNumber(); var flag = n == null; if (flag) { return 0; } return n; }",
         "function f(flag as Toybox.Lang.Boolean) { var n = \"41\".toNumber(); if (n == null) { return 0; } while (flag) { n = null; } return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return 0; }",
+        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return n+1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

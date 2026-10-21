@@ -23,6 +23,7 @@ pub use bindings::{
 pub use dictionary::{DictionaryKey, DictionaryScalar, DictionaryType, DictionaryValue};
 mod ir_text;
 mod joins;
+mod local_flow;
 mod names;
 mod native;
 mod native_bindings;
@@ -1348,6 +1349,18 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Declare an inferred variable, optionally with its first value. Writes
+    /// may change its type; each typed read is checked against CFG storage flow.
+    LocalVariable {
+        local: LocalId,
+        value: Option<ValueId>,
+    },
+    /// Read an inferred variable under a contract checked on every incoming path.
+    VariableRead {
+        result: ValueId,
+        local: LocalId,
+        value_type: JoinType,
+    },
     /// Reserve typed storage without assigning a value. Reads require a write
     /// on every incoming path; the declaration itself emits no initialization.
     LocalDeclare {
@@ -1358,8 +1371,9 @@ pub enum Operation {
         local: LocalId,
         value: ValueId,
     },
-    /// Assign a declared local's value without changing its supported
-    /// type or allocating a new local. The right-hand value is consumed first.
+    /// Assign a declared local without allocating a new slot. Fixed storage
+    /// checks its contract; inferred storage updates its flow type. The
+    /// right-hand value is consumed first.
     LocalAssign {
         local: LocalId,
         value: ValueId,
@@ -1727,6 +1741,7 @@ impl Function {
         let declaration_inputs = control_flow::local_declaration_inputs(&structure, &operations);
         let mut available_declarations = std::collections::BTreeSet::new();
         let mut deferred_locals = std::collections::BTreeSet::new();
+        let mut variable_locals = std::collections::BTreeSet::new();
         let refinement_inputs = type_flow::inputs(&structure, &operations);
         let mut refinements = std::collections::BTreeSet::new();
         let mut types = std::collections::BTreeMap::new();
@@ -2128,6 +2143,9 @@ impl Function {
                         {
                             if let Some(&at) = definitions.get(&value) {
                                 let declared = match operations[at].operation {
+                                    Operation::VariableRead { .. } => ValueType::from_api_type(
+                                        &type_of(value).api_type().with_null(),
+                                    ),
                                     Operation::LocalRead { local, .. }
                                     | Operation::LocalTake { local, .. } => {
                                         local_types.get(&local).copied()
@@ -2458,6 +2476,7 @@ impl Function {
                             matches!(
                                 operations[*at].operation,
                                 Operation::LocalRead { .. }
+                                    | Operation::VariableRead { .. }
                                     | Operation::LocalTake { .. }
                                     | Operation::ParameterRead { .. }
                             )
@@ -2880,6 +2899,43 @@ impl Function {
                     };
                     (result, arguments.clone())
                 }
+                Operation::LocalVariable { local, value } => {
+                    if !locals.insert(local) {
+                        return Err(fail("duplicate variable declaration"));
+                    }
+                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
+                        return Err(fail("parameters plus locals exceed 255-slot limit"));
+                    }
+                    variable_locals.insert(local);
+                    deferred_locals.insert(local);
+                    available_declarations.insert(local);
+                    refinements.retain(|fact| fact.place() != type_flow::Place::Local(local));
+                    if let Some(value) = value {
+                        available_locals.insert(local);
+                        (None, vec![value])
+                    } else {
+                        available_locals.remove(&local);
+                        (None, vec![])
+                    }
+                }
+                Operation::VariableRead {
+                    result,
+                    local,
+                    ref value_type,
+                } => {
+                    if !variable_locals.contains(&local) || !available_locals.contains(&local) {
+                        return Err(fail("variable read requires an assigned inferred variable"));
+                    }
+                    if type_text::local_contract_tag(value_type).is_none() {
+                        return Err(fail("unsupported variable read contract"));
+                    }
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&value_type.api_type())
+                            .ok_or_else(|| fail("unsupported variable read value type"))?,
+                    );
+                    (Some(result), vec![])
+                }
                 Operation::LocalDeclare {
                     local,
                     ref value_type,
@@ -2934,66 +2990,75 @@ impl Function {
                             "assignment requires an initialized local on every incoming path",
                         ));
                     }
-                    let incoming = type_of(value);
-                    let source_interface = matches!(
-                        local_types[&local],
-                        ValueType::Interface(_) | ValueType::NullableInterface(_)
-                    ) && origins.class(value).is_some();
-                    if local_types[&local] != incoming
-                        && !source_interface
-                        && !(matches!(
+                    if variable_locals.contains(&local) {
+                        available_locals.insert(local);
+                        refinements.retain(|fact| fact.place() != type_flow::Place::Local(local));
+                        (None, vec![value])
+                    } else {
+                        let incoming = type_of(value);
+                        let source_interface = matches!(
                             local_types[&local],
-                            ValueType::LangObject
-                                | ValueType::Numeric
-                                | ValueType::IntegerAlias
-                                | ValueType::Decimal
-                                | ValueType::NullableObject
-                                | ValueType::NullableNativeObject(_)
-                                | ValueType::NullableNumeric
-                                | ValueType::NullableIntegerAlias
-                                | ValueType::NullableDecimal
-                                | ValueType::Interface(_)
-                                | ValueType::NullableInterface(_)
-                        ) && native::accepts(
-                            &local_types[&local].api_type(),
-                            &incoming.api_type(),
-                        ))
-                        && !(local_types[&local] == ValueType::Dictionary
-                            && matches!(incoming, ValueType::TypedDictionary(_)))
-                        && !(local_types[&local] == ValueType::NullableDictionary
-                            && incoming == ValueType::Null)
-                        && !(local_types[&local] == ValueType::NullableFloat
-                            && matches!(incoming, ValueType::Float | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableDouble
-                            && matches!(incoming, ValueType::Double | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableLong
-                            && matches!(incoming, ValueType::Long | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableInteger
-                            && matches!(incoming, ValueType::Integer | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableBoolean
-                            && matches!(incoming, ValueType::Boolean | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableByteArray
-                            && matches!(incoming, ValueType::ByteArray | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableWeakReference
-                            && matches!(incoming, ValueType::WeakReference | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableMethod
-                            && matches!(incoming, ValueType::Method | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableSymbol
-                            && matches!(incoming, ValueType::Symbol | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableChar
-                            && matches!(incoming, ValueType::Char | ValueType::Null))
-                        && !(local_types[&local] == ValueType::NullableString
-                            && matches!(incoming, ValueType::String | ValueType::Null))
-                    {
-                        return Err(fail("assignment must preserve the local's value type"));
+                            ValueType::Interface(_) | ValueType::NullableInterface(_)
+                        ) && origins.class(value).is_some();
+                        if local_types[&local] != incoming
+                            && !source_interface
+                            && !(matches!(
+                                local_types[&local],
+                                ValueType::LangObject
+                                    | ValueType::Numeric
+                                    | ValueType::IntegerAlias
+                                    | ValueType::Decimal
+                                    | ValueType::NullableObject
+                                    | ValueType::NullableNativeObject(_)
+                                    | ValueType::NullableNumeric
+                                    | ValueType::NullableIntegerAlias
+                                    | ValueType::NullableDecimal
+                                    | ValueType::Interface(_)
+                                    | ValueType::NullableInterface(_)
+                            ) && native::accepts(
+                                &local_types[&local].api_type(),
+                                &incoming.api_type(),
+                            ))
+                            && !(local_types[&local] == ValueType::Dictionary
+                                && matches!(incoming, ValueType::TypedDictionary(_)))
+                            && !(local_types[&local] == ValueType::NullableDictionary
+                                && incoming == ValueType::Null)
+                            && !(local_types[&local] == ValueType::NullableFloat
+                                && matches!(incoming, ValueType::Float | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableDouble
+                                && matches!(incoming, ValueType::Double | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableLong
+                                && matches!(incoming, ValueType::Long | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableInteger
+                                && matches!(incoming, ValueType::Integer | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableBoolean
+                                && matches!(incoming, ValueType::Boolean | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableByteArray
+                                && matches!(incoming, ValueType::ByteArray | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableWeakReference
+                                && matches!(incoming, ValueType::WeakReference | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableMethod
+                                && matches!(incoming, ValueType::Method | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableSymbol
+                                && matches!(incoming, ValueType::Symbol | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableChar
+                                && matches!(incoming, ValueType::Char | ValueType::Null))
+                            && !(local_types[&local] == ValueType::NullableString
+                                && matches!(incoming, ValueType::String | ValueType::Null))
+                        {
+                            return Err(fail("assignment must preserve the local's value type"));
+                        }
+                        refinements.retain(|fact: &type_flow::Fact| {
+                            fact.place() != type_flow::Place::Local(local)
+                        });
+                        available_locals.insert(local);
+                        (None, vec![value])
                     }
-                    refinements.retain(|fact: &type_flow::Fact| {
-                        fact.place() != type_flow::Place::Local(local)
-                    });
-                    available_locals.insert(local);
-                    (None, vec![value])
                 }
                 Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
+                    if variable_locals.contains(&local) {
+                        return Err(fail("inferred variables require a typed variable read"));
+                    }
                     if !locals.contains(&local) || !available_locals.contains(&local) {
                         return Err(fail(
                             "local read must refer to an earlier initialized local",
@@ -3136,6 +3201,7 @@ impl Function {
         if return_type.is_none() {
             return_type = Some(declared_result.clone().unwrap_or(ReturnType::Void));
         }
+        local_flow::validate(&structure, &operations, &types, &origins)?;
         for (index, inferred) in inferred_types {
             if let Operation::BlockParameter { value_type, .. } = &mut operations[index].operation {
                 *value_type = inferred;
@@ -3239,7 +3305,8 @@ impl Function {
                         index,
                         value,
                     } => vec![*array, *index, *value],
-                    Operation::LocalDeclare { .. }
+                    Operation::LocalVariable { value: None, .. }
+                    | Operation::LocalDeclare { .. }
                     | Operation::DictionaryBegin { .. }
                     | Operation::ByteOptionsBegin { .. }
                     | Operation::ArrayBegin { .. }
@@ -3251,6 +3318,9 @@ impl Function {
                     Operation::ArrayFillMany { values, .. } => values.clone(),
                     Operation::JumpValue { value, .. } => vec![*value],
                     Operation::ArrayFill { value, .. }
+                    | Operation::LocalVariable {
+                        value: Some(value), ..
+                    }
                     | Operation::LocalInitialize { value, .. }
                     | Operation::LocalAssign { value, .. }
                     | Operation::ParameterAssign { value, .. }
@@ -3975,6 +4045,20 @@ impl Function {
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)
                 }
+                Operation::LocalVariable { local, value } => match value {
+                    Some(value) => format!(".variable ${} %{}", local.0, value.0),
+                    None => format!(".variable ${}", local.0),
+                },
+                Operation::VariableRead {
+                    result,
+                    local,
+                    ref value_type,
+                } => format!(
+                    ".read-variable %{} ${} {}",
+                    result.0,
+                    local.0,
+                    type_text::local_contract_tag(value_type).unwrap()
+                ),
                 Operation::LocalDeclare {
                     local,
                     ref value_type,

@@ -71,7 +71,7 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
     for source in [
         "function f() as Toybox.Lang.Boolean { return false && 1; }",
         "function f() as Toybox.Lang.Boolean { return true || null; }",
-        "function f() { var flag = true && false; flag = 1; return 0; }",
+        "function f() { var flag = true && false; flag = 1; if(flag){return 1;}return 0; }",
         "function f(n as Toybox.Lang.Number or Null) { var present = !(n == null) && n > 0; if (present) { return n; } return 0; }",
         "function f(n as Toybox.Lang.Number or Null) { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
         "function f() { return -(true && false); }",

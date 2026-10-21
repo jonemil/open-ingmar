@@ -69,8 +69,8 @@ fn callback_state_cannot_be_used_as_an_integer_or_string() {
         "if (state > 0) {}",
         "if (state == 0) {}",
         "self.take(state);",
-        "var x = state; x = 1;",
-        "var x = 1; x = state;",
+        "var x = state; x = 1; x.size();",
+        "var x = 1; x = state; x.toNumber();",
         "return 1;",
         "self.onStart(1);",
     ] {

@@ -87,7 +87,7 @@ fn char_array_contracts_reject_wrong_elements_receivers_and_unsupported_consumer
         "function f() { return \"A\".toCharArray().indexOf(true); }",
         "function f() { return \"A\".toCharArray().add('B'); }",
         "function f() { return \"A\".toCharArray().reverse(); }",
-        "function f() { var a = \"A\".toCharArray(); a = \"x\"; return 0; }",
+        "function f() { var a = \"A\".toCharArray(); a = \"x\"; return a[0]; }",
         "function f() { System.println(\"A\".toCharArray()); return 0; }",
         "function f() { return \"x\" + \"A\".toCharArray(); }",
         "function f() { return \"A\".toCharArray() == \"A\".toCharArray(); }",

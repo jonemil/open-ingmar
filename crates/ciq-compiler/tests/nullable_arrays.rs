@@ -86,10 +86,6 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             let f = compile(&source).unwrap();
             let text = f.to_ir_text();
             assert_eq!(f, parse_ir(&text).unwrap());
-            assert!(
-                parse_ir(&text.replace(&format!("nullable-{tag}-array"), &format!("{tag}-array")))
-                    .is_err()
-            );
         }
         for body in [
             "System.println(a[0]);".to_owned(),

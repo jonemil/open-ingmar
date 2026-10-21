@@ -138,7 +138,20 @@ pub(crate) fn value_call(
     }
     if let api::Type::Named(name) = receiver {
         if let Some(interface) = crate::InterfaceType::from_name(name) {
+            if let Some(context) = context {
+                context.check_type(api::core(), receiver)?;
+            }
             let declaration = api::core().interface(interface.name()).unwrap();
+            if !declaration.methods.iter().any(|m| m.name == member) {
+                // Existing interface assignability permits the Object view.
+                // Keep method-specific executable restrictions in its profile.
+                return value_call(
+                    &api::Type::named("Toybox.Lang.Object"),
+                    member,
+                    arguments,
+                    context,
+                );
+            }
             let method = declaration
                 .methods
                 .iter()

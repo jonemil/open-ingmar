@@ -91,6 +91,7 @@ module NullableSourceTests {
         RootModuleCalls.run();
         ParameterWrites.run();
         DeferredLocals.run();
+        EvolvingLocals.run();
     }
 }
 
@@ -769,4 +770,61 @@ module DeferredLocals {
         bytes = new [2]b;
         System.println(bytes.size());
     }
+}
+
+module EvolvingLocals {
+    function branch(flag as Boolean) as Number {
+        var value = "before";
+        if (flag) { value = 7; } else { value = 8; }
+        return value + 1;
+    }
+    function mixed(flag as Boolean) as Number {
+        var value = 41;
+        if (flag) { value = "hello"; }
+        if (value instanceof String) { return value.length(); }
+        if (value instanceof Number) { return value + 1; }
+        return -1;
+    }
+    function numeric(flag as Boolean) as Number {
+        var value = 41;
+        if (flag) { value = 42l; }
+        return value.toNumber();
+    }
+    function run() as Void {
+        System.println("evolving-locals");
+        var value = 41;
+        var old = value;
+        value = "changed";
+        System.println(old + 1);
+        System.println(value.length());
+        System.println(EvolvingLocals.branch(true));
+        System.println(EvolvingLocals.branch(false));
+        System.println(EvolvingLocals.mixed(true));
+        System.println(EvolvingLocals.mixed(false));
+        System.println(EvolvingLocals.numeric(true));
+        var changing = 41;
+        while (changing instanceof Number) {
+            System.println(changing + 1);
+            changing = "done";
+        }
+        System.println(changing.toString());
+        var items = [4, 5];
+        var shared = items;
+        items = "text";
+        System.println(shared[1]);
+        System.println(items.length());
+        var token = new Probe();
+        var original = token;
+        token = new EvolvingToken();
+        System.println(original.value());
+        System.println(token.other());
+        var nullable = 1;
+        nullable = null;
+        System.println(nullable == null);
+        nullable = "again";
+        System.println(nullable.length());
+    }
+}
+class EvolvingToken {
+    function other() as Number { return 23; }
 }

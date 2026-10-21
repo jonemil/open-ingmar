@@ -8,6 +8,8 @@ enum Directive {
     Subtract,
     Local,
     DeclareLocal,
+    Variable,
+    ReadVariable,
     Read,
     Call,
     Parameter,
@@ -270,6 +272,11 @@ pub(crate) fn parse_ir_context(
             Some(".shift-right") => (Directive::ShiftRight, 4),
             Some(".local") => (Directive::Local, 3),
             Some(".declare-local") => (Directive::DeclareLocal, 3),
+            Some(".variable") => (
+                Directive::Variable,
+                fields.len() - usize::from(fields.last().is_some_and(|s| s.starts_with("span="))),
+            ),
+            Some(".read-variable") => (Directive::ReadVariable, 4),
             Some(".read" | ".take") => (Directive::Read, 3),
             Some(".symbol") => (Directive::Symbol, 3),
             Some(".self") => (Directive::SelfValue, 2),
@@ -1125,6 +1132,25 @@ pub(crate) fn parse_ir_context(
                 }
                 Directive::Return => Operation::Return {
                     value: parse_value(&fields[1])?,
+                },
+                Directive::Variable => {
+                    if !(2..=3).contains(&width) {
+                        return Err(fail(*at, "variable requires local and optional value"));
+                    }
+                    Operation::LocalVariable {
+                        local: parse_local(&fields[1])?,
+                        value: fields
+                            .get(2)
+                            .filter(|_| width == 3)
+                            .map(|s| parse_value(s))
+                            .transpose()?,
+                    }
+                }
+                Directive::ReadVariable => Operation::VariableRead {
+                    result: parse_value(&fields[1])?,
+                    local: parse_local(&fields[2])?,
+                    value_type: crate::type_text::local_contract(&fields[3])
+                        .ok_or_else(|| fail(*at, "invalid variable read contract"))?,
                 },
                 Directive::DeclareLocal => Operation::LocalDeclare {
                     local: parse_local(&fields[1])?,

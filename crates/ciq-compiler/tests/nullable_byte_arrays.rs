@@ -52,7 +52,7 @@ fn nullable_byte_array_uses_require_current_nonnull_proofs() {
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;if(local!=null){local=null;local.size();}}",
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;if(b!=null){local.size();}}",
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var present=b!=null;if(present){b.size();}}",
-        "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;local=[1];}",
+        "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;local=[1];local.decodeNumber();}",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

@@ -208,9 +208,9 @@ fn storage_inputs(
     let universe = operations
         .iter()
         .filter_map(|op| match op.operation {
-            Operation::LocalDeclare { local, .. } | Operation::LocalInitialize { local, .. } => {
-                Some(local)
-            }
+            Operation::LocalVariable { local, .. }
+            | Operation::LocalDeclare { local, .. }
+            | Operation::LocalInitialize { local, .. } => Some(local),
             _ => None,
         })
         .collect::<BTreeSet<_>>();
@@ -242,10 +242,15 @@ fn storage_inputs(
                     continue;
                 }
                 match op.operation {
-                    Operation::LocalInitialize { local, .. } => {
+                    Operation::LocalInitialize { local, .. }
+                    | Operation::LocalVariable {
+                        local,
+                        value: Some(_),
+                    } => {
                         outgoing.insert(local);
                     }
-                    Operation::LocalDeclare { local, .. } => {
+                    Operation::LocalDeclare { local, .. }
+                    | Operation::LocalVariable { local, value: None } => {
                         if matches!(state, LocalState::Declared) {
                             outgoing.insert(local);
                         } else {

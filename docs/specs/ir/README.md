@@ -329,6 +329,29 @@ new iteration. This is a checking rule, not a runtime slot clear: earlier
 references retain ordinary frame/write lifetimes until replaced or the frame
 exits.
 
+`.variable $id [%initial]` reserves inferred storage, optionally initialized.
+Unlike `.local` and `.declare-local`, its assignments may change type. It obeys
+the same declaration uniqueness, dominance, frame budget, and definite
+assignment rules. `.read-variable %result $id <contract>` defines a fresh value
+with a checked read contract; ordinary `.read` and `.take` cannot read inferred
+storage. Hidden ownership-transfer temporaries retain fixed storage contracts.
+
+Validation reconstructs possible writes at each CFG point to a fixed point,
+replacing a slot's alternatives on assignment and combining them at incoming
+edges. Read contracts must accept the resulting view, refined only by shared
+runtime-class/non-null facts. Metadata cannot assert a type unsupported by the
+incoming values. Exact source identities, supported numeric aliases, comparison
+interfaces, and nullable joins retain their contracts; other heterogeneous
+alternatives use Object, optionally nullable. This is a conservative read view,
+not general source union support. A write invalidates old storage proofs;
+previously captured values retain their own contracts and identity.
+
+Source construction selects inferred storage when writes change the local's
+contract and recomputes reads and conditional result contracts after loop
+backedges are known. Fixed storage remains useful for unchanged source locals,
+hidden temporaries, and explicit IR contracts. Saved IR validation checks both
+forms independently of source inference.
+
 `.take` defines the same typed value as `.read` but transfers ownership out of
 the local. The local becomes unavailable on that CFG path; later reads and takes
 fail until its initialization executes again (for example, on another loop
@@ -475,10 +498,12 @@ ciq-ir
 .end
 ```
 
-The target must be initialized on every incoming path. `.assign` does not
-introduce an identity, count as another local, or establish initialization.
-Repeated `.local` declarations for one ID remain invalid. Local IDs retain their
-initializer's supported type; assignments must match it. Undefined
+The target must be declared on every incoming path. An assignment may establish
+the first value of `.declare-local` or `.variable`; ordinary `.local` requires
+its initialization. `.assign` does not introduce an identity or count as another
+local. Repeated declarations for one ID remain invalid. Fixed storage retains
+its initializer's or declared contract; inferred variables use the flow rules
+above. Undefined
 values/locals, wrong-path targets, shared values, and cross-block RHS values are
 rejected. The RHS contributes one use; assignment defines no result. Each write
 counts toward the 1024-operation limit and reuses the existing slot.
@@ -1484,13 +1509,14 @@ profile](../frontend/README.md#operator-contracts). Ordering directives follow
 the [numeric comparison
 domains](../frontend/README.md#numbers-and-numeric-aliases) and [Char
 restrictions](../frontend/README.md#operator-contracts). Callback-state
-reads/locals retain their declared nullable type; proven reads yield a non-null
-Dictionary. Printing and arithmetic reject Null and Dictionary values. Null may
+parameter reads and fixed locals retain their declared nullable type; proven
+reads yield a non-null Dictionary. Printing and arithmetic reject Null and
+Dictionary values. Null may
 be used in nullable scalar user contracts. Non-null Dictionary references
 support the [allocation/call profile](#containers-and-private-construction). A
-nullable callback Dictionary local may be assigned null; other assignments
-preserve the initializer type. Lowering uses `npush` for null and the existing
-local-slot and equality instructions.
+nullable callback Dictionary local may be assigned null. Inferred storage follows
+the [local flow rules](#local-operations). Lowering uses `npush` for null and the
+existing local-slot and equality instructions.
 
 ### Instance receivers
 
@@ -1623,7 +1649,8 @@ erased native reference.
 `nullable-source(ClassName@Native.Base)` carries the same exact class requirement
 while admitting Null. It is valid in parameter and function/call result metadata.
 Null branches refine fresh parameter/local reads without erasing source
-identity; assignment preserves the original local's class/nullability contract.
+identity. Fixed storage preserves its class/nullability contract on assignment;
+inferred variables recompute their read contracts from incoming writes.
 Function validation checks return provenance and non-null receivers; unit
 validation resolves declarations and checks call contracts against their bodies.
 Its runtime representation is the ordinary reference or Null, with no added

@@ -10,6 +10,7 @@ pub(crate) struct Types {
     parameters: Vec<ParameterType>,
     values: BTreeMap<ValueId, Type>,
     locals: BTreeMap<LocalId, Type>,
+    variables: std::collections::BTreeSet<LocalId>,
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
     byte_arrays: std::collections::BTreeSet<crate::BuilderId>,
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
@@ -32,6 +33,7 @@ impl Types {
             parameters: parameters.clone(),
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
+            variables: Default::default(),
             builders: BTreeMap::new(),
             byte_arrays: Default::default(),
             dictionaries: BTreeMap::new(),
@@ -46,6 +48,17 @@ impl Types {
     pub(crate) fn observe(&mut self, operation: &Operation) {
         let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
+            Operation::LocalVariable { local, value } => {
+                self.variables.insert(*local);
+                self.locals.remove(local);
+                if let Some(ty) = value.and_then(|v| self.values.get(&v)) {
+                    self.locals.insert(*local, ty.clone());
+                }
+                return;
+            }
+            Operation::VariableRead {
+                result, value_type, ..
+            } => (*result, Some(value_type.api_type())),
             Operation::ByteOptionsBegin { builder, .. } => {
                 self.options.insert(*builder);
                 return;
@@ -188,7 +201,12 @@ impl Types {
                 }
                 return;
             }
-            Operation::LocalAssign { local, .. } => {
+            Operation::LocalAssign { local, value } => {
+                if self.variables.contains(local) {
+                    if let Some(ty) = self.values.get(value) {
+                        self.locals.insert(*local, ty.clone());
+                    }
+                }
                 self.facts
                     .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));
                 return;
@@ -400,6 +418,31 @@ impl Types {
     }
     pub(crate) fn value_type(&self, value: ValueId) -> Option<&Type> {
         self.values.get(&value)
+    }
+    pub(crate) fn contracts(&self) -> BTreeMap<ValueId, crate::JoinType> {
+        self.values
+            .keys()
+            .filter_map(|&v| self.join_contract(v).map(|ty| (v, ty)))
+            .collect()
+    }
+    pub(crate) fn refresh_variables(
+        &mut self,
+        operations: &[crate::LocatedOperation],
+        block: crate::BlockId,
+    ) {
+        if self.variables.is_empty() {
+            return;
+        }
+        let structure = crate::control_flow::prefix(operations);
+        let inputs = crate::local_flow::inputs(&structure, operations, &self.contracts());
+        for local in &self.variables {
+            if let Some(domain) = inputs.get(&block).and_then(|s| s.get(local)) {
+                if let Some(ty) = crate::local_flow::proven(domain, *local, &self.facts) {
+                    self.locals.insert(*local, ty.api_type());
+                    self.origins.set_variable_contract(*local, &ty);
+                }
+            }
+        }
     }
 
     /// Select the private builder's final element contract after the first element.

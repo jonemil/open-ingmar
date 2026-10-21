@@ -59,7 +59,6 @@ fn source_join_rejects_mismatched_classes_erasure_and_lost_null_proofs() {
         "function f(flag as Toybox.Lang.Boolean) as Token {return flag?new Token():null;}",
         "function f(flag as Toybox.Lang.Boolean) {var t=flag?new Token():null;if(t!=null){t=null;return t.value();}return 0;}",
         "function f(flag as Toybox.Lang.Boolean,t as Token or Null) {if(t!=null){t=null;var joined=flag?t:new Token();return joined.value();}return 0;}",
-        "function f(flag as Toybox.Lang.Boolean) {var t=flag?new Token():new Token();t=new Other();return 0;}",
     ] {
         assert!(compile_sources(&[source, CLASSES]).is_err(), "{source}");
     }

@@ -53,7 +53,7 @@ fn dictionary_methods_and_nullable_state_require_checked_non_null_receivers() {
         "function f() { var d = {}; return d.get(\"one\"); }",
         "function f() { var d = {}; d.put(\"one\", 1); return d.size(); }",
         "function f() { var d = {}; return d.size(1); }",
-        "function f() { var d = {}; d = 1; return 0; }",
+        "function f() { var d = {}; d = 1; return d.size(); }",
         "function f() { return {} + {}; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");

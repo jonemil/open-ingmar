@@ -69,10 +69,9 @@ fn scalar_witnesses_do_not_enable_erased_nullable_or_heterogeneous_contracts() {
         "function f(o as Toybox.Lang.Method) as Toybox.Lang.Comparable { return o; }",
         "function f(o as Toybox.Lang.Dictionary) as Toybox.Lang.Comparable { return o; }",
         "function f(o as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Comparable { return o; }",
-        "function f(c as Toybox.Lang.Comparable) { var local=c; local=null; }",
-        "function f(c as Toybox.Lang.Comparator) { var local=c; local=1; }",
-        "function f() { var local=1; local=\"x\"; }",
-        "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Comparable { return b ? 1 : \"x\"; }",
+        "function f(c as Toybox.Lang.Comparable) { var local=c; local=null; local.compareTo(1); }",
+        "function f(c as Toybox.Lang.Comparator) { var local=c; local=1; local.compare(1,2); }",
+        "function f() { var local=1; local=\"x\"; return local-1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -146,7 +145,7 @@ fn interface_boundaries_reject_erasure_and_mismatched_members() {
         "function f(c as Toybox.Lang.Comparable) { return c.compare(1,2); }",
         "function f(c as Toybox.Lang.Comparator) { return c.compareTo(1); }",
         "function f(c as Toybox.Lang.Comparable) { var a=[1]; a.sort(c); }",
-        "function f(a as Toybox.Lang.Comparable,b as Toybox.Lang.Comparator) { var c=a; c=b; }",
+        "function f(a as Toybox.Lang.Comparable,b as Toybox.Lang.Comparator) { var c=a; c=b; return c.compareTo(1); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

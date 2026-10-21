@@ -138,6 +138,10 @@ Declaration lists become sequential declarations/initializers in the existing
 scope. `.declare-local` reserves a frame slot without emitting a write; the first
 assignment uses ordinary `lputv` after evaluating its RHS. No synthetic Null or
 placeholder initialization is emitted.
+`.variable` uses the same slot allocation, with `lputv` only when an initializer
+is present. `.read-variable` emits ordinary `lgetv`; its flow-checked contract
+does not insert a cast, conversion, or runtime guard. Assignments reuse the slot
+even when the inferred value type changes.
 Additional statement terminators are consumed during source parsing; they do
 not introduce IR operations, VM instructions, or extra frame slots.
 

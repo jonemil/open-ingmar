@@ -75,7 +75,7 @@ fn nullable_method_members_need_fresh_storage_proofs() {
         "function f(m as Toybox.Lang.Method or Null) as Void {var local=m;if(local!=null){local=null;local.invoke();}}",
         "function f(m as Toybox.Lang.Method or Null) as Void {var local=m;if(m!=null){local.invoke();}}",
         "function f(m as Toybox.Lang.Method or Null) as Void {var present=m!=null;if(present){m.invoke();}}",
-        "function f(m as Toybox.Lang.Method or Null,n as Toybox.Lang.Method) as Void {var local=n;local=m;}",
+        "function f(m as Toybox.Lang.Method or Null,n as Toybox.Lang.Method) as Void {var local=n;local=m;local.invoke();}",
         "function f(m as Toybox.Lang.Method or Null,n as Toybox.Lang.Method) as Toybox.Lang.Boolean {return m==n;}",
         "function f(m as Toybox.Lang.Method or Null) as Void {if(m){m.invoke();}}",
     ] {

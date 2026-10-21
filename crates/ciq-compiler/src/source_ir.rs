@@ -333,9 +333,31 @@ fn emit_non_call(
         parser::ExpressionKind::Local(name) => {
             let result = ValueId(operations.len() as u32);
             if let Some(local) = locals.get(&name) {
-                Operation::LocalRead {
-                    result,
-                    local: *local,
+                if operations.iter().any(
+                    |op| matches!(op.operation,Operation::LocalVariable{local:at,..} if at==*local),
+                ) {
+                    let value_type = crate::local_flow::prefix_read(
+                        operations,
+                        *local,
+                        calls.parameter_types.clone(),
+                    )
+                    .ok_or_else(|| {
+                        Diagnostic::at(
+                            source,
+                            expression.span.start,
+                            "cannot infer variable read before assignment",
+                        )
+                    })?;
+                    Operation::VariableRead {
+                        result,
+                        local: *local,
+                        value_type,
+                    }
+                } else {
+                    Operation::LocalRead {
+                        result,
+                        local: *local,
+                    }
                 }
             } else if let Some(index) = parameters.get(&name) {
                 Operation::ParameterRead {
@@ -711,6 +733,45 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
+    /// Promote a named slot when assignment changes its inferred contract.
+    /// Preserve frame identity and earlier value snapshots; hidden temporaries
+    /// keep fixed contracts and do not participate in variable inference.
+    fn promote_variable(&mut self, local: LocalId) {
+        if self
+            .operations
+            .iter()
+            .any(|op| matches!(op.operation,Operation::LocalVariable{local:at,..}if at==local))
+        {
+            return;
+        }
+        for op in &mut self.operations {
+            match op.operation {
+                Operation::LocalInitialize { local: at, value } if at == local => {
+                    op.operation = Operation::LocalVariable {
+                        local,
+                        value: Some(value),
+                    };
+                    self.types.observe(&op.operation);
+                }
+                Operation::LocalDeclare { local: at, .. } if at == local => {
+                    op.operation = Operation::LocalVariable { local, value: None };
+                    self.types.observe(&op.operation);
+                }
+                Operation::LocalRead { local: at, result } if at == local => {
+                    let value_type = self
+                        .types
+                        .join_contract(result)
+                        .expect("earlier source local read has a contract");
+                    op.operation = Operation::VariableRead {
+                        result,
+                        local,
+                        value_type,
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
     /// Allocate source and temporary locals under the shared frame-slot limit.
     fn local_id(&mut self, span: Span) -> Result<LocalId, Diagnostic> {
         if self.next_local as usize >= crate::MAX_LOCALS {
@@ -1574,6 +1635,7 @@ impl Builder<'_> {
             self.types.facts = crate::type_flow::prefix_inputs(&self.operations)
                 .remove(&block)
                 .unwrap_or_default();
+            self.types.refresh_variables(&self.operations, block);
         }
         self.types.observe(&operation);
         self.operations.push(LocatedOperation { operation, span });
@@ -2416,6 +2478,21 @@ impl Builder<'_> {
                             self.types.observe(&declaration);
                             self.operations[at].operation = declaration;
                         }
+                        let incoming = self.types.join_contract(value);
+                        let incoming_class = incoming.as_ref().and_then(|ty| {
+                            if let crate::JoinType::Source { class, .. } = ty {
+                                Some(class.name.as_str())
+                            } else {
+                                None
+                            }
+                        });
+                        if incoming
+                            .as_ref()
+                            .is_some_and(|ty| self.types.local_type(local) != Some(&ty.api_type()))
+                            || self.types.local_class(local) != incoming_class
+                        {
+                            self.promote_variable(local);
+                        }
                     }
                     let operation = match place {
                         crate::type_flow::Place::Local(local) => {
@@ -2763,6 +2840,18 @@ fn build_body(
             }),
         );
     }
+    crate::local_flow::normalize(&mut builder.operations, body_calls.parameter_types.clone())
+        .map_err(|error| {
+            Diagnostic::at(
+                source,
+                error
+                    .operation
+                    .and_then(|at| builder.operations.get(at))
+                    .and_then(|op| op.span)
+                    .map_or(ast.body_span.start, |s| s.start),
+                error.message,
+            )
+        })?;
     // Hidden expression owners transfer on their final read. Named locals keep
     // source lifetimes, even if their last syntactic use occurs earlier.
     let mut final_reads = BTreeMap::new();

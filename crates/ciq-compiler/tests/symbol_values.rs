@@ -91,7 +91,7 @@ fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
     for source in [
         "function f() { return :; }",
         "function f() { return :123; }",
-        "function f() { var s=:alpha; s=1; return 0; }",
+        "function f() { var s=:alpha; s=1; s.toUpper(); return 0; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

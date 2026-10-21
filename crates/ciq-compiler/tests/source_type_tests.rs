@@ -39,7 +39,6 @@ fn scoped_proofs_do_not_escape_to_aliases_writes_or_unchecked_paths() {
         "function f(o as Toybox.Lang.Object) { var x=o; if (x instanceof C) { x=new Other(); return x.value(); } else { return 0; } }",
         "function f(o as Toybox.Lang.Object) { if (o instanceof C) { System.println(o.value()); } return o.value(); }",
         "function f(o as Toybox.Lang.Object) { var yes=o instanceof C; if (yes) { return o.value(); } else { return 0; } }",
-        "function f(o as Toybox.Lang.Object) { var c=o as C; c=new Other(); return 0; }",
         "function f(o as Toybox.Lang.Object) { var c=o as C; var erased=c as Toybox.Lang.Object; return erased.value(); }",
         "function f(o as Toybox.Lang.Object) { return (o as Missing).value(); }",
         "function f(o as Toybox.Lang.Object) as Toybox.Lang.Boolean { return o instanceof Missing; }",

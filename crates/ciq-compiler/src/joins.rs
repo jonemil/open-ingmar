@@ -146,17 +146,16 @@ pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
     }
     for alias in [Type::integer(), Type::decimal(), Type::numeric()] {
         let nullable = alias.clone().with_null();
-        if left == &alias || right == &alias || left == &nullable || right == &nullable {
-            for candidate in [alias, nullable] {
-                if crate::native::accepts(&candidate, left)
-                    && crate::native::accepts(&candidate, right)
-                {
-                    return Some(candidate);
-                }
+        for candidate in [alias, nullable] {
+            if crate::native::accepts(&candidate, left) && crate::native::accepts(&candidate, right)
+            {
+                return Some(candidate);
             }
         }
     }
-    None
+    let comparable = crate::InterfaceType::Comparable.api_type(false);
+    (crate::native::accepts(&comparable, left) && crate::native::accepts(&comparable, right))
+        .then_some(comparable)
 }
 
 /// Collect source join operands without changing their predecessor identities.
@@ -273,6 +272,7 @@ pub(crate) fn validate_stack_uses(
                 Operation::Return { .. }
                 | Operation::Discard { .. }
                 | Operation::LocalInitialize { .. }
+                | Operation::LocalVariable { value: Some(_), .. }
                 | Operation::LocalAssign { .. }
                 | Operation::ParameterAssign { .. }
                 | Operation::JumpValue { .. }

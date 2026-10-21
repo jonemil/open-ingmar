@@ -155,6 +155,8 @@ value-operation = ".integer" value-id signed-decimal-i32
 storage-operation = ".parameter" value-id decimal-usize
                   | ".assign-parameter" decimal-usize value-id
                   | ".declare-local" local-id local-contract-tag
+                  | ".variable" local-id value-id?
+                  | ".read-variable" value-id local-id local-contract-tag
                   | (".local" | ".assign") local-id value-id
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata?

@@ -1440,6 +1440,10 @@ impl CompilationUnit {
                 | Operation::LocalDeclare {
                     value_type: crate::JoinType::Source { class, .. },
                     ..
+                }
+                | Operation::VariableRead {
+                    value_type: crate::JoinType::Source { class, .. },
+                    ..
                 } = &located.operation
                 {
                     if !self.classes.iter().any(|declaration| {

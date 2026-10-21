@@ -125,7 +125,7 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         "function f() { var n = null; System.println(n.toString()); }",
         "function f(n) { return n.toString(); }",
         "function f(n) { var x = n.toString() + 1; return x; }",
-        "function f(n) { var x = n.toString(); x = 1; }",
+        "function f(n) { var x = n.toString(); x = 1; return x.length(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

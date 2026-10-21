@@ -68,7 +68,7 @@ fn header_lists_check_every_declaration_and_effect_including_dead_updates() {
         "function f(){for(var i=j,j=1;i<2;i++){}return 0;}",
         "function f(){for(var i=0,i=1;i<2;i++){}return 0;}",
         "function f(){for(var i=0,j=1;i<2;i++){}return j;}",
-        "function f(){for(var i=0,j=1;i<2;i++,j=false){break;}return 0;}",
+        "function f(){for(var i=0,j=1;i<2;i++,j-=false){break;}return 0;}",
         "function f(){for(var i=0,j=1;i<2;i++,j=Missing.next()){break;}return 0;}",
         "function f(){for(var i=0,var j=1;i<2;i++){}return 0;}",
         "function f(){for(var i=0,;i<2;i++){}return 0;}",

@@ -47,9 +47,6 @@ fn call_contracts_and_local_constructor_classes_are_not_guessed() {
         "var v = new HelloView(); v.add(\"bad\");",
         "var v = new HelloView(); var invalid = v.bump();",
         "var v = new HelloView(); v.onShow();",
-        "var v = new HelloView(); v = new Toybox.WatchUi.View();",
-        "var v = new HelloView(); v = new OtherView();",
-        "var v = new Toybox.WatchUi.View(); v = new HelloView(); v.current();",
         "var v = Factory.make(); v.current();",
     ] {
         let app = format!("function start() {{ {body} }}");

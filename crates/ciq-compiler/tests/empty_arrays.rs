@@ -75,7 +75,7 @@ fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
         "function f() { var a = [1]; a.unknown([]); }",
         "function f() { var a = [1]; a.addAll([], 1); }",
         "function f() { var a = [1]; a.addAll(['a']); }",
-        "function f() { var a = ['a']; a = [1]; }",
+        "function f() { var a = ['a']; a = [1]; a.add('b'); }",
         "function f() { return [].size(); }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [].reverse(); }",
         "function f() { var a = [[], []]; }",

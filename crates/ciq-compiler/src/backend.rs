@@ -156,6 +156,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
+            | Operation::VariableRead { result, .. }
             | Operation::LocalTake { result, .. }
             | Operation::GlobalCall { result, .. }
             | Operation::ModuleCall { result, .. }
@@ -165,7 +166,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::NativeCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
-            Operation::LocalInitialize { local, .. } | Operation::LocalDeclare { local, .. } => {
+            Operation::LocalInitialize { local, .. }
+            | Operation::LocalDeclare { local, .. }
+            | Operation::LocalVariable { local, .. } => {
                 slots.insert(
                     *local,
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
@@ -331,7 +334,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             _ => (),
         }
         let (value, opcode, operands) = match located.operation {
-            Operation::LocalDeclare { .. } => continue,
+            Operation::LocalDeclare { .. } | Operation::LocalVariable { value: None, .. } => {
+                continue;
+            }
             Operation::Block { block } => {
                 items.push(Item::Label(format!("__ciq_block_{}_{}", label, block.0)));
                 continue;
@@ -390,6 +395,10 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 continue;
             }
             Operation::LocalInitialize { local, value }
+            | Operation::LocalVariable {
+                local,
+                value: Some(value),
+            }
             | Operation::LocalAssign { local, value } => {
                 (value, Opcode::Lputv, vec![Operand::Bits(slots[&local])])
             }
@@ -911,7 +920,7 @@ fn expression(
                 Operation::ParameterRead { index, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(*index as u64 + 1)])
                 }
-                Operation::LocalRead { local, .. } => {
+                Operation::LocalRead { local, .. } | Operation::VariableRead { local, .. } => {
                     (Opcode::Lgetv, vec![Operand::Bits(slots[local])])
                 }
                 Operation::LocalTake { local, .. } => {

@@ -73,7 +73,9 @@ remain deferred in [the plan](plan.md).
 Within `ciq-compiler`, `parser` and `names` handle source syntax and native-name
 bindings; `source_ir` constructs semantic operations. Candidate types and source
 origins help construction but are not validation proofs. `Function` validation
-checks per-body invariants; `unit` adds declaration, signature, field, and
+checks per-body invariants, using `local_flow` to check inferred variable reads
+against possible writes at each CFG point and sharing narrowing facts with
+`type_flow`. `unit` adds declaration, signature, field, and
 callback checks. `api` owns declarations, `native` owns executable profiles,
 `native_bindings` owns the pinned VM identities shared by runtime type tests and
 application generation, and `operators` owns operand/result rules. `type_text`

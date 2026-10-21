@@ -32,6 +32,7 @@ pub(crate) struct Origins {
     nulls: std::collections::BTreeSet<ValueId>,
     null_locals: std::collections::BTreeSet<LocalId>,
     locals: BTreeMap<LocalId, Option<Contract>>,
+    variables: std::collections::BTreeSet<LocalId>,
     parameters: Vec<crate::ParameterType>,
 }
 
@@ -62,6 +63,30 @@ impl Origins {
             }
         }
         match operation {
+            Operation::LocalVariable { local, value } => {
+                self.variables.insert(*local);
+                self.locals
+                    .insert(*local, value.and_then(|v| self.values.get(&v).cloned()));
+                self.null_locals.remove(local);
+                if value.is_some_and(|v| self.nulls.contains(&v)) {
+                    self.null_locals.insert(*local);
+                }
+            }
+            Operation::VariableRead {
+                result, value_type, ..
+            } => {
+                if let crate::JoinType::Source { class, nullable } = value_type {
+                    self.values.insert(
+                        *result,
+                        Contract {
+                            class: class.clone(),
+                            nullable: *nullable,
+                        },
+                    );
+                } else if *value_type == crate::JoinType::Api(crate::api::Type::Null) {
+                    self.nulls.insert(*result);
+                }
+            }
             Operation::SourceCast {
                 result,
                 class,
@@ -192,7 +217,13 @@ impl Origins {
                 }
             }
             Operation::LocalAssign { local, value } => {
-                if let Some(Some(contract)) = self.locals.get(local) {
+                if self.variables.contains(local) {
+                    self.locals.insert(*local, self.values.get(value).cloned());
+                    self.null_locals.remove(local);
+                    if self.nulls.contains(value) {
+                        self.null_locals.insert(*local);
+                    }
+                } else if let Some(Some(contract)) = self.locals.get(local) {
                     if !self.accepts(&contract.class, contract.nullable, *value) {
                         return Err(
                             "source-object local assignment must preserve its constructor class",
@@ -219,6 +250,7 @@ impl Origins {
             if let Some(class) = crate::type_flow::source_class(place, facts) {
                 let result = match operation {
                     Operation::ParameterRead { result, .. }
+                    | Operation::VariableRead { result, .. }
                     | Operation::LocalRead { result, .. }
                     | Operation::LocalTake { result, .. } => *result,
                     _ => unreachable!(),
@@ -233,6 +265,7 @@ impl Origins {
             } else if facts.contains(&crate::type_flow::Fact::NonNull(place)) {
                 let result = match operation {
                     Operation::ParameterRead { result, .. }
+                    | Operation::VariableRead { result, .. }
                     | Operation::LocalRead { result, .. }
                     | Operation::LocalTake { result, .. } => *result,
                     _ => unreachable!(),
@@ -325,6 +358,22 @@ impl Origins {
             .get(&local)
             .and_then(|class| class.as_ref())
             .map(|contract| contract.class.as_str())
+    }
+    pub(crate) fn set_variable_contract(&mut self, local: LocalId, ty: &crate::JoinType) {
+        self.locals.insert(
+            local,
+            match ty {
+                crate::JoinType::Source { class, nullable } => Some(Contract {
+                    class: class.clone(),
+                    nullable: *nullable,
+                }),
+                _ => None,
+            },
+        );
+        self.null_locals.remove(&local);
+        if *ty == crate::JoinType::Api(crate::api::Type::Null) {
+            self.null_locals.insert(local);
+        }
     }
 }
 

@@ -83,8 +83,9 @@ function parse(text as Toybox.Lang.String) as Toybox.Lang.Number {
 A join retains a proof only if all incoming paths provide it. The false exit of
 `while (value == null)` also provides a proof, unless another exit such as
 `break` lacks it. Assignments to that local invalidate the proof, including
-assignments of non-null values. Nullable locals accept Null, their non-null
-type, or the same union; their declared storage type stays nullable.
+assignments of non-null values. A subsequent read uses the contracts reaching
+that point; a non-null write may itself establish a non-null inferred type.
+Explicit parameter/field contracts retain their declared nullability.
 
 Only direct parameter/local-read comparisons with literal null used by the
 branch establish facts. A stored Boolean condition, a null-valued local used as
@@ -221,11 +222,10 @@ returns can carry Long.
 
 Long/Long and mixed Number/Long pairs support `+`, `-`, `*`, `/`, and `%`.
 Either Long operand makes the result Long; Number/Number keeps Number. Promotion
-belongs to these operators only: arguments, returns, and assignments still
-require their declared storage type. Long locals support the corresponding
-compound assignments with Number/Long right operands; a Number local cannot
-store a promoted Long result. Nullable numeric operands require a non-null
-proof.
+belongs to these operators only: arguments, returns, and fixed storage still
+require their declared type. Inferred locals may store a promoted Long result,
+including through compound assignment with Number/Long operands. Nullable numeric
+operands require a non-null proof.
 
 These pairs also support all six numeric comparisons, returning Boolean. Long
 mixing with Char admits equality/inequality and addition returning Char;
@@ -325,9 +325,9 @@ rules. Nullable aliases require a current non-null proof before arithmetic,
 printing, or member calls. Writes invalidate that proof; a saved Boolean guard
 is not a proof for later reads.
 
-Conditional joins retain an existing numeric alias when it covers both arms;
-adding a Null arm makes it nullable. Concrete Number/Long or Float/Double arms
-alone do not introduce a numeric alias.
+Conditional joins infer the narrowest supported numeric alias covering both
+arms, including concrete Number/Long or Float/Double alternatives; adding a
+Null arm makes it nullable.
 [Class fields](#numeric-alias-fields) retain these same alias
 contracts. Arbitrary source unions and general union inference remain
 unsupported.
@@ -689,11 +689,12 @@ Other undeclared native/source inheritance remains unsupported. Source
 inheritance, arbitrary receiver field access, and general dynamic dispatch
 remain unsupported.
 
-Exact constructor identity is an invariant local refinement, not a new native
-API type. Generic View parameters, declared View returns, and Array<View>
+Exact constructor identity is a flow-sensitive local refinement, not a new
+native API type. Generic View parameters, declared View returns, and Array<View>
 element reads expose only their base contract. They cannot authorize
-source-method calls. A generic View local does not gain constructor identity
-merely by assigning a source instance later. No runtime cast is emitted.
+source-method calls. Assigning a known source instance to a local establishes
+its identity for subsequent reads; joining different classes erases that exact
+identity until a runtime type test establishes it. No runtime cast is emitted.
 
 `ObjectCall` and `ObjectCallStatement` record a receiver value, class name,
 member, and arguments; value calls also record the result contract. Function
@@ -786,9 +787,10 @@ Source dispatch and non-null source consumers require a non-null proof on the
 read, using the shared [branch rules](#runtime-object-predicates). Checking an
 alias does not prove the original storage non-null. Writes invalidate that
 local's proof; joins and loop backedges retain only shared facts.
-A local initialized from a nullable source value permits the same class or Null
-on assignment. A fresh copy inside a proven branch has a non-null contract.
-The original local keeps its nullable storage contract after a check or write.
+A local initialized from a nullable source value exposes that contract until
+flow establishes a different one. A fresh copy inside a proven branch has a
+non-null contract. Checks refine reads without rewriting storage; assignment
+updates an inferred local's contract, including class identity and nullability.
 Nullable source Array elements remain unsupported; this does not introduce
 general source unions.
 
@@ -1520,7 +1522,7 @@ contract. `var value;` declares a local without assigning a default value.
 A declaration list shares one `var`, as in `var a, b = 2; a = b;`.
 Each initializer executes and binds its name before the next is checked or
 executed. Items may have different supported value types; each retains its own
-local identity and fixed type. Calls, container literals, and their internal
+local identity. Calls, container literals, and their internal
 commas remain ordinary initializer expressions. The whole list belongs to the
 current scope; it creates no nested scope. Expressions may read locals repeatedly
 after initialization. Duplicate
@@ -1534,7 +1536,7 @@ local scope: declarations disappear on exit, and writes to enclosing locals
 persist. Empty and nested blocks are allowed. Scope exit does not reuse local
 slots or add runtime reference-release instructions. A block preserves its
 body's return/break/continue behavior and does not create a loop-control target.
-Reassignment follows the fixed-type rules below.
+Reassignment follows the flow-sensitive rules below.
 
 Reads require assignment on every executable incoming path; declaration alone
 does not establish a readable Null. A plain assignment may initialize declared
@@ -1543,10 +1545,13 @@ Both arms may supply the first value before a join, and a `do` body may assign
 before its post-test. A possibly skipped `while` body cannot establish a value
 after the loop. Re-executing a declaration in a loop resets assignment status.
 
-Local types are inferred from initializers or, for a deferred declaration, its
-first textual plain assignment. The current profile fixes that supported
-contract for later writes, including other branches; changing types and wider
-union inference remain planned. An unused unassigned declaration has an inert
+Local types are inferred from values reaching each read, including sequential
+assignments and branch/loop joins. A write replaces the local's current inferred
+contract; it does not change earlier snapshots. Joins retain compatible exact,
+nullable, numeric-alias, or comparison-interface contracts. Other heterogeneous
+values expose Object, optionally nullable, until checked narrowing establishes a
+more specific type. General source union annotations remain unsupported.
+An unused unassigned declaration has an inert
 Null storage contract in saved IR, with no readable runtime default.
 Explicit `var name as Type = value`
 annotations are rejected, matching SDK 9.2.0; these are distinct from supported
@@ -1644,9 +1649,10 @@ not an expression. Local compound and increment/decrement statements are
 specified below. Class methods additionally support [explicit self field
 assignment](#instance-fields).
 
-The initializer fixes the local's supported type. Each assignment must preserve
-it, including Boolean locals; a nullable Dictionary local may receive null.
-General type changes are rejected. RHS evaluation finishes before the write, so
+Assignments may change a local's inferred type, including its source-class
+identity or nullability. Parameters, fields, and container elements retain
+their declared contracts; changing a local binding does not widen the contents
+of an existing mutable container. RHS evaluation finishes before the write, so
 `n = n + 1` reads the old value. Later reads observe the new content on that
 path. Assigning an enclosing local inside an arm is allowed; assignment does not
 create a declaration.
@@ -1701,11 +1707,13 @@ unsupported.
 `n op= rhs;` reads the existing storage once, evaluates `rhs` once, applies the
 corresponding supported binary operator, then writes the result to the existing
 slot. The whole RHS is parsed before applying the implicit operator: `n *= 1 +
-2` means `n = n * (1 + 2)`. Existing binary contracts and fixed local types
-apply, with parameters retaining their signature contract: all ten operators
+2` means `n = n * (1 + 2)`. Existing binary contracts apply, with parameters
+retaining their signature contract: all ten operators
 accept non-null Number pairs; String `+=` uses
-supported scalar concatenation, and Char `+=` accepts Number/Long. Number `+=
-Char` and Char `+= Char` fail because their results change the local type. No
+supported scalar concatenation, and Char `+=` accepts Number/Long. Number/Long
+`+= Char` produces Char; Char `+= Char` produces String. Inferred locals may
+change type accordingly, while fixed parameter/field/element contracts still
+govern their write-back. No
 new coercion, folding, or runtime guard is introduced.
 
 The read/binary/write sequence uses ordinary IR operations and source spans. A
@@ -1726,7 +1734,8 @@ assignments, prints, nested conditions/loops, and early returns.
 Body locals are visible within that body and nested scopes, but not after the
 loop or in its condition. Their existing slots are initialized anew on each
 iteration; new slots are not allocated per iteration. Enclosing local writes
-persist into later tests and after exit. Fixed local types still apply.
+persist into later tests and after exit. Reads account for all incoming writes,
+including loop backedges, rather than assuming the first iteration's type.
 
 The body may execute zero times. Its declarations cannot establish a local
 needed at the test or exit. A function ending with a loop still needs a return
@@ -1755,7 +1764,7 @@ trailing commas are rejected, matching the SDK header grammar. See the connected
 
 All initializer locals are visible to the condition, body, and update, but not
 after the loop. Body locals are not visible in either header
-clause. Existing fixed-type and no-shadowing rules apply; a name can be reused
+clause. Existing inference and no-shadowing rules apply; a name can be reused
 after its loop scope ends.
 
 `do { body } while (condition);` executes its body before testing. The condition
@@ -1801,7 +1810,7 @@ the function's fallthrough return requirement. Mixed
 returning/breaking/continuing arms omit a join when all paths terminate. A
 false-condition exit remains unless the condition is absent or unreachable.
 Skipped declarations stay scoped to their body/arm; initialized enclosing locals
-retain their slots and fixed types. These statements emit existing `.jump`
+retain their slots and flow-sensitive types. These statements emit existing `.jump`
 operations.
 
 See [loop-control.mc](../../../examples/compiler-probe/loop-control.mc) and
@@ -2335,8 +2344,8 @@ that value before calling its supported Object methods (`toString`, `equals`,
 `hashCode`). Neither `stillAlive()` nor testing a separate `get()` call proves a
 later result non-null.
 
-Nullable WeakReference locals retain their union through assignment and joins
-with WeakReference/Null alternatives, since API 1.2.0. A fresh non-null proof
+WeakReference/Null alternatives join as nullable WeakReference, since API 1.2.0.
+A sequential write may narrow an inferred local. A fresh non-null proof
 permits handle members; it proves neither target liveness nor a non-null `get()`
 result. Writes invalidate local proofs; aliases and stored Boolean tests do not
 transfer them. Lexical `as WeakReference or Null` asserts a type without runtime
@@ -3007,7 +3016,7 @@ reference; aliases observe its mutations. API minimum: 3.0.0.
 
 `ByteArray or Null` is supported in parameters/results, conditional joins, and
 inferred locals. ByteArray/Null alternatives join without allocation or
-conversion. Nullable locals retain that contract when assigned either value.
+conversion. Sequential writes update inferred local contracts.
 Direct null checks on fresh local/parameter reads establish non-null use in
 branches, short-circuit expressions, conditional arms, and loops. Early returns
 can exclude Null from a following path. Methods, indexing, and non-null typed
@@ -3170,10 +3179,11 @@ supported parameter and result contracts from API 5.0.0. Module aliases and
 imports resolve them like other API types. Comparable exposes `compareTo(Object)
 as Number`; Comparator exposes `compare(Object, Object) as Number`. Calls use
 ordinary receiver/member dispatch, evaluate receiver before arguments once, and
-preserve the implementing instance. Comparator values can also supply Array
+preserve the implementing instance. Supported inherited Object observers use
+the ordinary Object executable profile. Comparator values can also supply Array
 `sort`.
 
-User calls, returns, and interface-local assignments accept the same interface,
+User calls, returns, and fixed interface storage accept the same interface,
 a verified native scalar witness, or an exact source-class witness. Unit
 validation rechecks every required source member, arity, parameter, and result
 contract. Opaque Object/View values, a `has` test, and source classes with
@@ -3197,23 +3207,25 @@ Comparable to the compatible Number, Long, Float, Double, Boolean, Char, or
 String contract. The same rule applies to Comparable-or-Null and removes Null
 on that edge. Concrete operations and forwarding to Comparable consumers can
 then use the read without a cast or conversion. The storage's interface
-contract remains unchanged; writes invalidate facts, and untested aliases do
-not inherit them. Refinement requires a verified native interface witness:
+contract remains unchanged by the test; writes invalidate facts, and untested
+aliases do not inherit them. Refinement requires a verified native interface witness:
 testing a Comparator against Number does not authorize Number operations.
 
 An interface parameter or call result retains its contract through inferred
 locals, aliases, and same-interface assignment and conditional joins. A
 Comparable local also accepts a verified scalar assignment. A conditional with a
-Comparable arm and a verified scalar arm retains Comparable in either arm order;
-two different scalar types do not implicitly infer an interface. There is no
-implicit conversion between Comparable and Comparator. Direct source assignments
-defer their signature proof to unit validation, including after IR reload; an
-incompatible source class cannot enter either interface local.
+Comparable arm and a verified scalar arm retains Comparable in either arm order.
+Different verified scalar witnesses also join as Comparable when no narrower
+numeric contract covers them. There is no
+implicit conversion between Comparable and Comparator. Writes to fixed interface
+storage defer their source signature proof to unit validation, including after
+IR reload. Inferred local bindings may change type; a later interface consumer
+still requires the appropriate witness.
 
 A nullable interface accepts Null and compatible non-null values. Nullable
-scalars can widen to Comparable-or-Null. Nullable locals keep their declared
-contract across writes and require a fresh non-null read proof before member
-calls or non-null forwarding. Equality/inequality with Null works in either
+scalars can widen to Comparable-or-Null. Nullable reads require a non-null proof
+before member calls or non-null forwarding; inferred local writes update their
+flow contract. Equality/inequality with Null works in either
 operand order. The shared branch rules cover early returns, conditional arms,
 and loops; writes invalidate local proofs, and aliases/stored Boolean guards do
 not transfer them. A conditional combining an interface and Null produces the

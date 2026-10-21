@@ -144,6 +144,7 @@ pub(crate) fn inputs(
         match located.operation {
             Operation::Null { result }
             | Operation::LocalRead { result, .. }
+            | Operation::VariableRead { result, .. }
             | Operation::LocalTake { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::Not { result, .. }
@@ -224,7 +225,9 @@ pub(crate) fn inputs(
 
 pub(crate) fn read_place(operation: &Operation) -> Option<Place> {
     match *operation {
-        Operation::LocalRead { local, .. } => Some(Place::Local(local)),
+        Operation::LocalRead { local, .. } | Operation::VariableRead { local, .. } => {
+            Some(Place::Local(local))
+        }
         Operation::ParameterRead { index, .. } => Some(Place::Parameter(index)),
         _ => None,
     }
@@ -298,7 +301,8 @@ fn guard_place(
 /// Return frame storage whose previous refinement is invalidated by this write.
 fn write_place(operation: &Operation) -> Option<Place> {
     match operation {
-        Operation::LocalDeclare { local, .. }
+        Operation::LocalVariable { local, .. }
+        | Operation::LocalDeclare { local, .. }
         | Operation::LocalInitialize { local, .. }
         | Operation::LocalAssign { local, .. } => Some(Place::Local(*local)),
         Operation::ParameterAssign { index, .. } => Some(Place::Parameter(*index)),

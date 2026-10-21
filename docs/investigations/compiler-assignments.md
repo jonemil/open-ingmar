@@ -8,7 +8,7 @@ uses our [nested-condition scaffold](compiler-nested-conditions.md) and
 
 ## Contract and experiment
 
-The [source][source] and [IR][ir] specs define assignment, fixed local types,
+The [source][source] and [IR][ir] specs define assignment, local type inference,
 read/write order, and snapshots. This experiment uses:
 
 The [checked-in source](../../examples/compiler-probe/assignments.mc) initializes
@@ -159,8 +159,7 @@ SDK/generated simulator output matches the expected text; structured export,
 reassembly, and native/text resumption pass through the shared checker.
 Artifacts: `scratch/core-local-inference/check/`. The new declaration has no
 runtime write; ordinary `lputv` implements the first assignment. No new opcode
-or DATA record is required. Inferred type changes after initialization remain
-outside the fixed-contract profile.
+or DATA record is required.
 
 The authored loop probe in `scratch/core-local-lifetime/source/app.mc` assigns
 a ByteArray only on its first iteration and retains a weak handle. SDK CODE
@@ -168,3 +167,20 @@ has one write to the value's slot 4 at CODE+0x54, with no clearing write at the
 loop declaration or backedge. This establishes the observed absence of a
 redeclaration write; no separate simulator-liveness result is claimed for this
 isolated probe. Its build log and structured export are retained alongside it.
+
+## Changing inferred types
+
+SDK 9.2.0, Java 17, `fr265`, unoptimized builds: authored probes in
+`scratch/core-evolving-locals/source/app.mc` compile with Number-to-String
+sequential writes, both-branch overwrites, nullable joins, and a type-changing
+loop guarded by `instanceof`. These establish that initializers do not fix
+source local contracts.
+
+The tracked `EvolvingLocals` group in [the console specimen][parameters] adds
+those cases, Number/Long joins, preserved scalar/source snapshots, and an Array
+alias retained after its original binding becomes String. SDK and generated
+simulator output both match `expected.txt`. The shared checker also passes
+native/saved-IR/saved-assembly equivalence and structured CODE/DATA reassembly
+for both PRGs. Artifacts: `scratch/core-evolving-locals/check/`. Existing
+`lgetv`/`lputv` implement the changing bindings; no new VM opcode or DATA record
+is needed. This does not establish general source union or Any semantics.

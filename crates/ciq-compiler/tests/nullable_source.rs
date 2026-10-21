@@ -68,8 +68,7 @@ fn nullable_source_contracts_reject_erasure_unrelated_classes_and_missing_proofs
         "function f(token as Token or Null) { return Tokens.exact(token); }",
         "function f(token as Token or Null) { var copy = token; if (token != null) { return copy.value(); } return 0; }",
         "function f(token as Token or Null) { var copy = token; if (copy != null) { copy = null; return copy.value(); } return 0; }",
-        "function f(token as Token or Null) { var copy = token; if (copy != null) { var exact = copy; exact = null; } return 0; }",
-        "function f(token as Token or Null) { var copy = token; if (copy != null) { copy = new Other(); } return 0; }",
+        "function f(token as Token or Null) { var copy = token; if (copy != null) { var exact = copy; exact = null; exact.value(); } return 0; }",
         "function f(token as Token or Null) { var copy = token; var guarded = copy != null; if (guarded) { return copy.value(); } return 0; }",
         "function f(token as Token or Null) { var copy = token; while (copy != null) { copy = null; } return copy.value(); }",
         "function f(token as Token or Null) { var copy = token; if (true) { if (copy != null) { return 0; } } return copy.value(); }",
@@ -78,7 +77,6 @@ fn nullable_source_contracts_reject_erasure_unrelated_classes_and_missing_proofs
         "function f(token as Other) as Token or Null { return token; }",
         "function f() as Token or Null { return new Other(); }",
         "function f(token as Missing or Null) { return 0; }",
-        "function f() { var token = new Token(); token = null; }",
     ] {
         assert!(
             compile_sources(&[source, prelude, CLASSES]).is_err(),
