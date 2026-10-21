@@ -1,30 +1,65 @@
-//! Finite exact source-class alternatives, separate from erased native types.
+//! Class-containing unions that distinguish exact identities from native types.
 use crate::{JoinType, ParameterType, ReturnType, SourceClass, api::Type};
 
-/// A normalized nonempty set of exact source classes, optionally admitting Null.
+/// A normalized union containing exact source classes and optional native/Null
+/// alternatives. Native alternatives do not establish exact source identities.
 /// Classes retain their native bases; compilation-unit validation resolves each
 /// identity against its declaration. This contract does not express inheritance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceUnion {
     pub(crate) classes: Vec<SourceClass>,
     pub(crate) nullable: bool,
+    pub(crate) native: Vec<Type>,
 }
 impl SourceUnion {
     /// Normalize exact class alternatives, rejecting empty/oversized sets,
     /// malformed identities, and bases that cannot be source-constructed.
-    pub fn new(mut classes: Vec<SourceClass>, nullable: bool) -> Result<Self, &'static str> {
+    pub fn new(classes: Vec<SourceClass>, nullable: bool) -> Result<Self, &'static str> {
+        Self::with_native(classes, Vec::new(), nullable)
+    }
+    /// Normalize a class-containing union with supported native alternatives.
+    /// Reject malformed classes, unsupported native value contracts, and more
+    /// than 254 normalized alternatives. Native Null contributes nullability.
+    pub fn with_native(
+        mut classes: Vec<SourceClass>,
+        native: Vec<Type>,
+        nullable: bool,
+    ) -> Result<Self, &'static str> {
         classes.sort();
         classes.dedup();
-        if classes.is_empty() || classes.len() + usize::from(nullable) > crate::MAX_PARAMETERS {
-            return Err("source union requires 1..=254 alternatives including Null");
+        if classes.is_empty() {
+            return Err("class-containing union requires an exact source alternative");
         }
         if classes
             .iter()
-            .any(|class| SourceClass::parse(&class.to_string()).as_ref() != Some(class))
+            .any(|c| SourceClass::parse(&c.to_string()).as_ref() != Some(c))
         {
             return Err("invalid source union class identity or native base");
         }
-        Ok(Self { classes, nullable })
+        let normalized = crate::unions::normalize(native);
+        let mut nullable = nullable;
+        let mut native = Vec::new();
+        for ty in crate::unions::alternatives(&normalized) {
+            if *ty == Type::Null {
+                nullable = true;
+            } else if crate::unions::parameter(ty.clone()).is_some() {
+                native.push(ty.clone());
+            } else {
+                return Err("unsupported native source-union alternative");
+            }
+        }
+        if classes.len() + native.len() + usize::from(nullable) > crate::MAX_PARAMETERS {
+            return Err("source union exceeds 254 alternatives including Null");
+        }
+        Ok(Self {
+            classes,
+            nullable,
+            native,
+        })
+    }
+    /// Return normalized native alternatives without source-base projections.
+    pub fn native(&self) -> &[Type] {
+        &self.native
     }
     /// Return normalized class identities, without erasing their native bases.
     pub fn classes(&self) -> &[SourceClass] {
@@ -38,6 +73,7 @@ impl SourceUnion {
         Self {
             classes: vec![class],
             nullable,
+            native: Vec::new(),
         }
     }
     pub(crate) fn api_type(&self) -> Type {
@@ -46,13 +82,20 @@ impl SourceUnion {
             .iter()
             .map(|c| Type::named(c.base.api_name()))
             .collect::<Vec<_>>();
+        types.extend(self.native.iter().cloned());
         if self.nullable {
             types.push(Type::Null);
         }
         crate::unions::normalize(types)
     }
     pub(crate) fn join(self) -> JoinType {
-        if self.classes.len() == 1 {
+        if self.native == [Type::Any] {
+            return JoinType::Api(Type::Any);
+        }
+        if self.classes.is_empty() {
+            return JoinType::Api(self.api_type());
+        }
+        if self.classes.len() == 1 && self.native.is_empty() {
             JoinType::Source {
                 class: self.classes[0].clone(),
                 nullable: self.nullable,
@@ -62,7 +105,10 @@ impl SourceUnion {
         }
     }
     pub(crate) fn parameter(self) -> ParameterType {
-        if self.classes.len() == 1 {
+        if self.native == [Type::Any] {
+            return ParameterType::Any;
+        }
+        if self.classes.len() == 1 && self.native.is_empty() {
             if self.nullable {
                 ParameterType::NullableSourceObject(self.classes[0].clone())
             } else {
@@ -73,7 +119,10 @@ impl SourceUnion {
         }
     }
     pub(crate) fn result(self) -> ReturnType {
-        if self.classes.len() == 1 {
+        if self.native == [Type::Any] {
+            return ReturnType::Any;
+        }
+        if self.classes.len() == 1 && self.native.is_empty() {
             if self.nullable {
                 ReturnType::NullableSourceObject(self.classes[0].clone())
             } else {
@@ -83,19 +132,63 @@ impl SourceUnion {
             ReturnType::SourceUnion(self)
         }
     }
+    pub(crate) fn native_type(&self) -> Type {
+        let mut types = self.native.clone();
+        if self.nullable {
+            types.push(Type::Null);
+        }
+        crate::unions::normalize(types)
+    }
+    pub(crate) fn accepts_api(&self, actual: &Type) -> bool {
+        crate::native::accepts(&self.native_type(), actual)
+    }
+    /// Check assignability, leaving structural class/interface witnesses to the
+    /// unit. Native base projection alone is not an interface implementation.
     pub(crate) fn accepts(&self, actual: &Self) -> bool {
+        self.accepts_with(actual, |_, ty| {
+            matches!(
+                crate::ValueType::from_api_type(ty),
+                Some(crate::ValueType::Interface(_))
+            )
+        })
+    }
+    pub(crate) fn accepts_with(
+        &self,
+        actual: &Self,
+        witness: impl Fn(&SourceClass, &Type) -> bool,
+    ) -> bool {
         (self.nullable || !actual.nullable)
-            && actual.classes.iter().all(|c| self.classes.contains(c))
+            && actual.native.iter().all(|ty| self.accepts_api(ty))
+            && actual.classes.iter().all(|c| {
+                self.classes.contains(c)
+                    || self.native.iter().any(|ty| {
+                        crate::native::accepts(ty, &Type::named(c.base.api_name()))
+                            || witness(c, ty)
+                    })
+            })
     }
     pub(crate) fn merge(&self, other: &Self) -> Option<Self> {
-        Self::new(
+        Self::with_native(
             self.classes.iter().chain(&other.classes).cloned().collect(),
+            self.native.iter().chain(&other.native).cloned().collect(),
             self.nullable || other.nullable,
         )
         .ok()
     }
+    pub(crate) fn merge_api(&self, ty: &Type) -> Option<Self> {
+        Self::with_native(
+            self.classes.clone(),
+            self.native
+                .iter()
+                .cloned()
+                .chain(std::iter::once(ty.clone()))
+                .collect(),
+            self.nullable,
+        )
+        .ok()
+    }
     pub(crate) fn text(&self) -> String {
-        if self.classes.len() == 1 {
+        if self.classes.len() == 1 && self.native.is_empty() {
             return if self.nullable {
                 format!("nullable-source({})", self.classes[0])
             } else {
@@ -107,12 +200,20 @@ impl SourceUnion {
             .iter()
             .map(|c| format!("source({c})"))
             .collect::<Vec<_>>();
+        tags.extend(self.native.iter().map(|ty| {
+            crate::type_text::parameter_tag(
+                &crate::unions::parameter(ty.clone()).expect("validated native alternative"),
+            )
+            .into_owned()
+        }));
         if self.nullable {
             tags.push("null".into());
         }
         format!("source-union({})", tags.join("|"))
     }
-    /// Refine exact alternatives using facts about the same storage identity.
+    /// Refine source and native alternatives using the same storage facts.
+    /// A runtime source-class test can recover an exact identity from an opaque
+    /// native alternative; a mere native base projection cannot do so.
     /// An empty intersection retains the original contract: there is no bottom
     /// type or unreachable-code proof in this type model.
     pub(crate) fn refine(
@@ -129,7 +230,16 @@ impl SourceUnion {
             match fact {
                 Fact::NonNull(at) if *at == place => refined.nullable = false,
                 Fact::Class(at, ClassTarget::Source(class)) if *at == place => {
+                    let base = Type::named(class.base.api_name());
+                    let opaque_match = refined
+                        .native
+                        .iter()
+                        .any(|ty| crate::native::accepts(ty, &base));
                     refined.classes.retain(|c| c == class);
+                    if opaque_match && !refined.classes.contains(class) {
+                        refined.classes.push(class.clone());
+                    }
+                    refined.native.clear();
                     refined.nullable = false;
                 }
                 Fact::NotClass(at, ClassTarget::Source(class)) if *at == place => {
@@ -139,9 +249,28 @@ impl SourceUnion {
                     refined.classes.retain(|c| {
                         crate::native::accepts(&Type::named(class), &Type::named(c.base.api_name()))
                     });
+                    let target = Type::named(class);
+                    refined.native = refined
+                        .native
+                        .into_iter()
+                        .filter_map(|ty| {
+                            if crate::native::accepts(&target, &ty) {
+                                Some(ty)
+                            } else if crate::native::accepts(&ty, &target)
+                                && crate::ValueType::from_api_type(&target).is_some()
+                            {
+                                Some(target.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
                     refined.nullable = false;
                 }
                 Fact::NotClass(at, ClassTarget::Native(class)) if *at == place => {
+                    refined
+                        .native
+                        .retain(|ty| !crate::native::accepts(&Type::named(class), ty));
                     refined.classes.retain(|c| {
                         !crate::native::accepts(
                             &Type::named(class),
@@ -152,7 +281,7 @@ impl SourceUnion {
                 _ => {}
             }
         }
-        if refined.classes.is_empty() {
+        if refined.classes.is_empty() && refined.native.is_empty() {
             if refined.nullable {
                 JoinType::Api(Type::Null)
             } else {

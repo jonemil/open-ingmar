@@ -307,7 +307,7 @@ interface-name-tag = "comparable" | "comparator"
 interface-tag = interface-name-tag | "nullable-" interface-name-tag
 enum-tag = "number-format" | "endian"
 source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")"
-source-union-atom = source-tag | "null"
+source-union-atom = source-tag | native-parameter-tag
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
 source-identity = identifier "@" source-base
@@ -337,11 +337,15 @@ when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
 Dictionary punctuation. These tags do not extend field or cast domains.
 
-Source-union tags contain 2 through 254 exact source/Null atoms, including at
-least one class. Classes normalize by identity and native base; duplicate atoms
-collapse, and singleton sets use ordinary source/nullable-source tags. Nested
-source-union tags and native alternatives are rejected. These tags are admitted
-in signatures, block values, and local contracts, but not fields or casts.
+Source-union tags contain 2 through 254 atoms, including at least one exact
+source class, and at most 254 alternatives after normalization. Classes sort by
+identity/native base, followed by normalized native alternatives and then Null.
+Numeric aliases expand; duplicates collapse. Pure source singleton sets use
+ordinary source/nullable-source tags. Any absorbs the union. Exact identities
+are retained alongside opaque Object alternatives rather than subsumed.
+Nested union tags, Void, tuples, and nullable-source atoms are rejected. These
+tags are admitted in signatures, block values, and local contracts, but not
+fields or casts.
 
 The contexts deliberately differ. Source casts use `source-tag` or
 `nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the

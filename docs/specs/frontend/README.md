@@ -76,7 +76,7 @@ Parameter and result annotations accept `A or B` chains of supported native
 value types, including Null and existing parameterized Array/Dictionary types.
 Bare Null is also a signature contract. Fields and lexical `as` assertions keep
 their separately specified type domains. [Exact source-class unions](#source-class-signatures)
-retain identities separately and cannot yet mix with native alternatives.
+retain identities separately, including when mixed with native alternatives.
 
 Normalization flattens alternatives, removes duplicates, and orders them
 consistently. Numeric aliases and existing nullable types retain their established
@@ -324,7 +324,7 @@ validation.
 `Long or Null` parameters/results, locals, and conditional joins use the shared
 nullable rules. A direct non-null proof is required before numeric operations,
 printing, or receiver dispatch. Matching Long arms join without conversion;
-mixed Number/Long conditional arms remain invalid.
+Number/Long alternatives join as Integer under the shared numeric-alias rules.
 
 Long `toFloat()` and `toDouble()` are available since API 1.0.0, under the
 [floating contracts](#numbers-and-numeric-aliases). Long arrays and Dictionaries follow their
@@ -837,27 +837,40 @@ non-null contract. Checks refine reads without rewriting storage; assignment
 updates an inferred local's contract, including class identity and nullability.
 Nullable source Array elements remain unsupported.
 
-A source-class union retains a sorted, deduplicated set of exact class/native-base
-identities and optional Null. Its signature may contain up to 254 alternatives.
-Different native bases are permitted. Assignments, arguments, and returns must
-retain a subset of the declared classes; Null requires a nullable contract.
-Opaque native references cannot satisfy an exact class alternative. Any retains
-its separate gradual boundary rules. Mixing source and native alternatives is
-unsupported, and union fields and general union casts remain outside this profile.
+A class-containing union retains sorted, deduplicated exact class/native-base
+identities alongside supported native alternatives and optional Null. Its
+signature admits up to 254 atoms and up to 254 normalized alternatives after
+alias expansion. Different source bases and native containers are permitted.
+No subtype subsumption removes an exact identity: `Token or Lang.Object` retains
+both the known Token alternative and the opaque Object alternative. Any instead
+absorbs the union under its separate gradual boundary rules.
+
+Each actual alternative must fit the declared contract. An exact class can match
+that identity or an assignable native alternative; a structural interface match
+requires its class's verified signature. An opaque native reference can match
+only native alternatives, never an exact source identity. Null requires a
+nullable contract. These checks apply at parameters, returns, fixed storage,
+and explicit block-value edges; saved metadata cannot invent a witness. Union
+fields and general union casts remain outside this profile.
 
 Conditional joins and inferred local writes preserve these exact alternatives.
 Direct source `instanceof` tests select a class on the true edge and exclude it
 on the false edge; nested tests can select from three or more alternatives.
 Negation and loop exits use the same facts. Null tests preserve the remaining
-class set. Aliases and stored Booleans do not transfer facts, and writes kill them.
+class set. Excluding the final source alternative leaves its native alternatives;
+for example, the false edge of `value instanceof Token` on `Token or String`
+permits `value.length()`. A positive source test on an opaque Object alternative
+can establish the tested exact class. Native type tests intersect both the native
+alternatives and the source bases. Aliases and stored Booleans do not transfer
+facts, and writes kill them.
 There is no bottom type: contradictory tests do not establish unreachable code.
 
 Source method dispatch requires a single proven, non-null class. A guard can
 establish it for a parameter or fresh local read. An unrefined union cannot yet
 call a common source-declared member even if every class declares it. Supported
 native methods use the union's native projection and existing receiver checks.
-Structural interface consumers require every retained class to implement the
-required signature, including after saved IR reload. A nullable source contract
+Structural interface consumers require every retained source class and native
+alternative to satisfy the required signature, including after saved IR reload. A nullable source contract
 can satisfy a nullable interface, but not a non-null interface without a proof.
 When a callback can dispatch to multiple classes, initialization/shutdown effect
 checking remains conservative rather than selecting one class's body.
@@ -1553,9 +1566,9 @@ return reaches direct literals and supported sized Array allocations in both
 arms; no element contract is inferred solely from a sibling arm.
 
 Exact source references join as [source-class unions](#source-class-signatures),
-retaining each identity and optional Null. A source/native mixture still requires
-explicit erasure before joining. Neither a union nor a shared native base proves
-one source class for dispatch; class-specific use needs a checked singleton.
+retaining each identity, native alternative, and optional Null. Neither a union
+nor a shared native base proves one source class for dispatch; class-specific
+use needs a checked singleton.
 
 Join inference uses checked incoming operand types after the complete graph's
 null-flow analysis. A direct nullable read under a non-null proof contributes
@@ -1610,8 +1623,8 @@ assignments and branch/loop joins. A write replaces the local's current inferred
 contract; it does not change earlier snapshots. Joins retain compatible exact,
 nullable, numeric-alias, or comparison-interface contracts. Other supported
 native alternatives retain normalized unions. Exact source alternatives retain
-source-class unions; source/native mixtures still use opaque projections, which
-cannot recover an unproven source identity.
+class-containing unions, including mixtures with native values. Opaque native
+alternatives remain distinct and cannot supply an unproven source identity.
 An unused unassigned declaration has an inert
 Null storage contract in saved IR, with no readable runtime default.
 Explicit `var name as Type = value`

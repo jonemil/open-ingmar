@@ -401,6 +401,14 @@ impl Types {
             _ => return,
         };
         if let Some(ty) = ty {
+            let ty = if crate::type_flow::read_place(operation).is_some()
+                || matches!(operation, Operation::LocalTake { .. })
+            {
+                self.origins.refined_type(result).unwrap_or(ty)
+            } else {
+                ty
+            };
+            self.origins.note_type(result, ty.clone());
             if ty == Type::Any {
                 self.origins.note_dynamic(result);
             }

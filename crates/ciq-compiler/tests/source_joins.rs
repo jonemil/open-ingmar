@@ -54,7 +54,7 @@ fn conditional_values_preserve_exact_class_nullability_and_nested_edges() {
 fn source_join_rejects_mismatched_classes_erasure_and_lost_null_proofs() {
     for source in [
         "function f(flag as Toybox.Lang.Boolean) as Token {return flag?new Token():new Other();}",
-        "function f(flag as Toybox.Lang.Boolean,o as Toybox.Lang.Object) {var t=flag?new Token():o;return 0;}",
+        "function f(flag as Toybox.Lang.Boolean,o as Toybox.Lang.Object) as Token {return flag?new Token():o;}",
         "function f(flag as Toybox.Lang.Boolean) {var t=flag?new Token():null;return t.value();}",
         "function f(flag as Toybox.Lang.Boolean) as Token {return flag?new Token():null;}",
         "function f(flag as Toybox.Lang.Boolean) {var t=flag?new Token():null;if(t!=null){t=null;return t.value();}return 0;}",

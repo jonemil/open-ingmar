@@ -1,4 +1,4 @@
-# Numeric aliases and native unions
+# Numeric aliases and unions
 
 [app.mc](app.mc) checks all 16 Number/Long/Float/Double pairings through
 `Lang.Numeric` parameters, integer-only operations through `Lang.Integer`, and
@@ -10,7 +10,9 @@ The `NativeUnions` group checks Number/String signatures, common methods,
 both branches of class/Null tests, changing locals and loop exits, conditional
 joins, standalone Null, and guarded nullable Array references. The `SourceUnions`
 group checks exact class alternatives, forwarding, both guard edges, changing
-locals, loop exits, and structural Comparator witnesses for sorting.
+locals, loop exits, and structural Comparator witnesses for sorting. The
+`MixedUnions` group combines source classes with native scalars, containers,
+Object, and Comparator; guards recover exact or native-only contracts.
 
 API minimum: 5.0.0; target: 5.2.0; SDK/compiler/simulator: 9.2.0 / fr265.
 

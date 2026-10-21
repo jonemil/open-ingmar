@@ -2522,7 +2522,7 @@ impl Parser<'_> {
     }
 
     /// Parse `or` alternatives, normalizing native unions without erasing a
-    /// source class into its native base. Mixed source/native unions are rejected.
+    /// source class into its native base. Source and native alternatives retain distinct contracts.
     fn parameter_annotation(&mut self, at: usize) -> Result<crate::ParameterType, Diagnostic> {
         let first = self.parameter_atom()?;
         if self.peek()? != Kind::Word("or") {
@@ -2545,16 +2545,14 @@ impl Parser<'_> {
             })
             .collect::<Vec<_>>();
         if !sources.is_empty() {
-            if parts
+            let native = parts
                 .iter()
-                .all(|p| p.source_contract().is_some() || *p == crate::ParameterType::Null)
-            {
-                let nullable = parts.contains(&crate::ParameterType::Null);
-                return crate::SourceUnion::new(sources, nullable)
-                    .map(crate::SourceUnion::parameter)
-                    .map_err(|message| self.error(at, message));
-            }
-            return Err(self.error(at, "mixed source-class and native unions are not supported"));
+                .filter(|p| p.source_contract().is_none())
+                .map(crate::ParameterType::api_type)
+                .collect();
+            return crate::SourceUnion::with_native(sources, native, false)
+                .map(crate::SourceUnion::parameter)
+                .map_err(|message| self.error(at, message));
         }
         crate::unions::parameter(crate::unions::normalize(
             parts.iter().map(crate::ParameterType::api_type).collect(),

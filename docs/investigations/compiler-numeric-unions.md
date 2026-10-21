@@ -72,6 +72,22 @@ source-member dispatch without a class guard. Rust checks additionally cover
 three alternatives with different native bases, missing interface witnesses,
 erased references, stale guards, and forged saved contracts.
 
+## Mixed source/native alternatives
+
+`MixedUnions` extends the authored example with source/String and source/Number
+signatures, native Array alternatives, Null, forwarding, changing locals, and
+loop-exit narrowing. SDK/compiler/simulator 9.2.0 / fr265, target 5.2.0 and minimum
+5.0.0 accept these forms. Testing an opaque Object alternative against
+`UnionMarker` recovers its exact class. A `UnionMarker or Comparator` parameter
+accepts a distinct source Comparator implementation and invokes it for sorting.
+
+SDK and generated applications match all 135 expected console lines. Source,
+saved IR, and assembly produce identical unsigned generated applications. Both
+SDK and generated PRGs pass structured CODE/DATA reconstruction without required
+raw fallback. Reproduce with the existing specimen-checker commands; captures
+are in `scratch/unions/mixed-check/`. This does not establish common
+source-member calls through an unrefined class set or union fields.
+
 ## Field storage
 
 SDK/compiler/simulator 9.2.0 / fr265 also accept

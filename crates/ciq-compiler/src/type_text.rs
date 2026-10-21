@@ -233,18 +233,21 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
             return Err("invalid source union alternatives");
         }
         let mut classes = Vec::new();
-        let mut nullable = false;
+        let mut native = Vec::new();
         for part in parts {
             if part.starts_with("source-union(") || part.starts_with("union(") {
                 return Err("nested source union tags are not supported");
             }
             match call_result(part)? {
                 ReturnType::SourceObject(class) => classes.push(class),
-                ReturnType::Null => nullable = true,
-                _ => return Err("source union requires exact source classes or Null"),
+                ReturnType::SourceUnion(_) | ReturnType::NullableSourceObject(_) => {
+                    return Err("source union requires atomic alternatives");
+                }
+                other => native.push(other.api_type()),
             }
         }
-        return crate::SourceUnion::new(classes, nullable).map(crate::SourceUnion::result);
+        return crate::SourceUnion::with_native(classes, native, false)
+            .map(crate::SourceUnion::result);
     }
     if tag.starts_with("union(") {
         let body = tag
@@ -256,6 +259,7 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
             || parts.len() > crate::MAX_PARAMETERS
             || parts.iter().any(|p| {
                 p.starts_with("union(")
+                    || p.starts_with("source-union(")
                     || p.starts_with("source(")
                     || p.starts_with("nullable-source(")
             })

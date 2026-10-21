@@ -24,6 +24,8 @@ type Contract = crate::SourceUnion;
 #[derive(Default)]
 pub(crate) struct Origins {
     values: BTreeMap<ValueId, Contract>,
+    native_values: BTreeMap<ValueId, crate::api::Type>,
+    refined_values: BTreeMap<ValueId, crate::api::Type>,
     nulls: std::collections::BTreeSet<ValueId>,
     null_locals: std::collections::BTreeSet<LocalId>,
     locals: BTreeMap<LocalId, Option<Contract>>,
@@ -43,6 +45,19 @@ impl Origins {
     /// boundary dynamically without establishing a source-class proof.
     pub(crate) fn note_dynamic(&mut self, value: ValueId) {
         self.dynamic.insert(value);
+    }
+    /// Record a checked native type without turning its projection into an
+    /// exact class witness. Used for native alternatives at mixed boundaries.
+    pub(crate) fn note_type(&mut self, value: ValueId, ty: crate::api::Type) {
+        self.native_values.insert(value, ty);
+    }
+    /// Return a storage read's refined projection, including native-only results
+    /// after the last exact class alternative has been excluded.
+    pub(crate) fn refined_type(&self, value: ValueId) -> Option<crate::api::Type> {
+        self.values
+            .get(&value)
+            .map(Contract::api_type)
+            .or_else(|| self.refined_values.get(&value).cloned())
     }
     /// Track exact classes through signatures, assertions, calls, and locals.
     /// Apply the caller's current CFG facts to reads, rejecting writes that
@@ -214,6 +229,7 @@ impl Origins {
             if let Some(contract) = self.values.get(&result).cloned() {
                 let refined = contract.refine(place, facts);
                 self.values.remove(&result);
+                self.refined_values.insert(result, refined.api_type());
                 if let Some(contract) = refined.source_contract() {
                     self.values.insert(result, contract);
                 } else if refined == crate::JoinType::Api(crate::api::Type::Null) {
@@ -278,7 +294,7 @@ impl Origins {
     pub(crate) fn class(&self, value: ValueId) -> Option<&str> {
         self.values
             .get(&value)
-            .filter(|c| !c.nullable && c.classes.len() == 1)
+            .filter(|c| !c.nullable && c.classes.len() == 1 && c.native.is_empty())
             .map(|c| c.classes[0].as_str())
     }
     /// Return retained class alternatives and nullability for unit witnesses.
@@ -292,6 +308,11 @@ impl Origins {
                 .values
                 .get(&value)
                 .is_some_and(|actual| expected.accepts(actual))
+            || (!self.values.contains_key(&value)
+                && self
+                    .native_values
+                    .get(&value)
+                    .is_some_and(|ty| expected.accepts_api(ty)))
     }
     /// Check exact source assignability, admitting Null only for nullable storage.
     pub(crate) fn accepts(
@@ -308,7 +329,7 @@ impl Origins {
         self.locals
             .get(&local)
             .and_then(|class| class.as_ref())
-            .filter(|contract| contract.classes.len() == 1)
+            .filter(|contract| contract.classes.len() == 1 && contract.native.is_empty())
             .map(|contract| contract.classes[0].as_str())
     }
     pub(crate) fn set_variable_contract(&mut self, local: LocalId, ty: &crate::JoinType) {
@@ -339,6 +360,6 @@ pub(crate) fn class(
     origins
         .values
         .get(&value)
-        .filter(|contract| contract.classes.len() == 1)
+        .filter(|contract| contract.classes.len() == 1 && contract.native.is_empty())
         .map(|contract| contract.classes[0].name.clone())
 }

@@ -417,7 +417,8 @@ runtime-class/non-null facts. Metadata cannot assert a type unsupported by the
 incoming values. Exact source identities, supported numeric aliases, comparison
 interfaces, and nullable joins retain their contracts; other supported native
 alternatives retain normalized unions. Exact source alternatives retain source
-unions. Mixed exact/erased alternatives still require separate support. A write invalidates old storage proofs;
+unions, with native alternatives retained separately from exact identities.
+A write invalidates old storage proofs;
 previously captured values retain their own contracts and identity.
 
 Source construction selects inferred storage when writes change the local's
@@ -1738,9 +1739,12 @@ conversion instruction. Nullable source tags also describe field declarations
 and reads, and selects a nullable source assertion in `.cast`. Source tags are
 also exact join contracts, but are not native API cast tags.
 
-`SourceUnion` stores a normalized nonempty set of `SourceClass` identities and
-nullability. Its public constructor rejects malformed names, nonconstructible
-bases, and sets exceeding 254 alternatives including Null. Parameters and
+`SourceUnion` stores normalized `SourceClass` identities, native alternatives,
+and nullability. At least one exact class is required on construction;
+`with_native` adds supported native types without turning their projections into
+exact witnesses. Constructors reject malformed names, nonconstructible bases,
+unsupported native types, and sets exceeding 254 alternatives including Null.
+The native-only result of narrowing uses the ordinary API contract. Parameters and
 results use `ParameterType::SourceUnion` and `ReturnType::SourceUnion`; joins and
 fixed/inferred local read contracts use `JoinType::SourceUnion`. Singleton sets
 use the existing exact/nullable variants. Typed construction canonicalizes
@@ -1753,10 +1757,15 @@ checks subset assignability, and refines both class-test edges. API projections
 are derived from all retained bases, including after negative-edge narrowing;
 they do not establish exact identity. Unit validation resolves every class/base
 against declarations and every call/result claim against its signature.
-Structural interface checks require witnesses for all retained classes; unknown
-multiple callback bodies retain conservative initialization/shutdown effects.
-Fields, general union casts, mixed source/native alternatives, and common source
-member dispatch through an unrefined set remain unsupported.
+Mixed assignability checks each actual exact class against exact alternatives
+or a valid native alternative, with structural witnesses resolved by the unit.
+Actual native alternatives can satisfy only native contracts. Fixed local and
+block-edge checks resolve deferred witnesses too; inferred read metadata cannot
+claim a witness by changing its type tag. Structural interface consumers check
+both retained classes and native alternatives. Unknown multiple callback bodies
+retain conservative initialization/shutdown effects. Fields, general union
+casts, and common source-member dispatch through an unrefined set remain
+unsupported.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

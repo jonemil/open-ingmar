@@ -102,8 +102,8 @@ pub(crate) fn inputs(
 }
 
 /// Choose a supported read view without converting or changing stored values.
-/// Preserve supported native and exact source alternatives. Mixed erased/source
-/// domains still use Object (optionally Null) until mixed unions are supported.
+/// Preserve supported native and exact source alternatives. Unsupported private
+/// domains retain the conservative Object/Null view.
 fn view(domain: &[JoinType]) -> Option<JoinType> {
     let mut result = domain.first()?.clone();
     for ty in &domain[1..] {
@@ -148,8 +148,8 @@ fn accepts(expected: &JoinType, actual: &JoinType) -> bool {
     if let Some(expected) = expected.source_contract() {
         return actual
             .source_contract()
-            .is_some_and(|actual| expected.accepts(&actual))
-            || (expected.nullable() && *actual == JoinType::Api(Type::Null));
+            .is_some_and(|actual| expected.accepts_with(&actual, |_, _| false))
+            || (actual.source_contract().is_none() && expected.accepts_api(&actual.api_type()));
     }
     match (expected, actual) {
         (

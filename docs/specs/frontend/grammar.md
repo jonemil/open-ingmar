@@ -282,8 +282,9 @@ no imports. These semantic type domains mean:
 - Dictionary type by itself denotes an opaque Lang.Dictionary; its parameterized
   form specifies the bounded key/value contracts.
 - Signature unions: up to 254 value atoms, including Null and supported native
-  container references. A source-class union instead contains exact source-class
-  atoms and optional Null. Mixing source-class and native atoms is unsupported.
+  container references and exact source-class atoms. Class-containing unions
+  preserve exact identities separately from native alternatives. The normalized
+  set is also limited to 254 alternatives, including expanded aliases and Null.
 - Nullable field domains: scalar/alias, core reference, interface, and exact
   constructible source class. Container fields remain non-null.
 - View, Array, Dictionary, Symbol, Method, and ByteArray productions use their

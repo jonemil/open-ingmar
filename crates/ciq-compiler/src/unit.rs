@@ -1115,6 +1115,7 @@ impl CompilationUnit {
             let mut origins =
                 crate::source_objects::Origins::new(function.parameter_types().to_vec());
             for (&value, ty) in &function.value_types {
+                origins.note_type(value, ty.api_type());
                 if *ty == crate::ValueType::Any {
                     origins.note_dynamic(value);
                 }
@@ -1188,7 +1189,56 @@ impl CompilationUnit {
                     .observe(&located.operation, &facts)
                     .map_err(|message| fail(Some(index), None, message.into()))?;
             }
+            let source_locals = function
+                .operations()
+                .iter()
+                .filter_map(|located| match &located.operation {
+                    Operation::LocalDeclare { local, value_type } => {
+                        value_type.source_contract().map(|c| (*local, c))
+                    }
+                    Operation::LocalInitialize { local, value } => {
+                        origins.contract(*value).cloned().map(|c| (*local, c))
+                    }
+                    _ => None,
+                })
+                .collect::<BTreeMap<_, _>>();
+            let source_blocks = function
+                .operations()
+                .windows(2)
+                .filter_map(|pair| {
+                    if let (
+                        Operation::Block { block },
+                        Operation::BlockParameter { value_type, .. },
+                    ) = (&pair[0].operation, &pair[1].operation)
+                    {
+                        value_type.source_contract().map(|c| (*block, c))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                let source_boundary = match &located.operation {
+                    Operation::Return { value } => function
+                        .return_type()
+                        .source_contract()
+                        .map(|c| (c, *value)),
+                    Operation::ParameterAssign { index, value } => function.parameter_types()
+                        [*index]
+                        .source_contract()
+                        .map(|c| (c, *value)),
+                    Operation::LocalAssign { local, value } => {
+                        source_locals.get(local).cloned().map(|c| (c, *value))
+                    }
+                    Operation::JumpValue { target, value } => {
+                        source_blocks.get(target).cloned().map(|c| (c, *value))
+                    }
+                    _ => None,
+                };
+                if let Some((expected, value)) = source_boundary {
+                    self.check_source_value(function, &origins, value, &expected)
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                }
                 let check_element = |element: crate::ArrayElement,
                                      value: crate::ValueId|
                  -> Result<(), UnitError> {
@@ -1637,7 +1687,10 @@ impl CompilationUnit {
                         continue;
                     }
                     if let Some(expected) = parameter.source_contract() {
-                        if !origins.accepts_contract(&expected, *argument) {
+                        if self
+                            .check_source_value(function, &origins, *argument, &expected)
+                            .is_err()
+                        {
                             return Err(fail(
                                 Some(index),
                                 Some(operation),
@@ -1684,6 +1737,42 @@ impl CompilationUnit {
         Ok(())
     }
 
+    /// Check a class-containing boundary against actual native alternatives and
+    /// exact identities, resolving every deferred structural interface witness.
+    fn check_source_value(
+        &self,
+        function: &Function,
+        origins: &crate::source_objects::Origins,
+        value: crate::ValueId,
+        expected: &crate::SourceUnion,
+    ) -> Result<(), String> {
+        if function.value_types[&value] == crate::ValueType::Any {
+            return Ok(());
+        }
+        let accepted = if let Some(actual) = origins.contract(value) {
+            expected.accepts_with(actual, |class, ty| {
+                if let Some(crate::ValueType::Interface(interface)) =
+                    crate::ValueType::from_api_type(ty)
+                {
+                    self.check_interface_signature(class.as_str(), interface.name())
+                        .is_ok()
+                } else {
+                    false
+                }
+            })
+        } else {
+            expected.accepts_api(&function.value_types[&value].api_type())
+        };
+        if accepted {
+            Ok(())
+        } else {
+            Err(
+                "value does not satisfy the class-containing union or its interface witnesses"
+                    .into(),
+            )
+        }
+    }
+
     /// Require the same interface, a verified scalar, or an exact source witness.
     /// Native-base projection alone cannot establish structural members.
     fn check_interface_value(
@@ -1705,6 +1794,11 @@ impl CompilationUnit {
             .ok_or("interface argument or return requires a checked source implementation")?;
         if contract.nullable() && !nullable {
             return Err("nullable source union requires a non-null proof".into());
+        }
+        for ty in contract.native() {
+            if !crate::native::accepts(&interface.api_type(nullable), ty) {
+                return Err("native union alternative does not satisfy the interface".into());
+            }
         }
         for class in contract.classes() {
             self.check_interface_signature(class.as_str(), interface.name())?;

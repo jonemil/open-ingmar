@@ -75,18 +75,12 @@ pub(crate) fn contract_tag(ty: &JoinType) -> Option<std::borrow::Cow<'static, st
 }
 
 /// Merge exact source/Null alternatives, or reuse the ordinary API join rules.
-/// Mixing exact identities with erased native alternatives remains unsupported.
+/// Mixed joins preserve opaque native alternatives without claiming identities.
 pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinType> {
     match (left.source_contract(), right.source_contract()) {
         (Some(a), Some(b)) => return a.merge(&b).map(crate::SourceUnion::join),
-        (Some(mut a), None) if *right == JoinType::Api(Type::Null) => {
-            a.nullable = true;
-            return Some(a.join());
-        }
-        (None, Some(mut b)) if *left == JoinType::Api(Type::Null) => {
-            b.nullable = true;
-            return Some(b.join());
-        }
+        (Some(a), None) => return a.merge_api(&right.api_type()).map(crate::SourceUnion::join),
+        (None, Some(b)) => return b.merge_api(&left.api_type()).map(crate::SourceUnion::join),
         _ => {}
     }
     match (left, right) {

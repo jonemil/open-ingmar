@@ -83,7 +83,7 @@ module UnionOps {
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); System.exit(); }
+    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); MixedUnions.run(); System.exit(); }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
 }
 
@@ -191,5 +191,57 @@ module SourceUnions {
         System.println(SourceUnions.loop());
         System.println(SourceUnions.sorted(true));
         System.println(SourceUnions.sorted(false));
+    }
+}
+
+module MixedUnions {
+    function pick(flag as Lang.Boolean) as UnionToken or Lang.String {
+        return flag ? new UnionToken() : "four";
+    }
+    function echo(value as UnionToken or Lang.String) as Lang.String or UnionToken {
+        return value;
+    }
+    function measure(value as UnionToken or Lang.String or Null) as Lang.Number {
+        if (value == null) { return 0; }
+        if (value instanceof UnionToken) { return value.count(); }
+        return value.length();
+    }
+    function numeric(value as UnionToken or Lang.Number) as Lang.Number {
+        if (value instanceof Lang.Number) { return value + 1; }
+        return value.count();
+    }
+    function indexed(value as UnionToken or Lang.Array<Lang.Number>) as Lang.Number {
+        if (value instanceof UnionToken) { return value.count(); }
+        return value[0];
+    }
+    function loop() as Lang.Number {
+        var value = MixedUnions.pick(true);
+        while (value instanceof UnionToken) { value = "done"; }
+        return value.length();
+    }
+    function recover(value as UnionToken or Lang.Object) as Lang.Number {
+        if (value instanceof UnionMarker) { return value.size(); }
+        if (value instanceof UnionToken) { return value.count(); }
+        return 0;
+    }
+    function sorted(value as UnionMarker or Lang.Comparator) as Lang.Number {
+        if (value instanceof UnionMarker) { return value.size(); }
+        var values = [3, 1, 2];
+        values.sort(value);
+        return values[0];
+    }
+    function run() as Void {
+        System.println("mixed-unions");
+        System.println(MixedUnions.measure(MixedUnions.echo(MixedUnions.pick(true))));
+        System.println(MixedUnions.measure(MixedUnions.pick(false)));
+        System.println(MixedUnions.measure(null));
+        System.println(MixedUnions.numeric(41));
+        System.println(MixedUnions.numeric(new UnionToken()));
+        System.println(MixedUnions.indexed([42]));
+        System.println(MixedUnions.indexed(new UnionToken()));
+        System.println(MixedUnions.loop());
+        System.println(MixedUnions.recover(new UnionMarker()));
+        System.println(MixedUnions.sorted(new UnionToken()));
+        System.println(MixedUnions.sorted(new UnionMarker()));
     }
 }

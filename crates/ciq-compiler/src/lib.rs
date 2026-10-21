@@ -3289,10 +3289,10 @@ impl Function {
                     // Exact source alternatives may narrow to different native
                     // bases on either edge; the erased projection alone cannot
                     // distinguish them. Origins derives the same storage facts.
-                    if let Some(contract) = origins.contract(result) {
+                    if let Some(projection) = origins.refined_type(result) {
                         types.insert(
                             result,
-                            ValueType::from_api_type(&contract.api_type())
+                            ValueType::from_api_type(&projection)
                                 .expect("checked source contract has a native projection"),
                         );
                     }
@@ -3305,6 +3305,7 @@ impl Function {
                     }
                 }
                 types.entry(result).or_insert(ValueType::Integer);
+                origins.note_type(result, types[&result].api_type());
                 if types.get(&result) == Some(&ValueType::Any) {
                     origins.note_dynamic(result);
                 }
