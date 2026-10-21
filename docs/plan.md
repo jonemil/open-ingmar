@@ -2,138 +2,353 @@
 
 ## Next work
 
-Finish the core Monkey C language, operators, and `Toybox.Lang` objects and
-their methods before returning to broader SDK classes. Reuse the existing console
-apps and [input counter](../examples/compiler-input-counter/README.md) to validate
-core changes. New UI classes, event objects, drawing APIs, and broader SDK
-modules belong to a later phase. Project/resource/package work stays in the
-backlog while these language foundations are the priority.
+Priority order:
 
-Choose increments by dependency, following the
-[class-focused strategy](#native-lang-strategy):
+1. [Language inference, unions, and storage](#1-inference-unions-and-storage).
+2. [Declarations, namespaces, and member storage](#2-declarations-namespaces-and-member-storage).
+3. [Source inheritance and construction](#3-source-inheritance-and-construction).
+4. [Operators, calls, and control flow](#4-operators-calls-and-control-flow).
+5. [Toybox.Lang](#toyboxlang-worklist), with classes ordered within the module.
+6. [Exception handling](#exceptions).
+7. [Lexical compatibility and annotations](#lexical-compatibility-and-annotations).
 
-**Object and structural contracts.** Establish member/signature proofs and API
-guards through explicit contracts. Extend source
-type targets alongside nested names and source superclass chains. Extend source
-references to container elements only with explicit storage, variance, and
-refinement contracts.
-Keep lexical `as` assertions separate from runtime tests and conversions.
-Native Object-typed parameters should retain their declared domains; do not
-replace runtime type exceptions with narrower compiler-only argument rules.
-Parameterized-container and general-union casts need their own type contracts.
-Extend general union rules and broader container/storage contracts as core
-consumers require them.
-Broader option records need explicit field/value contracts beyond the checked
-ByteArray option builder. Extend structural source annotations and option
-storage/mutation only with corresponding record proofs.
-Resolve SDK constant-literal Number/Char key conflation before accepting mixed
-scalar-token interface-key constants. Interface-key pool emission also needs a
-hash/equality-preserving materialization contract.
-Nullable Array sorting needs element/callback contracts and evidence: checked
-Comparator parameters currently exclude Null. The SDK rejects explicitly nullable
-Comparator parameters, while default sorting failed on a Null element; resolve
-this [contract mismatch](investigations/compiler-object-sort.md#failure-probes)
-before widening the profile. Further interface refinement
-should preserve both structural members and concrete class facts where needed.
-Preserve exact source identities until unit
-checking can establish required members; an erased Object or a runtime `has`
-test alone cannot prove a signature. Keep interface storage distinct from the
-exact source-class Comparator witness used by sorting.
+Items within each scope are also prioritized. Implement a named prerequisite
+before its consumer, and batch related items when they share implementation and
+validation. Shared language/type machinery should serve later class work rather
+than be reimplemented per class; class-specific signatures, bindings, API checks,
+and runtime validation still need their own coverage.
 
-Establish checked Method signatures when a concrete callback consumer needs
-argument/result guarantees. Keep source-target resolution and saved-IR checking
-consistent. Erased invocation does not establish a target's API availability,
-arity, or concrete result type.
-Symbol-bearing container literals use runtime construction; pooled Symbol payloads need
-independent encoding/relocation evidence before adding a DATA representation.
+Aim for a coherent proposed commit covering as much related functionality as can
+be implemented and validated together. Follow priorities while grouping shared
+prerequisites and their consumers; do not split a ready class/method group into
+tiny increments or add unrelated work to enlarge a change. The user makes the
+commits. Broader SDK modules and project work wait until this core list is empty.
 
-Keep SDK-rejected wider Char ordering and floating Char addition outside the
-operator profile. WeakReference Dictionary keys also stay outside the supported
-profile following the
-[SDK/simulator insertion failure](investigations/compiler-weak-references.md#dictionary-key-rejection);
-revisit that decision when new target/runtime evidence warrants it.
-Further numeric boundary work should answer a concrete
-consumer need: exception recovery, other runtime targets, additional NaN key
-patterns, or conversion thresholds. The isolated
-[boundary probes](investigations/compiler-numeric-boundaries.md) establish
-simulator observations, not portable failure/recovery or conversion guarantees.
+This is the single core backlog. It lists remaining work, not current
+capabilities. Delete each completed item after the
+[completion gate](#core-completion-gate) passes; delete empty subsections too.
+Do not retain completed items as checked boxes (`[x]`).
+For partial completion, remove the finished part and leave only the specific
+remainder. Add a new item only for an identified missing behavior or a named
+unresolved experiment, and place it at its actual priority. Specs describe
+implemented contracts; investigations retain evidence, not another backlog.
 
-Keep general source unions, Null keys, and explicit nested container parameters
-deferred under the [bounded source contracts](specs/frontend/README.md#planned-dictionary-extensions).
-Nullable Array elements currently need explicit context; broader literal
-inference can follow once mixed scalar/Null contracts are established.
-Sized Array allocation keeps nullable elements until a separate initialization
-proof can establish safe non-null reads; do not infer that proof from writes.
+## Core language worklist
 
-Broader weak targets and container recovery from
-opaque Object results need their own type/refinement contracts. Keep hidden
-temporary ownership explicit when adding new source staging paths.
+### 1. Inference, unions, and storage
 
-A blocked method should lead to its core type/operator/callable prerequisite or
-another core class group. Retain explicit deferred-method inventories; declaring
-an API member does not establish executable support. Reassess remaining core
-gaps before changing focus to the later SDK/project work below.
+- [ ] Refine native class facts on interface values: after
+  `c instanceof Lang.Number`, a Comparable parameter must allow `c + 1` and
+  still satisfy a Comparable consumer.
+- [ ] Support `var value;`, its initial Null value, assignment before use, and
+  reads before assignment according to SDK behavior.
+- [ ] Infer changing local types across sequential assignments, rather than
+  fixing every local to its initializer's type; compute branch and loop joins.
+- [ ] Use Any for unannotated parameters and results instead of the current
+  Number/Void defaults; support dynamic argument, member, and result checking.
+- [ ] Support arbitrary `A or B` source unions in annotations, storage, calls,
+  returns, and conditional joins, including union normalization and narrowing.
+- [ ] Support implicit Null returns/fallthrough and mixed value/Null paths under
+  inferred result contracts; keep explicit Void results distinct.
+- [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
+  diagnose recursive aliases.
+- [ ] Parse named and anonymous `interface` types with method and field members;
+  check structural assignment and member calls against their signatures.
+- [ ] Parse callback signatures with argument/result types; check assignments
+  and calls against the resolved signature.
+- [ ] Support positional tuple types, construction, indexing, and assignability
+  beyond the current fixed View callback shapes.
+- [ ] Support structural Symbol-keyed option-record annotations, optional fields,
+  assignment, and mutation beyond the private ByteArray options builder.
+- [ ] Support lexical `as` assertions for parameterized containers, interfaces,
+  and general unions without adding runtime conversions.
+- [ ] Support disabled, gradual, informative, and strict type-checking policies;
+  distinguish dynamic operations, ambiguity, and proven type errors.
 
-### Core contracts and evidence
+### 2. Declarations, namespaces, and member storage
 
-Keep general unions and non-Boolean truthiness deferred, as scoped by the
-[operator review](investigations/compiler-operator-coverage.md). Keep updates
-statement-only following the [SDK evidence](investigations/compiler-increments.md),
-and extend numeric update contracts alongside their value types.
+- [ ] Parse `const` declarations and bind constant references; reject rebinding
+  while allowing mutation of referenced containers.
+- [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
+  lookup, and enum annotations.
+- [ ] Support global and module `var` fields, typed/untyped defaults, reads, and
+  writes; implement initialization order and diagnose initialization cycles.
+- [ ] Support computed instance-field declaration initializers and inferred field
+  types beyond Number/Symbol literals; preserve per-instance evaluation order.
+- [ ] Resolve bare field names in instance methods with the SDK's local,
+  parameter, field, and outer-owner shadowing rules.
+- [ ] Support field reads/writes through another source instance, including
+  compound assignment and updates with single receiver evaluation.
+- [ ] Support nested module declarations and qualified names through multiple
+  module levels; reuse reopened-module collection across files.
+- [ ] Support classes declared inside modules and owner-qualified class names
+  in annotations, construction, and runtime type targets.
+- [ ] Resolve `using` aliases and `import` visibility for source namespaces and
+  their classes/types, including conflicting aliases and cross-file lookup.
+- [ ] Implement `me` and owner-relative `self` in module/global contexts after
+  checking their distinct SDK meanings; preserve instance receiver identity.
+- [ ] Support root-object `$.name` field/value access and nested qualified paths
+  beyond the existing global and one-module call forms.
+- [ ] Represent class and module values so they can be stored, passed, returned,
+  and used as Method receivers.
+- [ ] Support static fields/methods, their initialization, and class-qualified
+  access; distinguish static owners from instance receivers.
+- [ ] Enforce `public`, `private`, `protected`, and `hidden` on declarations and
+  inherited/member access, including access across source files.
 
-Keep generic signatures, invariant container elements, assignability, and
-nullable branch proofs shared across source and saved IR. Extend constructor
-and object-reference contracts as core classes need them. Comparator calls and
-broader object weak targets need their own dispatch/lifetime evidence;
-keep them distinct from the verified [immutable weak specialization][weak-results].
-Keep semantic operations explicit enough to select established VM instructions,
-following the [lowering review](investigations/natural-lowering.md). Preserve
-private initialization for effectful/branching array literals and typed DATA
-constants for scalar literals. Baseline instruction selection should preserve
-evaluation order and failure behavior without optimization or requiring the
-SDK's exact layout. Validate native/text paths and structured reconstruction.
+### 3. Source inheritance and construction
 
-Close the remaining [core API contracts][core-gaps] as their prerequisites
-become available.
-Read the language reference alongside each Lang contract. Probe sign syntax,
-conversion ranges, overflow, promotion, and evaluation order independently;
-resolve the [negative-literal postfix][negation] and
-[supplementary Char literal][char-literals] discrepancies before widening them.
+- [ ] Resolve source superclass chains and reject cycles; retain assignable
+  superclass/subclass identities in source and saved IR.
+- [ ] Lay out inherited fields, resolve inherited methods, and dispatch overrides
+  using the actual instance's class.
+- [ ] Inherit undecorated override signatures and check explicitly decorated
+  overrides for arity, argument, and result compatibility.
+- [ ] Support superclass-qualified method and initializer calls, including their
+  receiver, argument order, and field-initialization effects.
+- [ ] Establish SDK default/inherited initializer rules for View,
+  BehaviorDelegate, and source subclasses, then implement accepted forms.
+- [ ] Support nested classes and outer-instance construction/member lookup;
+  distinguish an explicit outer receiver from captured lexical names.
+- [ ] Implement SDK-valid direct `new Lang.Object()` construction; determine its
+  initialization/metadata contract with an authored specimen.
+- [ ] Permit receiver exposure, branches, and early exits in initializers when
+  required-field initialization is proven on every relevant path, replacing the
+  current mandatory straight-line initialization prefix.
 
-Preserve native/text pipeline equivalence and complete-app simulator validation
-for each group. Keep API minimum, selected target API, VM capabilities, and
-device capacity distinct. Grow the [API declarations][api-design] through
-core contracts; broader device/app/permission inputs and Application/System
-integration belong to the later project/SDK phase. A Jungle driver or complete
-API definition parser is not a prerequisite for this core work.
+### 4. Operators, calls, and control flow
+
+- [ ] Implement non-Boolean conditions for `if`, `while`, `for`, `do`, and `?:`;
+  probe truth values for Null, zero/nonzero numbers, and reference values.
+- [ ] Implement operand-returning `&&`/`and` and `||`/`or` for non-Boolean values,
+  with short-circuit evaluation and the resulting union contracts.
+- [ ] Probe unsupported operator spellings/forms (`>>>`, logical/unsigned-shift
+  compounds, and assignment expressions); implement SDK-accepted cases and
+  document explicit rejection for the others.
+- [ ] Support reference `==`/`!=` and String concatenation with object/container
+  operands where accepted by the SDK; preserve runtime equality/conversion.
+- [ ] Support runtime source-subclass targets and union refinement for
+  `instanceof`; verify which interface/parameterized targets the SDK accepts.
+- [ ] Make `has` refine guarded member/API availability while keeping member
+  existence separate from callable signature proof.
+- [ ] Accept supported nullable/union operands at shared arithmetic, comparison,
+  compound-assignment, and update sites after the required flow proofs.
+- [ ] Preserve enclosing lexical refinements while checking unreachable loop
+  updates and post-tests; keep those checks out of executable CFG edges.
+- [ ] Accept unbraced control bodies and standalone empty statements where the
+  SDK permits them; verify block/loop/switch declaration scope and shadowing.
+- [ ] Extend switch case equality and `case instanceof` to the new union,
+  source-inheritance, and receiver types; preserve fall-through facts.
+- [ ] Support calls through lexical callback values and source/module/class
+  callable members, rather than resolving every bare call to a declaration.
+- [ ] Probe call argument/frame limits, including the hidden receiver and
+  Method.invoke; reconcile the current 254-argument profile with SDK/runtime
+  limits and emit diagnostics at the applicable boundary.
+
+## Toybox.Lang worklist
+
+Class sections are in priority order. Shared language work is not repeated
+for every affected class. Inherited methods belong to their declaring class's
+items and apply to each newly supported receiver type. An implemented own
+method is not listed again merely because its class is not yet unrestricted.
+API availability, arguments/results, and storage/dispatch must work together for
+all items. The [public API review](investigations/core-lang-completion.md) records
+inventory provenance; the [frontend spec](specs/frontend/README.md) owns current
+executable profiles.
+
+### Object
+
+- [ ] Dispatch `toString`, `equals`, and `hashCode` on newly admitted Any/union,
+  source-subclass, Exception, and ResourceId values using their
+  resolved runtime contracts; preserve overrides and appropriate Null checks.
+- [ ] Extend `method(Symbol)` to inherited/static and module/global members;
+  resolve lexical conflicts using ordinary owner/member lookup.
+- [ ] Support `weak()` on source instances and opaque Object values, including
+  the possible immutable-scalar result instead of always claiming WeakReference.
+
+### Method
+
+- [ ] Implement `initialize(aClass, aMethod)` / `new Lang.Method(receiver, symbol)`
+  for supported instance, class, and module values, retaining the receiver.
+- [ ] Check known selectors for member existence, arity, argument/result types,
+  and API availability; retain dynamic lookup when the selector is unknown.
+- [ ] Carry callback signature proofs through binding, storage, refinement, and
+  `invoke`; return the checked result instead of erasing known callbacks.
+
+### Comparable
+
+- [ ] Permit an inherited source `compareTo(Object) as Number` to establish
+  the structural witness, including after saved-IR reload.
+
+### Comparator
+
+- [ ] Permit an inherited source `compare(Object, Object) as Number` to establish
+  the structural witness, including after saved-IR reload.
+- [ ] Resolve the published nullable Comparator arguments versus SDK rejection
+  of explicitly nullable `compare` parameters; use the verified signature
+  consistently in declarations, source/saved IR, and `Array.sort`.
+
+### Array
+
+- [ ] Preserve exact source-class elements through literals, allocation,
+  indexing/writes, `add`, `addAll`, `remove`, `removeAll`, `indexOf`, `slice`,
+  `reverse`, and typed `sort` callbacks.
+- [ ] Support explicit nested Array/Dictionary element parameters and nested
+  literal construction; preserve inner contracts through the same methods.
+- [ ] Support nullable Array references in signatures, fields, assignments,
+  conditional joins, and guarded indexing/member calls.
+- [ ] Infer heterogeneous and scalar/Null literal elements, including `[]`
+  without immediate call/return context; support their evolving local use.
+- [ ] Complete conditional Array joins beyond the current Number/Char profile,
+  preserving each arm's selected reference and invariant element contract.
+- [ ] Support sorting nullable elements through a checked custom comparator,
+  after resolving the Comparator signature discrepancy above.
+- [ ] Check multidimensional `new [sizes]` and native Array constructor syntax;
+  implement accepted forms with independent nested allocations.
+
+### Dictionary
+
+- [ ] Support general Object, exact source-class, container, and Method keys
+  through literals, indexed access, `get`, `put`, `hasKey`, `remove`, and `keys`;
+  preserve runtime hashing/equality and key identity.
+- [ ] Support Null keys if SDK/runtime accepts them; determine typed-key rules
+  and missing-value behavior with isolated specimens.
+- [ ] Preserve exact source-class values through storage, `get`, and `values`.
+- [ ] Support explicit nested key/value parameters and nested Dictionary/Array
+  literals; retain inner contracts through lookup, writes, and enumeration.
+- [ ] Support nullable typed Dictionary references and Dictionary/Null or opaque
+  Dictionary conditional joins with guarded calls/indexing.
+- [ ] Infer empty and heterogeneous Dictionary literals without immediate
+  context under the language's changing-local/union rules.
+- [ ] Support indexed compound assignment and numeric updates with single
+  receiver/key evaluation and a proven non-null lookup value.
+- [ ] Establish and implement SDK-valid `new Dictionary()` construction.
+- [ ] Resolve mixed Number/Char literal keys under Comparable/Comparator
+  contracts: compare SDK constant construction with runtime insertion and remove
+  the current mixed-token restriction only with preserved hash/equality behavior.
+
+### ByteArray
+
+- [ ] Probe Number/Char union Array inputs to `addAll`; implement SDK-accepted
+  combinations beyond the current homogeneous profiles.
+- [ ] Pass general typed option-record values to `encodeNumber`/`decodeNumber`,
+  including mutation and calls returning records, instead of requiring the
+  current private literal-builder proof.
+
+### WeakReference
+
+- [ ] Recover source-class and parameterized-container contracts from `get()`
+  using explicit casts/runtime tests; keep Null and liveness checks independent.
+- [ ] Validate `get()`/`stillAlive()` and receiver lifetime for the broader
+  Object.weak targets, including expiry while only a weak handle remains.
+
+### ResourceId
+
+- [ ] Declare and bind ResourceId values from a minimal authored resource fixture;
+  carry the identity through signatures, storage, and saved IR without starting
+  general resource generation.
+- [ ] Implement `toString()` and test the inherited Object methods on those
+  values with SDK/generated comparison.
+
+### Exception
+
+- [ ] Declare/construct `Exception.initialize()` with its API introduction level.
+- [ ] Implement `getErrorMessage()` and `printStackTrace()` with their nullable
+  String/Void contracts and API levels.
+- [ ] Support source subclasses, superclass initialization, and inherited
+  exception methods; retain the runtime class for typed handler matching.
+
+Each remaining native exception subclass needs its declared base/API level,
+constructor binding, inherited methods, and typed catch behavior. The shared
+Exception implementation supplies the inheritance and dispatch machinery.
+
+### InvalidOptionsException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### InvalidValueException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### OperationNotAllowedException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### SerializationException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### StorageFullException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### SymbolNotAllowedException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+### UnexpectedTypeException
+
+- [ ] Implement `initialize(msg as String, unused1 as Object or Null,
+  unused2 as Object or Null)`, retaining all three arguments and inherited
+  exception behavior.
+
+### ValueOutOfBoundsException
+
+- [ ] Implement `initialize(msg as String)` and its inherited exception contract.
+
+## Exceptions
+
+Requires the Lang.Exception constructor and subclass contracts
+[above](#exception).
+
+- [ ] Parse and lower `throw`, typed `catch`, and catch-all handlers; implement
+  first-matching handler selection and catch-variable scope.
+- [ ] Propagate exceptions through source/native calls, unwind frames/stack
+  temporaries, and support rethrowing a caught exception.
+- [ ] Implement `finally` on normal completion, throw, return, break, and
+  continue; handle exceptions raised by a handler or finally block.
+- [ ] Generate handler ranges and transfer/cleanup code from exception IR;
+  establish protected-range endpoint semantics using the existing `throw`
+  opcode and ordinary EXCEPTIONS reader/writer.
+- [ ] Add negative specimens distinguishing catchable Lang exceptions from fatal
+  VM/API errors, without treating fatal errors as recoverable handlers.
+
+## Lexical compatibility and annotations
+
+- [ ] Match the SDK's raw supplementary Char literal truncation and unpaired
+  String-surrogate replacement, replacing the current explicit restrictions.
+- [ ] Resolve negative-literal postfix parsing against the SDK and remove the
+  current parentheses requirement for SDK-valid forms.
+- [ ] Check reserved/contextual identifiers at declaration, member, selector,
+  and alias sites; classify `alias`/`native` with explicit accepted/rejected
+  specimens instead of reserving unverified executable features.
+- [ ] Check unterminated/nested-comment diagnostics and accepted identifier
+  character ranges against the SDK.
+- [ ] Parse and retain annotations at SDK-accepted declaration/block sites.
+- [ ] Apply `:debug`, `:release`, and `:test` source selection; preserve custom
+  annotation symbols in the appropriate debug metadata.
+- [ ] Implement `:typecheck` and `:initialized` checking semantics.
+- [ ] Preserve `:background`/`:glance` code availability and diagnose invalid
+  cross-scope references; runtime lifecycle registration stays in later SDK work.
+- [ ] Implement `:extendedCode` placement/API/target checks and the corresponding
+  CODE/PRG representation using a controlled SDK specimen.
+- [ ] Preserve runtime lookup for constants decorated with
+  `:optimizer(do_not_remove)`; no optimizer implementation is required.
 
 ## Core completion gate
 
-Finish the reviewed core Monkey C language and Toybox.Lang contracts before
-adding broader SDK classes/modules or resuming project/resource/package
-expansion. The [remaining core API inventory][core-gaps] covers named Lang classes,
-inherited methods, interfaces, module functions, and supporting constants/types.
-Existing names or successful narrow specimens do not establish full coverage.
+Remove an item only when its accepted syntax, type/API checks, storage, IR/text,
+lowering, and affected binary formats pass
+[toolchain completion](#toolchain-completion) and SDK/generated behavior agrees.
+For a probe item, an SDK rejection may close the question with a documented
+restriction and diagnostic test. A blocked item stays here with its specific
+prerequisite; it is not moved to the later SDK backlog. Do not retain completed
+checkboxes or replace a completed task with a generic obligation to extend it.
 
-The [core language worklist](#core-language-worklist) owns remaining language
-syntax and semantics, including exceptions. It and the core API inventory are
-both prerequisites; completing only operators or named Lang methods is
-insufficient. An item deferred for a prerequisite remains inside this phase.
-
-A core feature is complete only when its applicable syntax, semantics,
-signatures, argument/result domains, dispatch, API checks, and storage forms
-work through the [whole toolchain](#toolchain-completion), with matching
-SDK/generated behavior. Explicitly identify unknowns and unresolved failures;
-do not move a missing core contract into the later SDK backlog to close a class.
-Invalid/unavailable SDK uses should produce appropriate diagnostics. The
-compiler emits runtime calls; it does not reimplement firmware method bodies.
-
-Reuse existing application scaffolding, and add only minimal native/resource
-fixtures needed to validate a core contract such as ResourceId. Those fixtures
-are not a reason to start broader UI or project/resource generation. Reconcile
-the reviewed language/reference-guide coverage, public Lang inventory, and
-operator tables once more before opening the later SDK phase; close newly
-found gaps first.
+Broader SDK/project work starts when every core scope is empty. Verify that
+every entry in the public Lang index, including inherited members and supported
+API versions, is accounted for before removing the final item; newly identified
+gaps become specific checklist entries.
 
 ## Toolchain completion
 
@@ -171,119 +386,11 @@ while preserving that behavior and our own reconstruction guarantees.
 
 ## Native Lang strategy
 
-Organize native Lang work around one class at a time. Batch methods that fit
-the available types, including closely related prerequisites when practical,
-to share a complete-app specimen and final validation run. The compiler
-implements contracts, availability checks, and dispatch; the runtime supplies
-method bodies.
-Methods may be sequenced across core classes as dependencies require; the
-[core completion gate](#core-completion-gate) still blocks broader SDK work.
-
-- Review the class's methods, including inherited members, together. Record
-  argument/result contracts, API constraints, evidence, and unknowns in a focused
-  investigation. Identify methods that fit existing types and dispatch, and
-  name the prerequisites for deferred methods, such as new numeric types,
-  arrays, or callable values. Do not treat declarations as executable support.
-- Implement the supported group together. Add shared type, assignability, or
-  lowering machinery once where needed; keep operator work separate from native
-  method dispatch. Extend specs only for the accepted contracts.
-- Reuse a complete application for grouped SDK/generated simulator comparison
-  and source/IR/assembly equivalence. Cover method-specific behavior and failures,
-  wrong arguments, nullable results, and API boundaries with focused tests.
-  Run shared checks after the group rather than repeating them for every method;
-  isolate probes whose runtime failures would hide later results.
-- Move to the next useful class or prerequisite after validating the group.
-  Revisit deferred methods when their core dependencies exist. Keep validation
-  applications small and reusable while advancing the operator/Lang sequence.
-
-## Core language worklist
-
-Close the remaining gaps against the [official reading map][official-docs] and
-[current supported subset][source]. Existing partial support does not remove a
-feature from this worklist until its applicable contracts are covered. Items
-below are planned requirements, not claims that every encoding is understood.
-
-This worklist includes language keywords and control flow independently of the
-Lang method inventory; a missing construct need not block a native method to
-remain required core work. The frontend grammar records current acceptance.
-
-- **Lexical forms and literals:** reconcile reserved identifiers, comments,
-  and remaining lexical contexts beyond the verified numeric and literal-escape
-  profiles. Resolve raw supplementary Char truncation and unpaired String
-  surrogate replacement before widening those explicit restrictions. Distinguish
-  reserved but unused words such as `alias`/`native` from executable features.
-- **Declarations and storage:** uninitialized locals, inferred local types, multiple declaration
-  forms, constants, named/anonymous enums, instance/module/global/static fields,
-  and supported field value types. Establish default values, declaration versus
-  initialization order, dependency cycles, definite initialization, lifetime,
-  and access rules. Const reference bindings do not imply immutable contents.
-  Keep explicit local annotations rejected following the
-  [SDK declaration probes](investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
-- **Namespaces and lookup:** nested/reopened modules, classes within modules,
-  qualified names, inherited lookup, static lookup, `self`/`me`, and explicit
-  global `$.name` values and nested paths beyond supported function/module calls.
-  Complete `using` aliases, `import` type visibility, lexical scope, shadowing, and cross-file
-  resolution; keep module behavior distinct from Object inheritance.
-- **Functions and calls:** untyped Any parameters/results, declared contracts,
-  implicit returns/fallthrough, Void consumers, recursion, argument evaluation,
-  and instance/static/module/global call forms. Complete Method construction,
-  class/module receiver values, callback type syntax, lookup, and invocation
-  through the shared type and core API contracts. Verify applicable VM/SDK
-  argument and frame limits, including the hidden receiver.
-- **Classes and construction:** complete source superclass chains,
-  inherited fields/methods, overrides and signature rules, parent-qualified
-  method/initializer calls, static members, and public/private/protected/hidden
-  access. Resolve default initializers for other native bases and inherited
-  initializer requirements against the SDK.
-  Cover nested classes, outer-instance construction, and their distinct lookup
-  rules rather than assuming captured outer members.
-- **Expressions and operators:** finish valid unary/binary/conditional and
-  assignment/compound/update domains, lvalue forms, precedence, associativity,
-  short-circuiting, and single-evaluation/effect order. Include non-Boolean
-  truth-value and operand-returning logical behavior, nullability, `has`,
-  `instanceof`, and lexical `as` casts with their distinct contracts. Preserve SDK-rejected Char
-  operations and expression updates as diagnosed compatibility restrictions;
-  verify other forms rather than importing C semantics.
-- **Control flow and scopes:** preserve enclosing
-  lexical refinements when checking unexecuted loop headers, without adding dead
-  edges to executable CFG proofs. Extend case operand, receiver, and type-proof
-  domains with broader types and lookup; retain direct-entry initialization and
-  shared facts through fall-through. Keep return/reachability analysis consistent
-  as truthiness and exception handling expand.
-- **Types and dynamic behavior:** support implicit Any, Void/Null distinctions,
-  general unions, changing local types and joins, casts/refinement, and guarded
-  member/API availability. Add typedefs, concrete class values, named/anonymous
-  structural interfaces with fields/methods, enum types, callback signatures,
-  general tuples, parameterized containers, and structured option Dictionaries.
-  Define assignability, ambiguity, override, and checking-policy rules shared
-  by source and saved IR; current fixed/integer defaults are subset policies.
-- **Containers and references:** complete dynamic-sized allocation, nested and
-  heterogeneous contents, general object/reference values and keys, nullable
-  references/receivers, indexing and member writes, and general contextual
-  construction. Close ownership, aliasing, weak-target recovery, and callback
-  retention contracts alongside the [remaining Lang API inventory][core-gaps].
-- **Exceptions:** implement `try`, `throw`, typed and catch-all `catch`,
-  multiple handlers, rethrowing caught exceptions, and `finally`. Define handler selection, exception variable
-  scope, propagation across calls, frame/stack unwinding and cleanup, and
-  finally behavior on normal completion, throw, return, break, and continue.
-  Cover throwing from handlers/finally, user subclasses of Lang.Exception, and
-  the applicable exception methods. Extend IR/CFG, lowering, VM/EXCEPTIONS
-  records, and structured reconstruction together. Fatal VM/API errors are
-  distinct from catchable exceptions and need separate negative specimens.
-- **Language annotations:** parse and preserve annotations at accepted
-  declaration/block sites, with semantics for type checking/initialization and
-  debug/release/test selection. Account for code-placement and optimizer-control
-  annotations where applicable, including extended-code target/layout contracts.
-  Do not silently discard annotations that affect behavior or availability.
-  Background/glance annotation representation belongs here; their application
-  registration, lifecycle APIs, and runtime profiles remain later SDK work.
-
-The [core API inventory][core-gaps] owns individual Lang classes, methods,
-constants, aliases, and interfaces; do not duplicate that inventory here.
-Resolve reference/SDK discrepancies through focused authored specimens and
-record uncertainty. Overloading or other forms the SDK rejects need diagnostics,
-not an implementation copied from another language. Extend source and saved IR
-in the same increment and use the core completion gate for final reconciliation.
+Work on a class's remaining items together when they share prerequisites and a
+complete-app specimen. Native firmware supplies method bodies; this compiler
+checks contracts, binds references, and emits calls. Reuse the shared validation
+helpers and batch final checks for the group. Put a discovered prerequisite in
+the ordered checklist once, at its owning language/class scope.
 
 ## Later SDK and project work
 
@@ -338,7 +445,6 @@ for core-language validation throughout.
    a code/resource barrel consumed by an app, SDK consumption of our exported
    barrel, and extraction/verification of our own-key IQ output. Broader package
    variants remain evidence-driven.
-
 
 ## Build scopes and validation
 
@@ -401,18 +507,4 @@ for evidence and reproduction; do not keep completed-step lists in this plan.
 
 [builds]: specs/build/README.md#planned-project-builds-and-targets
 [constraints]: specs/build/README.md#target-constraints-and-section-layout
-[official-docs]: investigations/official-garmin-documentation.md
-[source]: specs/frontend/README.md
 [boundary]: investigations/string-address-boundary.md
-
-[api-design]: specs/sdk/README.md#api-declarations
-
-[core-gaps]: specs/sdk/README.md#deferred-core-methods
-
-[weak-results]: investigations/compiler-immutable-weak.md
-
-[char-literals]: investigations/compiler-char-literals.md
-
-[negation]: investigations/compiler-number-negation.md
-
-[official-language]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

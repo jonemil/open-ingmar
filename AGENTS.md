@@ -12,6 +12,14 @@
   architecture and specs own current structure, intent, and contracts. Keep
   investigations to essential evidence; do not maintain completed-work lists or
   document routine maintenance.
+- Keep the core backlog in `docs/plan.md` as one prioritized checklist of
+  specific remaining tasks. Delete completed items rather than marking them
+  `[x]`; do not retain or replace them with vague ongoing obligations or
+  duplicate backlogs in specs.
+- Group related functionality into a coherent proposed commit when it shares
+  implementation and validation. Follow backlog priorities, pulling required
+  shared prerequisites forward; avoid unrelated scope or one-method increments
+  when the rest of the group can be implemented and validated together.
 - Follow [docs/README.md](docs/README.md) for authoritative documentation homes,
   readable prose, and concrete Rustdoc descriptions of behavior and requirements.
   Extend existing references by default; split files only when doing so improves

@@ -1,58 +1,60 @@
-# Core Lang completion review
+# Core language coverage review
 
-Reviewed 2026-10-17 against current source contracts and the public API.
-This is a documentation/coverage review; no new simulator evidence was collected.
+Reviewed 2026-10-21 against source/IR contracts, declaration/executable code,
+retained language-guide articles, and Garmin's public API. This review adds no
+simulator evidence; SDK 9.2.0 / `fr265` remains the runtime reference environment.
+The [prioritized checklist][inventory] owns remaining work.
 
-**Officially documented:** the [Lang index][lang] lists ByteArray, ResourceId,
-and the Exception family alongside the scalar/container/reference classes.
-It also defines Comparable/Comparator, numeric aliases, NumberFormat/Endian,
-and the module-level format function. These belong in the core inventory rather
-than being implicitly postponed with broader SDK modules.
+## Public Lang inventory
 
-Own-method headings on the public Number, Long, Float, Double, Boolean, Char,
-String, Symbol, Array, Dictionary, Method, and WeakReference pages were compared
-with the compiler's declaration/executable profiles. The scalar own-method
-names largely have implementations; their bounded argument/storage contracts
-and inherited methods prevent a claim of complete compatibility. Array sorting
-and source/self Method binding are present; the previous deferred-method notes
-were stale on those points.
+**Officially documented:** the [Lang index][lang] lists 24 classes, the
+Comparable/Comparator interfaces, Numeric/Integer/Decimal aliases,
+NumberFormat/Endian constants, and `format`.
 
-**Interpretation:** remaining work is dominated by shared object/type/container
-machinery and untouched Lang facilities, rather than a long list of unimplemented
-numeric methods. Method constructor support still requires class/module receiver
-values. ByteArray encoding options require constants and Symbol-keyed option
-contracts. Exception methods require construction and source exception handling.
-ResourceId needs a minimal resource-reference fixture; it does not justify
-starting full resource/project generation.
+Own-method summaries for all non-exception classes were compared with
+`api::core()`, native-call profiles, and frontend contracts. Implemented scalar
+methods, Array sorting, source/self Method binding, ByteArray operations, and
+`format` must not be relisted as wholly missing. Their supported domains are
+specified in the [frontend reference][source]. New type/storage domains need
+explicit work only where a concrete unsupported path is identified.
 
-The [remaining contract inventory][inventory] and [completion gate][gate] own
-current requirements. Full completion needs a final public-API/operator-table
-reconciliation and SDK/generated evidence; this review is not an exhaustive
-operand-pair or exception-behavior audit. Keep SDK-rejected constructs distinct
-from unsupported valid language/API forms.
+ResourceId's own member is `toString`. Method additionally declares the
+`initialize(aClass, aMethod)` constructor. Exception declares `initialize`,
+`getErrorMessage`, and `printStackTrace`. Each of the eight Lang exception
+subclasses declares a constructor: seven take a String message;
+UnexpectedTypeException also takes two Object-or-Null compatibility arguments.
+These names and signatures were checked against their linked API pages via the
+Lang index. Inherited Object/Exception members need not be duplicated per class
+in the worklist. Public API signatures alone do not establish VM bindings or
+runtime acceptance.
+
+Downloaded public class pages and extracted own-member names are retained under
+`scratch/core-plan-review/`. The compiler/SDK executables were not inspected.
+
+## Language coverage
+
+The official reference/functions, Objects and Memory, Monkey Types,
+annotations, and exception-guide snapshots under
+`scratch/official-docs/plan-review/` supplied the language coverage map.
+The [reading map][reading] retains article links and attribution. Current source
+contracts, parser, call/type validation, and format documentation distinguish
+implemented forms from remaining items in the
+[language checklist](../plan.md#core-language-worklist).
+
+The VM `throw` opcode and ordinary EXCEPTIONS parsing/writing already exist;
+source exception IR, handler-range generation, and unwinding semantics do not.
+Likewise, implemented `for` loops, parameter assignment, and Object default
+initializers are absent from the remaining-work list. An SDK-rejected form is a
+documented restriction, not a perpetually unfinished implementation task.
+
+An authored compiler probe (`scratch/core-plan-review/interface-fact.mc`)
+confirms that a Comparable parameter refined with `instanceof Token` already
+retains Token member calls and can be forwarded to a Comparable consumer.
+That source-identity task is not missing. In contrast,
+`interface-native.mc` is rejected for `c + 1` after a Comparable parameter tests
+positive for Number. The checklist names that specific native-refinement gap.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
-[inventory]: ../specs/sdk/README.md#deferred-core-methods
-[gate]: ../plan.md#core-completion-gate
-
-## Language-scope reconciliation
-
-The retained official reference/functions, Objects and Memory, Monkey Types,
-annotations, and exception-guide snapshots under
-`scratch/official-docs/plan-review/` were re-read for language gaps. They expose
-requirements beyond operators and named Lang methods: declaration/initialization
-rules, loop/switch scopes, `me` and global `$.name`, nested modules/classes,
-visibility/static members, typedefs/interfaces/callback types, Any and changing
-local types, and annotation semantics. The exception guide includes typed and
-catch-all handlers, finally, and user Exception subclasses. Handler transfer,
-unwinding, cleanup, and abrupt exits still require our own runtime evidence.
-
-The corresponding [language worklist](../plan.md#core-language-worklist) owns
-these planned requirements. Current public guide requests returned navigation
-shells or inaccessible content through the browser tool; this reconciliation
-uses the retained article content from the earlier official-documentation
-review, not newly observed language behavior. The [reading map][reading] retains
-its source links and attribution. Recheck current guide content and controlled
-SDK acceptance when implementing each group.
-
+[inventory]: ../plan.md#toyboxlang-worklist
+[source]: ../specs/frontend/README.md
 [reading]: official-garmin-documentation.md

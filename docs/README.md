@@ -14,7 +14,10 @@ documentation. This page defines how to write and organize that documentation.
 - **Architecture** (`architecture.md`): crate responsibilities, dependencies,
   shared pipelines, and implementation boundaries.
 - **Plan** (`plan.md`): where we are heading, next work, newly discovered needs,
-  and deferred directions. Do not keep a list of completed steps.
+  and deferred directions. The core backlog is a single prioritized checklist
+  of concrete remaining tasks, grouped by language feature or module/class.
+  Delete completed items instead of retaining completed steps or generic
+  reminders to extend them. Do not keep parallel backlogs in specs.
 - **Specifications** (`specs/`): authoritative subsystem contracts, including
   design intent, invariants, rationale, languages/formats, supported behavior,
   limits, and errors. Mark planned requirements separately from implemented rules.

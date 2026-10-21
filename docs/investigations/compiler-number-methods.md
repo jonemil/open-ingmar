@@ -5,7 +5,7 @@ pages. Runtime experiment: SDK/compiler/simulator 9.2.0, fr265, optimization
 disabled. Scope: contracts and native dispatch, not runtime implementation.
 
 Supported method contracts are defined in [the source spec](../specs/frontend/README.md#native-value-calls);
-[API declarations](../specs/sdk/README.md#deferred-core-methods) record
+[Core checklist](../plan.md#toyboxlang-worklist) records
 remaining prerequisites. This record retains public attribution and the tests
 that establish runtime behavior.
 

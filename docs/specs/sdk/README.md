@@ -170,53 +170,13 @@ external definition reader must establish equivalent closure and availability
 invariants. A runtime may later associate these declarations with its own
 implementations without coupling the catalogue to VM storage.
 
-### Deferred core methods
+### Remaining core work
 
-This inventory covers outstanding Lang contracts, not just missing method names.
-The [source specification](../frontend/README.md) owns implemented behavior and
-its bounded argument/storage profiles. Compare each class's own and inherited
-members against the reviewed public API before marking it complete. Remaining
-operator/type-system dependencies and sequencing belong to the
-[core completion gate](../../plan.md#core-completion-gate).
-
-- **Number, Long, Float, Double, Boolean, Char, String:** resolve literal/Unicode
-  discrepancies and validate remaining boundaries. Broader Object/interface/enum
-  representation and inherited dispatch follow the core type work; existing
-  own-method names largely have executable profiles.
-- **Object and source objects:** complete source inheritance/overrides, member
-  lookup, source-inheritance/general-union type tests and refinement, and broader
-  inherited-method dispatch.
-- **Array:** exact source-class elements, explicit nested parameters, nullable
-  Array references, broader literal inference, and nullable sorting/Comparable
-  contracts outside the checked profiles.
-- **Dictionary:** general Object/reference keys, exact source/nested value
-  contracts, general typed nullable references, and enumeration for those domains.
-- **Symbol:** full selector/member-resolution contracts, shared with source
-  inheritance and Method lookup work.
-- **Method:** constructor and class/module receiver values,
-  known-selector checks and concrete callback
-  signature/refinement rules where required by consumers.
-- **WeakReference and Object.weak:** broader source/Object targets
-  and safe concrete recovery from get(); preserve exact
-  immutable weak-result behavior.
-- **Exception family:** exception construction, message/stack methods, source
-  subclassing, and throw/try/catch/finally lowering and unwinding. Distinguish
-  fatal runtime errors.
-- **ResourceId:** resource-reference value/binding contracts and own/inherited
-  methods, using minimal fixtures before broader resource generation.
-- **Supporting types:** general unions and broader
-  structural option types.
-
-Array default sorting and checked source Comparator instances are implemented
-within their [documented profile](../frontend/README.md#source-comparators).
-Direct source-instance/self Method binding is likewise implemented; remaining
-Method work concerns construction and broader contracts. Neither closes all
-container or callable requirements.
-
-This compiler provides checking, binding, and invocation of runtime methods.
-Completion does not require implementing native firmware method bodies. The
-[public API review](../../investigations/core-lang-completion.md) records inventory
-provenance; future discoveries amend this list and the plan.
+The [prioritized Toybox.Lang checklist](../../plan.md#toyboxlang-worklist)
+owns remaining class, method, and module tasks. Shared language prerequisites
+are listed once in the [core language checklist](../../plan.md#core-language-worklist).
+The [frontend specification](../frontend/README.md) owns current executable
+contracts; catalogue declarations alone do not establish that support.
 
 ## API context inputs
 
