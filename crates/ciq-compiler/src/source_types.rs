@@ -174,6 +174,12 @@ impl Types {
                     .get(local)
                     .map(|ty| self.refined(ty.clone(), crate::type_flow::Place::Local(*local))),
             ),
+            Operation::LocalDeclare { local, value_type } => {
+                self.locals.insert(*local, value_type.api_type());
+                self.facts
+                    .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));
+                return;
+            }
             Operation::LocalInitialize { local, value } => {
                 self.facts
                     .retain(|fact| fact.place() != crate::type_flow::Place::Local(*local));

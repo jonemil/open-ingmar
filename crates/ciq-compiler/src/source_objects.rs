@@ -171,6 +171,20 @@ impl Origins {
                     },
                 );
             }
+            Operation::LocalDeclare { local, value_type } => {
+                let contract = match value_type {
+                    crate::JoinType::Source { class, nullable } => Some(Contract {
+                        class: class.clone(),
+                        nullable: *nullable,
+                    }),
+                    _ => None,
+                };
+                self.locals.insert(*local, contract);
+                self.null_locals.remove(local);
+                if *value_type == crate::JoinType::Api(crate::api::Type::Null) {
+                    self.null_locals.insert(*local);
+                }
+            }
             Operation::LocalInitialize { local, value } => {
                 self.locals.insert(*local, self.values.get(value).cloned());
                 if self.nulls.contains(value) {

@@ -191,7 +191,7 @@ impl Statement {
 
 pub(crate) struct LocalDeclaration {
     pub name: String,
-    pub initializer: Expression,
+    pub initializer: Option<Expression>,
     pub span: Span,
 }
 
@@ -1986,7 +1986,7 @@ impl<'a> Parser<'a> {
         Ok(self.lookahead.as_ref().unwrap().span.start)
     }
 
-    /// Parse one initialized local after its optional leading var keyword.
+    /// Parse one inferred local with an optional initializer.
     fn local_declaration(
         &mut self,
         start: usize,
@@ -2003,11 +2003,12 @@ impl<'a> Parser<'a> {
                 "local variable types are inferred; explicit local annotations are unsupported",
             ));
         }
-        self.expect(
-            Kind::Punctuation('='),
-            "'=' (locals require an initializer)",
-        )?;
-        let initializer = self.expression(0)?;
+        let initializer = if self.peek()? == Kind::Punctuation('=') {
+            self.token()?;
+            Some(self.expression(0)?)
+        } else {
+            None
+        };
         let end = self.statement_end(terminator)?;
         Ok(Statement::Local(LocalDeclaration {
             name: name.into(),
@@ -2056,7 +2057,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse initialized locals sharing one var keyword. A normal declaration
+    /// Parse inferred locals sharing one var keyword. A normal declaration
     /// consumes repeated semicolons; a for initializer consumes one separator.
     fn local_declarations(
         &mut self,

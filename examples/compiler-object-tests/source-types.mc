@@ -90,6 +90,7 @@ module NullableSourceTests {
         CoreGlobalCalls.run();
         RootModuleCalls.run();
         ParameterWrites.run();
+        DeferredLocals.run();
     }
 }
 
@@ -730,4 +731,42 @@ module ParameterWrites {
 class ParameterWriter {
     function initialize(){}
     function step(n) as Number {n+=1; return n;}
+}
+
+module DeferredLocals {
+    function choose(flag as Boolean) as Number {
+        var value;
+        if (flag) { value = 7; } else { value = 8; }
+        return value;
+    }
+    function afterReturn(flag as Boolean) as Number {
+        var value;
+        if (flag) { return 1; } else { value = 9; }
+        return value;
+    }
+    function run() as Void {
+        System.println("deferred-locals");
+        var unused, value, first = CoreHeaders.mark("deferred-first", 2), text;
+        value = first + 1;
+        text = "assigned";
+        System.println(value);
+        System.println(text);
+        System.println(DeferredLocals.choose(true));
+        System.println(DeferredLocals.choose(false));
+        System.println(DeferredLocals.afterReturn(false));
+        var post;
+        do { post = 11; } while (false);
+        System.println(post);
+        var index;
+        for (index = 0; index < 2; index++) { System.println(index); }
+        var token;
+        token = new Probe();
+        System.println(token.value());
+        var values;
+        values = [4, 5];
+        System.println(values[1]);
+        var bytes;
+        bytes = new [2]b;
+        System.println(bytes.size());
+    }
 }

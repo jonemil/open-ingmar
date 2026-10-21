@@ -180,26 +180,46 @@ pub(crate) fn local_inputs(
     structure: &Structure,
     operations: &[LocatedOperation],
 ) -> BTreeMap<BlockId, BTreeSet<LocalId>> {
+    storage_inputs(structure, operations, LocalState::Initialized)
+}
+
+/// Compute declarations dominating each block independently of assigned values.
+pub(crate) fn local_declaration_inputs(
+    structure: &Structure,
+    operations: &[LocatedOperation],
+) -> BTreeMap<BlockId, BTreeSet<LocalId>> {
+    storage_inputs(structure, operations, LocalState::Declared)
+}
+
+#[derive(Clone, Copy)]
+enum LocalState {
+    Declared,
+    Initialized,
+}
+
+fn storage_inputs(
+    structure: &Structure,
+    operations: &[LocatedOperation],
+    state: LocalState,
+) -> BTreeMap<BlockId, BTreeSet<LocalId>> {
     if !structure.explicit {
         return BTreeMap::new();
     }
-    let mut generated: BTreeMap<_, BTreeSet<_>> = structure
+    let universe = operations
+        .iter()
+        .filter_map(|op| match op.operation {
+            Operation::LocalDeclare { local, .. } | Operation::LocalInitialize { local, .. } => {
+                Some(local)
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let entry = structure.blocks[0];
+    let mut inputs: BTreeMap<_, _> = structure
         .predecessors
         .keys()
-        .map(|b| (*b, BTreeSet::new()))
+        .map(|b| (*b, universe.clone()))
         .collect();
-    let mut universe = BTreeSet::new();
-    for (index, located) in operations.iter().enumerate() {
-        if let Operation::LocalInitialize { local, .. } = located.operation {
-            universe.insert(local);
-            generated
-                .get_mut(&structure.blocks[index])
-                .unwrap()
-                .insert(local);
-        }
-    }
-    let entry = structure.blocks[0];
-    let mut inputs: BTreeMap<_, _> = generated.keys().map(|b| (*b, universe.clone())).collect();
     let mut outputs = inputs.clone();
     loop {
         let mut changed = false;
@@ -225,7 +245,21 @@ pub(crate) fn local_inputs(
                     Operation::LocalInitialize { local, .. } => {
                         outgoing.insert(local);
                     }
-                    Operation::LocalTake { local, .. } => {
+                    Operation::LocalDeclare { local, .. } => {
+                        if matches!(state, LocalState::Declared) {
+                            outgoing.insert(local);
+                        } else {
+                            outgoing.remove(&local);
+                        }
+                    }
+                    Operation::LocalAssign { local, .. }
+                        if matches!(state, LocalState::Initialized) =>
+                    {
+                        outgoing.insert(local);
+                    }
+                    Operation::LocalTake { local, .. }
+                        if matches!(state, LocalState::Initialized) =>
+                    {
                         outgoing.remove(&local);
                     }
                     _ => {}

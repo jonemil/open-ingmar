@@ -133,3 +133,38 @@ established by this probe.
 [source]: ../specs/frontend/README.md#local-reassignment
 [ir]: ../specs/ir/README.md#local-assignment
 [scaffold]: control-flow.md#reproduction
+
+## Deferred local declarations
+
+2026-10-21, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+
+**Observed:** `var x;` is accepted when unused or assigned before executable
+reads. A mixed `var x, y=2; x=y;` list is accepted. Reads immediately following
+an uninitialized declaration, after a one-arm assignment, or after a loop
+redeclares the slot without assigning on every path are rejected with
+“Value may not be initialized.” Assigning in both conditional arms or in a
+`do` body permits a later read. These checks do not establish a readable Null
+default for an uninitialized local.
+
+The SDK also accepts an unassigned variable's update in `for(;;x++){return;}`.
+Our frontend still requires a selectable update operand type there; accepting
+untyped values in disconnected headers remains a checking/inference gap.
+The isolated authored probes and SDK logs are in
+`scratch/core-local-inference/` (`probe.py`).
+
+The tracked `DeferredLocals` group in [the console specimen][parameters] covers
+mixed declaration/effect order, branch and early-return joins, post-test/for
+loops, and scalar, source-reference, Array, and ByteArray assignments.
+SDK/generated simulator output matches the expected text; structured export,
+reassembly, and native/text resumption pass through the shared checker.
+Artifacts: `scratch/core-local-inference/check/`. The new declaration has no
+runtime write; ordinary `lputv` implements the first assignment. No new opcode
+or DATA record is required. Inferred type changes after initialization remain
+outside the fixed-contract profile.
+
+The authored loop probe in `scratch/core-local-lifetime/source/app.mc` assigns
+a ByteArray only on its first iteration and retains a weak handle. SDK CODE
+has one write to the value's slot 4 at CODE+0x54, with no clearing write at the
+loop declaration or backedge. This establishes the observed absence of a
+redeclaration write; no separate simulator-liveness result is claimed for this
+isolated probe. Its build log and structured export are retained alongside it.

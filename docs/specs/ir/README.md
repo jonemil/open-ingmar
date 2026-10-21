@@ -316,12 +316,26 @@ reinitialization, and parameters plus locals exceeding 255 are rejected. Unread
 locals are accepted: their initializer still executes. Source names are resolved
 by the frontend and are not stored in this provisional IR.
 
+`.declare-local $id <contract>` reserves typed storage without a value. Its
+contract uses the existing API/source spellings, including opaque/native/tuple
+domains excluded from conditional joins. It counts toward the frame and
+operation limits but emits no default initialization. Declaration IDs share the
+same uniqueness domain as `.local`. A plain `.assign` may establish its first
+value; reads/takes require assignment on every executable path. The declaration
+must dominate each assignment, independently of value availability. Source
+contracts retain exact identity, and interface writes retain unit-level
+signature checks. Re-executing a declaration clears assignment status for its
+new iteration. This is a checking rule, not a runtime slot clear: earlier
+references retain ordinary frame/write lifetimes until replaced or the frame
+exits.
+
 `.take` defines the same typed value as `.read` but transfers ownership out of
-the local. The local becomes unavailable on that CFG path; later reads, takes,
-or assignments fail until its initialization executes again (for example, on
-another loop iteration). Joins require availability on every incoming edge. A
-take is ordered with other effects and cannot move across writes or calls. Each
-resulting value still has exactly one use.
+the local. The local becomes unavailable on that CFG path; later reads and takes
+fail until its initialization executes again (for example, on another loop
+iteration). Assignment can refill explicitly declared storage; ordinary `.local`
+storage retains its initialization requirement. Joins require availability on
+every incoming edge. A take is ordered with other effects and cannot move across
+writes or calls. Each resulting value still has exactly one use.
 
 [VM lowering](../lowering/README.md#local-operations).
 
@@ -805,15 +819,18 @@ when an ordinary scalar result would otherwise be inferred from returns.
 Definite-local sets are computed to a greatest fixed point. Start incoming and
 outgoing sets at the universe of declared local IDs. For every block, intersect
 its predecessor outgoing sets to obtain its incoming set; its outgoing set adds
-all its `.local` initializers. Entry additionally has an empty external
-predecessor, so its incoming set is always empty. Repeat until sets stop
-changing. Scan each block's operations from its final incoming set, adding
-initializers only when encountered. Reads/assignments require membership at
-their position and an earlier textual declaration; assignments do not add
-initialization. Disconnected component roots instead start with declared locals
-available, permitting references in unexecuted headers; earlier textual
-declaration and type checks still apply. Intersections use only predecessors
-within the component, so dead edges cannot affect executable initialization.
+its `.local` initializers and `.assign` writes, and removes `.declare-local` and
+`.take` storage. Entry additionally has an empty external predecessor, so its
+incoming set is always empty. Repeat until sets stop changing. Scan each block's
+operations from its final incoming set, adding initializers/writes only when
+encountered. Reads require membership at their position. A separate declaration
+analysis admits `.declare-local` and `.local` and does not remove declarations
+on takes; assignments require a declaration on every incoming path and an
+earlier textual definition. Disconnected component roots instead start with
+declared locals available, permitting references in unexecuted headers; earlier
+textual declaration and type checks still apply. Intersections use only
+predecessors within the component, so dead edges cannot affect executable
+initialization.
 
 This accepts common initialized locals carried around a loop and rejects values
 initialized only on its backedge. Local initializer IDs remain globally unique;

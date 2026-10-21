@@ -705,6 +705,7 @@ struct Builder<'a> {
     types: crate::source_types::Types,
     next_local: u32,
     named_locals: std::collections::BTreeSet<LocalId>,
+    pending_locals: BTreeMap<LocalId, usize>,
     next_block: u32,
     controls: Vec<ControlTargets>,
 }
@@ -2017,7 +2018,7 @@ impl Builder<'_> {
         Ok(())
     }
 
-    /// Resolve a named assignment target to initialized local or parameter storage.
+    /// Resolve a named assignment target to declared local or parameter storage.
     fn named_place(
         &self,
         name: &str,
@@ -2038,9 +2039,7 @@ impl Builder<'_> {
                 Diagnostic::at(
                     self.source,
                     span.start,
-                    format!(
-                        "assignment requires an in-scope initialized local or parameter {name:?}"
-                    ),
+                    format!("assignment requires an in-scope declared local or parameter {name:?}"),
                 )
             })
     }
@@ -2363,9 +2362,22 @@ impl Builder<'_> {
                             "duplicate local declaration or shadowing an outer local",
                         ));
                     }
-                    let value = self.value(local.initializer, locals)?;
-                    let id = self.local_id(span)?;
-                    self.push(Operation::LocalInitialize { local: id, value }, Some(span));
+                    let id;
+                    if let Some(initializer) = local.initializer {
+                        let value = self.value(initializer, locals)?;
+                        id = self.local_id(span)?;
+                        self.push(Operation::LocalInitialize { local: id, value }, Some(span));
+                    } else {
+                        id = self.local_id(span)?;
+                        self.pending_locals.insert(id, self.operations.len());
+                        self.push(
+                            Operation::LocalDeclare {
+                                local: id,
+                                value_type: crate::JoinType::Api(crate::api::Type::Null),
+                            },
+                            Some(span),
+                        );
+                    }
                     self.named_locals.insert(id);
                     locals.insert(local.name, id);
                 }
@@ -2391,6 +2403,20 @@ impl Builder<'_> {
                         }
                     };
                     let value = self.value_with_context(value, locals, expected)?;
+                    if let crate::type_flow::Place::Local(local) = place {
+                        if let Some(at) = self.pending_locals.remove(&local) {
+                            let value_type = self.types.join_contract(value).ok_or_else(|| {
+                                Diagnostic::at(
+                                    self.source,
+                                    span.start,
+                                    "cannot infer local assignment type",
+                                )
+                            })?;
+                            let declaration = Operation::LocalDeclare { local, value_type };
+                            self.types.observe(&declaration);
+                            self.operations[at].operation = declaration;
+                        }
+                    }
                     let operation = match place {
                         crate::type_flow::Place::Local(local) => {
                             Operation::LocalAssign { local, value }
@@ -2713,6 +2739,7 @@ fn build_body(
         types: crate::source_types::Types::new(candidate_parameters),
         next_local: 0,
         named_locals: std::collections::BTreeSet::new(),
+        pending_locals: BTreeMap::new(),
         next_block: 1,
         controls: Vec::new(),
     };

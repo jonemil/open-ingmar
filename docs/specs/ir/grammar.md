@@ -154,6 +154,7 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".constant" value-id module-name identifier
 storage-operation = ".parameter" value-id decimal-usize
                   | ".assign-parameter" decimal-usize value-id
+                  | ".declare-local" local-id local-contract-tag
                   | (".local" | ".assign") local-id value-id
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata?
@@ -317,6 +318,7 @@ join-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
          | source-tag | nullable-source-tag
+local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```

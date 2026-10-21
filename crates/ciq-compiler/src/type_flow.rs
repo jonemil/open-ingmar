@@ -298,9 +298,9 @@ fn guard_place(
 /// Return frame storage whose previous refinement is invalidated by this write.
 fn write_place(operation: &Operation) -> Option<Place> {
     match operation {
-        Operation::LocalInitialize { local, .. } | Operation::LocalAssign { local, .. } => {
-            Some(Place::Local(*local))
-        }
+        Operation::LocalDeclare { local, .. }
+        | Operation::LocalInitialize { local, .. }
+        | Operation::LocalAssign { local, .. } => Some(Place::Local(*local)),
         Operation::ParameterAssign { index, .. } => Some(Place::Parameter(*index)),
         _ => None,
     }

@@ -147,7 +147,7 @@ fn declaration_lists_share_scope_order_and_lowering_with_individual_declarations
         "var x=1,y=y;return x;",
         "var x=1,var y=2;return x;",
         "var x=1,;return x;",
-        "var x=1,y;return x;",
+        "var x=1,y;return y;",
         "{var x=1,y=x+1;}return y;",
     ] {
         assert!(

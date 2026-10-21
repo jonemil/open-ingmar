@@ -23,6 +23,11 @@ nested choices and effect markers check lazy arm evaluation.
 clauses, scoped locals, nested break/continue targets, early returns, and skipped
 headers. Markers check effects as well as numeric results.
 
+`DeferredLocals` checks mixed declarations, first assignments in both branches,
+early returns, post-test and `for` loops, and scalar/source/container storage.
+The frontend rejects executable reads before definite assignment; declaration
+alone does not supply a readable Null value.
+
 `CoreScopes` checks standalone blocks, local-name reuse, and `else if` selection
 with effect markers, nullable guards, early returns, and enclosing loop controls.
 

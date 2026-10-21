@@ -165,7 +165,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::NativeCall { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
-            Operation::LocalInitialize { local, .. } => {
+            Operation::LocalInitialize { local, .. } | Operation::LocalDeclare { local, .. } => {
                 slots.insert(
                     *local,
                     (function.parameter_count() + slots.len() + builders.len() + 1) as u64,
@@ -331,6 +331,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             _ => (),
         }
         let (value, opcode, operands) = match located.operation {
+            Operation::LocalDeclare { .. } => continue,
             Operation::Block { block } => {
                 items.push(Item::Label(format!("__ciq_block_{}_{}", label, block.0)));
                 continue;

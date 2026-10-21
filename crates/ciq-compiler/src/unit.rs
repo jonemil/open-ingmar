@@ -1160,6 +1160,15 @@ impl CompilationUnit {
                 .operations()
                 .iter()
                 .filter_map(|located| {
+                    if let Operation::LocalDeclare { local, value_type } = &located.operation {
+                        let ty = crate::ValueType::from_api_type(&value_type.api_type())?;
+                        if matches!(
+                            ty,
+                            crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
+                        ) {
+                            return Some((*local, ty));
+                        }
+                    }
                     if let Operation::LocalInitialize { local, value } = located.operation {
                         let ty = function.value_types[&value];
                         if matches!(
@@ -1425,6 +1434,10 @@ impl CompilationUnit {
                 if let Operation::SourceCast { class, .. }
                 | Operation::SourceInstanceOf { class, .. }
                 | Operation::BlockParameter {
+                    value_type: crate::JoinType::Source { class, .. },
+                    ..
+                }
+                | Operation::LocalDeclare {
                     value_type: crate::JoinType::Source { class, .. },
                     ..
                 } = &located.operation

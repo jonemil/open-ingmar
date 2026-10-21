@@ -97,8 +97,8 @@ for-statement = "for" "(" for-initializer? ";" expression? ";"
 for-initializer = local-clause | for-effects
 for-effects = loop-effect ("," loop-effect)*
 loop-effect = assignment-clause | update-clause
-local-clause = "var" initialized-local ("," initialized-local)*
-initialized-local = identifier "=" expression
+local-clause = "var" local-declarator ("," local-declarator)*
+local-declarator = identifier ("=" expression)?
 assignment-clause = assign-target ("=" | compound-operator) expression
 update-clause = update-target ("++" | "--") | ("++" | "--") update-target
 do-statement = "do" block "while" "(" expression ")" statement-terminator
@@ -116,8 +116,9 @@ compound-operator = "+=" | "-=" | "*=" | "/=" | "%="
 ```
 
 Semantic checking restricts each target/operator pair; this syntax does not
-permit every assignment form for every type. Locals require initializers and
-have no explicit source annotation. Update operators are statements only. Calls
+permit every assignment form for every type. Locals have no explicit source
+annotation; reads require definite assignment. Update operators are statements
+only. Calls
 include module/self/receiver calls, intrinsic System.println, and supported
 native base initialization. Conditional and loop bodies require braces; an
 `else` may instead introduce another `if-statement`. Standalone blocks are

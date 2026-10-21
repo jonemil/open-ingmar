@@ -1348,11 +1348,17 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
+    /// Reserve typed storage without assigning a value. Reads require a write
+    /// on every incoming path; the declaration itself emits no initialization.
+    LocalDeclare {
+        local: LocalId,
+        value_type: JoinType,
+    },
     LocalInitialize {
         local: LocalId,
         value: ValueId,
     },
-    /// Replace an initialized local's value without changing its supported
+    /// Assign a declared local's value without changing its supported
     /// type or allocating a new local. The right-hand value is consumed first.
     LocalAssign {
         local: LocalId,
@@ -1718,6 +1724,9 @@ impl Function {
         let mut value_blocks = std::collections::BTreeMap::new();
         let mut available_locals = std::collections::BTreeSet::new();
         let local_inputs = control_flow::local_inputs(&structure, &operations);
+        let declaration_inputs = control_flow::local_declaration_inputs(&structure, &operations);
+        let mut available_declarations = std::collections::BTreeSet::new();
+        let mut deferred_locals = std::collections::BTreeSet::new();
         let refinement_inputs = type_flow::inputs(&structure, &operations);
         let mut refinements = std::collections::BTreeSet::new();
         let mut types = std::collections::BTreeMap::new();
@@ -2004,6 +2013,7 @@ impl Function {
                 }
                 Operation::Block { block } => {
                     available_locals = local_inputs[&block].clone();
+                    available_declarations = declaration_inputs[&block].clone();
                     refinements = refinement_inputs[&block].clone();
                     (None, vec![])
                 }
@@ -2870,6 +2880,33 @@ impl Function {
                     };
                     (result, arguments.clone())
                 }
+                Operation::LocalDeclare {
+                    local,
+                    ref value_type,
+                } => {
+                    if type_text::local_contract_tag(value_type).is_none() {
+                        return Err(fail("unsupported local declaration contract"));
+                    }
+                    let ty = ValueType::from_api_type(&value_type.api_type())
+                        .ok_or_else(|| fail("unsupported local declaration value type"))?;
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &value_type.api_type())
+                            .map_err(|message| fail(&message))?;
+                    }
+                    local_types.insert(local, ty);
+                    if !locals.insert(local) {
+                        return Err(fail("duplicate local declaration"));
+                    }
+                    if parameter_count + locals.len() + builders.len() > MAX_LOCALS {
+                        return Err(fail("parameters plus locals exceed 255-slot limit"));
+                    }
+                    available_declarations.insert(local);
+                    deferred_locals.insert(local);
+                    available_locals.remove(&local);
+                    refinements.retain(|fact| fact.place() != type_flow::Place::Local(local));
+                    (None, vec![])
+                }
                 Operation::LocalInitialize { local, value } => {
                     refinements.retain(|fact: &type_flow::Fact| {
                         fact.place() != type_flow::Place::Local(local)
@@ -2879,6 +2916,7 @@ impl Function {
                         return Err(fail("duplicate local initialization"));
                     }
                     available_locals.insert(local);
+                    available_declarations.insert(local);
                     if locals.len() > MAX_LOCALS {
                         return Err(fail("function exceeds 255-local limit"));
                     }
@@ -2888,7 +2926,10 @@ impl Function {
                     (None, vec![value])
                 }
                 Operation::LocalAssign { local, value } => {
-                    if !locals.contains(&local) || !available_locals.contains(&local) {
+                    if !locals.contains(&local)
+                        || !available_declarations.contains(&local)
+                        || (!deferred_locals.contains(&local) && !available_locals.contains(&local))
+                    {
                         return Err(fail(
                             "assignment requires an initialized local on every incoming path",
                         ));
@@ -2949,6 +2990,7 @@ impl Function {
                     refinements.retain(|fact: &type_flow::Fact| {
                         fact.place() != type_flow::Place::Local(local)
                     });
+                    available_locals.insert(local);
                     (None, vec![value])
                 }
                 Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
@@ -3197,7 +3239,8 @@ impl Function {
                         index,
                         value,
                     } => vec![*array, *index, *value],
-                    Operation::DictionaryBegin { .. }
+                    Operation::LocalDeclare { .. }
+                    | Operation::DictionaryBegin { .. }
                     | Operation::ByteOptionsBegin { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ByteArrayBegin { .. } => vec![],
@@ -3437,7 +3480,7 @@ impl Function {
                 } => format!(
                     ".block-value %{} {}",
                     result.0,
-                    joins::contract_tag(value_type).unwrap()
+                    type_text::local_contract_tag(value_type).unwrap()
                 ),
                 Operation::JumpValue { target, value } => {
                     format!(".jump-value ^{} %{}", target.0, value.0)
@@ -3931,6 +3974,16 @@ impl Function {
                 Operation::ReturnVoid => ".return-void".into(),
                 Operation::ParameterRead { result, index } => {
                     format!(".parameter %{} {index}", result.0)
+                }
+                Operation::LocalDeclare {
+                    local,
+                    ref value_type,
+                } => {
+                    format!(
+                        ".declare-local ${} {}",
+                        local.0,
+                        type_text::local_contract_tag(value_type).unwrap()
+                    )
                 }
                 Operation::LocalInitialize { local, value } => {
                     format!(".local ${} %{}", local.0, value.0)

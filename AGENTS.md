@@ -17,7 +17,9 @@
   `[x]`; do not retain or replace them with vague ongoing obligations or
   duplicate backlogs in specs.
 - Group related functionality into a coherent proposed commit when it shares
-  implementation and validation. Follow backlog priorities, pulling required
+  implementation and validation. Prefer larger coherent batches that get more
+  coverage from each shared test/audit run and reduce validation overhead.
+  Follow backlog priorities, pulling required
   shared prerequisites forward; avoid unrelated scope or one-method increments
   when the rest of the group can be implemented and validated together.
 - Follow [docs/README.md](docs/README.md) for authoritative documentation homes,

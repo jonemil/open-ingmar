@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support `var value;`, its initial Null value, assignment before use, and
-  reads before assignment according to SDK behavior.
 - [ ] Infer changing local types across sequential assignments, rather than
   fixing every local to its initializer's type; compute branch and loop joins.
 - [ ] Use Any for unannotated parameters and results instead of the current
@@ -131,7 +129,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Accept supported nullable/union operands at shared arithmetic, comparison,
   compound-assignment, and update sites after the required flow proofs.
 - [ ] Preserve enclosing lexical refinements while checking unreachable loop
-  updates and post-tests; keep those checks out of executable CFG edges.
+  updates and post-tests; accept unassigned operands in provably unexecuted
+  headers where the SDK does, without inventing a runtime value. Keep those
+  checks out of executable CFG edges.
 - [ ] Accept unbraced control bodies and standalone empty statements where the
   SDK permits them; verify block/loop/switch declaration scope and shadowing.
 - [ ] Extend switch case equality and `case instanceof` to the new union,

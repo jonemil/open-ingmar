@@ -7,6 +7,7 @@ enum Directive {
     Add,
     Subtract,
     Local,
+    DeclareLocal,
     Read,
     Call,
     Parameter,
@@ -268,6 +269,7 @@ pub(crate) fn parse_ir_context(
             Some(".shift-left") => (Directive::ShiftLeft, 4),
             Some(".shift-right") => (Directive::ShiftRight, 4),
             Some(".local") => (Directive::Local, 3),
+            Some(".declare-local") => (Directive::DeclareLocal, 3),
             Some(".read" | ".take") => (Directive::Read, 3),
             Some(".symbol") => (Directive::Symbol, 3),
             Some(".self") => (Directive::SelfValue, 2),
@@ -1012,7 +1014,7 @@ pub(crate) fn parse_ir_context(
                 },
                 Directive::BlockValue => Operation::BlockParameter {
                     result: parse_value(&fields[1])?,
-                    value_type: crate::joins::parse_contract(&fields[2])
+                    value_type: crate::type_text::local_contract(&fields[2])
                         .ok_or_else(|| fail(*at, "unsupported block value type"))?,
                 },
                 Directive::JumpValue => Operation::JumpValue {
@@ -1123,6 +1125,11 @@ pub(crate) fn parse_ir_context(
                 }
                 Directive::Return => Operation::Return {
                     value: parse_value(&fields[1])?,
+                },
+                Directive::DeclareLocal => Operation::LocalDeclare {
+                    local: parse_local(&fields[1])?,
+                    value_type: crate::type_text::local_contract(&fields[2])
+                        .ok_or_else(|| fail(*at, "invalid local declaration contract"))?,
                 },
                 Directive::Local => Operation::LocalInitialize {
                     local: parse_local(&fields[1])?,

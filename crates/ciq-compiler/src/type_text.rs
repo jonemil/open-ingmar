@@ -386,6 +386,30 @@ pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
     })
 }
 
+/// Parse a local storage contract, including value domains excluded from joins.
+pub(super) fn local_contract(tag: &str) -> Option<crate::JoinType> {
+    crate::joins::parse_contract(tag).or_else(|| {
+        let ty = call_result(tag).ok()?.api_type();
+        crate::ValueType::from_api_type(&ty).map(|_| crate::JoinType::Api(ty))
+    })
+}
+
+/// Print a local storage contract without widening conditional-join syntax.
+pub(super) fn local_contract_tag(ty: &crate::JoinType) -> Option<Cow<'static, str>> {
+    crate::joins::contract_tag(ty).or_else(|| {
+        let api = ty.api_type();
+        NAMED
+            .iter()
+            .find_map(|(tag, _, result)| (result.api_type() == api).then_some(Cow::Borrowed(*tag)))
+            .or_else(|| {
+                [crate::TupleShape::OneView, crate::TupleShape::ViewDelegate]
+                    .into_iter()
+                    .find(|shape| shape.api_type() == api)
+                    .map(|shape| result_tag(&ReturnType::Tuple(shape)))
+            })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

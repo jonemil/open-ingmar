@@ -1516,7 +1516,8 @@ See the [example](../../../examples/compiler-conditionals/README.md) and
 ### Local declarations and reads
 
 `var <identifier> = <expression>;` initializes a local with a supported value
-contract. A declaration list shares one `var`, as in `var a = 1, b = a + 2;`.
+contract. `var value;` declares a local without assigning a default value.
+A declaration list shares one `var`, as in `var a, b = 2; a = b;`.
 Each initializer executes and binds its name before the next is checked or
 executed. Items may have different supported value types; each retains its own
 local identity and fixed type. Calls, container literals, and their internal
@@ -1524,7 +1525,7 @@ commas remain ordinary initializer expressions. The whole list belongs to the
 current scope; it creates no nested scope. Expressions may read locals repeatedly
 after initialization. Duplicate
 declarations in one scope, shadowing an enclosing local or parameter,
-self/forward/unknown reads and uninitialized declarations are rejected. An arm's
+self/forward/unknown reads are rejected. An arm's
 locals are visible within that arm and nested arms, but not in a sibling or
 after the condition. Disjoint arms may reuse a name; each declaration receives a
 distinct semantic local and VM slot. A later outer declaration may also reuse a
@@ -1535,7 +1536,19 @@ slots or add runtime reference-release instructions. A block preserves its
 body's return/break/continue behavior and does not create a loop-control target.
 Reassignment follows the fixed-type rules below.
 
-Local types are inferred from initializers. Explicit `var name as Type = value`
+Reads require assignment on every executable incoming path; declaration alone
+does not establish a readable Null. A plain assignment may initialize declared
+storage; compound assignments and updates still require an assigned value.
+Both arms may supply the first value before a join, and a `do` body may assign
+before its post-test. A possibly skipped `while` body cannot establish a value
+after the loop. Re-executing a declaration in a loop resets assignment status.
+
+Local types are inferred from initializers or, for a deferred declaration, its
+first textual plain assignment. The current profile fixes that supported
+contract for later writes, including other branches; changing types and wider
+union inference remain planned. An unused unassigned declaration has an inert
+Null storage contract in saved IR, with no readable runtime default.
+Explicit `var name as Type = value`
 annotations are rejected, matching SDK 9.2.0; these are distinct from supported
 parameter/result/field annotations and expression casts. See the
 [declaration probes](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
@@ -1623,7 +1636,7 @@ scoping and shadowing rules remain future work.
 
 ### Local reassignment
 
-`<identifier> = <expression>;` replaces an earlier initialized, in-scope local.
+`<identifier> = <expression>;` assigns an earlier declared, in-scope local.
 The local target must be a bare identifier. Unknown/forward names and arm locals
 used outside their scope are rejected. Parameters follow the
 [parameter storage contract](#parameters-and-positional-arguments). Assignment is a statement,
@@ -1764,6 +1777,10 @@ For example, a skipped update using a nullable Number needs its own null guard
 or explicit cast even inside an enclosing `if (n != null)`. Executable headers
 retain the usual incoming proofs; preserving lexical proofs for skipped headers
 is a remaining frontend checking requirement.
+
+The SDK also accepts unassigned updates in provably unexecuted headers, such as
+`var x; for(;;x++){return;}`. This frontend still requires a selectable operand
+type there; no runtime default is inferred from that SDK acceptance.
 
 See the grouped `CoreLoops` specimen in
 [source-types.mc](../../../examples/compiler-object-tests/source-types.mc) and

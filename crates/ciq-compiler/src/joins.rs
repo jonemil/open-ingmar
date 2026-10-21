@@ -4,11 +4,11 @@ use std::collections::BTreeMap;
 
 pub(crate) use crate::type_text::{join as parse_type, join_tag as type_tag};
 
-/// A block parameter's value contract, independent of VM stack representation.
+/// A block parameter or declared local's contract, independent of VM storage.
 /// Source contracts retain exact identity in addition to their native projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinType {
-    /// An API value type within the supported conditional-join profile.
+    /// An API value type; each consumer checks its supported type domains.
     Api(Type),
     /// An exact constructible source class, optionally admitting Null.
     Source {

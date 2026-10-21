@@ -11,7 +11,8 @@ extra runtime guards, or substitutions for unsupported source features. Assembly
 then resolves identities and placement; it does not select operations.
 
 Slot zero is the context/receiver; parameters begin at one. Ordinary locals
-follow parameters in initialization order, including locals on mutually
+follow parameters in declaration/initialization order, including locals on
+mutually
 exclusive paths. Private builders and hidden temporaries count against the same
 255-slot budget. Slots are not reused. The prologue uses `argc` without extra
 locals or `argcincsp` to allocate additional frame storage. These are structural
@@ -133,7 +134,10 @@ updates](../frontend/README.md#increment-and-decrement).
 
 ### Local operations
 
-Declaration lists become sequential local initializers in the existing scope.
+Declaration lists become sequential declarations/initializers in the existing
+scope. `.declare-local` reserves a frame slot without emitting a write; the first
+assignment uses ordinary `lputv` after evaluating its RHS. No synthetic Null or
+placeholder initialization is emitted.
 Additional statement terminators are consumed during source parsing; they do
 not introduce IR operations, VM instructions, or extra frame slots.
 
