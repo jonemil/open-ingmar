@@ -1,0 +1,108 @@
+use ciq_compiler::{
+    ParameterType, ReturnType,
+    api::{ApiContext, ApiLevel, Type},
+    application::{ConsoleApplication, build_console_application},
+    compile, parse_ir, parse_unit_ir,
+};
+
+const PROGRAM: &str = include_str!("../../../examples/ir-any/program.ciqir");
+
+#[test]
+fn any_contracts_preserve_in_memory_text_and_complete_application_stages() {
+    let unit = parse_unit_ir(PROGRAM).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let assembly = unit.lower();
+    assert_eq!(
+        assembly,
+        ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+    );
+    let options = ConsoleApplication {
+        id: [61; 16],
+        entry: "MinimalConsoleApp.onStart".into(),
+    };
+    let app = build_console_application(&unit, &options).unwrap();
+    let resumed = parse_unit_ir(&unit.to_ir_text()).unwrap();
+    assert_eq!(app, build_console_application(&resumed, &options).unwrap());
+    assert_eq!(ParameterType::Any.api_type(), Type::Any);
+    assert_eq!(ReturnType::Any.api_type(), Type::Any);
+    assert_eq!(Type::Any.with_null(), Type::Any);
+    ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0))
+        .unwrap()
+        .check_type(ciq_compiler::api::core(), &Type::Any)
+        .unwrap();
+}
+
+#[test]
+fn dynamic_operands_use_shared_operations_without_accepting_known_type_errors() {
+    for body in [
+        ".parameter %0 0\n.not %1 %0\n.return %1",
+        ".parameter %0 0\n.negate %1 %0\n.return %1",
+        ".parameter %0 0\n.complement %1 %0\n.return %1",
+        ".parameter %0 0\n.increment %1 %0\n.return %1",
+        ".parameter %0 0\n.integer %1 2\n.equal %2 %0 %1\n.return %2",
+        ".parameter %0 0\n.local $0 %0\n.string %1 \"next\"\n.assign $0 %1\n.read %2 $0\n.return %2",
+    ] {
+        let text = format!(
+            "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
+        );
+        let f = parse_ir(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(
+            f.lower(),
+            ciq_assembly::Program::parse(&f.assembly()).unwrap()
+        );
+    }
+    for source in [
+        "function f(){return true-1;}",
+        "function f(){return \"x\".missing();}",
+        "function f(n as Toybox.Lang.Number){return n.length();}",
+        "function f(){var a=[1];a[0]=\"bad\";return 0;}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+}
+
+#[test]
+fn dynamic_metadata_preserves_structural_validation_and_explicit_void() {
+    for body in [
+        ".parameter %0 1\n.return %0",
+        ".parameter %0 0\n.call-native %1 %0 bad.name\n.return %1",
+        ".return-void",
+        ".variable $0\n.read-variable %0 $0 any\n.return %0",
+        ".parameter %0 0\n.variable $0 %0\n.read-variable %1 $0 integer\n.return %1",
+    ] {
+        let text = format!(
+            "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
+        );
+        assert!(parse_ir(&text).is_err(), "{text}");
+    }
+    let text = "ciq-ir\n.function f result=void\n.null %0\n.return %0\n.end\n";
+    assert!(parse_ir(text).is_err());
+}
+
+#[test]
+fn dynamic_boundaries_retain_known_arity_availability_and_source_contracts() {
+    for body in [
+        ".string %0 \"x\"\n.parameter %1 0\n.call-native %2 %0 length %1\n.return %2",
+        ".parameter %0 0\n.call-native %1 %0 length\n.return %1",
+    ] {
+        let text = format!(
+            "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
+        );
+        let result = parse_ir(&text);
+        if body.starts_with(".string") {
+            assert!(
+                result.is_err(),
+                "known length still requires zero arguments"
+            );
+        } else {
+            assert!(result.is_ok(), "dynamic length defers its receiver type");
+        }
+    }
+    let text = "ciq-unit\n.owner global\nciq-ir\n.function f parameters=1 parameter-types=any result=source(C@Lang.Object)\n.parameter %0 0\n.return %0\n.end\n.class C Lang.Object\nciq-ir\n.function initialize receiver=instance\n.return-void\n.end\n.end-class\n";
+    let unit = parse_unit_ir(text).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let low = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
+    let text = "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n.integer %0 42\n.parameter %1 0\n.call-native %2 %0 toChar %1\n.return %2\n.end\n";
+    assert!(ciq_compiler::parse_ir_with_api(text, low).is_err());
+}

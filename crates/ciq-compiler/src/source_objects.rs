@@ -33,6 +33,7 @@ pub(crate) struct Origins {
     null_locals: std::collections::BTreeSet<LocalId>,
     locals: BTreeMap<LocalId, Option<Contract>>,
     variables: std::collections::BTreeSet<LocalId>,
+    dynamic: std::collections::BTreeSet<ValueId>,
     parameters: Vec<crate::ParameterType>,
 }
 
@@ -42,6 +43,11 @@ impl Origins {
             parameters,
             ..Default::default()
         }
+    }
+    /// Record a value independently checked as Any. It may cross a typed
+    /// boundary dynamically without establishing a source-class proof.
+    pub(crate) fn note_dynamic(&mut self, value: ValueId) {
+        self.dynamic.insert(value);
     }
     /// Track exact classes through signatures, assertions, calls, and locals.
     /// Apply the caller's current CFG facts to reads, rejecting writes that
@@ -345,7 +351,8 @@ impl Origins {
         nullable: bool,
         value: ValueId,
     ) -> bool {
-        (nullable && self.nulls.contains(&value))
+        self.dynamic.contains(&value)
+            || (nullable && self.nulls.contains(&value))
             || self
                 .values
                 .get(&value)

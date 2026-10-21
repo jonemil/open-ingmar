@@ -1,9 +1,14 @@
 //! Operator contracts for the executable source subset, before VM selection.
 //! These rules do not enumerate every operator/type combination in Monkey C.
+//! Any operands defer operation/type failures to runtime, retaining Any results
+//! except for comparisons, which produce Boolean.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
 pub(crate) fn not_result(operand: &Type) -> Option<Type> {
+    if *operand == Type::Any {
+        return Some(Type::Any);
+    }
     if let Some(types) = operand.numeric_alternatives() {
         return types
             .iter()
@@ -15,6 +20,9 @@ pub(crate) fn not_result(operand: &Type) -> Option<Type> {
 
 /// Resolve Number/Long complement without widening its width or admitting Null.
 pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
+    if *operand == Type::Any {
+        return Some(Type::Any);
+    }
     if let Some(types) = operand.numeric_alternatives() {
         return types
             .iter()
@@ -26,6 +34,9 @@ pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
 
 /// Resolve unary signs without changing numeric width or admitting Null.
 pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+    if *operand == Type::Any {
+        return Some(Type::Any);
+    }
     if operand.numeric_alternatives().is_some() {
         return Some(operand.clone());
     }
@@ -43,6 +54,9 @@ fn numeric(ty: &Type) -> bool {
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
 pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+    if *operand == Type::Any {
+        return Some(Type::Any);
+    }
     if operand.numeric_alternatives().is_some() {
         return Some(operand.clone());
     }
@@ -60,6 +74,9 @@ pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
 /// Numeric aliases require every concrete pair to be valid; results use an
 /// exact scalar or the narrowest supported numeric alias containing them.
 pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    if *left == Type::Any || *right == Type::Any {
+        return Some(Type::Any);
+    }
     if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
         let mut results = Vec::new();
         for a in left
@@ -164,6 +181,9 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    if *left == Type::Any || *right == Type::Any {
+        return Some(Type::named("Toybox.Lang.Boolean"));
+    }
     if left.numeric_alternatives().is_some() || right.numeric_alternatives().is_some() {
         for a in left
             .numeric_alternatives()
@@ -263,7 +283,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
 
 fn string_operand(ty: &Type, boolean: bool) -> bool {
     match ty {
-        Type::Null => true,
+        Type::Any | Type::Null => true,
         Type::Named(name) => {
             matches!(
                 name.as_str(),

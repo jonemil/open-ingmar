@@ -1124,6 +1124,11 @@ impl CompilationUnit {
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut origins =
                 crate::source_objects::Origins::new(function.parameter_types().to_vec());
+            for (&value, ty) in &function.value_types {
+                if *ty == crate::ValueType::Any {
+                    origins.note_dynamic(value);
+                }
+            }
             let array_builders = function
                 .operations()
                 .iter()

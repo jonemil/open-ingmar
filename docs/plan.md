@@ -37,12 +37,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Use Any for unannotated parameters and results instead of the current
-  Number/Void defaults; support dynamic argument, member, and result checking.
+- [ ] Map omitted source parameter/result annotations to the existing Any IR
+  contracts instead of Number/Void; migrate fixtures intended to require fixed
+  types, retaining constructor and inherited callback contracts.
 - [ ] Support arbitrary `A or B` source unions in annotations, storage, calls,
   returns, and conditional joins, including union normalization and narrowing.
-- [ ] Support implicit Null returns/fallthrough and mixed value/Null paths under
-  inferred result contracts; keep explicit Void results distinct.
+- [ ] Give empty/bare-return unannotated source bodies Null results and accept
+  explicit mixed value/Null returns under Any; keep Void distinct. Preserve the
+  SDK's rejection of mixed value/bare-return and value/fallthrough paths.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
   diagnose recursive aliases.
 - [ ] Parse named and anonymous `interface` types with method and field members;

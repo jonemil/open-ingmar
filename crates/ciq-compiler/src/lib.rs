@@ -410,6 +410,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// Dynamic value, including Null, with operations checked at runtime.
+    Any,
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
     NumberFormat,
     /// A Lang.Endian enum value, distinct from Number and NumberFormat.
@@ -481,6 +483,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Dynamic value, including Null, with operations checked at runtime.
+    Any,
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
     NumberFormat,
     /// A Lang.Endian enum value, distinct from Number and NumberFormat.
@@ -555,6 +559,7 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Any => api::Type::Any,
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
             Self::NullableDouble => ValueType::NullableDouble.api_type(),
@@ -608,6 +613,7 @@ impl ReturnType {
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Any => api::Type::Any,
             Self::NullableInteger => ValueType::NullableInteger.api_type(),
             Self::NullableLong => ValueType::NullableLong.api_type(),
             Self::NullableDouble => ValueType::NullableDouble.api_type(),
@@ -658,6 +664,8 @@ impl ReturnType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
+    /// Dynamic value, including Null, with operations checked at runtime.
+    Any,
     ByteArrayOptions,
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
     NumberFormat,
@@ -753,6 +761,7 @@ impl ValueType {
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(self) -> api::Type {
         match self {
+            Self::Any => api::Type::Any,
             Self::ByteArrayOptions => api::Type::byte_options(),
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
             Self::Long => api::Type::named("Toybox.Lang.Long"),
@@ -836,6 +845,7 @@ impl ValueType {
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
         match ty {
+            api::Type::Any => Some(Self::Any),
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
             ty if *ty == TupleShape::ViewDelegate.api_type() => {
                 Some(Self::Tuple(TupleShape::ViewDelegate))
@@ -2001,6 +2011,7 @@ impl Function {
                     if !matches!(
                         type_of(receiver),
                         ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
+                            | ValueType::Any
                             | ValueType::LangObject
                     ) {
                         return Err(fail(
@@ -2194,7 +2205,7 @@ impl Function {
                     (Some(result), vec![left, right])
                 }
                 Operation::Branch { condition, .. } => {
-                    if type_of(condition) != ValueType::Boolean {
+                    if !matches!(type_of(condition), ValueType::Boolean | ValueType::Any) {
                         return Err(fail("branch requires a Boolean value"));
                     }
                     (None, vec![condition])
@@ -2338,7 +2349,8 @@ impl Function {
                     }
                     if !matches!(
                         type_of(value),
-                        ValueType::Integer
+                        ValueType::Any
+                            | ValueType::Integer
                             | ValueType::Numeric
                             | ValueType::IntegerAlias
                             | ValueType::Decimal
@@ -2644,21 +2656,21 @@ impl Function {
                     index,
                 } => {
                     let element = match type_of(array) {
-                        ValueType::Array(element) => element,
-                        ValueType::ByteArray => ArrayElement::Number,
+                        ValueType::Any => api::Type::Any,
+                        ValueType::Array(element) => element.api_type(),
+                        ValueType::ByteArray => ArrayElement::Number.api_type(),
                         _ => {
                             return Err(fail(
                                 "indexed reads require an Array or ByteArray receiver",
                             ));
                         }
                     };
-                    if type_of(index) != ValueType::Integer {
+                    if type_of(array) != ValueType::Any
+                        && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
+                    {
                         return Err(fail("array reads require a non-null Number index"));
                     }
-                    types.insert(
-                        result,
-                        ValueType::from_api_type(&element.api_type()).unwrap(),
-                    );
+                    types.insert(result, ValueType::from_api_type(&element).unwrap());
                     (Some(result), vec![array, index])
                 }
                 Operation::ArrayWrite {
@@ -2667,6 +2679,7 @@ impl Function {
                     value,
                 } => {
                     let element = match type_of(array) {
+                        ValueType::Any => api::Type::Any,
                         ValueType::Array(element) => element.api_type(),
                         ValueType::ByteArray => api::Type::Union(vec![
                             api::Type::named("Toybox.Lang.Number"),
@@ -2678,7 +2691,9 @@ impl Function {
                             ));
                         }
                     };
-                    if type_of(index) != ValueType::Integer {
+                    if type_of(array) != ValueType::Any
+                        && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
+                    {
                         return Err(fail("array writes require a non-null Number index"));
                     }
                     if !native::accepts(&element, &type_of(value).api_type())
@@ -3001,6 +3016,8 @@ impl Function {
                             ValueType::Interface(_) | ValueType::NullableInterface(_)
                         ) && origins.class(value).is_some();
                         if local_types[&local] != incoming
+                            && local_types[&local] != ValueType::Any
+                            && incoming != ValueType::Any
                             && !source_interface
                             && !(matches!(
                                 local_types[&local],
@@ -3131,6 +3148,7 @@ impl Function {
                             ValueType::NullableNumeric => ReturnType::NullableNumeric,
                             ValueType::NullableIntegerAlias => ReturnType::NullableIntegerAlias,
                             ValueType::NullableDecimal => ReturnType::NullableDecimal,
+                            ValueType::Any => ReturnType::Any,
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
                             ValueType::Double => ReturnType::Double,
@@ -3178,6 +3196,9 @@ impl Function {
                     }
                 }
                 types.entry(result).or_insert(ValueType::Integer);
+                if types.get(&result) == Some(&ValueType::Any) {
+                    origins.note_dynamic(result);
+                }
             }
             for operand in operands {
                 if !definitions.contains_key(&operand) {
@@ -4146,7 +4167,8 @@ fn validate_call_arguments(
         types.get(v).is_some_and(|t| {
             !matches!(
                 t,
-                ValueType::Integer
+                ValueType::Any
+                    | ValueType::Integer
                     | ValueType::String
                     | ValueType::Boolean
                     | ValueType::Char
@@ -4199,6 +4221,7 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::Any => Ok(ValueType::Any),
         ReturnType::NullableInteger => Ok(ValueType::NullableInteger),
         ReturnType::NullableLong => Ok(ValueType::NullableLong),
         ReturnType::NullableDouble => Ok(ValueType::NullableDouble),

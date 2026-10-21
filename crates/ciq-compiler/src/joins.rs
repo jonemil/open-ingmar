@@ -73,6 +73,9 @@ pub(crate) fn contract_tag(ty: &JoinType) -> Option<std::borrow::Cow<'static, st
 /// Distinct source classes and implicit source erasure do not form a join.
 pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinType> {
     match (left, right) {
+        (JoinType::Api(Type::Any), _) | (_, JoinType::Api(Type::Any)) => {
+            Some(JoinType::Api(Type::Any))
+        }
         (JoinType::Api(left), JoinType::Api(right)) => result(left, right).map(JoinType::Api),
         (
             JoinType::Source {
@@ -98,6 +101,9 @@ pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinT
 
 /// Join supported alternatives without converting either runtime value.
 pub(crate) fn result(left: &Type, right: &Type) -> Option<Type> {
+    if *left == Type::Any || *right == Type::Any {
+        return Some(Type::Any);
+    }
     if left == right && type_tag(left).is_some() {
         return Some(left.clone());
     }

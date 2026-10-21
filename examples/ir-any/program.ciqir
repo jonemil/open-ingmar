@@ -1,0 +1,153 @@
+ciq-unit
+.owner global
+ciq-ir
+.function main
+.string %0 "dynamic"
+.println %0
+.string %1 "hi"
+.call %2 Dynamic identity result=any %1
+.println %2
+.null %3
+.call %4 Dynamic identity result=any %3
+.println %4
+.string %5 "abc"
+.call %6 Dynamic length result=any %5
+.println %6
+.integer %7 40
+.integer %8 2
+.call %9 Dynamic add result=any %7 %8
+.println %9
+.array-constant %10 number 0x0000002a
+.local $0 %10
+.read %11 $0
+.integer %12 0
+.call %13 Dynamic at result=any %11 %12
+.println %13
+.read %14 $0
+.integer %15 0
+.integer %16 7
+.call-discard Dynamic put %14 %15 %16
+.read %17 $0
+.integer %18 0
+.call %19 Dynamic at result=any %17 %18
+.println %19
+.boolean %20 true
+.call %21 Dynamic condition result=boolean %20
+.println %21
+.new-source %22 Token Lang.Object
+.call %23 Dynamic custom result=any %22
+.println %23
+.string %24 "%d"
+.call %25 Dynamic format result=string %24
+.println %25
+.integer %26 41
+.call %27 Dynamic narrow result=integer %26
+.println %27
+.return-void
+.end
+.owner module Dynamic
+ciq-ir
+.function identity parameters=1 parameter-types=any result=any
+.parameter %0 0
+.return %0
+.end
+.owner module Dynamic
+ciq-ir
+.function length parameters=1 parameter-types=any result=any
+.parameter %0 0
+.call-native %1 %0 length
+.return %1
+.end
+.owner module Dynamic
+ciq-ir
+.function add parameters=2 parameter-types=any:any result=any
+.parameter %0 0
+.parameter %1 1
+.add %2 %0 %1
+.return %2
+.end
+.owner module Dynamic
+ciq-ir
+.function at parameters=2 parameter-types=any:any result=any
+.parameter %0 0
+.parameter %1 1
+.array-read %2 %0 %1
+.return %2
+.end
+.owner module Dynamic
+ciq-ir
+.function put parameters=3 parameter-types=any:any:any
+.parameter %0 0
+.parameter %1 1
+.parameter %2 2
+.array-write %0 %1 %2
+.return-void
+.end
+.owner module Dynamic
+ciq-ir
+.function condition parameters=1 parameter-types=any result=boolean
+.block ^0
+.parameter %0 0
+.branch %0 ^1 ^2
+.block ^1
+.boolean %1 true
+.return %1
+.block ^2
+.boolean %2 false
+.return %2
+.end
+.owner module Dynamic
+ciq-ir
+.function custom parameters=1 parameter-types=any result=any
+.parameter %0 0
+.call-native %1 %0 value
+.return %1
+.end
+.owner module Dynamic
+ciq-ir
+.function format parameters=1 parameter-types=any result=string
+.integer %0 42
+.parameter %1 0
+.call-native %2 %0 format %1
+.return %2
+.end
+.owner module Dynamic
+ciq-ir
+.function narrow parameters=1 parameter-types=any
+.block ^0
+.parameter %0 0
+.instanceof %1 %0 Toybox.Lang.Number
+.branch %1 ^1 ^2
+.block ^1
+.parameter %2 0
+.integer %3 1
+.add %4 %2 %3
+.return %4
+.block ^2
+.integer %5 0
+.return %5
+.end
+.class Token Lang.Object
+ciq-ir
+.function initialize receiver=instance
+.return-void
+.end
+ciq-ir
+.function value receiver=instance
+.integer %0 42
+.return %0
+.end
+.end-class
+.class MinimalConsoleApp Application.AppBase
+ciq-ir
+.function initialize receiver=instance
+.base-initialize Application.AppBase
+.return-void
+.end
+ciq-ir
+.function onStart parameters=1 parameter-types=nullable-dictionary receiver=instance
+.call-global-discard main
+.call-native-module-discard Toybox.System exit
+.return-void
+.end
+.end-class

@@ -7,6 +7,7 @@ use std::borrow::Cow;
 
 // Canonical spellings common to ordinary parameter and call-result contracts.
 const NAMED: &[(&str, ParameterType, ReturnType)] = &[
+    ("any", ParameterType::Any, ReturnType::Any),
     ("integer", ParameterType::Integer, ReturnType::Integer),
     ("long", ParameterType::Long, ReturnType::Long),
     ("float", ParameterType::Float, ReturnType::Float),

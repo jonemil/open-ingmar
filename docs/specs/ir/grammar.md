@@ -289,7 +289,7 @@ parameter-tag = common-tag | array-tag | source-tag | nullable-source-tag
 call-result-tag = common-tag | array-tag | source-tag | nullable-source-tag
                 | "one-view" | "view-delegate"
 declared-result-tag = call-result-tag
-common-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
+common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate"
 scalar-tag = "integer" | other-scalar-tag
@@ -316,7 +316,7 @@ dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
                    | "symbol" | "method" | "byte-array"
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
-join-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
+join-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
          | source-tag | nullable-source-tag

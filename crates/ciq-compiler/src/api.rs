@@ -96,7 +96,7 @@ impl ApiContext {
     }
 
     /// Check class/interface introduction levels in a value or signature type,
-    /// including container parameters. Null/Void have no level; unions require
+    /// including container parameters. Any/Null/Void have no level; unions require
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
@@ -134,7 +134,7 @@ impl ApiContext {
             Type::Union(types) => types
                 .iter()
                 .try_for_each(|ty| self.check_type(catalogue, ty)),
-            Type::Null | Type::Void => Ok(()),
+            Type::Any | Type::Null | Type::Void => Ok(()),
         }
     }
 
@@ -183,6 +183,8 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Dynamic value, including Null; operations defer unknown types to runtime.
+    Any,
     /// Mutable Array with an explicit element contract. Array element contracts
     /// are invariant; this does not imply executable support for every element.
     Array(Box<Type>),
@@ -221,7 +223,11 @@ impl Type {
         ])
     }
     /// Add Null to the top-level union alternatives once, preserving their order.
+    /// Any already admits Null and remains Any.
     pub fn with_null(self) -> Self {
+        if self == Self::Any {
+            return Self::Any;
+        }
         let mut alternatives = match self {
             Self::Union(types) => types,
             ty => vec![ty],
@@ -1379,7 +1385,7 @@ mod tests {
                 Type::Union(types) | Type::Tuple(types) => {
                     types.iter().for_each(|ty| check_type(api, ty))
                 }
-                Type::Null | Type::Void => {}
+                Type::Any | Type::Null | Type::Void => {}
             }
         }
         for class in api.classes.values() {

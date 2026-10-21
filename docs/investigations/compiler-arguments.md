@@ -217,3 +217,28 @@ nested argument context/order, semantic/IR position and dependency validation,
 malformed signatures/lists, source/IR encoding/nesting bounds, and CLI text
 resumption. The restricted test evaluator uses synthetic callees and
 stack/context markers; it is not a full VM/frame implementation.
+
+## Dynamic IR contracts
+
+2026-10-21; SDK 9.2.0, Java 17, `fr265`, `-O 0`. Authored probes in
+`scratch/core-any/source/app.mc` establish that omitted parameter/result
+annotations permit String and Null forwarding and dynamic member calls. Bare
+`Any` annotations are rejected as an unresolved type. The SDK rejects both a
+value-returning branch with implicit fallthrough and mixed value/bare returns;
+explicit value/Null returns compile. These are SDK-profile observations, not
+claims about all type-checking policies.
+
+The tracked [source and hand-authored IR](../../examples/ir-any/README.md)
+compare dynamic scalar calls, arithmetic, indexing/mutation, conditions,
+source-class member dispatch, a dynamic argument to a known native method, and
+runtime-class narrowing. Both signed programs match `expected.txt` in the
+simulator. Structured CODE/DATA exports reconstruct both complete PRGs byte for
+byte. No new opcode or DATA record is required. Artifacts and logs are in
+`scratch/core-any/`; the passing runtime comparison is `check-final/runtime/`.
+
+Reproduction: build the saved IR with its README command. The SDK reference uses
+`scripts/build-example.sh scratch/core-any` with a local Jungle pointing at
+`examples/ir-any` and the console manifest/resources in `scratch/native-names`.
+The first SDK run printed the expected values but failed afterward because its
+console app omitted `System.exit()`; the tracked specimen includes that call.
+Our source-default migration is separate from this IR/runtime experiment.

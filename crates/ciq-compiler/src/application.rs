@@ -345,7 +345,10 @@ pub fn build_console_application(
                 .chain(unit.classes().iter().flat_map(|c| &c.methods))
                 .flat_map(|f| f.operations())
                 .filter_map(|op| {
-                    if let crate::Operation::Symbol { name, .. } = &op.operation {
+                    if let crate::Operation::Symbol { name, .. }
+                    | crate::Operation::NativeCall { member: name, .. }
+                    | crate::Operation::NativeCallStatement { member: name, .. } = &op.operation
+                    {
                         Some(name.clone())
                     } else {
                         None
@@ -389,6 +392,9 @@ pub fn build_console_application(
             format!("__ciq_member_{}", function.name()),
             ids[function.name()],
         );
+    }
+    for (name, id) in &ids {
+        bindings.insert(format!("__ciq_native_{name}"), *id);
     }
     for (module, id) in &module_ids {
         bindings.insert(format!("__ciq_module_{module}"), *id);

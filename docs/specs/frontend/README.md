@@ -58,6 +58,10 @@ scalar/Void returns unless an explicit signature is supplied. Native callbacks
 retain their independently resolved signatures; annotations cannot override
 them.
 
+Semantic IR also supports [Any contracts](../ir/README.md#dynamic-values).
+They do not yet change the source defaults above; bare `Any` is not accepted
+source annotation syntax in the tested SDK profile.
+
 ### Nullable results
 
 String `find(String)` and `toNumber()` are available since API 1.0.0 and return

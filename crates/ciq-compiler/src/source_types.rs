@@ -269,6 +269,7 @@ impl Types {
                 self.values
                     .get(array)
                     .and_then(|ty| match candidate(ty).as_ref() {
+                        Type::Any => Some(Type::Any),
                         Type::Array(element) => Some((**element).clone()),
                         Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
                             Some(Type::named("Toybox.Lang.Number"))
@@ -393,6 +394,9 @@ impl Types {
             _ => return,
         };
         if let Some(ty) = ty {
+            if ty == Type::Any {
+                self.origins.note_dynamic(result);
+            }
             self.values.insert(result, ty);
         }
     }

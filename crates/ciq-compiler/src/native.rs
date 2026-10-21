@@ -121,12 +121,41 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
 /// availability, arguments, and executable support must all pass first.
 /// Comparison and equality operands follow their declared Object contracts;
 /// an accepted argument may still cause a runtime type exception.
+/// Any receivers defer member/argument checking to runtime and produce Any.
+/// Any arguments on known receivers retain profile, arity, and API checks.
 pub(crate) fn value_call(
     receiver: &api::Type,
     member: &str,
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if *receiver == api::Type::Any {
+        if arguments.len() > crate::MAX_PARAMETERS {
+            return Err("call exceeds 254-argument limit".into());
+        }
+        crate::validate_call_names(None, member)?;
+        return Ok(api::Type::Any);
+    }
+    if arguments.contains(&api::Type::Any) {
+        if let Some(expected) = value_parameters(receiver, member) {
+            if expected.len() == arguments.len() {
+                let resolved = arguments
+                    .iter()
+                    .zip(expected)
+                    .map(|(actual, expected)| {
+                        if *actual == api::Type::Any {
+                            expected
+                        } else {
+                            actual.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if !resolved.contains(&api::Type::Any) {
+                    return value_call(receiver, member, &resolved, context);
+                }
+            }
+        }
+    }
     if let Some(alternatives) = receiver.numeric_alternatives() {
         let result = value_call(&alternatives[0], member, arguments, context)?;
         for alternative in &alternatives[1..] {
@@ -521,8 +550,13 @@ fn scalar_comparable(actual: &api::Type) -> bool {
 /// or union membership without implicit conversions. Every alternative of an
 /// actual union must be accepted.
 /// Containers may widen to their declared class/base; their parameters are invariant.
+/// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
-    if expected == actual {
+    if expected == actual
+        || (*expected == api::Type::Any || *actual == api::Type::Any)
+            && *expected != api::Type::Void
+            && *actual != api::Type::Void
+    {
         return true;
     }
     if matches!(expected, api::Type::Named(name) if name == crate::InterfaceType::Comparable.name())

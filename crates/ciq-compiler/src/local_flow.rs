@@ -161,6 +161,7 @@ fn accepts(expected: &JoinType, actual: &JoinType) -> bool {
         ) => a == b && (*a_null || !b_null),
         (JoinType::Source { nullable: true, .. }, JoinType::Api(Type::Null)) => true,
         (JoinType::Source { .. }, _) => false,
+        (_, JoinType::Api(Type::Any)) => *expected == JoinType::Api(Type::Any),
         (_, _) => crate::native::accepts(&expected.api_type(), &actual.api_type()),
     }
 }

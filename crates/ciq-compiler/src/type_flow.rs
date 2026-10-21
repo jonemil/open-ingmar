@@ -60,7 +60,8 @@ pub(crate) fn refine(
     let ty = if non_null { ty.without_null() } else { ty };
     if matches!(
         ty,
-        crate::ValueType::LangObject
+        crate::ValueType::Any
+            | crate::ValueType::LangObject
             | crate::ValueType::Interface(_)
             | crate::ValueType::Numeric
             | crate::ValueType::IntegerAlias

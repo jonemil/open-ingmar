@@ -15,6 +15,7 @@ Contents:
 - [Model and validation](#model-and-validation)
 - [Compilation units and classes](#compilation-units-and-classes)
 - [Values and storage](#values-and-storage)
+- [Dynamic values](#dynamic-values)
 - [Control flow](#control-flow)
 - [Containers and private construction](#containers-and-private-construction)
 - [Calls and objects](#calls-and-objects)
@@ -305,6 +306,49 @@ reuse these scalar tags on either side of `=>`, excluding nullable keys. Native
 methods and index operations recheck the
 [source container rules](../frontend/README.md#numeric-alias-containers), including
 invariance and null proofs, rather than trusting a saved result annotation.
+
+### Dynamic values
+
+`Any` is a dynamic value contract, distinct from Object and Void. It includes
+Null and has no API introduction level. In-memory parameter/result contracts
+and `api::Type` expose `Any`; saved parameter, result, local, and block-value
+contracts spell it `any`. The source frontend's omitted annotations still use
+the [source defaults](../frontend/README.md#function-type-contracts).
+
+Any may cross supported typed argument, assignment, and return boundaries
+without a conversion or generated guard. Concrete mismatches remain errors
+when neither side is Any. Container element contracts do not widen to Any;
+this does not introduce Array<Any>, Dictionary Any parameters, or new source
+annotation syntax. Void calls still cannot produce values, and an Any result
+requires a value return. Null is an ordinary admissible return value.
+
+Arithmetic and unary operations with dynamic operands use the existing
+operators and produce Any; comparisons produce Boolean. Dynamic conditions
+use the ordinary branch. Indexing an Any receiver uses existing indexed
+operations with dynamic keys/values and an Any read result. A concrete Array
+receiver retains its Number index and element contracts, admitting Any arguments
+under the dynamic boundary rule. Runtime type, bounds, and operation failures
+remain possible.
+
+Calling a named member on Any accepts structurally valid names and up to 254
+arguments, producing Any. Method existence, arity, and runtime argument types
+are not statically known. On a concrete receiver, member resolution, supported
+executable profiles, arity, and API availability still apply. An Any argument
+may satisfy a known parameter without changing its declared result contract.
+Names share pinned API IDs or allocated source-member IDs in the application;
+there is no independent dynamic-member namespace.
+
+Runtime class tests can narrow fresh Any storage reads through the shared
+fact analysis. Any alone does not prove a source class; passing it through an
+explicit source contract defers that boundary to runtime. Writes invalidate
+old facts. Inferred-variable read metadata cannot replace an incoming Any view
+with an invented concrete contract; narrowing must be independently established.
+Structural checks remain mandatory: definition/use order, frame limits,
+definite assignment, block-local values, and effect scheduling.
+
+The [saved-IR example](../../../examples/ir-any/README.md) and
+[runtime evidence](../../investigations/compiler-arguments.md#dynamic-ir-contracts)
+cover these operations through assembly, PRG reconstruction, and the simulator.
 
 ### Local operations
 
