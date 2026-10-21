@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     if (Flags.mark("skip-and", false) && Flags.mark("bad-and", true)) {
         System.println("unexpected and");
     } else { System.println("and skipped"); }

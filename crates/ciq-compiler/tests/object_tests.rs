@@ -46,11 +46,11 @@ fn qualified_names_aliases_and_api_requirements_remain_checked() {
     let unit = compile_sources_with_api(&[source], accepted).unwrap();
     assert!(unit.validate_api(low).is_err());
     for source in [
-        "function f(o as Toybox.Lang.Object) { return o instanceof Lang.Comparator; }",
-        "function f(o as Toybox.Lang.Object) { return o instanceof Missing; }",
-        "function f(o as Toybox.Lang.Object) { return o has 1; }",
-        "function f(o as Toybox.Lang.Object or Null) { return o has :toString; }",
-        "function f() { return null has :toString; }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { return o instanceof Lang.Comparator; }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { return o instanceof Missing; }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { return o has 1; }",
+        "function f(o as Toybox.Lang.Object or Null) as Toybox.Lang.Number { return o has :toString; }",
+        "function f() as Toybox.Lang.Number { return null has :toString; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

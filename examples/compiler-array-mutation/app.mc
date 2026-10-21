@@ -14,7 +14,7 @@ module Arrays {
     }
 }
 
-function start() {
+function start() as Void {
     var a = "aba".toCharArray();
     var shared = a;
     var b = "ca".toCharArray();

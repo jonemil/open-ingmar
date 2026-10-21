@@ -31,7 +31,10 @@ fn logical_values_preserve_complete_application_and_snapshot_call_order() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile("function f() { return M.first() + (true && false).hashCode(); }").unwrap();
+    let f = compile(
+        "function f() as Toybox.Lang.Number { return M.first() + (true && false).hashCode(); }",
+    )
+    .unwrap();
     let operations = f.operations();
     let call = operations
         .iter()
@@ -71,10 +74,10 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
     for source in [
         "function f() as Toybox.Lang.Boolean { return false && 1; }",
         "function f() as Toybox.Lang.Boolean { return true || null; }",
-        "function f() { var flag = true && false; flag = 1; if(flag){return 1;}return 0; }",
-        "function f(n as Toybox.Lang.Number or Null) { var present = !(n == null) && n > 0; if (present) { return n; } return 0; }",
-        "function f(n as Toybox.Lang.Number or Null) { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
-        "function f() { return -(true && false); }",
+        "function f() as Toybox.Lang.Number { var flag = true && false; flag = 1; if(flag){return 1;}return 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var present = !(n == null) && n > 0; if (present) { return n; } return 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
+        "function f() as Toybox.Lang.Number { return -(true && false); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

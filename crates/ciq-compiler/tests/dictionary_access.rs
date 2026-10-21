@@ -5,7 +5,7 @@ const D: &str = "Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>"
 
 #[test]
 fn indexed_reads_and_writes_have_dictionary_ir_and_direct_vm_operations() {
-    let numeric = compile("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Number>, key) as Toybox.Lang.Number or Null { return d[key]; }").unwrap();
+    let numeric = compile("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Number>, key as Toybox.Lang.Number) as Toybox.Lang.Number or Null { return d[key]; }").unwrap();
     assert_eq!(
         numeric.lower().encode().unwrap(),
         [0x35, 3, 0x12, 1, 0x12, 2, 0x10, 0x16]
@@ -94,7 +94,7 @@ fn lookup_proofs_and_mutation_survive_source_and_saved_units() {
         ),
     ] {
         let source = format!(
-            "module M {{ function make() as Toybox.Lang.Dictionary<Toybox.Lang.{key}, Toybox.Lang.{value}> {{ return {literal}; }} function run() {{ var d = M.make(); {body} return 0; }} }}"
+            "module M {{ function make() as Toybox.Lang.Dictionary<Toybox.Lang.{key}, Toybox.Lang.{value}> {{ return {literal}; }} function run() as Toybox.Lang.Number {{ var d = M.make(); {body} return 0; }} }}"
         );
         let unit = compile_sources(&[&source]).unwrap();
         assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
@@ -120,7 +120,7 @@ fn nullable_values_require_guarded_uses_and_typed_keys_and_writes() {
         "return d.remove(\"one\");",
         "d[\"one\"]++; return 0;",
     ] {
-        let source = format!("function f(d as {D}) {{ {body} }}");
+        let source = format!("function f(d as {D}) as Void {{ {body} }}");
         assert!(compile(&source).is_err(), "accepted {source}");
     }
     for body in [
@@ -129,7 +129,7 @@ fn nullable_values_require_guarded_uses_and_typed_keys_and_writes() {
         "return d.get(\"one\");",
         "return d.hasKey(\"one\");",
     ] {
-        let source = format!("function f(d as Toybox.Lang.Dictionary) {{ {body} }}");
+        let source = format!("function f(d as Toybox.Lang.Dictionary) as Void {{ {body} }}");
         assert!(compile(&source).is_err());
     }
     let nullable = "Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null>";
@@ -143,7 +143,7 @@ fn nullable_values_require_guarded_uses_and_typed_keys_and_writes() {
 #[test]
 fn branches_in_write_values_stage_receiver_and_key_before_the_join() {
     let source = format!(
-        "function f(d as {D}, choose as Toybox.Lang.Boolean) {{ d[\"one\"] = choose ? 1 : 2; var n = d[choose ? \"one\" : \"missing\"]; if (n != null) {{ return n; }} return 0; }}"
+        "function f(d as {D}, choose as Toybox.Lang.Boolean) as Toybox.Lang.Number {{ d[\"one\"] = choose ? 1 : 2; var n = d[choose ? \"one\" : \"missing\"]; if (n != null) {{ return n; }} return 0; }}"
     );
     let f = compile(&source).unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());

@@ -1,4 +1,4 @@
-function choose(value) {
+function choose(value as Toybox.Lang.Number) as Toybox.Lang.Number {
     var remaining = value + 4;
     var total = 0;
     while (remaining > 0) {

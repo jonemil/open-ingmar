@@ -56,7 +56,7 @@ fn scalar_literals_remain_typed_through_ir_assembly_and_explicit_data_binding() 
         );
     }
     for source in [
-        "function f(n) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 1]; }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 1]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1 + 2]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [(true || false).hashCode()]; }",
     ] {

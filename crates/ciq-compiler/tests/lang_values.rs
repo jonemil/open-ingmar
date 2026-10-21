@@ -104,7 +104,7 @@ fn forward_and_recursive_calls_use_declared_contracts() {
 #[test]
 fn call_contracts_are_checked_against_callees_after_ir_edits() {
     let callee = "module M { function echo(text as Toybox.Lang.String) as Toybox.Lang.String { return text; } }";
-    let caller = "function f() { System.println(M.echo(\"hi\")); }";
+    let caller = "function f() as Void { System.println(M.echo(\"hi\")); }";
     let unit = compile_sources(&[callee, caller]).unwrap();
     let text = unit.to_ir_text();
     for bad in [
@@ -119,7 +119,7 @@ fn call_contracts_are_checked_against_callees_after_ir_edits() {
         "M.echo(1);",
         "System.println(M.echo(false));",
     ] {
-        let caller = format!("function f() {{ {statement} }}");
+        let caller = format!("function f() as Void {{ {statement} }}");
         let error = compile_sources(&[callee, &caller]).unwrap_err();
         assert_eq!(error.source, 1);
         assert!(
@@ -147,10 +147,10 @@ fn annotated_returns_remain_uniform_and_callback_contracts_remain_separate() {
         "function f() as Toybox.Lang.Boolean { return \"hi\"; }",
         "function f() as Void { return true; }",
         "function f() as Toybox.Lang.String { return; }",
-        "function f(s as Toybox.Lang.String) { return s + 1; }",
-        "function f(s as Toybox.Lang.String) { if (s) { return 1; } else { return 2; } }",
-        "function f(s as Toybox.Lang.Boolean) { return s + 1; }",
-        "function f(s as Toybox.Lang.Unknown) { return 1; }",
+        "function f(s as Toybox.Lang.String) as Toybox.Lang.Number { return s + 1; }",
+        "function f(s as Toybox.Lang.String) as Toybox.Lang.Number { if (s) { return 1; } else { return 2; } }",
+        "function f(s as Toybox.Lang.Boolean) as Toybox.Lang.Number { return s + 1; }",
+        "function f(s as Toybox.Lang.Unknown) as Toybox.Lang.Number { return 1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

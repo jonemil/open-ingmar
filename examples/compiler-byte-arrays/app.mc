@@ -16,9 +16,9 @@ class ByteBox {
     function change() as Void { self.fixed[0] += 1; }
 }
 module Bytes {
-    function make(n) as Lang.ByteArray { return new[n]b; }
+    function make(n as Toybox.Lang.Number) as Lang.ByteArray { return new[n]b; }
     function echo(b as Lang.ByteArray) as Lang.ByteArray { return b; }
-    function effect(n) { System.println(n); return n; }
+    function effect(n as Toybox.Lang.Number) as Toybox.Lang.Number { System.println(n); return n; }
     function choose(flag as Lang.Boolean) as Lang.ByteArray {
         return flag ? new[Bytes.effect(2)]b : new[Bytes.effect(4)]b;
     }
@@ -26,8 +26,8 @@ module Bytes {
         return [0, 1, 127, 128, 255, -1, -128, 'A']b;
     }
     function empty() as Lang.ByteArray { return []b; }
-    function straight(n) as Lang.ByteArray { return [n, n + 1]b; }
-    function computed(n) as Lang.ByteArray {
+    function straight(n as Toybox.Lang.Number) as Lang.ByteArray { return [n, n + 1]b; }
+    function computed(n as Toybox.Lang.Number) as Lang.ByteArray {
         return [Bytes.effect(n), true ? Bytes.effect(n + 1) : Bytes.effect(99), 'Z']b;
     }
     function optional(flag as Lang.Boolean) as Lang.ByteArray or Null {
@@ -36,7 +36,7 @@ module Bytes {
     function echoOptional(b as Lang.ByteArray or Null) as Lang.ByteArray or Null {
         return b;
     }
-    function required(b as Lang.ByteArray) { return b.size(); }
+    function required(b as Lang.ByteArray) as Toybox.Lang.Number { return b.size(); }
     function describe(b as Lang.ByteArray or Null) as Void {
         if (b == null) { System.println("no bytes"); return; }
         b[0] += 1;
@@ -51,7 +51,7 @@ module Bytes {
         return [null, flag ? [7]b : null];
     }
     function nullList() as Lang.Array<Lang.ByteArray or Null> { return [null]; }
-    function slots(n) as Lang.Array<Lang.ByteArray or Null> { return new[n]; }
+    function slots(n as Toybox.Lang.Number) as Lang.Array<Lang.ByteArray or Null> { return new[n]; }
     function table(flag as Lang.Boolean) as Lang.Dictionary<Lang.String, Lang.ByteArray> {
         return {"one" => [13]b, "two" => flag ? [14]b : [15]b};
     }
@@ -77,7 +77,7 @@ module Bytes {
     }
     function byteKeys(key as Lang.ByteArray)
         as Lang.Dictionary<Lang.ByteArray, Lang.Number> { return {key => 10}; }
-    function recovered(o as Lang.Object or Null) {
+    function recovered(o as Lang.Object or Null) as Toybox.Lang.Number {
         if (!(o instanceof Lang.ByteArray)) { return -1; }
         o[0] += 1;
         return o[0];
@@ -87,7 +87,7 @@ module Bytes {
     }
 }
 module ByteProgram {
-    function run() {
+    function run() as Void {
         var a = Bytes.make(Bytes.effect(3));
         System.println(a.toString());
         System.println(a[0]);

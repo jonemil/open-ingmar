@@ -106,3 +106,97 @@ fn dynamic_boundaries_retain_known_arity_availability_and_source_contracts() {
     let text = "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n.integer %0 42\n.parameter %1 0\n.call-native %2 %0 toChar %1\n.return %2\n.end\n";
     assert!(ciq_compiler::parse_ir_with_api(text, low).is_err());
 }
+
+#[test]
+fn omitted_source_annotations_are_dynamic_and_saved_stages_preserve_them() {
+    for source in [
+        "function f(x){return x;}",
+        "function f(x){return x.length();}",
+        "function f(x,y){return x+y;}",
+        "function f(x,key){return x[key];}",
+        "function f(x,key,v){x[key]=v;return x[key];}",
+        "function f(x){x=\"next\";return x;}",
+        "function f(n){var count=n;var total=0;while(count>0){total+=count;count-=1;}return total;}",
+        "function f(n){var count=n;var total=0;while(count>0){var a=[count,(true||false).hashCode()];total+=a[0];count-=1;}return total;}",
+        "function f(){return \"hi\";}",
+        "function f(){return null;}",
+        "function f(b){if(b){return 42;}else{return \"no\";}}",
+        "function f(b){if(b){return 42;}else{return null;}}",
+        "function f(){}",
+        "function f(){return;}",
+        "function f(b){if(b){return;}else{System.println(1);}}",
+    ] {
+        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f.return_type(), ReturnType::Any, "{source}");
+        assert!(
+            f.parameter_types()
+                .iter()
+                .all(|ty| *ty == ParameterType::Any)
+        );
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(
+            f.lower(),
+            ciq_assembly::Program::parse(&f.assembly()).unwrap()
+        );
+    }
+    for source in [
+        "function f(b){if(b){return 42;}}",
+        "function f(b){if(b){return 42;}else{return;}}",
+        "function f() as Void{return 42;}",
+        "function f() as Toybox.Lang.Number{return null;}",
+    ] {
+        assert!(compile(source).is_err(), "{source}");
+    }
+    let unit =
+        ciq_compiler::compile_sources(&[include_str!("../../../examples/ir-any/app.mc")]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let app = ConsoleApplication {
+        id: [62; 16],
+        entry: "MinimalConsoleApp.onStart".into(),
+    };
+    build_console_application(&unit, &app).unwrap();
+}
+
+#[test]
+fn concrete_source_results_accept_dynamic_values_without_losing_saved_contracts() {
+    for ty in [
+        "Number",
+        "Long",
+        "Float",
+        "Double",
+        "String",
+        "Boolean",
+        "Object",
+        "Array<Toybox.Lang.Number>",
+    ] {
+        let source = format!("function f(x) as Toybox.Lang.{ty}{{return x;}}");
+        let f = compile(&source).unwrap();
+        assert!(f.to_ir_text().contains("result="));
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap(), "{source}");
+    }
+}
+
+#[test]
+fn dynamic_lengths_and_elements_preserve_checked_container_contracts() {
+    for source in [
+        "function f(n) as Toybox.Lang.ByteArray{return new[n]b;}",
+        "function f(n) as Toybox.Lang.Array<Toybox.Lang.Number or Null>{return new[n];}",
+        "function f(x){var a=[x,7];a[0]=null;return a[0];}",
+        "function f(x){var a=[x];a.add(7);return a[1];}",
+    ] {
+        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    }
+    let f = compile("function f(x){return [x,7];}").unwrap();
+    assert!(f.to_ir_text().contains(" any "));
+    for text in [
+        "ciq-ir\n.function f\n.array-constant %0 any 0x00000001\n.return %0\n.end\n",
+        "ciq-unit\n.owner global\nciq-ir\n.function use parameters=1 parameter-types=number-array\n.integer %0 0\n.return %0\n.end\n.owner global\nciq-ir\n.function f\n.array-new %0 any\n.call-global %1 use %0\n.return %1\n.end\n",
+    ] {
+        if text.starts_with("ciq-unit") {
+            assert!(parse_unit_ir(text).is_err());
+        } else {
+            assert!(parse_ir(text).is_err());
+        }
+    }
+}

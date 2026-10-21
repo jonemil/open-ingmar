@@ -83,18 +83,18 @@ fn class_ownership_receiver_and_text_pipeline_preserve_complete_prg() {
 #[test]
 fn self_calls_resolve_only_within_the_enclosing_class_and_check_signatures() {
     for source in [
-        "class C extends Application.AppBase { function start() { self.missing(); } }",
-        "class C extends Application.AppBase { function start() { self.f(); } function f(x) {} }",
-        "class C extends Application.AppBase { function start() { return self.f(); } function f() {} }",
-        "class C extends Application.AppBase { function start() { return M.f(); } function f() { return 1; } }",
-        "class C extends Application.AppBase { function start() { C.f(); } function f() {} }",
-        "module M { function f() {} } class C extends Application.AppBase { function start() { self.f(); } }",
-        "function f() { return 1; } class C extends Application.AppBase { function start() { return self.f(); } }",
-        "class C extends Application.AppBase { function f() { D.f(); } } class D extends Application.AppBase { function f() {} }",
+        "class C extends Application.AppBase { function start() as Void { self.missing(); } }",
+        "class C extends Application.AppBase { function start() as Void { self.f(); } function f(x as Toybox.Lang.Number) as Void {} }",
+        "class C extends Application.AppBase { function start() as Toybox.Lang.Number { return self.f(); } function f() as Void {} }",
+        "class C extends Application.AppBase { function start() as Toybox.Lang.Number { return M.f(); } function f() as Toybox.Lang.Number { return 1; } }",
+        "class C extends Application.AppBase { function start() as Void { C.f(); } function f() as Void {} }",
+        "module M { function f() as Void {} } class C extends Application.AppBase { function start() as Void { self.f(); } }",
+        "function f() as Toybox.Lang.Number { return 1; } class C extends Application.AppBase { function start() as Toybox.Lang.Number { return self.f(); } }",
+        "class C extends Application.AppBase { function f() as Void { D.f(); } } class D extends Application.AppBase { function f() as Void {} }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
-    let unit = compile_sources(&["class C extends Application.AppBase { function f(x) { return self.g(x); } function g(x) { return x; } } class D extends Application.AppBase { function f() { self.f(); } }"]).unwrap();
+    let unit = compile_sources(&["class C extends Application.AppBase { function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { return self.g(x); } function g(x as Toybox.Lang.Number) as Toybox.Lang.Number { return x; } } class D extends Application.AppBase { function f() as Void { self.f(); } }"]).unwrap();
     assert_eq!(unit.classes().len(), 2);
     assert_eq!(
         unit.classes()[0].methods[0].return_type(),
@@ -108,8 +108,8 @@ fn self_calls_resolve_only_within_the_enclosing_class_and_check_signatures() {
             .contains("exactly one")
     );
     let error = compile_sources(&[
-        "function main() {}",
-        "class C extends Application.AppBase {\n function f() { self.missing(); }\n}",
+        "function main() as Void {}",
+        "class C extends Application.AppBase {\n function f() as Void { self.missing(); }\n}",
     ])
     .unwrap_err();
     assert_eq!(error.source, 1);
@@ -143,7 +143,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         }])
         .is_err()
     );
-    let free = compile("function f() {}").unwrap();
+    let free = compile("function f() as Void {}").unwrap();
     assert!(
         CompilationUnit::with_classes(
             vec![],
@@ -157,11 +157,11 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         .is_err()
     );
     for source in [
-        "function f() { self.f(); }",
-        "function f() { return self.f(); }",
-        "function f(self) {}",
-        "function f() { var self = 1; }",
-        "function f() { return self; }",
+        "function f() as Void { self.f(); }",
+        "function f() as Toybox.Lang.Number { return self.f(); }",
+        "function f(self as Toybox.Lang.Number) as Void {}",
+        "function f() as Void { var self = 1; }",
+        "function f() as Toybox.Lang.Number { return self; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -179,17 +179,17 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
 #[test]
 fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
     for source in [
-        "class C extends Other { function f() {} }",
+        "class C extends Other { function f() as Void {} }",
         "class C extends Application.AppBase {}",
         "class C extends Application.AppBase { var x = 1; }",
-        "class C extends Application.AppBase { function f() {} function f() {} }",
-        "class C extends Application.AppBase { function f() {} } class C extends Application.AppBase { function g() {} }",
-        "module C { function f() {} } class C extends Application.AppBase { function g() {} }",
-        "function C() {} class C extends Application.AppBase { function f() {} }",
-        "class System extends Application.AppBase { function f() {} }",
-        "class AppBase extends Application.AppBase { function f() {} }",
-        "class println extends Application.AppBase { function f() {} }",
-        "module M { class C extends Application.AppBase { function f() {} } }",
+        "class C extends Application.AppBase { function f() as Void {} function f() as Void {} }",
+        "class C extends Application.AppBase { function f() as Void {} } class C extends Application.AppBase { function g() as Void {} }",
+        "module C { function f() as Void {} } class C extends Application.AppBase { function g() as Void {} }",
+        "function C() as Void {} class C extends Application.AppBase { function f() as Void {} }",
+        "class System extends Application.AppBase { function f() as Void {} }",
+        "class AppBase extends Application.AppBase { function f() as Void {} }",
+        "class println extends Application.AppBase { function f() as Void {} }",
+        "module M { class C extends Application.AppBase { function f() as Void {} } }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
@@ -201,7 +201,7 @@ fn class_syntax_names_and_container_framing_reject_unsupported_inputs() {
     ] {
         assert!(parse_unit_ir(&bad).is_err());
     }
-    let plain = compile_sources(&["function main() {}"]).unwrap();
+    let plain = compile_sources(&["function main() as Void {}"]).unwrap();
     assert!(plain.to_ir_text().starts_with("ciq-unit\n"));
     assert_eq!(parse_unit_ir(&plain.to_ir_text()).unwrap(), plain);
     let too_many = format!(
@@ -299,11 +299,12 @@ fn class_application_validates_entry_and_metadata_conflicts() {
         );
     }
     assert!(compile_sources(&[
-        "class C extends Application.AppBase { function start() {} function getInitialView() {} }",
+        "class C extends Application.AppBase { function start() as Void {} function getInitialView() {} }",
     ]).is_err());
-    let unit =
-        compile_sources(&["class C extends Application.AppBase { function C() { return 41; } }"])
-            .unwrap();
+    let unit = compile_sources(&[
+        "class C extends Application.AppBase { function C() as Toybox.Lang.Number { return 41; } }",
+    ])
+    .unwrap();
     let prg = build_console_application(&unit, &app("C.C")).unwrap();
     let decoded = decode(
         prg.sections()
@@ -382,7 +383,7 @@ fn class_cli_roundtrips_ir_and_rejects_invalid_receiver_without_output() {
     assert_eq!(fs::read(&direct).unwrap(), fs::read(&resumed).unwrap());
     fs::write(
         &source,
-        "class Counter extends Application.AppBase { function start() { self.missing(); } }",
+        "class Counter extends Application.AppBase { function start() as Void { self.missing(); } }",
     )
     .unwrap();
     let invalid = dir.join("invalid.prg");

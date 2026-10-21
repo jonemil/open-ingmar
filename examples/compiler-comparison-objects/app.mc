@@ -73,7 +73,7 @@ module Comparisons {
 }
 class Target {
     function initialize() {}
-    function value() { return 7; }
+    function value() as Toybox.Lang.Number { return 7; }
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }

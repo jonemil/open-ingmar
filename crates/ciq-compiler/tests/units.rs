@@ -70,30 +70,30 @@ fn forward_calls_across_files_preserve_unit_ir_assembly_and_bytes() {
 
 #[test]
 fn source_unit_checks_callees_arity_types_and_file_locations() {
-    let callee = "module Numbers { function difference(a,b) { return a - b; } }";
+    let callee = "module Numbers { function difference(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { return a - b; } }";
     for (caller, message) in [
         (
-            "function f() { return Numbers.difference(1); }",
+            "function f() as Toybox.Lang.Number { return Numbers.difference(1); }",
             "expects 2 arguments, got 1",
         ),
         (
-            "function f() { return Numbers.difference(1,2,3); }",
+            "function f() as Toybox.Lang.Number { return Numbers.difference(1,2,3); }",
             "expects 2 arguments, got 3",
         ),
         (
-            "function f() { return Numbers.unknown(); }",
+            "function f() as Toybox.Lang.Number { return Numbers.unknown(); }",
             "unresolved function",
         ),
         (
-            "function f() { return Missing.difference(1,2); }",
+            "function f() as Toybox.Lang.Number { return Missing.difference(1,2); }",
             "unresolved function",
         ),
         (
-            "function f() { return Numbers.difference(\"x\",2); }",
+            "function f() as Toybox.Lang.Number { return Numbers.difference(\"x\",2); }",
             "argument type does not match parameter contract",
         ),
         (
-            "function f() { return Numbers.difference(1 == 1,2); }",
+            "function f() as Toybox.Lang.Number { return Numbers.difference(1 == 1,2); }",
             "argument type does not match parameter contract",
         ),
     ] {
@@ -108,36 +108,36 @@ fn source_unit_checks_callees_arity_types_and_file_locations() {
                 .unwrap()
         );
     }
-    let caller = "\nfunction f() {\n    return Numbers.difference();\n}";
+    let caller = "\nfunction f() as Toybox.Lang.Number {\n    return Numbers.difference();\n}";
     let error = compile_sources(&[callee, caller]).unwrap_err();
     assert_eq!(
         (error.source, error.diagnostic.line, error.diagnostic.column),
         (1, 3, 12)
     );
     // Single-function compilation retains its intentionally external callee mode.
-    assert!(compile("function f() { return Missing.external(); }").is_ok());
+    assert!(compile("function f() as Toybox.Lang.Number { return Missing.external(); }").is_ok());
 }
 
 #[test]
 fn duplicate_and_conflicting_declarations_fail_for_source_typed_and_text_units() {
-    let source = "function f() { return 1; }";
+    let source = "function f() as Toybox.Lang.Number { return 1; }";
     let error = compile_sources(&[source, source]).unwrap_err();
     assert_eq!(error.source, 1);
     assert!(error.diagnostic.message.contains("duplicate"));
     for source in [
-        "module A { function f() { return 1; } function f() { return 2; } }",
-        "module System { function f() { return 1; } }",
-        "function A() { return 1; } module A { function f() { return 1; } }",
+        "module A { function f() as Toybox.Lang.Number { return 1; } function f() as Toybox.Lang.Number { return 2; } }",
+        "module System { function f() as Toybox.Lang.Number { return 1; } }",
+        "function A() as Toybox.Lang.Number { return 1; } module A { function f() as Toybox.Lang.Number { return 1; } }",
         "module A {}",
         "module A { module B {} }",
-        "function f() { return 1; } garbage",
-        "function f() { return \"x\"; }",
+        "function f() as Toybox.Lang.Number { return 1; } garbage",
+        "function f() as Toybox.Lang.Number { return \"x\"; }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
     let declaration = FunctionDeclaration {
         module: Some("A".into()),
-        function: compile("function f() { return 1; }").unwrap(),
+        function: compile("function f() as Toybox.Lang.Number { return 1; }").unwrap(),
     };
     let duplicate =
         CompilationUnit::new(vec![declaration.clone(), declaration.clone()]).unwrap_err();
@@ -184,8 +184,8 @@ fn ownership_mangling_prevents_member_internal_and_literal_alias_collisions() {
 #[test]
 fn reopened_modules_and_recursive_calls_share_collected_signatures() {
     let unit = compile_sources(&[
-        "module A { function first(n) { if (n == 0) { return 0; } return A.second(n - 1); } }",
-        "module A { function second(n) { if (n == 0) { return 1; } return A.first(n - 1); } }",
+        "module A { function first(n as Toybox.Lang.Number) as Toybox.Lang.Number { if (n == 0) { return 0; } return A.second(n - 1); } }",
+        "module A { function second(n as Toybox.Lang.Number) as Toybox.Lang.Number { if (n == 0) { return 1; } return A.first(n - 1); } }",
     ])
     .unwrap();
     assert_eq!(parse_unit_ir(&unit.to_ir_text()).unwrap(), unit);
@@ -196,7 +196,7 @@ fn reopened_modules_and_recursive_calls_share_collected_signatures() {
             .message
             .contains("unresolved")
     );
-    let caller = compile("function f() { return A.second(); }").unwrap();
+    let caller = compile("function f() as Toybox.Lang.Number { return A.second(); }").unwrap();
     let error = CompilationUnit::new(vec![
         FunctionDeclaration {
             module: None,
@@ -240,7 +240,7 @@ fn unit_text_framing_and_combined_function_bounds_are_checked() {
         .collect::<String>();
     let unit = compile_sources(&[&source]).unwrap();
     assert_eq!(unit.declarations().len(), 256);
-    let extra = "function extra() { return 1; }";
+    let extra = "function extra() as Toybox.Lang.Number { return 1; }";
     assert!(compile_sources(&[&source, extra]).is_err());
     assert!(compile_sources(&[&(source + extra)]).is_err());
     let text = unit.to_ir_text()
@@ -320,18 +320,18 @@ fn cli_unit_sources_resume_ir_and_assembly_without_overwriting_outputs() {
 fn owner_relative_calls_keep_signatures_context_and_text_pipelines() {
     let source = r#"
         module M {
-            function sum(n) { if(n == 0) { return 0; } return n + sum(n - 1); }
-            function step(n) { return n + 1; }
-            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+            function sum(n as Toybox.Lang.Number) as Toybox.Lang.Number { if(n == 0) { return 0; } return n + sum(n - 1); }
+            function step(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n + 1; }
+            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }
             function notify() as Void { System.println(1); }
-            function run(step) { var M = 7; notify(); step(1); return step(M) + sum(3) + count([]); }
+            function run(step as Toybox.Lang.Number) as Toybox.Lang.Number { var M = 7; notify(); step(1); return step(M) + sum(3) + count([]); }
         }
         class Token {
             function initialize() {}
-            function sum(n) { if(n == 0) { return 0; } return n + sum(n - 1); }
-            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+            function sum(n as Toybox.Lang.Number) as Toybox.Lang.Number { if(n == 0) { return 0; } return n + sum(n - 1); }
+            function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }
             function notify() as Void { System.println(1); }
-            function run(sum) { notify(); sum(1); return sum(3) + count([]); }
+            function run(sum as Toybox.Lang.Number) as Toybox.Lang.Number { notify(); sum(1); return sum(3) + count([]); }
         }
     "#;
     let unit = ciq_compiler::compile_sources(&[source]).unwrap();
@@ -347,9 +347,8 @@ fn owner_relative_calls_keep_signatures_context_and_text_pipelines() {
     assert!(unit.declarations().iter().flat_map(|decl| decl.function.operations()).any(|op|
         matches!(&op.operation, ciq_compiler::Operation::ModuleCallStatement { module, member, .. }
             if module == "M" && member == "notify")));
-    let first =
-        "module First { function run() { return later(4); } function later(n) { return n; } }";
-    let other = "module Other { function later(n) as Toybox.Lang.String { return \"other\"; } }";
+    let first = "module First { function run() as Toybox.Lang.Number { return later(4); } function later(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } }";
+    let other = "module Other { function later(n as Toybox.Lang.Number) as Toybox.Lang.String { return \"other\"; } }";
     let unit = ciq_compiler::compile_sources(&[first, other]).unwrap();
     assert_eq!(
         unit,
@@ -360,13 +359,13 @@ fn owner_relative_calls_keep_signatures_context_and_text_pipelines() {
 #[test]
 fn owner_relative_calls_reject_unresolved_targets_and_invalid_consumers() {
     for source in [
-        "module M { function f() { return missing(); } }",
-        "class C { function initialize(){} function f() { return missing(); } }",
-        "module M { function f() { return target(); } function target(n) { return n; } }",
-        "module M { function f() { return target(true); } function target(n) { return n; } }",
-        "module M { function f() { return target(); } function target() as Void {} }",
-        "module M { function f() { var value=1; return value(); } }",
-        "function f(){return $.missing();}",
+        "module M { function f() as Toybox.Lang.Number { return missing(); } }",
+        "class C { function initialize(){} function f() as Toybox.Lang.Number { return missing(); } }",
+        "module M { function f() as Toybox.Lang.Number { return target(); } function target(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } }",
+        "module M { function f() as Toybox.Lang.Number { return target(true); } function target(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } }",
+        "module M { function f() as Toybox.Lang.Number { return target(); } function target() as Void {} }",
+        "module M { function f() as Toybox.Lang.Number { var value=1; return value(); } }",
+        "function f() as Toybox.Lang.Number{return $.missing();}",
     ] {
         assert!(
             ciq_compiler::compile_sources(&[source]).is_err(),
@@ -378,22 +377,22 @@ fn owner_relative_calls_reject_unresolved_targets_and_invalid_consumers() {
 #[test]
 fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
     let first = r#"
-        function step(n) { return n + 1; }
-        function total(n) { if(n==0) { return 0; } return step(n) + total(n-1); }
-        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+        function step(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n + 1; }
+        function total(n as Toybox.Lang.Number) as Toybox.Lang.Number { if(n==0) { return 0; } return step(n) + total(n-1); }
+        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }
         function notify() as Void { System.println(1); }
         function title() as Toybox.Lang.String { return "x"; }
         function token() as C { return new C(); }
     "#;
     let second = r#"
         module M {
-            function step(n) { return n * 2; }
-            function run() { notify(); $.notify(); step(1); $.step(1); return total(3) + $.step(4) + count([]) + title().length() + token().run(); }
+            function step(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n * 2; }
+            function run() as Toybox.Lang.Number { notify(); $.notify(); step(1); $.step(1); return total(3) + $.step(4) + count([]) + title().length() + token().run(); }
         }
         class C {
             function initialize() {}
-            function step(n) { return n * 3; }
-            function run() { notify(); return total(3) + $.step(4) + step(4); }
+            function step(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n * 3; }
+            function run() as Toybox.Lang.Number { notify(); return total(3) + $.step(4) + step(4); }
         }
     "#;
     let unit = compile_sources(&[first, second]).unwrap();
@@ -416,16 +415,16 @@ fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
         ))
         .is_err()
     );
-    assert!(compile_sources(&["function f() { return f(); }"]).is_ok());
+    assert!(compile_sources(&["function f() as Toybox.Lang.Number { return f(); }"]).is_ok());
     for source in [
-        "function g(n) { return n; } function f() { return g(); }",
-        "function g(n) { return n; } function f() { return g(true); }",
-        "function g() as Void {} function f() { return g(); }",
-        "function g() { return 1; } module M { function g(n){return n;} function f(){return g();} }",
-        "function f(){return $.missing();}",
-        "function g(){return 1;} class C { var g=1; function f(){return g();} }",
-        "function f(){return $f();}",
-        "function f(){return $.f;}",
+        "function g(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return g(); }",
+        "function g(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return g(true); }",
+        "function g() as Void {} function f() as Toybox.Lang.Number { return g(); }",
+        "function g() as Toybox.Lang.Number { return 1; } module M { function g(n as Toybox.Lang.Number) as Toybox.Lang.Number{return n;} function f() as Toybox.Lang.Number{return g();} }",
+        "function f() as Toybox.Lang.Number{return $.missing();}",
+        "function g() as Toybox.Lang.Number{return 1;} class C { var g=1; function f() as Toybox.Lang.Number{return g();} }",
+        "function f() as Toybox.Lang.Number{return $f();}",
+        "function f() as Toybox.Lang.Number{return $.f;}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
@@ -441,16 +440,16 @@ fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
 #[test]
 fn root_module_calls_bypass_lexical_qualifiers_and_keep_contracts() {
     let module = r#"module M {
-        function step(n) { return n + 1; }
+        function step(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n + 1; }
         function notify() as Void { System.println(1); }
-        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }
+        function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }
     }"#;
     let callers = r#"
-        function run(M) { $.M.notify(); $.M.step(1); return $.M.step(M) + $.M.count([]); }
-        module Other { function run() { var M = 7; return $.M.step(M); } }
+        function run(M as Toybox.Lang.Number) as Toybox.Lang.Number { $.M.notify(); $.M.step(1); return $.M.step(M) + $.M.count([]); }
+        module Other { function run() as Toybox.Lang.Number { var M = 7; return $.M.step(M); } }
         class C {
             function initialize() {}
-            function run(M) { $.M.notify(); return $.M.step(M); }
+            function run(M as Toybox.Lang.Number) as Toybox.Lang.Number { $.M.notify(); return $.M.step(M); }
         }
     "#;
     let unit = compile_sources(&[module, callers]).unwrap();
@@ -463,26 +462,26 @@ fn root_module_calls_bypass_lexical_qualifiers_and_keep_contracts() {
             .contains("getmv @__ciq_module_M @__ciq_member_step")
     );
     for caller in [
-        "function f(){return $.M.missing();}",
-        "function f(){return $.M.step();}",
-        "function f(){return $.M.step(true);}",
-        "function f(){return $.M.notify();}",
-        "function f(){return $.M;}",
-        "function f(){return $.M.step;}",
-        "function f(){return $.M.N.step(1);}",
-        "function f(){return $.M.();}",
+        "function f() as Toybox.Lang.Number{return $.M.missing();}",
+        "function f() as Toybox.Lang.Number{return $.M.step();}",
+        "function f() as Toybox.Lang.Number{return $.M.step(true);}",
+        "function f() as Toybox.Lang.Number{return $.M.notify();}",
+        "function f() as Toybox.Lang.Number{return $.M;}",
+        "function f() as Toybox.Lang.Number{return $.M.step;}",
+        "function f() as Toybox.Lang.Number{return $.M.N.step(1);}",
+        "function f() as Toybox.Lang.Number{return $.M.();}",
     ] {
         assert!(compile_sources(&[module, caller]).is_err(), "{caller}");
     }
     assert!(
         compile_sources(&[
-            "class C { function initialize(){} function step(){return 1;} } function f(){return $.C.step();}"
+            "class C { function initialize(){} function step() as Toybox.Lang.Number{return 1;} } function f() as Toybox.Lang.Number{return $.C.step();}"
         ])
         .is_err()
     );
     for depth in [64, 65] {
         let caller = format!(
-            "function f() {{ return {}1{}; }}",
+            "function f() as Toybox.Lang.Number {{ return {}1{}; }}",
             "$.M.step(".repeat(depth),
             ")".repeat(depth)
         );

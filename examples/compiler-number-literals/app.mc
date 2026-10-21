@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(0);
     System.println(127);
     System.println(128);

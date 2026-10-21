@@ -312,15 +312,28 @@ invariance and null proofs, rather than trusting a saved result annotation.
 `Any` is a dynamic value contract, distinct from Object and Void. It includes
 Null and has no API introduction level. In-memory parameter/result contracts
 and `api::Type` expose `Any`; saved parameter, result, local, and block-value
-contracts spell it `any`. The source frontend's omitted annotations still use
-the [source defaults](../frontend/README.md#function-type-contracts).
+contracts spell it `any`. The source frontend uses these contracts for
+[omitted annotations](../frontend/README.md#function-type-contracts).
 
 Any may cross supported typed argument, assignment, and return boundaries
 without a conversion or generated guard. Concrete mismatches remain errors
 when neither side is Any. Container element contracts do not widen to Any;
-this does not introduce Array<Any>, Dictionary Any parameters, or new source
-annotation syntax. Void calls still cannot produce values, and an Any result
+computed Array literals may select Any elements when their first value is
+dynamic. Their saved element tag is `any`, signature/call tag `any-array`, and
+join tag `array-any`. Reads produce Any; fills and writes admit values including
+Null. The element contract is invariant: an existing Array<Number> is not an
+Array<Any>. Dynamic-element arrays use ordinary construction/fill operations;
+the per-type scalar constant format does not admit `any` constants. This does
+not introduce Dictionary Any parameters or new source annotation syntax.
+Void calls still cannot produce values, and an Any result
 requires a value return. Null is an ordinary admissible return value.
+
+Source empty/bare-return bodies lower to `.null` and `.return`, with an explicit
+Any result contract. `.return-void` remains a no-value return, not an implicit
+Null. A declared concrete result returned from an Any expression must also be
+serialized explicitly: inferring the saved function result from that expression
+would lose the declared boundary. Unchanged concrete returns may still omit
+redundant result metadata under the ordinary text rules.
 
 Arithmetic and unary operations with dynamic operands use the existing
 operators and produce Any; comparisons produce Boolean. Dynamic conditions

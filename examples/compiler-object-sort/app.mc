@@ -3,7 +3,7 @@ using Toybox.System;
 class TextOrder {
     var count = 0;
     var direction = 1;
-    function initialize(n) { self.direction = n; }
+    function initialize(n as Toybox.Lang.Number) { self.direction = n; }
     function compare(a as Lang.Object, b as Lang.Object) as Lang.Number {
         self.count++;
         return self.direction * a.toString().compareTo(b.toString());
@@ -12,7 +12,7 @@ class TextOrder {
 }
 class Label {
     var value = 0;
-    function initialize(n) { self.value = n; }
+    function initialize(n as Toybox.Lang.Number) { self.value = n; }
     function toString() as Lang.String { return self.value.toString(); }
 }
 module ObjectSort {

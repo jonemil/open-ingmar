@@ -1,8 +1,8 @@
 module Numbers {
-    function answer() {
+    function answer() as Toybox.Lang.Number {
         return 9;
     }
 }
-function answer() {
+function answer() as Toybox.Lang.Number {
     return 7;
 }

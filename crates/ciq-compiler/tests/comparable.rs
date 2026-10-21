@@ -26,7 +26,7 @@ fn scalar_comparable_witnesses_share_api_and_saved_pipeline_checks() {
         ("String", "\"a\""),
     ] {
         let source = format!(
-            "function create(value as Toybox.Lang.{ty}) as Toybox.Lang.Comparable {{ return value; }} function use() {{ return M.use({literal},{literal}); }}"
+            "function create(value as Toybox.Lang.{ty}) as Toybox.Lang.Comparable {{ return value; }} function use() as Toybox.Lang.Number {{ return M.use({literal},{literal}); }}"
         );
         let unit = compile_sources_with_api(&[consumer, &source], current).unwrap();
         let text = unit.to_ir_text();
@@ -69,9 +69,9 @@ fn scalar_witnesses_do_not_enable_erased_nullable_or_heterogeneous_contracts() {
         "function f(o as Toybox.Lang.Method) as Toybox.Lang.Comparable { return o; }",
         "function f(o as Toybox.Lang.Dictionary) as Toybox.Lang.Comparable { return o; }",
         "function f(o as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Comparable { return o; }",
-        "function f(c as Toybox.Lang.Comparable) { var local=c; local=null; local.compareTo(1); }",
-        "function f(c as Toybox.Lang.Comparator) { var local=c; local=1; local.compare(1,2); }",
-        "function f() { var local=1; local=\"x\"; return local-1; }",
+        "function f(c as Toybox.Lang.Comparable) as Void { var local=c; local=null; local.compareTo(1); }",
+        "function f(c as Toybox.Lang.Comparator) as Void { var local=c; local=1; local.compare(1,2); }",
+        "function f() as Toybox.Lang.Number { var local=1; local=\"x\"; return local-1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -132,20 +132,20 @@ fn interface_boundaries_reject_erasure_and_mismatched_members() {
     }
     let consumer = "module M { function use(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compareTo(1); } }";
     for source in [
-        "function f(o as Toybox.Lang.Object) { return M.use(o); }",
-        "function f(o as Toybox.Lang.Object) { if (o has :compareTo) { return M.use(o); } else { return 0; } }",
-        "function f() { return M.use(null); }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { return M.use(o); }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { if (o has :compareTo) { return M.use(o); } else { return 0; } }",
+        "function f() as Toybox.Lang.Number { return M.use(null); }",
     ] {
         assert!(compile_sources(&[consumer, source]).is_err(), "{source}");
     }
     for source in [
-        "function f(c as Toybox.Lang.Comparable) { return c.compareTo(null); }",
-        "function f(c as Toybox.Lang.Comparable) { return c.compareTo(); }",
-        "function f(c as Toybox.Lang.Comparable) { return c.compareTo(1,2); }",
-        "function f(c as Toybox.Lang.Comparable) { return c.compare(1,2); }",
-        "function f(c as Toybox.Lang.Comparator) { return c.compareTo(1); }",
-        "function f(c as Toybox.Lang.Comparable) { var a=[1]; a.sort(c); }",
-        "function f(a as Toybox.Lang.Comparable,b as Toybox.Lang.Comparator) { var c=a; c=b; return c.compareTo(1); }",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compareTo(null); }",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compareTo(); }",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compareTo(1,2); }",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compare(1,2); }",
+        "function f(c as Toybox.Lang.Comparator) as Toybox.Lang.Number { return c.compareTo(1); }",
+        "function f(c as Toybox.Lang.Comparable) as Void { var a=[1]; a.sort(c); }",
+        "function f(a as Toybox.Lang.Comparable,b as Toybox.Lang.Comparator) as Toybox.Lang.Number { var c=a; c=b; return c.compareTo(1); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -159,7 +159,7 @@ fn erased_comparison_effects_preserve_reference_initialization_requirements() {
         (
             "Comparable",
             "var n=M.call(c);",
-            "module M { function call(c as Toybox.Lang.Comparable) { return c.compareTo(1); } }",
+            "module M { function call(c as Toybox.Lang.Comparable) as Toybox.Lang.Number { return c.compareTo(1); } }",
         ),
         ("Comparator", "var a=[1,2]; a.sort(c);", ""),
         ("Comparator or Null", "var a=[1,2]; a.sort(c);", ""),
@@ -311,8 +311,8 @@ fn source_comparable_requires_the_exact_member_signature() {
 fn interface_contracts_do_not_enable_runtime_tests_or_unchecked_casts() {
     for source in [
         "import Toybox.Lang; class Comparable { function initialize() {} }",
-        "import Toybox.Lang; function f(o as Object) { return o instanceof Comparable; }",
-        "import Toybox.Lang; function f(o as Object) { return o as Comparable; }",
+        "import Toybox.Lang; function f(o as Object) as Toybox.Lang.Number { return o instanceof Comparable; }",
+        "import Toybox.Lang; function f(o as Object) as Toybox.Lang.Number { return o as Comparable; }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
@@ -336,7 +336,7 @@ fn native_interface_refinement_covers_each_scalar_and_saved_pipeline() {
                 let parameter = if local { "input" } else { "c" };
                 let prefix = if local { "var c=input;" } else { "" };
                 let source = format!(
-                    "function f({parameter} as Toybox.Lang.Comparable{nullable}) {{ {prefix} if(c instanceof Toybox.Lang.{ty}){{ {body} }} return 0; }}"
+                    "function f({parameter} as Toybox.Lang.Comparable{nullable}) as Toybox.Lang.Number {{ {prefix} if(c instanceof Toybox.Lang.{ty}){{ {body} }} return 0; }}"
                 );
                 let function = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
                 assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
@@ -355,7 +355,7 @@ fn native_interface_refinement_covers_each_scalar_and_saved_pipeline() {
         "if(c instanceof Toybox.Lang.Number){var old=c; c=\"done\"; return old+1;} return 0;",
     ] {
         let source = format!(
-            "module M {{function use(c as Toybox.Lang.Comparable) {{return c.compareTo(1);}}}} function f(c as Toybox.Lang.Comparable or Null) {{{body}}}"
+            "module M {{function use(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {{return c.compareTo(1);}}}} function f(c as Toybox.Lang.Comparable or Null) as Toybox.Lang.Number {{{body}}}"
         );
         let unit = compile_sources_with_api(&[&source], current).unwrap();
         assert_eq!(
@@ -368,16 +368,16 @@ fn native_interface_refinement_covers_each_scalar_and_saved_pipeline() {
 #[test]
 fn interface_refinement_requires_live_compatible_class_facts() {
     for source in [
-        "function f(c as Toybox.Lang.Comparable) {return c+1;}",
-        "function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){} return c+1;}",
-        "function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){c=\"done\"; return c+1;} return 0;}",
-        "function f(c as Toybox.Lang.Comparable) {var v=c; if(v instanceof Toybox.Lang.Number){v=\"done\"; return v+1;} return 0;}",
-        "function f(c as Toybox.Lang.Comparable) {var copy=c; if(c instanceof Toybox.Lang.Number){return copy+1;} return 0;}",
-        "function f(c as Toybox.Lang.Comparator) {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {return c+1;}",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){} return c+1;}",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){c=\"done\"; return c+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {var v=c; if(v instanceof Toybox.Lang.Number){v=\"done\"; return v+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {var copy=c; if(c instanceof Toybox.Lang.Number){return copy+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparator) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }
-    let function=compile("function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}").unwrap();
+    let function=compile("function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}").unwrap();
     let text = function.to_ir_text();
     let forged = text.replace("Toybox.Lang.Number", "Toybox.Lang.String");
     assert_ne!(text, forged);

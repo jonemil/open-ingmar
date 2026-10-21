@@ -119,8 +119,9 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         "Toybox.Lang.String, Toybox.Lang.Array<Toybox.Lang.Number>",
         "Toybox.Lang.String, Toybox.Lang.Number or Toybox.Lang.String",
     ] {
-        let source =
-            format!("function f(d as Toybox.Lang.Dictionary<{bad}>) {{ return d.size(); }}");
+        let source = format!(
+            "function f(d as Toybox.Lang.Dictionary<{bad}>) as Toybox.Lang.Number {{ return d.size(); }}"
+        );
         assert!(compile(&source).is_err(), "accepted {source}");
     }
     for body in [
@@ -128,7 +129,7 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         "return d[\"one\"];",
         "return true ? d : d;",
     ] {
-        let source = format!("function f(d as {NUMBER}) {{ {body} }}");
+        let source = format!("function f(d as {NUMBER}) as Void {{ {body} }}");
         assert!(compile(&source).is_err(), "accepted {source}");
     }
 }

@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     var flag = false && Flags.mark("bad-init", true);
     System.println(flag);
     flag = true || Flags.mark("bad-assign", false);

@@ -32,7 +32,7 @@ fn array_reads_preserve_complete_pipelines_and_postfix_order() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n) as Toybox.Lang.Char { return a[n]; }";
+    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n as Toybox.Lang.Number) as Toybox.Lang.Char { return a[n]; }";
     let f = compile(source).unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
@@ -60,7 +60,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()[null]; }",
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()['A']; }",
         "function f() as Toybox.Lang.Char { return \"abc\".toCharArray()[0][0]; }",
-        "function f() { var a = \"abc\".toCharArray(); a[0] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = \"abc\".toCharArray(); a[0] = 2; return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return \"abc\".toCharArray()[n]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
@@ -77,7 +77,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         ))
         .unwrap();
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n) as Toybox.Lang.Char { return a[n]; }").unwrap();
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n as Toybox.Lang.Number) as Toybox.Lang.Char { return a[n]; }").unwrap();
     assert!(
         parse_ir(
             &f.to_ir_text()
@@ -155,7 +155,9 @@ fn indexing_and_member_calls_share_the_existing_nesting_budget() {
         for _ in 0..n {
             expression = format!("a[{expression}].toNumber() - 65");
         }
-        format!("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) {{ return {expression}; }}")
+        format!(
+            "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Number {{ return {expression}; }}"
+        )
     };
     compile(&source(63)).unwrap();
     assert!(

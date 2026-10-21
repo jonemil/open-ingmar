@@ -1,13 +1,13 @@
 using Toybox.System;
 module Comparisons {
-    function left() { System.println("left"); return 3; }
-    function right() { System.println("right"); return 5; }
-    function parsed(text as Toybox.Lang.String) {
+    function left() as Toybox.Lang.Number { System.println("left"); return 3; }
+    function right() as Toybox.Lang.Number { System.println("right"); return 5; }
+    function parsed(text as Toybox.Lang.String) as Toybox.Lang.Number {
         var value = text.toNumber();
         if (value != null && value <= 17) { return value * 2; }
         return 0;
     }
-    function run() {
+    function run() as Void {
         var low = -2147483648;
         var high = 2147483647;
         System.println("comparisons");

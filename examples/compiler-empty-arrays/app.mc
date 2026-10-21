@@ -6,23 +6,23 @@ module Empty {
     function chars() as Toybox.Lang.Array<Toybox.Lang.Char> {
         return ([]);
     }
-    function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) {
+    function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number {
         return a.size();
     }
-    function show(a as Toybox.Lang.Array<Toybox.Lang.Char>) {
+    function show(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void {
         System.println(a.size());
     }
-    function effect(n) {
+    function effect(n as Toybox.Lang.Number) as Toybox.Lang.Number {
         System.println(n);
         return n;
     }
-    function ordered(n, a as Toybox.Lang.Array<Toybox.Lang.Number>, m) {
+    function ordered(n as Toybox.Lang.Number, a as Toybox.Lang.Array<Toybox.Lang.Number>, m as Toybox.Lang.Number) as Toybox.Lang.Number {
         return n + a.size() + m;
     }
-    function sized(n) as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
+    function sized(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number or Null> {
         return new[n];
     }
-    function nullableCount(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) {
+    function nullableCount(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) as Toybox.Lang.Number {
         return a.size();
     }
     function select(flag as Toybox.Lang.Boolean,
@@ -36,7 +36,7 @@ module Empty {
         return flag ? new[Empty.effect(2)] : new[Empty.effect(4)];
     }
 }
-function start() {
+function start() as Void {
     var a = Empty.numbers();
     System.println(a.size());
     a.add(7);

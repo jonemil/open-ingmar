@@ -33,8 +33,7 @@ fn writes_preserve_complete_source_ir_assembly_and_prg_pipelines() {
 
 #[test]
 fn write_consumes_three_operands_without_result_or_hidden_slots() {
-    let source =
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i, v) as Void { a[i] = v; }";
+    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i as Toybox.Lang.Number, v as Toybox.Lang.Number) as Void { a[i] = v; }";
     let f = compile(source).unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
@@ -62,35 +61,35 @@ fn write_consumes_three_operands_without_result_or_hidden_slots() {
 #[test]
 fn writes_reject_wrong_types_unproven_nulls_and_nonassignment_targets() {
     for source in [
-        "function f() { var a = [1]; a[0] = 'X'; return 0; }",
-        "function f() { var a = [1]; a[0] = true; return 0; }",
-        "function f() { var a = [1]; a[0] = null; return 0; }",
-        "function f() { var a = [1]; a[0] = [2]; return 0; }",
-        "function f() { var a = [1]; a['X'] = 2; return 0; }",
-        "function f() { var a = [1]; a[true] = 2; return 0; }",
-        "function f() { var a = [1]; a[null] = 2; return 0; }",
-        "function f() { var a = [1]; a[0][0] = 2; return 0; }",
-        "function f() { var a = [1]; return a[0] = 2; }",
-        "function f() { var a = [1]; a[0]; return 0; }",
-        "function f() { var a = [1]; (a) = [2]; return 0; }",
-        "function f() { 1[0] = 2; return 0; }",
-        "function f() { \"ab\"[0] = 2; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a[0] = 2; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) { a[0] = null; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { a[n] = 2; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { a[0] = n; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { if (n != null) { n = null; a[0] = n; } return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = 'X'; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = true; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = null; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = [2]; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a['X'] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[true] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[null] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0][0] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; return a[0] = 2; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0]; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; (a) = [2]; return 0; }",
+        "function f() as Toybox.Lang.Number { 1[0] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { \"ab\"[0] = 2; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Number { a[0] = 2; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) as Toybox.Lang.Number { a[0] = null; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { a[n] = 2; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { a[0] = n; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { n = null; a[0] = n; } return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { if (n != null) { a[n] = n; } return 0; }").unwrap();
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { a[n] = n; } return 0; }").unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
 fn saved_ir_rechecks_operands_and_effect_order() {
     let f = compile(
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i, v) as Void { a[i] = v; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i as Toybox.Lang.Number, v as Toybox.Lang.Number) as Void { a[i] = v; }",
     )
     .unwrap();
     let text = f.to_ir_text();
@@ -104,7 +103,7 @@ fn saved_ir_rechecks_operands_and_effect_order() {
         assert!(text.contains(from), "missing fixture: {from}\n{text}");
         assert!(parse_ir(&text.replace(from, to)).is_err(), "{to}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] = b[0]; return 0; }").unwrap();
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = b[0]; return 0; }").unwrap();
     let mut ops = f.operations().to_vec();
     let read = ops
         .iter()
@@ -140,10 +139,10 @@ fn saved_ir_rechecks_operands_and_effect_order() {
 #[test]
 fn logical_operands_snapshot_receiver_index_and_value_in_order() {
     for source in [
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] = (false || true).hashCode(); return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[(true && false).hashCode()] = 2; return 0; }",
-        "function f() { [1, 2][0] = 3; return 0; }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { var i = 0; while (i < a.size()) { a[i] = i; i = i + 1; } return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = (false || true).hashCode(); return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[(true && false).hashCode()] = 2; return 0; }",
+        "function f() as Toybox.Lang.Number { [1, 2][0] = 3; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { var i = 0; while (i < a.size()) { a[i] = i; i = i + 1; } return 0; }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -199,7 +198,7 @@ fn char_and_view_writes_preserve_unit_and_complete_application_pipelines() {
 #[test]
 fn element_writes_share_encoding_but_recheck_invariant_types_and_api_levels() {
     for element in ["Toybox.Lang.Char", "Toybox.WatchUi.View"] {
-        let f = compile(&format!("function f(a as Toybox.Lang.Array<{element}>, i, v as {element}) as Void {{ a[i] = v; }}")).unwrap();
+        let f = compile(&format!("function f(a as Toybox.Lang.Array<{element}>, i as Toybox.Lang.Number, v as {element}) as Void {{ a[i] = v; }}")).unwrap();
         assert_eq!(
             f.lower().encode().unwrap(),
             [0x35, 4, 0x12, 1, 0x12, 2, 0x12, 3, 0x11, 0x16]

@@ -26,7 +26,7 @@ fn dictionary_strings_use_existing_native_calls_and_preserve_saved_stages() {
     }
     for source in [
         "function f() as Toybox.Lang.String { return {}.toString().toUpper(); }",
-        "function f() { var d = {}; d.toString(); return d.toString().length(); }",
+        "function f() as Toybox.Lang.Number { var d = {}; d.toString(); return d.toString().length(); }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -53,9 +53,9 @@ fn source_and_saved_ir_enforce_dictionary_override_api_level() {
 fn string_conversion_requires_a_non_null_dictionary_and_correct_arity() {
     for source in [
         "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.String { return d.toString(1); }",
-        "function f(d as Toybox.Lang.Dictionary) { return d.toString(); }",
+        "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Number { return d.toString(); }",
         "function f() as Toybox.Lang.String { return null.toString(); }",
-        "function f(d as Toybox.Lang.Dictionary) { return d.toString() + 1; }",
+        "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Number { return d.toString() + 1; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

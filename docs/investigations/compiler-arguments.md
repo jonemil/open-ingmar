@@ -230,15 +230,24 @@ claims about all type-checking policies.
 
 The tracked [source and hand-authored IR](../../examples/ir-any/README.md)
 compare dynamic scalar calls, arithmetic, indexing/mutation, conditions,
-source-class member dispatch, a dynamic argument to a known native method, and
-runtime-class narrowing. Both signed programs match `expected.txt` in the
+source-class member dispatch, a dynamic argument to a known native method,
+runtime-class narrowing, empty/bare-return Null results, explicit mixed
+value/Null returns, dynamic Array literals, and a parameter-driven loop.
+Our source-compiled and SDK-compiled signed programs match `expected.txt` in the
 simulator. Structured CODE/DATA exports reconstruct both complete PRGs byte for
-byte. No new opcode or DATA record is required. Artifacts and logs are in
-`scratch/core-any/`; the passing runtime comparison is `check-final/runtime/`.
+byte, and source/saved-IR/saved-assembly resumption agrees. No new opcode or
+DATA record is required. Passing source/runtime artifacts are in
+`scratch/source-any/check/`; the hand-authored IR experiment is retained in
+`scratch/core-any/check-final/`.
 
 Reproduction: build the saved IR with its README command. The SDK reference uses
 `scripts/build-example.sh scratch/core-any` with a local Jungle pointing at
 `examples/ir-any` and the console manifest/resources in `scratch/native-names`.
 The first SDK run printed the expected values but failed afterward because its
 console app omitted `System.exit()`; the tracked specimen includes that call.
-Our source-default migration is separate from this IR/runtime experiment.
+Static fixtures now spell their intended Number/Void boundaries explicitly.
+Their migrated SDK source sets were rebuilt under SDK 9.2.0 at `-O 0`; local
+scaffolds supply imports and external Numbers helpers for standalone fragments.
+The immutable-weak fixture requires `-l 0` because the SDK's declared weak-result
+types differ from the [observed immutable runtime behavior](compiler-immutable-weak.md).
+Rebuild inputs, logs, and the specimen index are under `scratch/source-any/`.

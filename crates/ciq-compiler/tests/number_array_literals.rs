@@ -27,7 +27,7 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
     );
     for source in [
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }",
-        "function f(n) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, -n]; }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, -n]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [(true || false).hashCode(), 1]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { var n = 1; n = 2; return [n, n + 3]; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { return [a[0], 2]; }",
@@ -53,17 +53,17 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
 #[test]
 fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
     for source in [
-        "function f() { var a = [1, 'a']; }",
-        "function f() { var a = ['a', 1]; }",
-        "function f() { var a = [true, 1]; }",
-        "function f() { var a = [\"a\", 1]; }",
-        "function f() { var a = [null]; }",
-        "function f() { var a = [[1]]; }",
-        "function f() { var a = [1, null]; }",
-        "function f(n as Toybox.Lang.Number or Null) { var a = [n, 1]; }",
-        "function f(n as Toybox.Lang.Number or Null) { var a = [n + 1]; }",
-        "function f(s as Toybox.Lang.String or Null) { var a = [s.length()]; }",
-        "function f() { var n = \"x\".toNumber(); var a = [n]; }",
+        "function f() as Void { var a = [1, 'a']; }",
+        "function f() as Void { var a = ['a', 1]; }",
+        "function f() as Void { var a = [true, 1]; }",
+        "function f() as Void { var a = [\"a\", 1]; }",
+        "function f() as Void { var a = [null]; }",
+        "function f() as Void { var a = [[1]]; }",
+        "function f() as Void { var a = [1, null]; }",
+        "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n, 1]; }",
+        "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n + 1]; }",
+        "function f(s as Toybox.Lang.String or Null) as Void { var a = [s.length()]; }",
+        "function f() as Void { var n = \"x\".toNumber(); var a = [n]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return [1]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
@@ -76,12 +76,12 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
 
 #[test]
 fn allocation_precedes_element_effects_and_append_preserves_source_order() {
-    let f = compile_sources(&["module M { function effect(n) { return n; } } function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [M.effect(1), M.effect(2)]; }"]).unwrap();
+    let f = compile_sources(&["module M { function effect(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } } function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [M.effect(1), M.effect(2)]; }"]).unwrap();
     let text = f.to_ir_text();
     let f = parse_unit_ir(&text).unwrap();
     assert_eq!(f.to_ir_text(), text);
     let single =
-        compile("function f(n) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 2]; }")
+        compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 2]; }")
             .unwrap();
     assert!(matches!(
         single.operations()[0].operation,

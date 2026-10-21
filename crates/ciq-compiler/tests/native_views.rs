@@ -65,27 +65,27 @@ fn native_construction_and_object_arrays_preserve_complete_pipelines() {
 #[test]
 fn constructed_references_keep_invariant_contracts_and_observable_order() {
     for source in [
-        "function f() { var v = new View(); }",
-        "function f(WatchUi) { var v = new WatchUi.View(); }",
-        "function f(Toybox) { var v = new Toybox.WatchUi.View(); }",
-        "function f() { var v = new Toybox.WatchUi.Unknown(); }",
-        "function f() { var v = new Toybox.WatchUi.View(1); }",
-        "function f() { var new = 1; }",
-        "function f() { var a = [new Toybox.WatchUi.View(), 1]; }",
-        "function f() { var a = [1, new Toybox.WatchUi.View()]; }",
-        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) { a.add(1); }",
-        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) { a.addAll(['a']); }",
-        "function f(v as Toybox.WatchUi.View) { v = null; }",
-        "function f() { return new Toybox.WatchUi.View(); }",
-        "function f(v as Toybox.WatchUi.View) { System.println(v); }",
-        "function f(v as Toybox.WatchUi.View) { return v.hashCode(); }",
-        "function f(v as Toybox.WatchUi.View or Null) { return 0; }",
-        "import Toybox.WatchUi; function f(View) { return 0; }",
+        "function f() as Void { var v = new View(); }",
+        "function f(WatchUi as Toybox.Lang.Number) as Void { var v = new WatchUi.View(); }",
+        "function f(Toybox as Toybox.Lang.Number) as Void { var v = new Toybox.WatchUi.View(); }",
+        "function f() as Void { var v = new Toybox.WatchUi.Unknown(); }",
+        "function f() as Void { var v = new Toybox.WatchUi.View(1); }",
+        "function f() as Void { var new = 1; }",
+        "function f() as Void { var a = [new Toybox.WatchUi.View(), 1]; }",
+        "function f() as Void { var a = [1, new Toybox.WatchUi.View()]; }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a.add(1); }",
+        "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a.addAll(['a']); }",
+        "function f(v as Toybox.WatchUi.View) as Void { v = null; }",
+        "function f() as Toybox.Lang.Number { return new Toybox.WatchUi.View(); }",
+        "function f(v as Toybox.WatchUi.View) as Void { System.println(v); }",
+        "function f(v as Toybox.WatchUi.View) as Toybox.Lang.Number { return v.hashCode(); }",
+        "function f(v as Toybox.WatchUi.View or Null) as Toybox.Lang.Number { return 0; }",
+        "import Toybox.WatchUi; function f(View as Toybox.Lang.Number) as Toybox.Lang.Number { return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
     let f =
-        compile("function f(v as Toybox.WatchUi.View) { var a = [v]; a.add(v); return a.size(); }")
+        compile("function f(v as Toybox.WatchUi.View) as Toybox.Lang.Number { var a = [v]; a.add(v); return a.size(); }")
             .unwrap();
     let text = f.to_ir_text();
     let changed = text
@@ -101,9 +101,10 @@ fn constructed_references_keep_invariant_contracts_and_observable_order() {
         .join("\n");
     assert_ne!(changed, text.trim_end());
     assert!(parse_ir(&changed).is_err());
-    let unit = compile_sources(&["module M { function make() as Toybox.WatchUi.View { return new Toybox.WatchUi.View(); } } function start() { var a = [M.make()]; return a.size(); }"]).unwrap();
+    let unit = compile_sources(&["module M { function make() as Toybox.WatchUi.View { return new Toybox.WatchUi.View(); } } function start() as Toybox.Lang.Number { var a = [M.make()]; return a.size(); }"]).unwrap();
     assert!(parse_unit_ir(&unit.to_ir_text().replace("result=view", "result=integer")).is_err());
-    let f = compile("function f() { 1.abs(); var view = new Toybox.WatchUi.View(); }").unwrap();
+    let f =
+        compile("function f() as Void { 1.abs(); var view = new Toybox.WatchUi.View(); }").unwrap();
     let mut operations = f.operations().to_vec();
     let at = operations
         .iter()

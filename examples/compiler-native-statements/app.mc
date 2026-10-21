@@ -1,7 +1,7 @@
 using Toybox.System;
 
 module Arrays {
-    function mutate(a as Toybox.Lang.Array<Toybox.Lang.Char>) {
+    function mutate(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void {
         a.add('c');
         a.addAll("da".toCharArray());
         a.remove('a');
@@ -23,7 +23,7 @@ module Effects {
         return false;
     }
 }
-function start() {
+function start() as Void {
     var a = "aba".toCharArray();
     var shared = a;
     Arrays.mutate(a);

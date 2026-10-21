@@ -9,12 +9,12 @@ class HelloView extends WatchUi.View {
         self.bump();
         System.println(self.count);
     }
-    function bump() { self.count = self.count + 1; }
-    function add(n) {
+    function bump() as Void { self.count = self.count + 1; }
+    function add(n as Toybox.Lang.Number) as Toybox.Lang.Number {
         self.count = self.count + n;
         return self.count;
     }
-    function current() { return self.count; }
+    function current() as Toybox.Lang.Number { return self.count; }
     function onShow() { System.println("show"); }
     function onUpdate(dc) {
         self.bump();

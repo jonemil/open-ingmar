@@ -1,17 +1,17 @@
 using Toybox.System;
 module Literals {
-    function effect(n) {
+    function effect(n as Toybox.Lang.Number) as Toybox.Lang.Number {
         System.println(n);
         return n;
     }
-    function make(n) as Toybox.Lang.Array<Toybox.Lang.Number> {
+    function make(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> {
         return [n, -n, n + 1];
     }
-    function first(a as Toybox.Lang.Array<Toybox.Lang.Number>) {
+    function first(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number {
         return a[0];
     }
 }
-function start() {
+function start() as Void {
     var n = 7;
     System.println([n, 8, 9].toString());
     System.println(Literals.make(3).toString());

@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     Numbers.showFind("Go bananas!", "bananas");
     Numbers.showFind("Go bananas!", "missing");
     Numbers.showFind("zero", "zero");

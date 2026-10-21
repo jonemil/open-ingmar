@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(7.toNumber());
     System.println((0 - 7).abs().format("%03d"));
     System.println((0 - 7).toString());

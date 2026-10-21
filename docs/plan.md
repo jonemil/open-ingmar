@@ -37,14 +37,8 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Map omitted source parameter/result annotations to the existing Any IR
-  contracts instead of Number/Void; migrate fixtures intended to require fixed
-  types, retaining constructor and inherited callback contracts.
 - [ ] Support arbitrary `A or B` source unions in annotations, storage, calls,
   returns, and conditional joins, including union normalization and narrowing.
-- [ ] Give empty/bare-return unannotated source bodies Null results and accept
-  explicit mixed value/Null returns under Any; keep Void distinct. Preserve the
-  SDK's rejection of mixed value/bare-return and value/fallthrough paths.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
   diagnose recursive aliases.
 - [ ] Parse named and anonymous `interface` types with method and field members;
@@ -215,8 +209,8 @@ executable profiles.
   literals; retain inner contracts through lookup, writes, and enumeration.
 - [ ] Support nullable typed Dictionary references and Dictionary/Null or opaque
   Dictionary conditional joins with guarded calls/indexing.
-- [ ] Infer empty and heterogeneous Dictionary literals without immediate
-  context under the language's changing-local/union rules.
+- [ ] Infer empty, Any-valued, and heterogeneous Dictionary literals without
+  immediate context under the language's changing-local/union rules.
 - [ ] Support indexed compound assignment and numeric updates with single
   receiver/key evaluation and a proven non-null lookup value.
 - [ ] Establish and implement SDK-valid `new Dictionary()` construction.

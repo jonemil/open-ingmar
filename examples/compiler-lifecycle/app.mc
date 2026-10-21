@@ -32,7 +32,7 @@ class StartupApp extends App.AppBase {
         var missing = null;
         Sys.println(state == missing);
     }
-    function printAnswer() {
+    function printAnswer() as Void {
         Sys.println(Helpers.answer());
     }
 }

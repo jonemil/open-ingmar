@@ -14,7 +14,7 @@ module ArrayOps {
     }
 }
 
-function start() {
+function start() as Void {
     var chars = "ab".toCharArray();
     var shared = chars;
     var returned = chars.add('c');

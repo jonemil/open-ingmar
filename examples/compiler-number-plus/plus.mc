@@ -1,9 +1,9 @@
 using Toybox.System;
 module Plus {
-    function value(n) { return +n; }
-    function effect() { System.println("operand"); return -7; }
+    function value(n as Toybox.Lang.Number) as Toybox.Lang.Number { return +n; }
+    function effect() as Toybox.Lang.Number { System.println("operand"); return -7; }
     function flag() as Toybox.Lang.Boolean { System.println("flag"); return true; }
-    function run() {
+    function run() as Void {
         System.println(Plus.value(-2147483648));
         System.println(Plus.value(2147483647));
         System.println(Plus.value(0));

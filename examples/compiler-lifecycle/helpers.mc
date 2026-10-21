@@ -1,3 +1,3 @@
 module Helpers {
-    function answer() { return 41; }
+    function answer() as Toybox.Lang.Number { return 41; }
 }

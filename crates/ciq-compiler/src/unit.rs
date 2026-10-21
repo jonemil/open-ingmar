@@ -1979,6 +1979,15 @@ fn compile_sources_context(
             });
         }
     }
+    // Constructors retain their implicit Void ABI independently of ordinary
+    // unannotated methods, which expose Any to callers.
+    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
+        for method in &mut class.methods {
+            if method.name == "initialize" && method.result_type.is_none() {
+                method.result_type = Some(ReturnType::Void);
+            }
+        }
+    }
     let bases = parsed_sources
         .iter()
         .flat_map(|p| p.classes.iter())

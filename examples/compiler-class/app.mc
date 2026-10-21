@@ -6,28 +6,28 @@ class Counter extends App.AppBase {
         App.AppBase.initialize();
         Sys.println("source initialize");
     }
-    function start() {
+    function start() as Void {
         Sys.println("class startup");
         Sys.println(self.answer(self.left(), self.right()));
         self.announce();
         self.count(3);
         Sys.println(Numbers.answer());
     }
-    function answer(left, right) {
+    function answer(left as Toybox.Lang.Number, right as Toybox.Lang.Number) as Toybox.Lang.Number {
         return left - right;
     }
-    function left() {
+    function left() as Toybox.Lang.Number {
         Sys.println(1);
         return 50;
     }
-    function right() {
+    function right() as Toybox.Lang.Number {
         Sys.println(2);
         return 3;
     }
-    function announce() {
+    function announce() as Void {
         Sys.println("receiver call");
     }
-    function count(limit) {
+    function count(limit as Toybox.Lang.Number) as Void {
         var n = limit;
         while (n > 0) {
             if (n == 1) {

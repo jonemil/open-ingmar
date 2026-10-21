@@ -38,7 +38,7 @@ fn conditional_operands_and_scalar_array_producers_preserve_builder_progress() {
         "return {\"one\" => [n, n + 1][0], \"two\" => n + 2};",
     ] {
         let source = format!(
-            "function f(choose as Toybox.Lang.Boolean, n) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> {{ {body} }}"
+            "function f(choose as Toybox.Lang.Boolean, n as Toybox.Lang.Number) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> {{ {body} }}"
         );
         let f = compile(&source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -47,14 +47,14 @@ fn conditional_operands_and_scalar_array_producers_preserve_builder_progress() {
             ciq_assembly::Program::parse(&f.lower().to_text()).unwrap()
         );
     }
-    let source = "function f(n as Toybox.Lang.Number or Null) { if (n != null) { var d = {n => n + 1}; return d.size(); } return 0; }";
+    let source = "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { var d = {n => n + 1}; return d.size(); } return 0; }";
     let f = compile(source).unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     assert!(compile(&source.replace("if (n != null)", "if (true)")).is_err());
     let source = "function f(k as Toybox.Lang.String) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> { return {k => null}; }";
     let f = compile(source).unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    let inferred = compile("function f(k as Toybox.Lang.String, n as Toybox.Lang.Number or Null) { var d = {k => n}; return d.size(); }").unwrap();
+    let inferred = compile("function f(k as Toybox.Lang.String, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var d = {k => n}; return d.size(); }").unwrap();
     assert!(inferred.operations().iter().any(|op| matches!(op.operation, Operation::DictionaryBegin { dictionary_type, .. } if dictionary_type.value == ciq_compiler::DictionaryValue::NullableNumber)));
 }
 
@@ -105,11 +105,11 @@ fn builders_cannot_escape_early_or_skip_reorder_or_repeat_source_entries() {
 #[test]
 fn computed_types_do_not_accept_mixed_contracts_or_nested_dictionary_literals() {
     for source in [
-        "function f(k as Toybox.Lang.String) { var d = {k => null}; return d.size(); }",
-        "function f(n) { var d = {n => 1, \"x\" => n}; return d.size(); }",
-        "function f(n) { var d = {\"x\" => n, \"y\" => \"bad\"}; return d.size(); }",
-        "function f(n) { var d = {\"x\" => [n]}; return d.size(); }",
-        "function f(n) { var d = {\"x\" => ({\"inner\" => n})}; return d.size(); }",
+        "function f(k as Toybox.Lang.String) as Toybox.Lang.Number { var d = {k => null}; return d.size(); }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var d = {n => 1, \"x\" => n}; return d.size(); }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var d = {\"x\" => n, \"y\" => \"bad\"}; return d.size(); }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var d = {\"x\" => [n]}; return d.size(); }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var d = {\"x\" => ({\"inner\" => n})}; return d.size(); }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

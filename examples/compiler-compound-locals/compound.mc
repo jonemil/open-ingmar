@@ -1,8 +1,8 @@
 using Toybox.System;
 module Compound {
-    function value() { System.println("value"); return 3; }
+    function value() as Toybox.Lang.Number { System.println("value"); return 3; }
     function flag() as Toybox.Lang.Boolean { System.println("flag"); return true; }
-    function run() {
+    function run() as Void {
         var n = 10;
         n += Compound.value(); System.println(n);
         n -= 2; System.println(n);

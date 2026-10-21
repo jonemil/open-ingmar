@@ -114,9 +114,10 @@ fn source_char_tokens_preserve_values_spans_and_reject_unsupported_forms() {
             .is_err()
         );
     }
-    assert!(compile("function f() { return 'A'; }").is_err());
-    assert!(compile("function f() { return 'A' + 1; }").is_err());
-    let f = compile("function f() { return ('A'.toNumber() + 1).abs(); }").unwrap();
+    assert!(compile("function f() as Toybox.Lang.Number { return 'A'; }").is_err());
+    assert!(compile("function f() as Toybox.Lang.Number { return 'A' + 1; }").is_err());
+    let f = compile("function f() as Toybox.Lang.Number { return ('A'.toNumber() + 1).abs(); }")
+        .unwrap();
     assert!(parse_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
     assert!(
         compile("function f() as Toybox.Lang.Char { var c = 'A'; c = 65; return c; }").is_err()

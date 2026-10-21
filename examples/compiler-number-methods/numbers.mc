@@ -8,11 +8,11 @@ module Numbers {
                              right as Toybox.Lang.Number) as Toybox.Lang.Boolean {
         return left.compareTo(right) > 0;
     }
-    function receiver() {
+    function receiver() as Toybox.Lang.Number {
         System.println("receiver");
         return 7;
     }
-    function argument() {
+    function argument() as Toybox.Lang.Number {
         System.println("argument");
         return 3;
     }

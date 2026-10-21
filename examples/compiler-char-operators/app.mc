@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println('A' == 'A');
     System.println('A' == 'B');
     System.println('A' == 65);

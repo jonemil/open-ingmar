@@ -159,6 +159,7 @@ const NAMED: &[(&str, ParameterType, ReturnType)] = &[
 ];
 
 pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
+    ArrayElement::Any,
     ArrayElement::LangObject,
     ArrayElement::NullableObject,
     ArrayElement::Interface(InterfaceType::Comparable),

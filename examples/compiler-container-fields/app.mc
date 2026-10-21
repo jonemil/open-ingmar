@@ -2,8 +2,8 @@ using Toybox.Lang;
 using Toybox.System;
 class Token {
     var value = 0;
-    function initialize(n) {self.value = n;}
-    function get() {return self.value;}
+    function initialize(n as Toybox.Lang.Number) {self.value = n;}
+    function get() as Toybox.Lang.Number {return self.value;}
 }
 class Store {
     var object as Lang.Object;

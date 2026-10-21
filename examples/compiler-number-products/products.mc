@@ -1,8 +1,8 @@
 using Toybox.System;
 module Products {
-    function left(n) { System.println("left"); return n; }
-    function right(n) { System.println("right"); return n; }
-    function run() {
+    function left(n as Toybox.Lang.Number) as Toybox.Lang.Number { System.println("left"); return n; }
+    function right(n as Toybox.Lang.Number) as Toybox.Lang.Number { System.println("right"); return n; }
+    function run() as Void {
         var a = 17;
         var b = 5;
         System.println("products");

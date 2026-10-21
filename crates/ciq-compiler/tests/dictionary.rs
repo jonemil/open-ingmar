@@ -35,26 +35,26 @@ fn dictionary_methods_and_nullable_state_require_checked_non_null_receivers() {
         ciq_compiler::api::ApiLevel(1, 0, 0),
     )
     .unwrap();
-    let source = "function f() { return {}.size(); }";
+    let source = "function f() as Toybox.Lang.Number { return {}.size(); }";
     let f = ciq_compiler::compile_with_api(source, api).unwrap();
     assert_eq!(
         f,
         ciq_compiler::parse_ir_with_api(&f.to_ir_text(), api).unwrap()
     );
     for source in [
-        "function f(d as Toybox.Lang.Dictionary) { return d.size(); }",
+        "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Number { return d.size(); }",
         "function f() as Toybox.Lang.Boolean { return {}.isEmpty(); }",
-        "function f() { var d = {}; d = {}; return d.size(); }",
+        "function f() as Toybox.Lang.Number { var d = {}; d = {}; return d.size(); }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { var d = {}; return d.get(\"one\"); }",
-        "function f() { var d = {}; d.put(\"one\", 1); return d.size(); }",
-        "function f() { var d = {}; return d.size(1); }",
-        "function f() { var d = {}; d = 1; return d.size(); }",
-        "function f() { return {} + {}; }",
+        "function f() as Toybox.Lang.Number { var d = {}; return d.get(\"one\"); }",
+        "function f() as Toybox.Lang.Number { var d = {}; d.put(\"one\", 1); return d.size(); }",
+        "function f() as Toybox.Lang.Number { var d = {}; return d.size(1); }",
+        "function f() as Toybox.Lang.Number { var d = {}; d = 1; return d.size(); }",
+        "function f() as Toybox.Lang.Number { return {} + {}; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

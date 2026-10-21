@@ -11,11 +11,11 @@ module Views {
     function empty() as Toybox.Lang.Array<Toybox.WatchUi.View> {
         return [];
     }
-    function count(views as Toybox.Lang.Array<Toybox.WatchUi.View>) {
+    function count(views as Toybox.Lang.Array<Toybox.WatchUi.View>) as Toybox.Lang.Number {
         return views.size();
     }
 }
-function start() {
+function start() as Void {
     var view = Views.make();
     System.println("created");
     var views = [view, new WatchUi.View()];

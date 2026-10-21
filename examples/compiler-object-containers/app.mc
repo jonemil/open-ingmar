@@ -3,8 +3,8 @@ using Toybox.System;
 using Toybox.Graphics;
 class Token {
     var value = 0;
-    function initialize(n) { self.value = n; }
-    function get() { return self.value; }
+    function initialize(n as Toybox.Lang.Number) { self.value = n; }
+    function get() as Toybox.Lang.Number { return self.value; }
 }
 module Objects {
     function constants() as Lang.Array<Lang.Object> { return [1, 2l, 3.5, 4.5d, true, 'A', "text"]; }

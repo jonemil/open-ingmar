@@ -55,7 +55,7 @@ fn builders_allocate_final_length_fill_directly_and_publish_only_when_complete()
         bytes
     );
     let source = compile(
-        "function f(value) as Toybox.Lang.Array<Toybox.Lang.Number> { return [value, 2]; }",
+        "function f(value as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [value, 2]; }",
     )
     .unwrap();
     assert!(source.to_ir_text().contains(".array-begin &0 number 2"));
@@ -101,7 +101,7 @@ fn builder_progress_must_agree_at_joins_and_loops_can_restart_completed_builders
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let bad = joined.replace(".array-fill &0 0 %2", ".discard %2");
     assert!(parse_ir(&bad).is_err());
-    let source = "function f(n) { var count = n; var total = 0; while (count > 0) { var a = [count, (true || false).hashCode()]; total += a[0]; count -= 1; } return total; }";
+    let source = "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var count = n; var total = 0; while (count > 0) { var a = [count, (true || false).hashCode()]; total += a[0]; count -= 1; } return total; }";
     let f = compile(source).unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let dangling = joined.replace(

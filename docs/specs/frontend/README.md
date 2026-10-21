@@ -38,29 +38,37 @@ Contents:
 
 ### Function type contracts
 
-Ordinary source parameters default to Number. Annotations accept the
+Omitted ordinary parameter and result annotations select Any. Any includes Null;
+arguments, assignments, and results may cross supported typed boundaries without
+a generated conversion or guard. Operations on unknown receivers/operands defer
+type failures to runtime. Concrete invalid operations remain compile errors.
+The [IR dynamic contract](../ir/README.md#dynamic-values) defines these shared
+rules. Annotations accept the
 [value-type domains](grammar.md#type-syntax), resolved through canonical names,
 imports, and module aliases. Constructible source-class annotations preserve
 [exact identity](#source-class-signatures). Nullable forms append
 `or Null` only for the listed nullable domains; general unions are unsupported.
 
-Unannotated functions with value returns require Number results; those with no
-value returns have a Void contract. Every non-Number value result requires an
-explicit source annotation. Each return must be assignable to its contract: a
-nullable result accepts its non-null type, Null, or the same union. Unrelated
-types, value/void mixtures, and reachable paths missing returns are errors.
+An unannotated function exposes Any even when every return has one concrete
+type. A body with no value returns supplies Null on bare return or fallthrough;
+it remains usable as a value. Explicit `as Void` bodies produce no semantic
+value. Value-returning bodies require value returns on every returning path:
+explicit value/Null mixtures are accepted under Any, while value/bare-return
+mixtures and value/fallthrough paths are rejected, matching the tested SDK.
+Each value return must be assignable to its contract: a nullable result accepts
+its non-null type, Null, or the same union. Known unrelated concrete types remain
+errors under an explicit contract; Any crosses that boundary dynamically.
 A structurally non-returning body, such as `for (;;) {}`, may retain any
-supported declared result. An unannotated body without value returns still
-defaults to Void.
+supported declared result; an unannotated non-returning body retains Any.
 Callers use the declared result; no interprocedural non-returning-call analysis
 is implied. Typed IR constructors infer uniform
-scalar/Void returns unless an explicit signature is supplied. Native callbacks
-retain their independently resolved signatures; annotations cannot override
-them.
+scalar/Void returns unless an explicit signature is supplied; IR defaults are
+independent of source defaults. Constructors retain their implicit Void result,
+and native callbacks retain their independently resolved signatures; annotations
+cannot override callback contracts.
 
-Semantic IR also supports [Any contracts](../ir/README.md#dynamic-values).
-They do not yet change the source defaults above; bare `Any` is not accepted
-source annotation syntax in the tested SDK profile.
+Bare `Any` is not accepted source annotation syntax in the tested SDK profile;
+omitted annotations provide the dynamic contract.
 
 ### Nullable results
 
@@ -441,7 +449,7 @@ validation checks callee arity and argument/result contracts.
 
 Parameters support statement assignment, compound assignment, and supported
 increment/decrement operators. A write preserves the declared parameter domain
-(including the default Number domain), exact source identity, and container
+(including Any for an omitted annotation), exact source identity, and container
 invariance. Interface writes require a checked implementation. It replaces the
 callee's parameter value without rebinding the caller's variable. Replacing a
 reference differs from mutating the referenced object, whose aliases still
@@ -2461,6 +2469,15 @@ Runtime conversion and placeholder failures remain runtime behavior. The
 evaluation order, and a missing-parameter failure.
 
 ## Arrays
+
+Computed literals whose first element has type Any infer dynamic elements. For
+example, `function wrap(x) { return [x, 7]; }` constructs an Array with Any
+elements and exposes Any as the function result. Fills, indexed writes, and
+reads use the ordinary dynamic boundary rules, including Null values; the
+runtime Array remains a shared mutable reference. Existing concrete element
+contracts stay invariant. General heterogeneous inference without a dynamic
+first value, unconstrained empty literals, and explicit `Array<Any>` source
+annotations remain outside this profile.
 
 ### Char arrays
 

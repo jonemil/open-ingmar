@@ -722,6 +722,9 @@ struct Builder<'a> {
     source: &'a str,
     calls: &'a CallContext,
     result_type: crate::ReturnType,
+    // Bare returns supply Null only in Any bodies with no value returns.
+    // Mixed value/bare-return bodies must still fail the return-contract check.
+    null_return: bool,
     parameters: BTreeMap<String, usize>,
     operations: Vec<LocatedOperation>,
     types: crate::source_types::Types,
@@ -2579,6 +2582,10 @@ impl Builder<'_> {
                         Operation::Return {
                             value: self.returned_value(value, locals)?,
                         }
+                    } else if self.null_return {
+                        let value = ValueId(self.operations.len() as u32);
+                        self.push(Operation::Null { result: value }, Some(span));
+                        Operation::Return { value }
                     } else {
                         Operation::ReturnVoid
                     };
@@ -2794,7 +2801,7 @@ fn build_body(
         .unwrap_or_else(|| {
             annotations
                 .iter()
-                .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
+                .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Any))
                 .collect()
         });
     let mut body_calls = calls.clone();
@@ -2806,6 +2813,7 @@ fn build_body(
         source,
         calls: &body_calls,
         result_type: effective_result.clone(),
+        null_return: effective_result == crate::ReturnType::Any && !has_result_return,
         parameters: ast
             .parameters
             .into_iter()
@@ -2825,15 +2833,22 @@ fn build_body(
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
     if !builder.sequence(ast.statements, &mut BTreeMap::new())? {
-        if value_result {
+        if value_result && (effective_result != crate::ReturnType::Any || has_result_return) {
             return Err(Diagnostic::at(
                 source,
                 ast.body_span.end - 1,
                 "function requires a value return on every path",
             ));
         }
+        let operation = if effective_result == crate::ReturnType::Any {
+            let value = ValueId(builder.operations.len() as u32);
+            builder.push(Operation::Null { result: value }, None);
+            Operation::Return { value }
+        } else {
+            Operation::ReturnVoid
+        };
         builder.push(
-            Operation::ReturnVoid,
+            operation,
             Some(Span {
                 start: ast.body_span.end - 1,
                 end: ast.body_span.end,
@@ -2914,7 +2929,7 @@ fn build_body(
     } else {
         annotations
             .into_iter()
-            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
+            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Any))
             .collect()
     };
     let result = Function::construct_with_join_inference(
@@ -2929,7 +2944,8 @@ fn build_body(
                 !matches!(signature.result, crate::ReturnType::Tuple(_)) || !has_result_return
             })
             .map(|signature| signature.result.clone())
-            .or(result_type),
+            .or(result_type)
+            .or_else(|| callback.is_none().then_some(effective_result.clone())),
         true,
     );
     let function = result.map_err(|error| {
@@ -2959,20 +2975,14 @@ fn build_body(
                     .map(|span| span.start)
                 })
                 .unwrap_or(ast.body_span.start),
-            "return type does not match function contract; non-Number value results require an explicit annotation",
+            "return type does not match function contract",
         ));
     }
     Ok(function)
 }
 
 pub(crate) fn declared_result(ast: &parser::ParsedFunction) -> crate::ReturnType {
-    ast.result_type
-        .clone()
-        .unwrap_or(if has_value_return(&ast.statements) {
-            crate::ReturnType::Integer
-        } else {
-            crate::ReturnType::Void
-        })
+    ast.result_type.clone().unwrap_or(crate::ReturnType::Any)
 }
 
 /// Read user-declared call contracts before constructing any function body.
@@ -2982,7 +2992,7 @@ pub(crate) fn declared_signature(ast: &parser::ParsedFunction) -> CallSignature 
         parameters: ast
             .parameter_types
             .iter()
-            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Integer))
+            .map(|ty| ty.clone().unwrap_or(crate::ParameterType::Any))
             .collect(),
     }
 }

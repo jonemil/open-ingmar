@@ -58,7 +58,7 @@ module Tests {
 class Probe {
     var field = 1;
     function initialize() {}
-    function value() { return self.field; }
+    function value() as Toybox.Lang.Number { return self.field; }
 }
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }

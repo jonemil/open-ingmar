@@ -46,31 +46,31 @@ fn nullable_native_calls_preserve_complete_app_and_saved_ir() {
 #[test]
 fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
     for source in [
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } else { return n + 1; } }",
-        "function f() { var n = \"41\".toNumber(); if (null == n) { return 0; } return n.abs(); }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } return M.consume(n); }",
-        "function f() { var n = \"41\".toNumber(); while (n == null) { n = \"7\".toNumber(); } return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } if (n == null) { return 0; } return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } while (false) { System.println(n); } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } else { return n + 1; } }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (null == n) { return 0; } return n.abs(); }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } return M.consume(n); }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); while (n == null) { n = \"7\".toNumber(); } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } if (n == null) { return 0; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } while (false) { System.println(n); } return n; }",
     ] {
         let function = compile(source).unwrap();
         assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return \"41\".toNumber(); }",
-        "function f() { System.println(\"41\".toNumber()); }",
-        "function f() { return \"41\".toNumber() + 1; }",
-        "function f() { return \"41\".toNumber().abs(); }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return n + 1; } else { return 0; } }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { System.println(0); } else { System.println(n); } return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n+1; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = \"bad\".toNumber(); return n; }",
-        "function f() { var n = \"41\".toNumber(); var other = \"7\".toNumber(); if (n == null) { return 0; } return other; }",
-        "function f() { var n = \"41\".toNumber(); while (n == null) { break; } return n; }",
-        "function f() { var n = \"41\".toNumber(); var flag = n == null; if (flag) { return 0; } return n; }",
-        "function f(flag as Toybox.Lang.Boolean) { var n = \"41\".toNumber(); if (n == null) { return 0; } while (flag) { n = null; } return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return n+1; }",
+        "function f() as Toybox.Lang.Number { return \"41\".toNumber(); }",
+        "function f() as Void { System.println(\"41\".toNumber()); }",
+        "function f() as Toybox.Lang.Number { return \"41\".toNumber() + 1; }",
+        "function f() as Toybox.Lang.Number { return \"41\".toNumber().abs(); }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return n + 1; } else { return 0; } }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { System.println(0); } else { System.println(n); } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = null; return n+1; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = \"bad\".toNumber(); return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); var other = \"7\".toNumber(); if (n == null) { return 0; } return other; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); while (n == null) { break; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); var flag = n == null; if (flag) { return 0; } return n; }",
+        "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } while (flag) { n = null; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return n+1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -79,7 +79,7 @@ fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
 #[test]
 fn ir_edits_cannot_bypass_non_null_proofs() {
     let function = compile(
-        "function f() { var n = \"41\".toNumber(); if (n == null) { return 0; } return n + 1; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } return n + 1; }",
     )
     .unwrap();
     let mut operations = function.operations().to_vec();
@@ -105,11 +105,11 @@ fn ir_edits_cannot_bypass_non_null_proofs() {
 #[test]
 fn nullable_methods_reject_bad_arguments_and_other_receivers() {
     for source in [
-        "function f() { var n = \"text\".find(); }",
-        "function f() { var n = \"text\".find(1); }",
-        "function f() { var n = \"text\".find(null); }",
-        "function f() { var n = \"text\".toNumber(1); }",
-        "function f() { var n = true.toNumber(); }",
+        "function f() as Void { var n = \"text\".find(); }",
+        "function f() as Void { var n = \"text\".find(1); }",
+        "function f() as Void { var n = \"text\".find(null); }",
+        "function f() as Void { var n = \"text\".toNumber(1); }",
+        "function f() as Void { var n = true.toNumber(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

@@ -5,7 +5,7 @@ class ViewController extends WatchUi.View {
         View.initialize();
         self.target = view;
     }
-    function update(amount) { return self.target.add(amount); }
+    function update(amount as Toybox.Lang.Number) as Toybox.Lang.Number { return self.target.add(amount); }
     function view() as HelloView { return self.target; }
-    function current() { return self.target.current(); }
+    function current() as Toybox.Lang.Number { return self.target.current(); }
 }

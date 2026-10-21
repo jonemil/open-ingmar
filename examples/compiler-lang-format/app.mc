@@ -6,7 +6,7 @@ class Label {
 }
 module Formatting {
     function template() as Lang.String { System.println("template"); return "$2$/$1$/$2$"; }
-    function item(n) { System.println(n); return n; }
+    function item(n as Toybox.Lang.Number) as Toybox.Lang.Number { System.println(n); return n; }
     function typed(a as Lang.Array<Lang.Number>) as Lang.String { return Lang.format("$2$:$1$", a); }
     function run() as Void {
         System.println(Lang.format("$1$:$2$ $3$ $4$", [2, 30, "Sep", 4]));

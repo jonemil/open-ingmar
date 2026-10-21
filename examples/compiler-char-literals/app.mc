@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println('A');
     System.println('é'.toNumber());
     System.println('猫');

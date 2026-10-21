@@ -91,9 +91,9 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
         "function f() as Toybox.Lang.Number or Null { return; }",
         "function f() as Toybox.Lang.String or Null { }",
         "function f() as Toybox.Lang.Number { return null; }",
-        "function f() { return null; }",
-        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) { return 0; }",
-        "function f(x as Null or Toybox.Lang.Number) { return 0; }",
+        "function f() as Toybox.Lang.Number { return null; }",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number { return 0; }",
+        "function f(x as Null or Toybox.Lang.Number) as Toybox.Lang.Number { return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -101,7 +101,7 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
 
 #[test]
 fn user_arguments_use_union_assignability_and_results_remain_exact() {
-    let functions = "module M { function number(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return n; } function text(s as Toybox.Lang.String or Null) as Toybox.Lang.String or Null { return s; } function scalar(n as Toybox.Lang.Number) { return n; } }";
+    let functions = "module M { function number(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return n; } function text(s as Toybox.Lang.String or Null) as Toybox.Lang.String or Null { return s; } function scalar(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } }";
     for expression in [
         "M.number(null)",
         "M.number(7)",
@@ -110,7 +110,7 @@ fn user_arguments_use_union_assignability_and_results_remain_exact() {
         "M.text(\"hi\")",
         "M.text(\"hi\".substring(0, 1))",
     ] {
-        let source = format!("function start() {{ {expression}; }}");
+        let source = format!("function start() as Void {{ {expression}; }}");
         let unit = compile_sources(&[&source, functions]).unwrap();
         assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     }
@@ -122,10 +122,10 @@ fn user_arguments_use_union_assignability_and_results_remain_exact() {
         "M.scalar(null)",
         "M.scalar(\"7\".toNumber())",
     ] {
-        let source = format!("function start() {{ {expression}; }}");
+        let source = format!("function start() as Void {{ {expression}; }}");
         assert!(compile_sources(&[&source, functions]).is_err(), "{source}");
     }
-    let source = "function start() { System.println(M.number(7)); }";
+    let source = "function start() as Void { System.println(M.number(7)); }";
     assert!(compile_sources(&[source, functions]).is_err());
     // Forward and recursive call declarations preserve nullable results.
     let recursive = "module M { function first(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return M.later(n); } function later(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return M.first(n); } }";
@@ -173,12 +173,12 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
         .is_err()
     );
     for source in [
-        "function f(x as Toybox.Lang.String or Null) { return x.length(); }",
-        "function f(x as Toybox.Lang.String or Null) { var s = x; if (s == null) { return 0; } s = null; return s.length(); }",
+        "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { return x.length(); }",
+        "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } s = null; return s.length(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let guarded = compile("function f(x as Toybox.Lang.String or Null) { var s = x; if (s == null) { return 0; } return s.length(); }").unwrap();
+    let guarded = compile("function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } return s.length(); }").unwrap();
     assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
     let mut operations = guarded.operations().to_vec();
     for op in &mut operations {

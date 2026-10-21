@@ -31,7 +31,7 @@ fn short_circuit_complete_application_preserves_all_pipeline_boundaries() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile("function f(a as Toybox.Lang.Boolean, b as Toybox.Lang.Boolean) { if (a && b) { return 1; } return 0; }").unwrap();
+    let f = compile("function f(a as Toybox.Lang.Boolean, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { if (a && b) { return 1; } return 0; }").unwrap();
     let branches = f
         .operations()
         .iter()
@@ -61,32 +61,32 @@ fn conditions_validate_every_operand_and_only_propagate_guaranteed_null_facts() 
     ] {
         assert!(
             compile(&format!(
-                "function f() {{ if ({condition}) {{ return 1; }} return 0; }}"
+                "function f() as Toybox.Lang.Number {{ if ({condition}) {{ return 1; }} return 0; }}"
             ))
             .is_err(),
             "{condition}"
         );
     }
     for source in [
-        "function f(n as Toybox.Lang.Number or Null) { if (!(n == null) || true) { return n; } return 0; }",
-        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { if (n == null && b) { return 0; } return n; }",
-        "function f(n as Toybox.Lang.Number or Null) { if (!(n == null) && true) { System.println(n); } return n; }",
-        "function f(n as Toybox.Lang.Number or Null) { var present = !(n == null); if (present) { return n; } return 0; }",
-        "function f() { var n = \"8\".toNumber(); while (n == null || 1 > n) { break; } return n; }",
-        "function f() { var n = \"8\".toNumber(); if (!(n == null) && n > 0) { n = null; return n; } return 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!(n == null) || true) { return n; } return 0; }",
+        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { if (n == null && b) { return 0; } return n; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!(n == null) && true) { System.println(n); } return n; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var present = !(n == null); if (present) { return n; } return 0; }",
+        "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); while (n == null || 1 > n) { break; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); if (!(n == null) && n > 0) { n = null; return n; } return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
     for source in [
-        "function f(n as Toybox.Lang.Number or Null) { if (!(n == null) && n > 0) { return n; } return 0; }",
-        "function f(n as Toybox.Lang.Number or Null) { if (n == null || n > 0) { return 0; } return n; }",
-        "function f(n as Toybox.Lang.Number or Null) { if (!!(n == null)) { return 0; } return n; }",
-        "function f() { var n = \"8\".toNumber(); while (n == null || 1 > n) { n = 2; } return n; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!(n == null) && n > 0) { return n; } return 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null || n > 0) { return 0; } return n; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!!(n == null)) { return 0; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); while (n == null || 1 > n) { n = 2; } return n; }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f(n as Toybox.Lang.Number or Null) { if (!(n == null) && n > 0) { return n; } return 0; }").unwrap();
+    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!(n == null) && n > 0) { return n; } return 0; }").unwrap();
     let mut operations = f.operations().to_vec();
     let Operation::Branch {
         on_true, on_false, ..
@@ -113,7 +113,7 @@ fn conditions_validate_every_operand_and_only_propagate_guaranteed_null_facts() 
 #[test]
 fn saved_ir_not_guards_recheck_polarity_and_intervening_writes() {
     let f = compile(
-        "function f() { var n = \"8\".toNumber(); if (n == null) { return 0; } return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); if (n == null) { return 0; } return n; }",
     )
     .unwrap();
     let mut operations = f.operations().to_vec();
@@ -192,7 +192,7 @@ fn saved_ir_not_guards_recheck_polarity_and_intervening_writes() {
 fn logical_chain_limits_include_generated_blocks_and_terminators() {
     let source = |n: usize| {
         format!(
-            "function f() {{ if ({}) {{ return 1; }} return 0; }}",
+            "function f() as Toybox.Lang.Number {{ if ({}) {{ return 1; }} return 0; }}",
             vec!["true"; n].join(" && ")
         )
     };

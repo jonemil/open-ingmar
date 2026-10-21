@@ -73,7 +73,7 @@ fn long_signs_select_long_zero_and_preserve_operand_effects() {
 #[test]
 fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
     for source in [
-        "function f() { var value = 1; value += 2l; return value; }",
+        "function f() as Toybox.Lang.Number { var value = 1; value += 2l; return value; }",
         "function f() as Toybox.Lang.Long { var value = 1l; value = 1; return value; }",
         "function f() as Toybox.Lang.Long { return 1l + 'A'; }",
         "function f() as Toybox.Lang.Boolean { return 1l < 'A'; }",
@@ -83,7 +83,7 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Long { return 1l & false; }",
         "function f() as Toybox.Lang.Long { return 1l << false; }",
         "function f() as Toybox.Lang.Long { var value = 1l; return value++; }",
-        "function f() { if (1l) { return 1; } return 0; }",
+        "function f() as Toybox.Lang.Number { if (1l) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 2; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");

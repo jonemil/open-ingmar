@@ -138,6 +138,9 @@ Any is erased during instruction selection. Dynamic arithmetic, conditions,
 calls, and indexed access use the same VM operations as their concrete forms;
 no boxing, type conversion, or runtime-check sequence is introduced. Dynamic
 member symbols share the application's ordinary API/source name bindings.
+An empty/bare source return under Any emits `npush; return`; explicit Void
+retains a return without a semantic value. Array Any elements use ordinary
+`newa`, fills, and reads with no element tags stored in the runtime Array.
 See [dynamic IR contracts](../ir/README.md#dynamic-values).
 
 Declaration lists become sequential declarations/initializers in the existing

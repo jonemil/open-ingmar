@@ -418,7 +418,7 @@ class MinimalConsoleApp extends Application.AppBase {
 }
 
 module InterfaceRefinements {
-    function accept(c as Toybox.Lang.Comparable, other as Toybox.Lang.Object) {
+    function accept(c as Toybox.Lang.Comparable, other as Toybox.Lang.Object) as Toybox.Lang.Number {
         return c.compareTo(other);
     }
     function check(c as Toybox.Lang.Comparable or Null) as Toybox.Lang.Boolean {
@@ -445,7 +445,7 @@ module InterfaceRefinements {
         }
         return c == null;
     }
-    function rewrite(c as Toybox.Lang.Comparable) {
+    function rewrite(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {
         var value = c;
         var sum = 0;
         while (value instanceof Toybox.Lang.Number) {

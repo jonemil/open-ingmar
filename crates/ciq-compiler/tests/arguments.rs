@@ -133,19 +133,24 @@ fn check(source: &str, arguments: &[i32], expected: i32, expected_calls: &[u32])
 #[test]
 fn parameter_reads_and_local_slots_survive_all_pipelines() {
     check(
-        "function difference(first, second) { var adjusted = first + 3; return adjusted - second; }",
+        "function difference(first as Toybox.Lang.Number, second as Toybox.Lang.Number) as Toybox.Lang.Number { var adjusted = first + 3; return adjusted - second; }",
         &[45, 2],
         46,
         &[],
     );
     check(
-        "function repeat(value) { return value + value; }",
+        "function repeat(value as Toybox.Lang.Number) as Toybox.Lang.Number { return value + value; }",
         &[-3],
         -6,
         &[],
     );
-    check("function ignore(value) { return 41; }", &[99], 41, &[]);
-    let ir = compile("function difference(a,b) { var x = a + 3; return x - b; }").unwrap();
+    check(
+        "function ignore(value as Toybox.Lang.Number) as Toybox.Lang.Number { return 41; }",
+        &[99],
+        41,
+        &[],
+    );
+    let ir = compile("function difference(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { var x = a + 3; return x - b; }").unwrap();
     assert_eq!(ir.parameter_count(), 2);
     assert_eq!(
         ir.lower().encode().unwrap(),
@@ -158,37 +163,37 @@ fn parameter_reads_and_local_slots_survive_all_pipelines() {
 #[test]
 fn argument_order_and_nested_call_contexts_are_preserved() {
     check(
-        "function probe() { return Numbers.subtract(40 + 5, 2); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.subtract(40 + 5, 2); }",
         &[],
         43,
         &[0x80],
     );
     check(
-        "function probe() { return Numbers.adjust(40); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.adjust(40); }",
         &[],
         43,
         &[0x81],
     );
     check(
-        "function probe() { var saved = Numbers.next(); return Numbers.subtract(saved + 1, Numbers.two()) + 1; }",
+        "function probe() as Toybox.Lang.Number { var saved = Numbers.next(); return Numbers.subtract(saved + 1, Numbers.two()) + 1; }",
         &[],
         41,
         &[0x82, 0x83, 0x80],
     );
     check(
-        "function probe() { return Numbers.subtract(Numbers.next(), Numbers.next()); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.subtract(Numbers.next(), Numbers.next()); }",
         &[],
         -1,
         &[0x82, 0x82, 0x80],
     );
     check(
-        "function probe() { return Numbers.adjust(Numbers.subtract(Numbers.next(), Numbers.two())); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.adjust(Numbers.subtract(Numbers.next(), Numbers.two())); }",
         &[],
         42,
         &[0x82, 0x83, 0x80, 0x81],
     );
     check(
-        "function probe(a) { return Numbers.subtract(a, Numbers.adjust(2)); }",
+        "function probe(a as Toybox.Lang.Number) as Toybox.Lang.Number { return Numbers.subtract(a, Numbers.adjust(2)); }",
         &[10],
         5,
         &[0x81, 0x80],
@@ -197,7 +202,7 @@ fn argument_order_and_nested_call_contexts_are_preserved() {
 
 #[test]
 fn parameter_positions_and_argument_dependencies_are_visible_in_ir() {
-    let ir = compile("function probe(a,b) { return Numbers.subtract(b,a); }").unwrap();
+    let ir = compile("function probe(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { return Numbers.subtract(b,a); }").unwrap();
     assert!(matches!(
         ir.operations()[0].operation,
         Operation::ParameterRead { index: 1, .. }
@@ -225,16 +230,16 @@ fn parameter_positions_and_argument_dependencies_are_visible_in_ir() {
 #[test]
 fn malformed_parameter_and_argument_lists_are_rejected() {
     for source in [
-        "function probe(a,a) { return a; }",
-        "function probe(a,) { return a; }",
-        "function probe(a as Number) { return a; }",
-        "function probe(a=1) { return a; }",
-        "function probe(a) { var a = 2; return a; }",
-        "function probe(Numbers) { return Numbers.adjust(1); }",
-        "function probe() { return Numbers.adjust(,1); }",
-        "function probe() { return Numbers.adjust(1,); }",
-        "function probe() { return Numbers.subtract(1 2); }",
-        "function probe() { return Numbers.adjust(missing); }",
+        "function probe(a as Toybox.Lang.Number,a as Toybox.Lang.Number) as Toybox.Lang.Number { return a; }",
+        "function probe(a as Toybox.Lang.Number,) as Toybox.Lang.Number { return a; }",
+        "function probe(a as Number) as Toybox.Lang.Number { return a; }",
+        "function probe(a=1) as Toybox.Lang.Number { return a; }",
+        "function probe(a as Toybox.Lang.Number) as Toybox.Lang.Number { var a = 2; return a; }",
+        "function probe(Numbers as Toybox.Lang.Number) as Toybox.Lang.Number { return Numbers.adjust(1); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.adjust(,1); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.adjust(1,); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.subtract(1 2); }",
+        "function probe() as Toybox.Lang.Number { return Numbers.adjust(missing); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -255,7 +260,7 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
         .collect::<Vec<_>>()
         .join(",");
     let ir = compile(&format!(
-        "function probe({parameters}) {{ var x = p253; return x; }}"
+        "function probe({parameters}) as Toybox.Lang.Number {{ var x = p253; return x; }}"
     ))
     .unwrap();
     assert_eq!(
@@ -264,36 +269,43 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
     );
     assert!(
         compile(&format!(
-            "function probe({parameters},extra) {{ return 1; }}"
+            "function probe({parameters},extra as Toybox.Lang.Number) as Toybox.Lang.Number {{ return 1; }}"
         ))
         .is_err()
     );
     assert!(
         compile(&format!(
-            "function probe({parameters}) {{ var x = 1; var y = 2; return y; }}"
+            "function probe({parameters}) as Toybox.Lang.Number {{ var x = 1; var y = 2; return y; }}"
         ))
         .is_err()
     );
     let arguments = vec!["1"; 254].join(",");
     let ir = compile(&format!(
-        "function probe() {{ return Numbers.adjust({arguments}); }}"
+        "function probe() as Toybox.Lang.Number {{ return Numbers.adjust({arguments}); }}"
     ))
     .unwrap();
     assert!(ir.assembly().contains("invokem 0xff"));
     assert!(
         compile(&format!(
-            "function probe() {{ return Numbers.adjust({arguments},1); }}"
+            "function probe() as Toybox.Lang.Number {{ return Numbers.adjust({arguments},1); }}"
         ))
         .is_err()
     );
     let nested = format!("{}1{}", "Numbers.adjust(".repeat(64), ")".repeat(64));
-    assert!(compile(&format!("function probe() {{ return {nested}; }}")).is_ok());
+    assert!(
+        compile(&format!(
+            "function probe() as Toybox.Lang.Number {{ return {nested}; }}"
+        ))
+        .is_ok()
+    );
     let nested = format!("Numbers.adjust({nested})");
     assert!(
-        compile(&format!("function probe() {{ return {nested}; }}"))
-            .unwrap_err()
-            .message
-            .contains("nesting")
+        compile(&format!(
+            "function probe() as Toybox.Lang.Number {{ return {nested}; }}"
+        ))
+        .unwrap_err()
+        .message
+        .contains("nesting")
     );
     let body = (0..254)
         .map(|n| format!(".integer %{n} 1\n"))

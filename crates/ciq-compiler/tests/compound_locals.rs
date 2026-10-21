@@ -37,11 +37,11 @@ fn local_compounds_preserve_complete_pipelines() {
 fn every_operator_matches_explicit_read_binary_write_lowering() {
     for op in ["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"] {
         let compound = compile(&format!(
-            "function f() {{ var n = 12; n {op}= 3; return n; }}"
+            "function f() as Toybox.Lang.Number {{ var n = 12; n {op}= 3; return n; }}"
         ))
         .unwrap();
         let expanded = compile(&format!(
-            "function f() {{ var n = 12; n = n {op} 3; return n; }}"
+            "function f() as Toybox.Lang.Number {{ var n = 12; n = n {op} 3; return n; }}"
         ))
         .unwrap();
         assert_eq!(
@@ -63,7 +63,7 @@ fn every_operator_matches_explicit_read_binary_write_lowering() {
                 .any(|op| matches!(op.operation, Operation::LocalAssign { .. }))
         );
     }
-    let source = "function f() { var n = 1; n<<=2; return n; }";
+    let source = "function f() as Toybox.Lang.Number { var n = 1; n<<=2; return n; }";
     let f = compile(source).unwrap();
     let span = f
         .operations()
@@ -73,8 +73,11 @@ fn every_operator_matches_explicit_read_binary_write_lowering() {
         })
         .unwrap();
     assert_eq!(&source[span.start..span.end], "n<<=2;");
-    let f = compile("function f() { var n = 1; n += 2 * 3; return n; }").unwrap();
-    let expanded = compile("function f() { var n = 1; n = n + (2 * 3); return n; }").unwrap();
+    let f =
+        compile("function f() as Toybox.Lang.Number { var n = 1; n += 2 * 3; return n; }").unwrap();
+    let expanded =
+        compile("function f() as Toybox.Lang.Number { var n = 1; n = n + (2 * 3); return n; }")
+            .unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         expanded.lower().encode().unwrap()
@@ -86,35 +89,35 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
     for source in [
         "function f() as Toybox.Lang.String { var s = \"x\"; s += 3; s += null; return s; }",
         "function f() as Toybox.Lang.Char { var c = 'A'; c += 1; return c; }",
-        "function f() { var n = 1; n += n; return n; }",
-        "function f() { var n = 1; n *= (false || true).hashCode(); return n; }",
-        "function f() { var n = \"41\".toNumber(); if (n != null) { n += 1; if (n != null) { return n; } } return 0; }",
-        "function f() { var n = 1; n /= 0; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += n; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n *= (false || true).hashCode(); return n; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n != null) { n += 1; if (n != null) { return n; } } return 0; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n /= 0; return n; }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f(n) { n += true; return n; }",
-        "function f() { missing += 1; return 0; }",
-        "function f() { if (true) { var n = 1; } n += 1; return 0; }",
-        "function f() { var n = 1; (n) += 1; return n; }",
-        "function f() { var n = 1; n += true; return n; }",
-        "function f() { var n = 1; n += 'A'; return n; }",
-        "function f() { var n = 1; n += \"x\"; return n; }",
-        "function f() { var n = 1; n += null; return n; }",
-        "function f() { var c = 'A'; c += 'B'; c++; return 0; }",
-        "function f() { var c = 'A'; c -= 1; return 0; }",
-        "function f() { var s = \"x\"; s *= 2; return 0; }",
-        "function f() { var n = true; n |= true; return 0; }",
-        "function f() { var n = \"41\".toNumber(); n += 1; return 0; }",
-        "function f() { var a = [1]; a[0] += true; return 0; }",
-        "function f() { var a = [1]; a += [2]; return 0; }",
-        "function f() { var n = 1; n + = 2; return n; }",
-        "function f() { var n = 1; n &&= true; return n; }",
-        "function f() { var n = 1; return n += 2; }",
-        "function f() { var n = 1; n += (n = 2); return n; }",
-        "function f() { var n = 1; n >>>= 2; return n; }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { n += true; return n; }",
+        "function f() as Toybox.Lang.Number { missing += 1; return 0; }",
+        "function f() as Toybox.Lang.Number { if (true) { var n = 1; } n += 1; return 0; }",
+        "function f() as Toybox.Lang.Number { var n = 1; (n) += 1; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += true; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += 'A'; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += \"x\"; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += null; return n; }",
+        "function f() as Toybox.Lang.Number { var c = 'A'; c += 'B'; c++; return 0; }",
+        "function f() as Toybox.Lang.Number { var c = 'A'; c -= 1; return 0; }",
+        "function f() as Toybox.Lang.Number { var s = \"x\"; s *= 2; return 0; }",
+        "function f() as Toybox.Lang.Number { var n = true; n |= true; return 0; }",
+        "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); n += 1; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a[0] += true; return 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; a += [2]; return 0; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n + = 2; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n &&= true; return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; return n += 2; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n += (n = 2); return n; }",
+        "function f() as Toybox.Lang.Number { var n = 1; n >>>= 2; return n; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -122,7 +125,8 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
 
 #[test]
 fn saved_graph_cannot_move_the_read_after_rhs_effects() {
-    let f = compile("function f() { var n = 1; n += M.value(); return n; }").unwrap();
+    let f = compile("function f() as Toybox.Lang.Number { var n = 1; n += M.value(); return n; }")
+        .unwrap();
     let mut ops = f.operations().to_vec();
     let read = ops
         .iter()
@@ -146,7 +150,7 @@ fn saved_graph_cannot_move_the_read_after_rhs_effects() {
 #[test]
 fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
     let f =
-        compile("function f() { var n = 3; n += (false || true).hashCode(); return n; }").unwrap();
+        compile("function f() as Toybox.Lang.Number { var n = 3; n += (false || true).hashCode(); return n; }").unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     let ops = f.operations();
     let read = ops
@@ -171,17 +175,17 @@ fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
         .collect::<Vec<_>>()
         .join(",");
     compile(&format!(
-        "function f({params}) {{ var n = 1; n += 1; return n; }}"
+        "function f({params}) as Toybox.Lang.Number {{ var n = 1; n += 1; return n; }}"
     ))
     .unwrap();
     let err = compile(&format!(
-        "function f({params}) {{ var n = 1; n += (false || true).hashCode(); return n; }}"
+        "function f({params}) as Toybox.Lang.Number {{ var n = 1; n += (false || true).hashCode(); return n; }}"
     ))
     .unwrap_err();
     assert!(err.message.contains("255-slot limit"), "{}", err.message);
     let nested = |depth: usize| {
         let expr = format!("{}1{}", "M.value(".repeat(depth), ")".repeat(depth));
-        format!("function f() {{ var n = 1; n += {expr}; return n; }}")
+        format!("function f() as Toybox.Lang.Number {{ var n = 1; n += {expr}; return n; }}")
     };
     compile(&nested(64)).unwrap();
     assert!(

@@ -19,7 +19,7 @@ fn implicit_and_resolved_object_bases_work_at_the_initial_api_level() {
         "import Toybox.Lang; class C extends Object",
     ] {
         let source = format!(
-            "{declaration} {{ var n=1; function initialize(n) {{ self.n=n; }} function add(n) {{ self.n=self.n+n; return self.n; }} }} function f() {{ var c=new C(3); return c.add(4); }}"
+            "{declaration} {{ var n=1; function initialize(n as Toybox.Lang.Number) {{ self.n=n; }} function add(n as Toybox.Lang.Number) as Toybox.Lang.Number {{ self.n=self.n+n; return self.n; }} }} function f() as Toybox.Lang.Number {{ var c=new C(3); return c.add(4); }}"
         );
         let unit = compile_sources_with_api(&[&source], api).unwrap();
         assert_eq!(unit.classes()[0].base, ClassBase::LangObject);
@@ -27,7 +27,7 @@ fn implicit_and_resolved_object_bases_work_at_the_initial_api_level() {
     }
     let source = "class C { function initialize() {} } module Factory { function make() as Toybox.Lang.Object { return new C(); } } function f() as Toybox.Lang.String { return Factory.make().toString(); }";
     assert!(compile_sources_with_api(&[source], api).is_ok());
-    let source = "class C { function initialize() {} function hashCode() { return 17; } function value() { return self.hashCode(); } } function f() { var c=new C(); return c.hashCode()+c.value(); }";
+    let source = "class C { function initialize() {} function hashCode() as Toybox.Lang.Number { return 17; } function value() as Toybox.Lang.Number { return self.hashCode(); } } function f() as Toybox.Lang.Number { var c=new C(); return c.hashCode()+c.value(); }";
     let unit = compile_sources(&[source]).unwrap();
     assert!(unit.to_ir_text().contains(".call-self"));
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
@@ -98,14 +98,14 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
         "import Toybox.Lang; class Object { function initialize() {} }",
         "class Object { function initialize() {} }",
         "class C { var Object=1; function initialize() {} }",
-        "class C { function Object() {} function initialize() {} }",
+        "class C { function Object() as Void {} function initialize() {} }",
         "class C { function initialize() { View.initialize(); } }",
         "class C { function initialize() { Object.initialize(); } }",
         "class C { function initialize() { return 1; } }",
-        "class C { function initialize(n) {} } function f() { var c=new C(); }",
+        "class C { function initialize(n as Toybox.Lang.Number) {} } function f() as Void { var c=new C(); }",
         "class C { function initialize() {} } class Holder { var value as C; function initialize() {} }",
         "class C { function initialize() {} } function f() as Toybox.WatchUi.View { return new C(); }",
-        "function f(o as Toybox.Lang.Object) { return o.value(); }",
+        "function f(o as Toybox.Lang.Object) as Toybox.Lang.Number { return o.value(); }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
@@ -125,8 +125,8 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
 
 #[test]
 fn exact_references_resolve_across_files_without_erasing_native_bases() {
-    let classes = "class C { function initialize() {} function value() { return 7; } } class Holder { var target as C; function initialize(c as C) { self.target=c; } function get() as C { return self.target; } }";
-    let functions = "module M { function pass(c as C) as C { return c; } function make() as C { return new C(); } } function f() { var h=new Holder(M.pass(M.make())); return h.get().value(); }";
+    let classes = "class C { function initialize() {} function value() as Toybox.Lang.Number { return 7; } } class Holder { var target as C; function initialize(c as C) { self.target=c; } function get() as C { return self.target; } }";
+    let functions = "module M { function pass(c as C) as C { return c; } function make() as C { return new C(); } } function f() as Toybox.Lang.Number { var h=new Holder(M.pass(M.make())); return h.get().value(); }";
     for sources in [[functions, classes], [classes, functions]] {
         let unit = compile_sources(&sources).unwrap();
         let text = unit.to_ir_text();
@@ -163,13 +163,13 @@ fn exact_references_resolve_across_files_without_erasing_native_bases() {
 fn root_reference_contracts_reject_erasure_wrong_classes_and_early_exposure() {
     let declarations = "class C { function initialize() {} } class Other { function initialize() {} } module M { function pass(c as C) as C { return c; } }";
     for body in [
-        "function f(o as Toybox.Lang.Object) { M.pass(o); }",
-        "function f() { M.pass(new Other()); }",
-        "function f() { M.pass(null); }",
+        "function f(o as Toybox.Lang.Object) as Void { M.pass(o); }",
+        "function f() as Void { M.pass(new Other()); }",
+        "function f() as Void { M.pass(null); }",
         "function f(c as Other) as C { return c; }",
         "function f(o as Toybox.Lang.Object) as C { return o; }",
         "function f() as C { return new Other(); }",
-        "function f(c as Missing) { return 0; }",
+        "function f(c as Missing) as Toybox.Lang.Number { return 0; }",
         "class H { var c as C; function initialize() {} }",
         "class H { var c as C; function initialize(c as C) { self.c = new Other(); } }",
         "class H { var c as C; function initialize(c as C) { var x=self.c; self.c=c; } }",
@@ -204,7 +204,7 @@ fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() 
     for declaration in [
         "class C {}",
         "class C extends Toybox.Lang.Object {}",
-        "class C { var n=7; var text as Toybox.Lang.String or Null; function value() {return self.n;} }",
+        "class C { var n=7; var text as Toybox.Lang.String or Null; function value() as Toybox.Lang.Number {return self.n;} }",
     ] {
         let source = format!("{declaration} function f() as C {{return new C();}}");
         let unit = compile_sources(&[&source]).unwrap();
@@ -230,7 +230,7 @@ fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() 
     }
     // A source initializer replaces the default, rather than adding an overload.
     let unit = compile_sources(&[
-        "class C {function initialize(n) {}} function f() as C {return new C(1);}",
+        "class C {function initialize(n as Toybox.Lang.Number) {}} function f() as C {return new C(1);}",
     ])
     .unwrap();
     assert_eq!(unit.classes()[0].methods.len(), 1);
@@ -240,7 +240,7 @@ fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() 
         "class C {var text as Toybox.Lang.String;}",
         "class C {var target as C;}",
         "class C {var initialize=1;}",
-        "class C extends Toybox.WatchUi.View {function value() {return 1;}} function f() as Toybox.WatchUi.View {return new C();}",
+        "class C extends Toybox.WatchUi.View {function value() as Toybox.Lang.Number {return 1;}} function f() as Toybox.WatchUi.View {return new C();}",
         "module Empty {}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");

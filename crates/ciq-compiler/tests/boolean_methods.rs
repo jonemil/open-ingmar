@@ -52,8 +52,8 @@ fn boolean_group_preserves_complete_app_and_symbolic_pipelines() {
 #[test]
 fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
     for source in [
-        "function f(x as Toybox.Lang.Boolean) { return x.compareTo(1); }",
-        "function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return true.compareTo(n); }",
+        "function f(x as Toybox.Lang.Boolean) as Toybox.Lang.Number { return x.compareTo(1); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return true.compareTo(n); }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return true.equals(n); }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.Boolean { return false.equals(s); }",
         "function f() as Toybox.Lang.String { return true.toString(); }",
@@ -63,27 +63,30 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return true.compareTo(null); }",
-        "function f() { return true.compareTo(); }",
-        "function f() { return true.compareTo(0, 1); }",
-        "function f(n as Toybox.Lang.Number or Null) { return true.compareTo(n); }",
-        "function f() { return true.hashCode(1); }",
-        "function f() { return true.equals(); }",
-        "function f() { System.println(true.toString(1)); }",
-        "function f() { return true.toNumber(); }",
-        "function f() { return true.equals(false) + 1; }",
-        "function f() { return true.toString(); }",
-        "function f() { if (true.compareTo(false)) { return 1; } return 0; }",
+        "function f() as Toybox.Lang.Number { return true.compareTo(null); }",
+        "function f() as Toybox.Lang.Number { return true.compareTo(); }",
+        "function f() as Toybox.Lang.Number { return true.compareTo(0, 1); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return true.compareTo(n); }",
+        "function f() as Toybox.Lang.Number { return true.hashCode(1); }",
+        "function f() as Toybox.Lang.Number { return true.equals(); }",
+        "function f() as Void { System.println(true.toString(1)); }",
+        "function f() as Toybox.Lang.Number { return true.toNumber(); }",
+        "function f() as Toybox.Lang.Number { return true.equals(false) + 1; }",
+        "function f() as Toybox.Lang.Number { return true.toString(); }",
+        "function f() as Toybox.Lang.Number { if (true.compareTo(false)) { return 1; } return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return true.compareTo(false); }").unwrap();
+    let f =
+        compile("function f() as Toybox.Lang.Number { return true.compareTo(false); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".boolean %1 false"));
     assert!(parse_ir(&text.replace(".boolean %1 false", ".null %1")).is_err());
-    let arithmetic = compile("function f() { return true.compareTo(false) + 1; }").unwrap();
+    let arithmetic =
+        compile("function f() as Toybox.Lang.Number { return true.compareTo(false) + 1; }")
+            .unwrap();
     assert!(parse_ir(&arithmetic.to_ir_text().replace("compareTo", "equals")).is_err());
-    let f = compile("function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return true.compareTo(n); }").unwrap();
+    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return true.compareTo(n); }").unwrap();
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -106,7 +109,7 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
 
 #[test]
 fn boolean_method_availability_matches_source_and_ir() {
-    let source = "function f() { return true.compareTo(false); }";
+    let source = "function f() as Toybox.Lang.Number { return true.compareTo(false); }";
     let text = compile(source).unwrap().to_ir_text();
     for (target, minimum, expected) in [
         (
@@ -132,7 +135,7 @@ fn boolean_method_availability_matches_source_and_ir() {
         parse_ir_with_api(&text, context).unwrap()
     );
     for source in [
-        "function f() { return false.hashCode(); }",
+        "function f() as Toybox.Lang.Number { return false.hashCode(); }",
         "function f() as Toybox.Lang.Boolean { return true.equals(null); }",
         "function f() as Toybox.Lang.String { return false.toString(); }",
     ] {

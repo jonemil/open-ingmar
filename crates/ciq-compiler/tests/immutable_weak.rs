@@ -36,10 +36,10 @@ fn immutable_weak_preserves_result_types_and_complete_pipelines() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     for source in [
-        "function f() { return 7.weak() + 1; }",
+        "function f() as Toybox.Lang.Number { return 7.weak() + 1; }",
         "function f() as Toybox.Lang.String { return \"a\".weak().toUpper(); }",
         "function f() as Toybox.Lang.Boolean { return true.weak(); }",
-        "function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return n.weak(); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return n.weak(); }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.String { if (s == null) { return \"\"; } return s.weak(); }",
     ] {
         let f = compile(source).unwrap();
@@ -58,22 +58,22 @@ fn immutable_weak_preserves_result_types_and_complete_pipelines() {
 #[test]
 fn weak_contracts_reject_nullable_receivers_wrong_arity_and_consumers() {
     for source in [
-        "function f() { return 1.weak(2); }",
-        "function f() { return null.weak(); }",
-        "function f(n as Toybox.Lang.Number or Null) { return n.weak(); }",
+        "function f() as Toybox.Lang.Number { return 1.weak(2); }",
+        "function f() as Toybox.Lang.Number { return null.weak(); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n.weak(); }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.String { return s.weak(); }",
-        "function f() { return true.weak() + 1; }",
-        "function f() { return \"a\".weak(); }",
+        "function f() as Toybox.Lang.Number { return true.weak() + 1; }",
+        "function f() as Toybox.Lang.Number { return \"a\".weak(); }",
         "function f() as Toybox.Lang.Boolean { return 1.weak(); }",
-        "function f() { if (1.weak()) { return 1; } return 0; }",
+        "function f() as Toybox.Lang.Number { if (1.weak()) { return 1; } return 0; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return 1.weak() + 1; }").unwrap();
+    let f = compile("function f() as Toybox.Lang.Number { return 1.weak() + 1; }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".integer %0 1"));
     assert!(parse_ir(&text.replace(".integer %0 1", ".boolean %0 true")).is_err());
-    let f = compile("function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return n.weak(); }").unwrap();
+    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return n.weak(); }").unwrap();
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -119,7 +119,7 @@ fn weak_declared_and_effective_results_remain_distinct_and_versioned() {
         );
     }
     for source in [
-        "function f() { return 1.weak(); }",
+        "function f() as Toybox.Lang.Number { return 1.weak(); }",
         "function f() as Toybox.Lang.String { return \"a\".weak(); }",
         "function f() as Toybox.Lang.Boolean { return true.weak(); }",
     ] {

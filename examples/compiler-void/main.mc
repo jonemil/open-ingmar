@@ -1,4 +1,4 @@
-function main() {
+function main() as Void {
     Startup.begin();
     Startup.show(Numbers.left(), Numbers.right());
     Startup.count(3);

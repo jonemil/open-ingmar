@@ -35,7 +35,7 @@ fn number_arrays_preserve_complete_pipelines_and_numeric_read_results() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n) { return a[n]; }")
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number) as Toybox.Lang.Number { return a[n]; }")
         .unwrap();
     assert_eq!(
         f.parameter_types(),
@@ -63,23 +63,23 @@ fn number_arrays_preserve_complete_pipelines_and_numeric_read_results() {
 #[test]
 fn invariant_element_types_are_rechecked_in_source_and_saved_ir() {
     for source in [
-        "function f() { \"A\".toUtf8Array().add('A'); }",
-        "function f() { \"A\".toUtf8Array().indexOf(null); }",
-        "function f() { \"A\".toUtf8Array().remove(true); }",
-        "function f() { \"A\".toUtf8Array().removeAll(\"A\"); }",
-        "function f() { \"A\".toUtf8Array().addAll(\"A\".toCharArray()); }",
-        "function f() { \"A\".toCharArray().addAll(\"A\".toUtf8Array()); }",
-        "function f(s as Toybox.Lang.String or Null) { s.toUtf8Array(); }",
-        "function f() { 1.toUtf8Array(); }",
-        "function f() { \"A\".toUtf8Array(1); }",
-        "function f() { System.println(\"A\".toUtf8Array()); }",
+        "function f() as Void { \"A\".toUtf8Array().add('A'); }",
+        "function f() as Void { \"A\".toUtf8Array().indexOf(null); }",
+        "function f() as Void { \"A\".toUtf8Array().remove(true); }",
+        "function f() as Void { \"A\".toUtf8Array().removeAll(\"A\"); }",
+        "function f() as Void { \"A\".toUtf8Array().addAll(\"A\".toCharArray()); }",
+        "function f() as Void { \"A\".toCharArray().addAll(\"A\".toUtf8Array()); }",
+        "function f(s as Toybox.Lang.String or Null) as Void { s.toUtf8Array(); }",
+        "function f() as Void { 1.toUtf8Array(); }",
+        "function f() as Void { \"A\".toUtf8Array(1); }",
+        "function f() as Void { System.println(\"A\".toUtf8Array()); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a[0] - 1; }")
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a[0] - 1; }")
         .unwrap();
     assert!(parse_ir(&f.to_ir_text().replace("number-array", "char-array")).is_err());
-    let source = "module M { function make() as Toybox.Lang.Array<Toybox.Lang.Number> { return \"a\".toUtf8Array(); } } function start() { return M.make().size(); }";
+    let source = "module M { function make() as Toybox.Lang.Array<Toybox.Lang.Number> { return \"a\".toUtf8Array(); } } function start() as Toybox.Lang.Number { return M.make().size(); }";
     let unit = compile_sources(&[source]).unwrap();
     let text = unit.to_ir_text();
     assert!(text.contains("result=number-array"));
@@ -90,16 +90,16 @@ fn invariant_element_types_are_rechecked_in_source_and_saved_ir() {
         )
         .is_err()
     );
-    let bad_call = "module M { function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); } } function start() { return M.count(['a']); }";
+    let bad_call = "module M { function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); } } function start() as Toybox.Lang.Number { return M.count(['a']); }";
     assert!(compile_sources(&[bad_call]).is_err());
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return a[n] - 1; }").unwrap();
+    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return a[n] - 1; }").unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
 fn number_element_availability_is_distinct_from_conversion_and_mutation() {
     let initial = context(ApiLevel(1, 0, 0));
-    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }";
+    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }";
     let f = compile_with_api(source, initial).unwrap();
     assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
     let empty = "ciq-ir\n.function empty\n.array-new %0 number\n.return %0\n.end\n";
@@ -107,12 +107,12 @@ fn number_element_availability_is_distinct_from_conversion_and_mutation() {
     assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Number));
     assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    let conversion = "function f() { return \"a\".toUtf8Array().size(); }";
+    let conversion = "function f() as Toybox.Lang.Number { return \"a\".toUtf8Array().size(); }";
     assert!(compile_with_api(conversion, context(ApiLevel(1, 2, 0))).is_err());
     compile_with_api(conversion, context(ApiLevel(1, 3, 0))).unwrap();
     assert!(
         compile_with_api(
-            "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a.add(1); }",
+            "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Void { a.add(1); }",
             initial
         )
         .is_err()

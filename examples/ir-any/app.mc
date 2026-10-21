@@ -1,6 +1,15 @@
 using Toybox.Application;
 using Toybox.System;
 module Dynamic {
+    function empty() {}
+    function bare() { return; }
+    function maybe(b) { if (b) { return 42; } else { return null; } }
+    function array(x) { return [x, 7]; }
+    function sum(n) {
+        var total = 0;
+        while (n > 0) { total += n; n -= 1; }
+        return total;
+    }
     function identity(x) { return x; }
     function length(x) { return x.length(); }
     function add(x, y) { return x + y; }
@@ -30,6 +39,13 @@ function main() as Void {
     System.println(Dynamic.custom(new Token()));
     System.println(Dynamic.format("%d"));
     System.println(Dynamic.narrow(41));
+    System.println(Dynamic.empty());
+    System.println(Dynamic.bare());
+    System.println(Dynamic.maybe(true));
+    System.println(Dynamic.maybe(false));
+    System.println(Dynamic.at(Dynamic.array("x"), 0));
+    System.println(Dynamic.at(Dynamic.array("x"), 1));
+    System.println(Dynamic.sum(3));
 }
 class Token {
     function initialize() {}

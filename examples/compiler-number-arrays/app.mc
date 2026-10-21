@@ -11,7 +11,7 @@ module Numbers {
         return "z";
     }
 }
-function start() {
+function start() as Void {
     var a = "Aé😀".toUtf8Array();
     System.println(a.toString());
     System.println(a.size());

@@ -102,7 +102,7 @@ fn dictionary_identity_does_not_enable_unrelated_object_or_operator_profiles() {
     for body in ["return d.hashCode(1);", "return d.equals(d) + 1;"] {
         assert!(
             compile(&format!(
-                "function f(d as Toybox.Lang.Dictionary) {{ {body} }}"
+                "function f(d as Toybox.Lang.Dictionary) as Void {{ {body} }}"
             ))
             .is_err()
         );

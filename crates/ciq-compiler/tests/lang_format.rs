@@ -115,7 +115,9 @@ fn native_module_calls_recheck_contracts_and_saved_ir_edits() {
         compile("function f(a as Lang.Object) as Lang.String {return Lang.format(\"$1$\", a);}")
             .is_err()
     );
-    assert!(compile("function f() {return Lang.format(\"x\", []);}").is_err());
+    assert!(
+        compile("function f() as Toybox.Lang.Number {return Lang.format(\"x\", []);}").is_err()
+    );
     let text = compile("function f() as Lang.String {return Lang.format(\"$1$\", [1]);}")
         .unwrap()
         .to_ir_text();

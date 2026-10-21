@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println("a" + "b");
     System.println("n=" + 7);
     System.println(7 + "n");

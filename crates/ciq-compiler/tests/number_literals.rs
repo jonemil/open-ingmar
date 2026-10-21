@@ -23,7 +23,7 @@ fn signed_number_literals_choose_exact_smallest_immediate_encodings() {
         (i32::MAX, vec![0x25, 0x7f, 0xff, 0xff, 0xff]),
         (i32::MIN, vec![0x25, 0x80, 0, 0, 0]),
     ] {
-        let source = format!("function f() {{ return {value}; }}");
+        let source = format!("function f() as Toybox.Lang.Number {{ return {value}; }}");
         let f = compile(&source).unwrap();
         assert!(
             matches!(f.operations()[0].operation, ciq_compiler::Operation::Integer { value: actual, .. } if actual == value)
@@ -40,14 +40,14 @@ fn signed_number_literals_choose_exact_smallest_immediate_encodings() {
         }
     }
     for source in [
-        "function f() { return -0; }",
-        "function f() { return - /* sign */ 128; }",
-        "function f() { return 1 - -2; }",
+        "function f() as Toybox.Lang.Number { return -0; }",
+        "function f() as Toybox.Lang.Number { return - /* sign */ 128; }",
+        "function f() as Toybox.Lang.Number { return 1 - -2; }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
-    let source = "function f() { return -2147483648; }";
+    let source = "function f() as Toybox.Lang.Number { return -2147483648; }";
     let f = compile(source).unwrap();
     let span = f.operations()[0].span.unwrap();
     assert_eq!(&source[span.start..span.end], "-2147483648");
@@ -104,7 +104,10 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         "1l",
     ] {
         assert!(
-            compile(&format!("function f() {{ return {value}; }}")).is_err(),
+            compile(&format!(
+                "function f() as Toybox.Lang.Number {{ return {value}; }}"
+            ))
+            .is_err(),
             "{value}"
         );
         assert!(
@@ -116,14 +119,14 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         );
     }
     for source in [
-        "function f(n) { return ++n; }",
-        "function f() { return +true; }",
-        "function f() { return -1.abs(); }",
-        "function f() { return 1--2; }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return ++n; }",
+        "function f() as Toybox.Lang.Number { return +true; }",
+        "function f() as Toybox.Lang.Number { return -1.abs(); }",
+        "function f() as Toybox.Lang.Number { return 1--2; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    compile("function f() { return (-1).abs(); }").unwrap();
+    compile("function f() as Toybox.Lang.Number { return (-1).abs(); }").unwrap();
     assert!(parse_ir("ciq-ir\n.function f\n.integer %0 -\n.return %0\n.end\n").is_err());
 }
 
@@ -142,7 +145,10 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
         ("-037777777777", 1),
         ("-0x80000000", i32::MIN),
     ] {
-        let function = compile(&format!("function f(){{return {literal};}}")).unwrap();
+        let function = compile(&format!(
+            "function f() as Toybox.Lang.Number{{return {literal};}}"
+        ))
+        .unwrap();
         assert!(
             matches!(function.operations()[0].operation,ciq_compiler::Operation::Integer{value:actual,..} if actual==value),
             "{literal}"
@@ -150,11 +156,13 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
         assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower().encode().unwrap(),
-            compile(&format!("function f(){{return {value};}}"))
-                .unwrap()
-                .lower()
-                .encode()
-                .unwrap()
+            compile(&format!(
+                "function f() as Toybox.Lang.Number{{return {value};}}"
+            ))
+            .unwrap()
+            .lower()
+            .encode()
+            .unwrap()
         );
     }
     for literal in [
@@ -170,7 +178,10 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
         "1_000",
     ] {
         assert!(
-            compile(&format!("function f(){{return {literal};}}")).is_err(),
+            compile(&format!(
+                "function f() as Toybox.Lang.Number{{return {literal};}}"
+            ))
+            .is_err(),
             "{literal}"
         );
     }

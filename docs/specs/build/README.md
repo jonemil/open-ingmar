@@ -139,13 +139,15 @@ function IR and uses the shared symbolic assembly model. See
 ### Input and lifecycle
 
 The caller supplies sixteen application-ID bytes and a global entry function
-name. The entry must have zero parameters and return Void or a checked printable
+name. The entry must have zero parameters and return Any, Void, or a checked printable
 non-null scalar: Number, Long, Float, Double, String, Boolean, Char, Numeric,
 Integer, or Decimal. Other result contracts, including nullable aliases, Object,
 Symbol, containers, and references, are rejected before generation. CLI default:
 `main`. The ID identifies the application; it is independent of the signing key.
-Nullable entries are rejected because the generated wrapper prints valued
-results without a source-authored null guard.
+Explicit nullable entries are rejected because the generated wrapper prints
+valued results without a source-authored null guard. Any entries use dynamic
+printing, including a possible Null from an unannotated empty body; callers
+wanting no result print should declare Void.
 
 Generated lifecycle behavior:
 

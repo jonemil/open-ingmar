@@ -1,7 +1,7 @@
 using Toybox.System;
 
 module Numbers {
-    function showFind(text as Toybox.Lang.String, needle as Toybox.Lang.String) {
+    function showFind(text as Toybox.Lang.String, needle as Toybox.Lang.String) as Void {
         var index = text.find(needle);
         if (index == null) {
             System.println("not found");

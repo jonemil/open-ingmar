@@ -4,7 +4,7 @@ using Toybox.Graphics;
 class CounterView extends WatchUi.View {
     var count = 7;
     function initialize() { View.initialize(); }
-    function add(amount) {
+    function add(amount as Toybox.Lang.Number) as Toybox.Lang.Number {
         self.count = self.count + amount;
         return self.count;
     }

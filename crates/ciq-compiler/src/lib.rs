@@ -156,6 +156,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// Dynamic elements, including Null, inferred from unknown source values.
+    Any,
     /// A non-null Object value; concrete members require a narrower proof.
     LangObject,
     /// An Object value or Null; consumers must guard saved nullable reads.
@@ -198,6 +200,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Any => return api::Type::Any,
             Self::LangObject | Self::NullableObject => "Toybox.Lang.Object",
             Self::Numeric { alias, nullable } => return alias.api_type(nullable),
             Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
@@ -259,6 +262,7 @@ impl ArrayElement {
 
     fn text(self) -> &'static str {
         match self {
+            Self::Any => "any",
             Self::LangObject => "object",
             Self::NullableObject => "nullable-object",
             Self::Numeric { alias, nullable } => alias.value_tag(nullable),
@@ -2520,7 +2524,8 @@ impl Function {
                     element_type,
                     ref values,
                 } => {
-                    if values.is_empty()
+                    if element_type == ArrayElement::Any
+                        || values.is_empty()
                         || !values.iter().all(|value| {
                             native::accepts(&element_type.api_type(), &value.api_type())
                         })
@@ -2553,7 +2558,7 @@ impl Function {
                     (Some(result), vec![])
                 }
                 Operation::ByteArrayAllocate { result, length } => {
-                    if type_of(length) != ValueType::Integer {
+                    if !matches!(type_of(length), ValueType::Integer | ValueType::Any) {
                         return Err(fail("ByteArray length must be a non-null Number"));
                     }
                     if let Some(context) = context {
@@ -2575,10 +2580,12 @@ impl Function {
                 } => {
                     let inputs = if let Operation::ArrayAllocate { length, .. } = located.operation
                     {
-                        if element_type.nullable_base().is_none() {
+                        if element_type != ArrayElement::Any
+                            && element_type.nullable_base().is_none()
+                        {
                             return Err(fail("sized Array allocation requires nullable elements"));
                         }
-                        if type_of(length) != ValueType::Integer {
+                        if !matches!(type_of(length), ValueType::Integer | ValueType::Any) {
                             return Err(fail("Array length must be a non-null Number"));
                         }
                         vec![length]
@@ -3524,6 +3531,8 @@ impl Function {
             )
         };
         let result = if type_text::explicit_function_result(&self.return_type)
+            || (self.return_type != ReturnType::Any && self.return_type != ReturnType::Void
+                && self.operations.iter().any(|op| matches!(op.operation, Operation::Return { value } if self.value_types[&value] == ValueType::Any)))
             || (self.return_type != ReturnType::Void
                 && !self
                     .operations
@@ -4124,10 +4133,11 @@ impl Function {
 /// so the native base can be resolved from declarations.
 /// Resolves parameters and scoped locals, lowers conditions and while loops
 /// (including innermost break/continue) to blocks, and retains source spans.
-/// Value functions require a consistent typed return on every path;
-/// otherwise bare returns and fallthrough produce void returns. Mixed return
-/// types, unreachable statements, and local/parameter shadowing are rejected.
-/// Assignments require a visible initialized local and preserve its supported type.
+/// Omitted parameter/result annotations select Any. Empty and bare-return
+/// bodies return Null; explicit Void remains separate. Value-returning bodies
+/// require value returns on every returning path, checked against their result
+/// contract. Unreachable statements and local/parameter shadowing are rejected.
+/// Local reads require definite assignment; writes may change inferred types.
 /// Unsupported syntax, unresolved names, and invalid IR produce source
 /// diagnostics rather than partial output. VM instruction selection and symbol
 /// binding occur later.

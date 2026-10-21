@@ -86,8 +86,8 @@ fn classes(prg: &Prg) -> Vec<classes::Class<'_>> {
 #[test]
 fn complete_application_resolves_classes_modules_methods_and_literal_data() {
     let unit = compile_sources(&[
-        "function main() { System.println(\"hello é\\n\"); return A.f() + B.f(); }",
-        "module A { function f() { var n = 2; while (n > 0) { n = n - 1; } return n; } } module B { function f() { return 42; } }",
+        "function main() as Toybox.Lang.Number { System.println(\"hello é\\n\"); return A.f() + B.f(); }",
+        "module A { function f() as Toybox.Lang.Number { var n = 2; while (n > 0) { n = n - 1; } return n; } } module B { function f() as Toybox.Lang.Number { return 42; } }",
     ]).unwrap();
     let app = build_console_application(&unit, &options("main")).unwrap();
     assert_eq!(Prg::parse(&app.to_bytes()).unwrap(), app);
@@ -243,7 +243,7 @@ fn bootstrap_has_only_generated_imports_empty_resources_and_no_debug_or_signatur
 
 #[test]
 fn sdk_member_names_share_ids_without_colliding_with_generated_app_class() {
-    let unit = compile_sources(&["function main() { System.println(1); return A.println(); } function App() { return 3; } module A { function println() { return 2; } }"]).unwrap();
+    let unit = compile_sources(&["function main() as Toybox.Lang.Number { System.println(1); return A.println(); } function App() as Toybox.Lang.Number { return 3; } module A { function println() as Toybox.Lang.Number { return 2; } }"]).unwrap();
     let app = build_console_application(&unit, &options("main")).unwrap();
     let records = classes(&app);
     assert!(records[3].fields.iter().any(|f| f.symbol_id() == 0x800067));
@@ -263,23 +263,32 @@ fn sdk_member_names_share_ids_without_colliding_with_generated_app_class() {
 #[test]
 fn unsupported_entries_and_reserved_global_module_names_are_rejected() {
     for (source, entry) in [
-        ("function f() { return 1; }", "missing"),
-        ("module M { function f() { return 1; } }", "f"),
-        ("function f(x) { return x; }", "f"),
         (
-            "function main() { return 1; } function Toybox() { return 2; }",
+            "function f() as Toybox.Lang.Number { return 1; }",
+            "missing",
+        ),
+        (
+            "module M { function f() as Toybox.Lang.Number { return 1; } }",
+            "f",
+        ),
+        (
+            "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { return x; }",
+            "f",
+        ),
+        (
+            "function main() as Toybox.Lang.Number { return 1; } function Toybox() as Toybox.Lang.Number { return 2; }",
             "main",
         ),
         (
-            "function main() { return 1; } module globals { function f() { return 2; } }",
+            "function main() as Toybox.Lang.Number { return 1; } module globals { function f() as Toybox.Lang.Number { return 2; } }",
             "main",
         ),
         (
-            "function main() { return 1; } module statics { function f() { return 2; } }",
+            "function main() as Toybox.Lang.Number { return 1; } module statics { function f() as Toybox.Lang.Number { return 2; } }",
             "main",
         ),
         (
-            "function main() { return 1; } module Toybox { function f() { return 2; } }",
+            "function main() as Toybox.Lang.Number { return 1; } module Toybox { function f() as Toybox.Lang.Number { return 2; } }",
             "main",
         ),
     ] {

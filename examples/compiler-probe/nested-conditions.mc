@@ -1,4 +1,4 @@
-function choose(value) {
+function choose(value as Toybox.Lang.Number) as Toybox.Lang.Number {
     var base = 40;
     if (value == 0) {
         var amount = 3;

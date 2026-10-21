@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(Numbers.negate(41));
     System.println(Numbers.negate(-41));
     System.println(Numbers.negate(0));

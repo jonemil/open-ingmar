@@ -93,7 +93,7 @@ fn array_literals_enforce_element_api_and_resource_limits() {
             .contains("1024-operation")
     );
     let nested = format!(
-        "function f() {{ return {}'a'{}; }}",
+        "function f() as Toybox.Lang.Number {{ return {}'a'{}; }}",
         "[".repeat(65),
         "]".repeat(65)
     );
@@ -123,7 +123,8 @@ fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements
 
 #[test]
 fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
-    let f = compile("function f(n) { n.abs(); var a = ['a']; }").unwrap();
+    let f =
+        compile("function f(n as Toybox.Lang.Number) as Void { n.abs(); var a = ['a']; }").unwrap();
     let mut ops: Vec<LocatedOperation> = f.operations().to_vec();
     let allocation = ops
         .iter()

@@ -14,7 +14,7 @@ module Writes {
         System.println("view receiver");
         return a;
     }
-    function index() { System.println("index"); return 1; }
+    function index() as Toybox.Lang.Number { System.println("index"); return 1; }
     function character() as Toybox.Lang.Char {
         System.println("char value");
         return 'Ω';
@@ -25,7 +25,7 @@ module Writes {
         if (flag) { return new WatchUi.View(); }
         return new WatchUi.View();
     }
-    function run() {
+    function run() as Void {
         var chars = ['a', 'b'];
         var sharedChars = chars;
         Writes.chars(chars)[Writes.index()] = Writes.character();

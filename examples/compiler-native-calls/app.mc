@@ -1,4 +1,4 @@
-function start() {
+function start() as Void {
     var number = 41;
     System.println(number.toString());
     var negative = 0 - 1;

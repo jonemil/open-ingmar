@@ -41,7 +41,10 @@ fn number_group_preserves_complete_app_and_text_pipelines() {
         ("7.equals(null)", "equals", 0x008000b3),
         ("7.compareTo(3)", "compareTo", 0x00800e50),
     ] {
-        let f = compile(&format!("function f() {{ System.println({expression}); }}")).unwrap();
+        let f = compile(&format!(
+            "function f() as Void {{ System.println({expression}); }}"
+        ))
+        .unwrap();
         let symbols = ciq_assembly::Program::parse(&format!(".symbol method \"{name}\" id=0x{id:08x}\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol print \"println\" id=0x00800067")).unwrap();
         let bindings = ciq_compiler::symbol_bindings(&f.lower(), &symbols).unwrap();
         assert_eq!(bindings[&format!("__ciq_native_{name}")], id);
@@ -58,28 +61,27 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f() as Toybox.Lang.Boolean { return 7.equals(null); }",
         "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return 7.equals(x); }",
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Boolean { return 7.equals(x); }",
-        "function f(x as Toybox.Lang.Number or Null) { if (x == null) { return 0; } return 7.compareTo(x); }",
-        "function f() { return 7.compareTo(true); }",
+        "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (x == null) { return 0; } return 7.compareTo(x); }",
+        "function f() as Toybox.Lang.Number { return 7.compareTo(true); }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return 7.equals(); }",
-        "function f() { return 7.hashCode(1); }",
-        "function f() { return 7.toNumber(1); }",
-        "function f() { return 7.compareTo(); }",
-        "function f() { return 7.compareTo(1, 2); }",
-        "function f() { return 7.compareTo(null); }",
-        "function f(x as Toybox.Lang.Number or Null) { return 7.compareTo(x); }",
-        "function f(x as Toybox.Lang.Number or Null) { return x.hashCode(); }",
-        "function f() { return 7.equals(7) + 1; }",
-        "function f() { return true.abs(); }",
+        "function f() as Toybox.Lang.Number { return 7.equals(); }",
+        "function f() as Toybox.Lang.Number { return 7.hashCode(1); }",
+        "function f() as Toybox.Lang.Number { return 7.toNumber(1); }",
+        "function f() as Toybox.Lang.Number { return 7.compareTo(); }",
+        "function f() as Toybox.Lang.Number { return 7.compareTo(1, 2); }",
+        "function f() as Toybox.Lang.Number { return 7.compareTo(null); }",
+        "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return 7.compareTo(x); }",
+        "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return x.hashCode(); }",
+        "function f() as Toybox.Lang.Number { return 7.equals(7) + 1; }",
+        "function f() as Toybox.Lang.Number { return true.abs(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let wrong_user_type =
-        "module M { function number(n) { return n; } function f() { return M.number(true); } }";
+    let wrong_user_type = "module M { function number(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return M.number(true); } }";
     assert!(
         compile_sources_with_api(
             &[wrong_user_type],
@@ -87,7 +89,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         )
         .is_err()
     );
-    let f = compile("function f() { return 7.compareTo(3); }").unwrap();
+    let f = compile("function f() as Toybox.Lang.Number { return 7.compareTo(3); }").unwrap();
     let mut operations = f.operations().to_vec();
     let op = operations
         .iter_mut()
@@ -107,7 +109,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
 
 #[test]
 fn compare_introduction_is_checked_in_source_and_saved_ir() {
-    let source = "function f() { return 7.compareTo(3); }";
+    let source = "function f() as Toybox.Lang.Number { return 7.compareTo(3); }";
     let text = compile(source).unwrap().to_ir_text();
     for (target, minimum, expected) in [
         (
@@ -133,7 +135,7 @@ fn compare_introduction_is_checked_in_source_and_saved_ir() {
         parse_ir_with_api(&text, context).unwrap()
     );
     for expression in ["7.toNumber()", "7.hashCode()", "7.equals(null)"] {
-        let source = format!("function f() {{ System.println({expression}); }}");
+        let source = format!("function f() as Void {{ System.println({expression}); }}");
         compile_with_api(
             &source,
             ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap(),

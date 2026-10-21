@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(41.weak());
     System.println((0 - 41).weak() + 1);
     System.println("hello".weak());

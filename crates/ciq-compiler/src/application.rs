@@ -266,7 +266,8 @@ pub fn build_console_application(
     };
     if !matches!(
         entry.return_type(),
-        ReturnType::Integer
+        ReturnType::Any
+            | ReturnType::Integer
             | ReturnType::Long
             | ReturnType::Float
             | ReturnType::Double
@@ -279,7 +280,7 @@ pub fn build_console_application(
             | ReturnType::Void
     ) {
         return Err(error(
-            "console entry requires a non-null scalar or Void result",
+            "console entry requires a non-null scalar or Void result, or Any",
         ));
     }
     let source_start = instance

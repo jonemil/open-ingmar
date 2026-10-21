@@ -12,7 +12,7 @@ module Chars {
         return ['p', 'q'];
     }
 }
-function start() {
+function start() as Void {
     var a = ['a', 'b'];
     var shared = a;
     a.add('c');

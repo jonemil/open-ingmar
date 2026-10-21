@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     var chars = "AbC".toCharArray();
     System.println(chars[0]);
     System.println(chars[1].toUpper());

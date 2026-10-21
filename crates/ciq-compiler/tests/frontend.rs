@@ -3,7 +3,7 @@ use ciq_mc::{Opcode, decode};
 
 #[test]
 fn semantic_ir_preserves_value_identity_and_source_spans() {
-    let source = "// comment\nfunction probe() {\n    return 41;\n}\n";
+    let source = "// comment\nfunction probe() as Toybox.Lang.Number {\n    return 41;\n}\n";
     let function = compile(source).unwrap();
     assert_eq!(function.name(), "probe");
     let operations = function.operations();
@@ -33,7 +33,10 @@ fn every_supported_literal_assembles_and_returns_its_value() {
     // Interpret only the supported constant-return sequence, independently of
     // the frontend IR. This is an encoding check, not a full VM/runtime oracle.
     for expected in 0..=127 {
-        let function = compile(&format!("function probe() {{ return {expected}; }}")).unwrap();
+        let function = compile(&format!(
+            "function probe() as Toybox.Lang.Number {{ return {expected}; }}"
+        ))
+        .unwrap();
         let bytes = ciq_asm::assemble(&function.assembly()).unwrap();
         let mut result = None;
         let mut returned = false;
@@ -63,17 +66,17 @@ fn every_supported_literal_assembles_and_returns_its_value() {
 fn unsupported_programs_are_rejected_completely() {
     for source in [
         "",
-        "function probe(x as Number) { return 41; }",
-        "function probe() { return 2147483648; }",
-        "function probe() { return 999999999999999999999999; }",
-        "function probe() { return -2147483649; }",
-        "function probe() { return 0x100000000; }",
-        "function probe() { return 40 ** 1; }",
-        "function probe() { return true; }",
-        "function probe() { return 41; return 42; }",
-        "function probe() { return 41; } function other() { return 42; }",
-        "function return() { return 41; }",
-        "module Left { function probe() { return 41; } }",
+        "function probe(x as Number) as Toybox.Lang.Number { return 41; }",
+        "function probe() as Toybox.Lang.Number { return 2147483648; }",
+        "function probe() as Toybox.Lang.Number { return 999999999999999999999999; }",
+        "function probe() as Toybox.Lang.Number { return -2147483649; }",
+        "function probe() as Toybox.Lang.Number { return 0x100000000; }",
+        "function probe() as Toybox.Lang.Number { return 40 ** 1; }",
+        "function probe() as Toybox.Lang.Number { return true; }",
+        "function probe() as Toybox.Lang.Number { return 41; return 42; }",
+        "function probe() as Toybox.Lang.Number { return 41; } function other() as Toybox.Lang.Number { return 42; }",
+        "function return() as Toybox.Lang.Number { return 41; }",
+        "module Left { function probe() as Toybox.Lang.Number { return 41; } }",
         "function probe() { return 41;",
         "function probe() { /* unterminated",
     ] {
@@ -87,25 +90,26 @@ fn unsupported_programs_are_rejected_completely() {
 #[test]
 fn comments_and_unicode_diagnostics_keep_correct_source_locations() {
     let function = compile(
-        "/* café */ function /* name */ probe(// args\n) { return /* value */ 41; } // eof",
+        "/* café */ function /* name */ probe(// args\n) as Toybox.Lang.Number { return /* value */ 41; } // eof",
     )
     .unwrap();
     assert_eq!(function.name(), "probe");
-    let source = "/* café */\nfunction probe() {\n  return 2147483648;\n}";
+    let source = "/* café */\nfunction probe() as Toybox.Lang.Number {\n  return 2147483648;\n}";
     let error = compile(source).unwrap_err();
     assert_eq!((error.line, error.column), (3, 10));
     assert_eq!(&source[error.offset..error.offset + 10], "2147483648");
-    let error = compile("/* é */ function probe() { return 💡; }").unwrap_err();
-    assert_eq!((error.line, error.column), (1, 35));
+    let error =
+        compile("/* é */ function probe() as Toybox.Lang.Number { return 💡; }").unwrap_err();
+    assert_eq!((error.line, error.column), (1, 57));
     assert!(error.message.contains("unsupported character"));
 }
 
 #[test]
 fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
     for source in [
-        "function f() { return [1,2,][1]; }",
-        "function f() { return [M.first(),M.second(),][1]; }",
-        "function f(choose as Toybox.Lang.Boolean) { return [choose ? 1 : 2,3,][0]; }",
+        "function f() as Toybox.Lang.Number { return [1,2,][1]; }",
+        "function f() as Toybox.Lang.Number { return [M.first(),M.second(),][1]; }",
+        "function f(choose as Toybox.Lang.Boolean) as Toybox.Lang.Number { return [choose ? 1 : 2,3,][0]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return ['a','b',]; }",
         "function f() as Toybox.Lang.ByteArray { return [1,255,]b; }",
         "function f() as Toybox.Lang.ByteArray { return [M.first(),M.second(),]b; }",
@@ -137,21 +141,21 @@ fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
             ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
         );
     }
-    compile("function f() { return [1, /* end */ ][0]; }").unwrap();
+    compile("function f() as Toybox.Lang.Number { return [1, /* end */ ][0]; }").unwrap();
     compile("function f() as Toybox.Lang.Dictionary { return {\"a\" => 1, // end\n}; }").unwrap();
     for source in [
-        "function f() { return [,]; }",
-        "function f() { return [1,,]; }",
-        "function f() { return [,]b; }",
-        "function f() { return [1,,2]b; }",
+        "function f() as Toybox.Lang.Number { return [,]; }",
+        "function f() as Toybox.Lang.Number { return [1,,]; }",
+        "function f() as Toybox.Lang.Number { return [,]b; }",
+        "function f() as Toybox.Lang.Number { return [1,,2]b; }",
         "function f() as Toybox.Lang.Dictionary { return {,}; }",
         "function f() as Toybox.Lang.Dictionary { return {\"a\"=>1,,}; }",
         "function f() as Toybox.Lang.Dictionary { return {\"a\"=>,}; }",
-        "function f() { return M.value(1,); }",
-        "function f(n,) { return n; }",
-        "function f() { var a=1,; return a; }",
-        "function f() { for(var a=0,;a<1;a++){ return a; } return 1; }",
-        "function f() { for(var a=0;a<1;a++,){ return a; } return 1; }",
+        "function f() as Toybox.Lang.Number { return M.value(1,); }",
+        "function f(n as Toybox.Lang.Number,) as Toybox.Lang.Number { return n; }",
+        "function f() as Toybox.Lang.Number { var a=1,; return a; }",
+        "function f() as Toybox.Lang.Number { for(var a=0,;a<1;a++){ return a; } return 1; }",
+        "function f() as Toybox.Lang.Number { for(var a=0;a<1;a++,){ return a; } return 1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }

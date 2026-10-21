@@ -56,8 +56,8 @@ fn string_group_preserves_complete_app_and_symbolic_pipelines() {
 #[test]
 fn string_argument_profiles_and_nullable_results_share_ir_validation() {
     for source in [
-        "function f(x as Toybox.Lang.String or Null) { if (x == null) { return 0; } return \"a\".compareTo(x); }",
-        "function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } var value = \"10\".toNumberWithBase(n); if (value == null) { return 0; } return value; }",
+        "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { if (x == null) { return 0; } return \"a\".compareTo(x); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } var value = \"10\".toNumberWithBase(n); if (value == null) { return 0; } return value; }",
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Boolean { return \"a\".equals(x); }",
         "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return \"a\".equals(x); }",
         "function f() as Toybox.Lang.Boolean { return \"a\".equals(true); }",
@@ -67,30 +67,31 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return \"a\".compareTo(null); }",
-        "function f() { return \"a\".compareTo(); }",
-        "function f(x as Toybox.Lang.String or Null) { return \"a\".compareTo(x); }",
-        "function f(x as Toybox.Lang.String or Null) { return x.hashCode(); }",
-        "function f() { return \"a\".hashCode(1); }",
-        "function f() { return \"a\".equals(); }",
-        "function f() { var n = \"10\".toNumberWithBase(); }",
-        "function f() { var n = \"10\".toNumberWithBase(\"2\"); }",
-        "function f() { var n = \"10\".toNumberWithBase(true); }",
-        "function f() { var n = \"10\".toNumberWithBase(null); }",
-        "function f(n as Toybox.Lang.Number or Null) { var value = \"10\".toNumberWithBase(n); }",
-        "function f() { return \"10\".toNumberWithBase(2); }",
-        "function f() { System.println(\"10\".toNumberWithBase(2)); }",
-        "function f() { return \"a\".equals(\"b\") + 1; }",
-        "function f() { var n = 7.toNumberWithBase(2); }",
+        "function f() as Toybox.Lang.Number { return \"a\".compareTo(null); }",
+        "function f() as Toybox.Lang.Number { return \"a\".compareTo(); }",
+        "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { return \"a\".compareTo(x); }",
+        "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { return x.hashCode(); }",
+        "function f() as Toybox.Lang.Number { return \"a\".hashCode(1); }",
+        "function f() as Toybox.Lang.Number { return \"a\".equals(); }",
+        "function f() as Void { var n = \"10\".toNumberWithBase(); }",
+        "function f() as Void { var n = \"10\".toNumberWithBase(\"2\"); }",
+        "function f() as Void { var n = \"10\".toNumberWithBase(true); }",
+        "function f() as Void { var n = \"10\".toNumberWithBase(null); }",
+        "function f(n as Toybox.Lang.Number or Null) as Void { var value = \"10\".toNumberWithBase(n); }",
+        "function f() as Toybox.Lang.Number { return \"10\".toNumberWithBase(2); }",
+        "function f() as Void { System.println(\"10\".toNumberWithBase(2)); }",
+        "function f() as Toybox.Lang.Number { return \"a\".equals(\"b\") + 1; }",
+        "function f() as Void { var n = 7.toNumberWithBase(2); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return \"a\".compareTo(\"b\"); }").unwrap();
+    let f =
+        compile("function f() as Toybox.Lang.Number { return \"a\".compareTo(\"b\"); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".string %1 \"b\""));
     assert!(parse_ir(&text.replace(".string %1 \"b\"", ".null %1")).is_err());
     assert!(parse_ir(&text.replace("compareTo", "toNumberWithBase")).is_err());
-    let f = compile("function f() { var n = \"10\".toNumberWithBase(2); if (n == null) { return 0; } return n; }").unwrap();
+    let f = compile("function f() as Toybox.Lang.Number { var n = \"10\".toNumberWithBase(2); if (n == null) { return 0; } return n; }").unwrap();
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -107,12 +108,12 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
 fn string_method_introductions_are_checked_in_source_and_text() {
     for (source, introduced, previous) in [
         (
-            "function f() { var n = \"FF\".toNumberWithBase(16); }",
+            "function f() as Void { var n = \"FF\".toNumberWithBase(16); }",
             ApiLevel(1, 4, 1),
             ApiLevel(1, 4, 0),
         ),
         (
-            "function f() { return \"a\".compareTo(\"b\"); }",
+            "function f() as Toybox.Lang.Number { return \"a\".compareTo(\"b\"); }",
             ApiLevel(5, 0, 0),
             ApiLevel(4, 9, 9),
         ),
@@ -134,7 +135,7 @@ fn string_method_introductions_are_checked_in_source_and_text() {
         );
     }
     for source in [
-        "function f() { return \"a\".hashCode(); }",
+        "function f() as Toybox.Lang.Number { return \"a\".hashCode(); }",
         "function f() as Toybox.Lang.Boolean { return \"a\".equals(null); }",
     ] {
         compile_with_api(source, context(ApiLevel(1, 0, 0))).unwrap();

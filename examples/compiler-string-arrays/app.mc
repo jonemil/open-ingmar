@@ -15,7 +15,7 @@ module Strings {
         as Toybox.Lang.Array<Toybox.Lang.String> {
         System.println("receiver"); return a;
     }
-    function index() { System.println("index"); return 0; }
+    function index() as Toybox.Lang.Number { System.println("index"); return 0; }
 }
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }

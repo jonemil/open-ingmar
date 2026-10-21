@@ -1,6 +1,6 @@
 using Toybox.Lang;
 
-function choose(value) {
+function choose(value as Toybox.Lang.Number) as Toybox.Lang.Number {
     if (value == 0) {
         return 41;
     } else {
@@ -8,7 +8,7 @@ function choose(value) {
     }
 }
 
-function countdown(value) {
+function countdown(value as Toybox.Lang.Number) as Toybox.Lang.Number {
     var total = 0;
     while (value > 0) {
         total = total + 2;
@@ -17,7 +17,7 @@ function countdown(value) {
     return total;
 }
 
-function caught(fail) {
+function caught(fail as Toybox.Lang.Number) as Toybox.Lang.Number {
     try {
         if (fail) {
             throw new Lang.Exception();

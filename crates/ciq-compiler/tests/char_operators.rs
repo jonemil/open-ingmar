@@ -73,23 +73,23 @@ fn char_operators_preserve_result_types_and_complete_pipelines() {
 #[test]
 fn char_operator_profiles_reject_unverified_pairs_and_edited_consumers() {
     for source in [
-        "function f() { return 'B' - 'A'; }",
-        "function f() { return 'A' - 1; }",
-        "function f() { return 65 - 'A'; }",
-        "function f() { return 'A' + 1; }",
+        "function f() as Toybox.Lang.Number { return 'B' - 'A'; }",
+        "function f() as Toybox.Lang.Number { return 'A' - 1; }",
+        "function f() as Toybox.Lang.Number { return 65 - 'A'; }",
+        "function f() as Toybox.Lang.Number { return 'A' + 1; }",
         "function f() as Toybox.Lang.Char { return 'A' + 'B'; }",
         "function f() as Toybox.Lang.String { return 'A' + 1; }",
-        "function f() { System.println('A' + true); }",
-        "function f() { System.println('A' - \"B\"); }",
-        "function f() { System.println('A' == true); }",
-        "function f() { System.println('A' > true); }",
-        "function f() { System.println('A' == null); }",
+        "function f() as Void { System.println('A' + true); }",
+        "function f() as Void { System.println('A' - \"B\"); }",
+        "function f() as Void { System.println('A' == true); }",
+        "function f() as Void { System.println('A' > true); }",
+        "function f() as Void { System.println('A' == null); }",
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return c + n; }",
         "function f() as Toybox.Lang.Char { var c = 'A'; c = c + 'B'; return c; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return ('A' + 1).toNumber(); }").unwrap();
+    let f = compile("function f() as Toybox.Lang.Number { return ('A' + 1).toNumber(); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".integer %1 1"));
     assert!(parse_ir(&text.replace(".integer %1 1", ".boolean %1 true")).is_err());

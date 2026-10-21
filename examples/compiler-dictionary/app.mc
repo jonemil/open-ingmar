@@ -150,11 +150,11 @@ module Dictionaries {
         System.println(inferredChars.values().indexOf(null) >= 0);
     }
     function make() as Toybox.Lang.Dictionary { System.println("make"); return {}; }
-    function size(d as Toybox.Lang.Dictionary) { System.println("size"); return d.size(); }
+    function size(d as Toybox.Lang.Dictionary) as Toybox.Lang.Number { System.println("size"); return d.size(); }
     function makeTyped() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number> {
         return {};
     }
-    function typedSize(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) {
+    function typedSize(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) as Toybox.Lang.Number {
         var local = d;
         local = {};
         return local.size();
@@ -181,12 +181,12 @@ module Dictionaries {
         System.println("receiver"); return d;
     }
     function key() as Toybox.Lang.String { System.println("key"); return "one"; }
-    function value() { System.println("value"); return 123; }
-    function computedNullable(choose as Toybox.Lang.Boolean, n)
+    function value() as Toybox.Lang.Number { System.println("value"); return 123; }
+    function computedNullable(choose as Toybox.Lang.Boolean, n as Toybox.Lang.Number)
         as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> {
         return {"one" => choose ? n : null, "two" => n + 1};
     }
-    function mutate(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) {
+    function mutate(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) as Toybox.Lang.Number {
         System.println("mutate"); d["one"] = 2; return 2;
     }
     function text(d as Toybox.Lang.Dictionary) as Toybox.Lang.String {

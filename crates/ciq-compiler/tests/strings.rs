@@ -9,7 +9,7 @@ fn symbols() -> Program {
 
 #[test]
 fn strings_prints_and_interleaved_locals_survive_native_and_text_pipelines() {
-    let source = r#"function probe() {
+    let source = r#"function probe() as Toybox.Lang.Number {
         System.println("héllo # span=1:2\n\"quoted\"\\");
         var text = "héllo # span=1:2\n\"quoted\"\\";
         System.println(text);
@@ -73,9 +73,10 @@ fn strings_prints_and_interleaved_locals_survive_native_and_text_pipelines() {
 
 #[test]
 fn literal_binding_requires_unique_content_and_valid_placement() {
-    let program = compile("function probe() { System.println(\"hello\"); return 1; }")
-        .unwrap()
-        .lower();
+    let program =
+        compile("function probe() as Toybox.Lang.Number { System.println(\"hello\"); return 1; }")
+            .unwrap()
+            .lower();
     for data in [
         "",
         ".string other \"different\"",
@@ -112,18 +113,18 @@ fn literal_binding_requires_unique_content_and_valid_placement() {
 #[test]
 fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
     for source in [
-        "function probe() { return \"x\"; }",
-        "function probe() { var x = \"x\"; return x + 1; }",
-        "function probe() { return System.println(1); }",
-        "function probe() { var x = System.println(1); return x; }",
-        "function probe() { System.println(); return 1; }",
-        "function probe() { System.println(1, 2); return 1; }",
-        "function probe(System) { System.println(1); return 1; }",
-        "function probe() { var System = 1; System.println(1); return 1; }",
-        "function probe() { System.print(1); return 1; }",
-        "function probe() { System.println(\"bad\\q\"); return 1; }",
-        "function probe() { System.println(\"raw\nnewline\"); return 1; }",
-        "function probe() { System.println(\"unterminated); return 1; }",
+        "function probe() as Toybox.Lang.Number { return \"x\"; }",
+        "function probe() as Toybox.Lang.Number { var x = \"x\"; return x + 1; }",
+        "function probe() as Toybox.Lang.Number { return System.println(1); }",
+        "function probe() as Toybox.Lang.Number { var x = System.println(1); return x; }",
+        "function probe() as Toybox.Lang.Number { System.println(); return 1; }",
+        "function probe() as Toybox.Lang.Number { System.println(1, 2); return 1; }",
+        "function probe(System as Toybox.Lang.Number) as Toybox.Lang.Number { System.println(1); return 1; }",
+        "function probe() as Toybox.Lang.Number { var System = 1; System.println(1); return 1; }",
+        "function probe() as Toybox.Lang.Number { System.print(1); return 1; }",
+        "function probe() as Toybox.Lang.Number { System.println(\"bad\\q\"); return 1; }",
+        "function probe() as Toybox.Lang.Number { System.println(\"raw\nnewline\"); return 1; }",
+        "function probe() as Toybox.Lang.Number { System.println(\"unterminated); return 1; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -139,9 +140,9 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
             "{body}"
         );
     }
-    let error = compile("function probe() { return \"x\"; }").unwrap_err();
-    assert_eq!(error.column, 20);
-    assert!(error.message.contains("explicit annotation"));
+    let error = compile("function probe() as Toybox.Lang.Number { return \"x\"; }").unwrap_err();
+    assert_eq!(error.column, 42);
+    assert!(error.message.contains("return type does not match"));
 }
 
 #[test]
@@ -149,20 +150,22 @@ fn utf8_literal_size_and_string_escape_limits_are_checked() {
     let largest = "a".repeat(65535);
     assert!(
         compile(&format!(
-            "function probe() {{ System.println(\"{largest}\"); return 0; }}"
+            "function probe() as Toybox.Lang.Number {{ System.println(\"{largest}\"); return 0; }}"
         ))
         .is_ok()
     );
     for oversized in ["a".repeat(65536), "é".repeat(32768)] {
         assert!(
             compile(&format!(
-                "function probe() {{ System.println(\"{oversized}\"); return 0; }}"
+                "function probe() as Toybox.Lang.Number {{ System.println(\"{oversized}\"); return 0; }}"
             ))
             .is_err()
         );
     }
-    let function =
-        compile(r#"function probe() { System.println("\t\r\n\"\\"); return 0; }"#).unwrap();
+    let function = compile(
+        r#"function probe() as Toybox.Lang.Number { System.println("\t\r\n\"\\"); return 0; }"#,
+    )
+    .unwrap();
     assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
     // IR uses assembly escapes, independently of the source escape subset.
     assert!(parse_ir("ciq-ir\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());

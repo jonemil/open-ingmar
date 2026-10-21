@@ -32,11 +32,11 @@ module SourceTests {
 }
 class LocalView extends WatchUi.View {
     function initialize() { View.initialize(); }
-    function value() { return 2; }
+    function value() as Toybox.Lang.Number { return 2; }
 }
 class LocalDelegate extends WatchUi.BehaviorDelegate {
     function initialize() { BehaviorDelegate.initialize(); }
-    function value() { return 3; }
+    function value() as Toybox.Lang.Number { return 3; }
 }
 
 module NullableSourceTests {
@@ -119,7 +119,7 @@ class NullableSourceHolder {
     var delegate as LocalDelegate or Null;
     function initialize() {}
     function load() as Probe or Null { return self.token; }
-    function snapshot(token as Probe) {
+    function snapshot(token as Probe) as Toybox.Lang.Number {
         self.token = token;
         var copy = self.load();
         self.token = null;
@@ -212,12 +212,12 @@ module SourceJoins {
 }
 
 module CoreLoops {
-    function begin() { System.println("loop-init"); return 0; }
+    function begin() as Toybox.Lang.Number { System.println("loop-init"); return 0; }
     function test(n as Number) as Boolean { System.println("loop-test"); return n < 2; }
-    function step(n as Number) { System.println("loop-step"); return n + 1; }
+    function step(n as Number) as Toybox.Lang.Number { System.println("loop-step"); return n + 1; }
     function falseMark() as Boolean { System.println("bad-do-test"); return false; }
-    function returnDo() { do { return 41; } while(CoreLoops.falseMark()); }
-    function returnFor() { for(;;) { return 42; } }
+    function returnDo() as Toybox.Lang.Number { do { return 41; } while(CoreLoops.falseMark()); }
+    function returnFor() as Toybox.Lang.Number { for(;;) { return 42; } }
     function proof(value as Probe or Null) as Void {
         if (value != null) {
             do { break; } while(CoreLoops.falseMark());
@@ -596,12 +596,12 @@ module CoreCalls {
         var token = new OwnerToken();
         token.run();
     }
-    function total(n) as Number {
+    function total(n as Toybox.Lang.Number) as Number {
         if (n == 0) { return 0; }
         return n + total(n - 1);
     }
-    function step(n) as Number { return n * 2; }
-    function shadow(step) as Number { return step(4); }
+    function step(n as Toybox.Lang.Number) as Number { return n * 2; }
+    function shadow(step as Toybox.Lang.Number) as Number { return step(4); }
     function qualifier() as Number { var CoreCalls = 7; return step(CoreCalls); }
     function count(values as Array<Number>) as Number { return values.size(); }
     function notify() as Void { System.println("module-void"); }
@@ -611,11 +611,11 @@ class OwnerToken {
     var count = 0;
     function initialize() { self.count = 1; bump(); }
     function bump() as Void { self.count += 1; }
-    function total(n) as Number {
+    function total(n as Toybox.Lang.Number) as Number {
         if (n == 0) { return self.count; }
         return n + total(n - 1);
     }
-    function step(n) as Number { return n + self.count; }
+    function step(n as Toybox.Lang.Number) as Number { return n + self.count; }
     function notify() as Void { System.println("instance-void"); }
     function run() as Void {
         notify();
@@ -629,17 +629,17 @@ class OwnerToken {
     }
 }
 
-function globalStep(n) as Number { return n + 1; }
-function globalTotal(n) as Number {
+function globalStep(n as Toybox.Lang.Number) as Number { return n + 1; }
+function globalTotal(n as Toybox.Lang.Number) as Number {
     if (n == 0) { return 0; }
     return globalStep(n) + globalTotal(n - 1);
 }
 function globalNotify() as Void { System.println("global-void"); }
 function globalCount(values as Array<Number>) as Number { return values.size(); }
-function globalEffect(value) as Number { System.println(value); return value; }
+function globalEffect(value as Toybox.Lang.Number) as Number { System.println(value); return value; }
 
 module CoreGlobalCalls {
-    function globalStep(n) as Number { return n * 2; }
+    function globalStep(n as Toybox.Lang.Number) as Number { return n * 2; }
     function run() as Void {
         System.println("global-calls");
         System.println(globalStep(3));
@@ -659,7 +659,7 @@ module CoreGlobalCalls {
 }
 class GlobalCaller {
     function initialize() {}
-    function globalStep(n) as Number { return n * 3; }
+    function globalStep(n as Toybox.Lang.Number) as Number { return n * 3; }
     function run() as Void {
         System.println(globalStep(3));
         System.println($.globalStep(3));
@@ -681,18 +681,18 @@ module RootModuleCalls {
         token.run(5);
         System.println($.CoreCalls.step(true ? globalEffect(6) : globalEffect(99)));
     }
-    function shadow(CoreCalls) as Number { return $.CoreCalls.step(CoreCalls); }
+    function shadow(CoreCalls as Toybox.Lang.Number) as Number { return $.CoreCalls.step(CoreCalls); }
 }
 class RootModuleCaller {
     function initialize() {}
-    function run(CoreCalls) as Void {
+    function run(CoreCalls as Toybox.Lang.Number) as Void {
         System.println($.CoreCalls.step(CoreCalls));
         $.CoreCalls.notify();
     }
 }
 
 module ParameterWrites {
-    function number(n) as Number { n=2; n+=3; n++; --n; return n; }
+    function number(n as Toybox.Lang.Number) as Number { n=2; n+=3; n++; --n; return n; }
     function text(s as String) as String { s+="!"; return s; }
     function character(c as Char) as Char { c++; return c; }
     function floating(n as Float) as Float { n+=0.5; n++; return n; }
@@ -702,14 +702,14 @@ module ParameterWrites {
         if(n!=null){return n;}
         return -1;
     }
-    function loop(n) as Number {var sum=0; for(n=0;n<3;n++){sum+=n;} return sum;}
+    function loop(n as Toybox.Lang.Number) as Number {var sum=0; for(n=0;n<3;n++){sum+=n;} return sum;}
     function array(values as Array<Number>) as Number {values=[4,5]; return values[0];}
     function object(token as Probe or Null) as Number {
         token=null; token=new Probe();
         if(token!=null){return token.value();}
         return -1;
     }
-    function branch(n, flag as Boolean) as Number {n+=flag ? globalEffect(2) : globalEffect(99); return n;}
+    function branch(n as Toybox.Lang.Number, flag as Boolean) as Number {n+=flag ? globalEffect(2) : globalEffect(99); return n;}
     function run() as Void {
         System.println("parameter-writes");
         var n=41;
@@ -731,7 +731,7 @@ module ParameterWrites {
 }
 class ParameterWriter {
     function initialize(){}
-    function step(n) as Number {n+=1; return n;}
+    function step(n as Toybox.Lang.Number) as Number {n+=1; return n;}
 }
 
 module DeferredLocals {

@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(!true);
     System.println(!false);
     System.println(Flags.invert(true));

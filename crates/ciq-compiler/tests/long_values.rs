@@ -96,7 +96,7 @@ fn long_calls_and_complete_app_preserve_all_saved_stages() {
 fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
     for source in [
         "function f() as Toybox.Lang.Long { return 1; }",
-        "function f() { return 1l; }",
+        "function f() as Toybox.Lang.Number { return 1l; }",
         "function f() as Toybox.Lang.Long { return 9223372036854775808l; }",
         "function f() as Toybox.Lang.Long { return -9223372036854775809l; }",
         "function f() as Toybox.Lang.Long { return 0x10000000000000000L; }",
@@ -109,11 +109,11 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f() as Toybox.Lang.Long { var value = 1l; value = 1; return value; }",
         "function f() as Toybox.Lang.Number { var value = 1; value = 1l; return value; }",
         "function f(x as Toybox.Lang.Long or Null) as Toybox.Lang.Long { return x.abs(); }",
-        "function f() { return 1l.toNumber(1); }",
-        "function f() { var values = [1l, 1]; }",
-        "function f() { var values = {1 => 1l, 2 => 1}; }",
-        "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) { x.add(1); }",
-        "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) { x.put(1, 1); }",
+        "function f() as Toybox.Lang.Number { return 1l.toNumber(1); }",
+        "function f() as Void { var values = [1l, 1]; }",
+        "function f() as Void { var values = {1 => 1l, 2 => 1}; }",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) as Void { x.add(1); }",
+        "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) as Void { x.put(1, 1); }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

@@ -37,7 +37,8 @@ fn char_group_preserves_typed_calls_and_complete_pipelines() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile("function f() { return 65.toChar().toNumber(); }").unwrap();
+    let f =
+        compile("function f() as Toybox.Lang.Number { return 65.toChar().toNumber(); }").unwrap();
     let symbols = ciq_assembly::Program::parse(
         ".symbol char \"toChar\" id=0x008004c6\n.symbol number \"toNumber\" id=0x008000a7",
     )
@@ -60,29 +61,32 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f(c as Toybox.Lang.Char) as Toybox.Lang.Char { return c.toLower(); }",
         "function f(c as Toybox.Lang.Char) as Toybox.Lang.Boolean { return c.equals(true); }",
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return c.equals(n); }",
-        "function f(c as Toybox.Lang.Char) { return c.compareTo(false); }",
+        "function f(c as Toybox.Lang.Char) as Toybox.Lang.Number { return c.compareTo(false); }",
     ] {
         let f = compile(source).unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
-        "function f() { return 65.toChar(1); }",
-        "function f() { return true.toChar(); }",
-        "function f() { return 65.toChar(); }",
-        "function f() { return 65.toChar() + 1; }",
-        "function f() { return 65.toChar() == 65.toChar(); }",
-        "function f() { if (65.toChar()) { return 1; } return 0; }",
-        "function f() { return 65.toChar().toUpper(1); }",
-        "function f() { return 65.toChar().compareTo(null); }",
-        "function f(n as Toybox.Lang.Number or Null) { return n.toChar().toNumber(); }",
-        "function f(c as Toybox.Lang.Char or Null) { return c.toNumber(); }",
+        "function f() as Toybox.Lang.Number { return 65.toChar(1); }",
+        "function f() as Toybox.Lang.Number { return true.toChar(); }",
+        "function f() as Toybox.Lang.Number { return 65.toChar(); }",
+        "function f() as Toybox.Lang.Number { return 65.toChar() + 1; }",
+        "function f() as Toybox.Lang.Number { return 65.toChar() == 65.toChar(); }",
+        "function f() as Toybox.Lang.Number { if (65.toChar()) { return 1; } return 0; }",
+        "function f() as Toybox.Lang.Number { return 65.toChar().toUpper(1); }",
+        "function f() as Toybox.Lang.Number { return 65.toChar().compareTo(null); }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n.toChar().toNumber(); }",
+        "function f(c as Toybox.Lang.Char or Null) as Toybox.Lang.Number { return c.toNumber(); }",
         "function f() as Toybox.Lang.Char or Null { return true; }",
-        "function f() { return 65.toChar().weak(); }",
-        "function f() { return 'A'; }",
+        "function f() as Toybox.Lang.Number { return 65.toChar().weak(); }",
+        "function f() as Toybox.Lang.Number { return 'A'; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
-    let f = compile("function f() { return (65.toChar().toNumber() + 1).abs(); }").unwrap();
+    let f = compile(
+        "function f() as Toybox.Lang.Number { return (65.toChar().toNumber() + 1).abs(); }",
+    )
+    .unwrap();
     assert!(parse_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
     let source = "module M { function identity(c as Toybox.Lang.Char) as Toybox.Lang.Char { return c; } function f() as Toybox.Lang.Char { return M.identity(65.toChar()); } }";
     let unit = compile_sources_with_api(&[source], context(ApiLevel(1, 3, 0))).unwrap();
@@ -116,7 +120,7 @@ fn char_class_and_method_introductions_apply_to_source_and_ir() {
             ApiLevel(1, 2, 9),
         ),
         (
-            "function f(c as Toybox.Lang.Char) { return c.compareTo(65); }",
+            "function f(c as Toybox.Lang.Char) as Toybox.Lang.Number { return c.compareTo(65); }",
             ApiLevel(5, 0, 0),
             ApiLevel(4, 9, 9),
         ),

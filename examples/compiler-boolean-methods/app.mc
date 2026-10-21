@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(true.toString());
     System.println(false.toString());
     System.println(false.compareTo(false) == 0);

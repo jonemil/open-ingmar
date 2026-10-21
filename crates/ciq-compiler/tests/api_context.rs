@@ -31,7 +31,7 @@ fn context_requires_explicit_consistent_levels() {
 
 #[test]
 fn availability_errors_precede_argument_validation_in_source_and_ir() {
-    let source = "function show(n) { System.println(n.toChar(1)); }";
+    let source = "function show(n as Toybox.Lang.Number) as Void { System.println(n.toChar(1)); }";
     let text = "ciq-ir\n.function show parameters=1\n.parameter %0 0\n.integer %1 1\n.call-native %2 %0 toChar %1\n.println %2\n.return-void\n.end\n";
     for (target, minimum, expected) in [
         ("1.2.9", "1.0.0", "unavailable on target API 1.2.9"),
@@ -53,7 +53,7 @@ fn availability_errors_precede_argument_validation_in_source_and_ir() {
             .contains("argument count")
     );
     let unknown = compile_with_api(
-        "function show(n) { System.println(n.missing()); }",
+        "function show(n as Toybox.Lang.Number) as Void { System.println(n.missing()); }",
         context("1.0.0", "1.0.0"),
     )
     .unwrap_err();
@@ -116,7 +116,7 @@ fn explicit_context_preserves_native_text_and_complete_application_paths() {
         build_console_application(&resumed, &options).unwrap()
     );
     let function = compile_with_api(
-        "function show(n) { System.println(n.format(\"%02d\")); }",
+        "function show(n as Toybox.Lang.Number) as Void { System.println(n.format(\"%02d\")); }",
         context,
     )
     .unwrap();
@@ -143,8 +143,8 @@ fn explicit_context_preserves_native_text_and_complete_application_paths() {
 #[test]
 fn unit_source_and_text_report_availability_at_the_offending_body() {
     let sources = [
-        "module A { function ok() { return 1; } }",
-        "module B { function show(n) { System.println(n.toChar()); } }",
+        "module A { function ok() as Toybox.Lang.Number { return 1; } }",
+        "module B { function show(n as Toybox.Lang.Number) as Void { System.println(n.toChar()); } }",
     ];
     let context = context("1.0.0", "1.0.0");
     let error = compile_sources_with_api(&sources, context).unwrap_err();

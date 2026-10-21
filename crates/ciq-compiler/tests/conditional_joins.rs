@@ -80,16 +80,16 @@ fn malformed_edge_shapes_types_uses_and_stack_order_are_rejected() {
 fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
     use ciq_compiler::{compile, compile_sources, parse_unit_ir};
     for source in [
-        "function f(b as Toybox.Lang.Boolean) { return b ? 1 : 2; }",
+        "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return b ? 1 : 2; }",
         "function f() as Toybox.Lang.Char { return true ? 'a' : 'b'; }",
         "function f() as Toybox.Lang.Boolean { return true ? false : true ? true : true; }",
         "function f() as Toybox.Lang.Number or Null { return false ? 1 : null; }",
         "function f() as Toybox.Lang.String or Null { return false ? null : \"x\"; }",
-        "function f() { var n = \"7\".toNumber(); return n != null ? n + 1 : 0; }",
-        "function f() { var a = [1]; return (true ? a : [2])[0]; }",
-        "function f() { return 1 + (false ? 2 : 3); }",
+        "function f() as Toybox.Lang.Number { var n = \"7\".toNumber(); return n != null ? n + 1 : 0; }",
+        "function f() as Toybox.Lang.Number { var a = [1]; return (true ? a : [2])[0]; }",
+        "function f() as Toybox.Lang.Number { return 1 + (false ? 2 : 3); }",
         "function f() as Toybox.Lang.Boolean { return !(true ? false : true); }",
-        "function f() { var a = [true ? 1 : 2, false ? 3 : 4]; return a[0]; }",
+        "function f() as Toybox.Lang.Number { var a = [true ? 1 : 2, false ? 3 : 4]; return a[0]; }",
     ] {
         let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -97,17 +97,17 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     }
     for source in [
-        "function f() { return 1 ? 1 : 2; }",
-        "function f() { return true ? 'a' : 1; }",
-        "function f() { return true ? 1 : \"x\"; }",
-        "function f() { return true ? [1] : ['a']; }",
-        "function f() { return true ? [1] : null; }",
-        "function f() { return true ? [] : [1]; }",
-        "function f() { return true ? 1 : unknown; }",
-        "function f() { return true ? 1; }",
-        "function f() { return true ? : 2; }",
-        "function f() { return true ? 1 :; }",
-        "function f() { var n = \"x\".toNumber(); return n == null ? n + 1 : 0; }",
+        "function f() as Toybox.Lang.Number { return 1 ? 1 : 2; }",
+        "function f() as Toybox.Lang.Number { return true ? 'a' : 1; }",
+        "function f() as Toybox.Lang.Number { return true ? 1 : \"x\"; }",
+        "function f() as Toybox.Lang.Number { return true ? [1] : ['a']; }",
+        "function f() as Toybox.Lang.Number { return true ? [1] : null; }",
+        "function f() as Toybox.Lang.Number { return true ? [] : [1]; }",
+        "function f() as Toybox.Lang.Number { return true ? 1 : unknown; }",
+        "function f() as Toybox.Lang.Number { return true ? 1; }",
+        "function f() as Toybox.Lang.Number { return true ? : 2; }",
+        "function f() as Toybox.Lang.Number { return true ? 1 :; }",
+        "function f() as Toybox.Lang.Number { var n = \"x\".toNumber(); return n == null ? n + 1 : 0; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }
@@ -138,22 +138,28 @@ fn conditional_depth_and_frame_boundaries_remain_enforced() {
         .chain(std::iter::once("b as Toybox.Lang.Boolean".into()))
         .collect::<Vec<_>>()
         .join(",");
-    let f = compile(&format!("function f({parameters}) {{ return b ? 1 : 2; }}")).unwrap();
+    let f = compile(&format!(
+        "function f({parameters}) as Toybox.Lang.Number {{ return b ? 1 : 2; }}"
+    ))
+    .unwrap();
     assert!(!f.lower().to_text().contains("argcincsp"));
     compile(&format!(
-        "function f({parameters}) {{ System.println(true && false); return 1; }}"
+        "function f({parameters}) as Toybox.Lang.Number {{ System.println(true && false); return 1; }}"
     ))
     .unwrap();
     assert!(
         compile(&format!(
-            "function f({parameters}) {{ return 1 + (b ? 1 : 2); }}"
+            "function f({parameters}) as Toybox.Lang.Number {{ return 1 + (b ? 1 : 2); }}"
         ))
         .is_err()
     );
     for (depth, ok) in [(64, true), (65, false)] {
         let expression = format!("{}1{}", "true ? ".repeat(depth), " : 2".repeat(depth));
         assert_eq!(
-            compile(&format!("function f() {{ return {expression}; }}")).is_ok(),
+            compile(&format!(
+                "function f() as Toybox.Lang.Number {{ return {expression}; }}"
+            ))
+            .is_ok(),
             ok
         );
     }
@@ -164,11 +170,11 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
     use ciq_compiler::{ReturnType, compile};
     for (source, expected) in [
         (
-            "function f(n as Toybox.Lang.Number or Null) { return n != null ? n : 0; }",
+            "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n != null ? n : 0; }",
             ReturnType::Integer,
         ),
         (
-            "function f(n as Toybox.Lang.Number or Null) { return !(n == null) ? n : 0; }",
+            "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return !(n == null) ? n : 0; }",
             ReturnType::Integer,
         ),
         (
@@ -176,15 +182,15 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
             ReturnType::String,
         ),
         (
-            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { return n != null ? (b ? n : n) : 0; }",
+            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return n != null ? (b ? n : n) : 0; }",
             ReturnType::Integer,
         ),
         (
-            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { if (n != null) { var copy = n; return b ? copy : 0; } return 0; }",
+            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { if (n != null) { var copy = n; return b ? copy : 0; } return 0; }",
             ReturnType::Integer,
         ),
         (
-            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { return n != null && b ? n : 0; }",
+            "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return n != null && b ? n : 0; }",
             ReturnType::Integer,
         ),
         (
@@ -192,11 +198,11 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
             ReturnType::NullableInteger,
         ),
         (
-            "function f(n as Toybox.Lang.Number or Null) { var a = [n != null ? n : 0]; return a[0]; }",
+            "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var a = [n != null ? n : 0]; return a[0]; }",
             ReturnType::Integer,
         ),
         (
-            "function f(b as Toybox.Lang.Boolean) { var n = \"7\".toNumber(); var result = 0; while (n != null) { result = b ? n : 0; n = null; } return result; }",
+            "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"7\".toNumber(); var result = 0; while (n != null) { result = b ? n : 0; n = null; } return result; }",
             ReturnType::Integer,
         ),
     ] {
@@ -206,7 +212,7 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
         let p = f.lower();
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     }
-    let f = compile("function f(n as Toybox.Lang.Number or Null) { return n != null ? n : 0; }")
+    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n != null ? n : 0; }")
         .unwrap();
     let text = f.to_ir_text();
     assert!(
@@ -228,13 +234,13 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
 fn inference_keeps_unproven_or_invalidated_nullable_arms_nullable() {
     use ciq_compiler::compile;
     for source in [
-        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { return b ? n : 0; }",
-        "function f(n as Toybox.Lang.Number or Null) { return n == null ? n : 0; }",
-        "function f(n as Toybox.Lang.Number or Null) { var ok = n != null; return ok ? n : 0; }",
-        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { return n != null || b ? n : 0; }",
-        "function f(b as Toybox.Lang.Boolean) { var n = \"7\".toNumber(); if (n != null) { n = null; return b ? n : 0; } return 0; }",
-        "function f(b as Toybox.Lang.Boolean) { var n = \"7\".toNumber(); while (b) { n = null; } return b ? n : 0; }",
-        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) { var a = [b ? n : 0]; return a[0]; }",
+        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return b ? n : 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n == null ? n : 0; }",
+        "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var ok = n != null; return ok ? n : 0; }",
+        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return n != null || b ? n : 0; }",
+        "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"7\".toNumber(); if (n != null) { n = null; return b ? n : 0; } return 0; }",
+        "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"7\".toNumber(); while (b) { n = null; } return b ? n : 0; }",
+        "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var a = [b ? n : 0]; return a[0]; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }

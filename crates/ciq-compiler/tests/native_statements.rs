@@ -36,7 +36,7 @@ fn native_statements_preserve_complete_pipelines_and_statement_spans() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let source = "function f(n) { n.abs(); }";
+    let source = "function f(n as Toybox.Lang.Number) as Void { n.abs(); }";
     let f = compile(source).unwrap();
     assert_eq!(f.return_type(), ReturnType::Void);
     let discard = f
@@ -52,18 +52,24 @@ fn native_statements_preserve_complete_pipelines_and_statement_spans() {
 #[test]
 fn native_statements_pop_one_final_result_for_zero_argument_and_chained_calls() {
     for (source, last_invoke) in [
-        ("function f(n) { n.abs(); }", Opcode::Invokemz),
-        ("function f(n) { n.toString(); }", Opcode::Invokemz),
         (
-            "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.remove('a'); }",
-            Opcode::Invokem,
-        ),
-        (
-            "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.add('a').size(); }",
+            "function f(n as Toybox.Lang.Number) as Void { n.abs(); }",
             Opcode::Invokemz,
         ),
         (
-            "function f(s as Toybox.Lang.String) { s.find(\"z\"); }",
+            "function f(n as Toybox.Lang.Number) as Void { n.toString(); }",
+            Opcode::Invokemz,
+        ),
+        (
+            "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.remove('a'); }",
+            Opcode::Invokem,
+        ),
+        (
+            "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.add('a').size(); }",
+            Opcode::Invokemz,
+        ),
+        (
+            "function f(s as Toybox.Lang.String) as Void { s.find(\"z\"); }",
             Opcode::Invokem,
         ),
     ] {
@@ -94,22 +100,22 @@ fn native_statements_pop_one_final_result_for_zero_argument_and_chained_calls() 
 #[test]
 fn discarding_a_result_does_not_bypass_native_contract_or_null_proof_checks() {
     for source in [
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.remove(65); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.addAll(null); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.sort(1); }",
-        "function f(n) { n.abs(1); }",
-        "function f(s as Toybox.Lang.String or Null) { s.length(); }",
-        "function f() { 1 + 2; }",
-        "function f() { \"abc\".toCharArray()[0]; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.remove(65); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.addAll(null); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.sort(1); }",
+        "function f(n as Toybox.Lang.Number) as Void { n.abs(1); }",
+        "function f(s as Toybox.Lang.String or Null) as Void { s.length(); }",
+        "function f() as Void { 1 + 2; }",
+        "function f() as Void { \"abc\".toCharArray()[0]; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
     let f = compile(
-        "function f(s as Toybox.Lang.String or Null) { if (!(s == null)) { s.length(); } }",
+        "function f(s as Toybox.Lang.String or Null) as Void { if (!(s == null)) { s.length(); } }",
     )
     .unwrap();
     assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.remove('a'); }";
+    let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.remove('a'); }";
     let f = compile_with_api(source, context()).unwrap();
     let old = ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap();
     assert!(compile_with_api(source, old).is_err());
@@ -128,7 +134,7 @@ fn discarding_a_result_does_not_bypass_native_contract_or_null_proof_checks() {
 #[test]
 fn saved_ir_cannot_defer_a_discarded_mutation_past_a_later_read() {
     let f = compile(
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) { a.remove('a'); a.size(); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Void { a.remove('a'); a.size(); }",
     )
     .unwrap();
     let mut ops = f.operations().to_vec();

@@ -30,7 +30,7 @@ fn complete_byte_array_program_preserves_native_text_and_application_boundaries(
 
 #[test]
 fn byte_array_allocation_uses_newba_and_keeps_nonnull_storage_identity() {
-    let source = "function f(n) as Toybox.Lang.ByteArray { return new[n]b; }";
+    let source = "function f(n as Toybox.Lang.Number) as Toybox.Lang.ByteArray { return new[n]b; }";
     let f = compile(source).unwrap();
     assert_eq!(f.return_type(), ReturnType::ByteArray);
     assert!(
@@ -44,7 +44,7 @@ fn byte_array_allocation_uses_newba_and_keeps_nonnull_storage_identity() {
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.ByteArray { return flag ? new[1]b : new[2]b; }",
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.ByteArray { return new[flag ? 1 : 2]b; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.ByteArray { if (n != null) { return new[n]b; } return new[0]b; }",
-        "function f() { var a = new[1]b; var shared = a; a = new[2]b; shared[0] = 'A'; return shared[0]; }",
+        "function f() as Toybox.Lang.Number { var a = new[1]b; var shared = a; a = new[2]b; shared[0] = 'A'; return shared[0]; }",
         "function f() as Toybox.Lang.ByteArray { return new[-1]b; }",
     ] {
         let f = compile(source).unwrap();
@@ -56,32 +56,32 @@ fn byte_array_allocation_uses_newba_and_keeps_nonnull_storage_identity() {
 #[test]
 fn invalid_byte_lengths_writes_methods_and_storage_forms_are_rejected() {
     for source in [
-        "function f() { return new[null]b; }",
-        "function f() { return new[true]b; }",
-        "function f() { return new[1l]b; }",
-        "function f() { return new[1.0]b; }",
-        "function f() { var a = new[1]b; a[0] = null; }",
-        "function f() { var a = new[1]b; a[0] = true; }",
-        "function f() { var a = new[1]b; a[0] = 1l; }",
-        "function f() { var a = new[1]b; return a['a']; }",
-        "function f() { var a = new[1]b; a.add(null); }",
-        "function f() { var a = new[1]b; a.addAll([true]); }",
-        "function f() { var a = new[1]b; a.addAll([\"x\"]); }",
-        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { var b = new[0]b; b.addAll(a); }",
-        "function f() { var a = new[1]b; a.remove(); }",
-        "function f() { var a = new[1]b; a.slice(0); }",
-        "function f() { var a = new[1]b; a.sort(null); }",
+        "function f() as Toybox.Lang.Number { return new[null]b; }",
+        "function f() as Toybox.Lang.Number { return new[true]b; }",
+        "function f() as Toybox.Lang.Number { return new[1l]b; }",
+        "function f() as Toybox.Lang.Number { return new[1.0]b; }",
+        "function f() as Void { var a = new[1]b; a[0] = null; }",
+        "function f() as Void { var a = new[1]b; a[0] = true; }",
+        "function f() as Void { var a = new[1]b; a[0] = 1l; }",
+        "function f() as Toybox.Lang.Number { var a = new[1]b; return a['a']; }",
+        "function f() as Void { var a = new[1]b; a.add(null); }",
+        "function f() as Void { var a = new[1]b; a.addAll([true]); }",
+        "function f() as Void { var a = new[1]b; a.addAll([\"x\"]); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) as Void { var b = new[0]b; b.addAll(a); }",
+        "function f() as Void { var a = new[1]b; a.remove(); }",
+        "function f() as Void { var a = new[1]b; a.slice(0); }",
+        "function f() as Void { var a = new[1]b; a.sort(null); }",
         "function f() as Toybox.Lang.ByteArray { return [1]; }",
         "function f() as Toybox.Lang.ByteArray { return null; }",
-        "function f() { return [1, 2]b; }",
-        "function f() { var a = new[0]b; return true ? a : null; }",
+        "function f() as Toybox.Lang.Number { return [1, 2]b; }",
+        "function f() as Toybox.Lang.Number { var a = new[0]b; return true ? a : null; }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
     // Byte bounds remain runtime checks, even for literals known at compile time.
     for source in [
-        "function f() { var a = new[1]b; a[0] = 256; return a[0]; }",
-        "function f() { var a = new[0]b; a.add(-129); return a.size(); }",
+        "function f() as Toybox.Lang.Number { var a = new[1]b; a[0] = 256; return a[0]; }",
+        "function f() as Toybox.Lang.Number { var a = new[0]b; a.add(-129); return a.size(); }",
     ] {
         assert!(compile(source).is_ok());
     }
@@ -89,7 +89,7 @@ fn invalid_byte_lengths_writes_methods_and_storage_forms_are_rejected() {
 
 #[test]
 fn source_and_saved_ir_recheck_byte_array_api_and_length_operands() {
-    let source = "function f(n) as Toybox.Lang.ByteArray { return new[n]b; }";
+    let source = "function f(n as Toybox.Lang.Number) as Toybox.Lang.ByteArray { return new[n]b; }";
     let current = ApiContext::new(ApiLevel(3, 0, 0), ApiLevel(3, 0, 0)).unwrap();
     let old = ApiContext::new(ApiLevel(2, 4, 0), ApiLevel(2, 4, 0)).unwrap();
     let f = compile_with_api(source, current).unwrap();
@@ -108,9 +108,11 @@ fn source_and_saved_ir_recheck_byte_array_api_and_length_operands() {
         assert_ne!(bad, text);
         assert!(parse_ir(&bad).is_err());
     }
-    let text = compile("function f(b as Toybox.Lang.ByteArray) { b[0] = 7; return b[0]; }")
-        .unwrap()
-        .to_ir_text();
+    let text = compile(
+        "function f(b as Toybox.Lang.ByteArray) as Toybox.Lang.Number { b[0] = 7; return b[0]; }",
+    )
+    .unwrap()
+    .to_ir_text();
     // Locate by payload instead of relying on source-emission IDs.
     let bad = text
         .lines()

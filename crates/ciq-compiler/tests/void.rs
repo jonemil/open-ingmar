@@ -84,16 +84,16 @@ fn nonreturning_source_results_keep_unit_call_and_class_checks() {
 #[test]
 fn empty_explicit_and_falling_through_functions_have_void_returns() {
     for source in [
-        "function f() {}",
-        "function f() { return; }",
-        "function f() { System.println(41); }",
-        "function f(x) { if (x == 0) {} else {} }",
-        "function f(x) { if (x == 0) {} else { if (x > 1) {} else {} } }",
-        "function f(x) { while (x > 0) { continue; } }",
-        "function f(x) { while (x > 0) { break; } }",
-        "function f(x) { if (x == 0) { return; } System.println(x); }",
-        "function f(x) { while (x > 0) { return; } }",
-        "function f(x) { if (x == 0) { return; } else { return; } }",
+        "function f() as Void {}",
+        "function f() as Void { return; }",
+        "function f() as Void { System.println(41); }",
+        "function f(x as Toybox.Lang.Number) as Void { if (x == 0) {} else {} }",
+        "function f(x as Toybox.Lang.Number) as Void { if (x == 0) {} else { if (x > 1) {} else {} } }",
+        "function f(x as Toybox.Lang.Number) as Void { while (x > 0) { continue; } }",
+        "function f(x as Toybox.Lang.Number) as Void { while (x > 0) { break; } }",
+        "function f(x as Toybox.Lang.Number) as Void { if (x == 0) { return; } System.println(x); }",
+        "function f(x as Toybox.Lang.Number) as Void { while (x > 0) { return; } }",
+        "function f(x as Toybox.Lang.Number) as Void { if (x == 0) { return; } else { return; } }",
     ] {
         let function = compile(source).unwrap();
         assert_eq!(function.return_type(), ReturnType::Void, "{source}");
@@ -114,22 +114,25 @@ fn empty_explicit_and_falling_through_functions_have_void_returns() {
     assert_eq!(instructions.len(), 2);
     assert_eq!(instructions[0].instruction.opcode(), Opcode::Argc);
     assert_eq!(instructions[1].instruction.opcode(), Opcode::Return);
-    let explicit = compile("function f() { return; }").unwrap();
+    let explicit = compile("function f() as Void { return; }").unwrap();
     let span = explicit.operations()[0].span.unwrap();
-    assert_eq!(&"function f() { return; }"[span.start..span.end], "return;");
+    assert_eq!(
+        &"function f() as Void { return; }"[span.start..span.end],
+        "return;"
+    );
 }
 
 #[test]
 fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
     for source in [
-        "function f(x) { if (x == 0) { return; } return 1; }",
-        "function f(x) { if (x == 0) { return 1; } return; }",
-        "function f(x) { if (x == 0) { return 1; } }",
-        "function f(x) { while (x > 0) { return 1; } }",
-        "function f() { return; System.println(1); }",
-        "function f(x) { if (x == 0) { return; } else { return; } return; }",
-        "function f() { var M = 1; M.run(); }",
-        "function f(M) { M.run(); }",
+        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return; } return 1; }",
+        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } return; }",
+        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } }",
+        "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { return 1; } }",
+        "function f() as Void { return; System.println(1); }",
+        "function f(x as Toybox.Lang.Number) as Void { if (x == 0) { return; } else { return; } return; }",
+        "function f() as Void { var M = 1; M.run(); }",
+        "function f(M as Toybox.Lang.Number) as Void { M.run(); }",
     ] {
         assert!(compile(source).is_err(), "{source}");
     }
@@ -162,8 +165,7 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
 
 #[test]
 fn unit_signatures_reject_void_values_and_check_statement_call_arity() {
-    let prefix =
-        "module M { function run(x) { System.println(x); } function value() { return 1; } }";
+    let prefix = "module M { function run(x as Toybox.Lang.Number) as Void { System.println(x); } function value() as Toybox.Lang.Number { return 1; } }";
     for body in [
         "return M.run(1);",
         "var x = M.run(1); return x;",
@@ -173,17 +175,17 @@ fn unit_signatures_reject_void_values_and_check_statement_call_arity() {
         "M.run(M.run(1));",
     ] {
         assert!(
-            compile_sources(&[&format!("function f() {{ {body} }} {prefix}")]).is_err(),
+            compile_sources(&[&format!("function f() as Void {{ {body} }} {prefix}")]).is_err(),
             "{body}"
         );
     }
     // Signature collection checks forward calls and recursive void references.
     let unit = compile_sources(&[&format!(
-        "function f() {{ M.run(M.value()); M.value(); }} {prefix}"
+        "function f() as Void {{ M.run(M.value()); M.value(); }} {prefix}"
     )])
     .unwrap();
     assert_eq!(parse_unit_ir(&unit.to_ir_text()).unwrap(), unit);
-    let recursive = compile_sources(&["module M { function run() { M.run(); } }"]).unwrap();
+    let recursive = compile_sources(&["module M { function run() as Void { M.run(); } }"]).unwrap();
     assert_eq!(
         recursive.declarations()[0].function.return_type(),
         ReturnType::Void
@@ -197,7 +199,7 @@ fn unit_signatures_reject_void_values_and_check_statement_call_arity() {
 #[test]
 fn statement_calls_preserve_argument_order_and_discard_results() {
     let function =
-        compile("function f() { M.run(M.left(), M.right()); M.empty(); return; }").unwrap();
+        compile("function f() as Void { M.run(M.left(), M.right()); M.empty(); return; }").unwrap();
     let text = function.to_ir_text();
     assert!(text.contains(".call-discard M run %0 %1"));
     assert!(text.contains(".call-discard M empty"));
@@ -339,7 +341,11 @@ fn cli_resumes_void_units_and_preserves_output_on_type_errors() {
         run(args);
     }
     assert_eq!(fs::read(&direct).unwrap(), fs::read(&resumed).unwrap());
-    fs::write(&main, "function main() { return Startup.begin(); }").unwrap();
+    fs::write(
+        &main,
+        "function main() as Toybox.Lang.Number { return Startup.begin(); }",
+    )
+    .unwrap();
     let output = dir.join("invalid.prg");
     let result = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))
         .args([

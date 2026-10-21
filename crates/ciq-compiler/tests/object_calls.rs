@@ -33,7 +33,7 @@ fn constructed_receivers_and_aliases_preserve_complete_text_pipelines() {
         "var v = new HelloView(); System.println(v.add(v.current()));",
         "var v = new HelloView(); var n = 0; while (2 > n) { v.bump(); n = n + 1; } System.println(v.current());",
     ] {
-        let app = format!("function start() {{ {body} }}");
+        let app = format!("function start() as Void {{ {body} }}");
         let unit = compile_sources(&[&app, VIEW]).unwrap();
         assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     }
@@ -49,7 +49,7 @@ fn call_contracts_and_local_constructor_classes_are_not_guessed() {
         "var v = new HelloView(); v.onShow();",
         "var v = Factory.make(); v.current();",
     ] {
-        let app = format!("function start() {{ {body} }}");
+        let app = format!("function start() as Void {{ {body} }}");
         let other = "class OtherView extends WatchUi.View { function initialize() { View.initialize(); } } module Factory { function make() as Toybox.WatchUi.View { return new HelloView(); } }";
         assert!(compile_sources(&[&app, VIEW, other]).is_err(), "{body}");
     }
@@ -78,8 +78,8 @@ fn call_contracts_and_local_constructor_classes_are_not_guessed() {
 
 #[test]
 fn receiver_and_arguments_keep_order_and_contextual_array_contracts() {
-    let method = VIEW.replace("function current() { return self.count; }", "function current() { return self.count; } function length(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); }");
-    let unit = compile_sources(&["function f() { var v = new HelloView(); System.println(v.length([])); System.println(v.length([v.current()])); }", &method]).unwrap();
+    let method = VIEW.replace("function current() as Toybox.Lang.Number { return self.count; }", "function current() as Toybox.Lang.Number { return self.count; } function length(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); }");
+    let unit = compile_sources(&["function f() as Void { var v = new HelloView(); System.println(v.length([])); System.println(v.length([v.current()])); }", &method]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     let bad = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.call-object %3 %1 HelloView add %2\n.read %4 $0\n.call-object %5 %4 HelloView add %3\n.return %5\n.end\n";
     assert!(

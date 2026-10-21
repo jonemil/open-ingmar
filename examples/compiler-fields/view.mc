@@ -9,7 +9,7 @@ class HelloView extends WatchUi.View {
         self.bump();
         System.println(self.count);
     }
-    function bump() { self.count = self.count + 1; }
+    function bump() as Void { self.count = self.count + 1; }
     function onShow() { System.println("show"); }
     function onUpdate(dc) {
         self.bump();

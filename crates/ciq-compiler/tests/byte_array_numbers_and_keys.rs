@@ -11,7 +11,7 @@ fn byte_number_calls_keep_numeric_results_options_and_saved_contracts() {
         "function f(b as Lang.ByteArray,format as Lang.NumberFormat) as Lang.Numeric {var opts={:offset=>1,:endianness=>Lang.ENDIAN_BIG};return b.decodeNumber(format,opts);}",
         "function f(b as Lang.ByteArray,value as Lang.Numeric) as Lang.ByteArray {return b.encodeNumber(value,Lang.NUMBER_FORMAT_FLOAT,{:endianness=>Lang.ENDIAN_LITTLE});}",
         "function f(n as Lang.Numeric) as Void {System.println(n);n.toString();n.toNumber();n.toLong();n.toFloat();n.toDouble();n.format(\"%f\");}",
-        "function f(n as Lang.Numeric) {if(n instanceof Lang.Number){return n+1;}return 0;}",
+        "function f(n as Lang.Numeric) as Toybox.Lang.Number {if(n instanceof Lang.Number){return n+1;}return 0;}",
         "function f(n as Lang.Numeric) as Lang.Numeric {var local=n;local=1;local=2l;local=3.0;local=4.0d;return local;}",
         "function f(o as Lang.Object) as Lang.Numeric {return o as Lang.Numeric;}",
         "using Toybox.Lang as L;function f(b as L.ByteArray) as L.ByteArray {return b.encodeNumber(2.5d,L.NUMBER_FORMAT_FLOAT,{:offset=>0});}",
@@ -25,7 +25,7 @@ fn byte_number_calls_keep_numeric_results_options_and_saved_contracts() {
     assert_eq!(f.return_type(), ReturnType::Numeric);
     assert!(parse_ir(&f.to_ir_text().replace("result=numeric", "result=integer")).is_err());
     let f = compile(
-        "function f(n as Lang.Numeric) {if(n instanceof Lang.Number){return n+1;}return 0;}",
+        "function f(n as Lang.Numeric) as Toybox.Lang.Number {if(n instanceof Lang.Number){return n+1;}return 0;}",
     )
     .unwrap();
     assert_eq!(f.parameter_types(), &[ParameterType::Numeric]);
@@ -44,7 +44,7 @@ fn byte_number_calls_keep_numeric_results_options_and_saved_contracts() {
 fn byte_numeric_and_option_operands_are_checked_without_emitting_conversions() {
     for source in [
         "function f(n as Lang.Numeric or Null) as Lang.Numeric {return n+1;}",
-        "function f(b as Lang.ByteArray) {return b.decodeNumber(Lang.NUMBER_FORMAT_UINT32,{});}",
+        "function f(b as Lang.ByteArray) as Toybox.Lang.Number {return b.decodeNumber(Lang.NUMBER_FORMAT_UINT32,{});}",
         "function f(b as Lang.ByteArray) as Void {b.encodeNumber(true,Lang.NUMBER_FORMAT_UINT8,{});}",
         "function f(b as Lang.ByteArray) as Void {b.encodeNumber(null,Lang.NUMBER_FORMAT_UINT8,{});}",
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(null,{});}",

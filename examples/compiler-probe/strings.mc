@@ -1,4 +1,4 @@
-function probe() {
+function probe() as Toybox.Lang.Number {
     System.println("Hello from our compiler # span=1:2");
     var message = "héllo from Rust";
     System.println(message);

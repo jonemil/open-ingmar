@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println(Slices.orFallback("Go bananas!", 3, 10));
     System.println(Slices.orFallback("hello", 2, 2).length());
     System.println(Slices.orFallback("hello", 4, 2));

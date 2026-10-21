@@ -149,7 +149,7 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
     }
     for source in [
         "function f() as Toybox.Lang.Double { return 1.25D; }",
-        "function f() { return 1.25; }",
+        "function f() as Toybox.Lang.Number { return 1.25; }",
         "function f() as Toybox.Lang.Float { return 1; }",
         "function f() as Toybox.Lang.Float { return 1.25d; }",
         "function f() as Toybox.Lang.Float { return 1.25 + 2l; }",
@@ -161,16 +161,16 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         "function f() as Toybox.Lang.Double { return 01d; }",
         "function f() as Toybox.Lang.Double { return 1e1000d; }",
         "function f() as Toybox.Lang.Float { return 1.2e+; }",
-        "function f() { return 1.25 % 2; }",
-        "function f() { return 1.25 & 2; }",
-        "function f() { return 1.25 << 2; }",
-        "function f() { return !1.25; }",
-        "function f() { return ~1.25d; }",
-        "function f() { return 1.25 + true; }",
+        "function f() as Toybox.Lang.Number { return 1.25 % 2; }",
+        "function f() as Toybox.Lang.Number { return 1.25 & 2; }",
+        "function f() as Toybox.Lang.Number { return 1.25 << 2; }",
+        "function f() as Toybox.Lang.Number { return !1.25; }",
+        "function f() as Toybox.Lang.Number { return ~1.25d; }",
+        "function f() as Toybox.Lang.Number { return 1.25 + true; }",
         "function f() as Toybox.Lang.Float { var x = 1.25; x += 2l; return x; }",
         "function f() as Toybox.Lang.Float { return true ? 1.0 : 1; }",
-        "function f() { var xs = [1.25, 1]; }",
-        "function f() { var xs = {1 => 1.25, 2 => 1.25d}; }",
+        "function f() as Void { var xs = [1.25, 1]; }",
+        "function f() as Void { var xs = {1 => 1.25, 2 => 1.25d}; }",
     ] {
         assert!(compile(source).is_err(), "accepted {source}");
     }
@@ -223,7 +223,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
             "compareTo(1)",
         ] {
             let f = compile(&format!(
-                "function f() {{ System.println({literal}.{method}); }}"
+                "function f() as Void {{ System.println({literal}.{method}); }}"
             ))
             .unwrap();
             assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
@@ -261,7 +261,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
         for method in ["abs(1)", "format(1)", "toNumber(1)", "compareTo(null)"] {
             assert!(
                 compile(&format!(
-                    "function f() {{ System.println({literal}.{method}); }}"
+                    "function f() as Void {{ System.println({literal}.{method}); }}"
                 ))
                 .is_err()
             );
@@ -289,7 +289,7 @@ fn api_boundaries_apply_to_source_and_saved_text() {
             Some(ApiLevel(4, 9, 9)),
         ),
     ] {
-        let source = format!("function f() {{ System.println({expression}); }}");
+        let source = format!("function f() as Void {{ System.println({expression}); }}");
         let context = ApiContext::new(level, level).unwrap();
         let f = compile_with_api(&source, context).unwrap();
         if let Some(before) = before {

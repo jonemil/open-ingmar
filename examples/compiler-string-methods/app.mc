@@ -1,6 +1,6 @@
 using Toybox.System;
 
-function start() {
+function start() as Void {
     System.println("Hello".toLower());
     System.println("Hello".toUpper());
     System.println("Hello".toString());

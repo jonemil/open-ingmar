@@ -6,7 +6,7 @@ module ArrayOps {
     }
 }
 
-function start() {
+function start() as Void {
     var chars = "abca".toCharArray();
     var reversed = chars.reverse();
     System.println(reversed.toString());

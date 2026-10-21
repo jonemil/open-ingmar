@@ -123,14 +123,17 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
         "'A' == true",
     ] {
         assert!(
-            compile(&format!("function f() {{ System.println({expression}); }}")).is_err(),
+            compile(&format!(
+                "function f() as Void {{ System.println({expression}); }}"
+            ))
+            .is_err(),
             "{expression}"
         );
     }
     for expression in ["'A' + n", "n == 'A'"] {
         assert!(
             compile(&format!(
-                "function f(n as Toybox.Lang.Long or Null) {{ System.println({expression}); }}"
+                "function f(n as Toybox.Lang.Long or Null) as Void {{ System.println({expression}); }}"
             ))
             .is_err()
         );
@@ -185,12 +188,15 @@ fn char_weak_retains_char_and_checks_receiver_availability() {
     for source in [
         "function f(x as Toybox.Lang.Char or Null) as Toybox.Lang.Char { return x.weak(); }",
         "function f() as Toybox.Lang.Char { return 'A'.weak(1); }",
-        "function f() { return 'A'.weak(); }",
+        "function f() as Toybox.Lang.Number { return 'A'.weak(); }",
     ] {
         assert!(compile(source).is_err());
     }
     for expression in ["'A'.weak().toNumber()", "('A'.weak() + 1l).toNumber()"] {
-        let f = compile(&format!("function f() {{ return {expression}; }}")).unwrap();
+        let f = compile(&format!(
+            "function f() as Toybox.Lang.Number {{ return {expression}; }}"
+        ))
+        .unwrap();
         assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
     }
 }

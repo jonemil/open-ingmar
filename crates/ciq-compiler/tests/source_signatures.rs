@@ -48,7 +48,7 @@ fn exact_source_contracts_survive_function_calls_and_complete_text_pipelines() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let method = VIEW.replace("function current() { return self.count; }", "function current() { return self.count; } function pass(view as HelloView) as HelloView { return view; }");
+    let method = VIEW.replace("function current() as Toybox.Lang.Number { return self.count; }", "function current() as Toybox.Lang.Number { return self.count; } function pass(view as HelloView) as HelloView { return view; }");
     let unit = compile_sources(&["function f() { var view = Views.make(); System.println(view.pass(Views.pass(view)).current()); }", VIEWS, &method]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
 }
