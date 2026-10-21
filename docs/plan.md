@@ -233,7 +233,8 @@ remain required core work. The frontend grammar records current acceptance.
 - **Classes and construction:** complete source superclass chains,
   inherited fields/methods, overrides and signature rules, parent-qualified
   method/initializer calls, static members, and public/private/protected/hidden
-  access. Resolve default/inherited initializer requirements against the SDK.
+  access. Resolve default initializers for other native bases and inherited
+  initializer requirements against the SDK.
   Cover nested classes, outer-instance construction, and their distinct lookup
   rules rather than assuming captured outer members.
 - **Expressions and operators:** finish valid unary/binary/conditional and

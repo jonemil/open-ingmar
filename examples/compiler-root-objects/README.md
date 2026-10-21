@@ -4,7 +4,10 @@
 explicit `Lang.Object` comparator through a module alias. [app.mc](app.mc)
 checks independent fields, aliases, inherited observers, retained Method
 receivers, custom comparator dispatch, and exact cross-file source references
-through parameters, returns, retained fields, and replacement. The [expected output](expected.txt)
+through parameters, returns, retained fields, and replacement. EmptyToken,
+DefaultFields, and the comparator omit explicit initializers, checking default
+construction, nullable field defaults, and independent mutable fields.
+The [expected output](expected.txt)
 matches SDK/generated `fr265` programs.
 
 From the repository root:
@@ -16,7 +19,8 @@ cargo run -p ciq-asm -- sign scratch/compiler-root-objects/unsigned.prg scratch/
 sh scripts/run-simulator-container.sh --prg scratch/compiler-root-objects/generated.prg
 ```
 
-Each constructed class declares an initializer; Object initialization has no
-native base call. Exact source annotations/reference fields retain class identity
+Object initialization has no native base call; omitted initializers become
+zero-argument Void methods in IR. Exact source annotations/reference fields retain
+class identity
 and its native base; opaque Object erasure loses source-member access. See the
 [class contract](../../docs/specs/frontend/README.md#object-rooted-classes).

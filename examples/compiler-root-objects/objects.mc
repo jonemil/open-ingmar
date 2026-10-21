@@ -10,12 +10,24 @@ class Counter {
 }
 class Ordering extends L.Object {
     var calls = 0;
-    function initialize() {}
     function compare(a as Toybox.Lang.Object, b as Toybox.Lang.Object) as Toybox.Lang.Number {
         self.calls = self.calls + 1;
         return b.toString().compareTo(a.toString());
     }
     function count() as Toybox.Lang.Number { return self.calls; }
+}
+
+class EmptyToken {}
+
+class DefaultFields {
+    var count = 7;
+    var maybe as Toybox.Lang.String or Null;
+    function value() as Toybox.Lang.Number { return self.count; }
+    function empty() as Toybox.Lang.Boolean { return self.maybe == null; }
+    function step() as Toybox.Lang.Number {
+        self.count += 1;
+        return self.count;
+    }
 }
 
 class CounterBox {

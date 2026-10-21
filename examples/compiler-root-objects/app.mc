@@ -36,6 +36,14 @@ module Objects {
         System.println(previous.add(1));
         System.println(box.current().add(2));
         System.println(Objects.erase(box.current()).equals(box.current()));
+        var token = new EmptyToken();
+        System.println(token.equals(token));
+        var defaults = new DefaultFields();
+        var independent = new DefaultFields();
+        System.println(defaults.value());
+        System.println(defaults.empty());
+        System.println(defaults.step());
+        System.println(independent.value());
     }
 }
 class MinimalConsoleApp extends Application.AppBase {

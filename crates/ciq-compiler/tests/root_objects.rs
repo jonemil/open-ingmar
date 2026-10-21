@@ -84,7 +84,7 @@ fn native_object_import_and_hidden_constructor_survive_complete_saved_paths() {
                 }
             }
         }
-        assert_eq!(roots, 3);
+        assert_eq!(roots, 5);
         let asm = unit.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
@@ -102,7 +102,6 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
         "class C { function initialize() { View.initialize(); } }",
         "class C { function initialize() { Object.initialize(); } }",
         "class C { function initialize() { return 1; } }",
-        "class C { function value() { return 1; } } function f() { var c=new C(); }",
         "class C { function initialize(n) {} } function f() { var c=new C(); }",
         "class C { function initialize() {} } class Holder { var value as C; function initialize() {} }",
         "class C { function initialize() {} } function f() { var c=new C(); var d=new Other(); c=d; } class Other { function initialize() {} }",
@@ -199,4 +198,74 @@ fn single_function_source_cannot_guess_an_unresolved_class_base() {
     let source = "function f(c as C) as C { return c; }";
     let error = ciq_compiler::compile(source).unwrap_err();
     assert!(error.to_string().contains("compilation-unit declarations"));
+}
+
+#[test]
+fn default_object_initializers_are_explicit_in_ir_and_keep_field_requirements() {
+    for declaration in [
+        "class C {}",
+        "class C extends Toybox.Lang.Object {}",
+        "class C { var n=7; var text as Toybox.Lang.String or Null; function value() {return self.n;} }",
+    ] {
+        let source = format!("{declaration} function f() as C {{return new C();}}");
+        let unit = compile_sources(&[&source]).unwrap();
+        let initializer = unit.classes()[0]
+            .methods
+            .iter()
+            .find(|m| m.name() == "initialize")
+            .unwrap();
+        assert_eq!(initializer.parameter_count(), 0);
+        assert_eq!(initializer.return_type(), ciq_compiler::ReturnType::Void);
+        assert!(
+            initializer
+                .operations()
+                .iter()
+                .all(|op| matches!(op.operation, ciq_compiler::Operation::ReturnVoid))
+        );
+        assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+        let assembly = unit.lower();
+        assert_eq!(
+            assembly,
+            ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+        );
+    }
+    // A source initializer replaces the default, rather than adding an overload.
+    let unit = compile_sources(&[
+        "class C {function initialize(n) {}} function f() as C {return new C(1);}",
+    ])
+    .unwrap();
+    assert_eq!(unit.classes()[0].methods.len(), 1);
+    assert_eq!(unit.classes()[0].methods[0].parameter_count(), 1);
+    for source in [
+        "class C {} function f() as C {return new C(1);}",
+        "class C {var text as Toybox.Lang.String;}",
+        "class C {var target as C;}",
+        "class C {var initialize=1;}",
+        "class C extends Toybox.WatchUi.View {function value() {return 1;}} function f() as Toybox.WatchUi.View {return new C();}",
+        "module Empty {}",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+    // Saved IR must retain the normalized body; its reader does not silently
+    // repair missing method declarations or bypass constructor checking.
+    let unit = compile_sources(&["class C {} function f() as C {return new C();}"]).unwrap();
+    let text = unit.to_ir_text();
+    let start = text.find(".function initialize").unwrap();
+    let end = start + text[start..].find(".end\n").unwrap() + ".end\n".len();
+    let mut missing = text;
+    missing.replace_range(start..end, "");
+    assert!(parse_unit_ir(&missing).is_err());
+}
+
+#[test]
+fn default_initializers_count_toward_unit_body_limit() {
+    let source = (0..256)
+        .map(|i| format!("class C{i} {{}}\n"))
+        .collect::<String>();
+    let unit = compile_sources(&[&source]).unwrap();
+    assert_eq!(unit.classes().len(), 256);
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let too_many = format!("{source} class Extra {{}}");
+    let error = compile_sources(&[&too_many]).unwrap_err();
+    assert!(error.diagnostic.message.contains("256-function limit"));
 }

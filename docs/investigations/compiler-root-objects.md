@@ -13,7 +13,7 @@ and an Object-rooted comparator. Replacing all original Counter variables
 leaves its Method bound to the original state (`6 + 4 = 10`); the replacement
 remains at `100`. The specimen also passes Counter references through cross-file
 parameters, module/self results, a retained CounterBox field, replacement, and Object
-erasure. SDK/generated programs match all 16 expected lines. The original
+erasure. SDK/generated programs match the expected output. The original
 reference remains independently usable after field replacement (`22`), while
 the box refers to the replacement (`42`).
 
@@ -48,9 +48,28 @@ are in `scratch/root-object-probe/`.
 
 The extended reference check is in `scratch/check-root-references/`; it includes
 SDK/generated structured round trips and runtime output. These probes do not
-establish automatic default initializers, source superclass chains, Object
+establish source superclass chains, Object
 casts/refinement, or broader weak targets.
 See the [class contract][spec] and [plan](../plan.md).
+
+## Omitted initializers
+
+2026-10-21, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+
+**Observed:** the SDK accepts Object-rooted classes without `initialize`,
+including an empty class, an explicit aliased Object base, and classes with
+Number-literal or nullable String fields. The extended [tracked specimen][example]
+constructs these classes and uses a comparator whose initializer is omitted.
+It checks inherited Object dispatch, initial field values (`7` and Null), and
+independent state after mutation (`8` versus `7`). SDK and generated runtime
+results are checked against [expected output](../../examples/compiler-root-objects/expected.txt).
+Structured export/reassembly needs no additional opcode or DATA record.
+
+Reproduce with the shared console checker using `compiler-root-objects`.
+The initial accepted probe and structured SDK export are in
+`scratch/compiler-default-initialize/`; the extended comparison uses its `check/`
+directory. This does not establish default initialization for other native bases
+or source superclass chains.
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [example]: ../../examples/compiler-root-objects/README.md

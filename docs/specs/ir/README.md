@@ -100,6 +100,8 @@ bindings. Text is not mandatory between stages.
 
 `ClassDeclaration` records a name, native `ClassBase`, ordered fields, and
 ordered methods. Bases are identities rather than VM import indexes.
+Methods include the frontend's synthesized Object default initializer when
+source omits it; the IR reader and unit constructors do not synthesize bodies.
 `Function::method` constructs receiver-bearing IR; ordinary function
 constructors reject receiver operations. Unit validation requires instance
 bodies in classes and ordinary bodies in global/module owners. A method with no
@@ -1636,7 +1638,7 @@ Construction is order-sensitive. Function validation checks the identifier,
 supported construction profile, and API availability (Object: 1.0.0; native
 View.initialize: 2.1.0; BehaviorDelegate.initialize: 1.0.0). Object has no
 native base-initialization operation. Unit text records `.class Name
-Lang.Object`; its explicit source initializer is Void and contains no native
+Lang.Object`; its explicit IR initializer is Void and contains no native
 base call. Unit validation requires the named class's declared base to equal the
 operation's base, with a matching explicit initializer whose parameter contracts
 match the arguments. A standalone function retains this unresolved declaration

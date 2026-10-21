@@ -2709,6 +2709,7 @@ pub(crate) struct ParsedUnit {
 }
 pub(crate) struct ParsedClass {
     pub name: String,
+    pub name_span: Span,
     pub base: crate::ClassBase,
     pub fields: Vec<crate::InstanceField>,
     pub methods: Vec<ParsedFunction>,
@@ -3006,12 +3007,13 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             parser.token()?;
             parser.names = outer_names;
             parser.native_base = None;
-            if methods.is_empty() {
+            if methods.is_empty() && class_base != Some(crate::ClassBase::LangObject) {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
             if is_class {
                 unit.classes.push(ParsedClass {
                     name: name.into(),
+                    name_span: token.span,
                     base: class_base.unwrap(),
                     fields,
                     methods,

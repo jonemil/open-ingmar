@@ -1900,12 +1900,14 @@ impl std::error::Error for SourceDiagnostic {}
 
 /// Compile one or more source files into a validated declaration unit.
 ///
-/// Collects global/module functions and AppBase-derived class methods
+/// Collects global/module functions and supported native-derived class methods
 /// before resolving qualified calls, so declarations may follow their callers.
 /// Modules may be reopened across files; class names and member identities
 /// must remain unique. Calls on self resolve within their own class.
 /// Resolves the supported native module aliases and imported superclass names;
 /// native bindings are file-local and inherited by class/module scopes.
+/// Supplies an empty zero-argument Void initializer for Object-rooted classes
+/// without one, preserving it as an ordinary method in the returned unit.
 /// All user callees must be present. Rejects empty units and more than 256
 /// functions; existing syntax/type/control-flow bounds apply per function.
 /// Diagnostics identify the source index and byte/line/column within that file.
@@ -1939,6 +1941,22 @@ fn compile_sources_context(
             parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
+    // Normalize Object's default initializer before collecting signatures, so
+    // source calls and saved IR use the same ordinary method contract.
+    for class in parsed_sources.iter_mut().flat_map(|p| &mut p.classes) {
+        if class.base == ClassBase::LangObject
+            && !class.methods.iter().any(|m| m.name == "initialize")
+        {
+            class.methods.push(parser::ParsedFunction {
+                name: "initialize".into(),
+                parameters: Vec::new(),
+                parameter_types: Vec::new(),
+                result_type: Some(ReturnType::Void),
+                statements: Vec::new(),
+                body_span: class.name_span,
+            });
+        }
+    }
     let bases = parsed_sources
         .iter()
         .flat_map(|p| p.classes.iter())

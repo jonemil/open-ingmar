@@ -31,7 +31,7 @@ unit-file = native-declaration* declaration*
 declaration = function | module | class
 module = "module" identifier "{" native-declaration* function+ "}"
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (field | function)+ "}"
+        "{" native-declaration* (field | function)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
@@ -54,7 +54,10 @@ module functions, and class methods. Its `block` expands in [Statements](#statem
 `native-base`, `field-type`, and `result-type` expand in [Type syntax](#type-syntax).
 
 A compilation unit requires 1..=256 function/method bodies across its files.
-Classes require at least one method. Native bases are resolved Object, AppBase,
+Object-rooted classes may omit all methods; the frontend supplies their default
+initializer when absent. Other bases require at least one method. Synthesized
+initializers count toward the body limit. Native bases are resolved Object,
+AppBase,
 View, and BehaviorDelegate identities; omission selects Object. Field types and
 permitted defaults are the [storage contracts](README.md#instance-fields).
 `field-default` is further restricted by its type: Symbol permits a literal

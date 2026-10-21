@@ -636,9 +636,10 @@ resolved through the [native name profile](#native-name-declarations). It
 accepts canonical/qualified, aliased, and imported Object/AppBase/View/
 BehaviorDelegate spellings. An omitted base selects Lang.Object. Supported
 [field contracts](#instance-fields) are defined separately. Static methods,
-annotations, source superclass lookup, and nested/empty classes are unsupported.
-Classes require at least one method. Class names must be unique; classes cannot
-be reopened. Reject class/module/global-function name collisions.
+annotations, source superclass lookup, and nested classes are unsupported.
+Object-rooted classes may be empty; other classes require at least one method.
+Class names must be unique; classes cannot be reopened. Reject
+class/module/global-function name collisions.
 
 Reserved class names include language keywords, `self`, `System`, `Application`,
 `AppBase`, `globals`, `statics`, `Toybox`, and the bootstrap's pinned native
@@ -708,10 +709,16 @@ source class for a native reference.
 `class Counter { ... }` and `class Counter extends Lang.Object { ... }` declare
 Object-rooted source classes. The base also accepts `Toybox.Lang.Object`, Lang
 module aliases, and imported bare Object. Object construction requires API
-1.0.0. Each constructed class must declare a Void `initialize(arguments)`; it
-must not call a native base initializer. Declarations inside the class cannot
-shadow its reserved Object base binding. An automatic/default initializer and
-direct native `new Object()` are outside this profile.
+1.0.0. A declared `initialize(arguments)` must return Void and must not call a
+native base initializer. When omitted, the frontend supplies a zero-argument
+Void initializer with an empty body. This also permits empty Object-rooted
+classes. The default becomes an ordinary explicit method in IR and counts
+toward the unit's 256-body limit; saved IR does not infer omitted methods.
+Construction checks its zero-argument signature. Field defaults still come
+from declaration metadata; fields requiring explicit initialization remain
+rejected unless a source initializer fills them under the ordinary field rules.
+Declarations inside the class cannot shadow its reserved Object base binding.
+Direct native `new Object()` remains outside this profile.
 
 Number fields, supported constructor arguments, local aliases/reassignment, self
 calls, and calls on a proven source instance use the ordinary class rules.
@@ -740,8 +747,8 @@ under the
 elements and source superclass chains remain unsupported.
 
 Complete application DATA gives each class an Object base reference and a
-return-only hidden allocation constructor. Its user `initialize` runs through
-normal source construction. The [application
+return-only hidden allocation constructor. Its explicit or default `initialize`
+runs through normal source construction. The [application
 profile](../build/README.md#complete-application-generation) owns import
 binding; no native Object allocation/initialization hook is invoked. See the
 [example](../../../examples/compiler-root-objects/README.md) and
