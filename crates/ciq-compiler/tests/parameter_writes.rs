@@ -82,6 +82,7 @@ fn source_and_interface_parameter_assignments_require_exact_witnesses() {
         "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {c=new Good(); return 0;}",
         "function f(c as Toybox.Lang.Comparable, value as Good or Null) as Toybox.Lang.Number {if(value!=null){c=value;} return 0;}",
         "function f(c as Toybox.Lang.Comparable or Null, value as Good or Null) as Toybox.Lang.Number {if(value!=null){c=value;} else {c=null;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable or Null, value as Good or Null) as Toybox.Lang.Number {c=value; return 0;}",
     ] {
         let unit = compile_sources(&[classes, body]).unwrap();
         assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
@@ -91,7 +92,6 @@ fn source_and_interface_parameter_assignments_require_exact_witnesses() {
         "function f(t as Token) as Toybox.Lang.Number {t=null; return 0;}",
         "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {c=new Other(); return 0;}",
         "function f(c as Toybox.Lang.Comparable, value as Good or Null) as Toybox.Lang.Number {c=value; return 0;}",
-        "function f(c as Toybox.Lang.Comparable or Null, value as Good or Null) as Toybox.Lang.Number {c=value; return 0;}",
     ] {
         assert!(compile_sources(&[classes, body]).is_err(), "{body}");
     }

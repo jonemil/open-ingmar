@@ -285,9 +285,11 @@ prefixes concatenate inside the field.
 
 ```text
 parameter-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
+              | source-union-tag
 native-parameter-tag = common-tag | array-tag | "null" | "nullable-dictionary"
 union-tag = "union(" native-parameter-tag ("|" native-parameter-tag)+ ")"
 call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
+                | source-union-tag
                 | "one-view" | "view-delegate"
 declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
@@ -304,6 +306,8 @@ numeric-alias-tag = alias-tag | "nullable-" alias-tag
 interface-name-tag = "comparable" | "comparator"
 interface-tag = interface-name-tag | "nullable-" interface-name-tag
 enum-tag = "number-format" | "endian"
+source-union-tag = "source-union(" source-union-atom ("|" source-union-atom)+ ")"
+source-union-atom = source-tag | "null"
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
 source-identity = identifier "@" source-base
@@ -320,7 +324,7 @@ dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
 join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
-         | source-tag | nullable-source-tag
+         | source-tag | nullable-source-tag | source-union-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
@@ -332,6 +336,12 @@ Parsing normalizes alternatives and serialization uses an existing named tag
 when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
 Dictionary punctuation. These tags do not extend field or cast domains.
+
+Source-union tags contain 2 through 254 exact source/Null atoms, including at
+least one class. Classes normalize by identity and native base; duplicate atoms
+collapse, and singleton sets use ordinary source/nullable-source tags. Nested
+source-union tags and native alternatives are rejected. These tags are admitted
+in signatures, block values, and local contracts, but not fields or casts.
 
 The contexts deliberately differ. Source casts use `source-tag` or
 `nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the

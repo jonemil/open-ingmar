@@ -37,9 +37,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Preserve exact source-class alternatives in general unions through
-  annotations, storage, calls, returns, conditional joins, and narrowing;
-  retain each identity and required interface/initialization witnesses.
+- [ ] Support mixed exact source-class and native alternatives in union
+  annotations, storage, calls, returns, joins, and narrowing without erasing
+  exact identities or inventing interface witnesses.
+- [ ] Resolve common source-declared member calls through an unrefined
+  source-class union; check every class's signature and propagate all possible
+  callee effects while preserving one receiver evaluation.
 - [ ] Support union instance-field declarations, defaults, required
   initialization, reads, and writes, including nullable container references.
 - [ ] Parse `typedef` declarations, resolve aliases across owners/files, and

@@ -52,6 +52,26 @@ reconstruction; no required raw fallback occurs. Current captures are in
 `scratch/unions/check/`; reproduce with the specimen checker commands above.
 This specimen does not establish exact source-class unions or union fields.
 
+## Exact source-class unions
+
+The `SourceUnions` group adds authored `UnionToken`/`UnionMarker` classes with
+distinct methods and opposite Comparator implementations. SDK/compiler/simulator
+9.2.0 / fr265, target 5.2.0, accept their union signatures, conditional selection,
+forwarding, optional Null, changing locals, both class-test edges, and loop-exit
+narrowing. Sorting through the union dispatches to the selected class's compare
+method: the two instances yield ascending and descending results respectively.
+The example now requires minimum API 5.0.0 for `Array.sort`.
+
+SDK and generated apps match all 123 expected console lines. Both PRGs pass
+structured CODE/DATA export and unsigned reconstruction without required raw
+fallback; source, saved IR, and assembly produce identical generated unsigned
+applications. Reproduce with the same specimen-checker commands, using a fresh
+output directory; captures are in `scratch/unions/source-check-v3/`.
+This establishes the authored cases, not mixed native/source unions or common
+source-member dispatch without a class guard. Rust checks additionally cover
+three alternatives with different native bases, missing interface witnesses,
+erased references, stale guards, and forged saved contracts.
+
 ## Field storage
 
 SDK/compiler/simulator 9.2.0 / fr265 also accept

@@ -83,7 +83,7 @@ module UnionOps {
 }
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
-    function onStart(state) { UnionOps.run(); NativeUnions.run(); System.exit(); }
+    function onStart(state) { UnionOps.run(); NativeUnions.run(); SourceUnions.run(); System.exit(); }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
 }
 
@@ -136,5 +136,60 @@ module NativeUnions {
         System.println(NativeUnions.loop("hi"));
         System.println(NativeUnions.zero(null) == null);
         System.println('A' == null);
+    }
+}
+
+class UnionToken extends Lang.Object {
+    function initialize() {}
+    function count() as Lang.Number { return 7; }
+    function compare(a as Lang.Object, b as Lang.Object) as Lang.Number {
+        return (a as Lang.Number) - (b as Lang.Number);
+    }
+}
+class UnionMarker extends Lang.Object {
+    function initialize() {}
+    function size() as Lang.Number { return 9; }
+    function compare(a as Lang.Object, b as Lang.Object) as Lang.Number {
+        return (b as Lang.Number) - (a as Lang.Number);
+    }
+}
+module SourceUnions {
+    function pick(flag as Lang.Boolean) as UnionToken or UnionMarker {
+        return flag ? new UnionToken() : new UnionMarker();
+    }
+    function echo(value as UnionMarker or UnionToken) as UnionToken or UnionMarker {
+        return value;
+    }
+    function measure(value as UnionToken or UnionMarker or Null) as Lang.Number {
+        if (value == null) { return 0; }
+        if (value instanceof UnionToken) { return value.count(); }
+        return value.size();
+    }
+    function changing(flag as Lang.Boolean) as Lang.Number {
+        var value = new UnionToken();
+        if (flag) { value = new UnionMarker(); }
+        if (!(value instanceof UnionMarker)) { return value.count(); }
+        return value.size();
+    }
+    function loop() as Lang.Number {
+        var value = SourceUnions.pick(true);
+        while (value instanceof UnionToken) { value = new UnionMarker(); }
+        return value.size();
+    }
+    function sorted(flag as Lang.Boolean) as Lang.Number {
+        var values = [3, 1, 2];
+        values.sort(SourceUnions.pick(flag));
+        return values[0];
+    }
+    function run() as Void {
+        System.println("source-unions");
+        System.println(SourceUnions.measure(SourceUnions.echo(SourceUnions.pick(true))));
+        System.println(SourceUnions.measure(SourceUnions.pick(false)));
+        System.println(SourceUnions.measure(null));
+        System.println(SourceUnions.changing(true));
+        System.println(SourceUnions.changing(false));
+        System.println(SourceUnions.loop());
+        System.println(SourceUnions.sorted(true));
+        System.println(SourceUnions.sorted(false));
     }
 }

@@ -81,7 +81,9 @@ callback checks. `api` owns declarations, `native` owns executable profiles,
 application generation, and `operators` owns operand/result rules. `type_text`
 shares saved-type spellings while retaining each consumer's accepted domain.
 `unions` normalizes native alternatives and adapts them to supported contracts;
-source identities remain separate from native API projections.
+`source_union` normalizes exact class alternatives while `source_objects`
+tracks their provenance. Source identities remain separate from native API
+projections, which cannot authorize source dispatch or interface witnesses.
 `backend` selects VM instructions;
 `application` generates the bounded bootstrap and metadata. Keep these
 responsibilities separate even where they currently share a source file.

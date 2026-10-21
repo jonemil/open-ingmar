@@ -8,6 +8,8 @@ pub(crate) use crate::type_text::{join as parse_type, join_tag as type_tag};
 /// Source contracts retain exact identity in addition to their native projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinType {
+    /// Exact alternatives whose identities survive native projection.
+    SourceUnion(crate::SourceUnion),
     /// An API value type; each consumer checks its supported type domains.
     Api(Type),
     /// An exact constructible source class, optionally admitting Null.
@@ -22,6 +24,7 @@ impl JoinType {
     /// Exact source assignability is checked separately on each incoming edge.
     pub fn api_type(&self) -> Type {
         match self {
+            Self::SourceUnion(contract) => contract.api_type(),
             Self::Api(ty) => ty.clone(),
             Self::Source { class, nullable } => {
                 let ty = Type::named(class.base.api_name());
@@ -48,6 +51,7 @@ pub(crate) fn parse_contract(tag: &str) -> Option<JoinType> {
             class,
             nullable: true,
         }),
+        Ok(crate::ReturnType::SourceUnion(contract)) => Some(contract.join()),
         _ => parse_type(tag).map(JoinType::Api),
     }
 }
@@ -55,6 +59,7 @@ pub(crate) fn parse_contract(tag: &str) -> Option<JoinType> {
 /// Print a supported block contract, rejecting invalid source names or bases.
 pub(crate) fn contract_tag(ty: &JoinType) -> Option<std::borrow::Cow<'static, str>> {
     match ty {
+        JoinType::SourceUnion(contract) => Some(std::borrow::Cow::Owned(contract.text())),
         JoinType::Api(ty) => type_tag(ty),
         JoinType::Source { class, nullable } => {
             if crate::SourceClass::parse(&class.to_string()).as_ref() != Some(class) {
@@ -70,8 +75,20 @@ pub(crate) fn contract_tag(ty: &JoinType) -> Option<std::borrow::Cow<'static, st
 }
 
 /// Merge exact source/Null alternatives, or reuse the ordinary API join rules.
-/// Distinct source classes and implicit source erasure do not form a join.
+/// Mixing exact identities with erased native alternatives remains unsupported.
 pub(crate) fn contract_result(left: &JoinType, right: &JoinType) -> Option<JoinType> {
+    match (left.source_contract(), right.source_contract()) {
+        (Some(a), Some(b)) => return a.merge(&b).map(crate::SourceUnion::join),
+        (Some(mut a), None) if *right == JoinType::Api(Type::Null) => {
+            a.nullable = true;
+            return Some(a.join());
+        }
+        (None, Some(mut b)) if *left == JoinType::Api(Type::Null) => {
+            b.nullable = true;
+            return Some(b.join());
+        }
+        _ => {}
+    }
     match (left, right) {
         (JoinType::Api(Type::Any), _) | (_, JoinType::Api(Type::Any)) => {
             Some(JoinType::Api(Type::Any))
@@ -193,7 +210,7 @@ pub(crate) fn infer_type(
         joined = Some(match joined {
             None if contract_tag(&ty).is_some() => ty,
             Some(previous) => contract_result(&previous, &ty).ok_or(
-                "conditional arms require compatible core types or the same source class, optionally with Null",
+                "conditional arms require supported native or exact source alternatives, optionally with Null",
             )?,
             _ => return Err("unsupported conditional arm type"),
         });

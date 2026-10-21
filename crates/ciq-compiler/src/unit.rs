@@ -22,6 +22,7 @@ fn signature_matches(implementation: &Function, required: &crate::api::Method) -
                     actual,
                     crate::ParameterType::SourceObject(_)
                         | crate::ParameterType::NullableSourceObject(_)
+                        | crate::ParameterType::SourceUnion(_)
                 ) && &actual.api_type() == expected
             })
         && required.result == implementation.return_type().api_type()
@@ -109,7 +110,9 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
             ) || (member == "sort"
                 && arguments.iter().any(|a| {
-                    matches!(
+                    (crate::source_objects::class(function.operations(), *a, function.parameter_types().to_vec()).is_none()
+                        && function.value_types[a] != crate::ValueType::Null)
+                    || matches!(
                         function.value_types[a],
                         crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
                     )
@@ -963,25 +966,12 @@ impl CompilationUnit {
         let mut signatures = BTreeMap::new();
         let exit_callers = exit_callers(&bodies);
         for (index, &(owner, function)) in bodies.iter().enumerate() {
-            let source_result = match function.return_type() {
-                ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class) => {
-                    Some(class)
-                }
-                _ => None,
-            };
             let source_classes = function
                 .parameter_types()
                 .iter()
-                .filter_map(|ty| {
-                    if let crate::ParameterType::SourceObject(class)
-                    | crate::ParameterType::NullableSourceObject(class) = ty
-                    {
-                        Some(class)
-                    } else {
-                        None
-                    }
-                })
-                .chain(source_result.as_ref());
+                .filter_map(crate::ParameterType::source_contract)
+                .chain(function.return_type().source_contract())
+                .flat_map(|contract| contract.classes);
             for name in source_classes {
                 if !self.classes.iter().any(|class| {
                     class.name == name.name
@@ -1462,6 +1452,22 @@ impl CompilationUnit {
                         ));
                     }
                 }
+                if let Operation::BlockParameter { value_type, .. }
+                | Operation::LocalDeclare { value_type, .. }
+                | Operation::VariableRead { value_type, .. } = &located.operation
+                {
+                    if let Some(contract) = value_type.source_contract() {
+                        for class in contract.classes() {
+                            if !self
+                                .classes
+                                .iter()
+                                .any(|d| d.name == class.name && d.base == class.base)
+                            {
+                                return Err(fail(Some(index), Some(operation), "source union class and native base must match a unit declaration".into()));
+                            }
+                        }
+                    }
+                }
                 if let Operation::SourceNew { class, base, .. } = &located.operation {
                     let declaration = self
                         .classes
@@ -1630,18 +1636,13 @@ impl CompilationUnit {
                         .map_err(|message| fail(Some(index), Some(operation), message))?;
                         continue;
                     }
-                    if let crate::ParameterType::SourceObject(class)
-                    | crate::ParameterType::NullableSourceObject(class) = parameter
-                    {
-                        if !origins.accepts(
-                            class,
-                            matches!(parameter, crate::ParameterType::NullableSourceObject(_)),
-                            *argument,
-                        ) {
+                    if let Some(expected) = parameter.source_contract() {
+                        if !origins.accepts_contract(&expected, *argument) {
                             return Err(fail(
                                 Some(index),
                                 Some(operation),
-                                "argument does not preserve the declared source class".into(),
+                                "argument does not preserve the declared source alternatives"
+                                    .into(),
                             ));
                         }
                     }
@@ -1699,10 +1700,16 @@ impl CompilationUnit {
         ) {
             return Ok(());
         }
-        let class = origins
-            .class(value)
+        let contract = origins
+            .contract(value)
             .ok_or("interface argument or return requires a checked source implementation")?;
-        self.check_interface_signature(class, interface.name())
+        if contract.nullable() && !nullable {
+            return Err("nullable source union requires a non-null proof".into());
+        }
+        for class in contract.classes() {
+            self.check_interface_signature(class.as_str(), interface.name())?;
+        }
+        Ok(())
     }
 
     /// Check a source class against a named core API interface and API levels.
@@ -2019,16 +2026,20 @@ fn compile_sources_context(
                 .flat_map(|class| class.methods.iter_mut()),
         ) {
             for parameter in ast.parameter_types.iter_mut().flatten() {
-                if let crate::ParameterType::SourceObject(class)
-                | crate::ParameterType::NullableSourceObject(class) = parameter
-                {
-                    resolve(class)?;
+                if let Some(mut contract) = parameter.source_contract() {
+                    for class in &mut contract.classes {
+                        resolve(class)?;
+                    }
+                    *parameter = contract.parameter();
                 }
             }
-            if let Some(ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class)) =
-                &mut ast.result_type
-            {
-                resolve(class)?;
+            if let Some(result) = &mut ast.result_type {
+                if let Some(mut contract) = result.source_contract() {
+                    for class in &mut contract.classes {
+                        resolve(class)?;
+                    }
+                    *result = contract.result();
+                }
             }
         }
         for field in parsed

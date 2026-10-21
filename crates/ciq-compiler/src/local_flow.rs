@@ -102,8 +102,8 @@ pub(crate) fn inputs(
 }
 
 /// Choose a supported read view without converting or changing stored values.
-/// Preserve exact source identities and existing joins; heterogeneous domains
-/// widen to Object (optionally Null) until general source unions are supported.
+/// Preserve supported native and exact source alternatives. Mixed erased/source
+/// domains still use Object (optionally Null) until mixed unions are supported.
 fn view(domain: &[JoinType]) -> Option<JoinType> {
     let mut result = domain.first()?.clone();
     for ty in &domain[1..] {
@@ -134,12 +134,9 @@ pub(crate) fn proven(
             nullable: false,
         });
     }
-    let mut ty = view(domain)?;
-    if let JoinType::Source { nullable, .. } = &mut ty {
-        if facts.contains(&crate::type_flow::Fact::NonNull(place)) {
-            *nullable = false;
-        }
-        return Some(ty);
+    let ty = view(domain)?;
+    if let Some(contract) = ty.source_contract() {
+        return Some(contract.refine(place, facts));
     }
     let value = crate::ValueType::from_api_type(&ty.api_type())?;
     Some(JoinType::Api(
@@ -148,6 +145,12 @@ pub(crate) fn proven(
 }
 
 fn accepts(expected: &JoinType, actual: &JoinType) -> bool {
+    if let Some(expected) = expected.source_contract() {
+        return actual
+            .source_contract()
+            .is_some_and(|actual| expected.accepts(&actual))
+            || (expected.nullable() && *actual == JoinType::Api(Type::Null));
+    }
     match (expected, actual) {
         (
             JoinType::Source {

@@ -2695,11 +2695,17 @@ pub(crate) fn build(
     if ast.parameter_types.iter().flatten().any(|ty| {
         matches!(
             ty,
-            crate::ParameterType::SourceObject(_) | crate::ParameterType::NullableSourceObject(_)
+            crate::ParameterType::SourceObject(_)
+                | crate::ParameterType::NullableSourceObject(_)
+                | crate::ParameterType::SourceUnion(_)
         )
     }) || matches!(
         &ast.result_type,
-        Some(crate::ReturnType::SourceObject(_) | crate::ReturnType::NullableSourceObject(_))
+        Some(
+            crate::ReturnType::SourceObject(_)
+                | crate::ReturnType::NullableSourceObject(_)
+                | crate::ReturnType::SourceUnion(_)
+        )
     ) {
         return Err(Diagnostic::at(
             source,

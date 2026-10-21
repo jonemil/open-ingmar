@@ -2522,7 +2522,7 @@ impl Parser<'_> {
     }
 
     /// Parse `or` alternatives, normalizing native unions without erasing a
-    /// source class into its native base. General source-class unions are deferred.
+    /// source class into its native base. Mixed source/native unions are rejected.
     fn parameter_annotation(&mut self, at: usize) -> Result<crate::ParameterType, Diagnostic> {
         let first = self.parameter_atom()?;
         if self.peek()? != Kind::Word("or") {
@@ -2544,30 +2544,17 @@ impl Parser<'_> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        if let Some(class) = sources.first() {
-            let same_class_or_null = parts.iter().all(|part| match part {
-                crate::ParameterType::Null => true,
-                crate::ParameterType::SourceObject(other)
-                | crate::ParameterType::NullableSourceObject(other) => other == class,
-                _ => false,
-            });
-            if same_class_or_null {
-                let nullable = parts.iter().any(|part| {
-                    matches!(
-                        part,
-                        crate::ParameterType::Null | crate::ParameterType::NullableSourceObject(_)
-                    )
-                });
-                return Ok(if nullable {
-                    crate::ParameterType::NullableSourceObject(class.clone())
-                } else {
-                    crate::ParameterType::SourceObject(class.clone())
-                });
+        if !sources.is_empty() {
+            if parts
+                .iter()
+                .all(|p| p.source_contract().is_some() || *p == crate::ParameterType::Null)
+            {
+                let nullable = parts.contains(&crate::ParameterType::Null);
+                return crate::SourceUnion::new(sources, nullable)
+                    .map(crate::SourceUnion::parameter)
+                    .map_err(|message| self.error(at, message));
             }
-            return Err(self.error(
-                at,
-                "unions containing different source-class contracts are not supported",
-            ));
+            return Err(self.error(at, "mixed source-class and native unions are not supported"));
         }
         crate::unions::parameter(crate::unions::normalize(
             parts.iter().map(crate::ParameterType::api_type).collect(),
@@ -2627,6 +2614,7 @@ impl Parser<'_> {
             } else {
                 let parameter = self.parameter_annotation(at)?;
                 Some(match parameter {
+                    crate::ParameterType::SourceUnion(contract) => contract.result(),
                     crate::ParameterType::SourceObject(class) => {
                         crate::ReturnType::SourceObject(class)
                     }

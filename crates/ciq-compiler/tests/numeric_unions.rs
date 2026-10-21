@@ -7,7 +7,7 @@ use ciq_compiler::{
 
 #[test]
 fn numeric_example_preserves_saved_stages_and_complete_application() {
-    let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(3, 1, 0)).unwrap();
+    let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0)).unwrap();
     let unit = compile_sources_with_api(
         &[include_str!(
             "../../../examples/compiler-numeric-unions/app.mc"

@@ -416,8 +416,8 @@ edges. Read contracts must accept the resulting view, refined only by shared
 runtime-class/non-null facts. Metadata cannot assert a type unsupported by the
 incoming values. Exact source identities, supported numeric aliases, comparison
 interfaces, and nullable joins retain their contracts; other supported native
-alternatives retain normalized unions. Exact source-class mixtures still require
-separate identity/provenance support. A write invalidates old storage proofs;
+alternatives retain normalized unions. Exact source alternatives retain source
+unions. Mixed exact/erased alternatives still require separate support. A write invalidates old storage proofs;
 previously captured values retain their own contracts and identity.
 
 Source construction selects inferred storage when writes change the local's
@@ -600,8 +600,9 @@ Conditional expressions use a single typed block parameter, independently of
 mutable locals. Native IR uses `BlockParameter { result, value_type }`
 immediately after `Block`; incoming edges use `JumpValue { target, value }`.
 `value_type` is `JoinType::Api(Type)` for ordinary API contracts or
-`JoinType::Source { class, nullable }` for an exact source reference. The latter
-keeps identity separate from its API projection.
+`JoinType::Source { class, nullable }` for one exact source reference, or
+`JoinType::SourceUnion(SourceUnion)` for multiple exact alternatives. Source
+contracts keep identities separate from their API projections.
 Text syntax is:
 
 ```text
@@ -630,7 +631,7 @@ parameter and its incoming values, including Char's API 1.3.0 requirement.
 
 [VM lowering](../lowering/README.md#expression-joins).
 
-Source joins use normalized native alternatives or one exact source class
+Source joins use normalized native alternatives or exact source-class sets
 with optional Null; see
 [conditional expressions](../frontend/README.md#conditional-expressions) for
 source inference and restrictions. Source construction resolves each join from
@@ -1735,7 +1736,27 @@ validation resolves declarations and checks call contracts against their bodies.
 Its runtime representation is the ordinary reference or Null, with no added
 conversion instruction. Nullable source tags also describe field declarations
 and reads, and selects a nullable source assertion in `.cast`. Source tags are
-not join tags or native API cast tags.
+also exact join contracts, but are not native API cast tags.
+
+`SourceUnion` stores a normalized nonempty set of `SourceClass` identities and
+nullability. Its public constructor rejects malformed names, nonconstructible
+bases, and sets exceeding 254 alternatives including Null. Parameters and
+results use `ParameterType::SourceUnion` and `ReturnType::SourceUnion`; joins and
+fixed/inferred local read contracts use `JoinType::SourceUnion`. Singleton sets
+use the existing exact/nullable variants. Typed construction canonicalizes
+singleton signature, call-result, and local/join metadata just as parsing does.
+Saved text uses `source-union(...)`
+from the [type grammar](grammar.md#type-tags).
+
+Function validation tracks the complete exact set through values and storage,
+checks subset assignability, and refines both class-test edges. API projections
+are derived from all retained bases, including after negative-edge narrowing;
+they do not establish exact identity. Unit validation resolves every class/base
+against declarations and every call/result claim against its signature.
+Structural interface checks require witnesses for all retained classes; unknown
+multiple callback bodies retain conservative initialization/shutdown effects.
+Fields, general union casts, mixed source/native alternatives, and common source
+member dispatch through an unrefined set remain unsupported.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

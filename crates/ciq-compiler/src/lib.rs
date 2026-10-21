@@ -31,6 +31,8 @@ mod operators;
 mod parser;
 mod source_ir;
 mod source_objects;
+mod source_union;
+pub use source_union::SourceUnion;
 mod source_types;
 mod type_flow;
 mod type_text;
@@ -483,6 +485,8 @@ pub enum ReturnType {
     SourceObject(SourceClass),
     /// Exact source class or Null; source dispatch requires a non-null proof.
     NullableSourceObject(SourceClass),
+    /// A finite set of exact source classes, optionally admitting Null.
+    SourceUnion(SourceUnion),
     Tuple(TupleShape),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
@@ -560,6 +564,8 @@ pub enum ParameterType {
     SourceObject(SourceClass),
     /// Exact source class or Null; source dispatch requires a non-null proof.
     NullableSourceObject(SourceClass),
+    /// A finite set of exact source classes, optionally admitting Null.
+    SourceUnion(SourceUnion),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     /// An opaque native Dictionary or null; contents are not yet accessible.
@@ -612,6 +618,7 @@ impl ParameterType {
             Self::NullableMethod => ValueType::NullableMethod.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
+            Self::SourceUnion(contract) => contract.api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
             Self::NullableSourceObject(class) => {
                 api::Type::named(class.base.api_name()).with_null()
@@ -668,6 +675,7 @@ impl ReturnType {
             Self::NullableMethod => ValueType::NullableMethod.api_type(),
             Self::Symbol => ValueType::Symbol.api_type(),
             Self::Object(class) => ValueType::Object(*class).api_type(),
+            Self::SourceUnion(contract) => contract.api_type(),
             Self::SourceObject(class) => api::Type::named(class.base.api_name()),
             Self::NullableSourceObject(class) => {
                 api::Type::named(class.base.api_name()).with_null()
@@ -1689,6 +1697,7 @@ impl Function {
         let parameter_types = parameter_types
             .into_iter()
             .map(|ty| match ty {
+                ParameterType::SourceUnion(contract) => Ok(contract.parameter()),
                 ParameterType::Union(ty) => {
                     crate::unions::parameter(crate::unions::normalize(vec![ty])).ok_or_else(invalid)
                 }
@@ -1697,6 +1706,7 @@ impl Function {
             .collect::<Result<Vec<_>, _>>()?;
         let declared_result = declared_result
             .map(|ty| match ty {
+                ReturnType::SourceUnion(contract) => Ok(contract.result()),
                 ReturnType::Union(ty) => {
                     crate::unions::result(crate::unions::normalize(vec![ty])).ok_or_else(invalid)
                 }
@@ -1710,40 +1720,43 @@ impl Function {
             {
                 if let JoinType::Api(api::Type::Union(parts)) = value_type {
                     *value_type = JoinType::Api(crate::unions::normalize(parts.clone()));
+                } else if let JoinType::SourceUnion(contract) = value_type {
+                    *value_type = contract.clone().join();
+                }
+            }
+            if let Operation::GlobalCall { result_type, .. }
+            | Operation::ModuleCall { result_type, .. }
+            | Operation::SelfCall { result_type, .. }
+            | Operation::ObjectCall { result_type, .. }
+            | Operation::SelfFieldRead { result_type, .. } = &mut located.operation
+            {
+                if let ReturnType::SourceUnion(contract) = result_type {
+                    *result_type = contract.clone().result();
                 }
             }
         }
 
-        let source_parameters = parameter_types.iter().filter_map(|ty| {
-            if let ParameterType::SourceObject(class) | ParameterType::NullableSourceObject(class) =
-                ty
-            {
-                Some(class.as_str())
-            } else {
-                None
+        let source_contracts = parameter_types
+            .iter()
+            .filter_map(ParameterType::source_contract)
+            .chain(
+                declared_result
+                    .iter()
+                    .filter_map(ReturnType::source_contract),
+            );
+        for contract in source_contracts {
+            for class in contract.classes() {
+                validate_call_names(None, class.as_str()).map_err(|message| IrError {
+                    operation: None,
+                    message: message.into(),
+                })?;
+                if class.base.constructed_type().is_none() {
+                    return Err(IrError {
+                        operation: None,
+                        message: "source reference requires a constructible native base".into(),
+                    });
+                }
             }
-        });
-        let source_result = declared_result.as_ref().and_then(|ty| {
-            if let ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class) = ty {
-                Some(class.as_str())
-            } else {
-                None
-            }
-        });
-        for class in source_parameters.chain(source_result) {
-            validate_call_names(None, class).map_err(|message| IrError {
-                operation: None,
-                message: message.into(),
-            })?;
-        }
-        if parameter_types.iter().any(|ty| {
-            matches!(ty, ParameterType::SourceObject(class) | ParameterType::NullableSourceObject(class) if class.base.constructed_type().is_none())
-        }) || matches!(&declared_result, Some(ReturnType::SourceObject(class) | ReturnType::NullableSourceObject(class)) if class.base.constructed_type().is_none())
-        {
-            return Err(IrError {
-                operation: None,
-                message: "source reference requires a constructible native base".into(),
-            });
         }
         if parameter_types.iter().any(|ty| {
             matches!(
@@ -1890,8 +1903,8 @@ impl Function {
                 Operation::JumpValue { target, value } => {
                     let contract = &join_types[&target];
                     let source_matches = match contract {
-                        JoinType::Source { class, nullable } => {
-                            origins.accepts(class, *nullable, value)
+                        ty if ty.source_contract().is_some() => {
+                            origins.accepts_contract(&ty.source_contract().unwrap(), value)
                         }
                         _ => true,
                     };
@@ -2885,16 +2898,10 @@ impl Function {
                             "parameter assignment type does not match its signature",
                         ));
                     }
-                    if let ParameterType::SourceObject(class)
-                    | ParameterType::NullableSourceObject(class) = expected
-                    {
-                        if !origins.accepts(
-                            class,
-                            matches!(expected, ParameterType::NullableSourceObject(_)),
-                            value,
-                        ) {
+                    if let Some(contract) = expected.source_contract() {
+                        if !origins.accepts_contract(&contract, value) {
                             return Err(fail(
-                                "parameter assignment must preserve its declared source class",
+                                "parameter assignment must preserve its declared source alternatives",
                             ));
                         }
                     }
@@ -3105,7 +3112,7 @@ impl Function {
                         let source_interface = matches!(
                             local_types[&local],
                             ValueType::Interface(_) | ValueType::NullableInterface(_)
-                        ) && origins.class(value).is_some();
+                        ) && origins.contract(value).is_some();
                         if local_types[&local] != incoming
                             && local_types[&local] != ValueType::Any
                             && incoming != ValueType::Any
@@ -3208,23 +3215,17 @@ impl Function {
                 }
                 Operation::Return { value } => {
                     let result = if let Some(contract) = &declared_result {
-                        if let ReturnType::SourceObject(class)
-                        | ReturnType::NullableSourceObject(class) = contract
-                        {
-                            if !origins.accepts(
-                                class,
-                                matches!(contract, ReturnType::NullableSourceObject(_)),
-                                value,
-                            ) {
+                        if let Some(expected) = contract.source_contract() {
+                            if !origins.accepts_contract(&expected, value) {
                                 return Err(fail(
-                                    "return does not preserve its declared source class",
+                                    "return does not preserve its declared source alternatives",
                                 ));
                             }
                         }
                         let source_witness = matches!(
                             contract,
                             ReturnType::Interface(_) | ReturnType::NullableInterface(_)
-                        ) && origins.class(value).is_some();
+                        ) && origins.contract(value).is_some();
                         if !source_witness
                             && !native::accepts(&contract.api_type(), &type_of(value).api_type())
                         {
@@ -3282,6 +3283,20 @@ impl Function {
                 }
             };
             if let Some(result) = result {
+                if type_flow::read_place(&located.operation).is_some()
+                    || matches!(located.operation, Operation::LocalTake { .. })
+                {
+                    // Exact source alternatives may narrow to different native
+                    // bases on either edge; the erased projection alone cannot
+                    // distinguish them. Origins derives the same storage facts.
+                    if let Some(contract) = origins.contract(result) {
+                        types.insert(
+                            result,
+                            ValueType::from_api_type(&contract.api_type())
+                                .expect("checked source contract has a native projection"),
+                        );
+                    }
+                }
                 if let Some(context) = context {
                     if let Some(ty) = types.get(&result) {
                         context
@@ -4359,6 +4374,8 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::NullableMethod => Ok(ValueType::NullableMethod),
         ReturnType::Symbol => Ok(ValueType::Symbol),
         ReturnType::Object(class) => Ok(ValueType::Object(class)),
+        ReturnType::SourceUnion(contract) => ValueType::from_api_type(&contract.api_type())
+            .ok_or("unsupported source union projection"),
         ReturnType::SourceObject(class) => {
             validate_call_names(None, class.as_str())?;
             ValueType::from_api_type(&api::Type::named(class.base.api_name()))

@@ -224,6 +224,28 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if let Some(body) = tag
+        .strip_prefix("source-union(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        let parts = body.split('|').collect::<Vec<_>>();
+        if !(2..=crate::MAX_PARAMETERS).contains(&parts.len()) {
+            return Err("invalid source union alternatives");
+        }
+        let mut classes = Vec::new();
+        let mut nullable = false;
+        for part in parts {
+            if part.starts_with("source-union(") || part.starts_with("union(") {
+                return Err("nested source union tags are not supported");
+            }
+            match call_result(part)? {
+                ReturnType::SourceObject(class) => classes.push(class),
+                ReturnType::Null => nullable = true,
+                _ => return Err("source union requires exact source classes or Null"),
+            }
+        }
+        return crate::SourceUnion::new(classes, nullable).map(crate::SourceUnion::result);
+    }
     if tag.starts_with("union(") {
         let body = tag
             .strip_prefix("union(")
@@ -285,6 +307,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::SourceUnion(contract)) => Ok(contract.parameter()),
         Ok(ReturnType::SourceObject(class)) => Ok(ParameterType::SourceObject(class)),
         Ok(ReturnType::NullableSourceObject(class)) => {
             Ok(ParameterType::NullableSourceObject(class))
@@ -336,6 +359,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
         ReturnType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ReturnType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ReturnType::TypedDictionary(ty) => Cow::Owned(ty.text()),
+        ReturnType::SourceUnion(contract) => Cow::Owned(contract.text()),
         ReturnType::SourceObject(class) => Cow::Owned(format!("source({class})")),
         ReturnType::NullableSourceObject(class) => Cow::Owned(format!("nullable-source({class})")),
         ReturnType::Tuple(crate::TupleShape::OneView) => Cow::Borrowed("one-view"),
@@ -357,6 +381,7 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
         ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ParameterType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ParameterType::TypedDictionary(ty) => Cow::Owned(ty.text()),
+        ParameterType::SourceUnion(contract) => Cow::Owned(contract.text()),
         ParameterType::SourceObject(class) => Cow::Owned(format!("source({class})")),
         ParameterType::NullableSourceObject(class) => {
             Cow::Owned(format!("nullable-source({class})"))
@@ -385,6 +410,7 @@ pub(super) fn join(tag: &str) -> Option<Type> {
     }
     match call_result(tag).ok()? {
         ReturnType::Dictionary
+        | ReturnType::SourceUnion(_)
         | ReturnType::SourceObject(_)
         | ReturnType::NullableSourceObject(_)
         | ReturnType::Object(_)

@@ -75,9 +75,8 @@ omitted annotations provide the dynamic contract.
 Parameter and result annotations accept `A or B` chains of supported native
 value types, including Null and existing parameterized Array/Dictionary types.
 Bare Null is also a signature contract. Fields and lexical `as` assertions keep
-their separately specified type domains. Exact source classes may currently
-combine only with the same class and Null; they cannot participate in general
-native unions.
+their separately specified type domains. [Exact source-class unions](#source-class-signatures)
+retain identities separately and cannot yet mix with native alternatives.
 
 Normalization flattens alternatives, removes duplicates, and orders them
 consistently. Numeric aliases and existing nullable types retain their established
@@ -801,11 +800,13 @@ binding; no native Object allocation/initialization hook is invoked. See the
 ### Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
-an unqualified constructible source class name, optionally followed by `or Null`:
+unqualified constructible source class names joined with `or`, optionally
+including Null:
 
 ```text
 function pass(view as HelloView) as HelloView { return view; }
 function maybe(view as HelloView or Null) as HelloView or Null { return view; }
+function either(value as Token or Marker) as Token or Marker { return value; }
 ```
 
 The name must resolve to a declared Object-, View-, or BehaviorDelegate-derived
@@ -834,19 +835,41 @@ A local initialized from a nullable source value exposes that contract until
 flow establishes a different one. A fresh copy inside a proven branch has a
 non-null contract. Checks refine reads without rewriting storage; assignment
 updates an inferred local's contract, including class identity and nullability.
-Nullable source Array elements remain unsupported; this does not introduce
-general source unions.
+Nullable source Array elements remain unsupported.
 
-Module, self, and explicit object calls retain a declared source result,
-permitting subsequent source dispatch and same-class local assignment. Parameter
-reads also retain their declared class. Native callbacks keep their inherited
+A source-class union retains a sorted, deduplicated set of exact class/native-base
+identities and optional Null. Its signature may contain up to 254 alternatives.
+Different native bases are permitted. Assignments, arguments, and returns must
+retain a subset of the declared classes; Null requires a nullable contract.
+Opaque native references cannot satisfy an exact class alternative. Any retains
+its separate gradual boundary rules. Mixing source and native alternatives is
+unsupported, and union fields and general union casts remain outside this profile.
+
+Conditional joins and inferred local writes preserve these exact alternatives.
+Direct source `instanceof` tests select a class on the true edge and exclude it
+on the false edge; nested tests can select from three or more alternatives.
+Negation and loop exits use the same facts. Null tests preserve the remaining
+class set. Aliases and stored Booleans do not transfer facts, and writes kill them.
+There is no bottom type: contradictory tests do not establish unreachable code.
+
+Source method dispatch requires a single proven, non-null class. A guard can
+establish it for a parameter or fresh local read. An unrefined union cannot yet
+call a common source-declared member even if every class declares it. Supported
+native methods use the union's native projection and existing receiver checks.
+Structural interface consumers require every retained class to implement the
+required signature, including after saved IR reload. A nullable source contract
+can satisfy a nullable interface, but not a non-null interface without a proof.
+When a callback can dispatch to multiple classes, initialization/shutdown effect
+checking remains conservative rather than selecting one class's body.
+
+Module, self, and explicit object calls retain declared source alternatives,
+permitting subsequent checked narrowing and dispatch. Parameter reads retain
+their declared alternatives. Native callbacks keep their inherited
 signatures; source annotations cannot replace those contracts. No runtime cast
 is emitted.
 
-`ParameterType::SourceObject(SourceClass)` and
-`ReturnType::SourceObject(SourceClass)`, with their `NullableSourceObject`
-variants, carry the source name and native base
-separately. Source declaration collection resolves both across all input files
+Source contracts carry exact names and native bases separately; the
+[IR model](../ir/README.md#source-construction-and-native-constants) owns their representations. Source declaration collection resolves both across all input files
 before checking bodies. API checking projects to that base; exact source
 assignability is checked separately. Function validation checks names and return
 provenance, while unit validation checks both class identity and native base
@@ -856,7 +879,8 @@ Single-function source compilation rejects source-class annotations because it
 has no declarations from which to resolve their native bases.
 
 Saved parameter tags and function/call result tags use
-`source(ClassName@Native.Base)` or `nullable-source(ClassName@Native.Base)`.
+`source(ClassName@Native.Base)`, `nullable-source(ClassName@Native.Base)`, or
+`source-union(source(A@Native.Base)|source(B@Native.Base)|null)`.
 Result contracts must be explicit in saved
 function text to retain the source identity. See the [signature
 example](../../../examples/compiler-source-signatures/README.md) and [runtime
@@ -1528,13 +1552,10 @@ assignment, call, or
 return reaches direct literals and supported sized Array allocations in both
 arms; no element contract is inferred solely from a sibling arm.
 
-Exact source references may join only with the same resolved class (including
-its native base) or Null. Matching non-null arms retain a non-null source
-contract; a nullable arm or Null yields that class `or Null`. Nested joins,
-local copies, and explicit source function results preserve this identity.
-Different source classes, or a source/native mixture, require explicit erasure
-before joining; their shared native base does not establish a common source
-class. A nullable result still needs a non-null proof before source dispatch.
+Exact source references join as [source-class unions](#source-class-signatures),
+retaining each identity and optional Null. A source/native mixture still requires
+explicit erasure before joining. Neither a union nor a shared native base proves
+one source class for dispatch; class-specific use needs a checked singleton.
 
 Join inference uses checked incoming operand types after the complete graph's
 null-flow analysis. A direct nullable read under a non-null proof contributes
@@ -1588,9 +1609,9 @@ Local types are inferred from values reaching each read, including sequential
 assignments and branch/loop joins. A write replaces the local's current inferred
 contract; it does not change earlier snapshots. Joins retain compatible exact,
 nullable, numeric-alias, or comparison-interface contracts. Other supported
-native alternatives retain normalized unions. Exact source-class mixtures
-remain outside general union support; opaque projections cannot recover an
-unproven source identity.
+native alternatives retain normalized unions. Exact source alternatives retain
+source-class unions; source/native mixtures still use opaque projections, which
+cannot recover an unproven source identity.
 An unused unassigned declaration has an inert
 Null storage contract in saved IR, with no readable runtime default.
 Explicit `var name as Type = value`
