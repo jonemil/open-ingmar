@@ -12,6 +12,7 @@ module Comparators {
     function sort(a as Toybox.Lang.Array<Toybox.Lang.String>, c as Ordering) as Void { a.sort(c); }
     function empty() as Toybox.Lang.Array<Toybox.Lang.String> { return []; }
     function run() as Void {
+        InterfaceRefinements.run();
         InterfaceConstants.run();
         InterfaceKeys.run();
         InterfaceDictionaries.run();
@@ -414,4 +415,61 @@ module InterfaceCalls {
 class MinimalConsoleApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) { Comparators.run(); System.exit(); }
+}
+
+module InterfaceRefinements {
+    function accept(c as Toybox.Lang.Comparable, other as Toybox.Lang.Object) {
+        return c.compareTo(other);
+    }
+    function check(c as Toybox.Lang.Comparable or Null) as Toybox.Lang.Boolean {
+        if (c instanceof Toybox.Lang.Number) {
+            return c + 1 == 42 && InterfaceRefinements.accept(c, c) == 0;
+        }
+        if (c instanceof Toybox.Lang.Long) {
+            return c + 1l == 42l && InterfaceRefinements.accept(c, c) == 0;
+        }
+        if (c instanceof Toybox.Lang.Float) {
+            return c + 1.0 == 42.0 && InterfaceRefinements.accept(c, c) == 0;
+        }
+        if (c instanceof Toybox.Lang.Double) {
+            return c + 1.0d == 42.0d && InterfaceRefinements.accept(c, c) == 0;
+        }
+        if (c instanceof Toybox.Lang.Boolean) {
+            return !c && InterfaceRefinements.accept(c, false) == 0;
+        }
+        if (c instanceof Toybox.Lang.Char) {
+            return c.toNumber() == 65 && InterfaceRefinements.accept(c, 'A') == 0;
+        }
+        if (c instanceof Toybox.Lang.String) {
+            return c.length() == 2 && InterfaceRefinements.accept(c, "hi") == 0;
+        }
+        return c == null;
+    }
+    function rewrite(c as Toybox.Lang.Comparable) {
+        var value = c;
+        var sum = 0;
+        while (value instanceof Toybox.Lang.Number) {
+            sum = value + 1;
+            value = "done";
+        }
+        return sum;
+    }
+    function values() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return [41]; }
+    function run() as Void {
+        System.println(InterfaceRefinements.check(41));
+        System.println(InterfaceRefinements.check(41l));
+        System.println(InterfaceRefinements.check(41.0));
+        System.println(InterfaceRefinements.check(41.0d));
+        System.println(InterfaceRefinements.check(false));
+        System.println(InterfaceRefinements.check('A'));
+        System.println(InterfaceRefinements.check("hi"));
+        System.println(InterfaceRefinements.check(null));
+        System.println(InterfaceRefinements.rewrite(41));
+        var values = InterfaceRefinements.values();
+        var snapshot = values[0];
+        if (snapshot instanceof Toybox.Lang.Number) {
+            values[0] = "changed";
+            System.println(snapshot + 1);
+        }
+    }
 }

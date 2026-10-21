@@ -37,9 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Refine native class facts on interface values: after
-  `c instanceof Lang.Number`, a Comparable parameter must allow `c + 1` and
-  still satisfy a Comparable consumer.
 - [ ] Support `var value;`, its initial Null value, assignment before use, and
   reads before assignment according to SDK behavior.
 - [ ] Infer changing local types across sequential assignments, rather than

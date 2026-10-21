@@ -40,6 +40,9 @@ methods. Mixed scalar-token key constants remain deferred; see the
 `InterfaceConstants` checks all scalar tags, Number/Char distinctions, independent
 constant loads versus shared aliases, nullable Comparable contents, and a
 Null-only Comparator constant used for default sorting.
+`InterfaceRefinements` checks native scalar operations after Comparable type
+tests, forwarding narrowed values back to interface consumers, nullable input,
+loop writes, and an Array-read snapshot retained across element replacement.
 
 From the repository root:
 

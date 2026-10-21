@@ -50,9 +50,10 @@ documented restriction, not a perpetually unfinished implementation task.
 An authored compiler probe (`scratch/core-plan-review/interface-fact.mc`)
 confirms that a Comparable parameter refined with `instanceof Token` already
 retains Token member calls and can be forwarded to a Comparable consumer.
-That source-identity task is not missing. In contrast,
-`interface-native.mc` is rejected for `c + 1` after a Comparable parameter tests
-positive for Number. The checklist names that specific native-refinement gap.
+That source-identity task is not missing. The initial `interface-native.mc`
+probe exposed rejection of `c + 1` after a Comparable parameter tested positive
+for Number. The [grouped refinement experiment](compiler-comparators.md#native-comparable-refinement)
+records its resolution across the scalar Comparable implementations.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
 [inventory]: ../plan.md#toyboxlang-worklist

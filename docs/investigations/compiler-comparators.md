@@ -248,6 +248,26 @@ String pools, and `apush` suffice; no new opcode or binary record was encountere
 This establishes scalar constant storage, not source-object constant encoding
 or a shared ordering domain for arbitrary Comparable mixtures.
 
+## Native Comparable refinement
+
+2026-10-21, SDK/compiler/simulator 9.2.0, `fr265`, debug, `-O 0`.
+
+The tracked `InterfaceRefinements` group passes each scalar Comparable through
+an interface-or-Null parameter, tests its native class, and performs a concrete
+operation. It also forwards the narrowed read to a Comparable consumer. Cases
+cover Number/Long/Float/Double arithmetic, Boolean inversion, Char conversion,
+String length, and Null. A loop changes an interface local from Number to
+String; an Array element replacement leaves an earlier refined snapshot intact.
+SDK and generated simulator output both match the expected additions: eight
+true results and two `42` results. Both PRGs export/reassemble structurally and
+saved-stage compilation agrees.
+
+Reproduce with the shared console checker for `compiler-comparators`; artifacts
+are in `scratch/core-interface-refinement/check/`. Native/text IR uses the same
+storage facts and established VM operations; no new opcode or DATA record is
+required. This does not establish interface runtime targets or new structural
+witness classes.
+
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparator-typedef
 [comparable]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html#Comparable-typedef
 [api]: ../specs/sdk/README.md#declaration-model

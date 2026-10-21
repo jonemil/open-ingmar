@@ -46,12 +46,12 @@ imports, and module aliases. Constructible source-class annotations preserve
 
 Unannotated functions with value returns require Number results; those with no
 value returns have a Void contract. Every non-Number value result requires an
-explicit source annotation. Nullable exact source-class annotations remain
-unsupported. Each return must be assignable to its contract: a nullable result
-accepts its scalar type, Null, or the same union. Unrelated types, value/void
-mixtures, and reachable paths missing returns are errors. A structurally
-non-returning body, such as `for (;;) {}`, may retain any supported declared
-result. An unannotated body without value returns still defaults to Void.
+explicit source annotation. Each return must be assignable to its contract: a
+nullable result accepts its non-null type, Null, or the same union. Unrelated
+types, value/void mixtures, and reachable paths missing returns are errors.
+A structurally non-returning body, such as `for (;;) {}`, may retain any
+supported declared result. An unannotated body without value returns still
+defaults to Void.
 Callers use the declared result; no interprocedural non-returning-call analysis
 is implied. Typed IR constructors infer uniform
 scalar/Void returns unless an explicit signature is supplied. Native callbacks
@@ -3174,6 +3174,15 @@ class test on an Object read can likewise establish a scalar witness. Comparison
 still follows the receiver's runtime method; a common interface does not
 guarantee that arbitrary operand domains can be ordered or that a call cannot
 fail.
+
+A positive native `instanceof` test refines fresh local/parameter reads of
+Comparable to the compatible Number, Long, Float, Double, Boolean, Char, or
+String contract. The same rule applies to Comparable-or-Null and removes Null
+on that edge. Concrete operations and forwarding to Comparable consumers can
+then use the read without a cast or conversion. The storage's interface
+contract remains unchanged; writes invalidate facts, and untested aliases do
+not inherit them. Refinement requires a verified native interface witness:
+testing a Comparator against Number does not authorize Number operations.
 
 An interface parameter or call result retains its contract through inferred
 locals, aliases, and same-interface assignment and conditional joins. A

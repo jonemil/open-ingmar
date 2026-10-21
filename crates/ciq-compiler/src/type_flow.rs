@@ -45,7 +45,8 @@ pub(crate) fn source_class(place: Place, facts: &BTreeSet<Fact>) -> Option<crate
 
 /// Project a proven source/native class read to its value type, or remove Null
 /// from a supported nullable read. Exact source identity uses the same facts;
-/// runtime class tests do not infer container element contracts.
+/// native narrowing must satisfy the storage's declared contract, including
+/// structural interface witnesses. Tests do not infer container elements.
 pub(crate) fn refine(
     ty: crate::ValueType,
     place: Place,
@@ -60,6 +61,7 @@ pub(crate) fn refine(
     if matches!(
         ty,
         crate::ValueType::LangObject
+            | crate::ValueType::Interface(_)
             | crate::ValueType::Numeric
             | crate::ValueType::IntegerAlias
             | crate::ValueType::Decimal

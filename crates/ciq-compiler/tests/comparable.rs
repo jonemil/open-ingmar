@@ -318,3 +318,69 @@ fn interface_contracts_do_not_enable_runtime_tests_or_unchecked_casts() {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
 }
+
+#[test]
+fn native_interface_refinement_covers_each_scalar_and_saved_pipeline() {
+    let current = context(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0));
+    let low = context(ApiLevel(5, 2, 0), ApiLevel(4, 2, 0));
+    for (ty, body) in [
+        ("Number", "return c+1;"),
+        ("Long", "return (c+1l).toNumber();"),
+        ("Float", "return (c+1.0).toNumber();"),
+        ("Double", "return (c+1.0d).toNumber();"),
+        ("Boolean", "if(!c){return 1;} return 0;"),
+        ("Char", "return c.toNumber();"),
+        ("String", "return c.length();"),
+    ] {
+        for nullable in ["", " or Null"] {
+            for local in [false, true] {
+                let parameter = if local { "input" } else { "c" };
+                let prefix = if local { "var c=input;" } else { "" };
+                let source = format!(
+                    "function f({parameter} as Toybox.Lang.Comparable{nullable}) {{ {prefix} if(c instanceof Toybox.Lang.{ty}){{ {body} }} return 0; }}"
+                );
+                let function = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+                assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+                function.validate_api(current).unwrap();
+                assert!(function.validate_api(low).is_err());
+                let asm = function.lower();
+                assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
+            }
+        }
+    }
+    for body in [
+        "if(c instanceof Toybox.Lang.Number){return M.use(c)+c;} return 0;",
+        "if(!(c instanceof Toybox.Lang.Number)){return 0;} return M.use(c)+c;",
+        "return c instanceof Toybox.Lang.Number ? M.use(c)+c : 0;",
+        "var v=c; while(v instanceof Toybox.Lang.Number){var n=M.use(v)+v; v=\"done\"; return n;} return 0;",
+        "if(c instanceof Toybox.Lang.Number){var old=c; c=\"done\"; return old+1;} return 0;",
+    ] {
+        let source = format!(
+            "module M {{function use(c as Toybox.Lang.Comparable) {{return c.compareTo(1);}}}} function f(c as Toybox.Lang.Comparable or Null) {{{body}}}"
+        );
+        let unit = compile_sources_with_api(&[&source], current).unwrap();
+        assert_eq!(
+            unit,
+            parse_unit_ir_with_api(&unit.to_ir_text(), current).unwrap()
+        );
+    }
+}
+
+#[test]
+fn interface_refinement_requires_live_compatible_class_facts() {
+    for source in [
+        "function f(c as Toybox.Lang.Comparable) {return c+1;}",
+        "function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){} return c+1;}",
+        "function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){c=\"done\"; return c+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable) {var v=c; if(v instanceof Toybox.Lang.Number){v=\"done\"; return v+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparable) {var copy=c; if(c instanceof Toybox.Lang.Number){return copy+1;} return 0;}",
+        "function f(c as Toybox.Lang.Comparator) {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}",
+    ] {
+        assert!(compile(source).is_err(), "accepted {source}");
+    }
+    let function=compile("function f(c as Toybox.Lang.Comparable) {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}").unwrap();
+    let text = function.to_ir_text();
+    let forged = text.replace("Toybox.Lang.Number", "Toybox.Lang.String");
+    assert_ne!(text, forged);
+    assert!(parse_ir(&forged).is_err());
+}
