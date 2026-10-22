@@ -100,6 +100,19 @@ impl ApiContext {
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::Callback(signature) => {
+                crate::callbacks::validate(signature)?;
+                self.check_class(catalogue, "Toybox.Lang.Method")?;
+                for ty in signature
+                    .parameters
+                    .iter()
+                    .map(crate::ParameterType::api_type)
+                    .chain(std::iter::once(signature.result.api_type()))
+                {
+                    self.check_type(catalogue, &ty)?;
+                }
+                Ok(())
+            }
             Type::Structural(shape) => {
                 shape.validate()?;
                 for ty in shape.api_types() {
@@ -190,6 +203,8 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// A bound Method with a source-aware fixed signature.
+    Callback(Box<crate::StructuralMethod>),
     /// Source-declared structural fields and instance-method contracts.
     Structural(Box<crate::StructuralInterface>),
     /// Dynamic value, including Null; operations defer unknown types to runtime.
@@ -1374,6 +1389,16 @@ mod tests {
         let api = core();
         fn check_type(api: &Catalogue, ty: &Type) {
             match ty {
+                Type::Callback(signature) => {
+                    for ty in signature
+                        .parameters
+                        .iter()
+                        .map(crate::ParameterType::api_type)
+                        .chain(std::iter::once(signature.result.api_type()))
+                    {
+                        check_type(api, &ty);
+                    }
+                }
                 Type::Structural(shape) => {
                     for ty in shape.api_types() {
                         check_type(api, &ty);

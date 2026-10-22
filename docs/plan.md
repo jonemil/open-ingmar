@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Parse callback signatures with argument/result types; check assignments
-  and calls against the resolved signature.
 - [ ] Support positional tuple types, construction, indexing, and assignability
   beyond the current fixed View callback shapes.
 - [ ] Support structural Symbol-keyed option-record annotations, optional fields,
@@ -160,10 +158,10 @@ executable profiles.
 
 - [ ] Implement `initialize(aClass, aMethod)` / `new Lang.Method(receiver, symbol)`
   for supported instance, class, and module values, retaining the receiver.
-- [ ] Check known selectors for member existence, arity, argument/result types,
-  and API availability; retain dynamic lookup when the selector is unknown.
-- [ ] Carry callback signature proofs through binding, storage, refinement, and
-  `invoke`; return the checked result instead of erasing known callbacks.
+- [ ] Diagnose missing literal method targets; preserve distinct signatures when
+  a source-class union binds a selector with different target contracts.
+- [ ] Represent variadic bound-method signatures and infer native lifecycle
+  callback bindings, including the actual initial View tuple result.
 
 ### Comparable
 

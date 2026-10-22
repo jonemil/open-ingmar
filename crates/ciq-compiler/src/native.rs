@@ -58,6 +58,19 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if let api::Type::Callback(signature) = receiver {
+        return if member == "invoke" {
+            Some(
+                signature
+                    .parameters
+                    .iter()
+                    .map(ParameterType::api_type)
+                    .collect(),
+            )
+        } else {
+            value_parameters(&api::Type::named("Toybox.Lang.Method"), member)
+        };
+    }
     if let api::Type::Structural(shape) = receiver {
         return shape
             .methods
@@ -123,6 +136,26 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
     })
 }
 
+fn signature_call(
+    method: &crate::StructuralMethod,
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<api::Type, String> {
+    for (expected, actual) in method.parameters.iter().zip(arguments) {
+        structural_api(&expected.api_type(), actual, context)?;
+    }
+    if method.parameters.len() != arguments.len()
+        || !method
+            .parameters
+            .iter()
+            .zip(arguments)
+            .all(|(expected, actual)| accepts(&expected.api_type(), actual))
+    {
+        return Err("call arguments do not match the declared signature".into());
+    }
+    Ok(method.result.api_type())
+}
+
 /// Resolve a value-call contract through the catalogue, then require its bounded
 /// executable profile. Return the effective receiver-specific result; declaration
 /// availability, arguments, and executable support must all pass first.
@@ -136,24 +169,27 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::Callback(signature) = receiver {
+        if let Some(context) = context {
+            context.check_type(api::core(), receiver)?;
+        }
+        return if member == "invoke" {
+            signature_call(signature, arguments, context)
+        } else {
+            value_call(
+                &api::Type::named("Toybox.Lang.Method"),
+                member,
+                arguments,
+                context,
+            )
+        };
+    }
     if let api::Type::Structural(shape) = receiver {
         if let Some(context) = context {
             context.check_type(api::core(), receiver)?;
         }
         if let Some(method) = shape.methods.get(member) {
-            for (expected, actual) in method.parameters.iter().zip(arguments) {
-                structural_api(&expected.api_type(), actual, context)?;
-            }
-            if method.parameters.len() != arguments.len()
-                || !method
-                    .parameters
-                    .iter()
-                    .zip(arguments)
-                    .all(|(expected, actual)| accepts(&expected.api_type(), actual))
-            {
-                return Err("interface call arguments do not match its signature".into());
-            }
-            return Ok(method.result.api_type());
+            return signature_call(method, arguments, context);
         }
         return value_call(
             &api::Type::named("Toybox.Lang.Object"),
@@ -604,6 +640,21 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     {
         return true;
     }
+    if let api::Type::Callback(expected_signature) = expected {
+        return match actual {
+            api::Type::Callback(actual_signature) => expected_signature == actual_signature,
+            api::Type::Named(name) if name == "Toybox.Lang.Method" => true,
+            api::Type::Union(parts) => parts.iter().all(|ty| accepts(expected, ty)),
+            _ => false,
+        };
+    }
+    if let api::Type::Callback(_) = actual {
+        if let api::Type::Structural(shape) = expected {
+            return shape.accepts(actual);
+        }
+        return matches!(expected,api::Type::Named(name) if name=="Toybox.Lang.Method" || name=="Toybox.Lang.Object")
+            || matches!(expected,api::Type::Union(parts) if parts.iter().any(|ty|accepts(ty,actual)));
+    }
     if let api::Type::Union(types) = actual {
         return types.iter().all(|ty| accepts(expected, ty));
     }
@@ -694,9 +745,14 @@ pub(crate) fn structural_api(
             return Ok(());
         }
         context.check_type(api::core(), actual)?;
+        let actual_native = if matches!(actual, api::Type::Callback(_)) {
+            api::Type::named("Toybox.Lang.Method")
+        } else {
+            actual.clone()
+        };
         for name in shape.methods.keys() {
             let required = api::core()
-                .method_for_type(actual, name)
+                .method_for_type(&actual_native, name)
                 .map(|method| method.declaration.required_api)
                 .or_else(|| {
                     if let api::Type::Named(path) = actual {

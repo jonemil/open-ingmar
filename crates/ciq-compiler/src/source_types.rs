@@ -308,6 +308,9 @@ impl Types {
                     .and_then(|types| native::module_value(module, member, &types, None).ok());
                 (*result, ty)
             }
+            Operation::BindMethod {
+                result, signature, ..
+            } => (*result, Some(Type::Callback(signature.clone()))),
             Operation::NativeCall {
                 result,
                 receiver,

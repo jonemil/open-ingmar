@@ -218,7 +218,7 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
-    if tag.starts_with("interface(") || tag.starts_with("union(") {
+    if tag.starts_with("interface(") || tag.starts_with("union(") || tag.starts_with("callback(") {
         return ArrayElement::from_api_type(&call_result(tag).ok()?.api_type());
     }
     ARRAY_ELEMENTS.iter().find(|e| e.text() == tag).cloned()
@@ -227,10 +227,15 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
-    if (tag.starts_with("interface(") || tag.starts_with("union(")) && tag.ends_with("-array") {
+    if (tag.starts_with("interface(") || tag.starts_with("union(") || tag.starts_with("callback("))
+        && tag.ends_with("-array")
+    {
         return element(tag.strip_suffix("-array").unwrap())
             .map(ReturnType::Array)
             .ok_or("unsupported array element contract");
+    }
+    if tag.starts_with("callback(") {
+        return crate::callbacks::parse(tag).map(|s| ReturnType::Callback(Box::new(s)));
     }
     if tag.starts_with("interface(") {
         return crate::structural::parse(tag).map(|shape| ReturnType::Structural(Box::new(shape)));
@@ -326,6 +331,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
     }
     match call_result(tag) {
         Ok(ReturnType::Structural(shape)) => Ok(ParameterType::Structural(shape)),
+        Ok(ReturnType::Callback(signature)) => Ok(ParameterType::Callback(signature)),
         Ok(ReturnType::SourceUnion(contract)) => Ok(contract.parameter()),
         Ok(ReturnType::SourceObject(class)) => Ok(ParameterType::SourceObject(class)),
         Ok(ReturnType::NullableSourceObject(class)) => {
@@ -376,6 +382,7 @@ pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
 pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
     match ty {
         ReturnType::Structural(shape) => Cow::Owned(shape.tag()),
+        ReturnType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
         ReturnType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ReturnType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ReturnType::TypedDictionary(ty) => Cow::Owned(ty.text()),
@@ -399,6 +406,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     match ty {
         ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
+        ParameterType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
         ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ParameterType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ParameterType::TypedDictionary(ty) => Cow::Owned(ty.text()),

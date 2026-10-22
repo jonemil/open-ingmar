@@ -15,6 +15,7 @@ cargo run -p ciq-asm -- sign scratch/compiler-source-methods/unsigned.prg scratc
 sh scripts/run-simulator-container.sh --prg scratch/compiler-source-methods/generated.prg
 ```
 
-Bindings remain erased Methods: invocation returns `Object or Null` and does
-not check the target signature. See the
+Plain Method contracts erase invocation to `Object or Null`; resolved fixed
+bindings can retain a checked signature. See [typed callbacks](../compiler-callbacks/README.md)
+and the
 [source contract](../../docs/specs/frontend/README.md#method-values-and-invocation).

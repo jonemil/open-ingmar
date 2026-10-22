@@ -42,7 +42,7 @@ fn self_requires_a_receiver_and_stays_an_opaque_object() {
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() { return self + 1; } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as Toybox.Lang.Method { return self.method(1); } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as Toybox.Lang.Method { return self.method(:f, :f); } }",
-        "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() { var m=self.method(:f); return m.invoke()+1; } }",
+        "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f(selector as Toybox.Lang.Symbol) { var m=self.method(selector); return m.invoke()+1; } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as V { return self; } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } } function f() as Toybox.Lang.Method { var v=new V(); return v.method(1); }",
     ] {

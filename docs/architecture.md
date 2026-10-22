@@ -97,6 +97,10 @@ Interface members reuse source-aware parameter/result contracts; API projection
 does not replace exact member identities or authorize source dispatch.
 Container content contracts own structural shapes and share the same witness
 validation; they do not replace interface-valued elements with opaque Object.
+`callbacks` owns fixed Method signatures, saved tags, and binding proofs. Typed
+callback signatures reuse source-aware method contracts; native projection does
+not authorize an invented target signature. Binding and invocation lower through
+the existing Method runtime operations.
 Base-expression and postfix parsing use separate frames so suffix extensions
 preserve the established expression-depth budget.
 `backend` selects VM instructions;

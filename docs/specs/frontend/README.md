@@ -2397,14 +2397,16 @@ recovery. [Method fields](#method-fields) support required/nullable storage.
 Arrays and Dictionaries follow the
 [Array](#method-arrays) and [Dictionary](#method-dictionaries) profiles below.
 
-`invoke(arguments...)` accepts up to 254 supported Object/Null values and
+On an erased Method, `invoke(arguments...)` accepts up to 254 supported
+Object/Null values and
 returns opaque `Object or Null`. This erased result covers scalar/container
 values, nullable returns, and Void callbacks. Save and guard it before Object
 member calls; it cannot become a Number, typed container, or Method without a
 separate refinement contract. Statement invocation discards the result. Receiver
 evaluation precedes arguments, left to right, and each runs once.
 
-The compiler checks the Method API and VM argument-count limit. The target's
+For erased invocation, the compiler checks the Method API and VM argument-count
+limit. The target's
 existence, arity, accepted types, introduction level, and result behavior remain
 runtime/caller obligations; dynamic lookup does not recover its signature.
 Source instances support `instance.method(selector)` and instance bodies support
@@ -2421,12 +2423,58 @@ for the instance member. Declared source members follow the ordinary
 [owner lookup rules](#user-calls-and-owner-lookup). Receiver capture still
 requires all required instance fields to be initialized.
 
-Unlike the SDK checker, this erased lookup profile does not statically resolve a
-literal selector to a source target. A missing target or incompatible invocation
-remains a runtime/caller obligation even for literal selectors. Constructors and
-typed signatures remain deferred. Array sorting uses a [separate Comparator
+Dynamic selectors, unresolved members, variadic targets, native lifecycle
+callbacks, and source-class alternatives with different target signatures keep
+the erased lookup profile. Missing targets remain runtime/caller obligations in
+this profile. Method constructors remain deferred. Array sorting uses a [separate Comparator
 contract](#source-comparators). See the
 [binding/lifetime evidence](../../investigations/compiler-methods.md).
+
+#### Typed callbacks
+
+`Method(name as Type, ...) as Result` declares a fixed callback contract. Use
+the bare `Method` spelling; qualified `Lang.Method` names denote the erased
+class. Parameter names do not affect type identity. Omitted argument/result
+annotations mean Any; Void is permitted only as a result. Duplicate parameter
+names, more than 254 arguments, and contracts nested beyond 64 levels are errors.
+Arguments/results use the existing value domains, including exact source types,
+containers, structural interfaces, and callbacks. For example:
+
+```monkeyc
+typedef Unary as Method(n as Toybox.Lang.Number) as Toybox.Lang.Number;
+function apply(callback as Unary) as Toybox.Lang.Number {
+    return callback.invoke(41);
+}
+```
+
+Signatures match exactly; argument widening and result narrowing do not establish
+assignment compatibility. `.invoke` checks argument count/types and returns the
+declared result without an Object cast. A Void callback supports statement
+invocation only. Exact source results retain their identity for later source
+member calls. Callback parameters, returns, fields, local storage, and joins
+retain signatures; `Unary or Null` requires a non-null proof before invocation.
+Use an alias to distinguish callback nullability from a nullable result:
+`Method() as Number or Null` declares a nullable result.
+
+A literal selector on a resolved source receiver, explicit self, or supported
+native receiver can recover a fixed signature. Unit validation rechecks that
+binding against its target and API level after saved IR reload. Source-class
+alternatives must agree on the signature for this inference; the remaining
+lookup profiles above stay erased. Known incompatible typed bindings are errors.
+An erased Method or Any can cross a typed callback boundary under gradual
+checking, without proving the runtime target's signature. Widening a callback to
+plain Lang.Method deliberately erases its signature. Typed callbacks use the
+ordinary Method object and inherited Method operations.
+
+Arrays accept callback elements, optionally nullable; Dictionaries accept
+non-null callback keys and optionally nullable callback values. Expected literal
+contexts retain these contracts. Mutable containers remain invariant, reads
+preserve their declared content type, and guarded nullable snapshots remain
+callable after later mutation. Callback invocation conservatively carries
+the possible shutdown effect even when its signature is known. Direct lexical
+`callback(...)` calls and Method constructors retain their separate restrictions.
+See the [callback example](../../../examples/compiler-callbacks/README.md) and
+[IR contracts](../ir/README.md#typed-callback-contracts).
 
 #### Method Arrays
 

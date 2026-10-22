@@ -37,6 +37,8 @@ and future Rust toolchain experiments.
   containers, nullable source identities, fields, and casts.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural
   contracts, dynamic methods, mutable fields, snapshots, and evaluation order.
+- [compiler-callbacks](compiler-callbacks/README.md): fixed Method signatures,
+  typed binding, invocation, nullable storage, containers, and nested callbacks.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed
   literals, allocation, byte indexing, mutation, observers, and callbacks.
 - [compiler-source-methods](compiler-source-methods/README.md): source/self

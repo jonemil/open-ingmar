@@ -115,6 +115,32 @@ structural witnesses. [Frontend rules](../frontend/README.md#source-interface-ty
 own assignment, nullability, and observable behavior; [type tags](grammar.md#type-tags)
 own saved spelling.
 
+### Typed callback contracts
+
+Parameter/result contracts, `api::Type::Callback`, and saved tags retain a
+`StructuralMethod` signature with source-aware arguments/results. Exact signature
+equality controls typed assignments; plain Method and Any retain gradual boundary
+checks. Callback container contracts preserve signatures and content
+nullability. Shared signature validation and source-reference resolution traverse
+nested callbacks, interfaces, and containers.
+
+`.bind-method result receiver selector callback-tag` binds a literal Symbol value
+and records the resolved signature. Function validation checks operands, signature
+shape, API types, and evaluation order; unit validation confirms the selector,
+every exact receiver, target signature, and native member introduction level.
+An edited tag cannot assert an arbitrary binding signature or bypass a source
+override of Object.method. A standalone function
+retains its unit-level binding obligation.
+
+Invocation reuses `.call-native` and `.call-native-discard` with member `invoke`.
+The callback signature supplies arguments and results, including exact source
+provenance and Void. Receiver/argument effects execute once in order. The backend
+binds through Object.method using the existing symbol and invocation instructions;
+callback tags add no VM class, conversion, or PRG record. Signature checking does
+not prove callback behavior or absence of shutdown effects. The
+[frontend contract](../frontend/README.md#typed-callbacks) owns source syntax,
+gradual erasure, inference limits, and observable behavior.
+
 ### Validation
 
 Source typedefs are resolved before IR construction. Function signatures, field
@@ -1665,7 +1691,7 @@ not an explicit parameter/value ID.
 `.self` defines the current receiver as opaque Object. It requires
 `receiver=instance` and lowers to `getself`. It does not claim an exact source
 class. Reflective `self.method(selector)` uses this value with ordinary
-`.call-native`; its Method result remains erased.
+`.call-native` for erased lookup or `.bind-method` for a resolved typed binding.
 
 Two call directives also require an instance method:
 
@@ -1695,8 +1721,7 @@ ciq-ir
 Canonical method output keeps `receiver=instance`. Native base-class identity
 and enclosing class name belong to [unit class
 containers](#compilation-units-and-classes), not function IR; neither carries a
-VM import index. General receiver values, object construction, fields, native
-self calls, and source inheritance are unsupported.
+VM import index. Source-class construction and fields follow their unit contracts.
 
 ### Native module values
 

@@ -108,7 +108,38 @@ remains callable after its entry is removed. Key/value markers run once in order
 Both SDK/generated programs match all 75 expected lines, including Null checks,
 guarded hash/weak calls, and a loop that clears its Method. Structured section
 reconstruction passes for both. Artifacts: `scratch/check-method-dictionaries/`.
-No callable signature or concrete recovery from an erased result is inferred.
+The erased Method contracts in this specimen do not recover a callable signature
+or concrete result type.
+
+## Typed callback signatures
+
+Garmin's [Monkey Types guide][types] documents `Method(arguments) as Result`.
+Authored probes with SDK 9.2.0/fr265 establish:
+
+- Bare `Method(n as Lang.Number) as Lang.Number` compiles; the qualified
+  `Lang.Method(...)` spelling fails parsing (exit 100).
+- A known String-to-String binding cannot satisfy Number-to-Number (exit 105).
+- Widening a callback's argument to Object or narrowing its result to Number does
+  not establish compatibility with a different declared signature (exit 105).
+- Passing an erased Lang.Method to a typed callback parameter compiles.
+- A typedef alias permits a nullable callback and guarded invocation.
+
+The [typed specimen](../../examples/compiler-callbacks/README.md) checks source,
+self, and native binding; nullable snapshots; required fields; Void and exact
+source results; callback containers; erased boundaries; and nested callbacks.
+SDK/generated applications match all 14 expected console lines. Both PRGs
+reconstruct through structured CODE/DATA without required raw fallback; typed
+binding uses existing Object.method/invocation instructions.
+
+Reproduce with a minimal-console SDK scaffold, source path pointing to
+`examples/compiler-callbacks`, application ID `31cb64d7bbd44c7bbd12064f5f6fbb22`,
+minimum API 3.0.0, and target 5.2.0. Use `scripts/build-example.sh` and the shared
+`check-example.py` preparation/simulation workflow. Reusable SDK input is indexed
+under `scratch/sdk-cache/sdk-index.json`; per-change builds/logs are disposable.
+Current contracts belong in the [frontend](../specs/frontend/README.md#typed-callbacks)
+and [IR](../specs/ir/README.md#typed-callback-contracts).
+
+[types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 
 [object]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Object.html
 [method]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang/Method.html

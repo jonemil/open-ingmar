@@ -33,6 +33,7 @@ enum Directive {
     BaseInitialize,
     Null,
     CallNative,
+    BindMethod,
     Boolean,
     CallNativeModuleDiscard,
     Char,
@@ -339,6 +340,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".greater-equal") => (Directive::GreaterEqual, 4),
             Some(".not-equal") => (Directive::NotEqual, 4),
             Some(".null") => (Directive::Null, 2),
+            Some(".bind-method") => (Directive::BindMethod, 5),
             Some(".call-native") => (Directive::CallNative, call_width()),
             Some(".assign") => (Directive::Assign, 3),
             Some(".assign-parameter") => (Directive::AssignParameter, 3),
@@ -919,6 +921,15 @@ pub(crate) fn parse_function_ir_context(
                         "false" => false,
                         _ => return Err(fail(*at, "Boolean literal requires true or false")),
                     },
+                },
+                Directive::BindMethod => Operation::BindMethod {
+                    result: parse_value(&fields[1])?,
+                    receiver: parse_value(&fields[2])?,
+                    selector: parse_value(&fields[3])?,
+                    signature: Box::new(
+                        crate::callbacks::parse(&fields[4])
+                            .map_err(|message| fail(*at, message))?,
+                    ),
                 },
                 Directive::CallNative => Operation::NativeCall {
                     result: parse_value(&fields[1])?,

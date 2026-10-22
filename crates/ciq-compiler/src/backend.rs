@@ -164,7 +164,8 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::NativeModuleCall { result, .. }
             | Operation::SelfCall { result, .. }
             | Operation::ObjectCall { result, .. }
-            | Operation::NativeCall { result, .. } => {
+            | Operation::NativeCall { result, .. }
+            | Operation::BindMethod { result, .. } => {
                 definitions.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. }
@@ -880,6 +881,18 @@ fn expression(
                 Operation::Long { value: 0, .. } => (Opcode::Lpushz, vec![]),
                 Operation::Long { value, .. } => {
                     (Opcode::Lpush, vec![Operand::Bits(*value as u64)])
+                }
+                Operation::BindMethod {
+                    receiver, selector, ..
+                } => {
+                    tasks.extend([
+                        Task::Invoke(1),
+                        Task::Value(*selector),
+                        Task::Context,
+                        Task::NativeMember("method".into()),
+                        Task::Value(*receiver),
+                    ]);
+                    continue;
                 }
                 Operation::ObjectCall {
                     receiver,

@@ -243,7 +243,7 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         | Type::Dictionary { .. }
         | Type::Tuple(_)
         | Type::Parameter(_) => false,
-        Type::Options(_) | Type::Structural(_) => false,
+        Type::Options(_) | Type::Structural(_) | Type::Callback(_) => false,
     }
 }
 

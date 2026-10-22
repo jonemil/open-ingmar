@@ -22,7 +22,8 @@ sh scripts/run-simulator-container.sh --prg scratch/compiler-methods/generated.p
 Method binding and invocation require API 1.0.0. This specimen also uses weak
 references from 1.2.0 and native Array methods from 1.3.0. Erased invocation
 returns `Object or Null`; save and guard results before Object member calls.
-Concrete callback signatures and Method constructors remain deferred.
+See [typed callbacks](../compiler-callbacks/README.md) for checked signatures;
+Method constructors remain deferred.
 [Source callbacks](../compiler-source-methods/README.md) exercise direct
 instance/self binding. See the
 [source contracts](../../docs/specs/frontend/README.md#method-values-and-invocation).

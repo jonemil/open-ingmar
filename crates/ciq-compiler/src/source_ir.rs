@@ -686,6 +686,85 @@ fn emit_call(
                     || calls.get(&(class.clone(), member.clone())).is_some()
             })
         });
+    let binding_signature = if member == "method" && classes.is_none() {
+        if let [
+            parser::Expression {
+                kind: parser::ExpressionKind::Symbol(selector),
+                ..
+            },
+        ] = arguments.as_slice()
+        {
+            receiver.and_then(|receiver| {
+                let owners = if operations.iter().any(
+                    |op| matches!(op.operation,Operation::SelfValue{result} if result==receiver),
+                ) {
+                    vec!["self".to_owned()]
+                } else {
+                    crate::source_objects::contract(
+                        operations,
+                        receiver,
+                        calls.parameter_types.clone(),
+                    )
+                    .filter(|c| !c.nullable() && c.native().is_empty())
+                    .map(|c| c.classes().iter().map(|c| c.name.clone()).collect())
+                    .unwrap_or_default()
+                };
+                if owners.is_empty() {
+                    let mut types = crate::source_types::Types::new(calls.parameter_types.clone());
+                    for operation in operations.iter() {
+                        types.observe(&operation.operation);
+                    }
+                    return crate::callbacks::native_signature(
+                        types.value_type(receiver)?,
+                        selector,
+                        None,
+                    )
+                    .ok();
+                }
+                let signatures =
+                    owners
+                        .iter()
+                        .map(|owner| {
+                            if calls.class_bases.get(owner).is_some_and(|base| {
+                                crate::native::callback(*base, selector).is_some()
+                            }) {
+                                return None;
+                            }
+                            calls
+                                .get(&(owner.clone(), selector.clone()))
+                                .map(|signature| crate::StructuralMethod {
+                                    parameters: signature.parameters.clone(),
+                                    result: signature.result.clone(),
+                                })
+                                .or_else(|| {
+                                    crate::api::core()
+                                        .method_for_type(
+                                            &crate::api::Type::named(
+                                                calls.class_bases.get(owner)?.api_name(),
+                                            ),
+                                            selector,
+                                        )
+                                        .and_then(|method| {
+                                            if method.variadic.is_some() {
+                                                return None;
+                                            }
+                                            crate::StructuralMethod::from_native(
+                                                method.parameters,
+                                                method.result,
+                                            )
+                                        })
+                                })
+                        })
+                        .collect::<Option<Vec<_>>>()?;
+                let first = signatures.first()?;
+                signatures.iter().all(|s| s == first).then(|| first.clone())
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let arguments = arguments
         .into_iter()
         .map(|argument| emit(source, argument, locals, parameters, operations, calls))
@@ -709,6 +788,13 @@ fn emit_call(
                 classes,
                 member,
                 arguments,
+            }
+        } else if let Some(signature) = binding_signature {
+            Operation::BindMethod {
+                result,
+                receiver,
+                selector: arguments[0],
+                signature: Box::new(signature),
             }
         } else {
             Operation::NativeCall {
@@ -2048,6 +2134,8 @@ impl Builder<'_> {
                     element,
                     crate::ArrayElement::Interface(_)
                         | crate::ArrayElement::Structural { .. }
+                        | crate::ArrayElement::Callback { .. }
+                        | crate::ArrayElement::Method
                         | crate::ArrayElement::Numeric { .. }
                         | crate::ArrayElement::LangObject
                 ) =>

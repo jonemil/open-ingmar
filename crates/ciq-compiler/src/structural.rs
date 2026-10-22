@@ -16,6 +16,35 @@ pub(crate) fn value_shape(ty: &Type) -> Option<(&crate::StructuralInterface, boo
     }
 }
 
+/// Split one delimiter outside nested type parentheses, rejecting extra pairs.
+pub(crate) fn split_pair<'a>(text: &'a str, delimiter: &str) -> Option<(&'a str, &'a str)> {
+    let mut depth = 0usize;
+    let mut found = None;
+    for (at, ch) in text.char_indices() {
+        match ch {
+            '(' => {
+                depth += 1;
+                if depth > 64 {
+                    return None;
+                }
+            }
+            ')' => depth = depth.checked_sub(1)?,
+            _ => {}
+        }
+        if depth == 0 && text[at..].starts_with(delimiter) {
+            if found.is_some() {
+                return None;
+            }
+            found = Some(at);
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+    let at = found?;
+    Some((&text[..at], &text[at + delimiter.len()..]))
+}
+
 pub(crate) fn contains(ty: &Type) -> bool {
     match ty {
         Type::Structural(_) => true,
@@ -51,6 +80,13 @@ pub(crate) fn field_type(receiver: &Type, member: &str) -> Result<Type, String> 
 /// Resolve one receiver's declared method without erasing source identities.
 /// Inherited Object observers keep their ordinary native signatures.
 pub(crate) fn method_contract(receiver: &Type, member: &str) -> Option<StructuralMethod> {
+    if let Type::Callback(signature) = receiver {
+        return if member == "invoke" {
+            Some((**signature).clone())
+        } else {
+            method_contract(&Type::named("Toybox.Lang.Method"), member)
+        };
+    }
     if let Type::Structural(shape) = receiver {
         return shape
             .methods
@@ -86,6 +122,8 @@ pub(crate) fn resolve_parameter<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.parameter();
+    } else if let ParameterType::Callback(signature) = ty {
+        resolve_signature(signature, resolve)?;
     } else if let ParameterType::Structural(shape) = ty {
         shape.resolve_sources(resolve)?;
     } else if let ParameterType::Union(ty) = ty {
@@ -111,6 +149,8 @@ pub(crate) fn resolve_result<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.result();
+    } else if let ReturnType::Callback(signature) = ty {
+        resolve_signature(signature, resolve)?;
     } else if let ReturnType::Structural(shape) = ty {
         shape.resolve_sources(resolve)?;
     } else if let ReturnType::Union(ty) = ty {
@@ -128,6 +168,9 @@ fn resolve_element<E>(
     element: &mut crate::ArrayElement,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::ArrayElement::Callback { signature, .. } = element {
+        resolve_signature(signature, resolve)?;
+    }
     if let crate::ArrayElement::Structural { shape, .. } = element {
         shape.resolve_sources(resolve)?;
     }
@@ -137,6 +180,12 @@ fn resolve_dictionary<E>(
     dictionary: &mut crate::DictionaryType,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::DictionaryKey::Callback(signature) = &mut dictionary.key {
+        resolve_signature(signature, resolve)?;
+    }
+    if let crate::DictionaryValue::Callback { signature, .. } = &mut dictionary.value {
+        resolve_signature(signature, resolve)?;
+    }
     if let crate::DictionaryKey::Structural(shape) = &mut dictionary.key {
         shape.resolve_sources(resolve)?;
     }
@@ -144,6 +193,16 @@ fn resolve_dictionary<E>(
         shape.resolve_sources(resolve)?;
     }
     Ok(())
+}
+
+fn resolve_signature<E>(
+    signature: &mut StructuralMethod,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    for parameter in &mut signature.parameters {
+        resolve_parameter(parameter, resolve)?;
+    }
+    resolve_result(&mut signature.result, resolve)
 }
 
 fn resolve_api<E>(
@@ -156,6 +215,7 @@ fn resolve_api<E>(
             resolve_api(key, resolve)?;
             resolve_api(value, resolve)?;
         }
+        Type::Callback(signature) => resolve_signature(signature, resolve)?,
         Type::Structural(shape) => shape.resolve_sources(resolve)?,
         Type::Union(parts) => {
             for ty in parts {
@@ -182,6 +242,93 @@ pub struct StructuralInterface {
 pub struct StructuralMethod {
     pub parameters: Vec<ParameterType>,
     pub result: ReturnType,
+}
+
+fn type_depth(ty: &Type, depth: usize) -> bool {
+    if depth > 64 {
+        return false;
+    }
+    match ty {
+        Type::Structural(shape) => shape_depth(shape, depth + 1),
+        Type::Callback(signature) => signature_depth(signature, depth + 1),
+        Type::Union(parts) | Type::Tuple(parts) => parts.iter().all(|ty| type_depth(ty, depth + 1)),
+        Type::Array(ty) => type_depth(ty, depth + 1),
+        Type::Dictionary { key, value } => {
+            type_depth(key, depth + 1) && type_depth(value, depth + 1)
+        }
+        Type::Options(fields) => fields.values().all(|ty| type_depth(ty, depth + 1)),
+        _ => true,
+    }
+}
+fn result_depth(ty: &ReturnType, depth: usize) -> bool {
+    match ty {
+        ReturnType::Structural(shape) => shape_depth(shape, depth + 1),
+        ReturnType::Callback(signature) => signature_depth(signature, depth + 1),
+        ReturnType::Union(ty) => type_depth(ty, depth + 1),
+        ReturnType::SourceUnion(contract) => {
+            contract.native().iter().all(|ty| type_depth(ty, depth + 1))
+        }
+        ReturnType::Array(element) => element_depth(element, depth + 1),
+        ReturnType::TypedDictionary(dictionary) => dictionary_depth(dictionary, depth + 1),
+        _ => depth <= 64,
+    }
+}
+fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
+    match ty {
+        ParameterType::Structural(shape) => shape_depth(shape, depth + 1),
+        ParameterType::Callback(signature) => signature_depth(signature, depth + 1),
+        ParameterType::Union(ty) => type_depth(ty, depth + 1),
+        ParameterType::SourceUnion(contract) => {
+            contract.native().iter().all(|ty| type_depth(ty, depth + 1))
+        }
+        ParameterType::Array(element) => element_depth(element, depth + 1),
+        ParameterType::TypedDictionary(dictionary) => dictionary_depth(dictionary, depth + 1),
+        _ => depth <= 64,
+    }
+}
+fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
+    depth <= 64
+        && match element {
+            crate::ArrayElement::Callback { signature, .. } => {
+                signature_depth(signature, depth + 1)
+            }
+            crate::ArrayElement::Structural { shape, .. } => shape_depth(shape, depth + 1),
+            _ => true,
+        }
+}
+fn dictionary_depth(dictionary: &crate::DictionaryType, depth: usize) -> bool {
+    depth <= 64
+        && match &dictionary.key {
+            crate::DictionaryKey::Callback(signature) => signature_depth(signature, depth + 1),
+            crate::DictionaryKey::Structural(shape) => shape_depth(shape, depth + 1),
+            _ => true,
+        }
+        && match &dictionary.value {
+            crate::DictionaryValue::Callback { signature, .. } => {
+                signature_depth(signature, depth + 1)
+            }
+            crate::DictionaryValue::Structural { shape, .. } => shape_depth(shape, depth + 1),
+            _ => true,
+        }
+}
+fn shape_depth(shape: &StructuralInterface, depth: usize) -> bool {
+    depth <= 64
+        && shape.fields.values().all(|ty| result_depth(ty, depth + 1))
+        && shape.methods.values().all(|method| {
+            method
+                .parameters
+                .iter()
+                .all(|ty| parameter_depth(ty, depth + 1))
+                && result_depth(&method.result, depth + 1)
+        })
+}
+pub(crate) fn signature_depth(signature: &StructuralMethod, depth: usize) -> bool {
+    depth <= 64
+        && signature
+            .parameters
+            .iter()
+            .all(|p| parameter_depth(p, depth + 1))
+        && result_depth(&signature.result, depth + 1)
 }
 
 impl StructuralInterface {
@@ -217,80 +364,6 @@ impl StructuralInterface {
     /// Check supported names, arity, and member contracts before IR use.
     /// Interface declarations do not create runtime class values or method bodies.
     pub fn validate(&self) -> Result<(), String> {
-        fn type_depth(ty: &Type, depth: usize) -> bool {
-            if depth > 64 {
-                return false;
-            }
-            match ty {
-                Type::Structural(shape) => shape_depth(shape, depth + 1),
-                Type::Union(parts) | Type::Tuple(parts) => {
-                    parts.iter().all(|ty| type_depth(ty, depth + 1))
-                }
-                Type::Array(ty) => type_depth(ty, depth + 1),
-                Type::Dictionary { key, value } => {
-                    type_depth(key, depth + 1) && type_depth(value, depth + 1)
-                }
-                Type::Options(fields) => fields.values().all(|ty| type_depth(ty, depth + 1)),
-                _ => true,
-            }
-        }
-        fn result_depth(ty: &ReturnType, depth: usize) -> bool {
-            match ty {
-                ReturnType::Structural(shape) => shape_depth(shape, depth + 1),
-                ReturnType::Union(ty) => type_depth(ty, depth + 1),
-                ReturnType::SourceUnion(contract) => {
-                    contract.native().iter().all(|ty| type_depth(ty, depth + 1))
-                }
-                ReturnType::Array(element) => element_depth(element, depth + 1),
-                ReturnType::TypedDictionary(dictionary) => dictionary_depth(dictionary, depth + 1),
-                _ => depth <= 64,
-            }
-        }
-        fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
-            match ty {
-                ParameterType::Structural(shape) => shape_depth(shape, depth + 1),
-                ParameterType::Union(ty) => type_depth(ty, depth + 1),
-                ParameterType::SourceUnion(contract) => {
-                    contract.native().iter().all(|ty| type_depth(ty, depth + 1))
-                }
-                ParameterType::Array(element) => element_depth(element, depth + 1),
-                ParameterType::TypedDictionary(dictionary) => {
-                    dictionary_depth(dictionary, depth + 1)
-                }
-                _ => depth <= 64,
-            }
-        }
-        fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
-            depth <= 64
-                && match element {
-                    crate::ArrayElement::Structural { shape, .. } => shape_depth(shape, depth + 1),
-                    _ => true,
-                }
-        }
-        fn dictionary_depth(dictionary: &crate::DictionaryType, depth: usize) -> bool {
-            depth <= 64
-                && match &dictionary.key {
-                    crate::DictionaryKey::Structural(shape) => shape_depth(shape, depth + 1),
-                    _ => true,
-                }
-                && match &dictionary.value {
-                    crate::DictionaryValue::Structural { shape, .. } => {
-                        shape_depth(shape, depth + 1)
-                    }
-                    _ => true,
-                }
-        }
-        fn shape_depth(shape: &StructuralInterface, depth: usize) -> bool {
-            depth <= 64
-                && shape.fields.values().all(|ty| result_depth(ty, depth + 1))
-                && shape.methods.values().all(|method| {
-                    method
-                        .parameters
-                        .iter()
-                        .all(|ty| parameter_depth(ty, depth + 1))
-                        && result_depth(&method.result, depth + 1)
-                })
-        }
         if !shape_depth(self, 0) {
             return Err("interface contract nesting exceeds 64 levels".into());
         }
@@ -368,16 +441,9 @@ impl StructuralInterface {
         // Native classes expose no general field catalogue in this profile.
         self.fields.is_empty()
             && self.methods.iter().all(|(name, required)| {
-                crate::api::core()
-                    .method_for_type(actual, name)
-                    .is_some_and(|actual| {
-                        StructuralMethod::from_native(actual.parameters, actual.result)
-                            .is_some_and(|actual| required.accepts(&actual))
-                    })
+                method_contract(actual, name).is_some_and(|method| required.accepts(&method))
             })
-            && crate::api::core()
-                .method_for_type(actual, "toString")
-                .is_some()
+            && crate::native::accepts(&Type::named("Toybox.Lang.Object"), actual)
     }
 
     pub(crate) fn from_api(name: &str) -> Option<Self> {

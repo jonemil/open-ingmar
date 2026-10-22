@@ -16,6 +16,7 @@ pub mod application;
 pub mod backend;
 mod bindings;
 mod builders;
+mod callbacks;
 mod casts;
 mod control_flow;
 mod dictionary;
@@ -163,6 +164,11 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A bound Method signature, optionally permitting Null elements.
+    Callback {
+        signature: Box<StructuralMethod>,
+        nullable: bool,
+    },
     /// A finite source interface contract, optionally admitting Null elements.
     Structural {
         shape: Box<StructuralInterface>,
@@ -210,6 +216,9 @@ pub enum ArrayElement {
 
 impl ArrayElement {
     fn validate(&self) -> Result<(), String> {
+        if let Self::Callback { signature, .. } = self {
+            callbacks::validate(signature)?;
+        }
         if let Self::Structural { shape, .. } = self {
             shape.validate()?;
         }
@@ -219,6 +228,13 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Callback {
+                signature,
+                nullable,
+            } => {
+                let ty = api::Type::Callback(signature.clone());
+                return if *nullable { ty.with_null() } else { ty };
+            }
             Self::Structural { shape, nullable } => {
                 let ty = api::Type::Structural(shape.clone());
                 return if *nullable { ty.with_null() } else { ty };
@@ -249,6 +265,13 @@ impl ArrayElement {
 
     fn nullable_base(&self) -> Option<Self> {
         match self {
+            Self::Callback {
+                signature,
+                nullable: true,
+            } => Some(Self::Callback {
+                signature: signature.clone(),
+                nullable: false,
+            }),
             Self::Structural {
                 shape,
                 nullable: true,
@@ -281,6 +304,13 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if let Some((signature, nullable)) = callbacks::value_signature(ty) {
+            callbacks::validate(signature).ok()?;
+            return Some(Self::Callback {
+                signature: Box::new(signature.clone()),
+                nullable,
+            });
+        }
         if let Some((shape, nullable)) = crate::structural::value_shape(ty) {
             shape.validate().ok()?;
             return Some(Self::Structural {
@@ -298,6 +328,18 @@ impl ArrayElement {
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Callback {
+            signature,
+            nullable,
+        } = self
+        {
+            let tag = callbacks::tag(signature);
+            return if *nullable {
+                format!("union({tag}|null)").into()
+            } else {
+                tag.into()
+            };
+        }
         if let Self::Structural { shape, nullable } = self {
             return if *nullable {
                 format!("union({}|null)", shape.tag()).into()
@@ -306,7 +348,7 @@ impl ArrayElement {
             };
         }
         let text = match self {
-            Self::Structural { .. } => unreachable!(),
+            Self::Structural { .. } | Self::Callback { .. } => unreachable!(),
             Self::Any => "any",
             Self::LangObject => "object",
             Self::NullableObject => "nullable-object",
@@ -460,6 +502,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// A bound Method with a checked fixed argument/result signature.
+    Callback(Box<StructuralMethod>),
     /// Source structural member contract, independent of a runtime class.
     Structural(Box<StructuralInterface>),
     /// A normalized union of supported native value contracts.
@@ -541,6 +585,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// A bound Method with a checked fixed argument/result signature.
+    Callback(Box<StructuralMethod>),
     /// Source structural member contract, independent of a runtime class.
     Structural(Box<StructuralInterface>),
     /// A normalized union of supported native value contracts.
@@ -626,6 +672,7 @@ impl ParameterType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
@@ -684,6 +731,7 @@ impl ReturnType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
@@ -738,6 +786,8 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
+    /// A bound Method with a checked fixed argument/result signature.
+    Callback(Box<StructuralMethod>),
     Structural(Box<StructuralInterface>),
     Union(api::Type),
     /// Dynamic value, including Null, with operations checked at runtime.
@@ -845,6 +895,7 @@ impl ValueType {
     fn api_type(&self) -> api::Type {
         match self {
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Any => api::Type::Any,
             Self::ByteArrayOptions => api::Type::byte_options(),
@@ -937,6 +988,9 @@ impl ValueType {
         }
 
         match ty {
+            api::Type::Callback(signature) => callbacks::validate(signature)
+                .ok()
+                .map(|()| Self::Callback(signature.clone())),
             api::Type::Structural(shape) => shape
                 .validate()
                 .ok()
@@ -1450,6 +1504,14 @@ pub enum Operation {
     },
     /// Invoke a runtime-provided member on an explicit value receiver.
     /// Validation resolves its inherited contract and supported native lowering.
+    /// Bind a literal method selector with its resolved fixed signature.
+    /// Unit validation must confirm the receiver/selector and signature claim.
+    BindMethod {
+        result: ValueId,
+        receiver: ValueId,
+        selector: ValueId,
+        signature: Box<StructuralMethod>,
+    },
     NativeCall {
         result: ValueId,
         receiver: ValueId,
@@ -1762,6 +1824,7 @@ impl Function {
                 ParameterType::Array(element) => element.validate(),
                 ParameterType::TypedDictionary(dictionary) => dictionary.validate(),
                 ParameterType::Structural(shape) => shape.validate(),
+                ParameterType::Callback(signature) => callbacks::validate(signature),
                 _ => Ok(()),
             }
         };
@@ -1776,6 +1839,7 @@ impl Function {
                 ReturnType::Array(element) => element.validate(),
                 ReturnType::TypedDictionary(dictionary) => dictionary.validate(),
                 ReturnType::Structural(shape) => shape.validate(),
+                ReturnType::Callback(signature) => callbacks::validate(signature),
                 _ => Ok(()),
             };
             checked.map_err(|message| IrError {
@@ -3163,6 +3227,26 @@ impl Function {
                     });
                     (None, vec![value])
                 }
+                Operation::BindMethod {
+                    result,
+                    receiver,
+                    selector,
+                    ref signature,
+                } => {
+                    callbacks::validate(signature).map_err(|e| fail(&e))?;
+                    native::value_call(
+                        &type_of(receiver).api_type(),
+                        "method",
+                        &[type_of(selector).api_type()],
+                        context,
+                    )
+                    .map_err(|e| fail(&e))?;
+                    if !operations.iter().any(|op| matches!(&op.operation,Operation::Symbol{result,name:_} if *result==selector)) {
+                        return Err(fail("typed method binding requires a literal Symbol selector"));
+                    }
+                    types.insert(result, ValueType::Callback(signature.clone()));
+                    (Some(result), vec![receiver, selector])
+                }
                 Operation::NativeCall {
                     result,
                     receiver,
@@ -3375,6 +3459,7 @@ impl Function {
                             ValueType::Interface(_)
                                 | ValueType::NullableInterface(_)
                                 | ValueType::Structural(_)
+                                | ValueType::Callback(_)
                         ) && origins.contract(value).is_some();
                         if local_types[&local] != incoming
                             && local_types[&local] != ValueType::Any
@@ -3514,6 +3599,7 @@ impl Function {
                             ValueType::Union(ref ty) => ReturnType::Union(ty.clone()),
                             ValueType::Any => ReturnType::Any,
                             ValueType::Structural(shape) => ReturnType::Structural(shape),
+                            ValueType::Callback(signature) => ReturnType::Callback(signature),
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
                             ValueType::Double => ReturnType::Double,
@@ -3670,6 +3756,7 @@ impl Function {
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
+                    | Operation::BindMethod { .. }
                     | Operation::ObjectCall { .. }
                     | Operation::ObjectCallStatement { .. }
                     | Operation::NativeModuleCall { .. }
@@ -3807,6 +3894,9 @@ impl Function {
                                 | Operation::Compare { left, right, .. } => {
                                     tasks.extend([Task::Value(*right), Task::Value(*left)])
                                 }
+                                Operation::BindMethod {
+                                    receiver, selector, ..
+                                } => tasks.extend([Task::Value(*selector), Task::Value(*receiver)]),
                                 Operation::ObjectCall {
                                     receiver,
                                     arguments,
@@ -4367,6 +4457,18 @@ impl Function {
                     right.0
                 ),
                 Operation::Discard { value } => format!(".discard %{}", value.0),
+                Operation::BindMethod {
+                    result,
+                    receiver,
+                    selector,
+                    ref signature,
+                } => format!(
+                    ".bind-method %{} %{} %{} {}",
+                    result.0,
+                    receiver.0,
+                    selector.0,
+                    callbacks::tag(signature)
+                ),
                 Operation::NativeCall {
                     result,
                     receiver,
@@ -4594,6 +4696,7 @@ fn validate_call_arguments(
             !matches!(
                 t,
                 ValueType::Structural(_)
+                    | ValueType::Callback(_)
                     | ValueType::Union(_)
                     | ValueType::Any
                     | ValueType::Integer
@@ -4650,6 +4753,7 @@ fn validate_call_arguments(
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
         ReturnType::Structural(shape) => Ok(ValueType::Structural(shape)),
+        ReturnType::Callback(signature) => Ok(ValueType::Callback(signature)),
         ReturnType::Union(ty) => ValueType::from_api_type(&ty).ok_or("unsupported union result"),
         ReturnType::Null => Ok(ValueType::Null),
         ReturnType::Any => Ok(ValueType::Any),

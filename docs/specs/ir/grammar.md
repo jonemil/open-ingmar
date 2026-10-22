@@ -169,6 +169,7 @@ storage-operation = ".parameter" value-id decimal-usize
                   | ".assign-self" identifier value-id
                   | ".member-read" value-id value-id identifier
                   | ".member-write" value-id identifier value-id
+                  | ".bind-method" value-id value-id value-id callback-tag
 unary-operation = unary-directive value-id value-id
 unary-directive = ".positive" | ".negate" | ".not" | ".complement"
                 | ".increment" | ".decrement"
@@ -304,6 +305,10 @@ declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
+           | callback-tag
+callback-tag = "callback(" callback-arguments? "=>" callback-result-tag ")"
+callback-arguments = parameter-tag (";" parameter-tag)*
+callback-result-tag = parameter-tag | "void"
 structural-tag = "interface(" structural-members? ")"
 structural-members = structural-member-tag (";" structural-member-tag)*
 structural-member-tag = "f(" identifier "=" structural-value-tag ")"
@@ -333,15 +338,16 @@ source-base = "Lang.Object" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
-            | structural-tag | nullable-structural-tag
+            | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
 nullable-structural-tag = "union(" structural-tag "|null)"
+nullable-callback-tag = "union(" callback-tag "|null)"
 array-tag = element-tag "-array"
 dictionary-tag = "dictionary(" dictionary-key-tag "=>" dictionary-value-tag ")"
 dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
-                   | "symbol" | "method" | "byte-array" | structural-tag
+                   | "symbol" | "method" | "byte-array" | structural-tag | callback-tag
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
-                     | structural-tag | nullable-structural-tag
+                     | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
 join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
@@ -359,6 +365,15 @@ when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
 Dictionary punctuation. Fields admit these value tags under the field
 restrictions above; cast domains remain separate.
+
+Callback tags contain ordered parameter tags and one result, for example
+`callback(integer=>integer)` and `callback(=>void)`. Names are not serialized.
+Void is only a callback result. The whole signature is parenthesized, so nested
+callback, Dictionary, and union separators remain local to their contracts.
+Nullable callbacks use an ordinary union with Null. Array element tags and
+Dictionary key/value tags retain full callback signatures under their content
+restrictions. `.bind-method` records a checked signature claim; the
+[callback rules](README.md#typed-callback-contracts) define validation and erasure.
 
 Structural tags contain name-ordered field records followed by name-ordered
 methods; declaration order is not identity. Empty contracts use `interface()`.

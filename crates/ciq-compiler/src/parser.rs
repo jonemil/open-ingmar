@@ -2854,6 +2854,45 @@ impl Parser<'_> {
                 .structural_annotation()
                 .map(|shape| crate::ParameterType::Structural(Box::new(shape)));
         }
+        if self.peek()? == Kind::Word("Method") {
+            self.token()?;
+            if self.peek()? != Kind::Punctuation('(') {
+                return Ok(crate::ParameterType::Method);
+            }
+            self.token()?;
+            let mut parameters = Vec::new();
+            let mut names = BTreeSet::new();
+            if self.peek()? != Kind::Punctuation(')') {
+                loop {
+                    let name = self.identifier()?;
+                    let Kind::Word(name) = name.kind else {
+                        unreachable!()
+                    };
+                    if !names.insert(name) {
+                        return Err(self.error(at, "duplicate callback parameter"));
+                    }
+                    let ty = self.structural_member_type(at, false)?;
+                    parameters.push(
+                        ty.source_contract()
+                            .map(crate::SourceUnion::parameter)
+                            .or_else(|| crate::unions::parameter(ty.api_type()))
+                            .ok_or_else(|| self.error(at, "unsupported callback parameter"))?,
+                    );
+                    if parameters.len() > crate::MAX_PARAMETERS {
+                        return Err(self.error(at, "callback exceeds 254 parameters"));
+                    }
+                    if self.peek()? != Kind::Punctuation(',') {
+                        break;
+                    }
+                    self.token()?;
+                }
+            }
+            self.expect(Kind::Punctuation(')'), "')'")?;
+            let result = self.structural_member_type(at, true)?;
+            let signature = crate::StructuralMethod { parameters, result };
+            crate::callbacks::validate(&signature).map_err(|message| self.error(at, message))?;
+            return Ok(crate::ParameterType::Callback(Box::new(signature)));
+        }
         let path = self.path()?;
         if let Some(ty) = self.alias_parameter(&path, at)? {
             return Ok(ty);

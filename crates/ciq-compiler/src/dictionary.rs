@@ -180,6 +180,7 @@ pub(crate) fn constant_record(
 /// Supported non-null scalar, Method, and interface Dictionary keys.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryKey {
+    Callback(Box<crate::StructuralMethod>),
     /// A non-null source interface key; equality/hash dispatch remain runtime operations.
     Structural(Box<crate::StructuralInterface>),
     /// A non-null Numeric, Integer, or Decimal key, retaining its runtime type.
@@ -202,6 +203,7 @@ impl DictionaryKey {
     /// Return the invariant key contract without erasing numeric alternatives.
     pub fn api_type(&self) -> Type {
         let name = match self {
+            Self::Callback(signature) => return Type::Callback(signature.clone()),
             Self::Structural(shape) => return Type::Structural(shape.clone()),
             Self::Numeric(alias) => return alias.api_type(false),
             Self::Interface(crate::InterfaceType::Comparable) => "Comparable",
@@ -224,6 +226,10 @@ impl DictionaryKey {
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryValue {
+    Callback {
+        signature: Box<crate::StructuralMethod>,
+        nullable: bool,
+    },
     /// A source interface value, optionally permitting explicitly stored Null.
     Structural {
         shape: Box<crate::StructuralInterface>,
@@ -278,6 +284,12 @@ pub struct DictionaryType {
 
 impl DictionaryType {
     pub(crate) fn validate(&self) -> Result<(), String> {
+        if let DictionaryKey::Callback(signature) = &self.key {
+            crate::callbacks::validate(signature)?;
+        }
+        if let DictionaryValue::Callback { signature, .. } = &self.value {
+            crate::callbacks::validate(signature)?;
+        }
         if let DictionaryKey::Structural(shape) = &self.key {
             shape.validate()?;
         }
@@ -291,6 +303,13 @@ impl DictionaryType {
     pub fn api_type(&self) -> Type {
         let key = self.key.api_type();
         let (value, nullable) = match &self.value {
+            DictionaryValue::Callback {
+                signature,
+                nullable,
+            } => {
+                let ty = Type::Callback(signature.clone());
+                return Type::dictionary(key, if *nullable { ty.with_null() } else { ty });
+            }
             DictionaryValue::Structural { shape, nullable } => {
                 let ty = Type::Structural(shape.clone());
                 return Type::dictionary(key, if *nullable { ty.with_null() } else { ty });
@@ -347,6 +366,10 @@ impl DictionaryType {
             return None;
         };
         let key = match key.as_ref() {
+            Type::Callback(signature) => {
+                crate::callbacks::validate(signature).ok()?;
+                DictionaryKey::Callback(signature.clone())
+            }
             Type::Structural(shape) => {
                 shape.validate().ok()?;
                 DictionaryKey::Structural(shape.clone())
@@ -379,6 +402,16 @@ impl DictionaryType {
             return Some(Self {
                 key,
                 value: DictionaryValue::Numeric { alias, nullable },
+            });
+        }
+        if let Some((signature, nullable)) = crate::callbacks::value_signature(value) {
+            crate::callbacks::validate(signature).ok()?;
+            return Some(Self {
+                key,
+                value: DictionaryValue::Callback {
+                    signature: Box::new(signature.clone()),
+                    nullable,
+                },
             });
         }
         if let Some((shape, nullable)) = crate::structural::value_shape(value) {
@@ -434,6 +467,13 @@ impl DictionaryType {
 
     pub(crate) fn text(&self) -> String {
         let key = match &self.key {
+            DictionaryKey::Callback(signature) => {
+                return format!(
+                    "dictionary({}=>{})",
+                    crate::callbacks::tag(signature),
+                    self.value_text()
+                );
+            }
             DictionaryKey::Structural(shape) => {
                 return format!("dictionary({}=>{})", shape.tag(), self.value_text());
             }
@@ -456,6 +496,18 @@ impl DictionaryType {
     }
 
     fn value_text(&self) -> String {
+        if let DictionaryValue::Callback {
+            signature,
+            nullable,
+        } = &self.value
+        {
+            let tag = crate::callbacks::tag(signature);
+            return if *nullable {
+                format!("union({tag}|null)")
+            } else {
+                tag
+            };
+        }
         if let DictionaryValue::Structural { shape, nullable } = &self.value {
             return if *nullable {
                 format!("union({}|null)", shape.tag())
@@ -464,7 +516,7 @@ impl DictionaryType {
             };
         }
         let value = match &self.value {
-            DictionaryValue::Structural { .. } => unreachable!(),
+            DictionaryValue::Structural { .. } | DictionaryValue::Callback { .. } => unreachable!(),
             DictionaryValue::LangObject => "object",
             DictionaryValue::NullableObject => "nullable-object",
             DictionaryValue::Numeric { alias, nullable } => alias.value_tag(*nullable),
@@ -504,84 +556,10 @@ impl DictionaryType {
 
     pub(crate) fn parse(text: &str) -> Option<Self> {
         let body = text.strip_prefix("dictionary(")?.strip_suffix(')')?;
-        let parts = crate::structural::split(body, '=').ok()?;
-        let [key, value] = parts.as_slice() else {
-            return None;
-        };
-        let key = *key;
-        let value = value.strip_prefix('>')?;
-        Some(Self {
-            key: match key {
-                tag if tag.starts_with("interface(") => {
-                    DictionaryKey::Structural(Box::new(crate::structural::parse(tag).ok()?))
-                }
-                tag if crate::NumericAlias::parse_tag(tag)
-                    .is_some_and(|(_, nullable)| !nullable) =>
-                {
-                    DictionaryKey::Numeric(crate::NumericAlias::parse_tag(tag)?.0)
-                }
-                "comparable" => DictionaryKey::Interface(crate::InterfaceType::Comparable),
-                "comparator" => DictionaryKey::Interface(crate::InterfaceType::Comparator),
-                "integer" => DictionaryKey::Number,
-                "double" => DictionaryKey::Double,
-                "float" => DictionaryKey::Float,
-                "long" => DictionaryKey::Long,
-                "string" => DictionaryKey::String,
-                "boolean" => DictionaryKey::Boolean,
-                "char" => DictionaryKey::Char,
-                "symbol" => DictionaryKey::Symbol,
-                "method" => DictionaryKey::Method,
-                "byte-array" => DictionaryKey::ByteArray,
-                _ => return None,
-            },
-            value: match value {
-                tag if tag.starts_with("interface(") || tag.starts_with("union(") => {
-                    let ty = crate::type_text::call_result(tag).ok()?.api_type();
-                    let (shape, nullable) = crate::structural::value_shape(&ty)?;
-                    DictionaryValue::Structural {
-                        shape: Box::new(shape.clone()),
-                        nullable,
-                    }
-                }
-                "object" => DictionaryValue::LangObject,
-                "nullable-object" => DictionaryValue::NullableObject,
-                tag if crate::NumericAlias::parse_tag(tag).is_some() => {
-                    let (alias, nullable) = crate::NumericAlias::parse_tag(tag)?;
-                    DictionaryValue::Numeric { alias, nullable }
-                }
-                "comparable" => DictionaryValue::Interface(crate::InterfaceType::Comparable),
-                "comparator" => DictionaryValue::Interface(crate::InterfaceType::Comparator),
-                "nullable-comparable" => {
-                    DictionaryValue::NullableInterface(crate::InterfaceType::Comparable)
-                }
-                "nullable-comparator" => {
-                    DictionaryValue::NullableInterface(crate::InterfaceType::Comparator)
-                }
-                "integer" => DictionaryValue::Number,
-                "double" => DictionaryValue::Double,
-                "nullable-double" => DictionaryValue::NullableDouble,
-                "float" => DictionaryValue::Float,
-                "nullable-float" => DictionaryValue::NullableFloat,
-                "long" => DictionaryValue::Long,
-                "nullable-long" => DictionaryValue::NullableLong,
-                "nullable-integer" => DictionaryValue::NullableNumber,
-                "string" => DictionaryValue::String,
-                "nullable-string" => DictionaryValue::NullableString,
-                "boolean" => DictionaryValue::Boolean,
-                "nullable-boolean" => DictionaryValue::NullableBoolean,
-                "char" => DictionaryValue::Char,
-                "symbol" => DictionaryValue::Symbol,
-                "method" => DictionaryValue::Method,
-                "weak-reference" => DictionaryValue::WeakReference,
-                "byte-array" => DictionaryValue::ByteArray,
-                "nullable-byte-array" => DictionaryValue::NullableByteArray,
-                "nullable-weak-reference" => DictionaryValue::NullableWeakReference,
-                "nullable-method" => DictionaryValue::NullableMethod,
-                "nullable-symbol" => DictionaryValue::NullableSymbol,
-                "nullable-char" => DictionaryValue::NullableChar,
-                _ => return None,
-            },
-        })
+        let (key, value) = crate::structural::split_pair(body, "=>")?;
+        let key = crate::type_text::call_result(key).ok()?.api_type();
+        let value = crate::type_text::call_result(value).ok()?.api_type();
+        Self::from_api_type(&Type::dictionary(key, value))
     }
 }
 

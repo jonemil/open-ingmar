@@ -53,6 +53,9 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::Callback(signature) => crate::callbacks::validate(&signature)
+            .ok()
+            .map(|()| ParameterType::Callback(signature)),
         Type::Structural(shape) => shape
             .validate()
             .ok()
@@ -72,6 +75,9 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::Callback(signature) => crate::callbacks::validate(&signature)
+            .ok()
+            .map(|()| ReturnType::Callback(signature)),
         Type::Structural(shape) => shape
             .validate()
             .ok()

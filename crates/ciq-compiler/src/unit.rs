@@ -145,7 +145,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                     | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
                     | crate::ValueType::NullableObject if member == "toString")
                 || matches!(ty, crate::ValueType::Method
-                    | crate::ValueType::NullableMethod if member == "invoke")
+                    | crate::ValueType::NullableMethod | crate::ValueType::Callback(_) if member == "invoke")
             })
         }
         _ => false,
@@ -1363,6 +1363,23 @@ impl CompilationUnit {
                 })
                 .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::BindMethod {
+                    receiver,
+                    selector,
+                    signature,
+                    ..
+                } = &located.operation
+                {
+                    let owner = if let Owner::Class(name) = owner {
+                        Some(name)
+                    } else {
+                        None
+                    };
+                    crate::callbacks::check_binding(
+                        self, function, &origins, owner, *receiver, *selector, signature, context,
+                    )
+                    .map_err(|message| fail(Some(index), Some(operation), message))?;
+                }
                 if let Operation::MemberWrite {
                     receiver,
                     member,
