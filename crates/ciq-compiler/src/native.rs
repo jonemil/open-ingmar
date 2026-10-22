@@ -62,7 +62,7 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
         return shape
             .methods
             .get(member)
-            .map(|m| m.parameters.clone())
+            .map(|m| m.parameters.iter().map(ParameterType::api_type).collect())
             .or_else(|| value_parameters(&api::Type::named("Toybox.Lang.Object"), member));
     }
     if let api::Type::Union(alternatives) = receiver {
@@ -142,18 +142,18 @@ pub(crate) fn value_call(
         }
         if let Some(method) = shape.methods.get(member) {
             for (expected, actual) in method.parameters.iter().zip(arguments) {
-                structural_api(expected, actual, context)?;
+                structural_api(&expected.api_type(), actual, context)?;
             }
             if method.parameters.len() != arguments.len()
                 || !method
                     .parameters
                     .iter()
                     .zip(arguments)
-                    .all(|(expected, actual)| accepts(expected, actual))
+                    .all(|(expected, actual)| accepts(&expected.api_type(), actual))
             {
                 return Err("interface call arguments do not match its signature".into());
             }
-            return Ok(method.result.clone());
+            return Ok(method.result.api_type());
         }
         return value_call(
             &api::Type::named("Toybox.Lang.Object"),

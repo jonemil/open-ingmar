@@ -72,13 +72,16 @@ content contracts. Fields and lexical casts retain their existing domains.
 
 ### Source interface contracts
 
-`StructuralInterface` contains name-ordered fields and `StructuralMethod`
-signatures. `api::Type::Structural`, parameter/result contracts, joins, and fixed
-storage retain these finite shapes; typedef names do not survive expansion.
+`StructuralInterface` contains name-ordered fields with `ReturnType` contracts
+and `StructuralMethod` signatures with `ParameterType` arguments and a
+`ReturnType` result. `api::Type::Structural`, parameter/result contracts, joins,
+and fixed storage retain these finite shapes; typedef names do not survive expansion.
 Typed construction and text reload validate names, member/argument/depth limits,
 and canonical supported types. Mutable fields are invariant and method
-signatures match exactly. Exact source member types must not be replaced by
-their native projection; this profile rejects those unsupported contracts.
+signatures match exactly. Exact source member types, including nullable/mixed
+unions, remain distinct from their native projections. Unit validation resolves
+nested class references against constructible declarations and native bases,
+including references in otherwise unused field/local contracts.
 
 `.member-read result receiver name` derives its value type from the receiver's
 declared field. `.member-write receiver name value` checks the value against
@@ -88,6 +91,10 @@ or edited metadata cannot move a read across a write. Instance calls reuse
 `.call-native`/`.call-native-discard` with the receiver's structural declaration
 supplying arity, argument, and result contracts. The operation names cover
 structural dispatch as well as catalogue-provided members.
+Source provenance derives from the declared member contract, rather than its
+native projection. Union receivers check each signature's arguments and join
+results without discarding exact source alternatives. Reads remain snapshots;
+mutation does not change an earlier read's contract or runtime value.
 
 Function checks may defer an exact source implementation to unit validation.
 The unit resolves the required source/native member signatures at every checked

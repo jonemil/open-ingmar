@@ -1919,6 +1919,33 @@ impl Function {
                     &refinements,
                 )
                 .map_err(fail)?;
+            if let Operation::NativeCall {
+                receiver,
+                member,
+                arguments,
+                ..
+            }
+            | Operation::NativeCallStatement {
+                receiver,
+                member,
+                arguments,
+            } = &located.operation
+            {
+                for alternative in crate::unions::alternatives(&type_of(*receiver).api_type()) {
+                    if let Some(signature) = crate::structural::method_contract(alternative, member)
+                    {
+                        for (parameter, value) in signature.parameters.iter().zip(arguments) {
+                            if let Some(expected) = parameter.source_contract() {
+                                if !origins.accepts_contract(&expected, *value) {
+                                    return Err(fail(
+                                        "interface argument does not preserve source alternatives",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             let (result, operands) = match located.operation {
                 Operation::BlockParameter {
                     result,
@@ -2390,6 +2417,17 @@ impl Function {
                     {
                         let target = crate::structural::field_type(receiver_type, member)
                             .map_err(|message| fail(&message))?;
+                        if let Some(expected) =
+                            crate::structural::field_contract(receiver_type, member)
+                                .map_err(|message| fail(&message))?
+                                .source_contract()
+                        {
+                            if !origins.accepts_contract(&expected, value) {
+                                return Err(fail(
+                                    "structural field write does not preserve source alternatives",
+                                ));
+                            }
+                        }
                         if origins.contract(value).is_none() {
                             native::structural_api(&target, &type_of(value).api_type(), context)
                                 .map_err(|message| fail(&message))?;

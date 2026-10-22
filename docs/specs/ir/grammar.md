@@ -310,7 +310,8 @@ structural-member-tag = "f(" identifier "=" structural-value-tag ")"
                       | "m(" identifier "(" structural-arguments? ")="
                         structural-result-tag ")"
 structural-arguments = structural-value-tag (";" structural-value-tag)*
-structural-value-tag = native-parameter-tag | union-tag
+structural-value-tag = native-parameter-tag | union-tag | source-tag
+                     | nullable-source-tag | source-union-tag
 structural-result-tag = structural-value-tag | "void"
 scalar-tag = "integer" | other-scalar-tag
 other-scalar-tag = "long" | "float" | "double" | "string" | "boolean" | "char"
@@ -362,7 +363,8 @@ For example, `interface(f(value=integer);m(add(integer)=integer))` requires a
 mutable Number field and a one-Number-argument, Number-result method. `void` is
 permitted only as a method result. Nested interface/union tags are single
 tokens; separators inside nested parentheses do not split outer members or
-alternatives. Duplicate members and source identities inside member contracts
+alternatives. Exact source member types use the ordinary `source(...)`,
+`nullable-source(...)`, and `source-union(...)` spellings. Duplicate members
 are rejected. The [structural contract rules](README.md#source-interface-contracts)
 define limits, canonical types, and witness checking.
 

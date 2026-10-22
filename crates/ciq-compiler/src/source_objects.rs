@@ -123,6 +123,35 @@ impl Origins {
                     self.values.insert(*result, contract);
                 }
             }
+            Operation::MemberRead {
+                result,
+                receiver,
+                member,
+            } => {
+                if let Some(contract) = self
+                    .native_values
+                    .get(receiver)
+                    .and_then(|ty| crate::structural::field_contract(ty, member).ok())
+                    .and_then(|ty| ty.source_contract())
+                {
+                    self.values.insert(*result, contract);
+                }
+            }
+            Operation::NativeCall {
+                result,
+                receiver,
+                member,
+                ..
+            } => {
+                if let Some(contract) = self
+                    .native_values
+                    .get(receiver)
+                    .and_then(|ty| crate::structural::method_result(ty, member))
+                    .and_then(|result| result.source_contract())
+                {
+                    self.values.insert(*result, contract);
+                }
+            }
             Operation::SelfFieldRead {
                 result,
                 result_type,
@@ -354,14 +383,15 @@ pub(crate) fn contract(
     value: ValueId,
     parameters: Vec<crate::ParameterType>,
 ) -> Option<crate::SourceUnion> {
-    let mut origins = Origins::new(parameters);
+    let mut types = crate::source_types::Types::new(parameters);
     let inputs = crate::type_flow::prefix_inputs(operations);
-    let mut facts = Default::default();
     for located in operations {
-        crate::type_flow::update(&mut facts, &inputs, &located.operation);
-        let _ = origins.observe(&located.operation, &facts);
+        crate::type_flow::update(&mut types.facts, &inputs, &located.operation);
+        types.observe(&located.operation);
     }
-    origins.contract(value).cloned()
+    types
+        .join_contract(value)
+        .and_then(|ty| ty.source_contract())
 }
 
 /// Select one candidate class, leaving non-null proof to final validation.

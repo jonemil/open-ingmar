@@ -2746,8 +2746,7 @@ impl<'a> Parser<'a> {
 
 impl Parser<'_> {
     /// Parse source interface requirements without executable member bodies.
-    /// Reuse annotation resolution; exact source member contracts need a richer
-    /// structural representation and are rejected rather than projected away.
+    /// Preserve source identities using the ordinary parameter/result contracts.
     fn structural_annotation(&mut self) -> Result<crate::StructuralInterface, Diagnostic> {
         let start = self
             .expect(Kind::Word("interface"), "'interface'")?
@@ -2796,7 +2795,15 @@ impl Parser<'_> {
                         if !names.insert(argument) {
                             return Err(self.error(start, "duplicate interface parameter"));
                         }
-                        parameters.push(self.structural_member_type(start, false)?);
+                        let ty = self.structural_member_type(start, false)?;
+                        parameters.push(
+                            ty.source_contract()
+                                .map(crate::SourceUnion::parameter)
+                                .or_else(|| crate::unions::parameter(ty.api_type()))
+                                .ok_or_else(|| {
+                                    self.error(start, "unsupported interface parameter")
+                                })?,
+                        );
                         if self.peek()? != Kind::Punctuation(',') {
                             break;
                         }
@@ -2822,23 +2829,21 @@ impl Parser<'_> {
         &mut self,
         at: usize,
         result: bool,
-    ) -> Result<crate::api::Type, Diagnostic> {
+    ) -> Result<crate::ReturnType, Diagnostic> {
         if self.peek()? != Kind::Word("as") {
-            return Ok(crate::api::Type::Any);
+            return Ok(crate::ReturnType::Any);
         }
         self.token()?;
         if result && self.peek()? == Kind::Word("Void") {
             self.token()?;
-            return Ok(crate::api::Type::Void);
+            return Ok(crate::ReturnType::Void);
         }
         let parameter = self.parameter_annotation(at)?;
-        if parameter.source_contract().is_some() {
-            return Err(self.error(
-                at,
-                "exact source-class interface member contracts are not supported",
-            ));
-        }
-        Ok(parameter.api_type())
+        parameter
+            .source_contract()
+            .map(crate::SourceUnion::result)
+            .or_else(|| crate::unions::result(parameter.api_type()))
+            .ok_or_else(|| self.error(at, "unsupported interface member type"))
     }
 
     /// Parse one existing signature atom, including bounded container parameters.

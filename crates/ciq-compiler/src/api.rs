@@ -102,13 +102,8 @@ impl ApiContext {
         match ty {
             Type::Structural(shape) => {
                 shape.validate()?;
-                for ty in shape.fields.values().chain(
-                    shape
-                        .methods
-                        .values()
-                        .flat_map(|m| m.parameters.iter().chain(std::iter::once(&m.result))),
-                ) {
-                    self.check_type(catalogue, ty)?;
+                for ty in shape.api_types() {
+                    self.check_type(catalogue, &ty)?;
                 }
                 Ok(())
             }
@@ -1380,18 +1375,8 @@ mod tests {
         fn check_type(api: &Catalogue, ty: &Type) {
             match ty {
                 Type::Structural(shape) => {
-                    for ty in
-                        shape
-                            .fields
-                            .values()
-                            .chain(shape.methods.values().flat_map(|method| {
-                                method
-                                    .parameters
-                                    .iter()
-                                    .chain(std::iter::once(&method.result))
-                            }))
-                    {
-                        check_type(api, ty);
+                    for ty in shape.api_types() {
+                        check_type(api, &ty);
                     }
                 }
                 Type::Array(element) => {

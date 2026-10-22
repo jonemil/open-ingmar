@@ -4,6 +4,8 @@
 source implementations, nullable parameters, native scalar implementations, and
 mutable fields. Reads/writes, compound assignments, increments, nullable
 snapshots, and branching values preserve receiver identity and evaluation order.
+Source-class fields and method arguments/results retain exact identities,
+including nullable snapshots and a two-class method result.
 
 From the repository root, using new output paths:
 

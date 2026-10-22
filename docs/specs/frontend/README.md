@@ -3363,12 +3363,12 @@ function advance(counter as Counter) as Toybox.Lang.Number {
 ```
 
 Fields and method parameters/results use supported native value contracts,
-containers, unions, or nested structural interfaces; omitted annotations mean
-Any. Methods may return Void. Exact source-class contracts inside members and
-recursive interfaces are not yet represented. General Array/Dictionary content
-contracts retain their existing restrictions. Members have no bodies or default
-values. Duplicate names, more than 256 members, more than 254 arguments, and
-contract nesting beyond 64 levels are rejected.
+exact source classes, containers, unions, or nested structural interfaces;
+omitted annotations mean Any. Methods may return Void. Recursive interfaces are
+not yet represented. General Array/Dictionary content contracts retain their
+existing restrictions. Members have no bodies or default values. Duplicate
+names, more than 256 members, more than 254 arguments, and contract nesting
+beyond 64 levels are rejected.
 
 An interface's identity is its member contract, independent of typedef names
 or declaration order. A source class must expose every required field with
@@ -3390,6 +3390,14 @@ Any retains the language's gradual checks. Interface values can be passed to a
 weaker structural contract or Object view when their declarations establish it.
 Nullable interfaces require a non-null proof before member access. Interface
 names are lexical types and cannot be runtime class tests or constructors.
+
+Source-class member types resolve across files and retain their exact identity
+and native base. For example, an interface requiring `echo(Token) as Token`
+rejects `echo(Other) as Other` even when both classes derive from Lang.Object.
+Calls and field writes check the full source contract; field reads and method
+results retain it for later source dispatch, storage, and null refinement.
+For a union receiver, each alternative checks its own argument/field contract;
+read and call results join all possible source/native alternatives.
 
 `receiver.field` reads and writes require a declared structural field. Ordinary
 assignments, compound assignments, and statement increments/decrements check the

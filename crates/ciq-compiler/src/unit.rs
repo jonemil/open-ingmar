@@ -996,12 +996,14 @@ impl CompilationUnit {
                     ));
                 }
             }
-            let references = class
-                .fields
-                .iter()
-                .filter_map(|field| field.result_type().source_contract())
-                .flat_map(|contract| contract.classes)
-                .collect::<Vec<_>>();
+            let mut references = Vec::new();
+            for field in &class.fields {
+                crate::structural::resolve_result(&mut field.result_type(), &mut |target| {
+                    references.push(target.clone());
+                    Ok::<_, std::convert::Infallible>(())
+                })
+                .unwrap();
+            }
             for target in &references {
                 if !self.classes.iter().any(|declaration| {
                     declaration.name == target.name
@@ -1054,12 +1056,38 @@ impl CompilationUnit {
         let mut signatures = BTreeMap::new();
         let exit_callers = exit_callers(&bodies);
         for (index, &(owner, function)) in bodies.iter().enumerate() {
-            let source_classes = function
-                .parameter_types()
-                .iter()
-                .filter_map(crate::ParameterType::source_contract)
-                .chain(function.return_type().source_contract())
-                .flat_map(|contract| contract.classes);
+            let mut source_classes = Vec::new();
+            let mut collect = |class: &mut crate::SourceClass| {
+                source_classes.push(class.clone());
+                Ok::<_, std::convert::Infallible>(())
+            };
+            for mut parameter in function.parameter_types().iter().cloned() {
+                crate::structural::resolve_parameter(&mut parameter, &mut collect).unwrap();
+            }
+            crate::structural::resolve_result(&mut function.return_type().clone(), &mut collect)
+                .unwrap();
+            for ty in function
+                .value_types
+                .values()
+                .map(crate::ValueType::api_type)
+                .chain(
+                    function
+                        .operations()
+                        .iter()
+                        .filter_map(|op| match &op.operation {
+                            Operation::LocalDeclare { value_type, .. } => {
+                                Some(value_type.api_type())
+                            }
+                            _ => None,
+                        }),
+                )
+            {
+                if crate::structural::contains(&ty) {
+                    if let Some(mut result) = crate::unions::result(ty) {
+                        crate::structural::resolve_result(&mut result, &mut collect).unwrap();
+                    }
+                }
+            }
             for name in source_classes {
                 if !self.classes.iter().any(|class| {
                     class.name == name.name
@@ -1344,16 +1372,10 @@ impl CompilationUnit {
                     for receiver_type in
                         crate::unions::alternatives(&function.value_types[receiver].api_type())
                     {
-                        let expected = crate::structural::field_type(receiver_type, member)
+                        let expected = crate::structural::field_contract(receiver_type, member)
                             .map_err(|message| fail(Some(index), Some(operation), message))?;
-                        self.check_value_contract(
-                            function,
-                            &origins,
-                            *value,
-                            &crate::unions::result(expected).unwrap(),
-                            context,
-                        )
-                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                        self.check_value_contract(function, &origins, *value, &expected, context)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
                     }
                 }
                 let structural_boundary = match &located.operation {
@@ -1500,6 +1522,29 @@ impl CompilationUnit {
                         member,
                         arguments,
                     } => {
+                        for alternative in
+                            crate::unions::alternatives(&function.value_types[receiver].api_type())
+                        {
+                            if let Some(signature) =
+                                crate::structural::method_contract(alternative, member)
+                            {
+                                for (argument, expected) in
+                                    arguments.iter().zip(&signature.parameters)
+                                {
+                                    let expected = expected
+                                        .source_contract()
+                                        .map(crate::SourceUnion::result)
+                                        .or_else(|| crate::unions::result(expected.api_type()))
+                                        .unwrap();
+                                    self.check_value_contract(
+                                        function, &origins, *argument, &expected, context,
+                                    )
+                                    .map_err(|message| {
+                                        fail(Some(index), Some(operation), message)
+                                    })?;
+                                }
+                            }
+                        }
                         for (argument, expected) in arguments.iter().zip(
                             crate::native::value_parameters(
                                 &function.value_types[receiver].api_type(),
@@ -2063,9 +2108,7 @@ impl CompilationUnit {
                 .iter()
                 .find(|f| f.name == *name)
                 .ok_or_else(|| format!("{class} does not implement field {name}"))?;
-            if field.result_type().source_contract().is_some()
-                || field.result_type().api_type() != *expected
-            {
+            if field.result_type() != *expected {
                 return Err(format!(
                     "{class}.{name} does not have the invariant interface field type"
                 ));
@@ -2074,21 +2117,9 @@ impl CompilationUnit {
         for (name, required) in &shape.methods {
             let actual = if let Some(method) = declaration.methods.iter().find(|m| m.name() == name)
             {
-                if method.return_type().source_contract().is_some()
-                    || method
-                        .parameter_types()
-                        .iter()
-                        .any(|p| p.source_contract().is_some())
-                {
-                    return Err("exact source interface member signatures are not supported".into());
-                }
                 crate::StructuralMethod {
-                    parameters: method
-                        .parameter_types()
-                        .iter()
-                        .map(crate::ParameterType::api_type)
-                        .collect(),
-                    result: method.return_type().api_type(),
+                    parameters: method.parameter_types().to_vec(),
+                    result: method.return_type().clone(),
                 }
             } else {
                 let method = crate::api::core()
@@ -2097,10 +2128,8 @@ impl CompilationUnit {
                 if let Some(context) = context {
                     context.require(&format!("{class}.{name}"), method.declaration.required_api)?;
                 }
-                crate::StructuralMethod {
-                    parameters: method.parameters,
-                    result: method.result,
-                }
+                crate::StructuralMethod::from_native(method.parameters, method.result)
+                    .ok_or("unsupported native structural signature")?
             };
             if !required.accepts(&actual) {
                 return Err(format!(
@@ -2384,7 +2413,7 @@ fn compile_sources_context(
         .map(|class| (class.name.clone(), class.base))
         .collect::<BTreeMap<_, _>>();
     for (index, parsed) in parsed_sources.iter_mut().enumerate() {
-        let resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
+        let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
             reference.base = bases
                 .get(&reference.name)
                 .copied()
@@ -2409,20 +2438,10 @@ fn compile_sources_context(
                 .flat_map(|class| class.methods.iter_mut()),
         ) {
             for parameter in ast.parameter_types.iter_mut().flatten() {
-                if let Some(mut contract) = parameter.source_contract() {
-                    for class in &mut contract.classes {
-                        resolve(class)?;
-                    }
-                    *parameter = contract.parameter();
-                }
+                crate::structural::resolve_parameter(parameter, &mut resolve)?;
             }
             if let Some(result) = &mut ast.result_type {
-                if let Some(mut contract) = result.source_contract() {
-                    for class in &mut contract.classes {
-                        resolve(class)?;
-                    }
-                    *result = contract.result();
-                }
+                crate::structural::resolve_result(result, &mut resolve)?;
             }
         }
         for field in parsed
@@ -2430,12 +2449,10 @@ fn compile_sources_context(
             .iter_mut()
             .flat_map(|class| class.fields.iter_mut())
         {
-            if let Some(mut contract) = field.result_type().source_contract() {
-                for class in &mut contract.classes {
-                    resolve(class)?;
-                }
-                field.kind =
-                    FieldKind::from_result(contract.result()).expect("resolved field contract");
+            let mut result = field.result_type();
+            crate::structural::resolve_result(&mut result, &mut resolve)?;
+            if result != field.result_type() {
+                field.kind = FieldKind::from_result(result).expect("resolved field contract");
             }
         }
     }

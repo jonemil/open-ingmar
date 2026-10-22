@@ -9,7 +9,7 @@ The [application specimen](../../examples/compiler-interfaces/README.md) checks
 two unrelated source implementations, an anonymous native `toString` contract,
 nullable interfaces, mutable fields, snapshots, and ordered compound updates.
 SDK and generated applications match all
-[23 console lines](../../examples/compiler-interfaces/expected.txt). Both PRGs
+[26 console lines](../../examples/compiler-interfaces/expected.txt). Both PRGs
 support structured CODE/DATA export/reassembly and identical repeat exports,
 without required raw fallback. No interface runtime class or new opcode is
 needed: ordinary symbol lookup/calls and property writes execute the program.
@@ -27,12 +27,14 @@ The following additions were compiled against the same AppBase scaffold:
 - An unused `typedef Recursive as interface { function next() as Recursive; };`
   compiles. This establishes recursive declaration acceptance, not operations
   on recursively typed values.
-- An unused interface with a field and method parameter/result referring to
-  `FirstCounter` compiles, confirming exact source types are legal member types.
+- The complete specimen's `TokenBox` interface accepts a nullable Token field,
+  an `echo(Token) as Token` method, and a method returning Token or SpareToken.
+  Reads survive later field mutation; returned source objects support ordinary
+  member calls. These paths compile and execute in both toolchains.
 
 These observations support exact method signatures and invariant mutable fields
-on this SDK. Recursive and exact source member contracts remain outside the
-current finite native-member implementation. Its existing inferred Number field
+on this SDK. Recursive contracts remain outside the current finite-member
+implementation. Its existing inferred Number field
 profile provides a stronger contract than an SDK unannotated field; tracked
 runtime comparison uses explicit declarations.
 

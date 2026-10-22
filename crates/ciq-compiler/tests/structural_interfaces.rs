@@ -103,15 +103,17 @@ fn nested_nullable_and_reordered_contracts_round_trip_without_erasure() {
     let left=compile_function("function f(x as interface {var value as Toybox.Lang.Number;function get() as Toybox.Lang.Number;}) {return x;}").unwrap();
     let right=compile_function("function f(x as interface {function get() as Toybox.Lang.Number;var value as Toybox.Lang.Number;}) {return x;}").unwrap();
     assert_eq!(left.parameter_types(), right.parameter_types());
-    let forged = left
+    let source_field = left
         .to_ir_text()
         .replace("f(value=integer)", "f(value=source(Token@Lang.Object))");
-    assert!(parse_function_ir(&forged).is_err());
-    let forged = left.to_ir_text().replace(
+    assert!(parse_function_ir(&source_field).is_ok());
+    let source_parameter = left.to_ir_text().replace(
         "m(get()=integer)",
         "m(get(source(Token@Lang.Object))=integer)",
     );
-    assert!(parse_function_ir(&forged).is_err());
+    assert!(parse_function_ir(&source_parameter).is_ok());
+    let unit_text = format!("ciq-unit\n.owner global\n{source_field}");
+    assert!(parse_unit_ir(&unit_text).is_err());
     let duplicate = left
         .to_ir_text()
         .replace("f(value=integer)", "f(value=integer);f(value=string)");
@@ -197,4 +199,180 @@ fn native_witnesses_require_the_actual_member_api_level() {
     let member = "typedef Character as interface {function toChar() as Toybox.Lang.Char;}; function use(sink as interface {function accept(n as Character) as Void;}) {sink.accept(65);}";
     assert!(ciq_compiler::compile_function_with_api(member, early).is_err());
     assert!(ciq_compiler::compile_function_with_api(member, current).is_ok());
+}
+
+#[test]
+fn exact_source_members_preserve_identity_through_reads_calls_and_saved_ir() {
+    let source = "class Token {function id() as Toybox.Lang.Number {return 41;}} class Other {} typedef Box as interface {var value as Token or Null; function echo(t as Token) as Token;}; class Holder {var value as Token or Null; function echo(t as Token) as Token {return t;}} function use(b as Box, t as Token) as Toybox.Lang.Number {b.value=t;var saved=b.value;var out=b.echo(t);return out.id();} function run(){return use(new Holder(),new Token());}";
+    let unit = compile_sources(&[source]).unwrap();
+    let text = unit.to_ir_text();
+    assert!(
+        text.contains("interface(f(value=nullable-source("),
+        "{text}"
+    );
+    assert_eq!(unit, parse_unit_ir(&text).unwrap());
+    assert!(unit.lower().to_text().contains("getsv"));
+    for bad in [
+        source.replace("b.value=t;", "b.value=new Other();"),
+        source.replace("b.echo(t)", "b.echo(new Other())"),
+        source.replace(
+            "function echo(t as Token) as Token {return t;}",
+            "function echo(t as Other) as Other {return t;}",
+        ),
+        source.replace(
+            "var value as Token or Null; function echo(t as Token) as Token {",
+            "var value as Other or Null; function echo(t as Token) as Token {",
+        ),
+    ] {
+        assert!(compile_sources(&[&bad]).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn source_member_signatures_resolve_across_files_and_native_bases() {
+    let declarations = r#"
+        typedef Reader as interface {
+            var value as Token or Null;
+            function read() as Token;
+        };
+        function use(reader as Reader) as Token { return reader.read(); }
+    "#;
+    let implementation = r#"
+        class Token extends Toybox.WatchUi.View {
+            function initialize() { View.initialize(); }
+        }
+        class Holder {
+            var value as Token or Null;
+            function read() as Token { return new Token(); }
+        }
+        function run() { return use(new Holder()); }
+    "#;
+    let unit = compile_sources(&[declarations, implementation]).unwrap();
+    let text = unit.to_ir_text();
+    assert!(text.contains("source(Token@WatchUi.View)"));
+    assert_eq!(unit, parse_unit_ir(&text).unwrap());
+    // Alter only the member contracts, retaining real class declarations/bases.
+    let wrong_base = text.replace(
+        "f(value=nullable-source(Token@WatchUi.View))",
+        "f(value=nullable-source(Token@Lang.Object))",
+    );
+    assert!(parse_unit_ir(&wrong_base).is_err());
+    let unknown = text.replace(
+        "m(read()=source(Token@WatchUi.View))",
+        "m(read()=source(Unknown@WatchUi.View))",
+    );
+    assert!(parse_unit_ir(&unknown).is_err());
+    assert!(compile_sources(&[declarations]).is_err());
+}
+
+#[test]
+fn nullable_source_fields_keep_snapshot_and_union_result_contracts() {
+    let source = r#"
+        class First { function number() as Toybox.Lang.Number { return 1; } }
+        class Second { function number() as Toybox.Lang.Number { return 2; } }
+        typedef Box as interface {
+            var value as First or Null;
+            function choose(first as Toybox.Lang.Boolean) as First or Second;
+        };
+        class Holder {
+            var value as First or Null;
+            function choose(first as Toybox.Lang.Boolean) as First or Second {
+                return first ? new First() : new Second();
+            }
+        }
+        function read(box as Box) as Toybox.Lang.Number {
+            var value = box.value;
+            box.value = null;
+            if (value != null) { return value.number(); }
+            return box.choose(false).number();
+        }
+        function run() { return read(new Holder()); }
+    "#;
+    let unit = compile_sources(&[source]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let nullable_read = source.replace(
+        "return box.choose(false).number();",
+        "return box.value.number();",
+    );
+    assert!(compile_sources(&[&nullable_read]).is_err());
+    let nullable_argument = r#"
+        class Token {}
+        function use(box as interface {function echo(t as Token) as Token;}, t as Token or Null) {
+            return box.echo(t);
+        }
+    "#;
+    assert!(compile_sources(&[nullable_argument]).is_err());
+    let guarded = nullable_argument.replace(
+        "return box.echo(t);",
+        "if(t!=null){return box.echo(t);}return new Token();",
+    );
+    let unit = compile_sources(&[&guarded]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+}
+
+#[test]
+fn saved_member_operations_reject_erased_or_wrong_source_arguments() {
+    let source = r#"
+        class Token {}
+        class Other {}
+        function use(box as interface {var value as Token or Null;function take(t as Token) as Void;},
+                     token as Token, other as Other, erased as Toybox.Lang.Object) {
+            box.value=token;
+            box.take(token);
+        }
+    "#;
+    let unit = compile_sources(&[source]).unwrap();
+    let text = unit.to_ir_text();
+    // Rewrite each operation independently with an extra read of another parameter.
+    for parameter in [2, 3] {
+        for prefix in [".member-write", ".call-native-discard"] {
+            let rewritten = text
+                .lines()
+                .map(|line| {
+                    if line.starts_with(prefix) {
+                        let mut words = line.split_whitespace().collect::<Vec<_>>();
+                        words[3] = "%999";
+                        format!(".parameter %999 {parameter}\n{}", words.join(" "))
+                    } else {
+                        line.into()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            assert!(parse_unit_ir(&rewritten).is_err(), "{rewritten}");
+        }
+    }
+}
+
+#[test]
+fn union_receivers_check_each_exact_signature_and_join_source_results() {
+    let source = r#"
+        class First { function number() as Toybox.Lang.Number {return 1;} }
+        class Second { function number() as Toybox.Lang.Number {return 2;} }
+        typedef Left as interface {function echo(x as First) as First;};
+        typedef Right as interface {function echo(x as Second) as Second;};
+        function use(box as Left or Right, arg) {return box.echo(arg).number();}
+    "#;
+    let unit = compile_sources(&[source]).unwrap();
+    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
+    let bad = source.replace("arg)", "arg as First)");
+    assert!(compile_sources(&[&bad]).is_err());
+    // A native Object alternative must not erase the source-required argument.
+    let source = r#"
+        class Token {}
+        function use(value as Toybox.Lang.Object or interface {function equals(x as Token) as Toybox.Lang.Boolean;}, token as Toybox.Lang.Object) {
+            return value.equals(token);
+        }
+    "#;
+    assert!(compile_sources(&[source]).is_err());
+}
+
+#[test]
+fn typed_interface_construction_rejects_void_fields_without_panicking() {
+    let shape = ciq_compiler::StructuralInterface {
+        fields: [("value".into(), ciq_compiler::ReturnType::Void)].into(),
+        methods: Default::default(),
+    };
+    assert!(shape.validate().is_err());
 }

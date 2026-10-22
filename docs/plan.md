@@ -37,9 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Preserve exact source-class contracts in structural interface fields and
-  method parameters/results through annotations, saved IR, witness checks, and
-  member access.
 - [ ] Support structural interface contracts as Array elements and Dictionary
   keys/values through annotations, saved IR, and container operations.
 - [ ] Parse callback signatures with argument/result types; check assignments

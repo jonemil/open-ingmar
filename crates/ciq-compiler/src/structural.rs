@@ -1,5 +1,5 @@
 //! Source structural contracts, independent of runtime class identities.
-use crate::api::Type;
+use crate::{ParameterType, ReturnType, api::Type};
 use std::collections::BTreeMap;
 
 pub(crate) fn contains(ty: &Type) -> bool {
@@ -10,20 +10,110 @@ pub(crate) fn contains(ty: &Type) -> bool {
     }
 }
 
-pub(crate) fn field_type(receiver: &Type, member: &str) -> Result<Type, String> {
+/// Resolve a structural field without erasing exact source alternatives.
+pub(crate) fn field_contract(receiver: &Type, member: &str) -> Result<ReturnType, String> {
     match receiver {
         Type::Structural(shape) => shape
             .fields
             .get(member)
             .cloned()
             .ok_or_else(|| format!("interface has no field {member}")),
-        Type::Union(parts) => parts
-            .iter()
-            .map(|ty| field_type(ty, member))
-            .collect::<Result<Vec<_>, _>>()
-            .map(crate::unions::normalize),
+        Type::Union(parts) => {
+            let mut fields = parts.iter().map(|ty| field_contract(ty, member));
+            let first = fields.next().ok_or("empty receiver union")??;
+            fields.try_fold(first, |left, right| {
+                crate::joins::call_result(&left, &right?)
+                    .ok_or_else(|| "structural fields have incompatible contracts".into())
+            })
+        }
         _ => Err("field access requires a non-null structural receiver".into()),
     }
+}
+
+pub(crate) fn field_type(receiver: &Type, member: &str) -> Result<Type, String> {
+    field_contract(receiver, member).map(|ty| ty.api_type())
+}
+
+/// Resolve one receiver's declared method without erasing source identities.
+/// Inherited Object observers keep their ordinary native signatures.
+pub(crate) fn method_contract(receiver: &Type, member: &str) -> Option<StructuralMethod> {
+    if let Type::Structural(shape) = receiver {
+        return shape
+            .methods
+            .get(member)
+            .cloned()
+            .or_else(|| method_contract(&Type::named("Toybox.Lang.Object"), member));
+    }
+    let method = crate::api::core().method_for_type(receiver, member)?;
+    StructuralMethod::from_native(method.parameters, method.result)
+}
+
+/// Join every receiver alternative's method result, retaining source identities.
+pub(crate) fn method_result(receiver: &Type, member: &str) -> Option<ReturnType> {
+    let mut results = crate::unions::alternatives(receiver)
+        .iter()
+        .map(|ty| method_contract(ty, member).map(|method| method.result));
+    let first = results.next()??;
+    results.try_fold(first, |left, right| {
+        crate::joins::call_result(&left, &right?)
+    })
+}
+
+/// Resolve exact class references wherever a signature nests structural types.
+pub(crate) fn resolve_parameter<E>(
+    ty: &mut ParameterType,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    if let Some(mut contract) = ty.source_contract() {
+        for class in &mut contract.classes {
+            resolve(class)?;
+        }
+        for ty in &mut contract.native {
+            resolve_api(ty, resolve)?;
+        }
+        *ty = contract.parameter();
+    } else if let ParameterType::Structural(shape) = ty {
+        shape.resolve_sources(resolve)?;
+    } else if let ParameterType::Union(ty) = ty {
+        resolve_api(ty, resolve)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn resolve_result<E>(
+    ty: &mut ReturnType,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    if let Some(mut contract) = ty.source_contract() {
+        for class in &mut contract.classes {
+            resolve(class)?;
+        }
+        for ty in &mut contract.native {
+            resolve_api(ty, resolve)?;
+        }
+        *ty = contract.result();
+    } else if let ReturnType::Structural(shape) = ty {
+        shape.resolve_sources(resolve)?;
+    } else if let ReturnType::Union(ty) = ty {
+        resolve_api(ty, resolve)?;
+    }
+    Ok(())
+}
+
+fn resolve_api<E>(
+    ty: &mut Type,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    match ty {
+        Type::Structural(shape) => shape.resolve_sources(resolve)?,
+        Type::Union(parts) => {
+            for ty in parts {
+                resolve_api(ty, resolve)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Required member types for a source `interface` expression.
@@ -31,7 +121,7 @@ pub(crate) fn field_type(receiver: &Type, member: &str) -> Result<Type, String> 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralInterface {
     /// Mutable member fields with invariant value contracts.
-    pub fields: BTreeMap<String, Type>,
+    pub fields: BTreeMap<String, ReturnType>,
     /// Required instance methods, indexed by member name.
     pub methods: BTreeMap<String, StructuralMethod>,
 }
@@ -39,11 +129,40 @@ pub struct StructuralInterface {
 /// A fixed-arity instance method required by a structural interface.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralMethod {
-    pub parameters: Vec<Type>,
-    pub result: Type,
+    pub parameters: Vec<ParameterType>,
+    pub result: ReturnType,
 }
 
 impl StructuralInterface {
+    fn resolve_sources<E>(
+        &mut self,
+        resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+    ) -> Result<(), E> {
+        for ty in self.fields.values_mut() {
+            resolve_result(ty, resolve)?;
+        }
+        for method in self.methods.values_mut() {
+            for ty in &mut method.parameters {
+                resolve_parameter(ty, resolve)?;
+            }
+            resolve_result(&mut method.result, resolve)?;
+        }
+        Ok(())
+    }
+
+    /// Iterate native projections for API availability checks.
+    pub(crate) fn api_types(&self) -> impl Iterator<Item = Type> + '_ {
+        self.fields
+            .values()
+            .map(ReturnType::api_type)
+            .chain(self.methods.values().flat_map(|m| {
+                m.parameters
+                    .iter()
+                    .map(ParameterType::api_type)
+                    .chain(std::iter::once(m.result.api_type()))
+            }))
+    }
+
     /// Check supported names, arity, and member contracts before IR use.
     /// Interface declarations do not create runtime class values or method bodies.
     pub fn validate(&self) -> Result<(), String> {
@@ -64,18 +183,36 @@ impl StructuralInterface {
                 _ => true,
             }
         }
+        fn result_depth(ty: &ReturnType, depth: usize) -> bool {
+            match ty {
+                ReturnType::Structural(shape) => shape_depth(shape, depth + 1),
+                ReturnType::Union(ty) => type_depth(ty, depth + 1),
+                ReturnType::SourceUnion(contract) => {
+                    contract.native().iter().all(|ty| type_depth(ty, depth + 1))
+                }
+                _ => depth <= 64,
+            }
+        }
+        fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
+            match ty {
+                ParameterType::Structural(shape) => shape_depth(shape, depth + 1),
+                ParameterType::Union(ty) => type_depth(ty, depth + 1),
+                ParameterType::SourceUnion(contract) => {
+                    contract.native().iter().all(|ty| type_depth(ty, depth + 1))
+                }
+                _ => depth <= 64,
+            }
+        }
         fn shape_depth(shape: &StructuralInterface, depth: usize) -> bool {
             depth <= 64
-                && shape
-                    .fields
-                    .values()
-                    .chain(shape.methods.values().flat_map(|method| {
-                        method
-                            .parameters
-                            .iter()
-                            .chain(std::iter::once(&method.result))
-                    }))
-                    .all(|ty| type_depth(ty, depth + 1))
+                && shape.fields.values().all(|ty| result_depth(ty, depth + 1))
+                && shape.methods.values().all(|method| {
+                    method
+                        .parameters
+                        .iter()
+                        .all(|ty| parameter_depth(ty, depth + 1))
+                        && result_depth(&method.result, depth + 1)
+                })
         }
         if !shape_depth(self, 0) {
             return Err("interface contract nesting exceeds 64 levels".into());
@@ -93,19 +230,39 @@ impl StructuralInterface {
         {
             return Err("duplicate interface member".into());
         }
+        fn valid_result(ty: &ReturnType) -> bool {
+            if let Some(contract) = ty.source_contract() {
+                crate::SourceUnion::with_native(
+                    contract.classes.clone(),
+                    contract.native.clone(),
+                    contract.nullable,
+                )
+                .is_ok_and(|contract| contract.result() == *ty)
+            } else {
+                crate::unions::result(ty.api_type()).as_ref() == Some(ty)
+            }
+        }
+        fn valid_parameter(ty: &ParameterType) -> bool {
+            if let Some(contract) = ty.source_contract() {
+                crate::SourceUnion::with_native(
+                    contract.classes.clone(),
+                    contract.native.clone(),
+                    contract.nullable,
+                )
+                .is_ok_and(|contract| contract.parameter() == *ty)
+            } else {
+                crate::unions::parameter(ty.api_type()).as_ref() == Some(ty)
+            }
+        }
         for ty in self.fields.values() {
-            if !crate::unions::parameter(ty.clone()).is_some_and(|p| p.api_type() == *ty) {
+            if !valid_result(ty) {
                 return Err("unsupported interface field contract".into());
             }
         }
         for method in self.methods.values() {
             if method.parameters.len() > crate::MAX_PARAMETERS
-                || method.parameters.iter().any(|ty| {
-                    !crate::unions::parameter(ty.clone()).is_some_and(|p| p.api_type() == *ty)
-                })
-                || (method.result != Type::Void
-                    && !crate::unions::result(method.result.clone())
-                        .is_some_and(|r| r.api_type() == method.result))
+                || method.parameters.iter().any(|ty| !valid_parameter(ty))
+                || (method.result != ReturnType::Void && !valid_result(&method.result))
             {
                 return Err("unsupported interface method signature".into());
             }
@@ -137,10 +294,8 @@ impl StructuralInterface {
                 crate::api::core()
                     .method_for_type(actual, name)
                     .is_some_and(|actual| {
-                        required.accepts(&StructuralMethod {
-                            parameters: actual.parameters,
-                            result: actual.result,
-                        })
+                        StructuralMethod::from_native(actual.parameters, actual.result)
+                            .is_some_and(|actual| required.accepts(&actual))
                     })
             })
             && crate::api::core()
@@ -156,37 +311,34 @@ impl StructuralInterface {
                 .methods
                 .iter()
                 .map(|method| {
-                    (
+                    Some((
                         method.name.clone(),
-                        StructuralMethod {
-                            parameters: method.parameters.clone(),
-                            result: method.result.clone(),
-                        },
-                    )
+                        StructuralMethod::from_native(
+                            method.parameters.clone(),
+                            method.result.clone(),
+                        )?,
+                    ))
                 })
-                .collect(),
+                .collect::<Option<_>>()?,
         })
     }
 
     pub(crate) fn tag(&self) -> String {
-        let fields = self.fields.iter().map(|(name, ty)| {
-            format!(
-                "f({name}={})",
-                crate::type_text::result_tag(&crate::unions::result(ty.clone()).unwrap())
-            )
-        });
+        let fields = self
+            .fields
+            .iter()
+            .map(|(name, ty)| format!("f({name}={})", crate::type_text::result_tag(ty)));
         let methods = self.methods.iter().map(|(name, method)| {
             let params = method
                 .parameters
                 .iter()
-                .map(|ty| crate::type_text::result_tag(&crate::unions::result(ty.clone()).unwrap()))
+                .map(crate::type_text::parameter_tag)
                 .collect::<Vec<_>>()
                 .join(";");
-            let result = if method.result == Type::Void {
+            let result = if method.result == ReturnType::Void {
                 "void".into()
             } else {
-                crate::type_text::result_tag(&crate::unions::result(method.result.clone()).unwrap())
-                    .into_owned()
+                crate::type_text::result_tag(&method.result).into_owned()
             };
             format!("m({name}({params})={result})")
         });
@@ -226,13 +378,6 @@ pub(crate) fn split(text: &str, separator: char) -> Result<Vec<&str>, &'static s
 }
 
 pub(crate) fn parse(tag: &str) -> Result<StructuralInterface, &'static str> {
-    fn value(tag: &str) -> Result<Type, &'static str> {
-        let result = crate::type_text::call_result(tag)?;
-        if result.source_contract().is_some() {
-            return Err("exact source interface member contracts are not supported");
-        }
-        Ok(result.api_type())
-    }
     let body = tag
         .strip_prefix("interface(")
         .and_then(|s| s.strip_suffix(')'))
@@ -245,7 +390,11 @@ pub(crate) fn parse(tag: &str) -> Result<StructuralInterface, &'static str> {
         for member in split(body, ';')? {
             if let Some(field) = member.strip_prefix("f(").and_then(|s| s.strip_suffix(')')) {
                 let (name, tag) = field.split_once('=').ok_or("invalid interface field tag")?;
-                if shape.fields.insert(name.into(), value(tag)?).is_some() {
+                if shape
+                    .fields
+                    .insert(name.into(), crate::type_text::call_result(tag)?)
+                    .is_some()
+                {
                     return Err("duplicate interface field");
                 }
             } else if let Some(method) = member.strip_prefix("m(").and_then(|s| s.strip_suffix(')'))
@@ -277,21 +426,13 @@ pub(crate) fn parse(tag: &str) -> Result<StructuralInterface, &'static str> {
                 } else {
                     split(parameters, ';')?
                         .into_iter()
-                        .map(|tag| {
-                            let parameter = crate::type_text::parameter(tag)?;
-                            if parameter.source_contract().is_some() {
-                                return Err(
-                                    "exact source interface member contracts are not supported",
-                                );
-                            }
-                            Ok(parameter.api_type())
-                        })
+                        .map(crate::type_text::parameter)
                         .collect::<Result<_, _>>()?
                 };
                 let result = if result == "void" {
-                    Type::Void
+                    ReturnType::Void
                 } else {
-                    value(result)?
+                    crate::type_text::call_result(result)?
                 };
                 if shape
                     .methods
@@ -310,6 +451,20 @@ pub(crate) fn parse(tag: &str) -> Result<StructuralInterface, &'static str> {
 }
 
 impl StructuralMethod {
+    pub(crate) fn from_native(parameters: Vec<Type>, result: Type) -> Option<Self> {
+        Some(Self {
+            parameters: parameters
+                .into_iter()
+                .map(crate::unions::parameter)
+                .collect::<Option<_>>()?,
+            result: if result == Type::Void {
+                ReturnType::Void
+            } else {
+                crate::unions::result(result)?
+            },
+        })
+    }
+
     pub(crate) fn accepts(&self, actual: &Self) -> bool {
         self == actual
     }

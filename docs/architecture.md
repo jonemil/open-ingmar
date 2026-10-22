@@ -93,6 +93,8 @@ tracks their provenance. Source identities remain separate from native API
 projections, which cannot authorize source dispatch or interface witnesses.
 `structural` owns finite source interface contracts and their saved tags;
 `native` checks declared member use, and `unit` proves source implementations.
+Interface members reuse source-aware parameter/result contracts; API projection
+does not replace exact member identities or authorize source dispatch.
 Base-expression and postfix parsing use separate frames so suffix extensions
 preserve the established expression-depth budget.
 `backend` selects VM instructions;
