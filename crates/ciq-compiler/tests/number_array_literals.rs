@@ -57,13 +57,11 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
 #[test]
 fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
     for source in [
-        "function f() as Void { var a = [1, 'a']; }",
-        "function f() as Void { var a = ['a', 1]; }",
-        "function f() as Void { var a = [true, 1]; }",
-        "function f() as Void { var a = [\"a\", 1]; }",
-        "function f() as Void { var a = [null]; }",
-        "function f() as Void { var a = [[1]]; }",
-        "function f() as Void { var a = [1, null]; }",
+        "function f() as Toybox.Lang.Number { var a = [1, 'a']; return a[1]; }",
+        "function f() as Toybox.Lang.Number { var a = [\"a\", 1]; return a[0]; }",
+        "function f() as Void { var a = [null]; a[0].hashCode(); }",
+        "function f() as Toybox.Lang.Number { var a = [[1]]; return a[0]; }",
+        "function f() as Toybox.Lang.Number { var a = [1, null]; return a[1] + 1; }",
         "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n, 1]; }",
         "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n + 1]; }",
         "function f(s as Toybox.Lang.String or Null) as Void { var a = [s.length()]; }",

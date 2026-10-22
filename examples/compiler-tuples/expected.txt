@@ -18,3 +18,14 @@ first
 second
 12
 ordered
+inferred
+2
+97
+true
+1
+nested-inferred
+41
+first
+second
+12
+ordered

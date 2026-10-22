@@ -78,6 +78,32 @@ fn tuple_fields_callbacks_and_conditional_construction_keep_their_contracts() {
 }
 
 #[test]
+fn mixed_literal_and_nested_inference_uses_the_shared_tuple_model() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        function pair() as Lang.String { var x = [42, "answer"]; return x[1]; }
+        function scalarWidths() as Lang.Long { var x = [1, 2l, 3.0f, 4.0d]; return x[1]; }
+        function flags() as Lang.Boolean { var x = [true, 'a', "text"]; return x[0]; }
+        function nullable() as Lang.String { var x = [null, "value"]; return x[1]; }
+        function justNull() as Null { var x = [null]; return x[0]; }
+        function nested() as Lang.Number { var x = [[1, 2], ["nested"]]; return x[0][1]; }
+        function innerTuple() as Lang.String { var x = [1, [2, "nested"]]; return x[1][1]; }
+        function branch(flag as Lang.Boolean) as Lang.Boolean {
+            var x = [7, [flag ? true : false, true]];
+            return x[1][0];
+        }
+        function scalar(n as Lang.Number) as Lang.Number { var x = [n, n + 1]; x.add(3); return x[0]; }
+        function contextual() as Lang.Array<Lang.Object or Null> { return [1, "array", null]; }
+        function numeric() as Lang.Array<Lang.Numeric> { return [1, 2l, 3.0f, 4.0d]; }
+        function format() as Lang.String { var x = [42, "answer"]; return Lang.format("$1$ $2$", x); }
+        class Token { function number() as Lang.Number { return 41; } }
+        function source() as Lang.Number { var x = [new Token(), ["source"]]; return x[0].number(); }
+    "#,
+    );
+}
+
+#[test]
 fn tuple_lengths_and_indexes_use_full_number_encoding() {
     let slots = vec!["Toybox.Lang.Number"; 130].join(",");
     let elements = vec!["1"; 130].join(",");

@@ -107,7 +107,9 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             format!(
                 "function f() as Toybox.Lang.Array<Toybox.Lang.{ty} or Null> {{ return [{other}, null]; }}"
             ),
-            format!("function f() {{ var a = [{literal}, null]; }}"),
+            format!(
+                "function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{literal}, null]; }}"
+            ),
         ] {
             assert!(compile_function(&source).is_err(), "accepted {source}");
         }
@@ -155,8 +157,8 @@ fn reads_require_fresh_scalar_proofs_and_array_elements_remain_invariant() {
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return ['a']; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Char or Null>) { return a[0].toNumber(); }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean or Null>) { return !a[0]; }",
-        "function f() { var a = [null]; }",
-        "function f() { var a = [1, null]; }",
+        "function f() as Toybox.Lang.Number { var a = [null]; return a[0]; }",
+        "function f() { var a = [1, null]; return a[1].hashCode(); }",
     ] {
         assert!(compile_function(source).is_err(), "accepted {source}");
     }

@@ -112,7 +112,7 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f() as Toybox.Lang.Number { var value = 1; value = 1l; return value; }",
         "function f(x as Toybox.Lang.Long or Null) as Toybox.Lang.Long { return x.abs(); }",
         "function f() as Toybox.Lang.Number { return 1l.toNumber(1); }",
-        "function f() as Void { var values = [1l, 1]; }",
+        "function f() as Toybox.Lang.Long { var values = [1l, 1]; return values[1]; }",
         "function f() as Void { var values = {1 => 1l, 2 => 1}; }",
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) as Void { x.add(1); }",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) as Void { x.put(1, 1); }",

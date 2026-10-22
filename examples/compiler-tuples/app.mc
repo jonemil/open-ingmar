@@ -50,6 +50,21 @@ module Tuples {
     function ordered() as Pair { return [number(), text()]; }
 }
 
+module Inferred {
+    function pair() as Lang.String { var value = [42, "inferred"]; return value[1]; }
+    function widths() as Lang.Long { var value = [1, 2l, 3.0f, 4.0d]; return value[1]; }
+    function charCode() as Lang.Number { var value = [true, 'a', "text"]; return value[1].toNumber(); }
+    function nullable() as Lang.Boolean { var value = [null, "value"]; return value[0] == null; }
+    function allNull() as Lang.Number { var value = [null]; return value.size(); }
+    function nested() as Lang.String { var value = [[1, 2], [3, "nested-inferred"]]; return value[1][1]; }
+    function source() as Lang.Number { var value = [new Token(), ["source-inferred"]]; return value[0].number(); }
+    function ordered() as Lang.String {
+        var value = [Tuples.number(), [Tuples.text()]];
+        System.println(value[0]);
+        return value[1][0];
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -77,6 +92,14 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         var ordered = Tuples.ordered();
         System.println(ordered[0]);
         System.println(ordered[1]);
+        System.println(Inferred.pair());
+        System.println(Inferred.widths());
+        System.println(Inferred.charCode());
+        System.println(Inferred.nullable());
+        System.println(Inferred.allNull());
+        System.println(Inferred.nested());
+        System.println(Inferred.source());
+        System.println(Inferred.ordered());
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

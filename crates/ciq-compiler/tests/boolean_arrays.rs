@@ -39,8 +39,8 @@ fn boolean_arrays_preserve_types_and_native_saved_stages() {
 #[test]
 fn boolean_element_contracts_do_not_convert_numbers_or_allow_null() {
     for source in [
-        "function f() { var a = [true, 1]; }",
-        "function f() { var a = [true, null]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Boolean> { return [true, 1]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Boolean> { return [true, null]; }",
         "function f() { var a = [true]; a[0] = 1; }",
         "function f() { var a = [true]; a.add(null); }",
         "function f() { var a = [true]; a.addAll([1]); }",

@@ -170,7 +170,7 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         "function f() as Toybox.Lang.Number { return 1.25 + true; }",
         "function f() as Toybox.Lang.Float { var x = 1.25; x += 2l; return x; }",
         "function f() as Toybox.Lang.Float { return true ? 1.0 : 1; }",
-        "function f() as Void { var xs = [1.25, 1]; }",
+        "function f() as Toybox.Lang.Float { var xs = [1.25, 1]; return xs[1]; }",
         "function f() as Void { var xs = {1 => 1.25, 2 => 1.25d}; }",
     ] {
         assert!(compile_function(source).is_err(), "accepted {source}");

@@ -124,8 +124,11 @@ folding of arbitrary index expressions, or the effect of other Array mutators.
 produced the same expected console output in the fr265 simulator. This covers
 nested/source slots, positional/dynamic reads, nullable guards, fields, Method
 results, contextual literal arguments, conditional construction, Array widening,
-and ordered slot effects. Both SDK and generated PRGs reconstructed through
+and ordered slot effects. The application also checks inferred mixed scalar
+tokens, Null-only tuples, nested literals, source slots selected by nested
+inference, and ordered computed effects inside nested literals. Both SDK and
+generated PRGs reconstructed through
 structured section export without required CODE/DATA fallback. It does not
-establish tuple mutation tracking or unconstrained literal inference.
+establish tuple mutation tracking or inference for every unconstrained literal.
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

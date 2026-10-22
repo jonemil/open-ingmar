@@ -1238,8 +1238,9 @@ impl Builder<'_> {
         })
     }
 
-    /// Construct a typed array using a flat constant load for literal tokens,
-    /// otherwise allocating before ordered element evaluation.
+    /// Build a literal as a positional tuple or homogeneous Array. Mixed scalar
+    /// tokens and nested literals without an Array context use tuple packing;
+    /// other Arrays use constants or allocate before ordered element evaluation.
     /// A private builder prevents uninitialized slots from escaping as values;
     /// branching elements stage values with empty-stack CFG edges. A nullable
     /// expected contract permits Null and the base type without widening an
@@ -1294,6 +1295,22 @@ impl Builder<'_> {
                 _ => None,
             })
             .collect::<Option<Vec<_>>>();
+        if expected.is_none()
+            && (elements
+                .iter()
+                .any(|element| matches!(element.kind, parser::ExpressionKind::ArrayLiteral(_)))
+                || constant.as_ref().is_some_and(|values| {
+                    values[0].0.is_none() || values.iter().any(|value| value.0 != values[0].0)
+                }))
+        {
+            let value = self.tuple_value(elements, None, span, locals)?;
+            let local = self.local_id(span)?;
+            self.push(Operation::LocalInitialize { local, value }, Some(span));
+            return Ok(parser::Expression {
+                kind: parser::ExpressionKind::Temporary(local),
+                span,
+            });
+        }
         if let Some(values) = constant {
             let element_type = expected.clone().or(values[0].0.clone());
             if let Some(element_type) = element_type.filter(|element| {
@@ -1944,9 +1961,33 @@ impl Builder<'_> {
                 "initial View result requires one or two slots",
             ));
         }
+        self.tuple_value(elements, None, span, locals)
+    }
+
+    /// Evaluate tuple slots in order, propagating any declared slot contexts,
+    /// then pack their stored reads under the shared positional IR checks.
+    fn tuple_value(
+        &mut self,
+        elements: Vec<parser::Expression>,
+        expected: Option<&crate::TupleType>,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<ValueId, Diagnostic> {
+        if expected.is_some_and(|tuple| tuple.slots().len() != elements.len()) {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "tuple literal length does not match expected slots",
+            ));
+        }
         let snapshots = elements
             .into_iter()
-            .map(|element| self.snapshot(element, locals))
+            .enumerate()
+            .map(|(index, element)| {
+                let context =
+                    expected.and_then(|tuple| construction_type(&tuple.slots()[index].api_type()));
+                self.snapshot_with_context(element, locals, context)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let elements = snapshots
             .into_iter()
@@ -1983,31 +2024,9 @@ impl Builder<'_> {
             let Some(ConstructionType::Tuple(tuple)) = expected else {
                 unreachable!()
             };
-            if elements.len() != tuple.slots().len() {
-                return Err(Diagnostic::at(
-                    self.source,
-                    expression.span.start,
-                    "tuple literal length does not match expected slots",
-                ));
-            }
-            let snapshots = elements
-                .into_iter()
-                .zip(tuple.slots())
-                .map(|(element, slot)| {
-                    self.snapshot_with_context(element, locals, construction_type(&slot.api_type()))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let elements = snapshots
-                .into_iter()
-                .map(|snapshot| self.value(snapshot, locals))
-                .collect::<Result<Vec<_>, _>>()?;
-            let result = ValueId(self.operations.len() as u32);
-            self.push(
-                Operation::TupleNew { result, elements },
-                Some(expression.span),
-            );
-            return Ok(result);
+            return self.tuple_value(elements, Some(&tuple), expression.span, locals);
         }
+
         let inferred_options = expected.is_none()
             && matches!(&expression.kind,
             parser::ExpressionKind::DictionaryLiteral(entries) if entries.iter().any(|(key,value)| {

@@ -69,9 +69,9 @@ fn computed_strings_and_guarded_values_use_ordered_private_construction() {
 #[test]
 fn invariant_non_null_string_elements_are_checked_in_source_and_ir() {
     for source in [
-        "function f() { var a = [\"one\", 1]; }",
-        "function f() { var a = [\"one\", null]; }",
-        "function f() { var a = [[\"one\"]]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.String> { return [\"one\", 1]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.String> { return [\"one\", null]; }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.String> { return [[\"one\"]]; }",
         "function f(s as Toybox.Lang.String or Null) { var a = [s]; }",
         "function f() { var a = [\"one\"]; a[0] = null; }",
         "function f() { var a = [\"one\"]; a.add(1); }",

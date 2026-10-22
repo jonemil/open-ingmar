@@ -189,8 +189,19 @@ A declared tuple context constructs a direct Array literal positionally. Source
 call arguments, returns, field assignments, nullable contexts, and conditional
 arms propagate that context. Slot expressions evaluate left to right before
 packing the Array. The literal's length and each slot must satisfy the expected
-contract; nested literals receive their corresponding slot context. Without a
-tuple context, literals retain the existing homogeneous Array inference rules.
+contract; nested literals receive their corresponding slot context.
+
+Without a declared Array context, flat lists of numeric, Boolean, Char, String,
+and Null tokens infer tuples when their token types differ or they contain
+Null. A literal containing a nested Array literal also infers a tuple; its
+other slots may contain computed or source values. For example,
+`var pair = [42, "answer"];` gives `pair[1]` a String contract, and
+`var nested = [[1, 2], [3, "value"]];` preserves each indexed container's type.
+These cases use the same slot validation and packing as declared tuples.
+Homogeneous and other computed literals retain the existing Array inference
+rules until their mutable consumers can use positional contracts. An expected
+Array element contract keeps homogeneous Array construction, including its
+permitted mixed/nullable contents; inferred tuples do not widen existing Arrays.
 Empty tuple annotations, variadic tuple syntax, and Graphics.Dc slots are
 rejected by this profile.
 
@@ -2725,8 +2736,9 @@ elements and exposes Any as the function result. Fills, indexed writes, and
 reads use the ordinary dynamic boundary rules, including Null values; the
 runtime Array remains a shared mutable reference. Existing concrete element
 contracts stay invariant. General heterogeneous inference without a dynamic
-first value, unconstrained empty literals, and explicit `Array<Any>` source
-annotations remain outside this profile.
+first value follows the bounded [tuple inference rules](#positional-tuples).
+Unconstrained empty literals and explicit `Array<Any>` source annotations remain
+outside this profile.
 
 ### Char arrays
 
@@ -2735,8 +2747,9 @@ Nonempty Char-array literals accept Char-valued expressions, for example `['a',
 non-null `Array<Char>` and may receive postfix reads/calls. Number literals
 follow the [Number-array contract](#number-arrays); View literals follow the
 [native object contract](../sdk/README.md#native-views); String literals follow the
-[String-array contract](#string-arrays). Other element types, mixed
-types, and nested arrays are rejected. Container separators follow the
+[String-array contract](#string-arrays). Mixed and nested literals may instead
+produce [positional tuples](#positional-tuples); they do not establish a Char
+Array contract. Container separators follow the
 [literal grammar](grammar.md#lexical-rules-and-literals). Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
@@ -2893,7 +2906,8 @@ joins and nullable references use the [union rules](#native-unions). See the
 `Toybox.Lang.Array<Toybox.Lang.String>` is an invariant non-null String-element
 contract. Parameters/results preserve that type; indexed reads produce String
 and writes require String. Nullable source values require a non-null proof
-before construction, writes, or native arguments. Mixed element inference and nested arrays remain unsupported for this profile.
+before construction, writes, or native arguments. Mixed and nested literals do
+not establish this homogeneous Array contract; see [tuple inference](#positional-tuples).
 Nullable Array references require a non-null proof before receiver use.
 Nullable String elements have a [separate contract](#nullable-array-elements).
 
@@ -3033,8 +3047,9 @@ ordered fills. Branching nullable literals use a separate staging local per
 element so differing operand types do not change an existing local's contract.
 
 Existing Array references cannot widen or narrow their element contracts.
-Unannotated literals retain the non-null inference rules; `[null]` and `[1,
-null]` without nullable context remain rejected. Nested arrays remain deferred.
+Inferred [tuples](#positional-tuples) may contain Null or nested Arrays without
+establishing a mutable nullable-element Array contract. Such an Array requires
+the expected element context described above.
 Nullable Array references require a non-null proof before receiver use.
 
 Store a nullable read in a local and guard a fresh local read before scalar
@@ -3109,7 +3124,8 @@ requires 1.3.0. Enclosing calls retain their own API requirements.
 Context applies only to the direct empty literal, not through arbitrary
 operators or calls. `var a = []`, `[].size()`, and `return [].reverse()` are
 rejected, including the last case under an array return annotation. Local type
-annotations, nested arrays, and inference from later mutations are unsupported.
+annotations, nested empty literals without a slot context, and inference from
+later mutations are unsupported.
 Nonempty literals keep their independently inferred contract; argument/return
 context cannot coerce mixed elements or substitute Number and Char arrays. Saved
 IR records the concrete allocation type and rechecks all uses. See the
