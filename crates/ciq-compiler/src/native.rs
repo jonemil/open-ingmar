@@ -626,6 +626,8 @@ fn scalar_comparable(actual: &api::Type) -> bool {
 /// or union membership without implicit conversions. Every alternative of an
 /// actual union must be accepted.
 /// Containers may widen to their declared class/base; their parameters are invariant.
+/// A positional tuple also satisfies Array<T> when every slot satisfies T;
+/// an Array alone cannot establish a tuple's length or positional contracts.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if expected == actual
@@ -678,6 +680,9 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
                 .iter()
                 .zip(actual)
                 .all(|(expected, actual)| accepts(expected, actual));
+    }
+    if let (api::Type::Array(element), api::Type::Tuple(slots)) = (expected, actual) {
+        return slots.iter().all(|slot| accepts(element, slot));
     }
     if let api::Type::Named(expected) = expected {
         let actual = match actual {
@@ -854,6 +859,53 @@ fn module_contract(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tuple_assignability_checks_each_position_and_array_element() {
+        use api::Type;
+        let number = Type::named("Toybox.Lang.Number");
+        let string = Type::named("Toybox.Lang.String");
+        let pair = Type::Tuple(vec![number.clone(), string.clone()]);
+        let numeric = api::Type::numeric();
+        let array = |element| Type::Array(Box::new(element));
+
+        assert!(accepts(
+            &Type::Tuple(vec![numeric.clone(), string.clone()]),
+            &pair
+        ));
+        assert!(!accepts(
+            &pair,
+            &Type::Tuple(vec![numeric.clone(), string.clone()])
+        ));
+        assert!(!accepts(&Type::Tuple(vec![number.clone()]), &pair));
+        assert!(!accepts(
+            &Type::Tuple(vec![string.clone(), number.clone()]),
+            &pair
+        ));
+
+        let elements = crate::unions::normalize(vec![number.clone(), string]);
+        assert!(accepts(&array(elements.clone()), &pair));
+        assert!(accepts(&array(Type::named("Toybox.Lang.Object")), &pair));
+        assert!(!accepts(&array(number.clone()), &pair));
+        assert!(!accepts(&pair, &array(elements)));
+        assert!(!accepts(&array(numeric.clone()), &array(number.clone())));
+        assert!(!accepts(&pair, &Type::Null));
+
+        let maybe_number = Type::Tuple(vec![number.clone().with_null()]);
+        assert!(accepts(&array(number.clone().with_null()), &maybe_number));
+        assert!(!accepts(&array(number.clone()), &maybe_number));
+        assert!(accepts(
+            &array(numeric),
+            &Type::Union(vec![
+                Type::Tuple(vec![number]),
+                Type::Tuple(vec![Type::named("Toybox.Lang.Float")]),
+            ])
+        ));
+        assert!(!accepts(
+            &array(Type::Any),
+            &Type::Union(vec![pair, Type::Null])
+        ));
+    }
 
     #[test]
     fn dictionary_assignability_is_invariant_and_erasure_is_one_way() {

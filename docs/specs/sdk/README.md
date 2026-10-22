@@ -107,8 +107,12 @@ key/value contracts. `Catalogue::method()` still returns generic declarations.
 Container parameters are invariant: differing Array elements or Dictionary
 key/value contracts cannot widen or narrow through assignment. Typed containers
 may widen to their opaque class or Object; erasure does not permit assigning
-them back to a typed container. Tuples require exact arity and per-slot
-assignability; they are not homogeneous Array contracts.
+them back to a typed container. Tuple-to-tuple assignment requires equal arity
+and per-slot assignability. A tuple satisfies `Array<T>` when every slot
+satisfies `T`; this does not permit widening an existing `Array<A>` to
+`Array<B>` or assigning an Array back to a tuple. These shared declaration
+checks do not enable general tuple source syntax or mutation tracking. See the
+[SDK tuple probes](../../investigations/compiler-tuples.md).
 
 Dictionary declarations specialize `get(K)` to `V or Null`, `put(K, V)` and
 `remove(K)` to Void, `hasKey(K)` to Boolean, `keys()` to `Array<K>`, and

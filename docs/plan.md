@@ -38,7 +38,13 @@ implemented contracts; investigations retain evidence, not another backlog.
 ### 1. Inference, unions, and storage
 
 - [ ] Support positional tuple types, construction, indexing, and assignability
-  beyond the current fixed View callback shapes.
+  beyond the current fixed View callback shapes. Preserve exact source slot
+  identities through annotations and saved IR; infer literal slot types, select
+  constant-index results, and join dynamic-index results. Track slot replacement
+  and `add()` shape changes; a dynamic-index write loses positional shape in
+  SDK strict checking. Use the [SDK tuple probes](investigations/compiler-tuples.md)
+  to establish the mutable-flow contract rather than treating tuples as
+  invariant homogeneous Arrays.
 - [ ] Support structural Symbol-keyed option-record annotations, optional fields,
   assignment, and mutation beyond the private ByteArray options builder.
 - [ ] Support lexical `as` assertions for parameterized containers, interfaces,

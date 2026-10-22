@@ -15,6 +15,8 @@ SDK/version and scope; they are not current feature inventories. Use
   runtime callback identity, stateful ordering, and rejected parameter variants.
 - [Source interfaces](compiler-structural-interfaces.md): lexical fields/methods,
   exact signature probes, mutable property dispatch, and recursive declarations.
+- [Positional tuples](compiler-tuples.md): slot/Array assignability, indexing,
+  inferred construction, and mutable shape tracking in SDK strict checking.
 - [Default Array sorting](compiler-array-sort.md): comparable scalar types,
   shared mutation, Void results, and Comparator interface declarations.
 - [Wider numeric Dictionaries](compiler-numeric-dictionaries.md): numeric
