@@ -7,7 +7,7 @@ final-check runner in the Rust environment:
 
 ```sh
 python3 scripts/check-workspace.py run --output scratch/workspace-checks/new-run \
-  --audit --sdk-index scratch/example-audit/sdk-index.json --rustdoc --msrv
+  --audit --sdk-index scratch/sdk-cache/sdk-index.json --rustdoc --msrv
 ```
 
 Output must be a new directory. Default checks are workspace tests, Clippy, and

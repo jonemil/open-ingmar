@@ -61,8 +61,9 @@ saved-stage equivalence, SDK/generated structured reconstruction, signing, and
 expected-output comparison across the Rust and SDK environments. It does not
 replace visual checks for interactive apps.
 
-Keep complete logs and artifacts in ignored `scratch/` directories. Routine
-output should give a verdict and report/log location; inspect focused diagnostics
+Keep complete logs and artifacts in ignored `scratch/` directories while
+validating. Routine output should give a verdict and report/log location;
+inspect focused diagnostics
 on failure or when investigating unknown behavior. Preserve subprocess failure
 statuses and use fresh capture directories so stale output cannot pass a check.
 Batch independent checks when practical, while keeping simulator sessions serial.
@@ -72,3 +73,28 @@ final-check script for each feature. Changes after launching checks require
 repeating only the checks affected by those changes.
 Do not add a helper for a trivial one-off command or repeat it manually after its
 equivalent automated check passes.
+
+## Scratch retention
+
+After validation for a proposed commit, inspect failures and fallback diagnostics,
+record conclusions needed in the relevant documentation, and report the outcome.
+Then remove that change's temporary builds, copied executables, section exports,
+simulator captures, one-off scripts, and logs. Do not wait for the user to commit.
+Keep unresolved evidence until it has been investigated or made reproducible;
+do not delete files used by active commands or a preview session.
+
+Preserve `scratch/commit_msg` and inputs that are useful across changes:
+
+- `scratch/garmin-data/`: downloaded device profiles, fonts, and simulator data.
+- `scratch/sdk-cache/`: reusable SDK-built example PRGs and `sdk-index.json` for
+  `--sdk-index`. Rebuild affected entries when their inputs/settings change.
+- `scratch/official-docs/` and `scratch/sdk-manager/`: downloaded references and
+  retained local investigation notes.
+- `scratch/tools/`, when present: installed helper runtimes needed by scripts.
+- `scratch/markdown-preview/`: the reusable Python environment for docs preview.
+
+Treat these as retained local data, not disposable validation output. SDK
+installations, keys, reference repositories, and Cargo's shared `target/` cache
+also stay outside per-change cleanup. A Git ignore rule alone does not mean a
+directory is safe to delete. Keep reusable SDK specimens in the cache rather
+than retaining whole audit directories for their inputs.

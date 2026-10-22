@@ -33,6 +33,12 @@
   logs under `scratch/`; inspect failures and unknown behavior. Repeat passed
   checks only after relevant changes or unresolved concerns. Do not replace
   necessary visual/semantic review with a successful process exit.
+- After validating a proposed commit, inspect the results, record needed
+  findings, and remove its temporary builds, copied tools, exports, captures,
+  and logs. Preserve `scratch/commit_msg`, unresolved evidence, and reusable
+  inputs/caches, especially SDK/device data. Follow the
+  [scratch retention rules](docs/validation.md#scratch-retention); do not let
+  completed validation directories accumulate between changes.
 - Language/API feature work includes required support across the compiler, IR,
   VM encoding/decoding, assembler/disassembler, and affected PRG formats. Follow
   [toolchain completion](docs/plan.md#toolchain-completion); raw export fallback
