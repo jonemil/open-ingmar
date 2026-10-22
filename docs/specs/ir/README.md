@@ -59,8 +59,8 @@ owns instruction selection.
 native API alternatives when no established named contract applies. Standalone
 Null is a signature type too. Saved signatures, fixed local contracts, and
 block-value metadata use the [union tags](grammar.md#type-tags); reload validates
-and normalizes their alternatives. Source-class identities, Void, and callback
-tuples are excluded from generic union atoms.
+and normalizes their alternatives. Top-level source-class identities and Void
+are excluded from native union atoms; tuple atoms retain nested source slots.
 
 The [frontend union rules](../frontend/README.md#native-unions) own assignment,
 operation, and narrowing semantics. IR validation recomputes these checks from
@@ -1491,20 +1491,27 @@ SDK-observed constructor separately from target binding.
 
 ### Positional result construction
 
-`.tuple-new` constructs a fresh positional result. One slot has
-`TupleShape::OneView`; two have `TupleShape::ViewDelegate`, with View then
-InputDelegate API contracts. The supported second-slot value is a non-null
-BehaviorDelegate. Wrong slot count, ordering, types, or unsupported fields are
-rejected. Typed IR uses `TupleNew { result, elements }` with the same checks.
+`.tuple-new` constructs a fresh nonempty positional Array. Typed IR uses
+`TupleNew { result, elements }`; validation infers a `TupleType` from the
+evaluated operands, including exact source identities. Parameters, results,
+locals, fields, callbacks, and unions use the same `tuple(tag;tag;...)`
+contract. Nested tuple tags retain their slot contracts. Void slots and nesting
+beyond the shared 64-level signature limit are rejected.
 
 Every operand must be a local/parameter read evaluated earlier. Store effectful
 slot expressions left to right before constructing the tuple. Single-use,
-same-block, initialization, and effect-order rules remain in force. Tuple shapes
-are distinct from homogeneous Arrays and have no Array mutation/call profile.
-Locals may retain/copy a shape. Function results are inferred from tuple
-returns; explicit tuple function headers are unsupported. User-call metadata may
-use `result=one-view` or `result=view-delegate`; unit validation checks the
-actual callee result and rejects ordinary calls to native callbacks.
+same-block, initialization, and effect-order rules remain in force. Locals may
+retain/copy a shape. Explicit tuple and Array result headers preserve declared
+contracts even when a returned value has narrower positional information.
+User-call result metadata must match the callee's contract.
+
+`ArrayRead` also reads tuples. Validation selects a slot for a direct Integer
+operand or joins the possible slot contracts otherwise, using the
+[frontend rules](../frontend/README.md#positional-tuples). Source provenance is
+reconstructed on reload; result metadata cannot invent a source slot identity.
+Unit checks resolve nested class/native-base claims and retain native callback
+slot/cardinality checks. General tuple mutation is not admitted by this IR
+profile; the source receiver restrictions apply here too.
 
 [VM lowering](../lowering/README.md#positional-result-construction).
 
@@ -1861,9 +1868,10 @@ same alternatives; general union casts remain unsupported.
 existing specialized storage form, including general unions and nullable
 container references. `.field-value name tag` uses the ordinary saved value tag.
 Typed construction and parsing normalize aliases/unions and reuse specialized
-field forms where applicable. Callback tuples, Void, and Graphics.Dc alternatives
-are rejected. Unit declaration validation resolves every exact class/native-base
-pair, including unused union fields; API checks visit every retained type.
+field forms where applicable. Tuple fields retain their slots. Void and
+Graphics.Dc alternatives are rejected. Unit declaration validation resolves
+every exact class/native-base pair, including unused union fields; API checks
+visit every retained type.
 
 Field-read result metadata normalizes in both typed and parsed IR and must equal
 the declaration's full contract. It does

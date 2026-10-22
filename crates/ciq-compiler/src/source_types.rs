@@ -137,12 +137,23 @@ impl Types {
             ),
             Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
             Operation::TupleNew { result, elements } => {
-                let shape = if elements.len() == 2 {
-                    crate::TupleShape::ViewDelegate
-                } else {
-                    crate::TupleShape::OneView
-                };
-                (*result, Some(shape.api_type()))
+                let slots = elements
+                    .iter()
+                    .map(|value| {
+                        crate::tuples::value_contract(
+                            &self.origins,
+                            *value,
+                            self.values.get(value)?,
+                        )
+                        .ok()
+                    })
+                    .collect::<Option<Vec<_>>>();
+                (
+                    *result,
+                    slots
+                        .and_then(|slots| crate::TupleType::new(slots).ok())
+                        .map(|tuple| tuple.api_type()),
+                )
             }
             Operation::NativeNew { result, class } => (*result, Some(Type::named(class.name()))),
             Operation::WeakReferenceNew { result } => {
@@ -284,10 +295,22 @@ impl Types {
                 self.values
                     .get(array)
                     .and_then(|ty| match candidate(ty).as_ref() {
-                        Type::Union(_) => self.values.get(index).and_then(|key| {
-                            crate::unions::index_read(candidate(ty).as_ref(), key).ok()
+                        Type::Union(_) => crate::tuples::read_contract(
+                            candidate(ty).as_ref(),
+                            self.origins.integer(*index),
+                        )
+                        .and_then(Result::ok)
+                        .map(|ty| ty.api_type())
+                        .or_else(|| {
+                            self.values.get(index).and_then(|key| {
+                                crate::unions::index_read(candidate(ty).as_ref(), key).ok()
+                            })
                         }),
                         Type::Any => Some(Type::Any),
+                        Type::TupleValue(tuple) => tuple
+                            .read(self.origins.integer(*index))
+                            .ok()
+                            .map(|ty| ty.api_type()),
                         Type::Array(element) => Some((**element).clone()),
                         Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
                             Some(Type::named("Toybox.Lang.Number"))

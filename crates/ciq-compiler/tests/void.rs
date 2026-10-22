@@ -77,7 +77,7 @@ fn nonreturning_source_results_keep_unit_call_and_class_checks() {
     assert!(parse_unit_ir(unresolved).is_err());
     let source = "using Toybox.Application; class App extends Application.AppBase {function initialize(){AppBase.initialize();} function getInitialView(){for(;;){}}}";
     let unit = compile_sources(&[source]).unwrap();
-    assert!(unit.to_ir_text().contains("result=one-view"));
+    assert!(unit.to_ir_text().contains("result=tuple(view)"));
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
 }
 

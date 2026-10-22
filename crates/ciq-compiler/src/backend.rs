@@ -757,8 +757,9 @@ fn expression(
                     ..
                 } => unreachable!("Dc construction is not admitted"),
                 Operation::TupleNew { elements, .. } => {
+                    let (opcode, operands) = integer(elements.len() as i32);
                     items.extend([
-                        instruction(Opcode::Ipush1, vec![Operand::Bits(elements.len() as u64)]),
+                        instruction(opcode, operands),
                         instruction(Opcode::Newa, vec![]),
                     ]);
                     tasks.extend(
@@ -1122,10 +1123,8 @@ fn expression(
             }
             Task::TupleElement(value, index) => {
                 items.push(instruction(Opcode::Dup, vec![Operand::Bits(0)]));
-                items.push(instruction(
-                    Opcode::Ipush1,
-                    vec![Operand::Bits(index as u64)],
-                ));
+                let (opcode, operands) = integer(index as i32);
+                items.push(instruction(opcode, operands));
                 tasks.push(Task::TupleStore);
                 tasks.push(Task::Value(value));
                 continue;

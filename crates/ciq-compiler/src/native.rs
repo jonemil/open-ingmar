@@ -33,7 +33,11 @@ pub(crate) struct CallbackSignature {
 }
 impl CallbackSignature {
     pub(crate) fn accepts_result(&self, result: &ReturnType) -> bool {
-        &self.result == result || self.alternative.as_ref() == Some(result)
+        accepts(&self.result.api_type(), &result.api_type())
+            || self
+                .alternative
+                .as_ref()
+                .is_some_and(|alternative| accepts(&alternative.api_type(), &result.api_type()))
     }
 }
 
@@ -58,6 +62,9 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if matches!(receiver, api::Type::TupleValue(_)) {
+        return value_parameters(&api::Type::named("Toybox.Lang.Array"), member);
+    }
     if let api::Type::Callback(signature) = receiver {
         return if member == "invoke" {
             Some(
@@ -123,12 +130,15 @@ pub(crate) fn callback(base: ClassBase, member: &str) -> Option<CallbackSignatur
         ReturnType::Integer,
         ReturnType::Boolean,
         ReturnType::Void,
-        ReturnType::Tuple(crate::TupleShape::OneView),
+        ReturnType::Tuple(crate::TupleType::view()),
     ]
     .into_iter()
     .find(|candidate| accepts(&method.result, &candidate.api_type()))?;
-    let alternative = accepts(&method.result, &crate::TupleShape::ViewDelegate.api_type())
-        .then_some(ReturnType::Tuple(crate::TupleShape::ViewDelegate));
+    let alternative = accepts(
+        &method.result,
+        &crate::TupleType::view_delegate().api_type(),
+    )
+    .then_some(ReturnType::Tuple(crate::TupleType::view_delegate()));
     Some(CallbackSignature {
         parameters,
         result,
@@ -169,6 +179,24 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::TupleValue(tuple) = receiver {
+        tuple.validate()?;
+        if !matches!(
+            member,
+            "size" | "isEmpty" | "equals" | "hashCode" | "toString"
+        ) {
+            return Err("tuple method requires mutation/shape tracking not yet supported".into());
+        }
+        if let Some(context) = context {
+            context.check_type(api::core(), receiver)?;
+        }
+        return value_call(
+            &api::Type::named("Toybox.Lang.Array"),
+            member,
+            arguments,
+            context,
+        );
+    }
     if let api::Type::Callback(signature) = receiver {
         if let Some(context) = context {
             context.check_type(api::core(), receiver)?;
@@ -662,6 +690,33 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     }
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
+    }
+    if let api::Type::TupleValue(expected) = expected {
+        return match actual {
+            api::Type::TupleValue(actual) => {
+                expected.slots().len() == actual.slots().len()
+                    && expected
+                        .slots()
+                        .iter()
+                        .zip(actual.slots())
+                        .all(|(e, a)| crate::tuples::accepts(e, a))
+            }
+            api::Type::Tuple(actual) => {
+                expected.slots().len() == actual.len()
+                    && expected
+                        .slots()
+                        .iter()
+                        .zip(actual)
+                        .all(|(e, a)| e.source_contract().is_none() && accepts(&e.api_type(), a))
+            }
+            _ => false,
+        };
+    }
+    if let api::Type::TupleValue(actual) = actual {
+        return accepts(
+            expected,
+            &api::Type::Tuple(actual.slots().iter().map(ReturnType::api_type).collect()),
+        );
     }
     if let api::Type::Structural(shape) = expected {
         return shape.accepts(actual);

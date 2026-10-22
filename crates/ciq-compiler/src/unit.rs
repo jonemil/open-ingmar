@@ -468,14 +468,14 @@ pub enum FieldKind {
 }
 
 impl FieldKind {
-    /// Normalize a field value contract, excluding callback-only types.
+    /// Normalize a field value contract, excluding Void and graphics contexts.
     pub(crate) fn value_contract(ty: ReturnType) -> Option<ReturnType> {
         let ty = if let Some(contract) = ty.source_contract() {
             contract.result()
         } else {
             crate::unions::result(crate::unions::normalize(vec![ty.api_type()]))?
         };
-        if matches!(ty, ReturnType::Void | ReturnType::Tuple(_))
+        if matches!(ty, ReturnType::Void)
             || crate::unions::alternatives(&ty.api_type())
                 .iter()
                 .any(|part| *part == crate::api::Type::named("Toybox.Graphics.Dc"))
@@ -485,8 +485,8 @@ impl FieldKind {
         Some(ty)
     }
 
-    /// Adapt a signature value contract to canonical field storage. Callback
-    /// tuples, Void, and Graphics.Dc are not ordinary field value contracts.
+    /// Adapt a signature value contract to canonical field storage.
+    /// Void and Graphics.Dc are not ordinary field value contracts.
     pub(crate) fn from_result(ty: ReturnType) -> Option<Self> {
         let ty = Self::value_contract(ty)?;
         for scalar in [

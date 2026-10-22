@@ -44,8 +44,10 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
     .unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".array-constant %0 number"));
+    let changed = text.replace(".array-constant %0 number", ".array-constant %0 char");
+    assert!(parse_function_ir(&changed).is_err());
     assert_eq!(
-        parse_function_ir(&text.replace(".array-constant %0 number", ".array-constant %0 char"))
+        parse_function_ir(&changed.replace("result=number-array", "result=char-array"))
             .unwrap()
             .return_type(),
         ReturnType::Array(ArrayElement::Char),

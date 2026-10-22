@@ -227,6 +227,9 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("tuple(") {
+        return crate::tuples::parse(tag).map(ReturnType::Tuple);
+    }
     if (tag.starts_with("interface(") || tag.starts_with("union(") || tag.starts_with("callback("))
         && tag.ends_with("-array")
     {
@@ -310,18 +313,15 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
     if let Some(element) = tag.strip_suffix("-array").and_then(element) {
         return Ok(ReturnType::Array(element));
     }
-    match tag {
-        "one-view" => Ok(ReturnType::Tuple(crate::TupleShape::OneView)),
-        "view-delegate" => Ok(ReturnType::Tuple(crate::TupleShape::ViewDelegate)),
-        _ => NAMED
-            .iter()
-            .find(|(name, _, _)| *name == tag)
-            .map(|(_, _, r)| r.clone())
-            .ok_or("unsupported call result type"),
-    }
+    NAMED
+        .iter()
+        .find(|(name, _, _)| *name == tag)
+        .map(|(_, _, r)| r.clone())
+        .ok_or("unsupported call result type")
 }
 
-/// Parse parameter metadata, including nullable opaque Dictionaries, but not tuples/Void.
+/// Parse value parameter metadata, including tuples and nullable Dictionaries.
+/// Void is not a value parameter contract.
 pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
     if tag == "nullable-dictionary" {
         return Ok(ParameterType::NullableDictionary);
@@ -330,6 +330,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::Tuple(tuple)) => Ok(ParameterType::Tuple(tuple)),
         Ok(ReturnType::Structural(shape)) => Ok(ParameterType::Structural(shape)),
         Ok(ReturnType::Callback(signature)) => Ok(ParameterType::Callback(signature)),
         Ok(ReturnType::SourceUnion(contract)) => Ok(contract.parameter()),
@@ -360,8 +361,6 @@ pub(super) fn explicit_function_result(ty: &ReturnType) -> bool {
             | ReturnType::Boolean
             | ReturnType::Char
             | ReturnType::Object(_)
-            | ReturnType::Array(_)
-            | ReturnType::Tuple(_)
             | ReturnType::Void
     )
 }
@@ -389,8 +388,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
         ReturnType::SourceUnion(contract) => Cow::Owned(contract.text()),
         ReturnType::SourceObject(class) => Cow::Owned(format!("source({class})")),
         ReturnType::NullableSourceObject(class) => Cow::Owned(format!("nullable-source({class})")),
-        ReturnType::Tuple(crate::TupleShape::OneView) => Cow::Borrowed("one-view"),
-        ReturnType::Tuple(crate::TupleShape::ViewDelegate) => Cow::Borrowed("view-delegate"),
+        ReturnType::Tuple(tuple) => Cow::Owned(tuple.tag()),
         ReturnType::Void => unreachable!("Void has no value-result tag"),
         _ => Cow::Borrowed(
             NAMED
@@ -405,6 +403,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 /// Print parameter metadata using the same spellings as its reader.
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     match ty {
+        ParameterType::Tuple(tuple) => Cow::Owned(tuple.tag()),
         ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
         ParameterType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
         ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
@@ -443,7 +442,6 @@ pub(super) fn join(tag: &str) -> Option<Type> {
         | ReturnType::SourceObject(_)
         | ReturnType::NullableSourceObject(_)
         | ReturnType::Object(_)
-        | ReturnType::Tuple(_)
         | ReturnType::Array(_)
         | ReturnType::Void => None,
         ty => Some(ty.api_type()),
@@ -452,6 +450,9 @@ pub(super) fn join(tag: &str) -> Option<Type> {
 
 /// Print a supported join type without broadening its accepted domain.
 pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
+    if let Type::TupleValue(tuple) = ty {
+        return Some(Cow::Owned(tuple.tag()));
+    }
     if matches!(ty, Type::Union(_)) && named_result(ty).is_none() {
         return Some(Cow::Owned(crate::unions::text(ty)));
     }
@@ -488,12 +489,6 @@ pub(super) fn local_contract_tag(ty: &crate::JoinType) -> Option<Cow<'static, st
         NAMED
             .iter()
             .find_map(|(tag, _, result)| (result.api_type() == api).then_some(Cow::Borrowed(*tag)))
-            .or_else(|| {
-                [crate::TupleShape::OneView, crate::TupleShape::ViewDelegate]
-                    .into_iter()
-                    .find(|shape| shape.api_type() == api)
-                    .map(|shape| result_tag(&ReturnType::Tuple(shape)))
-            })
     })
 }
 
@@ -541,7 +536,7 @@ mod tests {
             ("dc-array", [false; 5]),
             ("comparable", [true, true, true, true, false]),
             ("view", [true, true, true, false, false]),
-            ("one-view", [false, true, true, false, false]),
+            ("tuple(view)", [true, true, true, true, false]),
             ("byte-options", [false, false, false, true, false]),
             ("null", [true, true, true, true, false]),
             ("void", [false; 5]),

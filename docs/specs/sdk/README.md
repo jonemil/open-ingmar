@@ -107,11 +107,12 @@ key/value contracts. `Catalogue::method()` still returns generic declarations.
 Container parameters are invariant: differing Array elements or Dictionary
 key/value contracts cannot widen or narrow through assignment. Typed containers
 may widen to their opaque class or Object; erasure does not permit assigning
-them back to a typed container. Tuple-to-tuple assignment requires equal arity
-and per-slot assignability. A tuple satisfies `Array<T>` when every slot
-satisfies `T`; this does not permit widening an existing `Array<A>` to
-`Array<B>` or assigning an Array back to a tuple. These shared declaration
-checks do not enable general tuple source syntax or mutation tracking. See the
+them back to a typed container. Tuple assignment and Array compatibility follow
+the [frontend tuple rules](../frontend/README.md#positional-tuples).
+The executable profile uses
+`Type::TupleValue(TupleType)` to retain source-aware slot contracts; catalogue
+`Type::Tuple` declarations may also contain unsubstituted generic parameters.
+These share positional assignment rules. See the
 [SDK tuple probes](../../investigations/compiler-tuples.md).
 
 Dictionary declarations specialize `get(K)` to `V or Null`, `put(K, V)` and
@@ -347,16 +348,16 @@ An AppBase class may define `function getInitialView()` with zero parameters.
 Every return must be a direct literal with either one non-null View or a View
 followed by a non-null BehaviorDelegate. Examples: `return [self.makeView()];`
 or `return [view, new CounterDelegate(view)];`. Parentheses are permitted. All
-paths must return the same shape: `TupleShape::OneView` or
-`TupleShape::ViewDelegate`. The pair's second API slot is InputDelegate;
+paths must return the same slot contract, represented by `TupleType`.
+The pair's second API slot is InputDelegate;
 BehaviorDelegate satisfies it through native inheritance.
 
 The compiler evaluates and stores slot expressions left to right before packing
 a fresh positional result. Hidden locals share the normal frame budget. Ordinary
 mutable Arrays cannot supply this contract. Wrong cardinality/order, Null,
 incompatible slot types/annotations, and ordinary user calls to the callback are
-rejected. Tuple source annotations and general tuple-expression inference remain
-unsupported.
+rejected. General [tuple annotations](../frontend/README.md#positional-tuples)
+do not relax this callback's direct-literal requirement.
 
 Saved IR retains the shape through [positional
 construction](../ir/README.md#positional-result-construction). Unit validation

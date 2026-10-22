@@ -2849,6 +2849,27 @@ impl Parser<'_> {
     /// Parse one existing signature atom, including bounded container parameters.
     fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
         let at = self.offset;
+        if self.peek()? == Kind::Punctuation('[') {
+            self.token()?;
+            let mut slots = Vec::new();
+            loop {
+                let slot = self.parameter_annotation(self.offset)?;
+                slots.push(
+                    slot.source_contract()
+                        .map(crate::SourceUnion::result)
+                        .or_else(|| crate::unions::result(slot.api_type()))
+                        .ok_or_else(|| self.error(at, "unsupported tuple slot contract"))?,
+                );
+                if self.peek()? != Kind::Punctuation(',') {
+                    break;
+                }
+                self.token()?;
+            }
+            self.expect(Kind::Punctuation(']'), "']'")?;
+            return crate::TupleType::new(slots)
+                .map(crate::ParameterType::Tuple)
+                .map_err(|message| self.error(at, message));
+        }
         if self.peek()? == Kind::Word("interface") {
             return self
                 .structural_annotation()

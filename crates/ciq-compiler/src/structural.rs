@@ -122,6 +122,10 @@ pub(crate) fn resolve_parameter<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.parameter();
+    } else if let ParameterType::Tuple(tuple) = ty {
+        for slot in &mut tuple.slots {
+            resolve_result(slot, resolve)?;
+        }
     } else if let ParameterType::Callback(signature) = ty {
         resolve_signature(signature, resolve)?;
     } else if let ParameterType::Structural(shape) = ty {
@@ -149,6 +153,10 @@ pub(crate) fn resolve_result<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.result();
+    } else if let ReturnType::Tuple(tuple) = ty {
+        for slot in &mut tuple.slots {
+            resolve_result(slot, resolve)?;
+        }
     } else if let ReturnType::Callback(signature) = ty {
         resolve_signature(signature, resolve)?;
     } else if let ReturnType::Structural(shape) = ty {
@@ -210,6 +218,11 @@ fn resolve_api<E>(
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
     match ty {
+        Type::TupleValue(tuple) => {
+            for slot in &mut tuple.slots {
+                resolve_result(slot, resolve)?;
+            }
+        }
         Type::Array(element) => resolve_api(element, resolve)?,
         Type::Dictionary { key, value } => {
             resolve_api(key, resolve)?;
@@ -249,6 +262,7 @@ fn type_depth(ty: &Type, depth: usize) -> bool {
         return false;
     }
     match ty {
+        Type::TupleValue(tuple) => tuple.slots.iter().all(|ty| result_depth(ty, depth + 1)),
         Type::Structural(shape) => shape_depth(shape, depth + 1),
         Type::Callback(signature) => signature_depth(signature, depth + 1),
         Type::Union(parts) | Type::Tuple(parts) => parts.iter().all(|ty| type_depth(ty, depth + 1)),
@@ -260,8 +274,12 @@ fn type_depth(ty: &Type, depth: usize) -> bool {
         _ => true,
     }
 }
-fn result_depth(ty: &ReturnType, depth: usize) -> bool {
+pub(crate) fn result_depth(ty: &ReturnType, depth: usize) -> bool {
+    if depth > 64 {
+        return false;
+    }
     match ty {
+        ReturnType::Tuple(tuple) => tuple.slots.iter().all(|ty| result_depth(ty, depth + 1)),
         ReturnType::Structural(shape) => shape_depth(shape, depth + 1),
         ReturnType::Callback(signature) => signature_depth(signature, depth + 1),
         ReturnType::Union(ty) => type_depth(ty, depth + 1),
@@ -275,6 +293,7 @@ fn result_depth(ty: &ReturnType, depth: usize) -> bool {
 }
 fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
     match ty {
+        ParameterType::Tuple(tuple) => tuple.slots.iter().all(|ty| result_depth(ty, depth + 1)),
         ParameterType::Structural(shape) => shape_depth(shape, depth + 1),
         ParameterType::Callback(signature) => signature_depth(signature, depth + 1),
         ParameterType::Union(ty) => type_depth(ty, depth + 1),

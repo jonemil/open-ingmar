@@ -573,8 +573,8 @@ pub(crate) fn parse_function_ir_context(
                         .collect::<Result<_, _>>()?,
                 },
                 Directive::TupleNew => {
-                    if !(3..=4).contains(&width) {
-                        return Err(fail(*at, "tuple allocation requires one or two slots"));
+                    if width < 3 {
+                        return Err(fail(*at, "tuple allocation requires at least one slot"));
                     }
                     Operation::TupleNew {
                         result: fields

@@ -100,6 +100,14 @@ impl ApiContext {
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::TupleValue(tuple) => {
+                tuple.validate()?;
+                self.check_class(catalogue, "Toybox.Lang.Array")?;
+                tuple
+                    .slots()
+                    .iter()
+                    .try_for_each(|slot| self.check_type(catalogue, &slot.api_type()))
+            }
             Type::Callback(signature) => {
                 crate::callbacks::validate(signature)?;
                 self.check_class(catalogue, "Toybox.Lang.Method")?;
@@ -203,6 +211,9 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Executable positional contract retaining source slot identities.
+    /// Declaration tuples below may additionally contain generic API parameters.
+    TupleValue(crate::TupleType),
     /// A bound Method with a source-aware fixed signature.
     Callback(Box<crate::StructuralMethod>),
     /// Source-declared structural fields and instance-method contracts.
@@ -1389,6 +1400,10 @@ mod tests {
         let api = core();
         fn check_type(api: &Catalogue, ty: &Type) {
             match ty {
+                Type::TupleValue(tuple) => tuple
+                    .slots()
+                    .iter()
+                    .for_each(|ty| check_type(api, &ty.api_type())),
                 Type::Callback(signature) => {
                     for ty in signature
                         .parameters

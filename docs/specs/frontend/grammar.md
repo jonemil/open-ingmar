@@ -229,7 +229,7 @@ rules below define paths; the domains following them restrict name resolution.
 
 ```text
 value-type = value-atom ("or" value-atom)*
-value-atom = named-value-type | "Null" | structural-interface | callback-type
+value-atom = named-value-type | "Null" | structural-interface | callback-type | tuple-type
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 result-type = value-type | "Void"
@@ -240,6 +240,7 @@ interface-member = "var" identifier ("as" value-type)? ";"
 interface-parameters = interface-parameter ("," interface-parameter)*
 interface-parameter = identifier ("as" value-type)?
 callback-type = "Method" "(" interface-parameters? ")" ("as" result-type)?
+tuple-type = "[" value-type ("," value-type)* "]"
 array-element = value-type
 dictionary-key = value-type
 dictionary-value = value-type

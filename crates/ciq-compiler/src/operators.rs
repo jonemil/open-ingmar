@@ -242,6 +242,7 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         | Type::Array(_)
         | Type::Dictionary { .. }
         | Type::Tuple(_)
+        | Type::TupleValue(_)
         | Type::Parameter(_) => false,
         Type::Options(_) | Type::Structural(_) | Type::Callback(_) => false,
     }

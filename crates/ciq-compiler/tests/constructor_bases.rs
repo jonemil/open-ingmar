@@ -24,13 +24,15 @@ fn forward_source_construction_carries_the_declared_native_base() {
 #[test]
 fn unit_rejects_a_constructor_projection_that_disagrees_with_its_class() {
     let text = compile_sources(&[APP, VIEW]).unwrap().to_ir_text();
-    // The operation still claims a constructible View; only the unit knows the
-    // named class actually extends AppBase.
+    // Keep the native callback contract; only the unit knows the changed
+    // constructor's source class actually extends AppBase rather than View.
     let changed = text
         .lines()
         .map(|line| {
             if line.starts_with(".new-source ") {
                 line.replace("HelloView WatchUi.View", "MinimalConsoleApp WatchUi.View")
+            } else if line.starts_with(".function getInitialView ") {
+                line.replace("tuple(source(HelloView@WatchUi.View))", "tuple(view)")
             } else {
                 line.to_owned()
             }
@@ -38,7 +40,7 @@ fn unit_rejects_a_constructor_projection_that_disagrees_with_its_class() {
         .collect::<Vec<_>>()
         .join("\n");
     let error = parse_unit_ir(&changed).unwrap_err();
-    assert!(error.to_string().contains("base does not match"), "{error}");
+    assert!(error.to_string().contains("native base"), "{error}");
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use ciq_compiler::{
-    ClassBase, ReturnType, TupleShape,
+    ClassBase, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
     compile_sources, parse_unit_ir,
@@ -26,9 +26,12 @@ fn input_counter_preserves_callback_contracts_and_complete_pipelines() {
         .iter()
         .find(|f| f.name() == "getInitialView")
         .unwrap();
-    assert_eq!(
-        initial.return_type(),
-        ReturnType::Tuple(TupleShape::ViewDelegate)
+    let ReturnType::Tuple(tuple) = initial.return_type() else {
+        panic!("expected positional callback");
+    };
+    assert!(
+        matches!(tuple.slots(), [ReturnType::SourceObject(view), ReturnType::SourceObject(delegate)]
+        if view.name == "CounterView" && delegate.name == "CounterDelegate")
     );
     let text = unit.to_ir_text();
     assert!(text.contains("CounterDelegate WatchUi.BehaviorDelegate"));

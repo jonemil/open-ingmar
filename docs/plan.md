@@ -37,14 +37,18 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support positional tuple types, construction, indexing, and assignability
-  beyond the current fixed View callback shapes. Preserve exact source slot
-  identities through annotations and saved IR; infer literal slot types, select
-  constant-index results, and join dynamic-index results. Track slot replacement
-  and `add()` shape changes; a dynamic-index write loses positional shape in
-  SDK strict checking. Use the [SDK tuple probes](investigations/compiler-tuples.md)
-  to establish the mutable-flow contract rather than treating tuples as
-  invariant homogeneous Arrays.
+- [ ] Infer Array literals without a declared container context as positional
+  tuples, retaining contextual homogeneous Array construction and checking
+  existing Array method/assignment consumers under the inferred slot contracts.
+- [ ] Track tuple slot replacement and `add`/`addAll` cardinality changes through
+  locals, parameters, branches, and saved IR. Handle dynamic-index writes losing
+  positional shape. Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
+  `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
+  resolve mutation/alias limits against the
+  [SDK tuple probes](investigations/compiler-tuples.md).
+- [ ] Prove source-class structural witnesses when packing tuples with interface
+  slots, reusing unit-level member checks rather than requiring an already typed
+  interface value.
 - [ ] Support structural Symbol-keyed option-record annotations, optional fields,
   assignment, and mutation beyond the private ByteArray options builder.
 - [ ] Support lexical `as` assertions for parameterized containers, interfaces,
@@ -389,9 +393,7 @@ for core-language validation throughout.
 1. **Extend native calls and callback values.** Use the declaration model for
    AppBase/View/delegate inherited members and callback contracts. Retain
    slot-type and cardinality checks for View and View/delegate results through
-   saved IR. Broaden contextual
-   tuple construction beyond direct callback literals only when provenance and
-   shape remain provable. Reuse core object-reference, array, nullable, and Void
+   saved IR. Reuse core object-reference, array, nullable, and Void
    contracts; add SDK-specific shapes only as required. Compare new dispatch forms
    with focused specimens. Exercise a non-null launch-state dictionary when
    an intent example is available; null-state startup does not establish it.

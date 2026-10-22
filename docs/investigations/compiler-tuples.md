@@ -3,7 +3,8 @@
 **Experimentally observed, 2026-10-22:** SDK 9.2.0 strict checking accepts
 positional annotations, nested tuples, per-slot widening, and tuple-to-Array
 assignment. Mutation can replace slot types or change cardinality. These are
-compile-time observations; no simulator execution was used for these probes.
+compile-time observations; the runtime check below covers construction and
+typed transport separately.
 
 **Officially documented:** [Monkey Types][types] defines equal-length,
 per-position tuple assignment and compatibility with an Array whose element
@@ -114,5 +115,17 @@ called with a local `[1]` likewise does not prevent returning that local's
 index zero as Number. This agrees with the documented lack of tuple mutation
 tracking across calls. It does not establish branch-merge rules, constant
 folding of arbitrary index expressions, or the effect of other Array mutators.
+
+## Runtime construction and typed transport
+
+**Experimentally observed, 2026-10-22:** the
+[complete application](../../examples/compiler-tuples/README.md) built with SDK
+9.2.0 strict checking and independently through source, saved IR, and assembly
+produced the same expected console output in the fr265 simulator. This covers
+nested/source slots, positional/dynamic reads, nullable guards, fields, Method
+results, contextual literal arguments, conditional construction, Array widening,
+and ordered slot effects. Both SDK and generated PRGs reconstructed through
+structured section export without required CODE/DATA fallback. It does not
+establish tuple mutation tracking or unconstrained literal inference.
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

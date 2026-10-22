@@ -76,7 +76,7 @@ Scalar field tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
 `numeric`, and nullable forms. Interface tags are `comparable`, `comparator`,
 and nullable forms. Field records do not carry spans or arbitrary default
 expressions. `.field-value` carries the full ordinary value contract, including
-native/source/mixed unions and nullable container references. Void, tuples, and
+native/source/mixed unions, tuples, and nullable container references. Void and
 Graphics.Dc are excluded, including as union alternatives. Parsing and typed
 construction canonicalize contracts with an existing specialized field form to
 that form. Generic fields retain Null metadata defaults; required initialization
@@ -300,12 +300,12 @@ native-parameter-tag = common-tag | array-tag | "null" | "nullable-dictionary"
 union-tag = "union(" native-parameter-tag ("|" native-parameter-tag)+ ")"
 call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
                 | source-union-tag
-                | "one-view" | "view-delegate"
 declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
-           | callback-tag
+           | callback-tag | tuple-tag
+tuple-tag = "tuple(" call-result-tag (";" call-result-tag)* ")"
 callback-tag = "callback(" callback-arguments? "=>" callback-result-tag ")"
 callback-arguments = parameter-tag (";" parameter-tag)*
 callback-result-tag = parameter-tag | "void"
@@ -352,14 +352,15 @@ join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nul
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
          | source-tag | nullable-source-tag | source-union-tag
-         | structural-tag
+         | structural-tag | callback-tag | tuple-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```
 
 A union tag has 2 through 254 alternatives before normalization. Nested union
-tags, source identities, Void, and callback tuple shapes are not union atoms.
+tags, top-level source identities, and Void are not native union atoms. Tuple
+atoms retain their nested source slot contracts.
 Parsing normalizes alternatives and serialization uses an existing named tag
 when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
@@ -392,7 +393,7 @@ identity/native base, followed by normalized native alternatives and then Null.
 Numeric aliases expand; duplicates collapse. Pure source singleton sets use
 ordinary source/nullable-source tags. Any absorbs the union. Exact identities
 are retained alongside opaque Object alternatives rather than subsumed.
-Nested union tags, Void, tuples, and nullable-source atoms are rejected. These
+Nested union tags, Void, and nullable-source atoms are rejected. These
 tags are admitted in signatures, block values, local contracts, and fields.
 General union casts remain unsupported.
 
@@ -406,8 +407,8 @@ The spelling `integer` means Number; `integer-union` means Lang.Integer.
 `float`, `double`, `string`, `boolean`, `char`, `object`, `symbol`, `method`,
 `weak-reference`, `byte-array`, `comparable`, and `comparator`. Each supports a
 `nullable-` form where the consumer allows it. `number-format` and `endian`
-retain enum identity; `dictionary` is opaque. User-call tuple results also use
-`one-view` and `view-delegate`. Native reference tags include `view`,
+retain enum identity; `dictionary` is opaque. Positional values use `tuple(...)`
+in parameters, results, local contracts, and joins. Native reference tags include `view`,
 `behavior-delegate`, and callback-only `dc`. `nullable-dictionary` also serves ordinary signatures.
 
 Exact source tags use `source(ClassName@Native.Base)` or

@@ -39,7 +39,7 @@ fn required_initialization_invariance_and_read_claims_are_enforced() {
         text.replace("source(B@Lang.Object)", "source(Missing@Lang.Object)"),
         text.replace(
             ".field-value value source-union(source(A@Lang.Object)|source(B@Lang.Object))",
-            ".field-value value one-view",
+            ".field-value value tuple(integer)",
         ),
     ] {
         assert_ne!(text, changed);

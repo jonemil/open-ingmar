@@ -23,6 +23,7 @@ type Contract = crate::SourceUnion;
 
 #[derive(Default)]
 pub(crate) struct Origins {
+    integers: BTreeMap<ValueId, i32>,
     values: BTreeMap<ValueId, Contract>,
     native_values: BTreeMap<ValueId, crate::api::Type>,
     refined_values: BTreeMap<ValueId, crate::api::Type>,
@@ -35,6 +36,9 @@ pub(crate) struct Origins {
 }
 
 impl Origins {
+    pub(crate) fn integer(&self, value: ValueId) -> Option<i32> {
+        self.integers.get(&value).copied()
+    }
     pub(crate) fn new(parameters: Vec<crate::ParameterType>) -> Self {
         Self {
             parameters,
@@ -67,6 +71,25 @@ impl Origins {
         operation: &Operation,
         facts: &std::collections::BTreeSet<crate::type_flow::Fact>,
     ) -> Result<(), &'static str> {
+        if let Operation::Integer { result, value } = operation {
+            self.integers.insert(*result, *value);
+        }
+        if let Operation::ArrayRead {
+            result,
+            array,
+            index,
+        } = operation
+        {
+            if let Some(result_type) = self
+                .native_values
+                .get(array)
+                .and_then(|ty| crate::tuples::read_contract(ty, self.integer(*index)))
+            {
+                if let Some(contract) = result_type.ok().and_then(|ty| ty.source_contract()) {
+                    self.values.insert(*result, contract);
+                }
+            }
+        }
         if let Operation::ObjectCall {
             receiver, classes, ..
         }

@@ -53,6 +53,7 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::TupleValue(tuple) => tuple.validate().ok().map(|()| ParameterType::Tuple(tuple)),
         Type::Callback(signature) => crate::callbacks::validate(&signature)
             .ok()
             .map(|()| ParameterType::Callback(signature)),
@@ -75,6 +76,7 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::TupleValue(tuple) => tuple.validate().ok().map(|()| ReturnType::Tuple(tuple)),
         Type::Callback(signature) => crate::callbacks::validate(&signature)
             .ok()
             .map(|()| ReturnType::Callback(signature)),
@@ -143,6 +145,12 @@ pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
     let mut results = Vec::new();
     for part in alternatives(receiver) {
         let element = match part {
+            Type::TupleValue(tuple) => {
+                if !crate::native::accepts(&Type::named("Toybox.Lang.Number"), key) {
+                    return Err("tuple reads require a non-null Number index".into());
+                }
+                tuple.read(None)?.api_type()
+            }
             Type::Any => Type::Any,
             Type::Array(element) => {
                 if !crate::native::accepts(&Type::named("Toybox.Lang.Number"), key) {

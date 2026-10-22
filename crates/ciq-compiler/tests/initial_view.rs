@@ -1,5 +1,5 @@
 use ciq_compiler::{
-    Function, Operation, ReturnType, TupleShape,
+    Function, Operation, ReturnType, TupleType,
     application::{ConsoleApplication, build_console_application},
     compile_sources, parse_function_ir, parse_unit_ir,
 };
@@ -15,10 +15,7 @@ fn source_initial_view_keeps_a_positional_result_through_both_text_boundaries() 
         .iter()
         .find(|f| f.name() == "getInitialView")
         .unwrap();
-    assert_eq!(
-        callback.return_type(),
-        ReturnType::Tuple(TupleShape::OneView)
-    );
+    assert_eq!(callback.return_type(), ReturnType::Tuple(TupleType::view()));
     assert_eq!(callback.parameter_count(), 0);
     assert!(
         callback
@@ -116,13 +113,13 @@ fn callback_result_shape_cannot_be_forged_by_source_or_saved_ir() {
     ] {
         assert!(
             parse_function_ir(&format!(
-                "ciq-ir\n.function f parameters=1 parameter-types=view\n{body}\n.end\n"
+                "ciq-ir\n.function f parameters=1 parameter-types=view result=tuple(view)\n{body}\n.end\n"
             ))
             .is_err()
         );
     }
     let f = parse_function_ir("ciq-ir\n.function f parameters=1 parameter-types=view\n.parameter %0 0\n.tuple-new %1 %0\n.return %1\n.end\n").unwrap();
-    assert_eq!(f.return_type(), ReturnType::Tuple(TupleShape::OneView));
+    assert_eq!(f.return_type(), ReturnType::Tuple(TupleType::view()));
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let mut ops = f.operations().to_vec();
     let last = ops.pop().unwrap();
@@ -150,7 +147,7 @@ fn callback_result_shape_cannot_be_forged_by_source_or_saved_ir() {
         Function::with_signature(
             "bad".into(),
             f.parameter_types().into(),
-            ReturnType::Tuple(TupleShape::OneView),
+            ReturnType::Tuple(TupleType::view()),
             ops
         )
         .is_err()
@@ -180,7 +177,7 @@ fn callback_shapes_are_checked_on_every_path_and_native_signature_levels() {
     )
     .unwrap();
     initial
-        .check_type(api, &TupleShape::OneView.api_type())
+        .check_type(api, &TupleType::view().api_type())
         .unwrap();
     assert!(ciq_compiler::compile_sources_with_api(&[source], initial).is_err());
 }

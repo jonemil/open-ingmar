@@ -42,7 +42,7 @@ fn source_unions_reject_erasure_forgery_and_stale_proofs() {
     for changed in [
         text.replace("source(B@Lang.Object)", "source(Missing@Lang.Object)"),
         text.replace("source(B@Lang.Object)", "source(B@WatchUi.View)"),
-        text.replace("source(B@Lang.Object)", "one-view"),
+        text.replace("source(B@Lang.Object)", "tuple()"),
     ] {
         assert!(parse_unit_ir(&changed).is_err(), "{changed}");
     }

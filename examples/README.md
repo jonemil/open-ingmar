@@ -7,6 +7,8 @@ and future Rust toolchain experiments.
 
 - [compiler-object-tests](compiler-object-tests/README.md): runtime class and
   member predicates, refinement, lexical casts, and evaluation order.
+- [compiler-tuples](compiler-tuples/README.md): positional/nested/source slots,
+  typed construction, fields, callbacks, indexing, and evaluation order.
 - [ir-any](ir-any/README.md): hand-authored dynamic IR, saved-stage compilation,
   and an SDK source comparison for Any calls, arithmetic, indexing, and narrowing.
 - [compiler-root-objects](compiler-root-objects/README.md): Object-rooted source

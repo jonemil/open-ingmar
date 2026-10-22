@@ -357,11 +357,15 @@ evidence](../../investigations/compiler-native-views.md).
 
 ### Positional result construction
 
-Lowering allocates length one or two with `ipush1 <length>; newa`, then emits
-`dup 0; ipush1 <index>; <stored slot read>; aputv` for each slot. The result is
-published after all slots are filled. Array/View/InputDelegate exist at API
-1.0.0; View construction requires its initializer's 2.1.0 level. No allocation
-failure timing or memory equivalence with SDK lowering is implied. See
+Lowering pushes the tuple length, allocates with `newa`, then emits
+`dup 0; <index>; <stored slot read>; aputv` for each slot. Lengths and indexes
+use the ordinary Number literal encoder, including wider pushes when needed.
+The result is published after all slots are filled. Indexed reads use the
+existing Array read instructions. No new VM opcode or DATA record is required.
+Array availability and each slot's native types are checked separately; View
+construction requires its initializer's 2.1.0 level. No allocation failure
+timing or memory equivalence with SDK lowering is implied. See the
+[tuple example](../../../examples/compiler-tuples/README.md) and
 [input evidence](../../investigations/compiler-input-counter.md).
 
 ### Native module values

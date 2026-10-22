@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, PartialEq, Eq)]
 enum ConstructionType {
     ByteOptions,
+    Tuple(crate::TupleType),
     Array(crate::ArrayElement),
     Dictionary(crate::DictionaryType),
 }
@@ -14,6 +15,7 @@ enum ConstructionType {
 /// Extract a supported container contract for contextual literal construction.
 fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
     match ty {
+        crate::api::Type::TupleValue(tuple) => Some(ConstructionType::Tuple(tuple.clone())),
         crate::api::Type::Union(parts) => {
             // An opaque Array alternative does not select its element type;
             // let literals infer their own contract for overload-like profiles.
@@ -859,6 +861,7 @@ struct ControlTargets {
 }
 
 struct Builder<'a> {
+    positional_callback: bool,
     source: &'a str,
     calls: &'a CallContext,
     result_type: crate::ReturnType,
@@ -1919,7 +1922,7 @@ impl Builder<'_> {
         expression: parser::Expression,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<ValueId, Diagnostic> {
-        if self.result_type != crate::ReturnType::Tuple(crate::TupleShape::OneView) {
+        if !self.positional_callback {
             return self.value_with_context(
                 expression,
                 locals,
@@ -1971,6 +1974,40 @@ impl Builder<'_> {
         locals: &BTreeMap<String, LocalId>,
         expected: Option<ConstructionType>,
     ) -> Result<ValueId, Diagnostic> {
+        if matches!(expression.kind, parser::ExpressionKind::ArrayLiteral(_))
+            && matches!(expected, Some(ConstructionType::Tuple(_)))
+        {
+            let parser::ExpressionKind::ArrayLiteral(elements) = expression.kind else {
+                unreachable!()
+            };
+            let Some(ConstructionType::Tuple(tuple)) = expected else {
+                unreachable!()
+            };
+            if elements.len() != tuple.slots().len() {
+                return Err(Diagnostic::at(
+                    self.source,
+                    expression.span.start,
+                    "tuple literal length does not match expected slots",
+                ));
+            }
+            let snapshots = elements
+                .into_iter()
+                .zip(tuple.slots())
+                .map(|(element, slot)| {
+                    self.snapshot_with_context(element, locals, construction_type(&slot.api_type()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let elements = snapshots
+                .into_iter()
+                .map(|snapshot| self.value(snapshot, locals))
+                .collect::<Result<Vec<_>, _>>()?;
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::TupleNew { result, elements },
+                Some(expression.span),
+            );
+            return Ok(result);
+        }
         let inferred_options = expected.is_none()
             && matches!(&expression.kind,
             parser::ExpressionKind::DictionaryLiteral(entries) if entries.iter().any(|(key,value)| {
@@ -3085,6 +3122,9 @@ fn build_body(
         body_calls.class_bases.insert("self".into(), base);
     }
     let mut builder = Builder {
+        positional_callback: callback
+            .as_ref()
+            .is_some_and(|signature| matches!(signature.result, crate::ReturnType::Tuple(_))),
         source,
         calls: &body_calls,
         result_type: effective_result.clone(),

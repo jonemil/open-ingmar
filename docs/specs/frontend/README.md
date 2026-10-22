@@ -171,6 +171,51 @@ must select a compatible minimum themselves. No API context means these
 compatibility checks are omitted. Index normalization/error behavior remains a
 runtime obligation; the declared result remains nullable.
 
+### Positional tuples
+
+`[T, U, ...]` annotations describe nonempty positional Arrays. Each written slot
+has a value contract; `...` is explanatory notation, not accepted source syntax.
+Tuples work in aliases, parameters, results, fields, Method signatures, unions,
+and nested tuple slots. Exact source-class identities survive storage and
+indexing instead of becoming their native Object/View base.
+
+```monkeyc
+typedef Pair as [Toybox.Lang.Number, Toybox.Lang.String];
+function pair() as Pair { return [42, "answer"]; }
+function first(value as Pair) as Toybox.Lang.Number { return value[0]; }
+```
+
+A declared tuple context constructs a direct Array literal positionally. Source
+call arguments, returns, field assignments, nullable contexts, and conditional
+arms propagate that context. Slot expressions evaluate left to right before
+packing the Array. The literal's length and each slot must satisfy the expected
+contract; nested literals receive their corresponding slot context. Without a
+tuple context, literals retain the existing homogeneous Array inference rules.
+Empty tuple annotations, variadic tuple syntax, and Graphics.Dc slots are
+rejected by this profile.
+
+Indexing requires a non-null tuple and a Number index. A direct integer literal
+selects its slot's contract; known negative/out-of-range indexes are errors.
+Other indexes join all possible slot results, preserving exact source-class
+alternatives. Tuple alternatives are checked separately before joining results.
+Runtime bounds checks still apply to dynamic indexes. Assigning tuples requires
+equal length and per-slot assignability. A tuple may widen to `Array<T>` when
+every slot satisfies `T`; an Array contract cannot establish tuple length or
+positions. Existing Array element contracts remain invariant.
+
+The current tuple receiver profile supports indexed reads and the native
+`size`, `equals`, `hashCode`, and `toString` observers. Indexed writes and other
+Array/Object methods are rejected until their shape/effect contracts are
+supported. These restrictions do not make the runtime Array immutable: an
+Array-typed callee may mutate it, and no positional mutation tracking across
+calls is promised. Structural slots may hold already checked interface values;
+fresh source-class witnesses are not inferred when packing a tuple.
+
+AppBase's [initial View callback](../sdk/README.md#source-initial-view-callback)
+still requires its direct literal and native slot profile. See the
+[complete example](../../../examples/compiler-tuples/README.md) and
+[SDK evidence](../../investigations/compiler-tuples.md).
+
 ## Numbers and numeric aliases
 
 ### Integer literals
@@ -1050,7 +1095,8 @@ constant initialization precedes its source initialize method. The shared
 Typed instance fields use the shared signature value grammar and normalization,
 including native unions, exact source-class sets, mixed source/native sets,
 standalone Null, and nullable Array/Dictionary references. Container contents
-remain invariant. Callback tuples, Void, and Graphics.Dc are not field contracts.
+remain invariant. Tuples retain positional contracts; Void and Graphics.Dc are
+not field contracts.
 Every alternative retains its API requirement even in an unused field.
 
 Generic value fields have ordinary Null metadata slots. If the contract admits

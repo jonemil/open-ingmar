@@ -39,6 +39,7 @@ mod structural;
 pub use source_union::SourceUnion;
 pub use structural::{StructuralInterface, StructuralMethod};
 mod source_types;
+mod tuples;
 mod type_flow;
 mod type_text;
 mod unions;
@@ -394,25 +395,7 @@ impl ArrayElement {
 /// Arrays and Dictionaries share the same tagged scalar payload representation.
 pub use dictionary::DictionaryScalar as ArrayConstantValue;
 
-/// Supported positional native callback results, independent of runtime storage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TupleShape {
-    OneView,
-    ViewDelegate,
-}
-
-impl TupleShape {
-    /// Return the exact API slot types represented by this shape.
-    pub fn api_type(self) -> api::Type {
-        match self {
-            Self::OneView => api::Type::Tuple(vec![api::Type::named(NativeClass::View.name())]),
-            Self::ViewDelegate => api::Type::Tuple(vec![
-                api::Type::named(NativeClass::View.name()),
-                api::Type::named("Toybox.WatchUi.InputDelegate"),
-            ]),
-        }
-    }
-}
+pub use tuples::TupleType;
 
 /// An exact source-class identity and its native API projection.
 /// Unit validation checks both fields against the class declaration; a native
@@ -576,7 +559,7 @@ pub enum ReturnType {
     NullableSourceObject(SourceClass),
     /// A finite set of exact source classes, optionally admitting Null.
     SourceUnion(SourceUnion),
-    Tuple(TupleShape),
+    Tuple(TupleType),
     /// Non-null Array with an invariant supported element contract.
     Array(ArrayElement),
     Void,
@@ -585,6 +568,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Positional Array slots, retaining exact source contracts.
+    Tuple(TupleType),
     /// A bound Method with a checked fixed argument/result signature.
     Callback(Box<StructuralMethod>),
     /// Source structural member contract, independent of a runtime class.
@@ -671,6 +656,7 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Tuple(tuple) => tuple.api_type(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
@@ -849,7 +835,7 @@ enum ValueType {
     Boolean,
     Char,
     Object(NativeClass),
-    Tuple(TupleShape),
+    Tuple(TupleType),
     FontDefinition,
     /// Nullable native projection of an exact source View/delegate contract.
     NullableNativeObject(NativeClass),
@@ -996,9 +982,8 @@ impl ValueType {
                 .ok()
                 .map(|()| Self::Structural(shape.clone())),
             api::Type::Any => Some(Self::Any),
-            ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
-            ty if *ty == TupleShape::ViewDelegate.api_type() => {
-                Some(Self::Tuple(TupleShape::ViewDelegate))
+            api::Type::TupleValue(tuple) => {
+                tuple.validate().ok().map(|()| Self::Tuple(tuple.clone()))
             }
             api::Type::Dictionary { .. } => {
                 DictionaryType::from_api_type(ty).map(Self::TypedDictionary)
@@ -1251,7 +1236,7 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Construct a fresh View result, optionally followed by a non-null delegate.
+    /// Construct a fresh positional Array, inferring the evaluated slot contracts.
     /// Slots must be already evaluated local/parameter reads, so allocation
     /// cannot move before operand effects. The shape has no Array mutation profile.
     TupleNew {
@@ -1821,6 +1806,7 @@ impl Function {
     ) -> Result<Self, IrError> {
         let validate_parameter = |parameter: &ParameterType| -> Result<(), String> {
             match parameter {
+                ParameterType::Tuple(tuple) => tuple.validate().map_err(String::from),
                 ParameterType::Array(element) => element.validate(),
                 ParameterType::TypedDictionary(dictionary) => dictionary.validate(),
                 ParameterType::Structural(shape) => shape.validate(),
@@ -1836,6 +1822,7 @@ impl Function {
         }
         if let Some(result) = &declared_result {
             let checked = match result {
+                ReturnType::Tuple(tuple) => tuple.validate().map_err(String::from),
                 ReturnType::Array(element) => element.validate(),
                 ReturnType::TypedDictionary(dictionary) => dictionary.validate(),
                 ReturnType::Structural(shape) => shape.validate(),
@@ -2825,19 +2812,14 @@ impl Function {
                     result,
                     ref elements,
                 } => {
-                    let shape = match elements.len() {
-                        1 => TupleShape::OneView,
-                        2 => TupleShape::ViewDelegate,
-                        _ => return Err(fail("initial View tuple requires one or two slots")),
-                    };
-                    let api::Type::Tuple(expected) = shape.api_type() else {
-                        unreachable!()
-                    };
-                    if !expected.iter().zip(elements).all(|(expected, value)| {
-                        native::accepts(expected, &type_of(*value).api_type())
-                    }) {
-                        return Err(fail("initial View tuple slot types do not match its shape"));
-                    }
+                    let slots = elements
+                        .iter()
+                        .map(|value| {
+                            tuples::value_contract(&origins, *value, &type_of(*value).api_type())
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(fail)?;
+                    let shape = TupleType::new(slots).map_err(fail)?;
                     if !elements.iter().all(|value| {
                         definitions.get(value).is_some_and(|at| {
                             matches!(
@@ -3033,11 +3015,26 @@ impl Function {
                                 } else {
                                     type_of(index).api_type()
                                 };
-                                results.push(unions::index_read(part, &key).map_err(|e| fail(&e))?);
+                                results.push(if let api::Type::TupleValue(tuple) = part {
+                                    if !native::accepts(
+                                        &api::Type::named("Toybox.Lang.Number"),
+                                        &key,
+                                    ) {
+                                        return Err(fail(
+                                            "tuple reads require a non-null Number index",
+                                        ));
+                                    }
+                                    tuple.read(origins.integer(index)).map_err(fail)?.api_type()
+                                } else {
+                                    unions::index_read(part, &key).map_err(|e| fail(&e))?
+                                });
                             }
                             unions::normalize(results)
                         }
                         ValueType::Any => api::Type::Any,
+                        ValueType::Tuple(ref tuple) => {
+                            tuple.read(origins.integer(index)).map_err(fail)?.api_type()
+                        }
                         ValueType::Array(element) => element.api_type(),
                         ValueType::ByteArray => ArrayElement::Number.api_type(),
                         _ => {
@@ -4695,7 +4692,8 @@ fn validate_call_arguments(
         types.get(v).is_some_and(|t| {
             !matches!(
                 t,
-                ValueType::Structural(_)
+                ValueType::Tuple(_)
+                    | ValueType::Structural(_)
                     | ValueType::Callback(_)
                     | ValueType::Union(_)
                     | ValueType::Any

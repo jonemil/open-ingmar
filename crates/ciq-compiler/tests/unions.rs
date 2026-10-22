@@ -71,7 +71,7 @@ fn saved_union_contracts_reject_forged_reads_and_recheck_availability() {
     for changed in [
         text.replace(".integer %0 1", ".boolean %0 true"),
         text.replace("union(integer|string)", "union(integer|void)"),
-        text.replace("union(integer|string)", "union(one-view|string)"),
+        text.replace("union(integer|string)", "union(tuple(integer)|string)"),
         text.replace(
             "union(integer|string)",
             "union(integer|source(C@Lang.Object))",
