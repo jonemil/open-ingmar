@@ -949,6 +949,84 @@ impl Builder<'_> {
         self.snapshot_with_context(expression, locals, None)
     }
 
+    /// Capture an index before later effects, retaining an immediate Number's
+    /// positional proof without assigning a constant contract to mutable storage.
+    fn snapshot_index(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+        positional: bool,
+    ) -> Result<parser::Expression, Diagnostic> {
+        if positional && matches!(expression.kind, parser::ExpressionKind::Integer(_)) {
+            Ok(expression)
+        } else {
+            self.snapshot(expression, locals)
+        }
+    }
+
+    /// Write an indexed value and update a named tuple's inferred storage view.
+    /// Reject tuple writes through unnamed aliases rather than retain a stale
+    /// positional proof for fields or nested receivers.
+    fn indexed_write(
+        &mut self,
+        target: Option<LocalId>,
+        array: ValueId,
+        index: ValueId,
+        value: ValueId,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        if self
+            .types
+            .value_type(array)
+            .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
+        {
+            let local = target.ok_or_else(|| {
+                Diagnostic::at(
+                    self.source,
+                    span.start,
+                    "tuple mutation requires a named local or parameter receiver",
+                )
+            })?;
+            self.promote_variable(local);
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::TupleWrite {
+                    result,
+                    array,
+                    index,
+                    value,
+                },
+                Some(span),
+            );
+            self.push(
+                Operation::LocalAssign {
+                    local,
+                    value: result,
+                },
+                Some(span),
+            );
+        } else {
+            let operation = if matches!(
+                self.types.value_type(array),
+                Some(crate::api::Type::Dictionary { .. })
+            ) {
+                Operation::DictionaryWrite {
+                    dictionary: array,
+                    key: index,
+                    value,
+                }
+            } else {
+                Operation::ArrayWrite {
+                    array,
+                    index,
+                    value,
+                }
+            };
+            self.push(operation, Some(span));
+        }
+        Ok(())
+    }
+
     /// Save an operand, passing container context into empty literals/conditional arms.
     fn snapshot_with_context(
         &mut self,
@@ -2320,9 +2398,27 @@ impl Builder<'_> {
         let E::ArrayRead { array, index } = target.kind else {
             unreachable!("parsed indexed compound target")
         };
+        let target = if let E::Local(name) = &array.kind {
+            locals.get(name).copied()
+        } else {
+            None
+        };
         let array = self.snapshot(*array, locals)?;
-        let index = self.snapshot(*index, locals)?;
+        let positional = match array.kind {
+            E::Temporary(local) => self
+                .types
+                .local_type(local)
+                .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some()),
+            _ => false,
+        };
+        let index = self.snapshot_index(*index, locals, positional)?;
         let temporary = |expression: &Expression| {
+            if let E::Integer(value) = expression.kind {
+                return Expression {
+                    kind: E::Integer(value),
+                    span: expression.span,
+                };
+            }
             let E::Temporary(local) = expression.kind else {
                 unreachable!("captured target operand")
             };
@@ -2345,15 +2441,7 @@ impl Builder<'_> {
         let array = self.value(array, locals)?;
         let index = self.value(index, locals)?;
         let value = self.value(value, locals)?;
-        self.push(
-            Operation::ArrayWrite {
-                array,
-                index,
-                value,
-            },
-            Some(span),
-        );
-        Ok(())
+        self.indexed_write(target, array, index, value, span)
     }
 
     /// Resolve a named assignment target to declared local or parameter storage.
@@ -2638,6 +2726,14 @@ impl Builder<'_> {
                     value,
                     ..
                 } => {
+                    let target = if let parser::ExpressionKind::Local(name) = &array.kind {
+                        locals.get(name).copied()
+                    } else {
+                        None
+                    };
+                    let positional = target
+                        .and_then(|local| self.types.local_type(local))
+                        .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some());
                     // Keep earlier operands stable across control-flow staging
                     // in any later expression; plain operands need no temporaries.
                     let (array, index, value) = if array.needs_materialization()
@@ -2646,7 +2742,7 @@ impl Builder<'_> {
                     {
                         (
                             self.snapshot(array, locals)?,
-                            self.snapshot(index, locals)?,
+                            self.snapshot_index(index, locals, positional)?,
                             self.snapshot(value, locals)?,
                         )
                     } else {
@@ -2655,23 +2751,7 @@ impl Builder<'_> {
                     let array = self.value(array, locals)?;
                     let index = self.value(index, locals)?;
                     let value = self.value(value, locals)?;
-                    let operation = if matches!(
-                        self.types.value_type(array),
-                        Some(crate::api::Type::Dictionary { .. })
-                    ) {
-                        Operation::DictionaryWrite {
-                            dictionary: array,
-                            key: index,
-                            value,
-                        }
-                    } else {
-                        Operation::ArrayWrite {
-                            array,
-                            index,
-                            value,
-                        }
-                    };
-                    self.push(operation, Some(span));
+                    self.indexed_write(target, array, index, value, span)?;
                 }
                 parser::Statement::MemberAssign {
                     receiver,
@@ -3155,7 +3235,7 @@ fn build_body(
             .map(|(i, n)| (n, i))
             .collect(),
         operations: Vec::new(),
-        types: crate::source_types::Types::new(candidate_parameters),
+        types: crate::source_types::Types::new(candidate_parameters.clone()),
         next_local: 0,
         named_locals: std::collections::BTreeSet::new(),
         pending_locals: BTreeMap::new(),
@@ -3166,7 +3246,37 @@ fn build_body(
     if has_control_flow(&ast.statements) {
         builder.push(Operation::Block { block: BlockId(0) }, None);
     }
-    if !builder.sequence(ast.statements, &mut BTreeMap::new())? {
+    // Positional parameter annotations describe the entry value. A mutable
+    // local view tracks subsequent slot replacement without changing the ABI.
+    let mut locals = BTreeMap::new();
+    let tuple_writes = tuple_write_receivers(&ast.statements);
+    for (name, index) in builder.parameters.clone() {
+        if tuple_writes.contains(name.as_str())
+            && candidate_parameters
+                .get(index)
+                .is_some_and(|ty| crate::tuples::read_contract(&ty.api_type(), None).is_some())
+        {
+            let local = builder.local_id(ast.body_span)?;
+            let value = ValueId(builder.operations.len() as u32);
+            builder.push(
+                Operation::ParameterRead {
+                    result: value,
+                    index,
+                },
+                None,
+            );
+            builder.push(
+                Operation::LocalVariable {
+                    local,
+                    value: Some(value),
+                },
+                None,
+            );
+            builder.named_locals.insert(local);
+            locals.insert(name, local);
+        }
+    }
+    if !builder.sequence(ast.statements, &mut locals)? {
         if value_result && (effective_result != crate::ReturnType::Any || has_result_return) {
             return Err(Diagnostic::at(
                 source,
@@ -3342,6 +3452,62 @@ fn has_control_flow(statements: &[parser::Statement]) -> bool {
         parser::Statement::Block { body, .. } => has_control_flow(body),
         _ => false,
     })
+}
+
+/// Find direct named slot-write receivers before building branch-local views.
+/// Only mutated parameters need an extra frame slot; read-only tuple parameters
+/// retain the ordinary parameter path and its existing frame capacity.
+fn tuple_write_receivers(statements: &[parser::Statement]) -> std::collections::BTreeSet<&str> {
+    use parser::{ExpressionKind as E, Statement as S};
+    let mut names = std::collections::BTreeSet::new();
+    for statement in statements {
+        let receiver = match statement {
+            S::ArrayAssign { array, .. } => Some(array),
+            S::Update { target, .. } | S::PlaceCompound { target, .. } => {
+                if let E::ArrayRead { array, .. } = &target.kind {
+                    Some(array.as_ref())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(parser::Expression {
+            kind: E::Local(name),
+            ..
+        }) = receiver
+        {
+            names.insert(name.as_str());
+        }
+        match statement {
+            S::If {
+                on_true, on_false, ..
+            } => {
+                names.extend(tuple_write_receivers(on_true));
+                names.extend(tuple_write_receivers(on_false));
+            }
+            S::Switch { cases, .. } => {
+                for case in cases {
+                    names.extend(tuple_write_receivers(&case.body));
+                }
+            }
+            S::For {
+                initialize,
+                body,
+                update,
+                ..
+            } => {
+                for statements in [initialize, body, update] {
+                    names.extend(tuple_write_receivers(statements));
+                }
+            }
+            S::Block { body, .. } | S::While { body, .. } | S::DoWhile { body, .. } => {
+                names.extend(tuple_write_receivers(body));
+            }
+            _ => {}
+        }
+    }
+    names
 }
 
 fn has_value_return(statements: &[parser::Statement]) -> bool {

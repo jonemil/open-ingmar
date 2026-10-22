@@ -1510,8 +1510,18 @@ operand or joins the possible slot contracts otherwise, using the
 [frontend rules](../frontend/README.md#positional-tuples). Source provenance is
 reconstructed on reload; result metadata cannot invent a source slot identity.
 Unit checks resolve nested class/native-base claims and retain native callback
-slot/cardinality checks. General tuple mutation is not admitted by this IR
-profile; the source receiver restrictions apply here too.
+slot/cardinality checks.
+
+`.tuple-write %result %array %index %value` replaces one slot and returns the
+same runtime Array reference. Validation derives the updated tuple contract
+from the receiver and replacement value, retaining exact source identities.
+The index must be a direct Integer operand in bounds for every receiver
+alternative. No result-type assertion supplies or overrides this proof.
+Store the result back to the named receiver's inferred local to make later reads
+use the new view. Branch joins use ordinary inferred-local domains. Tuple
+parameters requiring slot writes have entry reads stored into inferred locals
+without changing their calling convention or the capacity for read-only
+parameters. Aliased locals retain their own static views.
 
 [VM lowering](../lowering/README.md#positional-result-construction).
 

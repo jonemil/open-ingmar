@@ -1238,10 +1238,18 @@ pub enum Operation {
     },
     /// Construct a fresh positional Array, inferring the evaluated slot contracts.
     /// Slots must be already evaluated local/parameter reads, so allocation
-    /// cannot move before operand effects. The shape has no Array mutation profile.
+    /// cannot move before operand effects.
     TupleNew {
         result: ValueId,
         elements: Vec<ValueId>,
+    },
+    /// Replace a known tuple slot and return the same Array reference under its
+    /// updated positional contract. The index must be a literal Number operand.
+    TupleWrite {
+        result: ValueId,
+        array: ValueId,
+        index: ValueId,
+        value: ValueId,
     },
     /// Allocate and initialize one supported native object with no arguments.
     /// Constructor availability is checked separately from class availability;
@@ -2838,6 +2846,30 @@ impl Function {
                     types.insert(result, ValueType::Tuple(shape));
                     (Some(result), elements.clone())
                 }
+                Operation::TupleWrite {
+                    result,
+                    array,
+                    index,
+                    value,
+                } => {
+                    if !matches!(type_of(index), ValueType::Integer) {
+                        return Err(fail("tuple writes require a non-null Number index"));
+                    }
+                    let slot = tuples::value_contract(&origins, value, &type_of(value).api_type())
+                        .map_err(fail)?;
+                    let ty = tuples::write_contract(
+                        &type_of(array).api_type(),
+                        origins.integer(index),
+                        &slot,
+                    )
+                    .map_err(fail)?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty)
+                            .ok_or_else(|| fail("unsupported updated tuple contract"))?,
+                    );
+                    (Some(result), vec![array, index, value])
+                }
                 Operation::WeakReferenceNew { result } => {
                     if let Some(context) = context {
                         context
@@ -3750,6 +3782,7 @@ impl Function {
                     | Operation::NativeNew { .. }
                     | Operation::WeakReferenceNew { .. }
                     | Operation::TupleNew { .. }
+                    | Operation::TupleWrite { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
@@ -3906,6 +3939,18 @@ impl Function {
                                 } => {
                                     tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
                                     tasks.push(Task::Value(*receiver));
+                                }
+                                Operation::TupleWrite {
+                                    array,
+                                    index,
+                                    value,
+                                    ..
+                                } => {
+                                    tasks.extend([
+                                        Task::Value(*value),
+                                        Task::Value(*index),
+                                        Task::Value(*array),
+                                    ]);
                                 }
                                 Operation::TupleNew {
                                     elements: arguments,
@@ -4252,6 +4297,15 @@ impl Function {
                         .iter()
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>()
+                ),
+                Operation::TupleWrite {
+                    result,
+                    array,
+                    index,
+                    value,
+                } => format!(
+                    ".tuple-write %{} %{} %{} %{}",
+                    result.0, array.0, index.0, value.0
                 ),
                 Operation::NativeNew { result, class } => {
                     format!(".new-native %{} {}", result.0, class.name())

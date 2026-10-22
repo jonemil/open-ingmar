@@ -214,13 +214,32 @@ equal length and per-slot assignability. A tuple may widen to `Array<T>` when
 every slot satisfies `T`; an Array contract cannot establish tuple length or
 positions. Existing Array element contracts remain invariant.
 
-The current tuple receiver profile supports indexed reads and the native
-`size`, `equals`, `hashCode`, and `toString` observers. Indexed writes and other
-Array/Object methods are rejected until their shape/effect contracts are
-supported. These restrictions do not make the runtime Array immutable: an
-Array-typed callee may mutate it, and no positional mutation tracking across
-calls is promised. Structural slots may hold already checked interface values;
-fresh source-class witnesses are not inferred when packing a tuple.
+Writing a direct integer-literal index on a named tuple local or non-null tuple
+parameter replaces that slot's contract, including with a different type.
+Subsequent reads use the updated contract; branches join their possible tuple
+contracts. Compound assignments and statement updates use the same rule and
+capture the receiver once. For example:
+
+```monkeyc
+function replace(x as [Number, String]) as [String, String] {
+    x[0] = "changed";
+    return x;
+}
+```
+
+Parameter annotations constrain entry values. Parameters used as slot-write
+receivers have an inferred local view that may change inside the body.
+Mutation tracking is local to the named receiver: aliases and callers retain
+their previous static views, matching the SDK's
+observed limits. This does not guarantee that an aliased runtime slot still has
+its previous type. Dynamic-index writes, writes through fields/nested receivers,
+and writes through nullable tuple parameters are currently rejected.
+
+The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
+Other Array/Object methods remain rejected until their shape/effect contracts
+are supported. An Array-typed callee may still mutate the runtime Array.
+Structural slots may hold already checked interface values; fresh source-class
+witnesses are not inferred when packing a tuple.
 
 AppBase's [initial View callback](../sdk/README.md#source-initial-view-callback)
 still requires its direct literal and native slot profile. See the
@@ -591,8 +610,12 @@ observe ordinary object mutations.
 
 Evaluate the RHS before storing; earlier reads keep their snapshots and later
 reads observe the replacement. Writes invalidate that parameter's null/class
-refinements, including on loop backedges. They use the existing parameter slot
-and allocate no source local. See [assignment evidence](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
+refinements, including on loop backedges. Ordinary parameter writes use the
+existing parameter slot. Non-null [tuple parameters](#positional-tuples) used as
+slot-write receivers instead have an inferred local view so mutation can change
+their positional
+contract; their entry annotations still constrain calls. See
+[assignment evidence](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).
 
 [IR parameter operations](../ir/README.md#parameter-metadata-and-reads)
 retain positional identity and typed argument order; the [IR

@@ -183,3 +183,29 @@ pub(crate) fn read_contract(
         _ => None,
     }
 }
+
+/// Replace a known slot in each tuple alternative and return the new contract.
+/// Dynamic indices cannot establish a positional shape; reject them until
+/// generalized Array element unions can represent the resulting storage.
+pub(crate) fn write_contract(
+    receiver: &Type,
+    index: Option<i32>,
+    value: &ReturnType,
+) -> Result<Type, &'static str> {
+    match receiver {
+        Type::TupleValue(tuple) => {
+            let index = index.ok_or("dynamic tuple writes require generalized Array contracts")?;
+            tuple.read(Some(index))?;
+            let mut slots = tuple.slots.clone();
+            slots[index as usize] = value.clone();
+            Ok(TupleType::new(slots)?.api_type())
+        }
+        Type::Union(parts) => Ok(crate::unions::normalize(
+            parts
+                .iter()
+                .map(|part| write_contract(part, index, value))
+                .collect::<Result<_, _>>()?,
+        )),
+        _ => Err("tuple writes require non-null positional receivers"),
+    }
+}

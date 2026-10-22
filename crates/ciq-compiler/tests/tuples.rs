@@ -157,9 +157,69 @@ fn malformed_shapes_indexes_and_unproven_slot_identities_are_rejected() {
         "class A {} function f(x as [Toybox.Lang.Object]) as [A] { return x; }",
         "function f(x as []) { return x; }",
         "function f(x as [Toybox.Graphics.Dc]) { return x; }",
-        "function f(x as [Toybox.Lang.Number]) { x[0] = \"changed\"; }",
         "function f(x as [Toybox.Lang.Number]) { x.add(2); }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
+}
+
+#[test]
+fn tuple_slot_replacement_updates_locals_parameters_branches_and_source_identity() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        class Token { function number() as Lang.Number { return 41; } }
+        function parameter(x as [Lang.Number, Lang.String]) as [Lang.String, Lang.String] {
+            x[0] = "changed"; return x;
+        }
+        function local() as Lang.String { var x = [1, "old"]; x[0] = "changed"; return x[0]; }
+        function source() as Lang.Number { var x = [1, "old"]; x[0] = new Token(); return x[0].number(); }
+        function nested() as Lang.String { var x = [1, "old"]; x[0] = [2, "nested"]; return x[0][1]; }
+        function branch(flag as Lang.Boolean) as Lang.Number or Lang.String {
+            var x = [1, "old"]; if (flag) { x[0] = "changed"; } return x[0];
+        }
+        function alternatives(x as [Lang.Number, Lang.String] or [Lang.Boolean, Lang.Number]) as Lang.String {
+            x[0] = "changed"; return x[0];
+        }
+        function compound(x as [Lang.Number, Lang.String]) as Lang.Number { x[0] += 2; x[0]++; return x[0]; }
+        function effects(x as [Lang.Number, Lang.String], flag as Lang.Boolean) as Lang.Number {
+            x[0] = flag ? 41 : 42; return x[0];
+        }
+        function aliasView() as Lang.Number { var x = [1, "old"]; var y = x; y[0] = "changed"; return x[0]; }
+    "#,
+    );
+}
+
+#[test]
+fn tuple_writes_reject_stale_results_unknown_indices_and_unnamed_receivers() {
+    for source in [
+        r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number] { x[0] = "changed"; return x; }"#,
+        r#"function f(x as [Toybox.Lang.Number], i as Toybox.Lang.Number) { x[i] = 2; }"#,
+        r#"function f(x as [Toybox.Lang.Number]) { x[1] = 2; }"#,
+        r#"function f(x as [Toybox.Lang.Number]) { x["bad"] = 2; }"#,
+        r#"function f(x as [[Toybox.Lang.Number]]) { x[0][0] = "changed"; }"#,
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+    let unit = round_trip(
+        r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.String] { x[0] = "changed"; return x; }"#,
+    );
+    let text = unit.to_ir_text();
+    assert!(text.contains(".tuple-write"));
+    assert!(parse_unit_ir(&text.replace("result=tuple(string)", "result=tuple(number)")).is_err());
+}
+
+#[test]
+fn read_only_tuple_parameters_preserve_the_full_parameter_frame_budget() {
+    let parameters = (0..254)
+        .map(|i| format!("p{i} as [Toybox.Lang.Number]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    round_trip(&format!(
+        "function f({parameters}) as Toybox.Lang.Number {{ return p0[0]; }}"
+    ));
+    round_trip(&format!(
+        "function f({parameters}) as Toybox.Lang.Number {{ p0[0] = 42; return p0[0]; }}"
+    ));
+    assert!(compile_sources(&[&format!("function f({parameters}) as Toybox.Lang.Number {{ p0[0] = 42; p1[0] = 43; return p0[0]; }}")]).is_err());
 }

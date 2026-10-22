@@ -218,6 +218,7 @@ object-operation = ".new-native" value-id class-path
                  | ".new-source" value-id identifier native-base value-id*
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
+                 | ".tuple-write" value-id value-id value-id value-id
 ```
 
 User-call and field-read result defaults are `integer`; canonical output omits

@@ -37,8 +37,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Track tuple slot replacement and `add`/`addAll` cardinality changes through
-  locals, parameters, branches, and saved IR. Handle dynamic-index writes losing
+- [ ] Track tuple `add`/`addAll` cardinality changes through locals, parameters,
+  branches, and saved IR. Support slot writes through nullable tuple parameters,
+  fields, and nested receivers. Handle dynamic-index writes losing
   positional shape. Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
   `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
   resolve mutation/alias limits against the
@@ -46,7 +47,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 - [ ] Extend tuple inference to homogeneous/empty literals and computed scalar
   or source literals without a nested Array literal, including Symbol mixtures.
   Retain contextual Array construction and check existing Array method/assignment
-  consumers under inferred slot contracts; tuple mutation support below is a
+  consumers under inferred slot contracts; tuple mutation support above is a
   prerequisite for migrating existing mutable homogeneous Array users.
 - [ ] Prove source-class structural witnesses when packing tuples with interface
   slots, reusing unit-level member checks rather than requiring an already typed

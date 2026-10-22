@@ -57,7 +57,10 @@ counts.
 
 Parameter writes evaluate the RHS, then emit `lputv <index + 1>`. They reuse the
 existing parameter slot, leave the hidden receiver in slot 0 intact, and
-allocate no local copy. A write affects this frame's value; earlier evaluation
+allocate no local copy. Non-null tuple parameters used as slot-write receivers
+start with a read into an inferred local, which counts toward the same frame
+budget; their mutations use that local view. Read-only tuple parameters keep
+their ABI slots. A write affects this frame's value; earlier evaluation
 stack values and caller variables retain their own copies/references.
 [SDK and runtime evidence](../../investigations/compiler-arguments.md) verifies two
 parameters, a following local, nested calls, and generated caller/callee
@@ -361,7 +364,11 @@ Lowering pushes the tuple length, allocates with `newa`, then emits
 `dup 0; <index>; <stored slot read>; aputv` for each slot. Lengths and indexes
 use the ordinary Number literal encoder, including wider pushes when needed.
 The result is published after all slots are filled. Indexed reads use the
-existing Array read instructions. No new VM opcode or DATA record is required.
+existing Array read instructions. Tuple slot replacement emits the receiver,
+`dup 0`, index, replacement value, and `aputv`, leaving the same receiver on the
+stack for storage under its updated IR contract. Compound targets capture the
+receiver before reading/updating the slot; immediate indexes retain their
+positional proof across staging. No new VM opcode or DATA record is required.
 Array availability and each slot's native types are checked separately; View
 construction requires its initializer's 2.1.0 level. No allocation failure
 timing or memory equivalence with SDK lowering is implied. See the

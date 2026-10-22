@@ -3,8 +3,8 @@
 **Experimentally observed, 2026-10-22:** SDK 9.2.0 strict checking accepts
 positional annotations, nested tuples, per-slot widening, and tuple-to-Array
 assignment. Mutation can replace slot types or change cardinality. These are
-compile-time observations; the runtime check below covers construction and
-typed transport separately.
+compile-time observations; the runtime check below covers construction, typed
+transport, and direct slot replacement separately.
 
 **Officially documented:** [Monkey Types][types] defines equal-length,
 per-position tuple assignment and compatibility with an Array whose element
@@ -113,8 +113,13 @@ function test() as Lang.Number {
 A separate `change(x as [Lang.Number]) as Void { x[0] = "changed"; }`
 called with a local `[1]` likewise does not prevent returning that local's
 index zero as Number. This agrees with the documented lack of tuple mutation
-tracking across calls. It does not establish branch-merge rules, constant
-folding of arbitrary index expressions, or the effect of other Array mutators.
+tracking across calls. The complete application also passes strict SDK checking
+for a conditional slot replacement joined with the original tuple, Number slot
+compound updates,
+and replacement values containing nested tuples or exact source instances.
+A separate strict probe accepts rebinding a `[Lang.Number]` parameter to
+`["changed"]` and returning `[Lang.String]`. These observations do not establish
+constant folding of arbitrary index expressions or other Array mutators.
 
 ## Runtime construction and typed transport
 
@@ -126,9 +131,13 @@ nested/source slots, positional/dynamic reads, nullable guards, fields, Method
 results, contextual literal arguments, conditional construction, Array widening,
 and ordered slot effects. The application also checks inferred mixed scalar
 tokens, Null-only tuples, nested literals, source slots selected by nested
-inference, and ordered computed effects inside nested literals. Both SDK and
-generated PRGs reconstructed through
-structured section export without required CODE/DATA fallback. It does not
-establish tuple mutation tracking or inference for every unconstrained literal.
+inference, and ordered computed effects inside nested literals. Direct slot
+replacement changes parameter/local contracts, including nested/source values;
+the console
+also checks both paths of a branch join, compound updates, and a conditional RHS.
+Both SDK and generated PRGs reconstructed through structured section export
+without required CODE/DATA fallback. It does not
+establish mutation tracking through arbitrary aliases, across calls, or
+inference for every unconstrained literal.
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

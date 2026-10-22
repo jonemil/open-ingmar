@@ -154,6 +154,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Symbol { result, .. }
             | Operation::NativeConstant { result, .. }
             | Operation::TupleNew { result, .. }
+            | Operation::TupleWrite { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -717,6 +718,7 @@ fn expression(
         SourceMember(String),
         TupleStore,
         TupleElement(ValueId, usize),
+        TupleWrite(ValueId, ValueId),
         FinishConstructor(usize),
     }
     let mut tasks = vec![Task::Value(root)];
@@ -756,6 +758,16 @@ fn expression(
                     class: crate::NativeClass::Dc,
                     ..
                 } => unreachable!("Dc construction is not admitted"),
+                Operation::TupleWrite {
+                    array,
+                    index,
+                    value,
+                    ..
+                } => {
+                    tasks.push(Task::TupleWrite(*index, *value));
+                    tasks.push(Task::Value(*array));
+                    continue;
+                }
                 Operation::TupleNew { elements, .. } => {
                     let (opcode, operands) = integer(elements.len() as i32);
                     items.extend([
@@ -1127,6 +1139,13 @@ fn expression(
                 items.push(instruction(opcode, operands));
                 tasks.push(Task::TupleStore);
                 tasks.push(Task::Value(value));
+                continue;
+            }
+            Task::TupleWrite(index, value) => {
+                items.push(instruction(Opcode::Dup, vec![Operand::Bits(0)]));
+                tasks.push(Task::TupleStore);
+                tasks.push(Task::Value(value));
+                tasks.push(Task::Value(index));
                 continue;
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),

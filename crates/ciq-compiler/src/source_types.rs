@@ -136,6 +136,23 @@ impl Types {
                     .map(|ty| ty.api_type()),
             ),
             Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
+            Operation::TupleWrite {
+                result,
+                array,
+                index,
+                value,
+            } => (
+                *result,
+                self.values.get(array).and_then(|ty| {
+                    let slot = crate::tuples::value_contract(
+                        &self.origins,
+                        *value,
+                        self.values.get(value)?,
+                    )
+                    .ok()?;
+                    crate::tuples::write_contract(ty, self.origins.integer(*index), &slot).ok()
+                }),
+            ),
             Operation::TupleNew { result, elements } => {
                 let slots = elements
                     .iter()

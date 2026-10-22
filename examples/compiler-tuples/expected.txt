@@ -29,3 +29,10 @@ first
 second
 12
 ordered
+replaced
+41
+nested-replacement
+branch-replacement
+1
+42
+42

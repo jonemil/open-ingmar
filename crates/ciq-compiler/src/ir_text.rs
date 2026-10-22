@@ -44,6 +44,7 @@ enum Directive {
     ArrayNew,
     NewNative,
     TupleNew,
+    TupleWrite,
     NewSource,
     Constant,
     CallNativeDiscard,
@@ -316,6 +317,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".array-fill-many") => (Directive::ArrayFillMany, call_width()),
             Some(".new-native") => (Directive::NewNative, 3),
             Some(".tuple-new") => (Directive::TupleNew, call_width()),
+            Some(".tuple-write") => (Directive::TupleWrite, 5),
             Some(".new-source") => (Directive::NewSource, call_width()),
             Some(".constant") => (Directive::Constant, 4),
             Some(".call-native-discard") => (Directive::CallNativeDiscard, call_width()),
@@ -571,6 +573,12 @@ pub(crate) fn parse_function_ir_context(
                         .iter()
                         .map(|v| parse_value(v))
                         .collect::<Result<_, _>>()?,
+                },
+                Directive::TupleWrite => Operation::TupleWrite {
+                    result: parse_value(&fields[1])?,
+                    array: parse_value(&fields[2])?,
+                    index: parse_value(&fields[3])?,
+                    value: parse_value(&fields[4])?,
                 },
                 Directive::TupleNew => {
                     if width < 3 {

@@ -65,6 +65,37 @@ module Inferred {
     }
 }
 
+module Mutation {
+    function replace(x as Pair) as [Lang.String, Lang.String] {
+        x[0] = "replaced";
+        return x;
+    }
+    function source() as Lang.Number {
+        var x = [1, "old"];
+        x[0] = new Token();
+        return x[0].number();
+    }
+    function nested() as Lang.String {
+        var x = [1, "old"];
+        x[0] = [2, "nested-replacement"];
+        return x[0][1];
+    }
+    function branch(flag as Lang.Boolean) as Lang.Number or Lang.String {
+        var x = [1, "old"];
+        if (flag) { x[0] = "branch-replacement"; }
+        return x[0];
+    }
+    function compound(x as Pair) as Lang.Number {
+        x[0] += 2;
+        x[0]++;
+        return x[0];
+    }
+    function conditional(x as Pair, flag as Lang.Boolean) as Lang.Number {
+        x[0] = flag ? 42 : 7;
+        return x[0];
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -100,6 +131,13 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(Inferred.nested());
         System.println(Inferred.source());
         System.println(Inferred.ordered());
+        System.println(Mutation.replace([1, "old"])[0]);
+        System.println(Mutation.source());
+        System.println(Mutation.nested());
+        System.println(Mutation.branch(true));
+        System.println(Mutation.branch(false));
+        System.println(Mutation.compound([39, "compound"]));
+        System.println(Mutation.conditional([0, "conditional"], true));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }
