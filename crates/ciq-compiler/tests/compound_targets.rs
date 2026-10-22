@@ -2,7 +2,7 @@ use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 fn context() -> ApiContext {
@@ -74,8 +74,8 @@ fn indexed_compounds_capture_location_and_read_once() {
         let source = format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i, n) {{ a[i] {op}= n; return 0; }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let ops = f.operations();
         assert_eq!(
             ops.iter()
@@ -121,8 +121,8 @@ fn indexed_compounds_capture_location_and_read_once() {
         "function f() { [1, 2][0] += 1; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[-1] += 2; return 0; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] += 'A'; return 0; }",
@@ -135,13 +135,13 @@ fn indexed_compounds_capture_location_and_read_once() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a[0] += 1; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0][0] += 1; return 0; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn indexed_reads_stay_before_rhs_calls_and_branching_effects() {
-    let f = compile(
+    let f = compile_function(
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] += M.value(); return 0; }",
     )
     .unwrap();
@@ -163,7 +163,7 @@ fn indexed_reads_stay_before_rhs_calls_and_branching_effects() {
     )
     .unwrap_err();
     assert!(err.message.contains("evaluation order"), "{}", err.message);
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] += (false || true).hashCode(); return 0; }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0] += (false || true).hashCode(); return 0; }").unwrap();
     let ops = f.operations();
     let read = ops
         .iter()
@@ -184,12 +184,12 @@ fn capture_locals_use_the_frame_budget_without_reducing_parser_nesting() {
             .collect::<Vec<String>>()
             .join(",")
     };
-    compile(&format!(
+    compile_function(&format!(
         "function f({}) {{ a[0] += 1; return 0; }}",
         params(253)
     ))
     .unwrap();
-    let err = compile(&format!(
+    let err = compile_function(&format!(
         "function f({}) {{ a[0] += 1; return 0; }}",
         params(254)
     ))
@@ -202,9 +202,9 @@ fn capture_locals_use_the_frame_budget_without_reducing_parser_nesting() {
             ")".repeat(depth)
         )
     };
-    compile(&nested(64)).unwrap();
+    compile_function(&nested(64)).unwrap();
     assert!(
-        compile(&nested(65))
+        compile_function(&nested(65))
             .unwrap_err()
             .message
             .contains("nesting")

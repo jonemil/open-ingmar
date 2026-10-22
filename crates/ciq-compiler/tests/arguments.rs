@@ -1,5 +1,5 @@
 use ciq_assembly::Program;
-use ciq_compiler::{Function, Operation, compile, parse_ir, symbol_bindings};
+use ciq_compiler::{Function, Operation, compile_function, parse_function_ir, symbol_bindings};
 use ciq_mc::{Opcode, decode};
 use std::collections::BTreeMap;
 
@@ -107,7 +107,7 @@ fn symbols() -> Program {
     Program::parse(".symbol m \"globals/Numbers\" id=0x02\n.symbol subtract \"subtract\" id=0x80\n.symbol adjust \"adjust\" id=0x81\n.symbol next \"next\" id=0x82\n.symbol two \"two\" id=0x83\n").unwrap()
 }
 fn check(source: &str, arguments: &[i32], expected: i32, expected_calls: &[u32]) {
-    let ir = compile(source).unwrap();
+    let ir = compile_function(source).unwrap();
     let native = ir.lower();
     let bindings = symbol_bindings(&native, &symbols()).unwrap();
     let bytes = native
@@ -117,7 +117,7 @@ fn check(source: &str, arguments: &[i32], expected: i32, expected_calls: &[u32])
         evaluate(&bytes, arguments),
         (expected, expected_calls.to_vec())
     );
-    let resumed = parse_ir(&ir.to_ir_text()).unwrap();
+    let resumed = parse_function_ir(&ir.to_ir_text()).unwrap();
     assert_eq!(resumed, ir);
     for model in [resumed.lower(), Program::parse(&native.to_text()).unwrap()] {
         assert_eq!(model, native);
@@ -150,7 +150,7 @@ fn parameter_reads_and_local_slots_survive_all_pipelines() {
         41,
         &[],
     );
-    let ir = compile("function difference(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { var x = a + 3; return x - b; }").unwrap();
+    let ir = compile_function("function difference(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { var x = a + 3; return x - b; }").unwrap();
     assert_eq!(ir.parameter_count(), 2);
     assert_eq!(
         ir.lower().encode().unwrap(),
@@ -202,7 +202,7 @@ fn argument_order_and_nested_call_contexts_are_preserved() {
 
 #[test]
 fn parameter_positions_and_argument_dependencies_are_visible_in_ir() {
-    let ir = compile("function probe(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { return Numbers.subtract(b,a); }").unwrap();
+    let ir = compile_function("function probe(a as Toybox.Lang.Number,b as Toybox.Lang.Number) as Toybox.Lang.Number { return Numbers.subtract(b,a); }").unwrap();
     assert!(matches!(
         ir.operations()[0].operation,
         Operation::ParameterRead { index: 1, .. }
@@ -210,19 +210,23 @@ fn parameter_positions_and_argument_dependencies_are_visible_in_ir() {
     assert!(ir.to_ir_text().contains(".function probe parameters=2"));
     assert!(ir.to_ir_text().contains(".parameter %0 1"));
     assert!(ir.to_ir_text().contains(".call %2 Numbers subtract %0 %1"));
-    assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
-    assert!(parse_ir("ciq-ir\n.function probe\n.parameter %0 0\n.return %0\n.end").is_err());
+    assert_eq!(parse_function_ir(&ir.to_ir_text()).unwrap(), ir);
     assert!(
-        parse_ir("ciq-ir\n.function probe parameters=1\n.parameter %0 1\n.return %0\n.end")
-            .is_err()
+        parse_function_ir("ciq-ir\n.function probe\n.parameter %0 0\n.return %0\n.end").is_err()
     );
     assert!(
-        parse_ir(
+        parse_function_ir(
+            "ciq-ir\n.function probe parameters=1\n.parameter %0 1\n.return %0\n.end"
+        )
+        .is_err()
+    );
+    assert!(
+        parse_function_ir(
             "ciq-ir\n.function probe\n.integer %0 40\n.call %1 Numbers adjust %9\n.return %1\n.end"
         )
         .is_err()
     );
-    assert!(parse_ir("ciq-ir\n.function probe\n.call %0 Numbers next\n.call %1 Numbers two\n.call %2 Numbers subtract %1 %0\n.return %2\n.end").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function probe\n.call %0 Numbers next\n.call %1 Numbers two\n.call %2 Numbers subtract %1 %0\n.return %2\n.end").is_err());
     let typed = Function::with_parameters("probe".into(), 0, ir.operations().to_vec());
     assert!(typed.is_err());
 }
@@ -241,11 +245,11 @@ fn malformed_parameter_and_argument_lists_are_rejected() {
         "function probe() as Toybox.Lang.Number { return Numbers.subtract(1 2); }",
         "function probe() as Toybox.Lang.Number { return Numbers.adjust(missing); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for header in ["parameters=-1", "parameters=255", "parameters=", "arity=2"] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function probe {header}\n.integer %0 41\n.return %0\n.end"
             ))
             .is_err()
@@ -259,7 +263,7 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
         .map(|index| format!("p{index}"))
         .collect::<Vec<_>>()
         .join(",");
-    let ir = compile(&format!(
+    let ir = compile_function(&format!(
         "function probe({parameters}) as Toybox.Lang.Number {{ var x = p253; return x; }}"
     ))
     .unwrap();
@@ -268,39 +272,39 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
         [0x4a, 255, 1, 0x12, 254, 0x13, 255, 0x12, 255, 0x16]
     );
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe({parameters},extra as Toybox.Lang.Number) as Toybox.Lang.Number {{ return 1; }}"
         ))
         .is_err()
     );
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe({parameters}) as Toybox.Lang.Number {{ var x = 1; var y = 2; return y; }}"
         ))
         .is_err()
     );
     let arguments = vec!["1"; 254].join(",");
-    let ir = compile(&format!(
+    let ir = compile_function(&format!(
         "function probe() as Toybox.Lang.Number {{ return Numbers.adjust({arguments}); }}"
     ))
     .unwrap();
     assert!(ir.assembly().contains("invokem 0xff"));
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() as Toybox.Lang.Number {{ return Numbers.adjust({arguments},1); }}"
         ))
         .is_err()
     );
     let nested = format!("{}1{}", "Numbers.adjust(".repeat(64), ")".repeat(64));
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() as Toybox.Lang.Number {{ return {nested}; }}"
         ))
         .is_ok()
     );
     let nested = format!("Numbers.adjust({nested})");
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() as Toybox.Lang.Number {{ return {nested}; }}"
         ))
         .unwrap_err()
@@ -312,11 +316,11 @@ fn signature_call_frame_and_nesting_limits_are_enforced() {
         .collect::<String>();
     let args = (0..254).map(|n| format!(" %{n}")).collect::<String>();
     assert!(
-        parse_ir(&format!(
+        parse_function_ir(&format!(
             "ciq-ir\n.function probe\n{body}.call %254 Numbers adjust{args}\n.return %254\n.end"
         ))
         .is_ok()
     );
     let body = format!("{body}.integer %254 1\n");
-    assert!(parse_ir(&format!("ciq-ir\n.function probe\n{body}.call %255 Numbers adjust{args} %254\n.return %255\n.end")).is_err());
+    assert!(parse_function_ir(&format!("ciq-ir\n.function probe\n{body}.call %255 Numbers adjust{args} %254\n.return %255\n.end")).is_err());
 }

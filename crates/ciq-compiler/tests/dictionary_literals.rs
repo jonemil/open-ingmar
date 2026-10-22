@@ -1,15 +1,16 @@
 use ciq_compiler::{
-    DictionaryKey, DictionaryType, DictionaryValue, Operation, ReturnType, compile,
-    compile_sources, parse_ir, parse_unit_ir,
+    DictionaryKey, DictionaryType, DictionaryValue, Operation, ReturnType, compile_function,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
 fn constants_keep_native_text_and_assembly_data_paths_equivalent() {
-    let f =
-        compile("function f() as Toybox.Lang.Dictionary { return {\"one\" => 1, \"two\" => 2}; }")
-            .unwrap();
+    let f = compile_function(
+        "function f() as Toybox.Lang.Dictionary { return {\"one\" => 1, \"two\" => 2}; }",
+    )
+    .unwrap();
     assert_eq!(f.return_type(), ReturnType::Dictionary);
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let p = f.lower();
     assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     let ciq_assembly::Item::Dictionary(record) = &p.items()[0] else {
@@ -73,10 +74,10 @@ fn homogeneous_inference_and_context_retain_nullable_values() {
         ),
     ] {
         let source = format!("function f() {{ var d = {literal}; return d.size(); }}");
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         assert!(f.operations().iter().any(|op| matches!(op.operation,
             Operation::DictionaryConstant { dictionary_type, .. } if dictionary_type == DictionaryType { key, value })));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let source = "module D {
         function make() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> { return {\"one\" => 1}; }
@@ -93,7 +94,8 @@ fn homogeneous_inference_and_context_retain_nullable_values() {
 
 #[test]
 fn duplicate_scalar_keys_keep_the_last_value_in_the_data_record() {
-    let f = compile("function f() { return {\"same\" => 1, \"same\" => 41}.size(); }").unwrap();
+    let f = compile_function("function f() { return {\"same\" => 1, \"same\" => 41}.size(); }")
+        .unwrap();
     let p = f.lower();
     let ciq_assembly::Item::Dictionary(record) = &p.items()[0] else {
         panic!()
@@ -125,12 +127,12 @@ fn malformed_constants_and_unsupported_value_types_fail_before_lowering() {
         "{\"x\" = 1}",
     ] {
         assert!(
-            compile(&format!("function f() {{ return {literal}.size(); }}")).is_err(),
+            compile_function(&format!("function f() {{ return {literal}.size(); }}")).is_err(),
             "accepted {literal}"
         );
     }
     let source = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number> { return {\"one\" => 1}; }";
-    let text = compile(source).unwrap().to_ir_text();
+    let text = compile_function(source).unwrap().to_ir_text();
     for (old, new) in [
         ("number 0x00000001", "null"),
         ("number 0x00000001", "boolean true"),
@@ -141,12 +143,15 @@ fn malformed_constants_and_unsupported_value_types_fail_before_lowering() {
             "dictionary(integer=>integer) string",
         ),
     ] {
-        assert!(parse_ir(&text.replace(old, new)).is_err());
+        assert!(parse_function_ir(&text.replace(old, new)).is_err());
     }
     let opaque = "ciq-ir\n.function f\n.dictionary-constant %0 dictionary(string=>integer)\n.return %0\n.end\n";
-    assert!(parse_ir(opaque).is_err());
+    assert!(parse_function_ir(opaque).is_err());
     // Token-only profile does not make discarded overwritten entries exempt from typing.
-    assert!(compile("function f() { return {\"same\" => true, \"same\" => 1}.size(); }").is_err());
+    assert!(
+        compile_function("function f() { return {\"same\" => true, \"same\" => 1}.size(); }")
+            .is_err()
+    );
 }
 
 #[test]
@@ -154,23 +159,24 @@ fn literal_limits_and_api_requirements_are_enforced_before_encoding() {
     use ciq_compiler::api::{ApiContext, ApiLevel};
     let early = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let source = "function f() { return {'a' => 1}.size(); }";
-    assert!(ciq_compiler::compile_with_api(source, early).is_err());
-    let f = compile(source).unwrap();
-    assert!(ciq_compiler::parse_ir_with_api(&f.to_ir_text(), early).is_err());
+    assert!(ciq_compiler::compile_function_with_api(source, early).is_err());
+    let f = compile_function(source).unwrap();
+    assert!(ciq_compiler::parse_function_ir_with_api(&f.to_ir_text(), early).is_err());
     let long = format!(
         "function f() {{ return {{\"{}\" => 1}}.size(); }}",
         "x".repeat(65535)
     );
-    assert!(compile(&long).unwrap_err().message.contains("u16"));
+    assert!(compile_function(&long).unwrap_err().message.contains("u16"));
     let nested = format!(
         "function f() {{ return {}0{}.size(); }}",
         "{1 => ".repeat(65),
         "}".repeat(65)
     );
-    assert!(compile(&nested).is_err());
+    assert!(compile_function(&nested).is_err());
     let escaped =
-        compile("function f() { return {\"a #,\\\" \\\\ é\\n\" => \"same\\t\"}.size(); }").unwrap();
-    assert_eq!(escaped, parse_ir(&escaped.to_ir_text()).unwrap());
+        compile_function("function f() { return {\"a #,\\\" \\\\ é\\n\" => \"same\\t\"}.size(); }")
+            .unwrap();
+    assert_eq!(escaped, parse_function_ir(&escaped.to_ir_text()).unwrap());
     assert_eq!(
         escaped.lower(),
         ciq_assembly::Program::parse(&escaped.lower().to_text()).unwrap()

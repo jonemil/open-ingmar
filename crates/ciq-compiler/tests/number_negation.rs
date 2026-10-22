@@ -1,7 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -30,7 +30,7 @@ fn number_negation_preserves_complete_pipelines_precedence_and_single_evaluation
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile("function f() { return -M.value(); }").unwrap();
+    let f = compile_function("function f() { return -M.value(); }").unwrap();
     let assembly = f.lower().to_text();
     assert_eq!(assembly.matches("getmv").count(), 1);
     assert!(assembly.contains("ipushz\ngetmv"));
@@ -41,15 +41,15 @@ fn number_negation_preserves_complete_pipelines_precedence_and_single_evaluation
         "function f(n) { return -(-n); }",
         "function f(n) { return -n + 1; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f(n) { return -n.abs(); }").unwrap();
+    let f = compile_function("function f(n) { return -n.abs(); }").unwrap();
     let text = f.to_ir_text();
     assert!(text.find(".call-native").unwrap() < text.find(".negate").unwrap());
-    let f = compile("function f(n) { return -n + 1; }").unwrap();
+    let f = compile_function("function f(n) { return -n + 1; }").unwrap();
     assert!(f.to_ir_text().find(".negate").unwrap() < f.to_ir_text().find(".add").unwrap());
-    let f = compile("function f() { return -(-2147483648); }").unwrap();
+    let f = compile_function("function f() { return -(-2147483648); }").unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         [0x35, 1, 0x37, 0x25, 0x80, 0, 0, 0, 0x04, 0x16]
@@ -69,9 +69,9 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
         "function f(n) { return --n; }",
         "function f(n) { return - -n; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f(n) { return -n; }").unwrap();
+    let f = compile_function("function f(n) { return -n; }").unwrap();
     let op = f
         .operations()
         .iter()
@@ -82,17 +82,17 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
         "-n"
     );
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace(".parameter %0 0", ".boolean %0 true")
         )
         .is_err()
     );
-    let f = compile(
+    let f = compile_function(
         "function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return -n; }",
     )
     .unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -111,7 +111,8 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
         )
         .is_err()
     );
-    let f = compile("function f() { System.println(-M.first()); return M.second(); }").unwrap();
+    let f = compile_function("function f() { System.println(-M.first()); return M.second(); }")
+        .unwrap();
     let mut operations = f.operations().to_vec();
     let negation = operations
         .iter()
@@ -133,9 +134,9 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
             ")".repeat(depth)
         )
     };
-    compile(&source(32)).unwrap();
+    compile_function(&source(32)).unwrap();
     assert!(
-        compile(&source(33))
+        compile_function(&source(33))
             .unwrap_err()
             .message
             .contains("nesting")

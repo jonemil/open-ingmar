@@ -1,7 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -37,8 +37,8 @@ fn string_operators_preserve_complete_pipelines_and_nullable_results() {
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return n == \"a\"; }",
         "function f() as Toybox.Lang.String { return false + \"a\"; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let early = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     compile_sources_with_api(
@@ -62,14 +62,16 @@ fn string_profiles_reject_unsupported_pairs_without_narrowing_nullable_operands(
         "function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.Number or Null) as Toybox.Lang.String { return s + n; }",
         "function f() as Toybox.Lang.String { var s = \"a\"; s = 7; return s; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let dictionary = "class App extends Toybox.Application.AppBase { function onStart(state) { System.println(\"state=\" + state); } }";
     assert!(ciq_compiler::compile_sources(&[dictionary]).is_err());
-    let f = compile("function f() as Toybox.Lang.String { return \"a\" + 7; }").unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".add", ".subtract")).is_err());
-    let f = compile("function f() as Toybox.Lang.Boolean { return \"a\" == 7; }").unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".integer %1 7", ".boolean %1 true")).is_err());
+    let f = compile_function("function f() as Toybox.Lang.String { return \"a\" + 7; }").unwrap();
+    assert!(parse_function_ir(&f.to_ir_text().replace(".add", ".subtract")).is_err());
+    let f = compile_function("function f() as Toybox.Lang.Boolean { return \"a\" == 7; }").unwrap();
+    assert!(
+        parse_function_ir(&f.to_ir_text().replace(".integer %1 7", ".boolean %1 true")).is_err()
+    );
     let source = "module M { function length(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return M.length(\"a\" + 7); } }";
     assert!(ciq_compiler::compile_sources(&[source]).is_err());
 }

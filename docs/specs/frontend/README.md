@@ -9,11 +9,19 @@ not a replacement definition of the complete Monkey C language.
 
 `compile_sources` collects declarations from one or more files into a
 `CompilationUnit` before resolving owners and checking cross-function references.
-The lower-level `compile` entry accepts one global function and produces a
-`Function` fragment. It permits unresolved user module calls for external symbol
+The lower-level `compile_function` entry accepts one global function and produces
+a `Function` fragment. It permits unresolved user module calls for external symbol
 binding, without checking their declarations or signatures. Both entries use the
 same file/declaration parser; the fragment restriction is checked after parsing.
 The CLI selects units with `--unit`; its default is a function fragment.
+The library entry points name these scopes explicitly:
+
+| Scope | Source input | Saved IR input | Result |
+|---|---|---|---|
+| One function | `compile_function` | `parse_function_ir` | `Function` |
+| One or more source files | `compile_sources` | `parse_unit_ir` | `CompilationUnit` |
+
+Each entry has a `_with_api` variant for explicit API-level checks.
 Neither entry resolves Jungle projects. Diagnostics identify input byte offsets
 and one-based line and column; columns count Unicode scalar values. Callers
 supply filenames. Unsupported input is diagnosed rather than silently producing

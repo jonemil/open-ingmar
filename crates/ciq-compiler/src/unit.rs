@@ -2402,7 +2402,7 @@ fn parse_unit_ir_context(
             *i += 1;
             if line.split('#').next().unwrap().trim() == ".end" {
                 let end = rows.get(*i).map_or(text.len(), |r| r.0);
-                return crate::ir_text::parse_ir_context(&text[start..end], context)
+                return crate::ir_text::parse_function_ir_context(&text[start..end], context)
                     .map_err(|e| Diagnostic::at(text, start + e.offset, e.message));
             }
         }

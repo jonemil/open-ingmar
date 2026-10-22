@@ -1,7 +1,8 @@
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -21,23 +22,24 @@ fn nullable_byte_arrays_preserve_signatures_and_local_null_proofs() {
         "function f(b as Toybox.Lang.ByteArray,c as Toybox.Lang.ByteArray or Null) as Toybox.Lang.Boolean {return b.equals(c);}",
         "function f(b as Toybox.Lang.ByteArray or Null) as Toybox.Lang.Object or Null {return b;}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f(b as Toybox.Lang.ByteArray or Null) as Toybox.Lang.ByteArray or Null {return b;}").unwrap();
+    let f = compile_function("function f(b as Toybox.Lang.ByteArray or Null) as Toybox.Lang.ByteArray or Null {return b;}").unwrap();
     assert_eq!(f.parameter_types(), &[ParameterType::NullableByteArray]);
     assert_eq!(f.return_type(), ReturnType::NullableByteArray);
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=nullable-byte-array", "result=byte-array")
         )
         .is_err()
     );
-    let f =
-        compile("function f(b as Toybox.Lang.ByteArray or Null) as Void {if(b!=null){b.size();}}")
-            .unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
+    let f = compile_function(
+        "function f(b as Toybox.Lang.ByteArray or Null) as Void {if(b!=null){b.size();}}",
+    )
+    .unwrap();
+    assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
 }
 
 #[test]
@@ -54,7 +56,7 @@ fn nullable_byte_array_uses_require_current_nonnull_proofs() {
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var present=b!=null;if(present){b.size();}}",
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;local=[1];local.decodeNumber();}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let invalid = "module B {function size(b as Toybox.Lang.ByteArray){return b.size();} function f(b as Toybox.Lang.ByteArray or Null){return B.size(b);}}";
     assert!(compile_sources(&[invalid]).is_err());
@@ -74,9 +76,12 @@ fn nullable_byte_array_declarations_require_api_three_even_without_allocation() 
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {}",
         "function f() as Toybox.Lang.ByteArray or Null {return null;}",
     ] {
-        let f = compile_with_api(source, modern).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), modern).unwrap());
-        assert!(compile_with_api(source, old).is_err(), "{source}");
-        assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+        let f = compile_function_with_api(source, modern).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), modern).unwrap()
+        );
+        assert!(compile_function_with_api(source, old).is_err(), "{source}");
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
     }
 }

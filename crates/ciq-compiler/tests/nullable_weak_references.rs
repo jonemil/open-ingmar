@@ -2,8 +2,8 @@ use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, compile_with_api, parse_ir,
-    parse_ir_with_api, parse_unit_ir, parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources, compile_sources_with_api,
+    parse_function_ir, parse_function_ir_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -17,14 +17,14 @@ fn nullable_weak_values_preserve_signatures_joins_and_storage_proofs() {
         "function f(w as Toybox.Lang.WeakReference or Null) as Toybox.Lang.Boolean {return w!=null && w.stillAlive();}",
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {var local=w;while(local!=null){local.get();local=null;}}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f=compile("function f(w as Toybox.Lang.WeakReference or Null) as Toybox.Lang.WeakReference or Null {return w;}").unwrap();
+    let f=compile_function("function f(w as Toybox.Lang.WeakReference or Null) as Toybox.Lang.WeakReference or Null {return w;}").unwrap();
     assert_eq!(f.parameter_types(), &[ParameterType::NullableWeakReference]);
     assert_eq!(f.return_type(), ReturnType::NullableWeakReference);
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=nullable-weak-reference", "result=weak-reference")
         )
@@ -39,13 +39,13 @@ fn nullable_weak_values_preserve_signatures_joins_and_storage_proofs() {
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {var present=w!=null;if(present){w.get();}}",
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {if(w!=null && w.stillAlive()){w.get().toString();}}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let f = compile(
+    let f = compile_function(
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {if(w!=null){w.get();}}",
     )
     .unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
+    assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
 }
 
 #[test]
@@ -120,9 +120,9 @@ fn weak_nullability_keeps_api_requirements_and_unchecked_assertions() {
     let modern = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 2, 0)).unwrap();
     let initial = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 0, 0)).unwrap();
     let source = "function f(w as Toybox.Lang.WeakReference or Null) as Toybox.Lang.WeakReference or Null {return w;}";
-    let f = compile_with_api(source, modern).unwrap();
-    assert!(compile_with_api(source, initial).is_err());
-    assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+    let f = compile_function_with_api(source, modern).unwrap();
+    assert!(compile_function_with_api(source, initial).is_err());
+    assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
     let source = "class C {var w as Toybox.Lang.WeakReference or Null;function f() as Void {}}";
     let unit = compile_sources_with_api(&[source], modern).unwrap();
     assert_eq!(
@@ -132,11 +132,11 @@ fn weak_nullability_keeps_api_requirements_and_unchecked_assertions() {
     assert!(parse_unit_ir_with_api(&unit.to_ir_text(), initial).is_err());
     assert!(compile_sources_with_api(&[source], initial).is_err());
     let source = "function f(w as Toybox.Lang.Object or Null) as Toybox.Lang.WeakReference or Null {return w as Toybox.Lang.WeakReference or Null;}";
-    let f = compile(source).unwrap();
-    let identity = compile(
+    let f = compile_function(source).unwrap();
+    let identity = compile_function(
         "function f(w as Toybox.Lang.Object or Null) as Toybox.Lang.Object or Null {return w;}",
     )
     .unwrap();
     assert_eq!(f.lower(), identity.lower());
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }

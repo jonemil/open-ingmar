@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -11,8 +11,8 @@ fn boolean_and_char_null_guards_preserve_saved_stages() {
                 "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} \
                  {{ if ({guard}) {{ return {consume}; }} return {literal}; }}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             let assembly = f.lower();
             assert_eq!(
                 assembly,
@@ -21,7 +21,7 @@ fn boolean_and_char_null_guards_preserve_saved_stages() {
             let text = f.to_ir_text();
             let edited = text.replace(".not-equal", ".equal");
             if edited != text {
-                assert!(parse_ir(&edited).is_err());
+                assert!(parse_function_ir(&edited).is_err());
             }
         }
         for source in [
@@ -31,8 +31,8 @@ fn boolean_and_char_null_guards_preserve_saved_stages() {
                 "function f(p as Toybox.Lang.Boolean) as Toybox.Lang.{ty} or Null {{ return p ? {literal} : null; }}"
             ),
         ] {
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
     }
 }
@@ -55,16 +55,16 @@ fn nullable_scalars_require_proofs_and_preserve_storage_identity() {
             let source = format!(
                 "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} {{ {body} }}"
             );
-            assert!(compile(&source).is_err(), "accepted {source}");
+            assert!(compile_function(&source).is_err(), "accepted {source}");
         }
         let source = format!(
             "function f(p as Toybox.Lang.Boolean) as Toybox.Lang.{ty} {{ var value = p ? {literal} : null; if (value == null) {{ return {literal}; }} value = null; return {consume}; }}"
         );
-        assert!(compile(&source).is_err());
+        assert!(compile_function(&source).is_err());
         let source = format!(
             "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} or Null {{ return 42; }}"
         );
-        assert!(compile(&source).is_err());
+        assert!(compile_function(&source).is_err());
     }
 }
 
@@ -99,6 +99,9 @@ fn nullable_char_retains_the_char_api_minimum() {
         let source = format!(
             "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} or Null {{ return value; }}"
         );
-        assert_eq!(compile_with_api(&source, initial).is_ok(), accepted);
+        assert_eq!(
+            compile_function_with_api(&source, initial).is_ok(),
+            accepted
+        );
     }
 }

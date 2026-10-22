@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Function, Operation, ValueId,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -35,10 +35,11 @@ fn inherited_number_calls_preserve_complete_application_and_text_paths() {
                 .contains(&format!("getsv @__ciq_native_{member}"))
         );
     }
-    let function =
-        compile("function show(n as Toybox.Lang.Number) as Void { System.println(n.toString()); }")
-            .unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(
+        "function show(n as Toybox.Lang.Number) as Void { System.println(n.toString()); }",
+    )
+    .unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -51,8 +52,8 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
         "function f() as Void { System.println(\"text\".toString()); }",
         "function f() as Toybox.Lang.Number { if (\"text\".length() > 0) { return 1; } else { return 0; } }",
     ] {
-        let function = compile(source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         function
             .validate_api(
                 ciq_compiler::api::ApiContext::new(
@@ -69,7 +70,7 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
         ("toUpper", 0x008000bf),
         ("toString", 0x008000af),
     ] {
-        let function = compile(&format!(
+        let function = compile_function(&format!(
             "function f() as Void {{ System.println(\"Hi\".{member}()); }}"
         ))
         .unwrap();
@@ -87,11 +88,12 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
     }
     // Result contracts must be rechecked after an IR edit, not inferred from
     // the consumer's expected type.
-    let text =
-        compile("function f() as Toybox.Lang.Number { return (\"Hi\".length() + 1).abs(); }")
-            .unwrap()
-            .to_ir_text();
-    assert!(parse_ir(&text.replace("length", "toUpper")).is_err());
+    let text = compile_function(
+        "function f() as Toybox.Lang.Number { return (\"Hi\".length() + 1).abs(); }",
+    )
+    .unwrap()
+    .to_ir_text();
+    assert!(parse_function_ir(&text.replace("length", "toUpper")).is_err());
     for source in [
         "function f() as Void { System.println(1.length()); }",
         "function f() as Void { System.println(true.toUpper()); }",
@@ -102,7 +104,7 @@ fn string_methods_preserve_contracts_and_explicit_bindings() {
         "function f() as Void { System.println(\"Hi\".toUpper() - 1); }",
         "function f() as Void { System.println(\"Hi\".find(\"i\")); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -118,7 +120,7 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         ("n.format(null)", "argument types"),
         ("n.format(\"%d\", \"%d\")", "argument count"),
     ] {
-        let error = compile(&format!(
+        let error = compile_function(&format!(
             "function show(n as Toybox.Lang.Number) as Void {{ System.println({expression}); }}"
         ))
         .unwrap_err();
@@ -130,7 +132,7 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var x = n.toString() + 1; return x; }",
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var x = n.toString(); x = 1; return x.length(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     assert!(
         compile_sources(&["class C extends Application.AppBase {
@@ -149,12 +151,13 @@ fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { if (n.abs() > 0) { return 1; } else { return 0; } }",
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return M.consume(n.abs()); }",
     ] {
-        let function = compile(source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
-    let function =
-        compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n.abs(); }")
-            .unwrap();
+    let function = compile_function(
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n.abs(); }",
+    )
+    .unwrap();
     assert_eq!(function.return_type(), ciq_compiler::ReturnType::Integer);
     let assembly = function.lower();
     let text = assembly.to_text();
@@ -165,7 +168,7 @@ fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
     let code = assembly
         .encode_with_references(&bindings, &Default::default())
         .unwrap();
-    let resumed = parse_ir(&function.to_ir_text()).unwrap().lower();
+    let resumed = parse_function_ir(&function.to_ir_text()).unwrap().lower();
     assert_eq!(
         code,
         resumed
@@ -175,14 +178,16 @@ fn number_results_support_arithmetic_chained_calls_and_integer_returns() {
     // Changing a numeric-result call to a String-result call invalidates the
     // Number-only formatting consumer, including after text edits.
     let arithmetic =
-        compile("function f(n as Toybox.Lang.Number) as Void { System.println((n.abs() + 1).format(\"%d\")); }").unwrap();
-    assert!(parse_ir(&arithmetic.to_ir_text().replace("abs", "toString")).is_err());
-    assert!(compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n.abs().format(\"%d\"); }").is_err());
+        compile_function("function f(n as Toybox.Lang.Number) as Void { System.println((n.abs() + 1).format(\"%d\")); }").unwrap();
+    assert!(parse_function_ir(&arithmetic.to_ir_text().replace("abs", "toString")).is_err());
+    assert!(compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n.abs().format(\"%d\"); }").is_err());
     assert!(
-        compile("function f(n as Toybox.Lang.Number) as Void { System.println(n.abs(1)); }")
-            .is_err()
+        compile_function(
+            "function f(n as Toybox.Lang.Number) as Void { System.println(n.abs(1)); }"
+        )
+        .is_err()
     );
-    assert!(compile("function f() as Void { System.println(\"bad\".abs()); }").is_err());
+    assert!(compile_function("function f() as Void { System.println(\"bad\".abs()); }").is_err());
 }
 
 #[test]
@@ -194,12 +199,13 @@ fn computed_receivers_and_format_arguments_preserve_types_and_precedence() {
         "function f(n as Toybox.Lang.Number) as Void { System.println((n - 42).toString()); }",
         "function f() as Void { System.println(M.value().format(M.arg().toString())); }",
     ] {
-        let native = compile(source).unwrap();
-        let resumed = parse_ir(&native.to_ir_text()).unwrap();
+        let native = compile_function(source).unwrap();
+        let resumed = parse_function_ir(&native.to_ir_text()).unwrap();
         assert_eq!(native.lower(), resumed.lower());
     }
     let function =
-        compile("function f() as Void { System.println((40 + 2).format(\"%03d\")); }").unwrap();
+        compile_function("function f() as Void { System.println((40 + 2).format(\"%03d\")); }")
+            .unwrap();
     let assembly = function.assembly();
     let addition = assembly.find("addv").unwrap();
     let member = assembly.find("getsv @__ciq_native_format").unwrap();
@@ -211,15 +217,16 @@ fn computed_receivers_and_format_arguments_preserve_types_and_precedence() {
         "function f() as Void { System.println(41.format(\"%d\") - 1); }",
         "function f() as Void { System.println(41.format); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn format_ir_rejects_bad_types_and_argument_receiver_reordering() {
-    let function =
-        compile("function f() as Void { System.println(M.value().format(M.arg().toString())); }")
-            .unwrap();
+    let function = compile_function(
+        "function f() as Void { System.println(M.value().format(M.arg().toString())); }",
+    )
+    .unwrap();
     let operations = function.operations().to_vec();
     let receiver = operations
         .iter()
@@ -244,7 +251,7 @@ fn format_ir_rejects_bad_types_and_argument_receiver_reordering() {
             .contains("order")
     );
 
-    let text = compile(
+    let text = compile_function(
         "function f(n as Toybox.Lang.Number) as Void { System.println(n.format(\"%d\")); }",
     )
     .unwrap()
@@ -256,7 +263,7 @@ fn format_ir_rejects_bad_types_and_argument_receiver_reordering() {
     let result = string_line.split_whitespace().nth(1).unwrap();
     let bad = text.replace(string_line, &format!(".integer {result} 1"));
     assert!(
-        parse_ir(&bad)
+        parse_function_ir(&bad)
             .unwrap_err()
             .message
             .contains("argument types")
@@ -265,7 +272,12 @@ fn format_ir_rejects_bad_types_and_argument_receiver_reordering() {
         "function f(n as Toybox.Lang.Number) as Void {{ System.println(n{}); }}",
         ".toString()".repeat(70)
     );
-    assert!(compile(&deep).unwrap_err().message.contains("nesting"));
+    assert!(
+        compile_function(&deep)
+            .unwrap_err()
+            .message
+            .contains("nesting")
+    );
 }
 
 #[test]
@@ -279,9 +291,9 @@ fn positional_call_nesting_keeps_the_existing_bound() {
                 ")".repeat(depth)
             )
         };
-        assert!(compile(&source(64)).is_ok());
+        assert!(compile_function(&source(64)).is_ok());
         assert!(
-            compile(&source(65))
+            compile_function(&source(65))
                 .unwrap_err()
                 .message
                 .contains("nesting")
@@ -291,17 +303,18 @@ fn positional_call_nesting_keeps_the_existing_bound() {
 
 #[test]
 fn native_ir_revalidates_receiver_member_and_effect_order() {
-    let valid =
-        compile("function f(n as Toybox.Lang.Number) as Void { System.println(n.toString()); }")
-            .unwrap()
-            .to_ir_text();
+    let valid = compile_function(
+        "function f(n as Toybox.Lang.Number) as Void { System.println(n.toString()); }",
+    )
+    .unwrap()
+    .to_ir_text();
     for bad in [
         valid.replace("toString", "toFloat %0"),
         valid.replace("toString", "missing"),
         valid.replace("toString", "toString %0"),
         valid.replace(".parameter %0 0", ".null %0"),
     ] {
-        assert!(parse_ir(&bad).is_err(), "{bad}");
+        assert!(parse_function_ir(&bad).is_err(), "{bad}");
     }
     // The receiver call and conversion are observable operations. Printing a
     // later-defined integer first must not move those calls after that print.

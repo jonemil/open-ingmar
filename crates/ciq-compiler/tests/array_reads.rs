@@ -3,7 +3,8 @@ use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_ir_with_api, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_function_ir_with_api,
+    parse_unit_ir_with_api,
 };
 
 #[test]
@@ -33,7 +34,7 @@ fn array_reads_preserve_complete_pipelines_and_postfix_order() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n as Toybox.Lang.Number) as Toybox.Lang.Char { return a[n]; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         [0x35, 3, 0x12, 1, 0x12, 2, 0x10, 0x16]
@@ -45,10 +46,10 @@ fn array_reads_preserve_complete_pipelines_and_postfix_order() {
         .unwrap();
     let span = op.span.unwrap();
     assert_eq!(&source[span.start..span.end], "a[n]");
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.String { return a[0].toUpper().toString(); }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Char { return a[(true || false).hashCode()]; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.String { return a[0].toUpper().toString(); }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Char { return a[(true || false).hashCode()]; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -63,30 +64,30 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         "function f() as Toybox.Lang.Number { var a = \"abc\".toCharArray(); a[0] = 2; return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return \"abc\".toCharArray()[n]; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { if (n == null) { return 'X'; } return \"abc\".toCharArray()[n]; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { if (n == null) { return 'X'; } return \"abc\".toCharArray()[n]; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     for expr in [
         "\"ab\".toCharArray()[-1]",
         "\"ab\".toCharArray()[2]",
         "\"\".toCharArray()[0]",
     ] {
-        compile(&format!(
+        compile_function(&format!(
             "function f() as Toybox.Lang.Char {{ return {expr}; }}"
         ))
         .unwrap();
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n as Toybox.Lang.Number) as Toybox.Lang.Char { return a[n]; }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, n as Toybox.Lang.Number) as Toybox.Lang.Char { return a[n]; }").unwrap();
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("char-array:integer", "char-array:boolean")
         )
         .is_err()
     );
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("char-array:integer", "string:integer")
         )
@@ -111,7 +112,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         .is_err()
     );
     assert!(
-        parse_ir_with_api(
+        parse_function_ir_with_api(
             &f.to_ir_text(),
             ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap()
         )
@@ -121,7 +122,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
 
 #[test]
 fn bounds_sensitive_reads_preserve_order_even_without_calls_or_writes() {
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, b as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.String { return a[0] + b[0]; }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Char>, b as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.String { return a[0] + b[0]; }").unwrap();
     let mut operations = f.operations().to_vec();
     let reads = operations
         .iter()
@@ -159,9 +160,9 @@ fn indexing_and_member_calls_share_the_existing_nesting_budget() {
             "function f(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Number {{ return {expression}; }}"
         )
     };
-    compile(&source(63)).unwrap();
+    compile_function(&source(63)).unwrap();
     assert!(
-        compile(&source(64))
+        compile_function(&source(64))
             .unwrap_err()
             .message
             .contains("nesting")

@@ -1,4 +1,4 @@
-use ciq_compiler::{ClassBase, Operation, compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{ClassBase, Operation, compile_sources, parse_function_ir, parse_unit_ir};
 
 const APP: &str = include_str!("../../../examples/compiler-visible-view/app.mc");
 const VIEW: &str = include_str!("../../../examples/compiler-visible-view/view.mc");
@@ -46,15 +46,15 @@ fn standalone_constructor_requires_an_explicit_supported_projection() {
     let prefix = "ciq-ir\n.function f\n";
     let suffix = "\n.return %0\n.end\n";
     let valid = format!("{prefix}.new-source %0 HelloView WatchUi.View{suffix}");
-    let function = parse_ir(&valid).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = parse_function_ir(&valid).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for constructor in [
         ".new-source %0 HelloView",
         ".new-source %0 HelloView Application.AppBase",
         ".new-source %0 HelloView Graphics.Dc",
         ".new-source %0 HelloView Unknown",
     ] {
-        assert!(parse_ir(&format!("{prefix}{constructor}{suffix}")).is_err());
+        assert!(parse_function_ir(&format!("{prefix}{constructor}{suffix}")).is_err());
     }
 }
 

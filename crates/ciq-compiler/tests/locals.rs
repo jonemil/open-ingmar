@@ -1,4 +1,4 @@
-use ciq_compiler::{LocalId, Operation, ValueId, compile, parse_ir};
+use ciq_compiler::{LocalId, Operation, ValueId, compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 use std::collections::BTreeMap;
 
@@ -44,10 +44,10 @@ fn evaluate(bytes: &[u8]) -> i32 {
 }
 
 fn check(body: &str, expected: i32) {
-    let ir = compile(&format!("function probe() {{ {body} }}")).unwrap();
+    let ir = compile_function(&format!("function probe() {{ {body} }}")).unwrap();
     let bytes = ir.lower().encode().unwrap();
     assert_eq!(evaluate(&bytes), expected);
-    let resumed = parse_ir(&ir.to_ir_text()).unwrap();
+    let resumed = parse_function_ir(&ir.to_ir_text()).unwrap();
     assert_eq!(resumed, ir);
     assert_eq!(resumed.lower().encode().unwrap(), bytes);
     assert_eq!(
@@ -69,7 +69,7 @@ fn locals_repeated_reads_and_initialization_order_survive_all_pipelines() {
         "var first = 40 + 2; var second = first - 5; return first + second - first;",
         37,
     );
-    let bytes = compile("function probe() { var x = 40 + 2; return x; }")
+    let bytes = compile_function("function probe() { var x = 40 + 2; return x; }")
         .unwrap()
         .lower()
         .encode()
@@ -83,7 +83,7 @@ fn locals_repeated_reads_and_initialization_order_survive_all_pipelines() {
 #[test]
 fn semantic_locals_have_distinct_identity_and_source_spans() {
     let source = "function probe() { var answer = 41; return answer + answer; }";
-    let ir = compile(source).unwrap();
+    let ir = compile_function(source).unwrap();
     assert_eq!(
         ir.operations()[1].operation,
         Operation::LocalInitialize {
@@ -126,22 +126,23 @@ fn invalid_local_source_is_rejected_with_locations() {
         "{ var x = 1; } return x;",
     ] {
         assert!(
-            compile(&format!("function probe() {{ {body} }}")).is_err(),
+            compile_function(&format!("function probe() {{ {body} }}")).is_err(),
             "{body}"
         );
     }
-    let error = compile("function probe() {\n    var x = missing;\n    return x;\n}").unwrap_err();
+    let error =
+        compile_function("function probe() {\n    var x = missing;\n    return x;\n}").unwrap_err();
     assert_eq!((error.line, error.column), (2, 13));
     assert!(error.message.contains("not yet initialized"));
-    assert!(compile("function var() { return 1; }").is_err());
+    assert!(compile_function("function var() { return 1; }").is_err());
 }
 
 #[test]
 fn declaration_lists_share_scope_order_and_lowering_with_individual_declarations() {
-    let flat = compile("function probe(){var x=1;var y=x+2;var z=y+x;return z;}").unwrap();
-    let grouped = compile("function probe(){var x=1,y=x+2,z=y+x;;;return z;}").unwrap();
+    let flat = compile_function("function probe(){var x=1;var y=x+2;var z=y+x;return z;}").unwrap();
+    let grouped = compile_function("function probe(){var x=1,y=x+2,z=y+x;;;return z;}").unwrap();
     assert_eq!(flat.assembly(), grouped.assembly());
-    assert_eq!(grouped, parse_ir(&grouped.to_ir_text()).unwrap());
+    assert_eq!(grouped, parse_function_ir(&grouped.to_ir_text()).unwrap());
     for body in [
         "var x=1,x=2;return x;",
         "var x=1,y=y;return x;",
@@ -151,7 +152,7 @@ fn declaration_lists_share_scope_order_and_lowering_with_individual_declarations
         "{var x=1,y=x+1;}return y;",
     ] {
         assert!(
-            compile(&format!("function probe(){{{body}}}")).is_err(),
+            compile_function(&format!("function probe(){{{body}}}")).is_err(),
             "{body}"
         );
     }
@@ -160,7 +161,7 @@ fn declaration_lists_share_scope_order_and_lowering_with_individual_declarations
         .collect::<Vec<_>>()
         .join(",");
     assert!(
-        compile(&format!("function probe(){{var {names};return 0;}}"))
+        compile_function(&format!("function probe(){{var {names};return 0;}}"))
             .unwrap_err()
             .message
             .contains("255-local limit")
@@ -184,10 +185,10 @@ fn extra_semicolons_terminate_effects_without_creating_empty_statements() {
             "var x=0;do{x++;}while(false);;;return x;",
         ),
     ] {
-        let flat = compile(&format!("function probe(){{{flat}}}")).unwrap();
-        let extra = compile(&format!("function probe(){{{extra}}}")).unwrap();
+        let flat = compile_function(&format!("function probe(){{{flat}}}")).unwrap();
+        let extra = compile_function(&format!("function probe(){{{extra}}}")).unwrap();
         assert_eq!(flat.assembly(), extra.assembly());
-        assert_eq!(extra, parse_ir(&extra.to_ir_text()).unwrap());
+        assert_eq!(extra, parse_function_ir(&extra.to_ir_text()).unwrap());
     }
     for body in [
         ";return 0;",
@@ -199,7 +200,7 @@ fn extra_semicolons_terminate_effects_without_creating_empty_statements() {
         "for(var i=0;;;i<2;i++){}return 0;",
     ] {
         assert!(
-            compile(&format!("function probe(){{{body}}}")).is_err(),
+            compile_function(&format!("function probe(){{{body}}}")).is_err(),
             "{body}"
         );
     }
@@ -217,7 +218,7 @@ fn local_text_and_typed_validation_reject_uninitialized_or_duplicate_locals() {
         ".integer %0 41\n.local $4294967296 %0\n.read %1 $9\n.return %1",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
+            parse_function_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
@@ -245,10 +246,10 @@ fn local_text_and_typed_validation_reject_uninitialized_or_duplicate_locals() {
 #[test]
 fn semantic_local_ids_do_not_select_vm_slots() {
     let text = "ciq-ir\n.function probe\n.integer %10 40\n.local $4294967295 %10\n.read %20 $4294967295\n.integer %30 3\n.add %40 %20 %30\n.local $9 %40\n.read %50 $9\n.read %60 $4294967295\n.subtract %70 %50 %60\n.return %70\n.end";
-    let ir = parse_ir(text).unwrap();
+    let ir = parse_function_ir(text).unwrap();
     let bytes = ir.lower().encode().unwrap();
     assert_eq!(evaluate(&bytes), 3);
-    assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
+    assert_eq!(parse_function_ir(&ir.to_ir_text()).unwrap(), ir);
     let slots: Vec<_> = decode(&bytes)
         .unwrap()
         .iter()
@@ -265,7 +266,7 @@ fn local_and_total_operation_limits_include_initializers_and_reads() {
         .collect::<String>();
     check(&format!("{declarations}return x254;"), 1);
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() {{ {declarations}var x255 = 1; return x255; }}"
         ))
         .unwrap_err()
@@ -277,13 +278,13 @@ fn local_and_total_operation_limits_include_initializers_and_reads() {
         .collect::<String>();
     check(&format!("{initializers}return 1;"), 1); // 1020 + 2 operations
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() {{ {initializers}return 1 + 1; }}"
         ))
         .is_ok()
     ); // exactly 1024
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() {{ {initializers}return 1 + 1 + 1; }}"
         ))
         .unwrap_err()
@@ -294,7 +295,7 @@ fn local_and_total_operation_limits_include_initializers_and_reads() {
         .map(|n| format!(".integer %{n} 1\n.local ${n} %{n}\n"))
         .collect::<String>();
     assert!(
-        parse_ir(&format!(
+        parse_function_ir(&format!(
             "ciq-ir\n.function probe\n{body}.read %300 $255\n.return %300\n.end"
         ))
         .unwrap_err()

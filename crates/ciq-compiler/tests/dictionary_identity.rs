@@ -1,6 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -26,9 +27,9 @@ fn dictionary_identity_calls_keep_symbols_api_and_saved_stages() {
             ),
         ] {
             let source = format!("function f(d as {receiver}) as {result} {{ {body} }}");
-            let f = compile_with_api(&source, initial).unwrap();
+            let f = compile_function_with_api(&source, initial).unwrap();
             let text = f.to_ir_text();
-            assert_eq!(f, parse_ir_with_api(&text, initial).unwrap());
+            assert_eq!(f, parse_function_ir_with_api(&text, initial).unwrap());
             let assembly = f.lower();
             assert_eq!(
                 assembly,
@@ -44,7 +45,7 @@ fn dictionary_identity_calls_keep_symbols_api_and_saved_stages() {
             );
             let edited = text.replace(&format!(" {member}"), &format!(" {member} %0"));
             assert_ne!(text, edited);
-            assert!(parse_ir(&edited).is_err());
+            assert!(parse_function_ir(&edited).is_err());
         }
     }
 }
@@ -66,15 +67,15 @@ fn dictionary_equality_accepts_bounded_cross_contract_and_nullable_arguments() {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Boolean {{ return d.equals({argument}); }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for ty in ["Number", "String", "Boolean", "Char"] {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary, value as Toybox.Lang.{ty} or Null) as Toybox.Lang.Boolean {{ return d.equals(value); }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let source = include_str!("../../../examples/compiler-dictionary/app.mc");
     let unit = compile_sources(&[source]).unwrap();
@@ -97,11 +98,11 @@ fn dictionary_identity_does_not_enable_unrelated_object_or_operator_profiles() {
     ] {
         let source =
             format!("function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Boolean {{ {body} }}");
-        assert!(compile(&source).is_err(), "accepted {source}");
+        assert!(compile_function(&source).is_err(), "accepted {source}");
     }
     for body in ["return d.hashCode(1);", "return d.equals(d) + 1;"] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f(d as Toybox.Lang.Dictionary) as Void {{ {body} }}"
             ))
             .is_err()
@@ -109,8 +110,8 @@ fn dictionary_identity_does_not_enable_unrelated_object_or_operator_profiles() {
     }
     let source =
         "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Boolean { return d.equals(null); }";
-    let text = compile(source).unwrap().to_ir_text();
+    let text = compile_function(source).unwrap().to_ir_text();
     let edited = text.replace(" equals", " hashCode");
     assert_ne!(text, edited);
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
 }

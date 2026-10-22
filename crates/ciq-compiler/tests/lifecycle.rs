@@ -160,10 +160,10 @@ fn shutdown_callback_uses_native_contract_and_has_one_data_binding() {
 fn native_module_exit_preserves_aliases_bindings_and_effect_order() {
     for receiver in ["System", "Toybox.System", "Sys"] {
         let source = format!("using Toybox.System as Sys; function f() {{ {receiver}.exit(); }}");
-        let function = ciq_compiler::compile(&source).unwrap();
+        let function = ciq_compiler::compile_function(&source).unwrap();
         assert_eq!(
             function,
-            ciq_compiler::parse_ir(&function.to_ir_text()).unwrap()
+            ciq_compiler::parse_function_ir(&function.to_ir_text()).unwrap()
         );
         let assembly = function.lower();
         assert!(
@@ -182,11 +182,11 @@ fn native_module_exit_preserves_aliases_bindings_and_effect_order() {
             .unwrap();
     }
     let source = "function f() { System.println(1); System.exit(); }";
-    let function = ciq_compiler::compile(source).unwrap();
+    let function = ciq_compiler::compile_function(source).unwrap();
     let text = function.to_ir_text();
     let exit = ".call-native-module-discard Toybox.System exit";
     assert!(
-        ciq_compiler::parse_ir(
+        ciq_compiler::parse_function_ir(
             &text
                 .replace(exit, "")
                 .replace(".println %0", &format!("{exit}\n.println %0"))
@@ -199,12 +199,14 @@ fn native_module_exit_preserves_aliases_bindings_and_effect_order() {
         ("function f() { return System.exit(); }", "value lowering"),
         ("function f(System) { System.exit(); }", "System"),
     ] {
-        let error = ciq_compiler::compile(source).unwrap_err();
+        let error = ciq_compiler::compile_function(source).unwrap_err();
         assert!(error.message.contains(message), "{error}");
     }
     assert!(
-        ciq_compiler::parse_ir(&text.replace("Toybox.System exit", "Toybox.Application exit"))
-            .is_err()
+        ciq_compiler::parse_function_ir(
+            &text.replace("Toybox.System exit", "Toybox.Application exit")
+        )
+        .is_err()
     );
     let collision = compile_sources(&[
         "class exit extends Application.AppBase { function start() { System.exit(); } }",

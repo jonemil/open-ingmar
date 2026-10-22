@@ -1,11 +1,11 @@
-use ciq_compiler::{compile, compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 use ciq_mc::Opcode;
 
 const D: &str = "Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>";
 
 #[test]
 fn indexed_reads_and_writes_have_dictionary_ir_and_direct_vm_operations() {
-    let numeric = compile("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Number>, key as Toybox.Lang.Number) as Toybox.Lang.Number or Null { return d[key]; }").unwrap();
+    let numeric = compile_function("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Number>, key as Toybox.Lang.Number) as Toybox.Lang.Number or Null { return d[key]; }").unwrap();
     assert_eq!(
         numeric.lower().encode().unwrap(),
         [0x35, 3, 0x12, 1, 0x12, 2, 0x10, 0x16]
@@ -13,12 +13,12 @@ fn indexed_reads_and_writes_have_dictionary_ir_and_direct_vm_operations() {
     let source = format!(
         "function f(d as {D}) as Toybox.Lang.Number or Null {{ d[\"two\"] = 42; return d[\"one\"]; }}"
     );
-    let f = compile(&source).unwrap();
+    let f = compile_function(&source).unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".dictionary-write"));
     assert!(text.contains(".dictionary-read"));
     assert!(!text.contains(".array-read"));
-    assert_eq!(f, parse_ir(&text).unwrap());
+    assert_eq!(f, parse_function_ir(&text).unwrap());
     let p = f.lower();
     for expected in [Opcode::Agetv, Opcode::Aputv] {
         assert!(p.items().iter().any(
@@ -26,10 +26,10 @@ fn indexed_reads_and_writes_have_dictionary_ir_and_direct_vm_operations() {
         ));
     }
     assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
-    assert!(parse_ir(&text.replace(".dictionary-write", ".array-write")).is_err());
-    assert!(parse_ir(&text.replace(".dictionary-read", ".array-read")).is_err());
+    assert!(parse_function_ir(&text.replace(".dictionary-write", ".array-write")).is_err());
+    assert!(parse_function_ir(&text.replace(".dictionary-read", ".array-read")).is_err());
     assert!(
-        parse_ir(&text.replace(
+        parse_function_ir(&text.replace(
             "dictionary(string=>integer)",
             "dictionary(integer=>integer)"
         ))
@@ -41,7 +41,7 @@ fn indexed_reads_and_writes_have_dictionary_ir_and_direct_vm_operations() {
 fn saved_ir_cannot_postpone_a_read_until_after_mutation() {
     let text = "ciq-ir\n.function f parameters=1 parameter-types=dictionary(integer=>integer) result=nullable-integer\n.parameter %0 0\n.integer %1 1\n.dictionary-read %2 %0 %1\n.parameter %3 0\n.integer %4 1\n.integer %5 42\n.dictionary-write %3 %4 %5\n.return %2\n.end\n";
     assert!(
-        parse_ir(text)
+        parse_function_ir(text)
             .unwrap_err()
             .message
             .contains("evaluation order")
@@ -121,7 +121,7 @@ fn nullable_values_require_guarded_uses_and_typed_keys_and_writes() {
         "d[\"one\"]++; return 0;",
     ] {
         let source = format!("function f(d as {D}) as Void {{ {body} }}");
-        assert!(compile(&source).is_err(), "accepted {source}");
+        assert!(compile_function(&source).is_err(), "accepted {source}");
     }
     for body in [
         "return d[\"one\"];",
@@ -130,14 +130,14 @@ fn nullable_values_require_guarded_uses_and_typed_keys_and_writes() {
         "return d.hasKey(\"one\");",
     ] {
         let source = format!("function f(d as Toybox.Lang.Dictionary) as Void {{ {body} }}");
-        assert!(compile(&source).is_err());
+        assert!(compile_function(&source).is_err());
     }
     let nullable = "Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null>";
     let source = format!(
         "function f(d as {nullable}) as Toybox.Lang.Boolean {{ d[\"one\"] = null; d.put(\"two\", null); return d.get(\"one\") == null; }}"
     );
-    let f = compile(&source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(&source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -145,8 +145,8 @@ fn branches_in_write_values_stage_receiver_and_key_before_the_join() {
     let source = format!(
         "function f(d as {D}, choose as Toybox.Lang.Boolean) as Toybox.Lang.Number {{ d[\"one\"] = choose ? 1 : 2; var n = d[choose ? \"one\" : \"missing\"]; if (n != null) {{ return n; }} return 0; }}"
     );
-    let f = compile(&source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(&source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let text = f.to_ir_text();
     assert!(text.contains(".jump-value"));
     assert!(text.contains(".dictionary-write"));
@@ -159,10 +159,10 @@ fn guarded_nullable_keys_preserve_candidate_lookup_types_without_bypassing_proof
         if (key != null) {{ var value = d[key]; if (value != null) {{ d[key] = value + 1; return value; }} }}
         return 0;
     }}");
-    let f = compile(&source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(&source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let unsafe_source = source.replace("if (key != null)", "if (true)");
-    assert!(compile(&unsafe_source).is_err());
+    assert!(compile_function(&unsafe_source).is_err());
     let unsafe_ir = f.to_ir_text().replace(".dictionary-read", ".array-read");
-    assert!(parse_ir(&unsafe_ir).is_err());
+    assert!(parse_function_ir(&unsafe_ir).is_err());
 }

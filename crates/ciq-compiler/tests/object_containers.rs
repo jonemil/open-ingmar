@@ -3,8 +3,8 @@ use ciq_compiler::{
     ArrayElement, DictionaryKey, DictionaryType, DictionaryValue, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, compile_with_api, parse_ir,
-    parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, compile_sources_with_api,
+    parse_function_ir, parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -41,8 +41,8 @@ fn object_constants_keep_scalar_classes_bits_order_and_nullability() {
         let source = format!(
             "function f() as Lang.Array<Lang.Object{suffix}> {{return [1,1l,-0.0,1.0d,'A',true,\"text\"{null}];}}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert_eq!(
             f.return_type(),
             ReturnType::Array(if nullable {
@@ -72,8 +72,8 @@ fn object_constants_keep_scalar_classes_bits_order_and_nullability() {
             "function f() as Lang.Dictionary<Lang.String,Lang.Object{suffix}> {{return {{\"n\"=>1,\"l\"=>1l,\"f\"=>-0.0,\"d\"=>1.0d,\"c\"=>'A',\"b\"=>true,\"s\"=>\"text\"{}}};}}",
             if nullable { ",\"null\"=>null" } else { "" }
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert_eq!(
             f.return_type(),
             ReturnType::TypedDictionary(DictionaryType {
@@ -88,7 +88,7 @@ fn object_constants_keep_scalar_classes_bits_order_and_nullability() {
         let text = f.to_ir_text();
         if nullable {
             assert!(
-                parse_ir(&text.replace(
+                parse_function_ir(&text.replace(
                     "dictionary(string=>nullable-object)",
                     "dictionary(string=>object)"
                 ))
@@ -97,9 +97,9 @@ fn object_constants_keep_scalar_classes_bits_order_and_nullability() {
         }
     }
     let source = "function f() as Lang.Array<Lang.Object or Null> {return [null];}";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert!(
-        parse_ir(&f.to_ir_text().replace(
+        parse_function_ir(&f.to_ir_text().replace(
             ".array-constant %0 nullable-object",
             ".array-constant %0 object"
         ))
@@ -125,11 +125,11 @@ fn object_storage_preserves_context_erasure_and_nullable_snapshot_proofs() {
         "function f(n) as Lang.Array<Lang.Object or Null> {return new[n];}",
         "function f(a as Lang.Array<Lang.Object>,flag as Lang.Boolean) as Lang.Array<Lang.Object> {return flag?a:a;}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let text = f.to_ir_text();
         if text.contains(".not-equal ") {
-            assert!(parse_ir(&text.replace(".not-equal ", ".equal ")).is_err());
+            assert!(parse_function_ir(&text.replace(".not-equal ", ".equal ")).is_err());
         }
     }
     let unit=compile_sources(&["class C {function initialize(){}function get(){return 1;}}module M {function f(a as Lang.Array<Lang.Object>){var o=a[0];if(o instanceof C){return o.get();}return 0;}} "]).unwrap();
@@ -157,7 +157,7 @@ fn object_storage_does_not_invent_mutable_covariance_or_recover_erased_types() {
         "function f() as Lang.Dictionary<Lang.Object,Lang.Object> {return {};}",
         "function f(a as Lang.Array<Lang.Object>) as Lang.Array<Lang.Object> {return a as Lang.Array<Lang.Object>;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -169,9 +169,9 @@ fn object_erasure_retains_api_requirements_and_enum_nominality() {
         "function f() as Lang.Array<Lang.Object> {return ['A'];}",
         "function f() as Lang.Dictionary<Lang.String,Lang.Object> {return {\"c\"=>'A'};}",
     ] {
-        let f = compile_with_api(source, char_api).unwrap();
-        assert!(compile_with_api(source, old).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+        let f = compile_function_with_api(source, char_api).unwrap();
+        assert!(compile_function_with_api(source, old).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
     }
     for value in [
         "Lang.NUMBER_FORMAT_FLOAT",
@@ -179,14 +179,16 @@ fn object_erasure_retains_api_requirements_and_enum_nominality() {
         "Toybox.Graphics.FONT_MEDIUM",
     ] {
         let source = format!("function f() as Lang.Object {{return {value};}}");
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let source = format!(
             "module M {{function id(o as Lang.Object) as Lang.Object{{return o;}}function f() as Lang.Object{{return M.id({value});}}}}"
         );
         let unit = compile_sources(&[&source]).unwrap();
         assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
-        assert!(compile(&format!("function f(){{return {value}+1;}}")).is_err());
-        assert!(compile(&format!("function f() as Lang.Number{{return {value};}}")).is_err());
+        assert!(compile_function(&format!("function f(){{return {value}+1;}}")).is_err());
+        assert!(
+            compile_function(&format!("function f() as Lang.Number{{return {value};}}")).is_err()
+        );
     }
 }

@@ -1,4 +1,4 @@
-use ciq_compiler::{compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASSES: &str = "class Token { function initialize() {} function value() { return 41; } } class Other { function initialize() {} function value() { return 9; } }";
 
@@ -115,7 +115,7 @@ fn saved_ir_cannot_forge_nullable_class_or_non_null_proofs() {
         "nullable-source(Token@Unknown)",
     ] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f parameters=1 parameter-types={tag}\n.return-void\n.end\n"
             ))
             .is_err()
@@ -188,5 +188,5 @@ fn nullable_source_cast_has_no_machine_conversion_and_saved_targets_are_checked(
             .join("\n");
         assert!(parse_unit_ir(&changed).is_err(), "{changed}");
     }
-    assert!(parse_ir("ciq-ir\n.function f parameters=1 parameter-types=nullable-object\n.parameter %0 0\n.instanceof %1 %0 nullable-source(Token@Lang.Object)\n.return %1\n.end\n").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function f parameters=1 parameter-types=nullable-object\n.parameter %0 0\n.instanceof %1 %0 nullable-source(Token@Lang.Object)\n.return %1\n.end\n").is_err());
 }

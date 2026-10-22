@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -11,17 +11,17 @@ fn nullable_signatures_guards_and_edges_survive_saved_ir() {
         let source = format!(
             "function f(c as Toybox.Lang.{interface} or Null) as Toybox.Lang.{interface} or Null {{ return c; }}"
         );
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         function.validate_api(current).unwrap();
         assert!(function.validate_api(low).is_err());
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         let text = function.to_ir_text();
         let changed = text.replace(
             &format!("result=nullable-{}", interface.to_lowercase()),
             &format!("result={}", interface.to_lowercase()),
         );
         assert_ne!(text, changed);
-        assert!(parse_ir(&changed).is_err());
+        assert!(parse_function_ir(&changed).is_err());
     }
     for body in [
         "if(c!=null) { return c.compareTo(1); } else { return 0; }",
@@ -30,8 +30,8 @@ fn nullable_signatures_guards_and_edges_survive_saved_ir() {
         "return c!=null ? c.compareTo(1) : 0;",
     ] {
         let source = format!("function f(c as Toybox.Lang.Comparable or Null) {{ {body} }}");
-        let function = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for ty in [
         "Number", "Long", "Float", "Double", "Boolean", "Char", "String",
@@ -39,8 +39,12 @@ fn nullable_signatures_guards_and_edges_survive_saved_ir() {
         let source = format!(
             "function f(c as Toybox.Lang.{ty} or Null) as Toybox.Lang.Comparable or Null {{ return c; }}"
         );
-        let function = compile(&source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap(), "{ty}");
+        let function = compile_function(&source).unwrap();
+        assert_eq!(
+            function,
+            parse_function_ir(&function.to_ir_text()).unwrap(),
+            "{ty}"
+        );
     }
 }
 
@@ -55,7 +59,7 @@ fn nullable_receivers_require_fresh_storage_proofs() {
         "var local=c; var old=local; if(local!=null) { return old.compareTo(1); } else { return 0; }",
     ] {
         let source = format!("function f(c as Toybox.Lang.Comparable or Null) {{ {body} }}");
-        assert!(compile(&source).is_err(), "{source}");
+        assert!(compile_function(&source).is_err(), "{source}");
     }
     for source in [
         "function f(c as Toybox.Lang.Comparator or Null) { return c.compare(1,2); }",
@@ -67,10 +71,11 @@ fn nullable_receivers_require_fresh_storage_proofs() {
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
-    let function =
-        compile("function f(c as Toybox.Lang.Comparator or Null) { var a=[1,2]; a.sort(c); }")
-            .unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(
+        "function f(c as Toybox.Lang.Comparator or Null) { var a=[1,2]; a.sort(c); }",
+    )
+    .unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }
 
 #[test]

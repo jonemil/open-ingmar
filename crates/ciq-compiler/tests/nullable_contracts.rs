@@ -2,7 +2,7 @@ use ciq_compiler::{
     Function, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -68,9 +68,9 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
             ReturnType::NullableInteger,
         ),
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert_eq!(f.return_type(), result);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         f.validate_api(ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap())
             .unwrap();
         assert!(
@@ -95,7 +95,7 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number { return x; }",
         "function f(x as Null or Toybox.Lang.Number) as Toybox.Lang.Number { return x; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -135,7 +135,7 @@ fn user_arguments_use_union_assignability_and_results_remain_exact() {
 
 #[test]
 fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
-    let f = compile(
+    let f = compile_function(
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.String or Null { return x; }",
     )
     .unwrap();
@@ -159,14 +159,14 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
         .is_err()
     );
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=nullable-string", "result=nullable-integer")
         )
         .is_err()
     );
     assert!(
-        parse_ir(&f.to_ir_text().replace(
+        parse_function_ir(&f.to_ir_text().replace(
             "result=nullable-string",
             "result=nullable-string result=nullable-string"
         ))
@@ -176,10 +176,10 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { return x.length(); }",
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } s = null; return s.length(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let guarded = compile("function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } return s.length(); }").unwrap();
-    assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
+    let guarded = compile_function("function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } return s.length(); }").unwrap();
+    assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());
     let mut operations = guarded.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {

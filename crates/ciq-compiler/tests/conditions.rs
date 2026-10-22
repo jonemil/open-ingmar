@@ -1,4 +1,4 @@
-use ciq_compiler::{Function, compile, parse_ir};
+use ciq_compiler::{Function, compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 
 // A bounded integer/Boolean instruction oracle, independent of frontend/IR traversal.
@@ -67,7 +67,7 @@ fn execute(function: &Function, argument: i32) -> i32 {
 #[test]
 fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages() {
     let source = include_str!("../../../examples/compiler-probe/conditions.mc");
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(
         f,
         Function::with_parameters(
@@ -80,7 +80,7 @@ fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages
     assert_eq!(execute(&f, 0), 47);
     assert_eq!(execute(&f, 1), 49);
     assert!(f.to_ir_text().starts_with("ciq-ir"));
-    let reloaded = parse_ir(&f.to_ir_text()).unwrap();
+    let reloaded = parse_function_ir(&f.to_ir_text()).unwrap();
     assert_eq!(f, reloaded);
     assert_eq!(
         f.lower().encode().unwrap(),
@@ -93,7 +93,7 @@ fn conditions_choose_one_arm_with_common_locals_and_preserve_all_pipeline_stages
             .encode()
             .unwrap()
     );
-    let greater=compile("function choose(value as Toybox.Lang.Number) as Toybox.Lang.Number { if ((value + 2) > 3) { return value - 1; } else { return value + 1; } }").unwrap();
+    let greater=compile_function("function choose(value as Toybox.Lang.Number) as Toybox.Lang.Number { if ((value + 2) > 3) { return value - 1; } else { return value + 1; } }").unwrap();
     for (argument, expected) in [(0, 1), (1, 2), (2, 1), (9, 8)] {
         assert_eq!(execute(&greater, argument), expected);
     }
@@ -110,7 +110,7 @@ fn unsupported_conditions_and_boolean_uses_report_source_diagnostics() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { return x > 0; }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x > 0 > 1) { return 1; } else { return 2; } }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -120,16 +120,16 @@ fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
         let source = format!(
             "function f() as Toybox.Lang.Number {{ if ({literal}) {{ return 1; }} else {{ return 2; }} }}"
         );
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         assert!(function.assembly().contains(opcode));
         assert_eq!(execute(&function, 0), expected);
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
-    let function = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var again = x > 0; var count = 0; while (again) { count = count + 1; again = x > count; } if (again == false) { return count; } else { return 127; } }").unwrap();
+    let function = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var again = x > 0; var count = 0; while (again) { count = count + 1; again = x > count; } if (again == false) { return count; } else { return 127; } }").unwrap();
     for input in [0, 1, 7, 40] {
         assert_eq!(execute(&function, input), input);
     }
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for source in [
         "function f() as Toybox.Lang.Number { var flag = true; flag = 1; if(flag){return 1;}return 0; }",
         "function f() as Toybox.Lang.Number { var n = 1; n = false; return n+1; }",
@@ -139,26 +139,27 @@ fn boolean_literals_locals_and_assignments_control_branches_and_loops() {
         "function f() as Toybox.Lang.Number { if (true > false) { return 1; } else { return 2; } }",
         "function f() as Toybox.Lang.Number { var true = 1; return 0; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn boolean_text_literals_have_strict_syntax_and_keep_semantic_types() {
-    let function =
-        compile("function f() as Void { var flag = true; flag = false; System.println(flag); }")
-            .unwrap();
+    let function = compile_function(
+        "function f() as Void { var flag = true; flag = false; System.println(flag); }",
+    )
+    .unwrap();
     let text = function.to_ir_text();
     assert!(text.contains(".boolean %0 true"));
-    assert_eq!(function, parse_ir(&text).unwrap());
+    assert_eq!(function, parse_function_ir(&text).unwrap());
     for invalid in ["True", "1", "0", "null", "\"true\""] {
-        assert!(parse_ir(&text.replace("%0 true", &format!("%0 {invalid}"))).is_err());
+        assert!(parse_function_ir(&text.replace("%0 true", &format!("%0 {invalid}"))).is_err());
     }
-    assert!(parse_ir(&text.replace(".boolean %0 true", ".integer %0 1")).is_err());
+    assert!(parse_function_ir(&text.replace(".boolean %0 true", ".integer %0 1")).is_err());
     // A comparison can be stored and later printed, with each read owning its
     // own semantic value; storing does not relax one-use or scope rules.
-    let function = compile("function f(n as Toybox.Lang.Number) as Void { var zero = n == 0; System.println(zero); if (zero) { System.println(true); } }").unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function("function f(n as Toybox.Lang.Number) as Void { var zero = n == 0; System.println(zero); if (zero) { System.println(true); } }").unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }
 
 fn cfg(tail: &str) -> String {
@@ -178,24 +179,24 @@ fn control_flow_rejects_bad_edges_terminators_and_cross_block_values() {
         ".block ^1\n.integer %3 1\n.return %3\n.block ^2\n.return %0",
     ] {
         let text = cfg(tail);
-        assert!(parse_ir(&text).is_err(), "{text}");
+        assert!(parse_function_ir(&text).is_err(), "{text}");
     }
     let mut missing_entry =
         cfg(".block ^1\n.integer %3 1\n.return %3\n.block ^2\n.integer %4 2\n.return %4");
     missing_entry = missing_entry.replacen(".block ^0\n", "", 1);
-    assert!(parse_ir(&missing_entry).is_err());
+    assert!(parse_function_ir(&missing_entry).is_err());
 }
 
 #[test]
 fn joins_require_definite_local_initialization_without_inventing_phi_values() {
     let common = "ciq-ir\n.function f\n.block ^0\n.integer %0 7\n.local $0 %0\n.integer %1 0\n.integer %2 1\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^1\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.read %4 $0\n.return %4\n.end";
-    let f = parse_ir(common).unwrap();
+    let f = parse_function_ir(common).unwrap();
     assert_eq!(execute(&f, 0), 7);
     let partial = cfg(
         ".block ^1\n.integer %3 7\n.local $0 %3\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.read %4 $0\n.return %4",
     );
     assert!(
-        parse_ir(&partial)
+        parse_function_ir(&partial)
             .unwrap_err()
             .message
             .contains("local read")
@@ -204,14 +205,14 @@ fn joins_require_definite_local_initialization_without_inventing_phi_values() {
     let sibling = cfg(
         ".block ^1\n.integer %3 7\n.local $0 %3\n.integer %4 1\n.return %4\n.block ^2\n.read %5 $0\n.return %5",
     );
-    assert!(parse_ir(&sibling).is_err());
+    assert!(parse_function_ir(&sibling).is_err());
 }
 
 #[test]
 fn effects_remain_in_order_and_inside_the_selected_block() {
     let source = "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { System.println(x + 1); if (Numbers.left() == Numbers.right()) { return Numbers.yes(); } else { return Numbers.no(); } }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let assembly = f.assembly();
     assert!(
         assembly.find("__ciq_member_left").unwrap() < assembly.find("__ciq_member_right").unwrap()
@@ -234,7 +235,7 @@ fn effects_remain_in_order_and_inside_the_selected_block() {
         .unwrap();
     let mut swapped = lines.clone();
     swapped.swap(left, right);
-    assert!(parse_ir(&swapped.join("\n")).is_err());
+    assert!(parse_function_ir(&swapped.join("\n")).is_err());
 }
 
 #[test]
@@ -251,17 +252,17 @@ fn nested_arms_scoped_locals_early_returns_and_joins_execute_correctly() {
         var result = common + 7;
         return result;
     }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(execute(&f, 0), 43);
     assert_eq!(execute(&f, 1), 47);
     assert_eq!(
         execute(
-            &compile(&source.replace("amount > 2", "amount > 3")).unwrap(),
+            &compile_function(&source.replace("amount > 2", "amount > 3")).unwrap(),
             0
         ),
         40
     );
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(
         f.lower().encode().unwrap(),
         ciq_assembly::Program::parse(&f.assembly())
@@ -275,11 +276,11 @@ fn nested_arms_scoped_locals_early_returns_and_joins_execute_correctly() {
             .any(|o| matches!(o.operation, ciq_compiler::Operation::Jump { .. }))
     );
     // Both arms continue and repeated conditions read common locals at joins.
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var common = 7; if (x == 0) { var n = common + 1; } else { var n = common + 2; } if (x > 0) { return common + 1; } else { return common; } }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var common = 7; if (x == 0) { var n = common + 1; } else { var n = common + 2; } if (x > 0) { return common + 1; } else { return common; } }").unwrap();
     assert_eq!(execute(&f, 0), 7);
     assert_eq!(execute(&f, 1), 8);
     // Returning only from the false arm still leaves a valid true-arm join.
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = 1; } else { return 2; } return 3; }")
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = 1; } else { return 2; } return 3; }")
         .unwrap();
     assert_eq!(execute(&f, 0), 3);
     assert_eq!(execute(&f, 1), 2);
@@ -297,21 +298,21 @@ fn source_arm_scopes_missing_returns_and_unreachable_statements_are_rejected() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; var n = 2; } else { return 3; } }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } else { return 2; } return 3; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let source = "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = 1; } else {}\n return n; }";
-    let error = compile(source).unwrap_err();
+    let error = compile_function(source).unwrap_err();
     assert_eq!(&source[error.offset..error.offset + 1], "n");
     assert_eq!(error.line, 2);
-    let error = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } else {} }").unwrap_err();
+    let error = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } else {} }").unwrap_err();
     assert!(error.message.contains("every path"));
 }
 
 #[test]
 fn nested_effects_text_resumption_and_arm_local_ids_preserve_order() {
     let source = include_str!("../../../examples/compiler-probe/nested-conditions.mc");
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let assembly = f.assembly();
     assert_eq!(f.lower(), ciq_assembly::Program::parse(&assembly).unwrap());
     let locals: Vec<_> = f
@@ -324,8 +325,8 @@ fn nested_effects_text_resumption_and_arm_local_ids_preserve_order() {
         .collect();
     assert_eq!(locals, [0, 1, 2, 3, 4]);
     // An effectful initializer in a continuing arm remains ahead of its print.
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = Numbers.first(); System.println(n); } else { var n = Numbers.second(); System.println(n); } return Numbers.after(); }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = Numbers.first(); System.println(n); } else { var n = Numbers.second(); System.println(n); } return Numbers.after(); }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let assembly = f.assembly();
     assert!(
         assembly.find("__ciq_member_first").unwrap() < assembly.find("__ciq_block_f_2:").unwrap()
@@ -338,11 +339,11 @@ fn nested_effects_text_resumption_and_arm_local_ids_preserve_order() {
     );
     // String returns remain unsupported; Boolean locals may hold comparisons.
     assert!(
-        compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = \"str\"; return n; } else { return 1; } }")
+        compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = \"str\"; return n; } else { return 1; } }")
             .is_err()
     );
     assert!(
-        compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = x > 1; return 1; } else { return 2; } }")
+        compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = x > 1; return 1; } else { return 2; } }")
             .is_ok()
     );
 }
@@ -356,9 +357,9 @@ fn condition_nesting_and_global_frame_operation_limits_are_bounded() {
             "} else { return 2; }".repeat(count)
         )
     };
-    assert!(compile(&nested(64)).is_ok());
+    assert!(compile_function(&nested(64)).is_ok());
     assert!(
-        compile(&nested(65))
+        compile_function(&nested(65))
             .unwrap_err()
             .message
             .contains("nesting")
@@ -366,20 +367,20 @@ fn condition_nesting_and_global_frame_operation_limits_are_bounded() {
     let locals = (0..128)
         .map(|i| format!("var n{i} = 1;"))
         .collect::<String>();
-    let error = compile(&format!(
+    let error = compile_function(&format!(
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {{ if (x == 0) {{ {locals} }} else {{ {locals} }} return 1; }}"
     ))
     .unwrap_err();
     assert!(error.message.contains("slot limit"));
     // Printing has one argument definition and one sink, with no call result.
     let prints = "System.println(1);".repeat(511);
-    let f = compile(&format!(
+    let f = compile_function(&format!(
         "function f() as Toybox.Lang.Number {{ {prints}return 1; }}"
     ))
     .unwrap();
     assert_eq!(f.operations().len(), 1024);
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f() as Toybox.Lang.Number {{ {prints}System.println(1); return 1; }}"
         ))
         .is_err()
@@ -387,7 +388,7 @@ fn condition_nesting_and_global_frame_operation_limits_are_bounded() {
     // Many empty joins consume real block and terminator operations, not only expressions.
     let body = "if (x == 0) {} else {}".repeat(160);
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {{ {body}return 1; }}"
         ))
         .unwrap_err()
@@ -416,11 +417,11 @@ fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
             [43, 40],
         ),
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         for (argument, expected) in outcomes.into_iter().enumerate() {
             assert_eq!(execute(&f, argument as i32), expected);
         }
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert_eq!(
             f.lower().encode().unwrap(),
             ciq_assembly::Program::parse(&f.assembly())
@@ -435,7 +436,7 @@ fn reassignment_keeps_local_slots_and_reads_the_selected_branch_value() {
         );
     }
     let source = "function f() as Toybox.Lang.Number { var n = 1; n = n + 2; return n; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let assigned = f
         .operations()
         .iter()
@@ -460,11 +461,11 @@ fn source_assignments_reject_wrong_consumers_and_escaping_names() {
         "function f() as Toybox.Lang.Number { var n = 1; n + 1 = 2; return n; }",
         "function f() as Toybox.Lang.Number { var n = 1; n += \"string\"; return n; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let source =
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number {\n n = \"string\"; return n; }";
-    let error = compile(source).unwrap_err();
+    let error = compile_function(source).unwrap_err();
     assert_eq!((error.line, error.column), (2, 2));
     assert!(error.message.contains("parameter"));
 }
@@ -473,7 +474,7 @@ fn source_assignments_reject_wrong_consumers_and_escaping_names() {
 fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedules() {
     let stale = "ciq-ir\n.function f\n.integer %0 1\n.local $0 %0\n.read %1 $0\n.integer %2 2\n.assign $0 %2\n.return %1\n.end";
     assert!(
-        parse_ir(stale)
+        parse_function_ir(stale)
             .unwrap_err()
             .message
             .contains("evaluation order")
@@ -482,7 +483,7 @@ fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedul
     let ordered = stale
         .replace(".read %1 $0\n", "")
         .replace(".return %1", ".read %1 $0\n.return %1");
-    let f = parse_ir(&ordered).unwrap();
+    let f = parse_function_ir(&ordered).unwrap();
     assert_eq!(execute(&f, 0), 2);
     let mut operations = f.operations().to_vec();
     let read = operations.remove(4);
@@ -498,40 +499,40 @@ fn assignment_ir_requires_definite_initialization_and_rejects_stale_read_schedul
         ".integer %0 1\n.local $0 %0\n.string %1 \"str\"\n.assign $0 %1\n.integer %2 2\n.return %2",
         ".string %0 \"str\"\n.local $0 %0\n.integer %1 1\n.assign $0 %1\n.return %1",
     ] {
-        assert!(parse_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err());
+        assert!(parse_function_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err());
     }
     let partial = cfg(
         ".block ^1\n.integer %3 1\n.local $0 %3\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.integer %4 2\n.assign $0 %4\n.integer %5 3\n.return %5",
     );
     assert!(
-        parse_ir(&partial)
+        parse_function_ir(&partial)
             .unwrap_err()
             .message
             .contains("incoming path")
     );
     // Aliases need not be small slot indexes; assignment reuses the initializer slot.
-    let f = parse_ir(&ordered.replace("$0", "$4294967295")).unwrap();
+    let f = parse_function_ir(&ordered.replace("$0", "$4294967295")).unwrap();
     assert_eq!(execute(&f, 0), 2);
 }
 
 #[test]
 fn assignment_effect_order_and_operation_limits_include_each_write() {
-    let f = compile("function f() as Toybox.Lang.Number { var n = Numbers.first(); n = Numbers.second(n); System.println(n); return n; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Number { var n = Numbers.first(); n = Numbers.second(n); System.println(n); return n; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let assembly = f.assembly();
     assert!(
         assembly.find("__ciq_member_first").unwrap()
             < assembly.find("__ciq_member_second").unwrap()
     );
     let body = "n = 1;".repeat(510);
-    let f = compile(&format!(
+    let f = compile_function(&format!(
         "function f() as Toybox.Lang.Number {{ var n = 1; {body}return n; }}"
     ))
     .unwrap();
     assert_eq!(f.operations().len(), 1024);
     assert_eq!(execute(&f, 0), 1);
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f() as Toybox.Lang.Number {{ var n = 1; {body}n = 1; return n; }}"
         ))
         .unwrap_err()
@@ -542,11 +543,11 @@ fn assignment_effect_order_and_operation_limits_include_each_write() {
 
 #[test]
 fn while_tests_each_iteration_and_preserves_body_local_initialization() {
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; var total = 0; while (n > 0) { var current = n; if (current == 2) { total = total + 5; } else { total = total + current; } n = n - 1; } return total; }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; var total = 0; while (n > 0) { var current = n; if (current == 2) { total = total + 5; } else { total = total + current; } n = n - 1; } return total; }").unwrap();
     for (argument, expected) in [(0, 0), (1, 1), (2, 6), (3, 9), (4, 13), (9, 48)] {
         assert_eq!(execute(&f, argument), expected);
     }
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(
         f.lower().encode().unwrap(),
         ciq_assembly::Program::parse(&f.assembly())
@@ -569,7 +570,7 @@ fn while_tests_each_iteration_and_preserves_body_local_initialization() {
             .is_some_and(|target| target < i.offset as i64)
     }));
     assert_eq!(code[0].instruction.operands(), &[2, 3]);
-    let nested = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; var total = 0; while (n > 0) { var inner = n; while (inner > 0) { total = total + 1; inner = inner - 1; } n = n - 1; } return total; }").unwrap();
+    let nested = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; var total = 0; while (n > 0) { var inner = n; while (inner > 0) { total = total + 1; inner = inner - 1; } n = n - 1; } return total; }").unwrap();
     for (argument, expected) in [(0, 0), (1, 1), (3, 6)] {
         assert_eq!(execute(&nested, argument), expected);
     }
@@ -577,18 +578,18 @@ fn while_tests_each_iteration_and_preserves_body_local_initialization() {
 
 #[test]
 fn while_early_returns_leave_the_zero_iteration_exit_available() {
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; while (n > 0) { if (n == 2) { return 42; } else { n = n - 1; } } return 7; }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; while (n > 0) { if (n == 2) { return 42; } else { n = n - 1; } } return 7; }").unwrap();
     for (argument, expected) in [(0, 7), (1, 7), (2, 42), (3, 42)] {
         assert_eq!(execute(&f, argument), expected);
     }
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { return 41; } return 43; }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { return 41; } return 43; }").unwrap();
     assert_eq!(execute(&f, 0), 43);
     assert_eq!(execute(&f, 1), 41);
-    let f = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; if (n > 0) { while (n > 0) { n = n - 1; } } else { n = 3; } return n; }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; if (n > 0) { while (n > 0) { n = n - 1; } } else { n = 3; } return n; }").unwrap();
     assert_eq!(execute(&f, 0), 3);
     assert_eq!(execute(&f, 4), 0);
     assert!(
-        compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { return 41; } }")
+        compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { return 41; } }")
             .unwrap_err()
             .message
             .contains("every path")
@@ -601,10 +602,10 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
     let text = "ciq-ir\n.function f parameters=1\n.block ^100\n.jump ^5\n.block ^1\n.integer %0 7\n.local $0 %0\n.jump ^5\n.block ^5\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^50\n.block ^50\n.read %4 $0\n.return %4\n.end";
     // Changing the first edge to the body makes its initializer definite at exit.
     let mandatory_body = text.replacen(".jump ^5", ".jump ^1", 1);
-    assert_eq!(execute(&parse_ir(&mandatory_body).unwrap(), 0), 7);
+    assert_eq!(execute(&parse_function_ir(&mandatory_body).unwrap(), 0), 7);
 
     assert!(
-        parse_ir(text)
+        parse_function_ir(text)
             .unwrap_err()
             .message
             .contains("initialized local")
@@ -614,7 +615,7 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
         ".integer %4 2\n.assign $0 %4\n.integer %5 3\n.return %5",
     );
     assert!(
-        parse_ir(&assign)
+        parse_function_ir(&assign)
             .unwrap_err()
             .message
             .contains("incoming path")
@@ -623,14 +624,14 @@ fn cyclic_ir_reachability_and_initialization_do_not_invent_first_iteration_value
     let header = text
         .replace(".parameter %1 0", ".read %1 $0")
         .replace(".read %4 $0", ".integer %4 1");
-    assert!(parse_ir(&header).is_err());
+    assert!(parse_function_ir(&header).is_err());
     let disconnected = "ciq-ir\n.function f\n.block ^0\n.jump ^3\n.block ^1\n.jump ^2\n.block ^2\n.jump ^1\n.block ^3\n.integer %0 1\n.return %0\n.end";
-    let function = parse_ir(disconnected).unwrap();
+    let function = parse_function_ir(disconnected).unwrap();
     assert_eq!(execute(&function, 0), 1);
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     // An initializer inside a cyclic block must still precede its first local read.
     let bad = "ciq-ir\n.function f parameters=1\n.block ^0\n.jump ^1\n.block ^1\n.read %0 $0\n.local $0 %0\n.parameter %1 0\n.integer %2 0\n.greater %3 %1 %2\n.branch %3 ^1 ^2\n.block ^2\n.integer %4 1\n.return %4\n.end";
-    assert!(parse_ir(bad).is_err());
+    assert!(parse_function_ir(bad).is_err());
 }
 
 #[test]
@@ -644,7 +645,7 @@ fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
         "function f() as Toybox.Lang.Number { var while = 1; return while; }",
         "function while() as Toybox.Lang.Number { return 1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let nest = |n| {
         format!(
@@ -653,8 +654,13 @@ fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
             "}".repeat(n)
         )
     };
-    assert!(compile(&nest(64)).is_ok());
-    assert!(compile(&nest(65)).unwrap_err().message.contains("nesting"));
+    assert!(compile_function(&nest(64)).is_ok());
+    assert!(
+        compile_function(&nest(65))
+            .unwrap_err()
+            .message
+            .contains("nesting")
+    );
     let mixed = format!(
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {{ {}{}return 1; {}{}return 2; }}",
         "if (x == 0) {".repeat(32),
@@ -662,19 +668,24 @@ fn while_scopes_syntax_and_combined_nesting_limits_are_enforced() {
         "}".repeat(33),
         "} else { return 1; }".repeat(32)
     );
-    assert!(compile(&mixed).unwrap_err().message.contains("nesting"));
+    assert!(
+        compile_function(&mixed)
+            .unwrap_err()
+            .message
+            .contains("nesting")
+    );
 }
 
 #[test]
 fn loop_effects_and_text_pipeline_remain_inside_test_body_and_exit_blocks() {
-    let f = compile(include_str!("../../../examples/compiler-probe/loops.mc")).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(include_str!("../../../examples/compiler-probe/loops.mc")).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(
         f.lower(),
         ciq_assembly::Program::parse(&f.assembly()).unwrap()
     );
-    let f = compile("function f() as Toybox.Lang.Number { var n = 3; while (Numbers.condition(n) > 0) { n = Numbers.next(n); System.println(n); } return Numbers.after(n); }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Number { var n = 3; while (Numbers.condition(n) > 0) { n = Numbers.next(n); System.println(n); } return Numbers.after(n); }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let assembly = f.assembly();
     assert!(
         assembly.find("__ciq_member_condition").unwrap()
@@ -686,28 +697,31 @@ fn loop_effects_and_text_pipeline_remain_inside_test_body_and_exit_blocks() {
     assert!(
         assembly.find("__ciq_member_after").unwrap() > assembly.find("__ciq_block_f_3:").unwrap()
     );
-    let strings = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var text = \"first\"; var n = x; while (n > 0) { System.println(text); text = \"next\"; n = n - 1; } System.println(text); return 1; }").unwrap();
-    assert_eq!(strings, parse_ir(&strings.to_ir_text()).unwrap());
-    assert!(compile("function f() as Toybox.Lang.Number { while (0 == 0) {} return 1; }").is_ok());
+    let strings = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var text = \"first\"; var n = x; while (n > 0) { System.println(text); text = \"next\"; n = n - 1; } System.println(text); return 1; }").unwrap();
+    assert_eq!(strings, parse_function_ir(&strings.to_ir_text()).unwrap());
+    assert!(
+        compile_function("function f() as Toybox.Lang.Number { while (0 == 0) {} return 1; }")
+            .is_ok()
+    );
 }
 
 #[test]
 fn nested_loop_control_selects_innermost_targets_and_preserves_pipeline() {
     let source = include_str!("../../../examples/compiler-probe/loop-control.mc")
         .replace("    System.println(total);\n", "");
-    let f = compile(&source).unwrap();
+    let f = compile_function(&source).unwrap();
     for (argument, expected) in [(0, 44), (1, 46), (2, 48), (5, 54)] {
         assert_eq!(execute(&f, argument), expected);
     }
-    let restored = compile("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; while (n > 0) { while (n > 0) { break; } n = n - 1; continue; } return n; }").unwrap();
+    let restored = compile_function("function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = x; while (n > 0) { while (n > 0) { break; } n = n - 1; continue; } return n; }").unwrap();
     for argument in 0..4 {
         assert_eq!(execute(&restored, argument), 0);
     }
-    let zero = compile(&source.replace("value + 4", "value")).unwrap();
+    let zero = compile_function(&source.replace("value + 4", "value")).unwrap();
     for (argument, expected) in [(0, 40), (1, 42), (2, 42), (3, 42), (4, 44)] {
         assert_eq!(execute(&zero, argument), expected);
     }
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(
         f.lower().encode().unwrap(),
         ciq_assembly::Program::parse(&f.assembly())
@@ -733,24 +747,24 @@ fn mixed_loop_terminators_omit_joins_without_hiding_loop_exit() {
             [9, 9, 7, 7],
         ),
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         for (argument, expected) in results.into_iter().enumerate() {
             assert_eq!(execute(&f, argument as i32), expected);
         }
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
 #[test]
 fn optional_else_preserves_false_path_scope_and_return_requirements() {
-    let f = compile(
+    let f = compile_function(
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { var n = 3; if (x == 0) { return 7; } if (x > 1) { n = 9; } return n; }",
     )
     .unwrap();
     for (argument, expected) in [(0, 7), (1, 3), (2, 9)] {
         assert_eq!(execute(&f, argument), expected);
     }
-    let f = compile(
+    let f = compile_function(
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { if (x > 1) { return 1; } } else { return 2; } return 3; }",
     )
     .unwrap();
@@ -760,7 +774,7 @@ fn optional_else_preserves_false_path_scope_and_return_requirements() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { return 1; } }",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { if (x == 0) { var n = 1; } return n; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -788,18 +802,19 @@ fn scoped_blocks_and_else_if_preserve_values_and_pipeline_round_trips() {
             [0, 0, 0],
         ),
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         for (argument, expected) in outcomes.into_iter().enumerate() {
             assert_eq!(execute(&function, argument as i32), expected, "{source}");
         }
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower(),
             ciq_assembly::Program::parse(&function.assembly()).unwrap()
         );
     }
-    let flat = compile("function f() as Toybox.Lang.Number{var n=41;return n;}").unwrap();
-    let scoped = compile("function f() as Toybox.Lang.Number{{var n=41;return n;}}").unwrap();
+    let flat = compile_function("function f() as Toybox.Lang.Number{var n=41;return n;}").unwrap();
+    let scoped =
+        compile_function("function f() as Toybox.Lang.Number{{var n=41;return n;}}").unwrap();
     assert_eq!(flat.assembly(), scoped.assembly());
 
     let source = "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number{{if(n==null){return 0;}else if(n>0){return n+1;}else{return n-1;}}}";
@@ -824,7 +839,7 @@ fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{if(x==0){var n=1;}else if(n==1){return 2;}return 3;}",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{if(x==0){return 1;}else if(x>0) return 2;return 3;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for depth in [64, 65] {
         let blocks = format!(
@@ -837,7 +852,7 @@ fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
             "if(x==0){return 1;}else ".repeat(depth)
         );
         for source in [blocks, chain] {
-            let result = compile(&source);
+            let result = compile_function(&source);
             assert_eq!(result.is_ok(), depth == 64, "{source}: {result:?}");
             if let Err(error) = result {
                 assert!(error.message.contains("nesting"));
@@ -848,7 +863,12 @@ fn scoped_blocks_and_else_if_keep_scope_reachability_and_nesting_limits() {
         "function f() as Toybox.Lang.Number{{{}return 1;}}",
         "{}".repeat(1025)
     );
-    assert!(compile(&empty_blocks).unwrap_err().message.contains("1024"));
+    assert!(
+        compile_function(&empty_blocks)
+            .unwrap_err()
+            .message
+            .contains("1024")
+    );
 }
 
 #[test]
@@ -860,7 +880,7 @@ fn control_flow_bodies_require_braces_as_in_the_sdk() {
         "function f() as Toybox.Lang.Number{var i=0;do i++;while(i<2);return i;}",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{if(x==0)if(x==1){return 1;}else{return 2;}return 3;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -880,9 +900,9 @@ fn switch_dispatch_and_control_targets_survive_saved_stages() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{var n=0;switch(x){case 0:switch(x){case 0:break;}n++;break;default:n=9;}return n;}",
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{switch(x){case 0:{var n=1;return n;}default:{var n=2;return n;}}}",
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert!(function.to_ir_text().contains("equals"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower(),
             ciq_assembly::Program::parse(&function.assembly()).unwrap()
@@ -942,7 +962,7 @@ fn switch_scope_initialization_labels_and_nesting_are_checked() {
             "switch(x){default:".repeat(depth),
             "}".repeat(depth)
         );
-        let result = compile(&source);
+        let result = compile_function(&source);
         assert_eq!(result.is_ok(), depth == 64, "{result:?}");
         if let Err(error) = result {
             assert!(error.message.contains("nesting"));
@@ -952,7 +972,12 @@ fn switch_scope_initialization_labels_and_nesting_are_checked() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{{switch(x){{{}default:return 0;}}}}",
         "case 0:".repeat(1025)
     );
-    assert!(compile(&source).unwrap_err().message.contains("1024"));
+    assert!(
+        compile_function(&source)
+            .unwrap_err()
+            .message
+            .contains("1024")
+    );
 }
 
 #[test]
@@ -983,9 +1008,9 @@ fn for_header_lists_execute_left_to_right_and_preserve_loop_control() {
             42,
         ),
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert_eq!(execute(&function, 0), expected, "{source}");
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower(),
             ciq_assembly::Program::parse(&function.assembly()).unwrap()
@@ -1010,20 +1035,25 @@ fn loop_control_rejects_outside_targets_reserved_names_and_unreachable_code() {
                 "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {{ while (x > 0) {{ {keyword} }} return 1; }}"
             ),
         ] {
-            assert!(compile(&source).is_err(), "{source}");
+            assert!(compile_function(&source).is_err(), "{source}");
         }
         let source = format!(
             "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number {{ while (x > 0) {{ {keyword}; return 1; }} return 2; }}"
         );
         assert!(
-            compile(&source)
+            compile_function(&source)
                 .unwrap_err()
                 .message
                 .contains("unreachable")
         );
     }
     let source = "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number { while (x > 0) { if (x == 1) { break; } else { continue; } return 1; } return 2; }";
-    assert!(compile(source).unwrap_err().message.contains("unreachable"));
+    assert!(
+        compile_function(source)
+            .unwrap_err()
+            .message
+            .contains("unreachable")
+    );
 }
 
 #[test]
@@ -1038,17 +1068,17 @@ fn short_circuit_conditions_follow_boolean_truth_tables_and_precedence() {
                     (format!("({a} || {b}) && {c}"), (a || b) && c),
                     (format!("!({a} && {b} || {c})"), !(a && b || c)),
                 ] {
-                    let f = compile(&format!(
+                    let f = compile_function(&format!(
                         "function f() as Toybox.Lang.Number {{ if ({expression}) {{ return 1; }} else {{ return 0; }} }}"
                     ))
                     .unwrap();
                     assert_eq!(execute(&f, 0), i32::from(expected), "{expression}");
-                    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
                 }
             }
         }
     }
-    let f = compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var count = 0; while (n > count && 3 > count) { count = count + 1; } return count; }").unwrap();
+    let f = compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var count = 0; while (n > count && 3 > count) { count = count + 1; } return count; }").unwrap();
     for n in [0, 1, 2, 3, 4] {
         assert_eq!(execute(&f, n), n.min(3));
     }
@@ -1068,17 +1098,17 @@ fn logical_values_materialize_boolean_results_and_retest_assignments() {
                         (a && b) == (b || c),
                     ),
                 ] {
-                    let f = compile(&format!(
+                    let f = compile_function(&format!(
                         "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
                     ))
                     .unwrap();
                     assert_eq!(execute(&f, 0), i32::from(expected), "{expression}");
-                    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
                 }
             }
         }
     }
-    let f = compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var flag = n > 0 && true; var count = 0; while (flag) { count = count + 1; flag = n > count && 3 > count; } return count; }").unwrap();
+    let f = compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var flag = n > 0 && true; var count = 0; while (flag) { count = count + 1; flag = n > count && 3 > count; } return count; }").unwrap();
     for n in [0, 1, 2, 3, 4] {
         assert_eq!(execute(&f, n), n.min(3));
     }
@@ -1124,9 +1154,9 @@ fn for_and_post_test_loops_have_distinct_latches_and_correct_scope() {
             6,
         ),
     ] {
-        let function = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let function = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
         assert_eq!(execute(&function, 0), expected, "{source}");
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower(),
             ciq_assembly::Program::parse(&function.assembly()).unwrap()
@@ -1149,32 +1179,33 @@ fn loop_header_scope_and_unexecuted_clauses_still_receive_diagnostics() {
         "function f() as Toybox.Lang.Number {do{}while(false)return 0;}",
         "function f() as Toybox.Lang.Number {for(;;)break;return 0;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let source = "function f() as Void {for(;;){continue;}}";
-    let function = compile(source).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-    let function = compile("function f() as Toybox.Lang.Number {for(;;){continue;}}").unwrap();
+    let function = compile_function(source).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
+    let function =
+        compile_function("function f() as Toybox.Lang.Number {for(;;){continue;}}").unwrap();
     assert_eq!(function.return_type(), ciq_compiler::ReturnType::Integer);
     assert!(function.to_ir_text().contains("result=integer"));
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }
 
 #[test]
 fn disconnected_blocks_stay_checked_without_changing_executable_proofs() {
     let valid = "ciq-ir\n.function f\n.block ^0\n.integer %0 41\n.local $0 %0\n.jump ^2\n.block ^1\n.read %1 $0\n.discard %1\n.jump ^2\n.block ^2\n.read %2 $0\n.return %2\n.end\n";
-    let function = parse_ir(valid).unwrap();
+    let function = parse_function_ir(valid).unwrap();
     assert_eq!(execute(&function, 0), 41);
-    assert!(parse_ir(&valid.replace(".read %1 $0", ".read %1 $9")).is_err());
+    assert!(parse_function_ir(&valid.replace(".read %1 $0", ".read %1 $9")).is_err());
     assert!(
-        parse_ir(&valid.replace(
+        parse_function_ir(&valid.replace(
             ".read %1 $0\n.discard %1",
             ".boolean %1 false\n.assign $0 %1"
         ))
         .is_err()
     );
     let void_tail = "ciq-ir\n.function f\n.block ^0\n.integer %0 41\n.return %0\n.block ^1\n.return-void\n.end\n";
-    let function = parse_ir(void_tail).unwrap();
+    let function = parse_function_ir(void_tail).unwrap();
     assert_eq!(execute(&function, 0), 41);
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }

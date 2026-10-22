@@ -1,7 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
     parse_unit_ir_with_api,
 };
 
@@ -109,14 +109,14 @@ fn erased_references_and_forged_ir_do_not_establish_interface_members() {
         let source = format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,c as {ty}) {{ a.sort(c); }}"
         );
-        assert!(compile(&source).is_err());
+        assert!(compile_function(&source).is_err());
     }
     let source =
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,c as Ordering) { a.sort(c); }";
     let unit = compile_sources(&[source, ORDERING]).unwrap();
     let text = unit.declarations()[0].function.to_ir_text();
-    assert!(parse_ir(&text).is_ok()); // Class/member resolution remains a unit obligation.
-    assert!(parse_ir(&text.replace("source(Ordering@WatchUi.View)", "view")).is_err());
+    assert!(parse_function_ir(&text).is_ok()); // Class/member resolution remains a unit obligation.
+    assert!(parse_function_ir(&text.replace("source(Ordering@WatchUi.View)", "view")).is_err());
     let incomplete = "class Ordering extends Toybox.WatchUi.View { function initialize(direction as Toybox.Lang.Number) { View.initialize(); } }";
     assert!(compile_sources(&[source, incomplete]).is_err());
 }

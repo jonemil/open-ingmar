@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_with_api, parse_ir, parse_ir_with_api,
+    compile_function, compile_function_with_api, parse_function_ir, parse_function_ir_with_api,
 };
 
 #[test]
@@ -22,9 +22,9 @@ fn enumeration_preserves_generic_elements_through_saved_stages() {
                      Toybox.Lang.{value}>) as Toybox.Lang.Array<Toybox.Lang.{element}> \
                      {{ return d.{method}(); }}"
                 );
-                let f = compile(&source).unwrap();
+                let f = compile_function(&source).unwrap();
                 let text = f.to_ir_text();
-                assert_eq!(f, parse_ir(&text).unwrap());
+                assert_eq!(f, parse_function_ir(&text).unwrap());
                 let program = f.lower();
                 assert_eq!(
                     program,
@@ -36,8 +36,10 @@ fn enumeration_preserves_generic_elements_through_saved_stages() {
                         .contains(&format!("__ciq_native_{method}"))
                 );
                 assert!(
-                    parse_ir(&text.replace(&format!(" {method}"), &format!(" {method} %0")))
-                        .is_err()
+                    parse_function_ir(
+                        &text.replace(&format!(" {method}"), &format!(" {method} %0"))
+                    )
+                    .is_err()
                 );
             }
         }
@@ -53,11 +55,11 @@ fn enumeration_rejects_erasure_wrong_arity_and_incompatible_results() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null>) as Toybox.Lang.Array<Toybox.Lang.Number> { return d.values(); }",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.String or Null>) { return d.values()[0].length(); }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let f = compile("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) { return d.keys()[0].length(); }").unwrap();
+    let f = compile_function("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) { return d.keys()[0].length(); }").unwrap();
     assert!(
-        parse_ir(&f.to_ir_text().replace(" keys", " values")).is_err(),
+        parse_function_ir(&f.to_ir_text().replace(" keys", " values")).is_err(),
         "{}",
         f.to_ir_text()
     );
@@ -68,12 +70,15 @@ fn enumeration_is_available_at_initial_api_but_array_consumers_keep_their_minimu
     let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     for method in ["keys", "values"] {
         let source = format!("function f() {{ return {{1 => 2}}.{method}().size(); }}");
-        let f = compile_with_api(&source, initial).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+        let f = compile_function_with_api(&source, initial).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+        );
         let source = format!("function f() {{ return {{1 => 2}}.{method}().indexOf(1); }}");
-        let f = compile(&source).unwrap();
-        assert!(compile_with_api(&source, initial).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+        let f = compile_function(&source).unwrap();
+        assert!(compile_function_with_api(&source, initial).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
     }
 }
 
@@ -84,7 +89,7 @@ fn enumeration_resolves_native_symbols_from_assembly_input() {
     )
     .unwrap();
     for (method, id) in [("keys", 0x008000b9), ("values", 0x008000ba)] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Number> {{ return {{1 => 2}}.{method}(); }}"
         ))
         .unwrap();

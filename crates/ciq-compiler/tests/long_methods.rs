@@ -1,6 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -17,8 +18,9 @@ fn long_native_symbols_and_saved_ir_use_shared_dispatch() {
         ("1l.hashCode()", "hashCode", 0x008000ad),
         ("1l.weak()", "weak", 0x00800418),
     ] {
-        let f = compile(&format!("function f() {{ System.println({expression}); }}")).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f =
+            compile_function(&format!("function f() {{ System.println({expression}); }}")).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let symbols = ciq_assembly::Program::parse(&format!(
             ".symbol method \"{name}\" id=0x{id:08x}\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol print \"println\" id=0x00800067"
         )).unwrap();
@@ -26,11 +28,11 @@ fn long_native_symbols_and_saved_ir_use_shared_dispatch() {
         assert_eq!(bindings[&format!("__ciq_native_{name}")], id);
     }
     for (method, id) in [("toLong()", 0x008000a9), ("toLongWithBase(16)", 0x00800b1c)] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Long or Null {{ return \"ff\".{method}; }}"
         ))
         .unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let name = method.split('(').next().unwrap();
         let symbols =
             ciq_assembly::Program::parse(&format!(".symbol method \"{name}\" id=0x{id:08x}"))
@@ -67,15 +69,21 @@ fn native_introductions_apply_to_source_and_saved_ir() {
     ] {
         let source = format!("function f() {{ System.println({expression}); }}");
         let context = ApiContext::new(introduced, introduced).unwrap();
-        let f = compile_with_api(&source, context).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), context).unwrap());
+        let f = compile_function_with_api(&source, context).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), context).unwrap()
+        );
         if let Some(before) = before {
             for context in [
                 ApiContext::new(before, before).unwrap(),
                 ApiContext::new(introduced, before).unwrap(),
             ] {
-                assert!(compile_with_api(&source, context).is_err(), "{expression}");
-                assert!(parse_ir_with_api(&f.to_ir_text(), context).is_err());
+                assert!(
+                    compile_function_with_api(&source, context).is_err(),
+                    "{expression}"
+                );
+                assert!(parse_function_ir_with_api(&f.to_ir_text(), context).is_err());
             }
         }
     }
@@ -83,10 +91,10 @@ fn native_introductions_apply_to_source_and_saved_ir() {
         let source =
             format!("function f() as Toybox.Lang.Long or Null {{ return \"42\".{method}; }}");
         let level = ApiLevel(3, 1, 0);
-        let f = compile_with_api(&source, ApiContext::new(level, level).unwrap()).unwrap();
+        let f = compile_function_with_api(&source, ApiContext::new(level, level).unwrap()).unwrap();
         let before = ApiContext::new(ApiLevel(3, 0, 9), ApiLevel(3, 0, 9)).unwrap();
-        assert!(compile_with_api(&source, before).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), before).is_err());
+        assert!(compile_function_with_api(&source, before).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), before).is_err());
     }
 }
 
@@ -104,8 +112,8 @@ fn nullable_long_proofs_and_joins_survive_saved_ir() {
         "function f() as Toybox.Lang.Boolean { return true.compareTo(1l) < 1; }",
         "function f() as Toybox.Lang.Boolean { return 'A'.equals(65l); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap(), "{source}");
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap(), "{source}");
     }
     let unit = compile_sources(&["module M { function parse() as Toybox.Lang.Long or Null { return \"42\".toLong(); } function f() as Toybox.Lang.Long or Null { return M.parse(); } }"]).unwrap();
     let text = unit.to_ir_text();
@@ -136,6 +144,6 @@ fn nullable_long_and_native_calls_cannot_bypass_contracts() {
         "function f() { var n = \"42\".toLong(16); }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 1; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
 }

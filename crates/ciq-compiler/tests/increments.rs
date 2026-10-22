@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Function, Operation, ReturnType,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -14,14 +14,14 @@ fn char_increment_preserves_type_across_source_saved_ir_and_direct_addition() {
             let source = format!(
                 "function f() as Toybox.Lang.Char {{ {setup} {update}; return {result}; }}"
             );
-            let f = compile(&source).unwrap();
+            let f = compile_function(&source).unwrap();
             assert_eq!(f.return_type(), ReturnType::Char);
             let text = f.to_ir_text();
-            assert_eq!(f, parse_ir(&text).unwrap());
-            assert!(parse_ir(&text.replace(".increment", ".decrement")).is_err());
+            assert_eq!(f, parse_function_ir(&text).unwrap());
+            assert!(parse_function_ir(&text.replace(".increment", ".decrement")).is_err());
             assert_eq!(
                 f.lower(),
-                compile(&source.replace(&update, &format!("{target} += 1")))
+                compile_function(&source.replace(&update, &format!("{target} += 1")))
                     .unwrap()
                     .lower()
             );
@@ -30,8 +30,8 @@ fn char_increment_preserves_type_across_source_saved_ir_and_direct_addition() {
                 ciq_compiler::api::ApiLevel(1, 0, 0),
             )
             .unwrap();
-            assert!(ciq_compiler::compile_with_api(&source, old).is_err());
-            assert!(ciq_compiler::parse_ir_with_api(&text, old).is_err());
+            assert!(ciq_compiler::compile_function_with_api(&source, old).is_err());
+            assert!(ciq_compiler::parse_function_ir_with_api(&text, old).is_err());
             let mut operations = f.operations().to_vec();
             for op in &mut operations {
                 if let Operation::Step { increment, .. } = &mut op.operation {
@@ -54,10 +54,10 @@ fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
         ("--n", "n -= 1", ".decrement"),
     ] {
         let source = format!("function f() {{ var n = 1; {update}; return n; }}");
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         let text = f.to_ir_text();
         assert!(text.contains(directive));
-        assert_eq!(f, parse_ir(&text).unwrap());
+        assert_eq!(f, parse_function_ir(&text).unwrap());
         let assembly = f.lower();
         assert_eq!(
             assembly,
@@ -65,7 +65,7 @@ fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
         );
         assert_eq!(
             assembly.encode().unwrap(),
-            compile(&source.replace(update, compound))
+            compile_function(&source.replace(update, compound))
                 .unwrap()
                 .lower()
                 .encode()
@@ -83,7 +83,7 @@ fn prefix_and_postfix_statements_use_direct_number_steps_and_existing_slots() {
         .map(|i| format!("p{i}"))
         .collect::<Vec<_>>()
         .join(",");
-    compile(&format!(
+    compile_function(&format!(
         "function f({parameters}) {{ var n = 1; n++; --n; return n; }}"
     ))
     .unwrap();
@@ -116,16 +116,16 @@ fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() 
         "function f() { var n = [1]; n[true]++; }",
         "function f() { var n = 1; if (true) { var inner = 2; } inner++; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let text = "ciq-ir\n.function f\n.integer %0 1\n.increment %1 %0\n.return %1\n.end\n";
-    let f = parse_ir(text).unwrap();
+    let f = parse_function_ir(text).unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         [0x35, 1, 0x38, 1, 0x38, 1, 0x03, 0x16]
     );
     assert_eq!(
-        parse_ir(&text.replace(".increment", ".decrement"))
+        parse_function_ir(&text.replace(".increment", ".decrement"))
             .unwrap()
             .lower()
             .encode()
@@ -138,7 +138,7 @@ fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() 
         text.replace("%1 %0", "%1 %0 %0"),
         text.replace(".return %1", ".return %0"),
     ] {
-        assert!(parse_ir(&bad).is_err());
+        assert!(parse_function_ir(&bad).is_err());
     }
     let mut operations = f.operations().to_vec();
     operations[0].operation = Operation::Boolean {
@@ -147,14 +147,15 @@ fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() 
     };
     assert!(Function::with_signature("f".into(), vec![], ReturnType::Integer, operations).is_err());
     let guarded =
-        compile("function f() { var n = \"7\".toNumber(); if (n != null) { n++; } }").unwrap();
-    assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
+        compile_function("function f() { var n = \"7\".toNumber(); if (n != null) { n++; } }")
+            .unwrap();
+    assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());
 }
 
 #[test]
 fn indexed_updates_capture_once_in_order_and_keep_branching_indices_and_frame_limits() {
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[(true || false).hashCode() - 1]++; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[(true || false).hashCode() - 1]++; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let unit = compile_sources(&["module M { function array(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { return a; } function index() { return 0; } } function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { M.array(a)[M.index()]++; }"]).unwrap();
     let f = unit
         .declarations()
@@ -196,12 +197,15 @@ fn indexed_updates_capture_once_in_order_and_keep_branching_indices_and_frame_li
             .collect::<Vec<_>>()
             .join(",");
         assert_eq!(
-            compile(&format!("function f({parameters}) {{ a[0]++; }}")).is_ok(),
+            compile_function(&format!("function f({parameters}) {{ a[0]++; }}")).is_ok(),
             ok
         );
     }
     // A declared parameter remains immutable even though its array elements can change.
-    assert!(compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a++; }").is_err());
+    assert!(
+        compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a++; }")
+            .is_err()
+    );
 }
 
 #[test]

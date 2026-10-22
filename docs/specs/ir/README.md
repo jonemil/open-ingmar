@@ -72,9 +72,10 @@ content contracts. Fields and lexical casts retain their existing domains.
 
 ### Validation
 
-`Function::new` validates explicitly constructed operations; `compile(source)`
-constructs an immutable Function through the same validator. `parse_ir` resumes
-saved function text with those checks. These are body-level entry points, not
+`Function::new` validates explicitly constructed operations;
+`compile_function(source)` constructs an immutable Function through the same
+validator. `parse_function_ir` resumes saved function text with those checks.
+These are body-level entry points, not
 complete-program validation: user module callees may remain external and require
 later symbol binding. `compile_sources` and `parse_unit_ir` additionally require
 declared callees and check their contracts. The unit text reader uses the same
@@ -104,7 +105,7 @@ statement schedule. Saved IR that would reorder effects is rejected rather than
 silently rescheduled. [Call operations](#module-calls-and-operation-order) and
 [joins](#expression-joins) specify the applicable boundaries.
 
-`parse_ir` diagnoses input byte positions; typed construction reports the
+`parse_function_ir` diagnoses input byte positions; typed construction reports the
 operation index when available. Unit validation adds declaration ownership,
 exact call signatures, field contracts, and callback restrictions after checking
 each function. [API context](../sdk/README.md#api-context-inputs) adds
@@ -114,7 +115,7 @@ execution profiles.
 ### Native and text boundaries
 
 `Function::to_ir_text` preserves value IDs, receiver metadata, and optional
-spans. `parse_ir` reconstructs that semantic model. `Function::lower` constructs
+spans. `parse_function_ir` reconstructs that semantic model. `Function::lower` constructs
 shared assembly directly; `Function::assembly` lowers and prints it. Native and
 saved-stage compilation must produce equivalent assembly/CODE under identical
 bindings. Text is not mandatory between stages.

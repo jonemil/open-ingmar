@@ -1,4 +1,4 @@
-use ciq_compiler::{compile, compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 
 #[test]
 fn declarations_and_definite_assignment_preserve_saved_stages() {
@@ -18,8 +18,8 @@ fn declarations_and_definite_assignment_preserve_saved_stages() {
         "function f() as Toybox.Lang.Number{var x; x=new[2]b; return x.size();}",
         "function f() as Toybox.Lang.Number{var x; x=:token; return x.toNumber();}",
     ] {
-        let function = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         let asm = function.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
@@ -41,7 +41,7 @@ fn reads_require_assignment_on_every_executable_path() {
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number{while(flag){var x; if(flag){x=1;} System.println(x);} return 0;}",
         "function f() as Toybox.Lang.Number{var x; x=1; x=\"different\"; return x;}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
 }
 
@@ -54,7 +54,7 @@ fn saved_declarations_reject_forged_initialization_and_contracts() {
         "ciq-ir\n.function f\n.declare-local $0 integer\n.declare-local $0 integer\n.integer %0 0\n.return %0\n.end\n",
         "ciq-ir\n.function f\n.declare-local $0 void\n.return-void\n.end\n",
     ] {
-        assert!(parse_ir(text).is_err(), "accepted {text}");
+        assert!(parse_function_ir(text).is_err(), "accepted {text}");
     }
 }
 
@@ -75,15 +75,15 @@ fn declaration_contracts_cover_all_stored_domains_and_api_checks() {
             "var x; x=p; if(x!=null){x.invoke();} return 0;",
         ),
     ] {
-        let function = compile(&format!(
+        let function = compile_function(&format!(
             "function f({parameter}) as Toybox.Lang.Number{{{body}}}"
         ))
         .unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     let text =
         "ciq-ir\n.function f\n.declare-local $0 byte-array\n.integer %0 0\n.return %0\n.end\n";
-    let function = parse_ir(text).unwrap();
+    let function = parse_function_ir(text).unwrap();
     let low = ciq_compiler::api::ApiContext::new(
         ciq_compiler::api::ApiLevel(2, 0, 0),
         ciq_compiler::api::ApiLevel(2, 0, 0),
@@ -92,18 +92,19 @@ fn declaration_contracts_cover_all_stored_domains_and_api_checks() {
     assert!(function.validate_api(low).is_err());
     let maximum = (0..255).map(|i| format!("var v{i};")).collect::<String>();
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f() as Toybox.Lang.Number{{{maximum}return 0;}}"
         ))
         .is_ok()
     );
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f() as Toybox.Lang.Number{{{maximum}var extra;return 0;}}"
         ))
         .is_err()
     );
-    let function = compile("function f() as Toybox.Lang.Number{var x;x=1;return x;}").unwrap();
+    let function =
+        compile_function("function f() as Toybox.Lang.Number{var x;x=1;return x;}").unwrap();
     let code = function.lower().encode().unwrap();
     let ops = ciq_mc::decode(&code).unwrap();
     assert_eq!(
@@ -117,7 +118,7 @@ fn declaration_contracts_cover_all_stored_domains_and_api_checks() {
 #[test]
 fn declarations_must_dominate_assignments_and_source_contracts_remain_exact() {
     let text = "ciq-ir\n.function f\n.block ^0\n.boolean %0 true\n.branch %0 ^1 ^2\n.block ^1\n.declare-local $0 integer\n.jump ^3\n.block ^2\n.jump ^3\n.block ^3\n.integer %1 1\n.assign $0 %1\n.integer %2 0\n.return %2\n.end\n";
-    assert!(parse_ir(text).is_err());
+    assert!(parse_function_ir(text).is_err());
     let unit = compile_sources(&[
         "class C{} class Other{} function f() as Toybox.Lang.Number{var c;c=new C();return 0;}",
     ])

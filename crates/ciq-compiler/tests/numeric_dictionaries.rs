@@ -2,7 +2,8 @@ use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -44,8 +45,8 @@ fn all_numeric_key_value_contracts_are_invariant_and_nullable_values_survive_ir(
                 let source = format!(
                     "function f() as Toybox.Lang.Dictionary<Toybox.Lang.{key}, Toybox.Lang.{value}{suffix}> {{ return {{{k} => {v}}}; }}"
                 );
-                let f = compile(&source).unwrap();
-                assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                let f = compile_function(&source).unwrap();
+                assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
                 assert!(f.to_ir_text().contains(".dictionary-constant"));
                 let asm = f.lower();
                 let record = asm
@@ -69,14 +70,14 @@ fn all_numeric_key_value_contracts_are_invariant_and_nullable_values_survive_ir(
             let declaration = format!(
                 "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key},Toybox.Lang.{value} or Null>) as Toybox.Lang.{value} or Null {{ return d[{k}]; }}"
             );
-            let f = compile(&declaration).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&declaration).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             for body in [
                 format!("d.put({k},1);"),
                 format!("d.put(1,{v});"),
                 format!("d[1]={v};"),
             ] {
-                assert!(compile(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key},Toybox.Lang.{value}>) {{ {body} }}")).is_err(),"{key}, {value}: {body}");
+                assert!(compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key},Toybox.Lang.{value}>) {{ {body} }}")).is_err(),"{key}, {value}: {body}");
             }
         }
     }
@@ -87,14 +88,14 @@ fn all_numeric_key_value_contracts_are_invariant_and_nullable_values_survive_ir(
             "return {};".into(),
             format!("return {{1 => true ? {v} : null}};"),
         ] {
-            let f=compile(&format!("function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty} or Null> {{ {body} }}")).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f=compile_function(&format!("function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty} or Null> {{ {body} }}")).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for body in [
             "return d[1];".into(),
             format!("var n=d[1]; if(n == null) {{ return {v}; }} return d[1];"),
         ] {
-            assert!(compile(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty}>) as Toybox.Lang.{ty} {{ {body} }}")).is_err());
+            assert!(compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty}>) as Toybox.Lang.{ty} {{ {body} }}")).is_err());
         }
     }
 }
@@ -110,7 +111,7 @@ fn key_canonicalization_retains_signed_zero_and_double_nan_entries() {
         let text = format!(
             "ciq-ir\n.function f\n.dictionary-constant %0 dictionary({ty}=>integer) {ty} 0x{zero} number 0x00000001 {ty} 0x{negative} number 0x00000002 {ty} 0x{zero} number 0x00000003\n.return %0\n.end\n"
         );
-        let f = parse_ir(&text).unwrap();
+        let f = parse_function_ir(&text).unwrap();
         let asm = f.lower();
         let record = asm
             .items()
@@ -128,13 +129,13 @@ fn key_canonicalization_retains_signed_zero_and_double_nan_entries() {
             record.entries[0].1,
             ciq_prg::data::dictionaries::Value::Number(3)
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for (ty, bits, count) in [("float", "7fc00000", 1), ("double", "7ff8000000000000", 2)] {
         let text = format!(
             "ciq-ir\n.function f\n.dictionary-constant %0 dictionary({ty}=>integer) {ty} 0x{bits} number 0x00000001 {ty} 0x{bits} number 0x00000002\n.return %0\n.end\n"
         );
-        let f = parse_ir(&text).unwrap();
+        let f = parse_function_ir(&text).unwrap();
         let asm = f.lower();
         let record = asm
             .items()
@@ -158,10 +159,13 @@ fn malformed_constants_and_unavailable_methods_are_rejected() {
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}>) as Toybox.Lang.{ty} or Null {{ return d.get({literal}); }}"
         );
         let context = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
-        let f = compile_with_api(&source, context).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), context).unwrap());
-        assert!(compile(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}>) {{ d.put({literal},null); }}")).is_err());
-        let f=compile(&format!("function f() as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}> {{ return {{{literal}=>{literal}}}; }}")).unwrap();
+        let f = compile_function_with_api(&source, context).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), context).unwrap()
+        );
+        assert!(compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}>) {{ d.put({literal},null); }}")).is_err());
+        let f=compile_function(&format!("function f() as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}> {{ return {{{literal}=>{literal}}}; }}")).unwrap();
         let text = f.to_ir_text();
         for bad in ["0xgg", "0x10000000000000000"] {
             let offset = text.find(" 0x").unwrap() + 1;
@@ -169,11 +173,13 @@ fn malformed_constants_and_unavailable_methods_are_rejected() {
                 .find(char::is_whitespace)
                 .map(|n| offset + n)
                 .unwrap();
-            assert!(parse_ir(&format!("{}{}{}", &text[..offset], bad, &text[end..])).is_err());
+            assert!(
+                parse_function_ir(&format!("{}{}{}", &text[..offset], bad, &text[end..])).is_err()
+            );
         }
         let to_string = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{ty},Toybox.Lang.{ty}>) as Toybox.Lang.String {{ return d.toString(); }}"
         );
-        assert!(compile_with_api(&to_string, context).is_err());
+        assert!(compile_function_with_api(&to_string, context).is_err());
     }
 }

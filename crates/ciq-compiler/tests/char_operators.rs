@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -63,9 +63,9 @@ fn char_operators_preserve_result_types_and_complete_pipelines() {
             "addv",
         ),
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert_eq!(f.return_type(), ty);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert!(f.lower().to_text().contains(opcode));
     }
 }
@@ -86,22 +86,25 @@ fn char_operator_profiles_reject_unverified_pairs_and_edited_consumers() {
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return c + n; }",
         "function f() as Toybox.Lang.Char { var c = 'A'; c = c + 'B'; return c; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f() as Toybox.Lang.Number { return ('A' + 1).toNumber(); }").unwrap();
+    let f = compile_function("function f() as Toybox.Lang.Number { return ('A' + 1).toNumber(); }")
+        .unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".integer %1 1"));
-    assert!(parse_ir(&text.replace(".integer %1 1", ".boolean %1 true")).is_err());
-    assert!(parse_ir(&text.replace(".add", ".subtract")).is_err());
-    let f = compile("function f() as Toybox.Lang.Boolean { return 'A' == 65; }").unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".integer %1 65", ".boolean %1 true")).is_err());
+    assert!(parse_function_ir(&text.replace(".integer %1 1", ".boolean %1 true")).is_err());
+    assert!(parse_function_ir(&text.replace(".add", ".subtract")).is_err());
+    let f = compile_function("function f() as Toybox.Lang.Boolean { return 'A' == 65; }").unwrap();
+    assert!(
+        parse_function_ir(&f.to_ir_text().replace(".integer %1 65", ".boolean %1 true")).is_err()
+    );
     let source = "function f() as Toybox.Lang.Char { return 'A' + 1; }";
     let context = ApiContext::new(ApiLevel(1, 2, 9), ApiLevel(1, 0, 0)).unwrap();
-    let error = compile_with_api(source, context).unwrap_err();
+    let error = compile_function_with_api(source, context).unwrap_err();
     assert!(error.message.contains("unavailable on target"));
     assert_eq!(
         error.message,
-        parse_ir_with_api(&compile(source).unwrap().to_ir_text(), context)
+        parse_function_ir_with_api(&compile_function(source).unwrap().to_ir_text(), context)
             .unwrap_err()
             .message
     );

@@ -1,7 +1,7 @@
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -18,9 +18,9 @@ fn integer_arithmetic_promotes_only_at_the_operator_and_preserves_saved_stages()
             let source = format!(
                 "function f(left as Toybox.Lang.{left}, right as Toybox.Lang.{right}) as Toybox.Lang.Long {{ return left {operator} right; }}"
             );
-            let f = compile_with_api(&source, initial).unwrap();
+            let f = compile_function_with_api(&source, initial).unwrap();
             assert_eq!(f.return_type(), ReturnType::Long);
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             let assembly = f.lower();
             assert_eq!(
                 assembly,
@@ -31,15 +31,15 @@ fn integer_arithmetic_promotes_only_at_the_operator_and_preserves_saved_stages()
                 "as Toybox.Lang.Long { return",
                 "as Toybox.Lang.Number { return",
             );
-            assert!(compile(&source).is_err());
+            assert!(compile_function(&source).is_err());
         }
         for operator in ["==", "!=", "<", ">", "<=", ">="] {
             let source = format!(
                 "function f(left as Toybox.Lang.{left}, right as Toybox.Lang.{right}) as Toybox.Lang.Boolean {{ return left {operator} right; }}"
             );
-            let f = compile_with_api(&source, initial).unwrap();
+            let f = compile_function_with_api(&source, initial).unwrap();
             assert_eq!(f.return_type(), ReturnType::Boolean);
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
     }
     let source = "module A { function take(value as Toybox.Lang.Long) as Toybox.Lang.Long { return value; } function f() as Toybox.Lang.Long { return A.take(1l + 2); } }";
@@ -51,9 +51,9 @@ fn integer_arithmetic_promotes_only_at_the_operator_and_preserves_saved_stages()
 #[test]
 fn long_signs_select_long_zero_and_preserve_operand_effects() {
     for operator in ["+", "-"] {
-        let f = compile(&format!("function f(value as Toybox.Lang.Long) as Toybox.Lang.Long {{ return {operator}value; }}")).unwrap();
+        let f = compile_function(&format!("function f(value as Toybox.Lang.Long) as Toybox.Lang.Long {{ return {operator}value; }}")).unwrap();
         let text = f.to_ir_text();
-        assert_eq!(f, parse_ir(&text).unwrap());
+        assert_eq!(f, parse_function_ir(&text).unwrap());
         let assembly = f.lower().to_text();
         if operator == "-" {
             assert!(assembly.contains("lpushz"));
@@ -64,10 +64,10 @@ fn long_signs_select_long_zero_and_preserve_operand_effects() {
         }
         let edited = text.replace("parameter-types=long", "parameter-types=string");
         assert_ne!(text, edited);
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
-    let f = compile("function f() as Toybox.Lang.Long { var value = 1l; value += 2; value *= 3l; return value; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Long { var value = 1l; value += 2; value *= 3l; return value; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -86,10 +86,10 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Number { if (1l) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 2; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let source = "function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Long { if (value == null) { return 0l; } return value + 1l; }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    assert!(compile(&source.replace("if (value == null) { return 0l; }", "")).is_err());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
+    assert!(compile_function(&source.replace("if (value == null) { return 0l; }", "")).is_err());
 }

@@ -2,7 +2,8 @@ use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
-    byte_array_bindings, compile, compile_with_api, parse_ir, parse_ir_with_api,
+    byte_array_bindings, compile_function, compile_function_with_api, parse_function_ir,
+    parse_function_ir_with_api,
 };
 use ciq_prg::data::{Fragment, Source};
 use std::collections::BTreeMap;
@@ -16,12 +17,12 @@ fn byte_literal_constants_keep_exact_bytes_and_typed_bindings() {
         ),
         ("[]b", vec![]),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.ByteArray {{ return {literal}; }}"
         ))
         .unwrap();
         assert!(f.operations().iter().any(|o| matches!(&o.operation, Operation::ByteArrayConstant { values, .. } if values == &bytes)));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let p = f.lower();
         assert_eq!(p, Program::parse(&p.to_text()).unwrap());
         let data = Source {
@@ -74,7 +75,7 @@ fn computed_literals_use_private_initialization_without_truncating_bad_tokens() 
         "function f() as Toybox.Lang.ByteArray { return ['é']b; }",
         "function f() as Toybox.Lang.ByteArray { return [1 + 2]b; }",
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert!(
             f.operations()
                 .iter()
@@ -85,7 +86,7 @@ fn computed_literals_use_private_initialization_without_truncating_bad_tokens() 
                 .iter()
                 .any(|o| matches!(o.operation, Operation::ByteArrayConstant { .. }))
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let p = f.lower();
         assert_eq!(p, Program::parse(&p.to_text()).unwrap());
         let code = p.encode().unwrap();
@@ -104,7 +105,7 @@ fn computed_literals_use_private_initialization_without_truncating_bad_tokens() 
         "function f() { var a = [\"a\"]b; }",
         "function f() { var a = [[1]b]b; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -112,8 +113,8 @@ const BUILDER: &str = "ciq-ir\n.function f result=byte-array\n.byte-array-begin 
 
 #[test]
 fn builder_completion_type_and_api_checks_apply_to_native_and_saved_ir() {
-    let f = parse_ir(BUILDER).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = parse_function_ir(BUILDER).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let code = f.lower().encode().unwrap();
     assert!(
         ciq_mc::decode(&code)
@@ -137,7 +138,7 @@ fn builder_completion_type_and_api_checks_apply_to_native_and_saved_ir() {
         ),
         BUILDER.replace(".array-finish %2 &0", ".array-finish %2 &99"),
     ] {
-        assert!(parse_ir(&bad).is_err(), "{bad}");
+        assert!(parse_function_ir(&bad).is_err(), "{bad}");
     }
     let old = ApiContext::new(ApiLevel(2, 4, 0), ApiLevel(2, 4, 0)).unwrap();
     let current = ApiContext::new(ApiLevel(3, 0, 0), ApiLevel(3, 0, 0)).unwrap();
@@ -145,16 +146,19 @@ fn builder_completion_type_and_api_checks_apply_to_native_and_saved_ir() {
         "function f() as Void { var a = []b; }",
         "function f(n) as Void { var a = [n]b; }",
     ] {
-        let f = compile_with_api(source, current).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), current).unwrap());
-        assert!(compile_with_api(source, old).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+        let f = compile_function_with_api(source, current).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), current).unwrap()
+        );
+        assert!(compile_function_with_api(source, old).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
     }
     for payload in ["0x0", "0xgg", "ff", "0x000"] {
         let ir = format!(
             "ciq-ir\n.function f result=byte-array\n.byte-array-constant %0 {payload}\n.return %0\n.end\n"
         );
-        assert!(parse_ir(&ir).is_err());
+        assert!(parse_function_ir(&ir).is_err());
     }
 }
 

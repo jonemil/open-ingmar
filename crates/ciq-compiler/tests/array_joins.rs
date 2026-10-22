@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Operation, ReturnType,
     api::{ApiContext, ApiLevel},
-    compile, compile_with_api, parse_ir, parse_ir_with_api,
+    compile_function, compile_function_with_api, parse_function_ir, parse_function_ir_with_api,
 };
 
 fn source(element: &str) -> String {
@@ -41,12 +41,12 @@ fn every_supported_array_contract_roundtrips_through_a_stack_join() {
 }
 
 fn check_join(source: &str, tag: &str) {
-    let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
+    let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
     assert!(matches!(f.return_type(), ReturnType::Array(_)));
     assert!(f.to_ir_text().lines().any(
         |line| line.starts_with(".block-value ") && line.split_whitespace().nth(2) == Some(tag)
     ));
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert!(!f.operations().iter().any(|op| matches!(
         op.operation,
         Operation::ArrayNew { .. }
@@ -72,9 +72,9 @@ fn joins_preserve_invariance_and_do_not_enable_container_casts() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? a : b; }",
         "function f(a as Toybox.Lang.Object) { return a as Toybox.Lang.Array<Toybox.Lang.Number>; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let text = compile(&source("Toybox.Lang.Number or Null"))
+    let text = compile_function(&source("Toybox.Lang.Number or Null"))
         .unwrap()
         .to_ir_text();
     for tag in [
@@ -86,11 +86,11 @@ fn joins_preserve_invariance_and_do_not_enable_container_casts() {
     ] {
         let changed = text.replace("array-nullable-number", tag);
         assert_ne!(changed, text);
-        assert!(parse_ir(&changed).is_err(), "{tag}");
+        assert!(parse_function_ir(&changed).is_err(), "{tag}");
     }
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return true ? new[2] : []; }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -104,12 +104,15 @@ fn new_join_tags_recheck_api_levels_in_source_and_saved_ir() {
     ] {
         let source = source(element);
         let context = ApiContext::new(required, required).unwrap();
-        let f = compile_with_api(&source, context).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), context).unwrap());
+        let f = compile_function_with_api(&source, context).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), context).unwrap()
+        );
         if required > ApiLevel(1, 0, 0) {
             let old = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
-            assert!(compile_with_api(&source, old).is_err());
-            assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+            assert!(compile_function_with_api(&source, old).is_err());
+            assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
         }
     }
 }

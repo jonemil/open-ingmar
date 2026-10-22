@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -47,7 +47,7 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         "$Dictionary<$Comparator, $Comparable>",
     ] {
         let canonical = template.replace('$', "Toybox.Lang.");
-        let reference = compile(&format!(
+        let reference = compile_function(&format!(
             "function f(value as {canonical}) as {canonical} {{ return value; }}"
         ))
         .unwrap();
@@ -58,11 +58,11 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
         ] {
             let ty = template.replace('$', qualifier);
             let source = format!("{prefix} function f(value as {ty}) as {ty} {{ return value; }}");
-            let function = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+            let function = compile_function(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
             assert_eq!(function.parameter_types(), reference.parameter_types());
             assert_eq!(function.return_type(), reference.return_type());
             assert_eq!(function.lower(), reference.lower());
-            assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+            assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         }
     }
     let unit = compile_sources(&["import Toybox.Lang; module M { function f(value as Object) { if (value instanceof Number) { return value as Number + 1; } else { return 0; } } }"]).unwrap();
@@ -70,9 +70,9 @@ fn native_type_spellings_share_signature_and_saved_pipeline_contracts() {
     for ty in ["View", "BehaviorDelegate"] {
         let source =
             format!("import Toybox.WatchUi; function f(value as {ty}) as {ty} {{ return value; }}");
-        assert!(compile(&source).is_ok(), "{source}");
+        assert!(compile_function(&source).is_ok(), "{source}");
     }
-    assert!(compile("import Toybox.Lang; import Toybox.WatchUi; function f(a as Array<View>) as Array<View> { return a; }").is_ok());
+    assert!(compile_function("import Toybox.Lang; import Toybox.WatchUi; function f(a as Array<View>) as Array<View> { return a; }").is_ok());
 }
 
 #[test]

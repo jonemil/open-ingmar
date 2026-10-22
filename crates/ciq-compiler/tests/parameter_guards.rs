@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Function, Operation, ParameterType,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -16,8 +16,8 @@ fn direct_parameter_guards_preserve_source_and_ir_contracts() {
         "function f(x as Toybox.Lang.String or Null, flag as Toybox.Lang.Boolean) { if (flag) { if (x == null) { return 0; } } else { if (x == null) { return 0; } } return x.length(); }",
         "function f(x as Toybox.Lang.String or Null) { if (x == null) { return 0; } var local = x; local = \"other\"; System.println(x); return x.length(); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         f.validate_api(ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap())
             .unwrap();
     }
@@ -42,13 +42,13 @@ fn guards_do_not_prove_other_parameters_aliases_or_unguarded_paths() {
         "function f(x as Toybox.Lang.String or Null) { while (true) { System.println(x); if (x == null) { return 0; } } return 0; }",
         "function f(x as Toybox.Lang.String or Null) { if (x == null) { return 0; } x = null; return x.length(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn edited_parameter_guard_ir_cannot_trust_stale_proofs() {
-    let f = compile("function f(x as Toybox.Lang.String or Null, y as Toybox.Lang.String or Null) { if (x == null) { return 0; } return x.length(); }").unwrap();
+    let f = compile_function("function f(x as Toybox.Lang.String or Null, y as Toybox.Lang.String or Null) { if (x == null) { return 0; } return x.length(); }").unwrap();
     let types = vec![ParameterType::NullableString; 2];
     let mut swapped = f.operations().to_vec();
     for op in &mut swapped {
@@ -71,5 +71,5 @@ fn edited_parameter_guard_ir_cannot_trust_stale_proofs() {
     *index = 1;
     assert!(Function::with_parameter_types("unsafe".into(), types, different).is_err());
     let same_target = "ciq-ir\n.function f parameters=1 parameter-types=nullable-string\n.block ^0\n.parameter %0 0\n.null %1\n.equal %2 %0 %1\n.branch %2 ^1 ^1\n.block ^1\n.parameter %3 0\n.call-native %4 %3 length\n.return %4\n.end";
-    assert!(parse_ir(same_target).is_err());
+    assert!(parse_function_ir(same_target).is_err());
 }

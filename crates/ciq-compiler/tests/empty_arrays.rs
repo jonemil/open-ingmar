@@ -2,7 +2,8 @@ use ciq_compiler::{
     ArrayElement, Operation, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -30,7 +31,7 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
         ("Number", ArrayElement::Number),
         ("Char", ArrayElement::Char),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function empty() as Toybox.Lang.Array<Toybox.Lang.{name}> {{ return []; }}"
         ))
         .unwrap();
@@ -40,7 +41,7 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
             matches!(f.operations()[0].operation, Operation::ArrayNew { element_type, .. } if element_type == element)
         );
         assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let sources = [
         "function start() { return M.count([]); }",
@@ -59,8 +60,8 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.Number> { if (b) { return []; } return [1]; }",
         "function f(b as Toybox.Lang.Boolean) { var a = [1]; while (b) { a = []; break; } return a.size(); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
@@ -80,7 +81,7 @@ fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [].reverse(); }",
         "function f() { var a = [[], []]; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for source in [
         "module M { function count(n) { return n; } } function start() { return M.count([]); }",
@@ -91,7 +92,7 @@ fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
     }
     let source =
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a.addAll([]); return a.size(); }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".array-new %"));
     let changed = text
@@ -106,24 +107,27 @@ fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_ne!(changed, text.trim_end());
-    assert!(parse_ir(&changed).is_err());
+    assert!(parse_function_ir(&changed).is_err());
 }
 
 #[test]
 fn array_construction_does_not_inherit_append_api_requirements() {
     let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return []; }";
-    let f = compile_with_api(source, initial).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+    let f = compile_function_with_api(source, initial).unwrap();
+    assert_eq!(
+        f,
+        parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+    );
     assert!(
-        compile_with_api(
+        compile_function_with_api(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1]; }",
             initial
         )
         .is_ok()
     );
     assert!(
-        compile_with_api(
+        compile_function_with_api(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return []; }",
             initial
         )

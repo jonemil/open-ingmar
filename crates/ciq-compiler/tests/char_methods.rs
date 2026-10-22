@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context(level: ApiLevel) -> ApiContext {
@@ -38,7 +38,8 @@ fn char_group_preserves_typed_calls_and_complete_pipelines() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     let f =
-        compile("function f() as Toybox.Lang.Number { return 65.toChar().toNumber(); }").unwrap();
+        compile_function("function f() as Toybox.Lang.Number { return 65.toChar().toNumber(); }")
+            .unwrap();
     let symbols = ciq_assembly::Program::parse(
         ".symbol char \"toChar\" id=0x008004c6\n.symbol number \"toNumber\" id=0x008000a7",
     )
@@ -63,8 +64,8 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return c.equals(n); }",
         "function f(c as Toybox.Lang.Char) as Toybox.Lang.Number { return c.compareTo(false); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Number { return 65.toChar(1); }",
@@ -81,13 +82,13 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f() as Toybox.Lang.Number { return 65.toChar().weak(); }",
         "function f() as Toybox.Lang.Number { return 'A'; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile(
+    let f = compile_function(
         "function f() as Toybox.Lang.Number { return (65.toChar().toNumber() + 1).abs(); }",
     )
     .unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
+    assert!(parse_function_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
     let source = "module M { function identity(c as Toybox.Lang.Char) as Toybox.Lang.Char { return c; } function f() as Toybox.Lang.Char { return M.identity(65.toChar()); } }";
     let unit = compile_sources_with_api(&[source], context(ApiLevel(1, 3, 0))).unwrap();
     assert!(
@@ -125,7 +126,7 @@ fn char_class_and_method_introductions_apply_to_source_and_ir() {
             ApiLevel(4, 9, 9),
         ),
     ] {
-        let text = compile(source).unwrap().to_ir_text();
+        let text = compile_function(source).unwrap().to_ir_text();
         for (target, minimum, expected) in [
             (
                 previous,
@@ -139,7 +140,7 @@ fn char_class_and_method_introductions_apply_to_source_and_ir() {
             (introduced, previous, "application minimum API"),
         ] {
             let context = ApiContext::new(target, minimum).unwrap();
-            let error = compile_with_api(source, context).unwrap_err();
+            let error = compile_function_with_api(source, context).unwrap_err();
             assert!(
                 error.message.contains(expected),
                 "{source}: {}",
@@ -147,13 +148,15 @@ fn char_class_and_method_introductions_apply_to_source_and_ir() {
             );
             assert_eq!(
                 error.message,
-                parse_ir_with_api(&text, context).unwrap_err().message
+                parse_function_ir_with_api(&text, context)
+                    .unwrap_err()
+                    .message
             );
         }
         let context = context(introduced);
         assert_eq!(
-            compile_with_api(source, context).unwrap(),
-            parse_ir_with_api(&text, context).unwrap()
+            compile_function_with_api(source, context).unwrap(),
+            parse_function_ir_with_api(&text, context).unwrap()
         );
     }
 }

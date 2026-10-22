@@ -1,6 +1,6 @@
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
-    compile_sources, parse_ir, parse_unit_ir,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 const APP: &str = include_str!("../../../examples/compiler-object-calls/app.mc");
@@ -72,7 +72,7 @@ fn call_contracts_and_local_constructor_classes_are_not_guessed() {
         "ciq-ir\n.function f\n.call-object\n.return-void\n.end\n",
         "ciq-ir\n.function f\n.call-object-discard\n.return-void\n.end\n",
     ] {
-        assert!(parse_ir(text).is_err(), "{text}");
+        assert!(parse_function_ir(text).is_err(), "{text}");
     }
 }
 
@@ -83,7 +83,7 @@ fn receiver_and_arguments_keep_order_and_contextual_array_contracts() {
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     let bad = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.call-object %3 %1 HelloView add %2\n.read %4 $0\n.call-object %5 %4 HelloView add %3\n.return %5\n.end\n";
     assert!(
-        parse_ir(bad)
+        parse_function_ir(bad)
             .unwrap_err()
             .message
             .contains("evaluation order")

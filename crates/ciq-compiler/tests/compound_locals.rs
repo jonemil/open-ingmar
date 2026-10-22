@@ -2,7 +2,7 @@ use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -36,11 +36,11 @@ fn local_compounds_preserve_complete_pipelines() {
 #[test]
 fn every_operator_matches_explicit_read_binary_write_lowering() {
     for op in ["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"] {
-        let compound = compile(&format!(
+        let compound = compile_function(&format!(
             "function f() as Toybox.Lang.Number {{ var n = 12; n {op}= 3; return n; }}"
         ))
         .unwrap();
-        let expanded = compile(&format!(
+        let expanded = compile_function(&format!(
             "function f() as Toybox.Lang.Number {{ var n = 12; n = n {op} 3; return n; }}"
         ))
         .unwrap();
@@ -49,7 +49,7 @@ fn every_operator_matches_explicit_read_binary_write_lowering() {
             expanded.lower().encode().unwrap(),
             "{op}="
         );
-        assert_eq!(compound, parse_ir(&compound.to_ir_text()).unwrap());
+        assert_eq!(compound, parse_function_ir(&compound.to_ir_text()).unwrap());
         assert!(
             compound
                 .operations()
@@ -64,7 +64,7 @@ fn every_operator_matches_explicit_read_binary_write_lowering() {
         );
     }
     let source = "function f() as Toybox.Lang.Number { var n = 1; n<<=2; return n; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let span = f
         .operations()
         .iter()
@@ -74,10 +74,12 @@ fn every_operator_matches_explicit_read_binary_write_lowering() {
         .unwrap();
     assert_eq!(&source[span.start..span.end], "n<<=2;");
     let f =
-        compile("function f() as Toybox.Lang.Number { var n = 1; n += 2 * 3; return n; }").unwrap();
-    let expanded =
-        compile("function f() as Toybox.Lang.Number { var n = 1; n = n + (2 * 3); return n; }")
+        compile_function("function f() as Toybox.Lang.Number { var n = 1; n += 2 * 3; return n; }")
             .unwrap();
+    let expanded = compile_function(
+        "function f() as Toybox.Lang.Number { var n = 1; n = n + (2 * 3); return n; }",
+    )
+    .unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         expanded.lower().encode().unwrap()
@@ -94,8 +96,8 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n != null) { n += 1; if (n != null) { return n; } } return 0; }",
         "function f() as Toybox.Lang.Number { var n = 1; n /= 0; return n; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { n += true; return n; }",
@@ -119,14 +121,16 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         "function f() as Toybox.Lang.Number { var n = 1; n += (n = 2); return n; }",
         "function f() as Toybox.Lang.Number { var n = 1; n >>>= 2; return n; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn saved_graph_cannot_move_the_read_after_rhs_effects() {
-    let f = compile("function f() as Toybox.Lang.Number { var n = 1; n += M.value(); return n; }")
-        .unwrap();
+    let f = compile_function(
+        "function f() as Toybox.Lang.Number { var n = 1; n += M.value(); return n; }",
+    )
+    .unwrap();
     let mut ops = f.operations().to_vec();
     let read = ops
         .iter()
@@ -150,8 +154,8 @@ fn saved_graph_cannot_move_the_read_after_rhs_effects() {
 #[test]
 fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
     let f =
-        compile("function f() as Toybox.Lang.Number { var n = 3; n += (false || true).hashCode(); return n; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        compile_function("function f() as Toybox.Lang.Number { var n = 3; n += (false || true).hashCode(); return n; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let ops = f.operations();
     let read = ops
         .iter()
@@ -174,11 +178,11 @@ fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
         .map(|n| format!("p{n}"))
         .collect::<Vec<_>>()
         .join(",");
-    compile(&format!(
+    compile_function(&format!(
         "function f({params}) as Toybox.Lang.Number {{ var n = 1; n += 1; return n; }}"
     ))
     .unwrap();
-    let err = compile(&format!(
+    let err = compile_function(&format!(
         "function f({params}) as Toybox.Lang.Number {{ var n = 1; n += (false || true).hashCode(); return n; }}"
     ))
     .unwrap_err();
@@ -187,9 +191,9 @@ fn staged_rhs_uses_existing_local_budget_and_captured_left_value() {
         let expr = format!("{}1{}", "M.value(".repeat(depth), ")".repeat(depth));
         format!("function f() as Toybox.Lang.Number {{ var n = 1; n += {expr}; return n; }}")
     };
-    compile(&nested(64)).unwrap();
+    compile_function(&nested(64)).unwrap();
     assert!(
-        compile(&nested(65))
+        compile_function(&nested(65))
             .unwrap_err()
             .message
             .contains("nesting")

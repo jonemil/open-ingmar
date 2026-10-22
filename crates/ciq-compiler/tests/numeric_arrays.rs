@@ -2,7 +2,8 @@ use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -34,7 +35,7 @@ fn numeric_array_literals_bind_by_exact_bits_and_type() {
         ("Float", "0.0, -0.0, 1.25", "float"),
         ("Double", "0.0d, -0.0d, 16777217.0d", "double"),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{values}]; }}"
         ))
         .unwrap();
@@ -42,7 +43,7 @@ fn numeric_array_literals_bind_by_exact_bits_and_type() {
             f.to_ir_text()
                 .contains(&format!(".array-constant %0 {tag}"))
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let asm = f.lower();
         let record = asm
             .items()
@@ -77,11 +78,11 @@ fn numeric_array_literals_bind_by_exact_bits_and_type() {
         let text = format!(
             "ciq-ir\n.function f\n.array-constant %0 {ty_lower} 0x{bits}\n.return %0\n.end\n"
         );
-        let ir = parse_ir(&text).unwrap();
-        assert_eq!(ir, parse_ir(&ir.to_ir_text()).unwrap());
+        let ir = parse_function_ir(&text).unwrap();
+        assert_eq!(ir, parse_function_ir(&ir.to_ir_text()).unwrap());
         for bad in ["0x1", "-1", "0xgggggggg", "0x10000000000000000"] {
             assert!(
-                parse_ir(&text.replace(&format!("0x{bits}"), bad)).is_err(),
+                parse_function_ir(&text.replace(&format!("0x{bits}"), bad)).is_err(),
                 "{width}: {bad}"
             );
         }
@@ -100,11 +101,11 @@ fn new_array_types_share_nullable_and_invariant_contracts() {
             "return [];".into(),
             format!("return [true ? {literal} : null];"),
         ] {
-            let f = compile(&format!(
+            let f = compile_function(&format!(
                 "function f() as Toybox.Lang.Array<Toybox.Lang.{ty} or Null> {{ {body} }}"
             ))
             .unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for body in [
             "return a[0];".to_owned(),
@@ -112,8 +113,8 @@ fn new_array_types_share_nullable_and_invariant_contracts() {
                 .replace("ZERO", literal),
         ] {
             let nullable = body == "return a[0];";
-            let f=compile(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty}{} {{ {body} }}",if nullable {" or Null"}else{""})).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f=compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty}{} {{ {body} }}",if nullable {" or Null"}else{""})).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for body in [
             format!("a.add({other});"),
@@ -123,16 +124,16 @@ fn new_array_types_share_nullable_and_invariant_contracts() {
             "a[1l]=a[0];".into(),
         ] {
             assert!(
-                compile(&format!(
+                compile_function(&format!(
                     "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty}>) {{ {body} }}"
                 ))
                 .is_err(),
                 "{ty}: {body}"
             );
         }
-        assert!(compile(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ return a[0]; }}")).is_err());
-        assert!(compile(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ var n=a[0]; if(n == null) {{ return {literal}; }} return a[0]; }}")).is_err());
-        let f=compile(&format!("function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{literal} + {literal}]; }}")).unwrap();
+        assert!(compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ return a[0]; }}")).is_err());
+        assert!(compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ var n=a[0]; if(n == null) {{ return {literal}; }} return a[0]; }}")).is_err());
+        let f=compile_function(&format!("function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{literal} + {literal}]; }}")).unwrap();
         assert!(f.to_ir_text().contains(".array-begin"));
         assert!(!f.to_ir_text().contains(".array-constant"));
     }
@@ -144,17 +145,17 @@ fn generic_native_api_gates_are_preserved_for_new_elements() {
         let source =
             format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty}>) {{ return a.size(); }}");
         let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
-        compile_with_api(&source, initial).unwrap();
+        compile_function_with_api(&source, initial).unwrap();
         let source = format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty}>) {{ return a.indexOf({literal}); }}"
         );
-        let f = compile(&source).unwrap();
-        assert!(compile_with_api(&source, initial).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+        let f = compile_function(&source).unwrap();
+        assert!(compile_function_with_api(&source, initial).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
         let introduced = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
         assert_eq!(
-            compile_with_api(&source, introduced).unwrap(),
-            parse_ir_with_api(&f.to_ir_text(), introduced).unwrap()
+            compile_function_with_api(&source, introduced).unwrap(),
+            parse_function_ir_with_api(&f.to_ir_text(), introduced).unwrap()
         );
     }
 }
@@ -162,7 +163,8 @@ fn generic_native_api_gates_are_preserved_for_new_elements() {
 #[test]
 fn native_constant_construction_rejects_a_mismatched_element_payload() {
     let f =
-        compile("function f() as Toybox.Lang.Array<Toybox.Lang.Float> { return [1.25]; }").unwrap();
+        compile_function("function f() as Toybox.Lang.Array<Toybox.Lang.Float> { return [1.25]; }")
+            .unwrap();
     let mut operations = f.operations().to_vec();
     let ciq_compiler::Operation::ArrayConstant { element_type, .. } = &mut operations[0].operation
     else {

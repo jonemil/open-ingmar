@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -22,20 +22,27 @@ fn scalar_assertions_resume_without_runtime_checks_or_conversions() {
         let source = format!(
             "function f(o as Toybox.Lang.Object) as Toybox.Lang.{class} {{ return o as Toybox.Lang.{class}; }}"
         );
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         let text = function.to_ir_text();
         assert!(text.contains(&format!(" {tag} span=")), "{text}");
-        assert_eq!(function, parse_ir(&text).unwrap());
+        assert_eq!(function, parse_function_ir(&text).unwrap());
         assert!(!function.lower().to_text().contains("isa"));
     }
-    let uncast = compile("function f() { return 3; }").unwrap();
-    let cast = compile("function f() { return 3 as Lang.String as Lang.Number; }").unwrap();
+    let uncast = compile_function("function f() { return 3; }").unwrap();
+    let cast =
+        compile_function("function f() { return 3 as Lang.String as Lang.Number; }").unwrap();
     assert_eq!(uncast.lower(), cast.lower());
     let source = "function f(o as Toybox.Lang.Object) { return 1 + o as Lang.Number; }";
-    let function = compile(source).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-    assert!(compile("function f(o as Toybox.Lang.Object) { return -o as Lang.Number; }").is_err());
-    assert!(compile("function f(o as Toybox.Lang.Object) { return -(o as Lang.Number); }").is_ok());
+    let function = compile_function(source).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
+    assert!(
+        compile_function("function f(o as Toybox.Lang.Object) { return -o as Lang.Number; }")
+            .is_err()
+    );
+    assert!(
+        compile_function("function f(o as Toybox.Lang.Object) { return -(o as Lang.Number); }")
+            .is_ok()
+    );
 }
 
 #[test]
@@ -49,8 +56,8 @@ fn alias_nullable_logical_and_conditional_casts_preserve_type_contracts() {
         "function f(flag as Toybox.Lang.Boolean) { return (flag ? 1 : 2) as Lang.Number; }",
         "function f(o as Toybox.Lang.Object or Null) as Toybox.Lang.String { return o as Lang.String; }",
     ] {
-        let function = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         function.lower();
     }
     let source = "module M { function length(s as Toybox.Lang.String) { return s.length(); } function f(o as Toybox.Lang.Object) { return M.length(o as Lang.String); } }";
@@ -70,7 +77,7 @@ fn unsupported_targets_and_newer_api_types_are_rejected() {
     ] {
         let source =
             format!("function f(o as Toybox.Lang.Object) {{ var value = o as {target}; }}");
-        assert!(compile(&source).is_err(), "{source}");
+        assert!(compile_function(&source).is_err(), "{source}");
     }
     for tag in [
         "void",
@@ -81,7 +88,7 @@ fn unsupported_targets_and_newer_api_types_are_rejected() {
     ] {
         let text =
             format!("ciq-ir\n.function f\n.integer %0 1\n.cast %1 %0 {tag}\n.return %1\n.end\n");
-        assert!(parse_ir(&text).is_err());
+        assert!(parse_function_ir(&text).is_err());
     }
     let source =
         "function f(o as Toybox.Lang.Object) as Toybox.Lang.Char { return o as Lang.Char; }";
@@ -95,7 +102,7 @@ fn unsupported_targets_and_newer_api_types_are_rejected() {
 #[test]
 fn cast_chains_preserve_the_supported_nesting_limit() {
     let casts = " as Lang.Number".repeat(64);
-    compile(&format!("function f() {{ return 1{casts}; }}")).unwrap();
+    compile_function(&format!("function f() {{ return 1{casts}; }}")).unwrap();
     let casts = " as Lang.Number".repeat(65);
-    assert!(compile(&format!("function f() {{ return 1{casts}; }}")).is_err());
+    assert!(compile_function(&format!("function f() {{ return 1{casts}; }}")).is_err());
 }

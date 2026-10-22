@@ -3,8 +3,8 @@
 //! [`compile_sources`] parses one or more Monkey C files into a validated
 //! [`CompilationUnit`], resolving declarations and checking user calls.
 //! [`parse_unit_ir`] resumes the same validated unit from saved text.
-//! For isolated bodies, [`compile`] and [`parse_ir`] produce a [`Function`]
-//! without unit ownership/callee checks. These fragment entry points support
+//! For isolated bodies, [`compile_function`] and [`parse_function_ir`] produce
+//! a [`Function`] without unit ownership/callee checks. These entries support
 //! external symbol binding and focused lowering; they do not compile a program.
 //! Source entries share one declaration parser. [`backend::lower`] converts
 //! validated function IR into typed VM assembly.
@@ -40,7 +40,7 @@ mod type_flow;
 mod type_text;
 mod unions;
 mod unit;
-pub use ir_text::{parse_ir, parse_ir_with_api};
+pub use ir_text::{parse_function_ir, parse_function_ir_with_api};
 pub use joins::JoinType;
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
@@ -3586,7 +3586,7 @@ impl Function {
     ///
     /// Retains semantic IDs, operation order, receiver metadata, and optional
     /// source spans.
-    /// It can be read by [`parse_ir`]; it is not Garmin MIR.
+    /// It can be read by [`parse_function_ir`]; it is not Garmin MIR.
     pub fn to_ir_text(&self) -> String {
         let parameters = if self.parameter_count == 0 {
             String::new()
@@ -4221,14 +4221,18 @@ impl Function {
 /// binding; callee signatures and ownership are not validated here.
 /// Use [`compile_sources`] for programs, source-class types, and checked user
 /// calls. Unsupported syntax or invalid function IR produces a diagnostic.
-pub fn compile(source: &str) -> Result<Function, Diagnostic> {
+pub fn compile_function(source: &str) -> Result<Function, Diagnostic> {
     compile_fragment(source, None)
 }
 
 /// Compile an isolated function with explicit unguarded API-level checks.
-/// Has the same fragment and unresolved-callee restrictions as [`compile`].
+/// Has the same fragment and unresolved-callee restrictions as
+/// [`compile_function`].
 /// No device is inferred; use [`compile_sources_with_api`] for a program.
-pub fn compile_with_api(source: &str, context: api::ApiContext) -> Result<Function, Diagnostic> {
+pub fn compile_function_with_api(
+    source: &str,
+    context: api::ApiContext,
+) -> Result<Function, Diagnostic> {
     compile_fragment(source, Some(context))
 }
 

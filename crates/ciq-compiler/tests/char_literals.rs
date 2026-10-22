@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -20,7 +20,7 @@ fn char_literals_preserve_vm_encoding_and_complete_pipelines() {
         assert_eq!(instructions[0].instruction.opcode(), ciq_mc::Opcode::Cpush);
         assert!(ciq_mc::decode(&encoded[..4]).is_err());
         let text = format!("ciq-ir\n.function f\n.char %0 0x{value:08x}\n.return %0\n.end\n");
-        let f = parse_ir(&text).unwrap();
+        let f = parse_function_ir(&text).unwrap();
         assert_eq!(f.return_type(), ciq_compiler::ReturnType::Char);
         assert_eq!(f.to_ir_text(), text);
         assert!(f.lower().to_text().contains("cpush"));
@@ -74,14 +74,14 @@ fn source_char_tokens_preserve_values_spans_and_reject_unsupported_forms() {
         ("'\"'", 34),
     ] {
         let source = format!("function f() as Toybox.Lang.Char {{ return {literal}; }}");
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         let op = &f.operations()[0];
         assert!(
             matches!(op.operation, ciq_compiler::Operation::Char { value: actual, .. } if actual == value)
         );
         let span = op.span.unwrap();
         assert_eq!(&source[span.start..span.end], literal);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for literal in [
         "''",
@@ -99,7 +99,7 @@ fn source_char_tokens_preserve_values_spans_and_reject_unsupported_forms() {
         "'é'",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Char {{ return {literal}; }}"
             ))
             .is_err(),
@@ -108,26 +108,29 @@ fn source_char_tokens_preserve_values_spans_and_reject_unsupported_forms() {
     }
     for bits in ["65", "0x41", "0x000000041", "0x000000gg", "-1"] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f\n.char %0 {bits}\n.return %0\n.end\n"
             ))
             .is_err()
         );
     }
-    assert!(compile("function f() as Toybox.Lang.Number { return 'A'; }").is_err());
-    assert!(compile("function f() as Toybox.Lang.Number { return 'A' + 1; }").is_err());
-    let f = compile("function f() as Toybox.Lang.Number { return ('A'.toNumber() + 1).abs(); }")
-        .unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
+    assert!(compile_function("function f() as Toybox.Lang.Number { return 'A'; }").is_err());
+    assert!(compile_function("function f() as Toybox.Lang.Number { return 'A' + 1; }").is_err());
+    let f = compile_function(
+        "function f() as Toybox.Lang.Number { return ('A'.toNumber() + 1).abs(); }",
+    )
+    .unwrap();
+    assert!(parse_function_ir(&f.to_ir_text().replace("toNumber", "toUpper")).is_err());
     assert!(
-        compile("function f() as Toybox.Lang.Char { var c = 'A'; c = 65; return c; }").is_err()
+        compile_function("function f() as Toybox.Lang.Char { var c = 'A'; c = 65; return c; }")
+            .is_err()
     );
 }
 
 #[test]
 fn char_literal_api_introductions_agree_in_source_and_ir() {
     let source = "function f() as Toybox.Lang.Char { return 'A'; }";
-    let text = compile(source).unwrap().to_ir_text();
+    let text = compile_function(source).unwrap().to_ir_text();
     for (target, minimum, expected) in [
         (
             ApiLevel(1, 2, 9),
@@ -141,16 +144,18 @@ fn char_literal_api_introductions_agree_in_source_and_ir() {
         ),
     ] {
         let context = ApiContext::new(target, minimum).unwrap();
-        let error = compile_with_api(source, context).unwrap_err();
+        let error = compile_function_with_api(source, context).unwrap_err();
         assert!(error.message.contains(expected));
         assert_eq!(
             error.message,
-            parse_ir_with_api(&text, context).unwrap_err().message
+            parse_function_ir_with_api(&text, context)
+                .unwrap_err()
+                .message
         );
     }
     let context = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
     assert_eq!(
-        compile_with_api(source, context).unwrap(),
-        parse_ir_with_api(&text, context).unwrap()
+        compile_function_with_api(source, context).unwrap(),
+        parse_function_ir_with_api(&text, context).unwrap()
     );
 }

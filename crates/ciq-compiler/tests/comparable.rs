@@ -1,6 +1,6 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel, Type},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
     parse_unit_ir_with_api,
 };
 
@@ -52,12 +52,16 @@ fn scalar_comparable_witnesses_share_api_and_saved_pipeline_checks() {
         let nullable = format!(
             "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.Comparable {{ return value; }}"
         );
-        assert!(compile(&nullable).is_err(), "{ty}");
-        let function = compile(&format!(
+        assert!(compile_function(&nullable).is_err(), "{ty}");
+        let function = compile_function(&format!(
             "function f() as Toybox.Lang.Comparable {{ return {literal}; }}"
         ))
         .unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap(), "{ty}");
+        assert_eq!(
+            function,
+            parse_function_ir(&function.to_ir_text()).unwrap(),
+            "{ty}"
+        );
     }
 }
 
@@ -73,11 +77,11 @@ fn scalar_witnesses_do_not_enable_erased_nullable_or_heterogeneous_contracts() {
         "function f(c as Toybox.Lang.Comparator) as Void { var local=c; local=1; local.compare(1,2); }",
         "function f() as Toybox.Lang.Number { var local=1; local=\"x\"; return local-1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let function = compile("function f(value as Toybox.Lang.Object) as Toybox.Lang.Comparable { if (value instanceof Toybox.Lang.Number) { return value; } else { return 0; } }").unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-    let function = compile(
+    let function = compile_function("function f(value as Toybox.Lang.Object) as Toybox.Lang.Comparable { if (value instanceof Toybox.Lang.Number) { return value; } else { return 0; } }").unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(
         "function f(value as Toybox.Lang.Number) as Toybox.Lang.Comparable { return value; }",
     )
     .unwrap();
@@ -85,7 +89,7 @@ fn scalar_witnesses_do_not_enable_erased_nullable_or_heterogeneous_contracts() {
     // Integer-only parameter lists are omitted in the canonical text.
     let changed = text.replace("parameters=1", "parameters=1 parameter-types=object");
     assert_ne!(changed, text);
-    assert!(parse_ir(&changed).is_err());
+    assert!(parse_function_ir(&changed).is_err());
 }
 
 #[test]
@@ -113,8 +117,8 @@ fn interface_calls_forwarding_locals_and_returns_share_saved_contracts() {
     );
     assert_ne!(changed, text);
     assert!(parse_unit_ir(&changed).is_err());
-    let function = compile("import Toybox.Lang; function f(a as Comparable, b as Comparable, choose as Boolean) as Comparable { var c=choose ? a : b; c=a; return c; }").unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function("import Toybox.Lang; function f(a as Comparable, b as Comparable, choose as Boolean) as Comparable { var c=choose ? a : b; c=a; return c; }").unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -147,7 +151,7 @@ fn interface_boundaries_reject_erasure_and_mismatched_members() {
         "function f(c as Toybox.Lang.Comparable) as Void { var a=[1]; a.sort(c); }",
         "function f(a as Toybox.Lang.Comparable,b as Toybox.Lang.Comparator) as Toybox.Lang.Number { var c=a; c=b; return c.compareTo(1); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -338,8 +342,9 @@ fn native_interface_refinement_covers_each_scalar_and_saved_pipeline() {
                 let source = format!(
                     "function f({parameter} as Toybox.Lang.Comparable{nullable}) as Toybox.Lang.Number {{ {prefix} if(c instanceof Toybox.Lang.{ty}){{ {body} }} return 0; }}"
                 );
-                let function = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
-                assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+                let function =
+                    compile_function(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+                assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
                 function.validate_api(current).unwrap();
                 assert!(function.validate_api(low).is_err());
                 let asm = function.lower();
@@ -375,11 +380,11 @@ fn interface_refinement_requires_live_compatible_class_facts() {
         "function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {var copy=c; if(c instanceof Toybox.Lang.Number){return copy+1;} return 0;}",
         "function f(c as Toybox.Lang.Comparator) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let function=compile("function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}").unwrap();
+    let function=compile_function("function f(c as Toybox.Lang.Comparable) as Toybox.Lang.Number {if(c instanceof Toybox.Lang.Number){return c+1;} return 0;}").unwrap();
     let text = function.to_ir_text();
     let forged = text.replace("Toybox.Lang.Number", "Toybox.Lang.String");
     assert_ne!(text, forged);
-    assert!(parse_ir(&forged).is_err());
+    assert!(parse_function_ir(&forged).is_err());
 }

@@ -1,7 +1,8 @@
 use ciq_compiler::{
     DictionaryType, DictionaryValue, Operation, ParameterType,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -16,15 +17,15 @@ fn byte_dictionary_values_preserve_construction_inference_and_typed_enumeration(
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) {var b=d[\"a\"];if(b!=null){d.remove(\"a\");return b[0];}return 0;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null>) as Void {d.put(\"a\",[1]b);d[\"a\"]=null;var b=d.get(\"a\");if(b!=null){b.add(2);}}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let asm = f.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
     let source = "module B {function make() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray> {return {\"a\"=>[1]b};}function use() as Void {var d=B.make();d.put(\"b\",[2]b);}}";
     let unit = compile_sources(&[source]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
-    let f=compile("function f(b as Toybox.Lang.ByteArray) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray> {return {\"a\"=>b};}").unwrap();
+    let f=compile_function("function f(b as Toybox.Lang.ByteArray) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray> {return {\"a\"=>b};}").unwrap();
     assert!(
         f.operations()
             .iter()
@@ -48,10 +49,10 @@ fn dictionary_values_cannot_erase_class_nullability_or_lookup_proofs() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null> {return d;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null>) as Toybox.Lang.Array<Toybox.Lang.ByteArray> {return d.values();}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let f=compile("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Void {var b=d[\"a\"];if(b!=null){b.size();}}").unwrap();
-    assert!(parse_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
+    let f=compile_function("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Void {var b=d[\"a\"];if(b!=null){b.size();}}").unwrap();
+    assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn dictionary_null_constants_and_unused_types_keep_payload_and_api_checks() {
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray{suffix}>) as Void {{}}"
         );
         assert_eq!(
-            compile(&source).unwrap().parameter_types(),
+            compile_function(&source).unwrap().parameter_types(),
             &[ParameterType::TypedDictionary(ty)]
         );
     }
@@ -83,11 +84,11 @@ fn dictionary_null_constants_and_unused_types_keep_payload_and_api_checks() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Void {}",
         "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null> {return {\"a\"=>null};}",
     ] {
-        let f = compile_with_api(source, modern).unwrap();
+        let f = compile_function_with_api(source, modern).unwrap();
         let text = f.to_ir_text();
-        assert_eq!(f, parse_ir(&text).unwrap());
-        assert!(compile_with_api(source, old).is_err());
-        assert!(parse_ir_with_api(&text, old).is_err());
+        assert_eq!(f, parse_function_ir(&text).unwrap());
+        assert!(compile_function_with_api(source, old).is_err());
+        assert!(parse_function_ir_with_api(&text, old).is_err());
         if source.contains("=>null") {
             assert!(
                 f.operations()
@@ -96,7 +97,7 @@ fn dictionary_null_constants_and_unused_types_keep_payload_and_api_checks() {
             );
             let edited = text.replace(" null span=", " number 0x00000001 span=");
             assert_ne!(text, edited);
-            assert!(parse_ir(&edited).is_err());
+            assert!(parse_function_ir(&edited).is_err());
         }
     }
 }

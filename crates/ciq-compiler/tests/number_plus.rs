@@ -2,7 +2,8 @@ use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_ir_with_api, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_function_ir_with_api,
+    parse_unit_ir_with_api,
 };
 
 #[test]
@@ -36,7 +37,7 @@ fn unary_plus_preserves_complete_source_ir_assembly_and_prg_pipelines() {
 #[test]
 fn positive_is_checked_number_identity_with_no_vm_operation() {
     let source = "function f(n) { return +n; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(f.lower().encode().unwrap(), [0x35, 2, 0x12, 1, 0x16]);
     let positive = f
         .operations()
@@ -46,9 +47,9 @@ fn positive_is_checked_number_identity_with_no_vm_operation() {
     let span = positive.span.unwrap();
     assert_eq!(&source[span.start..span.end], "+n");
     assert!(f.to_ir_text().contains(".positive %1 %0"));
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let api = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), api).unwrap());
+    assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), api).unwrap());
     for expr in [
         "+0",
         "+2147483647",
@@ -61,8 +62,8 @@ fn positive_is_checked_number_identity_with_no_vm_operation() {
         "+/*sign*/1",
         "1 + +2",
     ] {
-        let f = compile(&format!("function f() {{ return {expr}; }}")).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&format!("function f() {{ return {expr}; }}")).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for (source, expected) in [
         (
@@ -74,7 +75,10 @@ fn positive_is_checked_number_identity_with_no_vm_operation() {
             vec![0x35, 3, 0x12, 1, 0x12, 2, 0x05, 0x16],
         ),
     ] {
-        assert_eq!(compile(source).unwrap().lower().encode().unwrap(), expected);
+        assert_eq!(
+            compile_function(source).unwrap().lower().encode().unwrap(),
+            expected
+        );
     }
 }
 
@@ -95,7 +99,7 @@ fn positive_rejects_wrong_types_missing_proofs_and_unsupported_prefixes() {
         "+!true",
     ] {
         assert!(
-            compile(&format!("function f() {{ return {expr}; }}")).is_err(),
+            compile_function(&format!("function f() {{ return {expr}; }}")).is_err(),
             "{expr}"
         );
     }
@@ -105,17 +109,17 @@ fn positive_rejects_wrong_types_missing_proofs_and_unsupported_prefixes() {
         "function f(n as Toybox.Lang.Number or Null) { return +n; }",
         "function f(n as Toybox.Lang.Number or Null) { if (n != null) { n = null; return +n; } return 0; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for source in [
         "function f(n as Toybox.Lang.Number or Null) { if (n != null) { return +n; } return 0; }",
         "function f(n as Toybox.Lang.Number or Null) { if (n == null) { return 0; } return +n; }",
         "function f() { var n = +(true || false).hashCode(); return n; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f(n) { return +n; }").unwrap();
+    let f = compile_function("function f(n) { return +n; }").unwrap();
     for (from, to) in [
         ("parameters=1", "parameters=1 parameter-types=boolean"),
         (
@@ -129,14 +133,14 @@ fn positive_rejects_wrong_types_missing_proofs_and_unsupported_prefixes() {
     ] {
         let text = f.to_ir_text();
         assert!(text.contains(from));
-        assert!(parse_ir(&text.replace(from, to)).is_err(), "{to}");
+        assert!(parse_function_ir(&text.replace(from, to)).is_err(), "{to}");
     }
-    assert!(parse_ir("ciq-ir\n.function f\n.integer %0 +1\n.return %0\n.end\n").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function f\n.integer %0 +1\n.return %0\n.end\n").is_err());
 }
 
 #[test]
 fn identity_keeps_recorded_reads_before_writes_and_ordinary_parser_limits() {
-    let f = compile("function f() { var n = 1; var m = +n; n = 2; return m; }").unwrap();
+    let f = compile_function("function f() { var n = 1; var m = +n; n = 2; return m; }").unwrap();
     let mut ops = f.operations().to_vec();
     let assign = ops
         .iter()
@@ -167,9 +171,9 @@ fn identity_keeps_recorded_reads_before_writes_and_ordinary_parser_limits() {
             ")".repeat(n)
         )
     };
-    compile(&source(32)).unwrap();
+    compile_function(&source(32)).unwrap();
     assert!(
-        compile(&source(33))
+        compile_function(&source(33))
             .unwrap_err()
             .message
             .contains("nesting")

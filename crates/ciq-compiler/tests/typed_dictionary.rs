@@ -1,6 +1,6 @@
 use ciq_compiler::{
-    DictionaryKey, DictionaryType, DictionaryValue, Operation, ReturnType, compile,
-    compile_sources, parse_ir, parse_unit_ir,
+    DictionaryKey, DictionaryType, DictionaryValue, Operation, ReturnType, compile_function,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 const NUMBER: &str = "Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>";
@@ -26,12 +26,12 @@ fn empty_construction_retains_typed_contracts_without_changing_vm_allocation() {
             let source = format!(
                 "function f() as Toybox.Lang.Dictionary<Toybox.Lang.{key}, Toybox.Lang.{value}> {{ return {{}}; }}"
             );
-            let f = compile(&source).unwrap();
+            let f = compile_function(&source).unwrap();
             assert_eq!(f.return_type(), ReturnType::TypedDictionary(ty));
             assert!(
                 matches!(f.operations()[0].operation, Operation::DictionaryNew { dictionary_type: Some(actual), .. } if actual == ty)
             );
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x2f, 0x16]);
             assert_eq!(
                 f.lower(),
@@ -72,18 +72,18 @@ fn parameters_calls_and_local_reassignment_keep_invariant_types() {
         assert!(compile_sources(&[&source]).is_err(), "accepted {source}");
     }
     let opaque = format!("function f(d as Toybox.Lang.Dictionary) as {NUMBER} {{ return d; }}");
-    assert!(compile(&opaque).is_err());
+    assert!(compile_function(&opaque).is_err());
 }
 
 #[test]
 fn saved_ir_does_not_recover_erased_or_incompatible_allocation_types() {
     let source = format!("function f() as {NUMBER} {{ return {{}}; }}");
-    let text = compile(&source).unwrap().to_ir_text();
+    let text = compile_function(&source).unwrap().to_ir_text();
     assert!(text.contains("result=dictionary(string=>integer)"));
     assert!(text.contains(".dictionary-new %0 type=dictionary(string=>integer)"));
-    assert!(parse_ir(&text.replace(" type=dictionary(string=>integer)", "")).is_err());
+    assert!(parse_function_ir(&text.replace(" type=dictionary(string=>integer)", "")).is_err());
     assert!(
-        parse_ir(&text.replace(
+        parse_function_ir(&text.replace(
             "type=dictionary(string=>integer)",
             "type=dictionary(string=>string)"
         ))
@@ -95,7 +95,7 @@ fn saved_ir_does_not_recover_erased_or_incompatible_allocation_types() {
         "dictionary(string=>integer=>integer)",
         "dictionary(string=>array-integer)",
     ] {
-        assert!(parse_ir(&text.replace("dictionary(string=>integer)", bad)).is_err());
+        assert!(parse_function_ir(&text.replace("dictionary(string=>integer)", bad)).is_err());
     }
     let source = format!(
         "module D {{ function make() as {NUMBER} {{ return {{}}; }}
@@ -122,7 +122,7 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<{bad}>) as Toybox.Lang.Number {{ return d.size(); }}"
         );
-        assert!(compile(&source).is_err(), "accepted {source}");
+        assert!(compile_function(&source).is_err(), "accepted {source}");
     }
     for body in [
         "return d.get(\"one\");",
@@ -130,7 +130,7 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         "return true ? d : d;",
     ] {
         let source = format!("function f(d as {NUMBER}) as Void {{ {body} }}");
-        assert!(compile(&source).is_err(), "accepted {source}");
+        assert!(compile_function(&source).is_err(), "accepted {source}");
     }
 }
 
@@ -140,11 +140,11 @@ fn dictionary_key_contracts_check_api_levels_in_native_and_saved_ir() {
     let source = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Char, Toybox.Lang.Number> { return {}; }";
     let early = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let later = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
-    assert!(ciq_compiler::compile_with_api(source, early).is_err());
-    let f = ciq_compiler::compile_with_api(source, later).unwrap();
-    assert!(ciq_compiler::parse_ir_with_api(&f.to_ir_text(), early).is_err());
+    assert!(ciq_compiler::compile_function_with_api(source, early).is_err());
+    let f = ciq_compiler::compile_function_with_api(source, later).unwrap();
+    assert!(ciq_compiler::parse_function_ir_with_api(&f.to_ir_text(), early).is_err());
     assert_eq!(
         f,
-        ciq_compiler::parse_ir_with_api(&f.to_ir_text(), later).unwrap()
+        ciq_compiler::parse_function_ir_with_api(&f.to_ir_text(), later).unwrap()
     );
 }

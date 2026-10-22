@@ -1,7 +1,8 @@
 use ciq_compiler::{
     ArrayConstantValue, ArrayElement, Operation, ReturnType,
     api::{ApiContext, ApiLevel, Type},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -32,9 +33,9 @@ fn nullable_elements_preserve_native_and_saved_pipelines() {
         ("Boolean", ArrayElement::NullableBoolean, "[null]"),
         ("Char", ArrayElement::NullableChar, "[null]"),
     ] {
-        let f = compile(&format!("function f() as Toybox.Lang.Array<Toybox.Lang.{element} or Null> {{ return {literal}; }}")).unwrap();
+        let f = compile_function(&format!("function f() as Toybox.Lang.Array<Toybox.Lang.{element} or Null> {{ return {literal}; }}")).unwrap();
         assert_eq!(f.return_type(), ReturnType::Array(expected));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert!(matches!(
             f.operations()[0].operation,
             Operation::ArrayConstant { .. }
@@ -83,9 +84,9 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             let source = format!(
                 "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ {body} }}"
             );
-            let f = compile(&source).unwrap();
+            let f = compile_function(&source).unwrap();
             let text = f.to_ir_text();
-            assert_eq!(f, parse_ir(&text).unwrap());
+            assert_eq!(f, parse_function_ir(&text).unwrap());
         }
         for body in [
             "System.println(a[0]);".to_owned(),
@@ -97,7 +98,7 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             let source = format!(
                 "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) {{ {body} }}"
             );
-            assert!(compile(&source).is_err(), "accepted {source}");
+            assert!(compile_function(&source).is_err(), "accepted {source}");
         }
         for source in [
             format!(
@@ -108,7 +109,7 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             ),
             format!("function f() {{ var a = [{literal}, null]; }}"),
         ] {
-            assert!(compile(&source).is_err(), "accepted {source}");
+            assert!(compile_function(&source).is_err(), "accepted {source}");
         }
     }
 }
@@ -121,16 +122,19 @@ fn nullable_boolean_char_array_api_checks_include_elements_and_consumers() {
         let source = format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) {{ return a.size(); }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(compile_with_api(&source, initial).is_ok(), initial_ok);
+        let f = compile_function(&source).unwrap();
         assert_eq!(
-            parse_ir_with_api(&f.to_ir_text(), initial).is_ok(),
+            compile_function_with_api(&source, initial).is_ok(),
             initial_ok
         );
-        assert!(compile_with_api(&source, char_api).is_ok());
+        assert_eq!(
+            parse_function_ir_with_api(&f.to_ir_text(), initial).is_ok(),
+            initial_ok
+        );
+        assert!(compile_function_with_api(&source, char_api).is_ok());
         let source = source.replace("a.size()", "a.indexOf(null)");
-        assert!(compile_with_api(&source, initial).is_err());
-        assert!(compile_with_api(&source, char_api).is_ok());
+        assert!(compile_function_with_api(&source, initial).is_err());
+        assert!(compile_function_with_api(&source, char_api).is_ok());
     }
 }
 
@@ -154,12 +158,12 @@ fn reads_require_fresh_scalar_proofs_and_array_elements_remain_invariant() {
         "function f() { var a = [null]; }",
         "function f() { var a = [1, null]; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { var n = a[0]; if (n != null) { a[0] = null; return n + 1; } return 0; }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
-    assert!(parse_ir(&f.to_ir_text().replace(".not-equal", ".equal")).is_err());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
+    assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal", ".equal")).is_err());
 }
 
 #[test]
@@ -172,12 +176,12 @@ fn computed_context_and_native_arguments_keep_exact_element_contracts() {
             .is_err()
     );
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>, n as Toybox.Lang.Number or Null) { a[0] = n; a.add(n); return a.indexOf(null); }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let text = f.to_ir_text();
-    assert!(parse_ir(&text.replace("nullable-number-array", "number-array")).is_err());
+    assert!(parse_function_ir(&text.replace("nullable-number-array", "number-array")).is_err());
     for bad in ["a.add(\"x\");", "var other = [1]; a.addAll(other);"] {
-        assert!(compile(&source.replace("a.add(n);", bad)).is_err());
+        assert!(compile_function(&source.replace("a.add(n);", bad)).is_err());
     }
     let receiver = Type::Array(Box::new(ArrayElement::NullableNumber.api_type()));
     let reverse = ciq_compiler::api::core()
@@ -191,12 +195,15 @@ fn nullable_storage_preserves_api_and_frame_checks() {
     let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let source =
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return [1, null]; }";
-    let f = compile_with_api(source, initial).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+    let f = compile_function_with_api(source, initial).unwrap();
+    assert_eq!(
+        f,
+        parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+    );
     let later_call = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { a.add(null); return a.size(); }";
-    assert!(compile_with_api(later_call, initial).is_err());
+    assert!(compile_function_with_api(later_call, initial).is_err());
     let text = "ciq-ir\n.function f parameters=254\n.array-begin &0 nullable-number 2\n.integer %0 1\n.null %1\n.array-fill-many &0 0 %0 %1\n.array-finish %2 &0\n.return %2\n.end\n";
-    let f = parse_ir(text).unwrap();
+    let f = parse_function_ir(text).unwrap();
     assert_eq!(&f.lower().encode().unwrap()[..3], &[0x4a, 255, 1]);
     for bad in [
         text.replace("parameters=254", "parameters=255"),
@@ -204,6 +211,6 @@ fn nullable_storage_preserves_api_and_frame_checks() {
         text.replace("nullable-number", "nullable-string"),
         text.replace(".null %1", ".char %1 0x00000061"),
     ] {
-        assert!(parse_ir(&bad).is_err(), "accepted {bad}");
+        assert!(parse_function_ir(&bad).is_err(), "accepted {bad}");
     }
 }

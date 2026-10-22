@@ -1,7 +1,7 @@
 use ciq_compiler::{
     ParameterType, ReturnType,
     application::{ConsoleApplication, build_console_application},
-    compile_sources, parse_ir, parse_unit_ir,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 const APP: &str = include_str!("../../../examples/compiler-source-signatures/app.mc");
@@ -80,7 +80,7 @@ fn source_contracts_do_not_cast_generic_native_or_unrelated_references() {
         "ciq-ir\n.function f parameters=1 parameter-types=view result=source(HelloView@WatchUi.View)\n.parameter %0 0\n.return %0\n.end\n",
         "ciq-ir\n.function f\n.call %0 M make result=source()\n.return %0\n.end\n",
     ] {
-        assert!(parse_ir(text).is_err(), "{text}");
+        assert!(parse_function_ir(text).is_err(), "{text}");
     }
 }
 

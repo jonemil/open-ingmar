@@ -1,6 +1,6 @@
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
-    compile_sources, parse_ir, parse_unit_ir,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 const APP: &str = include_str!("../../../examples/compiler-fields/app.mc");
@@ -90,7 +90,7 @@ fn declarations_and_saved_ir_resolve_fields_against_their_owner() {
         assert_ne!(text, changed);
         assert!(parse_unit_ir(&changed).is_err(), "{changed}");
     }
-    assert!(parse_ir("ciq-ir\n.function f\n.read-self %0 n\n.return %0\n.end\n").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function f\n.read-self %0 n\n.return %0\n.end\n").is_err());
 }
 
 #[test]
@@ -104,13 +104,13 @@ fn field_reads_cannot_move_across_writes_and_locals_remain_distinct() {
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     let bad = "ciq-ir\n.function f receiver=instance\n.read-self %0 n\n.integer %1 2\n.assign-self n %1\n.println %0\n.return-void\n.end\n";
     assert!(
-        parse_ir(bad)
+        parse_function_ir(bad)
             .unwrap_err()
             .message
             .contains("evaluation order")
     );
     let write = "ciq-ir\n.function f receiver=instance\n.string %0 \"bad\"\n.assign-self n %0\n.return-void\n.end\n";
-    assert!(parse_ir(write).is_ok()); // An interface field may hold String.
+    assert!(parse_function_ir(write).is_ok()); // An interface field may hold String.
     assert!(
         ciq_compiler::parse_unit_ir(&format!(
             "ciq-unit\n.class C Lang.Object\n.field-number n 0\n{write}.end-class\n"

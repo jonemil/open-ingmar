@@ -2,8 +2,8 @@ use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -41,11 +41,11 @@ fn wide_string_and_char_operators_preserve_complete_pipelines() {
         ("65.0 == 'A'", "Boolean", "eq"),
         ("'A' != 66.0d", "Boolean", "ne"),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.{ty} {{ return {expression}; }}"
         ))
         .unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let text = f.lower().to_text();
         assert!(text.lines().any(|line| line == instruction));
         assert!(
@@ -62,12 +62,12 @@ fn exact_string_accepts_all_numeric_widths_without_proving_non_null() {
             let source = format!(
                 "function f(n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ return {expression}; }}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for expression in ["\"v\" == n", "n != \"v\""] {
-            let f = compile(&format!("function f(n as Toybox.Lang.{ty} or Null) as Toybox.Lang.Boolean {{ return {expression}; }}")).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&format!("function f(n as Toybox.Lang.{ty} or Null) as Toybox.Lang.Boolean {{ return {expression}; }}")).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for body in [
             "System.println(\"v=\" + n); return n.toString();",
@@ -75,14 +75,14 @@ fn exact_string_accepts_all_numeric_widths_without_proving_non_null() {
             "if (n != \"v\") { return n.toString(); } return \"equal\";",
         ] {
             assert!(
-                compile(&format!(
+                compile_function(&format!(
                     "function f(n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ {body} }}"
                 ))
                 .is_err(),
                 "{ty}: {body}"
             );
         }
-        assert!(compile(&format!("function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ return s + n; }}")).is_err());
+        assert!(compile_function(&format!("function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ return s + n; }}")).is_err());
     }
 }
 
@@ -90,7 +90,7 @@ fn exact_string_accepts_all_numeric_widths_without_proving_non_null() {
 fn char_addition_equality_and_ordering_have_distinct_profiles() {
     for literal in ["65l", "65.0", "65.0d"] {
         for expression in [format!("'A' == {literal}"), format!("{literal} != 'A'")] {
-            let f = compile(&format!(
+            let f = compile_function(&format!(
                 "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
             ))
             .unwrap();
@@ -102,7 +102,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
                 format!("{literal} {operator} 'A'"),
             ] {
                 assert!(
-                    compile(&format!(
+                    compile_function(&format!(
                         "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
                     ))
                     .is_err()
@@ -123,7 +123,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
         "'A' == true",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Void {{ System.println({expression}); }}"
             ))
             .is_err(),
@@ -132,7 +132,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
     }
     for expression in ["'A' + n", "n < 'A'"] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f(n as Toybox.Lang.Long or Null) as Void {{ System.println({expression}); }}"
             ))
             .is_err()
@@ -152,10 +152,10 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
             (".add", ".subtract"),
         ),
     ] {
-        let text = compile(source).unwrap().to_ir_text();
+        let text = compile_function(source).unwrap().to_ir_text();
         let edited = text.replace(replacement.0, replacement.1);
         assert_ne!(text, edited);
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
 }
 
@@ -163,8 +163,11 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
 fn char_weak_retains_char_and_checks_receiver_availability() {
     let source = "function f(x as Toybox.Lang.Char or Null) as Toybox.Lang.Char { if (x == null) { return 'A'; } return x.weak(); }";
     let context = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
-    let f = compile_with_api(source, context).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), context).unwrap());
+    let f = compile_function_with_api(source, context).unwrap();
+    assert_eq!(
+        f,
+        parse_function_ir_with_api(&f.to_ir_text(), context).unwrap()
+    );
     assert!(
         f.lower()
             .to_text()
@@ -182,21 +185,21 @@ fn char_weak_retains_char_and_checks_receiver_availability() {
         ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap(),
         ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 2, 0)).unwrap(),
     ] {
-        assert!(compile_with_api(source, context).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), context).is_err());
+        assert!(compile_function_with_api(source, context).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), context).is_err());
     }
     for source in [
         "function f(x as Toybox.Lang.Char or Null) as Toybox.Lang.Char { return x.weak(); }",
         "function f() as Toybox.Lang.Char { return 'A'.weak(1); }",
         "function f() as Toybox.Lang.Number { return 'A'.weak(); }",
     ] {
-        assert!(compile(source).is_err());
+        assert!(compile_function(source).is_err());
     }
     for expression in ["'A'.weak().toNumber()", "('A'.weak() + 1l).toNumber()"] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Number {{ return {expression}; }}"
         ))
         .unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }

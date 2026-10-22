@@ -2,7 +2,8 @@ use ciq_compiler::{
     Function, Operation, ValueId,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_ir_with_api, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_function_ir_with_api,
+    parse_unit_ir_with_api,
 };
 
 #[test]
@@ -34,12 +35,12 @@ fn writes_preserve_complete_source_ir_assembly_and_prg_pipelines() {
 #[test]
 fn write_consumes_three_operands_without_result_or_hidden_slots() {
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i as Toybox.Lang.Number, v as Toybox.Lang.Number) as Void { a[i] = v; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(
         f.lower().encode().unwrap(),
         [0x35, 4, 0x12, 1, 0x12, 2, 0x12, 3, 0x11, 0x16]
     );
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let span = f
         .operations()
         .iter()
@@ -49,9 +50,9 @@ fn write_consumes_three_operands_without_result_or_hidden_slots() {
         .unwrap();
     assert_eq!(&source[span.start..span.end], "a[i] = v;");
     let ctx = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), ctx).unwrap());
+    assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), ctx).unwrap());
     for index in ["-1", "2", "2147483647"] {
-        compile(&format!(
+        compile_function(&format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Void {{ a[{index}] = 9; }}"
         ))
         .unwrap();
@@ -80,15 +81,15 @@ fn writes_reject_wrong_types_unproven_nulls_and_nonassignment_targets() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { a[0] = n; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { n = null; a[0] = n; } return 0; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { a[n] = n; } return 0; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { a[n] = n; } return 0; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
 fn saved_ir_rechecks_operands_and_effect_order() {
-    let f = compile(
+    let f = compile_function(
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, i as Toybox.Lang.Number, v as Toybox.Lang.Number) as Void { a[i] = v; }",
     )
     .unwrap();
@@ -101,9 +102,9 @@ fn saved_ir_rechecks_operands_and_effect_order() {
         (".array-write %0 %1 %2", ".array-write %0 %1 %1"),
     ] {
         assert!(text.contains(from), "missing fixture: {from}\n{text}");
-        assert!(parse_ir(&text.replace(from, to)).is_err(), "{to}");
+        assert!(parse_function_ir(&text.replace(from, to)).is_err(), "{to}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = b[0]; return 0; }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = b[0]; return 0; }").unwrap();
     let mut ops = f.operations().to_vec();
     let read = ops
         .iter()
@@ -144,8 +145,8 @@ fn logical_operands_snapshot_receiver_index_and_value_in_order() {
         "function f() as Toybox.Lang.Number { [1, 2][0] = 3; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { var i = 0; while (i < a.size()) { a[i] = i; i = i + 1; } return 0; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
@@ -155,8 +156,8 @@ fn staged_write_temporaries_use_the_existing_frame_budget() {
         .chain((1..254).map(|n| format!("p{n}")))
         .collect::<Vec<String>>()
         .join(",");
-    compile(&format!("function f({params}) as Void {{ a[0] = 9; }}")).unwrap();
-    let error = compile(&format!(
+    compile_function(&format!("function f({params}) as Void {{ a[0] = 9; }}")).unwrap();
+    let error = compile_function(&format!(
         "function f({params}) as Void {{ a[0] = (false || true).hashCode(); }}"
     ))
     .unwrap_err();
@@ -198,22 +199,22 @@ fn char_and_view_writes_preserve_unit_and_complete_application_pipelines() {
 #[test]
 fn element_writes_share_encoding_but_recheck_invariant_types_and_api_levels() {
     for element in ["Toybox.Lang.Char", "Toybox.WatchUi.View"] {
-        let f = compile(&format!("function f(a as Toybox.Lang.Array<{element}>, i as Toybox.Lang.Number, v as {element}) as Void {{ a[i] = v; }}")).unwrap();
+        let f = compile_function(&format!("function f(a as Toybox.Lang.Array<{element}>, i as Toybox.Lang.Number, v as {element}) as Void {{ a[i] = v; }}")).unwrap();
         assert_eq!(
             f.lower().encode().unwrap(),
             [0x35, 4, 0x12, 1, 0x12, 2, 0x12, 3, 0x11, 0x16]
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let introduction = if element.ends_with("Char") {
             ApiLevel(1, 3, 0)
         } else {
             ApiLevel(1, 0, 0)
         };
         let ctx = ApiContext::new(introduction, introduction).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), ctx).unwrap());
+        assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), ctx).unwrap());
         if element.ends_with("Char") {
             let older = ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap();
-            assert!(parse_ir_with_api(&f.to_ir_text(), older).is_err());
+            assert!(parse_function_ir_with_api(&f.to_ir_text(), older).is_err());
         }
     }
     for source in [
@@ -225,9 +226,9 @@ fn element_writes_share_encoding_but_recheck_invariant_types_and_api_levels() {
         "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a[0] = 1; }",
         "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a[0] = ['a']; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) as Void { a[0] = v; }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>, v as Toybox.WatchUi.View) as Void { a[0] = v; }").unwrap();
     for (from, to) in [
         ("view-array", "char-array"),
         ("view-array", "number-array"),
@@ -239,6 +240,6 @@ fn element_writes_share_encoding_but_recheck_invariant_types_and_api_levels() {
     ] {
         let text = f.to_ir_text();
         assert!(text.contains(from), "fixture: {from}\n{text}");
-        assert!(parse_ir(&text.replace(from, to)).is_err(), "{to}");
+        assert!(parse_function_ir(&text.replace(from, to)).is_err(), "{to}");
     }
 }

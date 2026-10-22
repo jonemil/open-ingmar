@@ -1,7 +1,8 @@
 use ciq_compiler::{
     ArrayConstantValue, ArrayElement, Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -32,8 +33,8 @@ fn strings_preserve_types_and_pooled_constants_through_saved_stages() {
             .iter()
             .any(|s| s.value.is_empty())
     );
-    let f = compile(r#"function f() as Toybox.Lang.Array<Toybox.Lang.String> { return ["", "é", "quote\"slash\\\n"]; }"#).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(r#"function f() as Toybox.Lang.Array<Toybox.Lang.String> { return ["", "é", "quote\"slash\\\n"]; }"#).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(
         f.return_type(),
         ciq_compiler::ReturnType::Array(ArrayElement::String)
@@ -56,12 +57,12 @@ fn computed_strings_and_guarded_values_use_ordered_private_construction() {
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.Array<Toybox.Lang.String> { if (s == null) { return []; } return [s, s.toUpper()]; }",
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.String> { return [b ? \"yes\" : \"no\", \"tail\"]; }",
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         let text = f.to_ir_text();
         assert!(text.contains(".array-begin"));
         assert!(text.contains(" string "));
-        assert_eq!(f, parse_ir(&text).unwrap());
-        assert!(parse_ir(&text.replace(" string ", " number ")).is_err());
+        assert_eq!(f, parse_function_ir(&text).unwrap());
+        assert!(parse_function_ir(&text.replace(" string ", " number ")).is_err());
     }
 }
 
@@ -79,19 +80,19 @@ fn invariant_non_null_string_elements_are_checked_in_source_and_ir() {
         "function f() { var a = [\"one\"]; System.println(a); }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [\"one\"]; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.String>, s as Toybox.Lang.String) as Toybox.Lang.String { a[0] = s; return a[0]; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.String>, s as Toybox.Lang.String) as Toybox.Lang.String { a[0] = s; return a[0]; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert!(
-        parse_ir(&f.to_ir_text().replace(
+        parse_function_ir(&f.to_ir_text().replace(
             "parameter-types=string-array:string",
             "parameter-types=string-array:nullable-string"
         ))
         .is_err()
     );
     let text = "ciq-ir\n.function f\n.array-constant %0 string \"one\"\n.return %0\n.end\n";
-    assert!(parse_ir(text).is_ok());
+    assert!(parse_function_ir(text).is_ok());
     for bad in [
         ".array-constant %0 string",
         ".array-constant %0 string one",
@@ -100,7 +101,7 @@ fn invariant_non_null_string_elements_are_checked_in_source_and_ir() {
         ".array-constant %0 string \"one\" null",
     ] {
         assert!(
-            parse_ir(&text.replace(".array-constant %0 string \"one\"", bad)).is_err(),
+            parse_function_ir(&text.replace(".array-constant %0 string \"one\"", bad)).is_err(),
             "accepted {bad}"
         );
     }
@@ -114,12 +115,15 @@ fn array_type_availability_does_not_enable_later_methods() {
         "function f() as Toybox.Lang.Array<Toybox.Lang.String> { return [\"one\"]; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.String>) as Toybox.Lang.String { return a[0]; }",
     ] {
-        let f = compile_with_api(source, initial).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+        let f = compile_function_with_api(source, initial).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+        );
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.String>) { a.add(\"one\"); return a.size(); }";
     let later = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
-    let f = compile_with_api(source, later).unwrap();
-    assert!(compile_with_api(source, initial).is_err());
-    assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+    let f = compile_function_with_api(source, later).unwrap();
+    assert!(compile_function_with_api(source, initial).is_err());
+    assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
 }

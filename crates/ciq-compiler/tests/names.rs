@@ -1,6 +1,6 @@
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_unit_ir,
+    compile_function, compile_sources, parse_unit_ir,
 };
 
 fn prg(source: &str) -> Vec<u8> {
@@ -40,8 +40,11 @@ fn single_function_and_nested_print_arguments_use_native_bindings() {
     ])
     .unwrap();
     assert!(unit.to_ir_text().contains(".println"));
-    assert!(compile("using Toybox.System as Sys; function main() { Sys.println(41); }").is_ok());
-    assert!(compile("function main() { Toybox.System.println(41); }").is_ok());
+    assert!(
+        compile_function("using Toybox.System as Sys; function main() { Sys.println(41); }")
+            .is_ok()
+    );
+    assert!(compile_function("function main() { Toybox.System.println(41); }").is_ok());
 }
 
 #[test]
@@ -193,9 +196,10 @@ fn source_keywords_are_reserved_even_before_their_construct_is_implemented() {
 
 #[test]
 fn source_keywords_do_not_restrict_saved_ir_or_assembly_names() {
-    let function =
-        ciq_compiler::parse_ir("ciq-ir\n.function for\n.integer %0 41\n.return %0\n.end\n")
-            .unwrap();
+    let function = ciq_compiler::parse_function_ir(
+        "ciq-ir\n.function for\n.integer %0 41\n.return %0\n.end\n",
+    )
+    .unwrap();
     assert_eq!(function.name(), "for");
     assert!(ciq_assembly::Program::parse("for:\nipush1 0x29\nreturn\n").is_ok());
 }

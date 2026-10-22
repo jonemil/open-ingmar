@@ -106,20 +106,20 @@ use crate::{
 /// syntax or semantic operations produce diagnostics at input byte offsets.
 /// This reads a function fragment, without checking unit ownership or callee
 /// declarations. Use [`crate::parse_unit_ir`] to resume a complete unit.
-pub fn parse_ir(source: &str) -> Result<Function, Diagnostic> {
-    parse_ir_context(source, None)
+pub fn parse_function_ir(source: &str) -> Result<Function, Diagnostic> {
+    parse_function_ir_context(source, None)
 }
 
 /// Parse function IR with explicit unguarded API-level checks. The context is
 /// a build input and is not read from, or written into, semantic IR text.
-pub fn parse_ir_with_api(
+pub fn parse_function_ir_with_api(
     source: &str,
     context: crate::api::ApiContext,
 ) -> Result<Function, Diagnostic> {
-    parse_ir_context(source, Some(context))
+    parse_function_ir_context(source, Some(context))
 }
 
-pub(crate) fn parse_ir_context(
+pub(crate) fn parse_function_ir_context(
     source: &str,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Function, Diagnostic> {

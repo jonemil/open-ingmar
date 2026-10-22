@@ -1,6 +1,6 @@
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -53,8 +53,8 @@ fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } if (n == null) { return 0; } return n; }",
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } while (false) { System.println(n); } return n; }",
     ] {
-        let function = compile(source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Number { return \"41\".toNumber(); }",
@@ -72,13 +72,13 @@ fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } while (flag) { n = null; } return n; }",
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return n+1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
 #[test]
 fn ir_edits_cannot_bypass_non_null_proofs() {
-    let function = compile(
+    let function = compile_function(
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } return n + 1; }",
     )
     .unwrap();
@@ -97,9 +97,9 @@ fn ir_edits_cannot_bypass_non_null_proofs() {
     assert!(ciq_compiler::Function::new("bad".into(), operations).is_err());
 
     let same_target = "ciq-ir\n.function f\n.block ^0\n.string %0 \"41\"\n.call-native %1 %0 toNumber\n.local $0 %1\n.read %2 $0\n.null %3\n.equal %4 %2 %3\n.branch %4 ^1 ^1\n.block ^1\n.read %5 $0\n.return %5\n.end";
-    assert!(parse_ir(same_target).is_err());
+    assert!(parse_function_ir(same_target).is_err());
     let reassigned_after_read = "ciq-ir\n.function f\n.block ^0\n.string %0 \"41\"\n.call-native %1 %0 toNumber\n.local $0 %1\n.read %2 $0\n.null %3\n.equal %4 %2 %3\n.null %5\n.assign $0 %5\n.branch %4 ^1 ^2\n.block ^1\n.integer %6 0\n.return %6\n.block ^2\n.read %7 $0\n.return %7\n.end";
-    assert!(parse_ir(reassigned_after_read).is_err());
+    assert!(parse_function_ir(reassigned_after_read).is_err());
 }
 
 #[test]
@@ -111,6 +111,6 @@ fn nullable_methods_reject_bad_arguments_and_other_receivers() {
         "function f() as Void { var n = \"text\".toNumber(1); }",
         "function f() as Void { var n = true.toNumber(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }

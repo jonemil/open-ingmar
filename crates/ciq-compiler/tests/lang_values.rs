@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Function, LocatedOperation, Operation, ParameterType, ReturnType, ValueId,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -74,16 +74,16 @@ fn typed_function_construction_infers_supported_returns() {
             Function::with_parameter_types("identity".into(), vec![parameter], operations).unwrap();
         assert_eq!(function.return_type(), result);
         assert_eq!(function.parameter_types()[0].api_type(), result.api_type());
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     assert_eq!(
-        compile("function f() as Toybox.Lang.String { return \"hi\"; }")
+        compile_function("function f() as Toybox.Lang.String { return \"hi\"; }")
             .unwrap()
             .return_type(),
         ReturnType::String
     );
     assert_eq!(
-        compile("function f() as Toybox.Lang.Boolean { return true; }")
+        compile_function("function f() as Toybox.Lang.Boolean { return true; }")
             .unwrap()
             .return_type(),
         ReturnType::Boolean
@@ -152,7 +152,7 @@ fn annotated_returns_remain_uniform_and_callback_contracts_remain_separate() {
         "function f(s as Toybox.Lang.Boolean) as Toybox.Lang.Number { return s + 1; }",
         "function f(s as Toybox.Lang.Unknown) as Toybox.Lang.Number { return 1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     assert!(compile_sources(&["class C extends Application.AppBase { function onStart(state as Toybox.Lang.String) { } }"]).is_err());
     assert!(compile_sources(&["class C extends Application.AppBase { function onStop(state) as Toybox.Lang.Boolean { return true; } }"]).is_err());

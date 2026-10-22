@@ -1,7 +1,8 @@
 use ciq_compiler::{
     api::{self, ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -20,17 +21,20 @@ fn methods_preserve_erased_contracts_api_and_saved_stages() {
         "function f(a as Toybox.Lang.Method,b as Toybox.Lang.Method,c as Toybox.Lang.Boolean) as Toybox.Lang.Method { return c ? a : b; }",
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.String { var v=m.invoke(); if(v==null) { return \"null\"; } return v.toString(); }",
     ] {
-        let f = compile_with_api(source, initial).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+        let f = compile_function_with_api(source, initial).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+        );
         let asm = f.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
     let weak =
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.WeakReference { return m.weak(); }";
-    assert!(compile_with_api(weak, initial).is_err());
+    assert!(compile_function_with_api(weak, initial).is_err());
     let api = ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap();
-    let f = compile_with_api(weak, api).unwrap();
-    assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), api).unwrap());
+    let f = compile_function_with_api(weak, api).unwrap();
+    assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), api).unwrap());
 }
 
 #[test]
@@ -52,8 +56,8 @@ fn variadic_declarations_and_invoke_byte_counts_do_not_weaken_fixed_arity() {
     );
     for n in [0, 1, 2, 254] {
         let arguments = vec!["1"; n].join(",");
-        let f=compile(&format!("function f(m as Toybox.Lang.Method) as Toybox.Lang.Object or Null {{ return m.invoke({arguments}); }}")).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f=compile_function(&format!("function f(m as Toybox.Lang.Method) as Toybox.Lang.Object or Null {{ return m.invoke({arguments}); }}")).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert!(
             f.lower()
                 .to_text()
@@ -63,7 +67,7 @@ fn variadic_declarations_and_invoke_byte_counts_do_not_weaken_fixed_arity() {
     }
     let args = vec!["1"; 255].join(",");
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f(m as Toybox.Lang.Method) {{ m.invoke({args}); return 0; }}"
         ))
         .is_err()
@@ -78,15 +82,15 @@ fn variadic_declarations_and_invoke_byte_counts_do_not_weaken_fixed_arity() {
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.String { return m.invoke().toString(); }",
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Number> { var v=m.invoke(); if(v==null) { return []; } return v; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let text = compile(
+    let text = compile_function(
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Object or Null { return m.invoke(); }",
     )
     .unwrap()
     .to_ir_text();
-    assert!(parse_ir(&text.replace("result=nullable-object", "result=object")).is_err());
-    assert!(parse_ir(&text.replace(" invoke", " absent")).is_err());
+    assert!(parse_function_ir(&text.replace("result=nullable-object", "result=object")).is_err());
+    assert!(parse_function_ir(&text.replace(" invoke", " absent")).is_err());
 }
 
 #[test]
@@ -97,7 +101,7 @@ fn raw_code_binding_resolves_new_native_members_and_weak_observers() {
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Object or Null { return m.invoke(); }",
         "function f(w as Toybox.Lang.WeakReference) as Toybox.Lang.Boolean { return w.stillAlive(); }",
     ] {
-        let asm = compile(source).unwrap().lower();
+        let asm = compile_function(source).unwrap().lower();
         let bindings = ciq_compiler::symbol_bindings(&asm, &symbols).unwrap();
         assert!(
             asm.encode_with_literals(&bindings, &Default::default(), &Default::default())

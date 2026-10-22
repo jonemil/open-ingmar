@@ -73,7 +73,7 @@ fn interface_witnesses_cover_every_class_and_preserve_nullability() {
 #[test]
 fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
     use ciq_compiler::{
-        ClassBase, Function, ParameterType, ReturnType, SourceClass, SourceUnion, parse_ir,
+        ClassBase, Function, ParameterType, ReturnType, SourceClass, SourceUnion, parse_function_ir,
     };
     let class = SourceClass {
         name: "A".into(),
@@ -90,7 +90,7 @@ fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
         let text = format!(
             "ciq-ir\n.function f parameters=1 parameter-types={tag} result={tag}\n.parameter %0 0\n.return %0\n.end\n"
         );
-        let parsed = parse_ir(&text).unwrap();
+        let parsed = parse_function_ir(&text).unwrap();
         let typed = Function::with_signature(
             "f".into(),
             vec![ParameterType::SourceUnion(set.clone())],
@@ -99,7 +99,7 @@ fn typed_and_saved_singleton_sets_use_the_same_canonical_contract() {
         )
         .unwrap();
         assert_eq!(typed, parsed);
-        assert_eq!(typed, parse_ir(&typed.to_ir_text()).unwrap());
+        assert_eq!(typed, parse_function_ir(&typed.to_ir_text()).unwrap());
     }
     assert!(SourceUnion::new(vec![], true).is_err());
     assert!(

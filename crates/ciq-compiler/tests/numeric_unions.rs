@@ -2,7 +2,7 @@ use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel, Type, core},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -69,24 +69,24 @@ fn alias_signatures_casts_calls_and_common_methods_round_trip() {
             "using Toybox.Lang as L; function f(n as L.{name}) as L.{name} {{ var local=n; local=1{}; return +(-local); }}",
             if name == "Decimal" { ".5" } else { "" }
         );
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         assert_eq!(function.parameter_types(), &[parameter]);
         assert_eq!(function.return_type(), result);
         assert!(function.to_ir_text().contains(&format!("result={tag}")));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         for nullable in ["", " or Null"] {
             let source = format!(
                 "function f(o as Lang.Object) as Lang.{name}{nullable} {{ return o as Lang.{name}{nullable}; }}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             assert!(!f.lower().to_text().contains("isa"));
         }
         let source = format!(
             "function f(n as Lang.{name}) as Void {{ System.println(n);n.toString();n.toNumber();n.toLong();n.toFloat();n.toDouble();n.format(\"%f\"); }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let source = format!(
             "module M {{function f(n as Lang.{name}) as Lang.{name} or Null {{return n;}} function g(n as Lang.{name}) as Lang.{name} or Null {{return M.f(n);}}}}"
         );
@@ -113,8 +113,8 @@ fn alias_operators_use_vm_operations_without_conversions() {
         let source = format!(
             "function f(a as Lang.{name},b as Lang.{name}) as Lang.{result} {{return {expr};}}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let text = f.lower().to_text();
         assert!(text.contains(opcode), "{text}");
         assert!(
@@ -133,13 +133,13 @@ fn alias_operators_use_vm_operations_without_conversions() {
         "function f(a as Lang.Numeric,b as Lang.Numeric) as Lang.Boolean {return a<=b;}",
         "function f(a as Lang.Integer) {if(a instanceof Lang.Number){return a;} return 0;}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let source = "function f(a as Lang.Numeric,b as Lang.Numeric) as Lang.Numeric {return a+b;}";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=numeric", "result=integer-union")
         )
@@ -157,19 +157,19 @@ fn nullable_aliases_require_current_proofs_and_preserve_join_contracts() {
         ] {
             let source =
                 format!("function f(n as Lang.{name} or Null) as Lang.{name} or Null {{{body}}}");
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             let text = f.to_ir_text();
             if text.contains(".not-equal ") {
-                assert!(parse_ir(&text.replace(".not-equal ", ".equal ")).is_err());
+                assert!(parse_function_ir(&text.replace(".not-equal ", ".equal ")).is_err());
             }
         }
         let alternate = if name == "Decimal" { "1.5" } else { "1" };
         let source = format!(
             "function f(n as Lang.{name},flag as Lang.Boolean) as Lang.{name} {{return flag?n:{alternate};}}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         for body in [
             "return n+1;",
             "if(n!=null){var x=n; x=null; return x+1;} return null;",
@@ -177,7 +177,7 @@ fn nullable_aliases_require_current_proofs_and_preserve_join_contracts() {
         ] {
             let source =
                 format!("function f(n as Lang.{name} or Null) as Lang.{name} or Null {{{body}}}");
-            assert!(compile(&source).is_err(), "{source}");
+            assert!(compile_function(&source).is_err(), "{source}");
         }
     }
 }
@@ -195,6 +195,6 @@ fn alias_domains_do_not_admit_null_or_unsupported_concrete_pairs() {
         "function f(a as Lang.Numeric) as Lang.Numeric {var x=a; x=null; return x;}",
         "function f(a as Lang.Decimal) as Lang.Number {return a;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }

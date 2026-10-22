@@ -3,7 +3,7 @@ use ciq_compiler::{
     ClassBase, ClassDeclaration, CompilationUnit, Function, FunctionDeclaration, LocatedOperation,
     Operation, ReturnType, ValueId,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 use ciq_mc::{Opcode, decode};
 use std::{fs, process::Command};
@@ -128,7 +128,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
     ];
     assert!(Function::new("f".into(), operations.clone()).is_err());
     let method = Function::method("f".into(), 0, operations).unwrap();
-    assert_eq!(parse_ir(&method.to_ir_text()).unwrap(), method);
+    assert_eq!(parse_function_ir(&method.to_ir_text()).unwrap(), method);
     assert!(
         CompilationUnit::new(vec![FunctionDeclaration {
             module: None,
@@ -143,7 +143,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         }])
         .is_err()
     );
-    let free = compile("function f() as Void {}").unwrap();
+    let free = compile_function("function f() as Void {}").unwrap();
     assert!(
         CompilationUnit::with_classes(
             vec![],
@@ -163,7 +163,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         "function f() as Void { var self = 1; }",
         "function f() as Toybox.Lang.Number { return self; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for text in [
         "ciq-ir\n.function f\n.call-self-discard f\n.return-void\n.end",
@@ -172,7 +172,7 @@ fn receiver_contract_cannot_be_invented_by_global_module_or_text_producers() {
         "ciq-ir\n.function f receiver=instance\n.call-self %0\n.return %0\n.end",
         "ciq-ir\n.function f receiver=instance\n.call-self-discard\n.return-void\n.end",
     ] {
-        assert!(parse_ir(text).is_err(), "{text}");
+        assert!(parse_function_ir(text).is_err(), "{text}");
     }
 }
 
@@ -276,7 +276,7 @@ fn self_calls_use_receiver_lookup_and_preserve_nested_argument_order() {
         .to_ir_text()
         .replace("consume %0 %1", "consume %1 %0");
     assert!(
-        parse_ir(&text)
+        parse_function_ir(&text)
             .unwrap_err()
             .message
             .contains("evaluation order")

@@ -52,7 +52,7 @@ fn loop_nesting_and_scope_diagnostics_remain_bounded() {
                 "}".repeat(65)
             }
         );
-        assert!(ciq_compiler::compile(&format!("function f(){{{body}}}")).is_err());
+        assert!(ciq_compiler::compile_function(&format!("function f(){{{body}}}")).is_err());
     }
     let source = "function f(){var i=0; for(i=0;i<2;++i){do{continue;}while(false);} return i;}";
     let unit = compile_sources(&[source]).unwrap();
@@ -86,6 +86,6 @@ fn header_lists_check_every_declaration_and_effect_including_dead_updates() {
         .collect::<Vec<_>>()
         .join(",");
     let source = format!("function f(){{for(var {declarations};false;){{}}return 0;}}");
-    let error = ciq_compiler::compile(&source).unwrap_err();
+    let error = ciq_compiler::compile_function(&source).unwrap_err();
     assert!(error.message.contains("255-local limit"), "{error:?}");
 }

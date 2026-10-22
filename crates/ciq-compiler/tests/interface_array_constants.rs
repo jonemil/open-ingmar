@@ -1,16 +1,16 @@
 use ciq_compiler::{
     ArrayConstantValue, Function, Operation,
     api::{ApiContext, ApiLevel},
-    compile, parse_ir, parse_ir_with_api,
+    compile_function, parse_function_ir, parse_function_ir_with_api,
 };
 
 #[test]
 fn tagged_constants_preserve_vm_types_pool_text_and_saved_stages() {
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Comparable> {return [97,'a',true,1l,1.0,1.0d,\"line\\n\\\"quoted\\\"\",\"line\\n\\\"quoted\\\"\"]; }";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     let text = function.to_ir_text();
     assert!(text.contains("comparable number 0x00000061 char 0x00000061 boolean true"));
-    assert_eq!(function, parse_ir(&text).unwrap());
+    assert_eq!(function, parse_function_ir(&text).unwrap());
     let assembly = function.lower();
     assert_eq!(
         assembly,
@@ -49,8 +49,8 @@ fn tagged_constants_preserve_vm_types_pool_text_and_saved_stages() {
 #[test]
 fn constants_validate_interface_witnesses_nullability_and_api_levels() {
     let text = "ciq-ir\n.function f\n.array-constant %0 comparable number 0x00000061 char 0x00000061 float 0x80000000 double 0x7ff8000000001234\n.return %0\n.end\n";
-    let function = parse_ir(text).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = parse_function_ir(text).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     let values = function
         .operations()
         .iter()
@@ -62,9 +62,9 @@ fn constants_validate_interface_witnesses_nullability_and_api_levels() {
     assert_eq!(values[2], ArrayConstantValue::Float(0x80000000));
     assert_eq!(values[3], ArrayConstantValue::Double(0x7ff8000000001234));
     let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0)).unwrap();
-    assert!(parse_ir_with_api(text, context).is_ok());
+    assert!(parse_function_ir_with_api(text, context).is_ok());
     let low = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(4, 2, 0)).unwrap();
-    assert!(parse_ir_with_api(text, low).is_err());
+    assert!(parse_function_ir_with_api(text, low).is_err());
     for payload in [
         "number",
         "number 0x100000000",
@@ -80,17 +80,17 @@ fn constants_validate_interface_witnesses_nullability_and_api_levels() {
             "number 0x00000061 char 0x00000061 float 0x80000000 double 0x7ff8000000001234",
             payload,
         );
-        assert!(parse_ir(&edited).is_err(), "{edited}");
+        assert!(parse_function_ir(&edited).is_err(), "{edited}");
     }
     for tag in ["comparable", "comparator"] {
         let text = format!(
             "ciq-ir\n.function f\n.array-constant %0 nullable-{tag} null null\n.return %0\n.end\n"
         );
-        let function = parse_ir(&text).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-        assert!(parse_ir(&text.replace(&format!("nullable-{tag}"), tag)).is_err());
+        let function = parse_function_ir(&text).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
+        assert!(parse_function_ir(&text.replace(&format!("nullable-{tag}"), tag)).is_err());
     }
-    assert!(parse_ir(&text.replace("comparable", "comparator")).is_err());
+    assert!(parse_function_ir(&text.replace("comparable", "comparator")).is_err());
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn typed_payloads_cannot_retag_number_as_char_or_replace_computed_objects() {
         ("Number", "97", ArrayConstantValue::Char(97)),
         ("Char", "'a'", ArrayConstantValue::Number(97)),
     ] {
-        let function = compile(&format!(
+        let function = compile_function(&format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{return [{literal}];}}"
         ))
         .unwrap();

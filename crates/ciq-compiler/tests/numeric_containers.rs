@@ -3,7 +3,7 @@ use ciq_compiler::{
     ArrayElement, DictionaryKey, DictionaryType, DictionaryValue, NumericAlias,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -60,8 +60,8 @@ fn alias_array_constants_retain_scalar_tags_and_exact_bits() {
             let source = format!(
                 "function f() as Lang.Array<Lang.{name}{suffix}> {{return [{values}{null}];}}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             assert!(f.to_ir_text().contains(&format!(
                 "{}{} ",
                 if nullable { "nullable-" } else { "" },
@@ -91,7 +91,7 @@ fn alias_array_constants_retain_scalar_tags_and_exact_bits() {
             );
             let edited = f.to_ir_text().replace(&format!("{tag} "), "number ");
             assert_ne!(edited, f.to_ir_text());
-            assert!(parse_ir(&edited).is_err());
+            assert!(parse_function_ir(&edited).is_err());
         }
     }
 }
@@ -108,8 +108,8 @@ fn dictionary_alias_keys_values_and_enumerations_keep_invariant_types() {
             let source = format!(
                 "function f() as Lang.Dictionary<Lang.{name},Lang.{name}{suffix}> {{return {{{literal}=>{literal}}};}}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             assert_eq!(
                 f.return_type(),
                 ciq_compiler::ReturnType::TypedDictionary(DictionaryType {
@@ -148,8 +148,8 @@ fn dictionary_alias_keys_values_and_enumerations_keep_invariant_types() {
                     "function f(n as Lang.{name} or Null) as Lang.Dictionary<Lang.String,Lang.{name} or Null> {{var d={{\"n\"=>n}}; return d;}}"
                 ),
             ] {
-                let f = compile(&body).unwrap_or_else(|e| panic!("{body}: {e}"));
-                assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+                let f = compile_function(&body).unwrap_or_else(|e| panic!("{body}: {e}"));
+                assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             }
         }
     }
@@ -173,10 +173,12 @@ fn nullable_alias_elements_need_snapshot_proofs_and_allocations_stay_nullable() 
                 "function f(n as Lang.{name} or Null) as Lang.Dictionary<Lang.{name},Lang.{name} or Null> {{if(n!=null){{var d={{n=>n}};return d;}}return {{}};}}"
             ),
         ] {
-            let f = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             if f.to_ir_text().contains(".not-equal ") {
-                assert!(parse_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
+                assert!(
+                    parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err()
+                );
             }
         }
         for source in [
@@ -201,7 +203,7 @@ fn nullable_alias_elements_need_snapshot_proofs_and_allocations_stay_nullable() 
                 "function f() as Lang.Dictionary<Lang.{name} or Null,Lang.{name}> {{return {{}};}}"
             ),
         ] {
-            assert!(compile(&source).is_err(), "{source}");
+            assert!(compile_function(&source).is_err(), "{source}");
         }
     }
 }
@@ -220,6 +222,6 @@ fn alias_containers_reject_covariance_and_unsupported_scalar_alternatives() {
         "function f(d as Lang.Dictionary<Lang.Decimal,Lang.Decimal>) as Void {d.put(1.5,1);}",
         "function f(d as Lang.Dictionary<Lang.Numeric,Lang.Numeric>) as Void {d.put('A',1);}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }

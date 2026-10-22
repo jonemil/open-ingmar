@@ -2,7 +2,7 @@ use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
-    compile, parse_ir, parse_unit_ir,
+    compile_function, parse_function_ir, parse_unit_ir,
 };
 
 const PROGRAM: &str = include_str!("../../../examples/ir-any/program.ciqir");
@@ -45,8 +45,8 @@ fn dynamic_operands_use_shared_operations_without_accepting_known_type_errors() 
         let text = format!(
             "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
         );
-        let f = parse_ir(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = parse_function_ir(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert_eq!(
             f.lower(),
             ciq_assembly::Program::parse(&f.assembly()).unwrap()
@@ -58,7 +58,7 @@ fn dynamic_operands_use_shared_operations_without_accepting_known_type_errors() 
         "function f(n as Toybox.Lang.Number){return n.length();}",
         "function f(){var a=[1];a[0]=\"bad\";return 0;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -74,10 +74,10 @@ fn dynamic_metadata_preserves_structural_validation_and_explicit_void() {
         let text = format!(
             "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
         );
-        assert!(parse_ir(&text).is_err(), "{text}");
+        assert!(parse_function_ir(&text).is_err(), "{text}");
     }
     let text = "ciq-ir\n.function f result=void\n.null %0\n.return %0\n.end\n";
-    assert!(parse_ir(text).is_err());
+    assert!(parse_function_ir(text).is_err());
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn dynamic_boundaries_retain_known_arity_availability_and_source_contracts() {
         let text = format!(
             "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n{body}\n.end\n"
         );
-        let result = parse_ir(&text);
+        let result = parse_function_ir(&text);
         if body.starts_with(".string") {
             assert!(
                 result.is_err(),
@@ -104,7 +104,7 @@ fn dynamic_boundaries_retain_known_arity_availability_and_source_contracts() {
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     let low = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let text = "ciq-ir\n.function f parameters=1 parameter-types=any result=any\n.integer %0 42\n.parameter %1 0\n.call-native %2 %0 toChar %1\n.return %2\n.end\n";
-    assert!(ciq_compiler::parse_ir_with_api(text, low).is_err());
+    assert!(ciq_compiler::parse_function_ir_with_api(text, low).is_err());
 }
 
 #[test]
@@ -126,14 +126,14 @@ fn omitted_source_annotations_are_dynamic_and_saved_stages_preserve_them() {
         "function f(){return;}",
         "function f(b){if(b){return;}else{System.println(1);}}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
         assert_eq!(f.return_type(), ReturnType::Any, "{source}");
         assert!(
             f.parameter_types()
                 .iter()
                 .all(|ty| *ty == ParameterType::Any)
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert_eq!(
             f.lower(),
             ciq_assembly::Program::parse(&f.assembly()).unwrap()
@@ -145,7 +145,7 @@ fn omitted_source_annotations_are_dynamic_and_saved_stages_preserve_them() {
         "function f() as Void{return 42;}",
         "function f() as Toybox.Lang.Number{return null;}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let unit =
         ciq_compiler::compile_sources(&[include_str!("../../../examples/ir-any/app.mc")]).unwrap();
@@ -170,9 +170,9 @@ fn concrete_source_results_accept_dynamic_values_without_losing_saved_contracts(
         "Array<Toybox.Lang.Number>",
     ] {
         let source = format!("function f(x) as Toybox.Lang.{ty}{{return x;}}");
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         assert!(f.to_ir_text().contains("result="));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap(), "{source}");
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap(), "{source}");
     }
 }
 
@@ -184,10 +184,10 @@ fn dynamic_lengths_and_elements_preserve_checked_container_contracts() {
         "function f(x){var a=[x,7];a[0]=null;return a[0];}",
         "function f(x){var a=[x];a.add(7);return a[1];}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f(x){return [x,7];}").unwrap();
+    let f = compile_function("function f(x){return [x,7];}").unwrap();
     assert!(f.to_ir_text().contains(" any "));
     for text in [
         "ciq-ir\n.function f\n.array-constant %0 any 0x00000001\n.return %0\n.end\n",
@@ -196,7 +196,7 @@ fn dynamic_lengths_and_elements_preserve_checked_container_contracts() {
         if text.starts_with("ciq-unit") {
             assert!(parse_unit_ir(text).is_err());
         } else {
-            assert!(parse_ir(text).is_err());
+            assert!(parse_function_ir(text).is_err());
         }
     }
 }

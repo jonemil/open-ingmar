@@ -1,7 +1,7 @@
 use ciq_compiler::{
     FieldKind,
     application::{ConsoleApplication, build_console_application},
-    compile_sources, parse_ir, parse_unit_ir,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 const APP: &str = include_str!("../../../examples/compiler-reference-fields/app.mc");
@@ -155,10 +155,10 @@ fn constructor_arguments_use_declared_context_and_order_checks() {
     let bad = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.call-object %2 %1 HelloView current\n.new-source %3 ViewController WatchUi.View %2\n.return %3\n.end\n";
     // The function carries a constructor declaration obligation; unit checking
     // rejects the Number argument for the declared source reference parameter.
-    assert!(parse_ir(bad).is_ok());
+    assert!(parse_function_ir(bad).is_ok());
     let wrong_order = "ciq-ir\n.function f\n.new-source %0 HelloView WatchUi.View\n.local $0 %0\n.read %1 $0\n.call-object %2 %1 HelloView current\n.read %3 $0\n.new-source %4 ViewController WatchUi.View %3 %2\n.return %4\n.end\n";
     assert!(
-        parse_ir(wrong_order)
+        parse_function_ir(wrong_order)
             .unwrap_err()
             .message
             .contains("evaluation order")
@@ -167,6 +167,6 @@ fn constructor_arguments_use_declared_context_and_order_checks() {
         "ciq-ir\n.function f\n.new-source\n.return-void\n.end\n",
         "ciq-ir\n.function f receiver=instance\n.read-self\n.return-void\n.end\n",
     ] {
-        assert!(parse_ir(text).is_err());
+        assert!(parse_function_ir(text).is_err());
     }
 }

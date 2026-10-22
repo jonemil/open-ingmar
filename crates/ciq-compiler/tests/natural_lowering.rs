@@ -1,14 +1,14 @@
-use ciq_compiler::{compile, parse_ir};
+use ciq_compiler::{compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 
 #[test]
 fn number_complement_retains_unary_ir_and_direct_instruction_selection() {
     let source = "function f(value) { return ~value; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".complement %1 %0"));
     assert!(!text.contains(".bit-xor") && !text.contains(".integer"));
-    assert_eq!(f, parse_ir(&text).unwrap());
+    assert_eq!(f, parse_function_ir(&text).unwrap());
     assert_eq!(f.lower().encode().unwrap(), [0x35, 2, 0x12, 1, 0x2d, 0x16]);
     let operation = f
         .operations()
@@ -17,11 +17,11 @@ fn number_complement_retains_unary_ir_and_direct_instruction_selection() {
         .unwrap();
     let span = operation.span.unwrap();
     assert_eq!(&source[span.start..span.end], "~value");
-    assert!(parse_ir(&text.replace(".complement %1 %0", ".complement %1 %99")).is_err());
-    assert!(parse_ir(&text.replace(".complement %1 %0", ".complement %1 %0 %0")).is_err());
+    assert!(parse_function_ir(&text.replace(".complement %1 %0", ".complement %1 %99")).is_err());
+    assert!(parse_function_ir(&text.replace(".complement %1 %0", ".complement %1 %0 %0")).is_err());
     let invalid = text.replace("parameters=1", "parameters=1 parameter-types=boolean");
-    assert!(parse_ir(&invalid).is_err());
-    let xor = compile("function f(value) { return value ^ -1; }").unwrap();
+    assert!(parse_function_ir(&invalid).is_err());
+    let xor = compile_function("function f(value) { return value ^ -1; }").unwrap();
     assert!(xor.to_ir_text().contains(".bit-xor"));
     assert!(
         decode(&xor.lower().encode().unwrap())
@@ -29,7 +29,7 @@ fn number_complement_retains_unary_ir_and_direct_instruction_selection() {
             .iter()
             .any(|i| i.instruction.opcode() == Opcode::Xorv)
     );
-    let twice = compile("function f(value) { return ~~value; }").unwrap();
+    let twice = compile_function("function f(value) { return ~~value; }").unwrap();
     assert_eq!(
         decode(&twice.lower().encode().unwrap())
             .unwrap()
@@ -44,10 +44,10 @@ fn number_complement_retains_unary_ir_and_direct_instruction_selection() {
         "function f() { return ~null; }",
         "function f(value as Toybox.Lang.Number or Null) { return ~value; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let guarded = compile("function f(value as Toybox.Lang.Number or Null) { if (value == null) { return 0; } return ~value; }").unwrap();
-    assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
+    let guarded = compile_function("function f(value as Toybox.Lang.Number or Null) { if (value == null) { return 0; } return ~value; }").unwrap();
+    assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -58,8 +58,8 @@ fn literal_null_comparisons_select_unary_checks_in_either_operand_order() {
         ("value != null", Opcode::Isnotnull),
         ("null != value", Opcode::Isnotnull),
     ] {
-        let function = compile(&format!("function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean {{ return {expression}; }}")).unwrap();
-        let resumed = parse_ir(&function.to_ir_text()).unwrap();
+        let function = compile_function(&format!("function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean {{ return {expression}; }}")).unwrap();
+        let resumed = parse_function_ir(&function.to_ir_text()).unwrap();
         assert_eq!(function, resumed);
         let code = function.lower().encode().unwrap();
         assert_eq!(code, resumed.lower().encode().unwrap());
@@ -85,7 +85,7 @@ fn literal_null_comparisons_select_unary_checks_in_either_operand_order() {
 #[test]
 fn direct_null_checks_preserve_calls_and_nested_boolean_inversion() {
     for expression in ["\"7\".toNumber() != null", "null != \"7\".toNumber()"] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
         ))
         .unwrap();
@@ -105,7 +105,7 @@ fn direct_null_checks_preserve_calls_and_nested_boolean_inversion() {
         assert!(opcodes.ends_with(&[Opcode::Invokemz, Opcode::Isnotnull, Opcode::Return]));
         assert!(!opcodes.contains(&Opcode::Npush));
     }
-    let f = compile("function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return !(value == null); }").unwrap();
+    let f = compile_function("function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return !(value == null); }").unwrap();
     assert!(
         decode(&f.lower().encode().unwrap())
             .unwrap()
@@ -114,7 +114,7 @@ fn direct_null_checks_preserve_calls_and_nested_boolean_inversion() {
             .collect::<Vec<_>>()
             .ends_with(&[Opcode::Isnull, Opcode::Invv, Opcode::Return])
     );
-    let f = compile(
+    let f = compile_function(
         "function f(value as Toybox.Lang.Number) as Toybox.Lang.Boolean { return value == 0; }",
     )
     .unwrap();
@@ -124,7 +124,8 @@ fn direct_null_checks_preserve_calls_and_nested_boolean_inversion() {
             .iter()
             .any(|i| i.instruction.opcode() == Opcode::Eq)
     );
-    let f = compile("function f() as Toybox.Lang.Boolean { return null == null; }").unwrap();
+    let f =
+        compile_function("function f() as Toybox.Lang.Boolean { return null == null; }").unwrap();
     assert!(
         decode(&f.lower().encode().unwrap())
             .unwrap()

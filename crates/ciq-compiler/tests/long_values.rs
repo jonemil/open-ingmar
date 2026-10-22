@@ -2,7 +2,7 @@ use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -24,13 +24,13 @@ fn long_literal_bits_survive_ir_assembly_and_vm_codec() {
         ("-0xffffffffffffffffL", 1),
         ("-0x8000000000000000L", i64::MIN),
     ] {
-        let f = compile_with_api(
+        let f = compile_function_with_api(
             &format!("function f() as Toybox.Lang.Long {{ return {literal}; }}"),
             initial,
         )
         .unwrap();
         assert_eq!(f.return_type(), ReturnType::Long);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let assembly = f.lower();
         assert_eq!(
             assembly,
@@ -61,8 +61,10 @@ fn long_literal_bits_survive_ir_assembly_and_vm_codec() {
             "1l",
         ] {
             assert!(
-                parse_ir(&text.replace(&format!(".long %0 {value}"), &format!(".long %0 {bad}")))
-                    .is_err()
+                parse_function_ir(
+                    &text.replace(&format!(".long %0 {value}"), &format!(".long %0 {bad}"))
+                )
+                .is_err()
             );
         }
     }
@@ -115,6 +117,6 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) as Void { x.add(1); }",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) as Void { x.put(1, 1); }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
 }

@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
     parse_unit_ir_with_api,
 };
 
@@ -66,13 +66,13 @@ fn invariant_keys_require_api_five_and_non_null_witnesses() {
             let source = format!(
                 "function f(d as {ty},k as Toybox.Lang.{interface} or Null) {{var result={operation};}}"
             );
-            assert!(compile(&source).is_err());
+            assert!(compile_function(&source).is_err());
             let guarded = source.replace(
                 &format!("var result={operation};"),
                 &format!("if(k!=null){{var result={operation};}}"),
             );
-            let function = compile(&guarded).unwrap();
-            assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+            let function = compile_function(&guarded).unwrap();
+            assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         }
         for key in [
             "Toybox.Lang.Number",
@@ -89,8 +89,10 @@ fn invariant_keys_require_api_five_and_non_null_witnesses() {
             assert!(compile_sources(&[&source]).is_err());
         }
         assert!(
-            compile(&source.replace(&format!("{interface},"), &format!("{interface} or Null,")))
-                .is_err()
+            compile_function(
+                &source.replace(&format!("{interface},"), &format!("{interface} or Null,"))
+            )
+            .is_err()
         );
     }
 }
@@ -98,7 +100,7 @@ fn invariant_keys_require_api_five_and_non_null_witnesses() {
 #[test]
 fn interface_key_literals_use_runtime_insertion_and_reject_ambiguous_constants() {
     let source = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Comparable,Toybox.Lang.Number> {return {1=>10,2=>20};}";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     assert!(
         function
             .operations()
@@ -111,22 +113,22 @@ fn interface_key_literals_use_runtime_insertion_and_reject_ambiguous_constants()
             .iter()
             .any(|op| matches!(op.operation, Operation::DictionaryConstant { .. }))
     );
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     let mixed = source.replace("1=>10,2=>20", "97=>1,'a'=>2");
     assert!(
-        compile(&mixed)
+        compile_function(&mixed)
             .unwrap_err()
             .to_string()
             .contains("runtime insertion")
     );
     let scalar = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number> {return {1=>1};}";
-    let text = compile(scalar).unwrap().to_ir_text();
+    let text = compile_function(scalar).unwrap().to_ir_text();
     let edited = text.replace(
         "dictionary(integer=>integer)",
         "dictionary(comparable=>integer)",
     );
     assert_ne!(text, edited);
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
 }
 
 #[test]

@@ -1,10 +1,10 @@
-use ciq_compiler::{Operation, ValueId, compile};
+use ciq_compiler::{Operation, ValueId, compile_function};
 use ciq_mc::{Opcode, decode};
 
 #[test]
 fn semantic_ir_preserves_value_identity_and_source_spans() {
     let source = "// comment\nfunction probe() as Toybox.Lang.Number {\n    return 41;\n}\n";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     assert_eq!(function.name(), "probe");
     let operations = function.operations();
     assert_eq!(
@@ -33,7 +33,7 @@ fn every_supported_literal_assembles_and_returns_its_value() {
     // Interpret only the supported constant-return sequence, independently of
     // the frontend IR. This is an encoding check, not a full VM/runtime oracle.
     for expected in 0..=127 {
-        let function = compile(&format!(
+        let function = compile_function(&format!(
             "function probe() as Toybox.Lang.Number {{ return {expected}; }}"
         ))
         .unwrap();
@@ -81,7 +81,7 @@ fn unsupported_programs_are_rejected_completely() {
         "function probe() { /* unterminated",
     ] {
         assert!(
-            compile(source).is_err(),
+            compile_function(source).is_err(),
             "accepted unsupported input {source:?}"
         );
     }
@@ -89,17 +89,17 @@ fn unsupported_programs_are_rejected_completely() {
 
 #[test]
 fn comments_and_unicode_diagnostics_keep_correct_source_locations() {
-    let function = compile(
+    let function = compile_function(
         "/* café */ function /* name */ probe(// args\n) as Toybox.Lang.Number { return /* value */ 41; } // eof",
     )
     .unwrap();
     assert_eq!(function.name(), "probe");
     let source = "/* café */\nfunction probe() as Toybox.Lang.Number {\n  return 2147483648;\n}";
-    let error = compile(source).unwrap_err();
+    let error = compile_function(source).unwrap_err();
     assert_eq!((error.line, error.column), (3, 10));
     assert_eq!(&source[error.offset..error.offset + 10], "2147483648");
-    let error =
-        compile("/* é */ function probe() as Toybox.Lang.Number { return 💡; }").unwrap_err();
+    let error = compile_function("/* é */ function probe() as Toybox.Lang.Number { return 💡; }")
+        .unwrap_err();
     assert_eq!((error.line, error.column), (1, 57));
     assert!(error.message.contains("unsupported character"));
 }
@@ -116,8 +116,8 @@ fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
         "function f() as Toybox.Lang.Dictionary { return {\"one\"=>1,\"two\"=>2,}; }",
         "function f() as Toybox.Lang.Dictionary { return {\"one\"=>M.first(),\"two\"=>M.second(),}; }",
     ] {
-        let function = compile(source).unwrap();
-        let ordinary = compile(&source.replace(",]", "]").replace(",}", "}")).unwrap();
+        let function = compile_function(source).unwrap();
+        let ordinary = compile_function(&source.replace(",]", "]").replace(",}", "}")).unwrap();
         assert_eq!(
             function
                 .operations()
@@ -133,7 +133,7 @@ fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
         );
         assert_eq!(
             function,
-            ciq_compiler::parse_ir(&function.to_ir_text()).unwrap()
+            ciq_compiler::parse_function_ir(&function.to_ir_text()).unwrap()
         );
         let assembly = function.lower();
         assert_eq!(
@@ -141,8 +141,9 @@ fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
             ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
         );
     }
-    compile("function f() as Toybox.Lang.Number { return [1, /* end */ ][0]; }").unwrap();
-    compile("function f() as Toybox.Lang.Dictionary { return {\"a\" => 1, // end\n}; }").unwrap();
+    compile_function("function f() as Toybox.Lang.Number { return [1, /* end */ ][0]; }").unwrap();
+    compile_function("function f() as Toybox.Lang.Dictionary { return {\"a\" => 1, // end\n}; }")
+        .unwrap();
     for source in [
         "function f() as Toybox.Lang.Number { return [,]; }",
         "function f() as Toybox.Lang.Number { return [1,,]; }",
@@ -157,6 +158,6 @@ fn trailing_container_commas_preserve_values_effects_and_saved_stages() {
         "function f() as Toybox.Lang.Number { for(var a=0,;a<1;a++){ return a; } return 1; }",
         "function f() as Toybox.Lang.Number { for(var a=0;a<1;a++,){ return a; } return 1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
 }

@@ -158,10 +158,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
     } else if from != "assembly" {
         let function = match (from.as_str(), context) {
-            ("source", Some(context)) => ciq_compiler::compile_with_api(source, context),
-            ("source", None) => ciq_compiler::compile(source),
-            (_, Some(context)) => ciq_compiler::parse_ir_with_api(source, context),
-            (_, None) => ciq_compiler::parse_ir(source),
+            ("source", Some(context)) => ciq_compiler::compile_function_with_api(source, context),
+            ("source", None) => ciq_compiler::compile_function(source),
+            (_, Some(context)) => ciq_compiler::parse_function_ir_with_api(source, context),
+            (_, None) => ciq_compiler::parse_function_ir(source),
         }
         .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?;
         (

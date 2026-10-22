@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context(target: ApiLevel, minimum: ApiLevel) -> ApiContext {
@@ -41,14 +41,14 @@ fn number_group_preserves_complete_app_and_text_pipelines() {
         ("7.equals(null)", "equals", 0x008000b3),
         ("7.compareTo(3)", "compareTo", 0x00800e50),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Void {{ System.println({expression}); }}"
         ))
         .unwrap();
         let symbols = ciq_assembly::Program::parse(&format!(".symbol method \"{name}\" id=0x{id:08x}\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol print \"println\" id=0x00800067")).unwrap();
         let bindings = ciq_compiler::symbol_bindings(&f.lower(), &symbols).unwrap();
         assert_eq!(bindings[&format!("__ciq_native_{name}")], id);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
@@ -64,8 +64,8 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (x == null) { return 0; } return 7.compareTo(x); }",
         "function f() as Toybox.Lang.Number { return 7.compareTo(true); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Number { return 7.equals(); }",
@@ -79,7 +79,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f() as Toybox.Lang.Number { return 7.equals(7) + 1; }",
         "function f() as Toybox.Lang.Number { return true.abs(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let wrong_user_type = "module M { function number(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return M.number(true); } }";
     assert!(
@@ -89,7 +89,8 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         )
         .is_err()
     );
-    let f = compile("function f() as Toybox.Lang.Number { return 7.compareTo(3); }").unwrap();
+    let f =
+        compile_function("function f() as Toybox.Lang.Number { return 7.compareTo(3); }").unwrap();
     let mut operations = f.operations().to_vec();
     let op = operations
         .iter_mut()
@@ -110,7 +111,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
 #[test]
 fn compare_introduction_is_checked_in_source_and_saved_ir() {
     let source = "function f() as Toybox.Lang.Number { return 7.compareTo(3); }";
-    let text = compile(source).unwrap().to_ir_text();
+    let text = compile_function(source).unwrap().to_ir_text();
     for (target, minimum, expected) in [
         (
             ApiLevel(4, 9, 9),
@@ -124,19 +125,19 @@ fn compare_introduction_is_checked_in_source_and_saved_ir() {
         ),
     ] {
         let context = context(target, minimum);
-        let source_error = compile_with_api(source, context).unwrap_err();
-        let text_error = parse_ir_with_api(&text, context).unwrap_err();
+        let source_error = compile_function_with_api(source, context).unwrap_err();
+        let text_error = parse_function_ir_with_api(&text, context).unwrap_err();
         assert!(source_error.message.contains(expected));
         assert_eq!(source_error.message, text_error.message);
     }
     let context = context(ApiLevel(5, 0, 0), ApiLevel(5, 0, 0));
     assert_eq!(
-        compile_with_api(source, context).unwrap(),
-        parse_ir_with_api(&text, context).unwrap()
+        compile_function_with_api(source, context).unwrap(),
+        parse_function_ir_with_api(&text, context).unwrap()
     );
     for expression in ["7.toNumber()", "7.hashCode()", "7.equals(null)"] {
         let source = format!("function f() as Void {{ System.println({expression}); }}");
-        compile_with_api(
+        compile_function_with_api(
             &source,
             ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap(),
         )

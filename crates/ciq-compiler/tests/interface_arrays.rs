@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
     parse_unit_ir_with_api,
 };
 
@@ -67,11 +67,11 @@ fn array_contracts_are_invariant_and_reads_preserve_nullable_interfaces() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable or Null>) { if(a[0]!=null) { return a[0].compareTo(1); } else { return 0; } }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>) { return a[0].value(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable or Null>) { var value=a[0]; if(value!=null) { return value.compareTo(1); } else { return 0; } }";
-    let function = compile(source).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(source).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for interface in ["Comparable", "Comparator"] {
         for null in ["", " or Null"] {
             let ty = format!("Toybox.Lang.Array<Toybox.Lang.{interface}{null}>");
@@ -87,7 +87,7 @@ fn array_contracts_are_invariant_and_reads_preserve_nullable_interfaces() {
             assert!(parse_unit_ir_with_api(&unit.to_ir_text(), low).is_err());
             let sort = format!("function f(a as {ty}) {{ a.sort(null); }}");
             assert_eq!(
-                compile(&sort).is_ok(),
+                compile_function(&sort).is_ok(),
                 interface == "Comparable" && null.is_empty()
             );
         }
@@ -97,7 +97,7 @@ fn array_contracts_are_invariant_and_reads_preserve_nullable_interfaces() {
 #[test]
 fn interface_constants_keep_scalar_tags_and_callbacks_require_initialization() {
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Comparable> { return [1,'a',true,1l,1.0,1.0d,\"x\"]; }";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     assert!(
         function
             .operations()
@@ -107,7 +107,7 @@ fn interface_constants_keep_scalar_tags_and_callbacks_require_initialization() {
             if matches!(values[0], ciq_compiler::ArrayConstantValue::Number(1))
             && matches!(values[1], ciq_compiler::ArrayConstantValue::Char(97))))
     );
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     let target = "class Target { function initialize() {} }";
     for operation in [
         "var n=a.indexOf(c);",
@@ -148,15 +148,15 @@ fn sorting_requires_non_null_elements_and_a_valid_default_or_callback() {
                 );
                 let accepted = element_null.is_empty()
                     && (interface == "Comparable" || comparator == "Toybox.Lang.Comparator");
-                match compile(&source) {
+                match compile_function(&source) {
                     Ok(function) => {
                         assert!(accepted, "{source}");
-                        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+                        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
                         let text = function.to_ir_text();
                         if interface == "Comparator" {
                             let edited = text.replace(":comparator", ":nullable-comparator");
                             assert_ne!(text, edited);
-                            assert!(parse_ir(&edited).is_err());
+                            assert!(parse_function_ir(&edited).is_err());
                         }
                     }
                     Err(error) => assert!(!accepted, "{source}: {error}"),
@@ -165,8 +165,8 @@ fn sorting_requires_non_null_elements_and_a_valid_default_or_callback() {
         }
     }
     let guarded = "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparator>, c as Toybox.Lang.Comparator or Null) { if (c != null) { a.sort(c); } }";
-    let function = compile(guarded).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(guarded).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     let class = "class C { function initialize() {} function compare(a as Toybox.Lang.Object,b as Toybox.Lang.Object) as Toybox.Lang.Number { return 0; } }";
     for interface in ["Comparable", "Comparator"] {
         let source = format!(

@@ -1,5 +1,5 @@
 use ciq_assembly::Program;
-use ciq_compiler::{Operation, compile, parse_ir, symbol_bindings};
+use ciq_compiler::{Operation, compile_function, parse_function_ir, symbol_bindings};
 use ciq_mc::{Opcode, decode};
 use std::collections::BTreeMap;
 
@@ -58,7 +58,7 @@ fn evaluate(bytes: &[u8]) -> (i32, Vec<u32>) {
 }
 
 fn check(body: &str, expected: i32, calls: &[u32]) {
-    let ir = compile(&format!("function probe() {{ {body} }}")).unwrap();
+    let ir = compile_function(&format!("function probe() {{ {body} }}")).unwrap();
     let native = ir.lower();
     assert!(
         native.encode().is_err(),
@@ -69,7 +69,7 @@ fn check(body: &str, expected: i32, calls: &[u32]) {
         .encode_with_references(&bindings, &Default::default())
         .unwrap();
     assert_eq!(evaluate(&bytes), (expected, calls.to_vec()));
-    let resumed = parse_ir(&ir.to_ir_text()).unwrap();
+    let resumed = parse_function_ir(&ir.to_ir_text()).unwrap();
     assert_eq!(resumed, ir);
     for model in [resumed.lower(), Program::parse(&native.to_text()).unwrap()] {
         assert_eq!(model, native);
@@ -115,7 +115,7 @@ fn calls_preserve_source_order_and_local_initialization_across_pipelines() {
 #[test]
 fn call_names_spans_and_zero_argument_encoding_are_explicit() {
     let source = "function probe() { return Numbers.left(); }";
-    let ir = compile(source).unwrap();
+    let ir = compile_function(source).unwrap();
     assert!(
         matches!(&ir.operations()[0].operation, Operation::ModuleCall { module, member, .. } if module == "Numbers" && member == "left")
     );
@@ -142,14 +142,14 @@ fn incompatible_effectful_ir_orders_are_rejected_but_pure_orders_still_work() {
         ".call %0 Numbers left\n.integer %1 1\n.local $0 %1\n.return %0", // moves call across store
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
+            parse_function_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
     let text = "ciq-ir\n.function probe\n.call %0 Numbers left\n.call %1 Numbers right\n.subtract %2 %0 %1\n.return %2\n.end";
-    let ir = parse_ir(text).unwrap();
-    assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
-    assert!(parse_ir("ciq-ir\n.function probe\n.integer %0 8\n.integer %1 40\n.subtract %2 %1 %0\n.return %2\n.end").is_ok());
+    let ir = parse_function_ir(text).unwrap();
+    assert_eq!(parse_function_ir(&ir.to_ir_text()).unwrap(), ir);
+    assert!(parse_function_ir("ciq-ir\n.function probe\n.integer %0 8\n.integer %1 40\n.subtract %2 %1 %0\n.return %2\n.end").is_ok());
 }
 
 #[test]
@@ -164,11 +164,11 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
         "var Numbers = 1; return Numbers.left();",
     ] {
         assert!(
-            compile(&format!("function probe() {{ {body} }}")).is_err(),
+            compile_function(&format!("function probe() {{ {body} }}")).is_err(),
             "{body}"
         );
     }
-    let error = compile("function probe() {\n  return Numbers.left(1,);\n}").unwrap_err();
+    let error = compile_function("function probe() {\n  return Numbers.left(1,);\n}").unwrap_err();
     assert_eq!((error.line, error.column), (2, 25));
     assert!(error.message.contains("expected"));
     for call in [
@@ -177,7 +177,7 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
         ".call %0 Numbers 42",
     ] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function probe\n{call}\n.return %0\n.end"
             ))
             .is_err()
@@ -187,7 +187,7 @@ fn unsupported_call_shapes_are_rejected_with_source_diagnostics() {
 
 #[test]
 fn symbol_binding_rejects_missing_ambiguous_or_non_symbol_sources() {
-    let code = compile("function probe() { return Numbers.left(); }")
+    let code = compile_function("function probe() { return Numbers.left(); }")
         .unwrap()
         .lower();
     for source in [

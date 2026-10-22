@@ -1,7 +1,7 @@
 use ciq_compiler::{
     ArrayElement, Operation, ReturnType,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -34,16 +34,18 @@ fn inferred_literals_keep_concrete_contracts_through_both_text_boundaries() {
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Array<Toybox.Lang.Number> { if (n == null) { return [0]; } return [n, n + 1]; }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.Array<Toybox.Lang.Number> { if (s == null) { return [0]; } return [s.length(), 2]; }",
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Number));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile("function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }")
-        .unwrap();
+    let f = compile_function(
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, 2]; }",
+    )
+    .unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".array-constant %0 number"));
     assert_eq!(
-        parse_ir(&text.replace(".array-constant %0 number", ".array-constant %0 char"))
+        parse_function_ir(&text.replace(".array-constant %0 number", ".array-constant %0 char"))
             .unwrap()
             .return_type(),
         ReturnType::Array(ArrayElement::Char),
@@ -66,12 +68,12 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
         "function f() as Void { var n = \"x\".toNumber(); var a = [n]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return [1]; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Array<Toybox.Lang.Number> { if (n == null) { return [0]; } return [n]; }").unwrap();
+    let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Array<Toybox.Lang.Number> { if (n == null) { return [0]; } return [n]; }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".equal "));
-    assert!(parse_ir(&text.replace(".equal ", ".greater ")).is_err());
+    assert!(parse_function_ir(&text.replace(".equal ", ".greater ")).is_err());
 }
 
 #[test]
@@ -81,7 +83,7 @@ fn allocation_precedes_element_effects_and_append_preserves_source_order() {
     let f = parse_unit_ir(&text).unwrap();
     assert_eq!(f.to_ir_text(), text);
     let single =
-        compile("function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 2]; }")
+        compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Number> { return [n, 2]; }")
             .unwrap();
     assert!(matches!(
         single.operations()[0].operation,

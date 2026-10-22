@@ -1,7 +1,8 @@
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -29,24 +30,24 @@ module M {
         "function f() as Toybox.Lang.Method or Null { return null; }",
         "function f(m as Toybox.Lang.Method or Null) as Toybox.Lang.Method or Null { return m; }",
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert_eq!(function.return_type(), ReturnType::NullableMethod);
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
-    let f = compile(
+    let f = compile_function(
         "function f(m as Toybox.Lang.Method or Null) as Toybox.Lang.Method or Null {return m;}",
     )
     .unwrap();
     assert_eq!(f.parameter_types(), &[ParameterType::NullableMethod]);
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=nullable-method", "result=method")
         )
         .is_err()
     );
     assert!(
-        parse_ir(
+        parse_function_ir(
             &f.to_ir_text()
                 .replace("result=nullable-method", "result=nullable-symbol")
         )
@@ -65,8 +66,8 @@ fn nullable_method_members_need_fresh_storage_proofs() {
         "function f(m as Toybox.Lang.Method or Null, n as Toybox.Lang.Method) as Toybox.Lang.Method or Null {var local=m;local=n;local=null;return local;}",
         "function f(m as Toybox.Lang.Method or Null) as Toybox.Lang.Boolean {if(m!=null){return m!=null;}return m==null;}",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f(m as Toybox.Lang.Method or Null) as Void {m.invoke();}",
@@ -79,34 +80,35 @@ fn nullable_method_members_need_fresh_storage_proofs() {
         "function f(m as Toybox.Lang.Method or Null,n as Toybox.Lang.Method) as Toybox.Lang.Boolean {return m==n;}",
         "function f(m as Toybox.Lang.Method or Null) as Void {if(m){m.invoke();}}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
-    let f =
-        compile("function f(m as Toybox.Lang.Method or Null) as Void {if(m!=null){m.invoke();}}")
-            .unwrap();
+    let f = compile_function(
+        "function f(m as Toybox.Lang.Method or Null) as Void {if(m!=null){m.invoke();}}",
+    )
+    .unwrap();
     let text = f.to_ir_text();
     let edited = text.replace(".not-equal ", ".equal ");
     assert_ne!(text, edited);
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
 }
 
 #[test]
 fn nullable_method_assertions_keep_runtime_values_and_api_guards() {
     let source = "function f(m as Toybox.Lang.Object or Null) as Toybox.Lang.Method or Null {return m as Toybox.Lang.Method or Null;}";
-    let f = compile(source).unwrap();
-    let identity = compile(
+    let f = compile_function(source).unwrap();
+    let identity = compile_function(
         "function f(m as Toybox.Lang.Object or Null) as Toybox.Lang.Object or Null {return m;}",
     )
     .unwrap();
     assert_eq!(f.lower(), identity.lower());
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let initial = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 0, 0)).unwrap();
     let member =
         "function f(m as Toybox.Lang.Method or Null) {if(m!=null){return m.hashCode();}return 0;}";
-    assert!(compile_with_api(member, initial).is_ok());
+    assert!(compile_function_with_api(member, initial).is_ok());
     let weak = "function f(m as Toybox.Lang.Method or Null) as Void {if(m!=null){m.weak();}}";
     let modern = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 2, 0)).unwrap();
-    let f = compile_with_api(weak, modern).unwrap();
-    assert!(compile_with_api(weak, initial).is_err());
-    assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+    let f = compile_function_with_api(weak, modern).unwrap();
+    assert!(compile_function_with_api(weak, initial).is_err());
+    assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
 }

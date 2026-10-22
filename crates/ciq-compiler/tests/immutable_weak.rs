@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context(level: ApiLevel) -> ApiContext {
@@ -42,8 +42,8 @@ fn immutable_weak_preserves_result_types_and_complete_pipelines() {
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return n.weak(); }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.String { if (s == null) { return \"\"; } return s.weak(); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let symbols = ciq_assembly::Program::parse(
             ".symbol weak \"weak\" id=0x00800418\n.symbol upper \"toUpper\" id=0x008000bf",
         )
@@ -67,13 +67,14 @@ fn weak_contracts_reject_nullable_receivers_wrong_arity_and_consumers() {
         "function f() as Toybox.Lang.Boolean { return 1.weak(); }",
         "function f() as Toybox.Lang.Number { if (1.weak()) { return 1; } return 0; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f() as Toybox.Lang.Number { return 1.weak() + 1; }").unwrap();
+    let f =
+        compile_function("function f() as Toybox.Lang.Number { return 1.weak() + 1; }").unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".integer %0 1"));
-    assert!(parse_ir(&text.replace(".integer %0 1", ".boolean %0 true")).is_err());
-    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return n.weak(); }").unwrap();
+    assert!(parse_function_ir(&text.replace(".integer %0 1", ".boolean %0 true")).is_err());
+    let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return n.weak(); }").unwrap();
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -123,7 +124,7 @@ fn weak_declared_and_effective_results_remain_distinct_and_versioned() {
         "function f() as Toybox.Lang.String { return \"a\".weak(); }",
         "function f() as Toybox.Lang.Boolean { return true.weak(); }",
     ] {
-        let text = compile(source).unwrap().to_ir_text();
+        let text = compile_function(source).unwrap().to_ir_text();
         for (target, minimum, expected) in [
             (
                 ApiLevel(1, 1, 9),
@@ -137,17 +138,19 @@ fn weak_declared_and_effective_results_remain_distinct_and_versioned() {
             ),
         ] {
             let context = ApiContext::new(target, minimum).unwrap();
-            let error = compile_with_api(source, context).unwrap_err();
+            let error = compile_function_with_api(source, context).unwrap_err();
             assert!(error.message.contains(expected));
             assert_eq!(
                 error.message,
-                parse_ir_with_api(&text, context).unwrap_err().message
+                parse_function_ir_with_api(&text, context)
+                    .unwrap_err()
+                    .message
             );
         }
         let context = context(ApiLevel(1, 2, 0));
         assert_eq!(
-            compile_with_api(source, context).unwrap(),
-            parse_ir_with_api(&text, context).unwrap()
+            compile_function_with_api(source, context).unwrap(),
+            parse_function_ir_with_api(&text, context).unwrap()
         );
     }
 }

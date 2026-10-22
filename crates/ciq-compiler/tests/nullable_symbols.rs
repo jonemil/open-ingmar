@@ -2,7 +2,7 @@ use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -28,11 +28,11 @@ fn nullable_symbols_keep_signatures_calls_joins_and_saved_stages() {
         "function f() as Toybox.Lang.Symbol or Null {return null;}",
         "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.Symbol or Null {return s;}",
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert_eq!(function.return_type(), ReturnType::NullableSymbol);
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
-    let function = compile(
+    let function = compile_function(
         "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.Symbol or Null {return s;}",
     )
     .unwrap();
@@ -43,7 +43,7 @@ fn nullable_symbols_keep_signatures_calls_joins_and_saved_stages() {
         text.replace("result=nullable-symbol", "result=nullable-integer"),
     ] {
         assert_ne!(text, edited);
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
     let text = unit.to_ir_text();
     assert!(parse_unit_ir(&text.replace("result=nullable-symbol", "result=symbol")).is_err());
@@ -73,8 +73,8 @@ fn symbol_members_and_selectors_require_fresh_null_proofs() {
         "function f(s as Toybox.Lang.Symbol or Null) {return s!=null ? s.toNumber() : 0;}",
         "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.Boolean {return s!=null && s.equals(:alpha);}",
     ] {
-        let function = compile(source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for source in [
         "function f(s as Toybox.Lang.Symbol or Null) {return s.toNumber();}",
@@ -86,14 +86,14 @@ fn symbol_members_and_selectors_require_fresh_null_proofs() {
         "function f(s as Toybox.Lang.Symbol or Null) {var present=s!=null;if(present){return s.toNumber();}return 0;}",
         "function f(s as Toybox.Lang.Symbol or Null) {var local=:alpha;local=s;return local.toNumber();}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let source =
         "function f(s as Toybox.Lang.Symbol or Null) {if(s!=null){return s.toNumber();}return 0;}";
-    let text = compile(source).unwrap().to_ir_text();
+    let text = compile_function(source).unwrap().to_ir_text();
     let edited = text.replace(".not-equal ", ".equal ");
     assert_ne!(text, edited);
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
 }
 
 #[test]
@@ -101,30 +101,30 @@ fn nullable_storage_does_not_lower_symbol_method_api_requirements() {
     let initial = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(1, 0, 0)).unwrap();
     let identity =
         "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.Symbol or Null {return s;}";
-    assert!(compile_with_api(identity, initial).is_ok());
+    assert!(compile_function_with_api(identity, initial).is_ok());
     let name = "function f(s as Toybox.Lang.Symbol or Null) as Toybox.Lang.String {if(s!=null){return s.toString();}return \"missing\";}";
-    assert!(compile_with_api(name, initial).is_ok());
+    assert!(compile_function_with_api(name, initial).is_ok());
     let number =
         "function f(s as Toybox.Lang.Symbol or Null) {if(s!=null){return s.toNumber();}return 0;}";
-    assert!(compile_with_api(number, initial).is_err());
+    assert!(compile_function_with_api(number, initial).is_err());
     let modern = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(2, 3, 0)).unwrap();
-    assert!(compile_with_api(number, modern).is_ok());
+    assert!(compile_function_with_api(number, modern).is_ok());
 }
 
 #[test]
 fn nullable_symbol_assertions_preserve_bits_and_require_a_guard_for_use() {
     let source = "function f(s as Toybox.Lang.Object or Null) as Toybox.Lang.Symbol or Null {return s as Toybox.Lang.Symbol or Null;}";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     let text = function.to_ir_text();
     assert!(text.contains(" nullable-symbol"));
-    assert_eq!(function, parse_ir(&text).unwrap());
-    let identity = compile(
+    assert_eq!(function, parse_function_ir(&text).unwrap());
+    let identity = compile_function(
         "function f(s as Toybox.Lang.Object or Null) as Toybox.Lang.Object or Null {return s;}",
     )
     .unwrap();
     assert_eq!(function.lower(), identity.lower());
     let guarded = "function f(s as Toybox.Lang.Object or Null) {var value=s as Toybox.Lang.Symbol or Null;if(value!=null){return value.toNumber();}return 0;}";
-    assert!(compile(guarded).is_ok());
+    assert!(compile_function(guarded).is_ok());
     let unsafe_use = "function f(s as Toybox.Lang.Object or Null) {var value=s as Toybox.Lang.Symbol or Null;return value.toNumber();}";
-    assert!(compile(unsafe_use).is_err());
+    assert!(compile_function(unsafe_use).is_err());
 }

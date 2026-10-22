@@ -2,8 +2,8 @@ use ciq_assembly::Program;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, compile_with_api, parse_ir,
-    parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, compile_sources_with_api,
+    parse_function_ir, parse_function_ir_with_api, parse_unit_ir,
 };
 
 fn context() -> ApiContext {
@@ -61,8 +61,8 @@ fn custom_sort_accepts_all_supported_non_null_reference_elements() {
         let native = format!(
             "function f(a as Lang.Array<{element}>, c as Lang.Comparator) as Void {{a.sort(c);}}"
         );
-        let f = compile_with_api(&native, context()).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function_with_api(&native, context()).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let broken = ORDER.replace("a as Lang.Object", "a as Lang.Number");
         assert!(compile_sources(&[&source, &broken]).is_err());
         if element != "Lang.Object" && element != "Lang.Comparable" {
@@ -70,7 +70,7 @@ fn custom_sort_accepts_all_supported_non_null_reference_elements() {
                 let source = format!(
                     "function f(a as Lang.Array<{element}>, c as Lang.Comparator or Null) as Void {{a.sort({comparator});}}"
                 );
-                assert!(compile(&source).is_err(), "{source}");
+                assert!(compile_function(&source).is_err(), "{source}");
             }
         }
     }
@@ -79,13 +79,13 @@ fn custom_sort_accepts_all_supported_non_null_reference_elements() {
 #[test]
 fn dynamic_object_ordering_keeps_api_checks_and_runtime_domains() {
     let source = "function f(a as Lang.Array<Lang.Object>) as Void {a.sort(null);}";
-    let f = compile_with_api(source, context()).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function_with_api(source, context()).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let old = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(4, 2, 0)).unwrap();
-    assert!(compile_with_api(source, old).is_err());
-    assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+    assert!(compile_function_with_api(source, old).is_err());
+    assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
     // Statically erased element domains cannot promise runtime comparability.
-    assert!(compile("function f() as Void {var a = [\"1\", 1]; a.sort(null);}").is_err());
+    assert!(compile_function("function f() as Void {var a = [\"1\", 1]; a.sort(null);}").is_err());
     let unit = compile_sources(&["module M {function values() as Lang.Array<Lang.Object> {return [\"1\",1];} function f() as Void {M.values().sort(null);}}"]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     for element in [
@@ -103,14 +103,16 @@ fn dynamic_object_ordering_keeps_api_checks_and_runtime_domains() {
             let source = format!(
                 "function f(a as Lang.Array<Lang.{element} or Null>, c as Lang.Comparator) as Void {{a.sort({argument});}}"
             );
-            assert!(compile(&source).is_err(), "{source}");
+            assert!(compile_function(&source).is_err(), "{source}");
         }
     }
     let source =
         "function f(a as Lang.Array<Lang.ByteArray>,c as Lang.Comparator) as Void {a.sort(c);}";
-    let text = compile(source).unwrap().to_ir_text();
-    assert!(parse_ir(&text.replace(":comparator", ":nullable-comparator")).is_err());
-    assert!(parse_ir(&text.replace("byte-array-array", "nullable-byte-array-array")).is_err());
+    let text = compile_function(source).unwrap().to_ir_text();
+    assert!(parse_function_ir(&text.replace(":comparator", ":nullable-comparator")).is_err());
+    assert!(
+        parse_function_ir(&text.replace("byte-array-array", "nullable-byte-array-array")).is_err()
+    );
 }
 
 #[test]

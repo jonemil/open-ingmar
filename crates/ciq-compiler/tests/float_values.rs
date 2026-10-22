@@ -2,7 +2,8 @@ use ciq_compiler::{
     Operation, ReturnType, ValueId,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -36,9 +37,9 @@ fn floating_bits_survive_every_text_and_codec_boundary() {
                 "ciq-ir\n.function f\n.{tag} %0 0x{bits:0digits$x}\n.return %0\n.end\n",
                 digits = width * 2
             );
-            let f = parse_ir(&text).unwrap();
+            let f = parse_function_ir(&text).unwrap();
             assert_eq!(f.return_type(), return_type);
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             let asm = f.lower();
             assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
             let encoded = asm.encode().unwrap();
@@ -73,7 +74,7 @@ fn floating_bits_survive_every_text_and_codec_boundary() {
                 "0x00000000000000000",
             ] {
                 assert!(
-                    parse_ir(
+                    parse_function_ir(
                         &text.replace(&format!("0x{bits:0digits$x}", digits = width * 2), bad)
                     )
                     .is_err(),
@@ -123,7 +124,7 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         ("1.25d", "Double", ".double %0 0x3ff4000000000000"),
         ("-0.0d", "Double", ".double %0 0x8000000000000000"),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.{ty} {{ return {literal}; }}"
         ))
         .unwrap();
@@ -141,11 +142,11 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         ("+1.25", "Float"),
         ("-(1.25d)", "Double"),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.{ty} {{ return {expression}; }}"
         ))
         .unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Double { return 1.25D; }",
@@ -172,7 +173,7 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         "function f() as Void { var xs = [1.25, 1]; }",
         "function f() as Void { var xs = {1 => 1.25, 2 => 1.25d}; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
 }
 
@@ -222,11 +223,11 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
             "equals(null)",
             "compareTo(1)",
         ] {
-            let f = compile(&format!(
+            let f = compile_function(&format!(
                 "function f() as Void {{ System.println({literal}.{method}); }}"
             ))
             .unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for expression in [
             format!(
@@ -240,8 +241,8 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
                 "function f() as Toybox.Lang.{ty} or Null {{ return true ? {literal} : null; }}"
             ),
         ] {
-            let f = compile(&expression).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&expression).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
         for body in [
             "return x.abs();",
@@ -251,7 +252,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
             "while (x == null) { break; } return x;",
         ] {
             assert!(
-                compile(&format!(
+                compile_function(&format!(
                     "function f(x as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} {{ {} }}",
                     body.replace("ZERO", literal)
                 ))
@@ -260,7 +261,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
         }
         for method in ["abs(1)", "format(1)", "toNumber(1)", "compareTo(null)"] {
             assert!(
-                compile(&format!(
+                compile_function(&format!(
                     "function f() as Void {{ System.println({literal}.{method}); }}"
                 ))
                 .is_err()
@@ -291,14 +292,14 @@ fn api_boundaries_apply_to_source_and_saved_text() {
     ] {
         let source = format!("function f() as Void {{ System.println({expression}); }}");
         let context = ApiContext::new(level, level).unwrap();
-        let f = compile_with_api(&source, context).unwrap();
+        let f = compile_function_with_api(&source, context).unwrap();
         if let Some(before) = before {
             for c in [
                 ApiContext::new(before, before).unwrap(),
                 ApiContext::new(level, before).unwrap(),
             ] {
-                assert!(compile_with_api(&source, c).is_err());
-                assert!(parse_ir_with_api(&f.to_ir_text(), c).is_err());
+                assert!(compile_function_with_api(&source, c).is_err());
+                assert!(parse_function_ir_with_api(&f.to_ir_text(), c).is_err());
             }
         }
     }
@@ -308,11 +309,11 @@ fn api_boundaries_apply_to_source_and_saved_text() {
     ] {
         let source =
             format!("function f() as Toybox.Lang.{ty} or Null {{ return \"1.25\".to{ty}(); }}");
-        let f = compile_with_api(&source, ApiContext::new(level, level).unwrap()).unwrap();
+        let f = compile_function_with_api(&source, ApiContext::new(level, level).unwrap()).unwrap();
         if let Some(before) = before {
             let c = ApiContext::new(before, before).unwrap();
-            assert!(compile_with_api(&source, c).is_err());
-            assert!(parse_ir_with_api(&f.to_ir_text(), c).is_err());
+            assert!(compile_function_with_api(&source, c).is_err());
+            assert!(parse_function_ir_with_api(&f.to_ir_text(), c).is_err());
         }
     }
 }

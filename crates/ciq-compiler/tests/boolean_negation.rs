@@ -2,7 +2,7 @@ use ciq_compiler::{
     Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -39,20 +39,20 @@ fn boolean_negation_preserves_complete_pipelines_and_precedence() {
         "!(1 > 2)",
         "!b == false",
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Boolean {{ return {expression}; }}"
         ))
         .unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let f = compile(
+    let f = compile_function(
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Boolean { return !b.equals(false); }",
     )
     .unwrap();
     let ir = f.to_ir_text();
     assert!(ir.find(".call-native").unwrap() < ir.find(".not").unwrap());
     assert_eq!(f.lower().to_text().matches("getsv").count(), 1);
-    let f = compile("function f() as Toybox.Lang.Boolean { return !true; }").unwrap();
+    let f = compile_function("function f() as Toybox.Lang.Boolean { return !true; }").unwrap();
     assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x3e, 0x2d, 0x16]);
 }
 
@@ -68,7 +68,7 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
         "1 !== 2",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
             ))
             .is_err(),
@@ -76,7 +76,7 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
         );
     }
     let source = "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Boolean { return !b; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let op = f
         .operations()
         .iter()
@@ -99,15 +99,15 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
         .is_err()
     );
     assert_eq!(
-        parse_ir(&f.to_ir_text().replace(".parameter %0 0", ".integer %0 1"))
+        parse_function_ir(&f.to_ir_text().replace(".parameter %0 0", ".integer %0 1"))
             .unwrap()
             .return_type(),
         ReturnType::Integer
     );
-    assert!(parse_ir(&f.to_ir_text().replace(".not %1 %0", ".not %1 %99")).is_err());
-    let guarded = compile("function f(n as Toybox.Lang.Number or Null) { if (!(n == null)) { return n + 1; } return 0; }").unwrap();
-    assert_eq!(guarded, parse_ir(&guarded.to_ir_text()).unwrap());
-    let f = compile("function f() as Toybox.Lang.Boolean { System.println(!true.equals(false)); return true.equals(true); }").unwrap();
+    assert!(parse_function_ir(&f.to_ir_text().replace(".not %1 %0", ".not %1 %99")).is_err());
+    let guarded = compile_function("function f(n as Toybox.Lang.Number or Null) { if (!(n == null)) { return n + 1; } return 0; }").unwrap();
+    assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Boolean { System.println(!true.equals(false)); return true.equals(true); }").unwrap();
     let mut operations = f.operations().to_vec();
     let negation = operations
         .iter()
@@ -137,9 +137,9 @@ fn logical_negation_rechecks_types_dependencies_spans_and_null_proofs() {
             "!".repeat(n)
         )
     };
-    compile(&nested(64)).unwrap();
+    compile_function(&nested(64)).unwrap();
     assert!(
-        compile(&nested(65))
+        compile_function(&nested(65))
             .unwrap_err()
             .message
             .contains("nesting")

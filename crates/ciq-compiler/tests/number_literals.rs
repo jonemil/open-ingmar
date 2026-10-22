@@ -1,7 +1,7 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources_with_api, parse_function_ir, parse_unit_ir_with_api,
 };
 
 #[test]
@@ -24,11 +24,11 @@ fn signed_number_literals_choose_exact_smallest_immediate_encodings() {
         (i32::MIN, vec![0x25, 0x80, 0, 0, 0]),
     ] {
         let source = format!("function f() as Toybox.Lang.Number {{ return {value}; }}");
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         assert!(
             matches!(f.operations()[0].operation, ciq_compiler::Operation::Integer { value: actual, .. } if actual == value)
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let encoded = f.lower().encode().unwrap();
         assert_eq!(&encoded[2..encoded.len() - 1], bytes);
         let decoded = ciq_mc::decode(&bytes).unwrap();
@@ -44,11 +44,11 @@ fn signed_number_literals_choose_exact_smallest_immediate_encodings() {
         "function f() as Toybox.Lang.Number { return - /* sign */ 128; }",
         "function f() as Toybox.Lang.Number { return 1 - -2; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let source = "function f() as Toybox.Lang.Number { return -2147483648; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let span = f.operations()[0].span.unwrap();
     assert_eq!(&source[span.start..span.end], "-2147483648");
 }
@@ -104,14 +104,14 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         "1l",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Number {{ return {value}; }}"
             ))
             .is_err(),
             "{value}"
         );
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f\n.integer %0 {value}\n.return %0\n.end\n"
             ))
             .is_err(),
@@ -124,10 +124,10 @@ fn number_literal_bounds_and_unary_scope_are_enforced_in_source_and_ir() {
         "function f() as Toybox.Lang.Number { return -1.abs(); }",
         "function f() as Toybox.Lang.Number { return 1--2; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    compile("function f() as Toybox.Lang.Number { return (-1).abs(); }").unwrap();
-    assert!(parse_ir("ciq-ir\n.function f\n.integer %0 -\n.return %0\n.end\n").is_err());
+    compile_function("function f() as Toybox.Lang.Number { return (-1).abs(); }").unwrap();
+    assert!(parse_function_ir("ciq-ir\n.function f\n.integer %0 -\n.return %0\n.end\n").is_err());
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
         ("-037777777777", 1),
         ("-0x80000000", i32::MIN),
     ] {
-        let function = compile(&format!(
+        let function = compile_function(&format!(
             "function f() as Toybox.Lang.Number{{return {literal};}}"
         ))
         .unwrap();
@@ -153,10 +153,10 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
             matches!(function.operations()[0].operation,ciq_compiler::Operation::Integer{value:actual,..} if actual==value),
             "{literal}"
         );
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         assert_eq!(
             function.lower().encode().unwrap(),
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Number{{return {value};}}"
             ))
             .unwrap()
@@ -178,7 +178,7 @@ fn radix_numbers_use_width_sized_bits_and_wrapping_literal_negation() {
         "1_000",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Number{{return {literal};}}"
             ))
             .is_err(),

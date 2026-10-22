@@ -1,7 +1,7 @@
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
-    compile, compile_with_api, parse_ir, parse_ir_with_api,
+    compile_function, compile_function_with_api, parse_function_ir, parse_function_ir_with_api,
 };
 
 #[test]
@@ -18,9 +18,12 @@ fn integer_bitwise_pairs_promote_through_native_and_saved_ir() {
             let source = format!(
                 "function f(left as Toybox.Lang.{left}, right as Toybox.Lang.{right}) as Toybox.Lang.Long {{ return left {operator} right; }}"
             );
-            let f = compile_with_api(&source, initial).unwrap();
+            let f = compile_function_with_api(&source, initial).unwrap();
             assert_eq!(f.return_type(), ReturnType::Long);
-            assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+            assert_eq!(
+                f,
+                parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+            );
             let assembly = f.lower();
             assert!(assembly.to_text().contains(opcode));
             assert_eq!(
@@ -28,7 +31,7 @@ fn integer_bitwise_pairs_promote_through_native_and_saved_ir() {
                 ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
             );
             assert!(
-                compile(&source.replace(
+                compile_function(&source.replace(
                     "as Toybox.Lang.Long { return",
                     "as Toybox.Lang.Number { return"
                 ))
@@ -44,11 +47,11 @@ fn long_inversion_and_statement_updates_keep_their_type() {
         let source = format!(
             "function f(value as Toybox.Lang.Long) as Toybox.Lang.Long {{ return {operator}value; }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         assert!(f.lower().to_text().contains("invv"));
         assert!(
-            compile(&source.replace(
+            compile_function(&source.replace(
                 "as Toybox.Lang.Long { return",
                 "as Toybox.Lang.Boolean { return"
             ))
@@ -69,14 +72,14 @@ fn long_inversion_and_statement_updates_keep_their_type() {
         let source = format!(
             "function f() as Toybox.Lang.Long {{ var value = 4294967297l; {update}; return value; }}"
         );
-        let f = compile(&source).unwrap();
+        let f = compile_function(&source).unwrap();
         let text = f.to_ir_text();
-        assert_eq!(f, parse_ir(&text).unwrap());
+        assert_eq!(f, parse_function_ir(&text).unwrap());
         // A changed local initializer must not disguise a width-changing write.
         if update.contains("1l") {
             let edited = text.replace(".long %0 4294967297", ".integer %0 1");
             assert_ne!(text, edited);
-            assert!(parse_ir(&edited).is_err());
+            assert!(parse_function_ir(&edited).is_err());
         }
     }
 }
@@ -95,12 +98,12 @@ fn bitwise_profiles_reject_invalid_counts_truthiness_and_update_expressions() {
         "function f() as Toybox.Lang.Long { var value = 1l; var copy = value--; return copy; }",
         "function f() as Toybox.Lang.Long { return ~null; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let source = "function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Long { if (value == null) { return 0l; } return 1l << value; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     let text = f.to_ir_text();
-    assert_eq!(f, parse_ir(&text).unwrap());
-    assert!(parse_ir(&text.replace(".equal", ".not-equal")).is_err());
-    assert!(compile(&source.replace("if (value == null) { return 0l; }", "")).is_err());
+    assert_eq!(f, parse_function_ir(&text).unwrap());
+    assert!(parse_function_ir(&text.replace(".equal", ".not-equal")).is_err());
+    assert!(compile_function(&source.replace("if (value == null) { return 0l; }", "")).is_err());
 }

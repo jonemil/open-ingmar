@@ -1,4 +1,4 @@
-use ciq_compiler::{compile, parse_ir};
+use ciq_compiler::{compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 
 fn result(bytes: &[u8]) -> i32 {
@@ -34,11 +34,11 @@ fn result(bytes: &[u8]) -> i32 {
 }
 
 fn check(expression: &str, expected: i32) {
-    let ir = compile(&format!("function probe() {{ return {expression}; }}")).unwrap();
+    let ir = compile_function(&format!("function probe() {{ return {expression}; }}")).unwrap();
     let model = ir.lower();
     let bytes = model.encode().unwrap();
     assert_eq!(result(&bytes), expected, "{expression}");
-    let resumed = parse_ir(&ir.to_ir_text()).unwrap();
+    let resumed = parse_function_ir(&ir.to_ir_text()).unwrap();
     assert_eq!(ir, resumed);
     assert_eq!(bytes, resumed.lower().encode().unwrap());
     let text_model = ciq_assembly::Program::parse(&model.to_text()).unwrap();
@@ -60,7 +60,7 @@ fn grouped_arithmetic_and_left_associativity_match_in_all_pipelines() {
     ] {
         check(expression, expected);
     }
-    let model = compile("function probe() { return 40 + (8 - 5); }")
+    let model = compile_function("function probe() { return 40 + (8 - 5); }")
         .unwrap()
         .lower();
     assert_eq!(
@@ -82,10 +82,10 @@ fn representative_operand_pairs_check_zero_negative_and_large_results() {
 #[test]
 fn backend_follows_dependencies_instead_of_ir_definition_order() {
     let text = "ciq-ir\n.function probe\n.integer %10 8\n.integer %20 5\n.integer %30 40\n.subtract %40 %10 %20\n.add %50 %30 %40\n.return %50\n.end\n";
-    let ir = parse_ir(text).unwrap();
+    let ir = parse_function_ir(text).unwrap();
     assert_eq!(result(&ir.lower().encode().unwrap()), 43);
     assert_eq!(ir.lower().encode().unwrap()[3], 40);
-    assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
+    assert_eq!(parse_function_ir(&ir.to_ir_text()).unwrap(), ir);
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn invalid_expression_graphs_are_rejected_before_codegen() {
         ".integer %0 41\n.subtract %1 %0\n.return %1", // missing operand
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
+            parse_function_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
@@ -119,18 +119,18 @@ fn malformed_source_expressions_keep_precise_diagnostics() {
         "40 + value",
     ] {
         assert!(
-            compile(&format!("function probe() {{ return {expression}; }}")).is_err(),
+            compile_function(&format!("function probe() {{ return {expression}; }}")).is_err(),
             "{expression}"
         );
     }
-    let error = compile("function probe() {\n    return 40 + );\n}").unwrap_err();
+    let error = compile_function("function probe() {\n    return 40 + );\n}").unwrap_err();
     assert_eq!((error.line, error.column), (2, 17));
 }
 
 #[test]
 fn nesting_and_operation_limits_are_enforced() {
     check(&format!("{}1{}", "(".repeat(64), ")".repeat(64)), 1);
-    let error = compile(&format!(
+    let error = compile_function(&format!(
         "function probe() {{ return {}1{}; }}",
         "(".repeat(65),
         ")".repeat(65)
@@ -138,7 +138,7 @@ fn nesting_and_operation_limits_are_enforced() {
     .unwrap_err();
     assert!(error.message.contains("nesting"));
     check(&vec!["1"; 512].join(" + "), 512);
-    let error = compile(&format!(
+    let error = compile_function(&format!(
         "function probe() {{ return {}; }}",
         vec!["1"; 513].join(" + ")
     ))

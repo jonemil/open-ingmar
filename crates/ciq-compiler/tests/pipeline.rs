@@ -1,11 +1,13 @@
-use ciq_compiler::{Function, LocatedOperation, Operation, Span, ValueId, compile, parse_ir};
+use ciq_compiler::{
+    Function, LocatedOperation, Operation, Span, ValueId, compile_function, parse_function_ir,
+};
 
 #[test]
 fn all_literal_pipelines_preserve_ir_labels_and_bytes() {
     for literal in 0..=127 {
         let source = format!("function probe() {{ return {literal}; }}");
-        let ir = compile(&source).unwrap();
-        let reloaded_ir = parse_ir(&ir.to_ir_text()).unwrap();
+        let ir = compile_function(&source).unwrap();
+        let reloaded_ir = parse_function_ir(&ir.to_ir_text()).unwrap();
         assert_eq!(ir, reloaded_ir);
         let model = ir.lower();
         let reloaded_model = ciq_assembly::Program::parse(&model.to_text()).unwrap();
@@ -22,11 +24,11 @@ fn all_literal_pipelines_preserve_ir_labels_and_bytes() {
 #[test]
 fn edited_ir_uses_explicit_value_ids_and_optional_source_metadata() {
     let text = "ciq-ir\n.function probe\n.integer %17 42\n.return %17\n.end\n";
-    let ir = parse_ir(text).unwrap();
+    let ir = parse_function_ir(text).unwrap();
     assert_eq!(ir.operations()[0].span, None);
     assert_eq!(ir.lower().encode().unwrap(), [0x35, 1, 0x38, 42, 0x16]);
-    assert_eq!(parse_ir(&ir.to_ir_text()).unwrap(), ir);
-    let error = parse_ir(&text.replace(".return %17", ".return %18")).unwrap_err();
+    assert_eq!(parse_function_ir(&ir.to_ir_text()).unwrap(), ir);
+    let error = parse_function_ir(&text.replace(".return %17", ".return %18")).unwrap_err();
     assert_eq!(error.line, 4);
     assert!(error.message.contains("defined value"));
 }
@@ -71,7 +73,7 @@ fn text_and_constructed_ir_share_semantic_validation() {
         "ciq-ir\n.function probe\n.integer %0 41\n.return %0\n.end\n.return %0",
         "ciq-ir\n.function probe\n.integer %4294967296 41\n.return %0\n.end",
     ] {
-        assert!(parse_ir(text).is_err(), "{text}");
+        assert!(parse_function_ir(text).is_err(), "{text}");
     }
     assert!(Function::new("invalid.name".into(), vec![integer(41), returned(0)]).is_err());
 }
@@ -80,7 +82,7 @@ fn text_and_constructed_ir_share_semantic_validation() {
 fn numbered_headers_are_rejected() {
     let function = "\n.function f\n.integer %0 41\n.return %0\n.end\n";
     for number in 0..=5 {
-        assert!(parse_ir(&format!("ciq-ir {number}{function}")).is_err());
+        assert!(parse_function_ir(&format!("ciq-ir {number}{function}")).is_err());
         assert!(
             ciq_compiler::parse_unit_ir(&format!(
                 "ciq-unit {number}\n.owner global\nciq-ir{function}"

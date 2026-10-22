@@ -1,5 +1,5 @@
 use ciq_assembly::{Item, Program};
-use ciq_compiler::{ArrayElement, Operation, array_bindings, compile, parse_ir};
+use ciq_compiler::{ArrayElement, Operation, array_bindings, compile_function, parse_function_ir};
 use ciq_prg::data::Source;
 use std::collections::BTreeMap;
 
@@ -9,13 +9,13 @@ fn scalar_literals_remain_typed_through_ir_assembly_and_explicit_data_binding() 
         ("0, 2147483647, -2147483648", "number"),
         ("'a', 'Ω'", "char"),
     ] {
-        let f = compile(&format!(
+        let f = compile_function(&format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.{}> {{ return [{elements}]; }}",
             if ty == "number" { "Number" } else { "Char" }
         ))
         .unwrap();
         assert!(f.to_ir_text().contains(&format!(".array-constant %0 {ty}")));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let assembly = f.lower();
         assert_eq!(assembly, Program::parse(&assembly.to_text()).unwrap());
         assert!(
@@ -60,7 +60,7 @@ fn scalar_literals_remain_typed_through_ir_assembly_and_explicit_data_binding() 
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1 + 2]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [(true || false).hashCode()]; }",
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert!(!f.to_ir_text().contains(".array-constant"));
         assert!(f.to_ir_text().contains(".array-begin"));
     }
@@ -69,7 +69,7 @@ fn scalar_literals_remain_typed_through_ir_assembly_and_explicit_data_binding() 
 #[test]
 fn constant_array_ir_rejects_bad_elements_and_checks_api_and_use_contracts() {
     let text = "ciq-ir\n.function f\n.array-constant %0 number 0x00000001\n.return %0\n.end\n";
-    let f = parse_ir(text).unwrap();
+    let f = parse_function_ir(text).unwrap();
     assert!(matches!(
         f.operations()[0].operation,
         Operation::ArrayConstant {
@@ -88,18 +88,20 @@ fn constant_array_ir_rejects_bad_elements_and_checks_api_and_use_contracts() {
         ".array-constant %0 number %1",
     ] {
         assert!(
-            parse_ir(&text.replace(".array-constant %0 number 0x00000001", bad)).is_err(),
+            parse_function_ir(&text.replace(".array-constant %0 number 0x00000001", bad)).is_err(),
             "accepted {bad}"
         );
     }
-    assert!(parse_ir(&text.replace(".return %0", ".return %1")).is_err());
+    assert!(parse_function_ir(&text.replace(".return %0", ".return %1")).is_err());
     let old = ciq_compiler::api::ApiContext::new(
         ciq_compiler::api::ApiLevel(1, 0, 0),
         ciq_compiler::api::ApiLevel(1, 0, 0),
     )
     .unwrap();
-    assert!(ciq_compiler::parse_ir_with_api(text, old).is_ok());
-    assert!(ciq_compiler::parse_ir_with_api(&text.replace("number", "char"), old).is_err());
+    assert!(ciq_compiler::parse_function_ir_with_api(text, old).is_ok());
+    assert!(
+        ciq_compiler::parse_function_ir_with_api(&text.replace("number", "char"), old).is_err()
+    );
 }
 
 #[test]

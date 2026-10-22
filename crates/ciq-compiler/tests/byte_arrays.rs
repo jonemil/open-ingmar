@@ -2,7 +2,8 @@ use ciq_compiler::{
     Operation, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -31,14 +32,14 @@ fn complete_byte_array_program_preserves_native_text_and_application_boundaries(
 #[test]
 fn byte_array_allocation_uses_newba_and_keeps_nonnull_storage_identity() {
     let source = "function f(n as Toybox.Lang.Number) as Toybox.Lang.ByteArray { return new[n]b; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(f.return_type(), ReturnType::ByteArray);
     assert!(
         f.operations()
             .iter()
             .any(|op| matches!(op.operation, Operation::ByteArrayAllocate { .. }))
     );
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert_eq!(f.lower().encode().unwrap(), [0x35, 2, 0x12, 1, 0x36, 0x16]);
     for source in [
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.ByteArray { return flag ? new[1]b : new[2]b; }",
@@ -47,8 +48,8 @@ fn byte_array_allocation_uses_newba_and_keeps_nonnull_storage_identity() {
         "function f() as Toybox.Lang.Number { var a = new[1]b; var shared = a; a = new[2]b; shared[0] = 'A'; return shared[0]; }",
         "function f() as Toybox.Lang.ByteArray { return new[-1]b; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         f.lower().encode().unwrap();
     }
 }
@@ -76,14 +77,14 @@ fn invalid_byte_lengths_writes_methods_and_storage_forms_are_rejected() {
         "function f() as Toybox.Lang.Number { return [1, 2]b; }",
         "function f() as Toybox.Lang.Number { var a = new[0]b; return true ? a : null; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     // Byte bounds remain runtime checks, even for literals known at compile time.
     for source in [
         "function f() as Toybox.Lang.Number { var a = new[1]b; a[0] = 256; return a[0]; }",
         "function f() as Toybox.Lang.Number { var a = new[0]b; a.add(-129); return a.size(); }",
     ] {
-        assert!(compile(source).is_ok());
+        assert!(compile_function(source).is_ok());
     }
 }
 
@@ -92,12 +93,12 @@ fn source_and_saved_ir_recheck_byte_array_api_and_length_operands() {
     let source = "function f(n as Toybox.Lang.Number) as Toybox.Lang.ByteArray { return new[n]b; }";
     let current = ApiContext::new(ApiLevel(3, 0, 0), ApiLevel(3, 0, 0)).unwrap();
     let old = ApiContext::new(ApiLevel(2, 4, 0), ApiLevel(2, 4, 0)).unwrap();
-    let f = compile_with_api(source, current).unwrap();
+    let f = compile_function_with_api(source, current).unwrap();
     let text = f.to_ir_text();
-    assert_eq!(f, parse_ir_with_api(&text, current).unwrap());
-    assert!(compile_with_api(source, old).is_err());
-    assert!(parse_ir_with_api(&text, old).is_err());
-    let text = compile("function f() as Toybox.Lang.ByteArray { return new[2]b; }")
+    assert_eq!(f, parse_function_ir_with_api(&text, current).unwrap());
+    assert!(compile_function_with_api(source, old).is_err());
+    assert!(parse_function_ir_with_api(&text, old).is_err());
+    let text = compile_function("function f() as Toybox.Lang.ByteArray { return new[2]b; }")
         .unwrap()
         .to_ir_text();
     for bad in [
@@ -106,9 +107,9 @@ fn source_and_saved_ir_recheck_byte_array_api_and_length_operands() {
         text.replace(".byte-array-new %1 %0", ".byte-array-new %1 %0 %0"),
     ] {
         assert_ne!(bad, text);
-        assert!(parse_ir(&bad).is_err());
+        assert!(parse_function_ir(&bad).is_err());
     }
-    let text = compile(
+    let text = compile_function(
         "function f(b as Toybox.Lang.ByteArray) as Toybox.Lang.Number { b[0] = 7; return b[0]; }",
     )
     .unwrap()
@@ -127,5 +128,5 @@ fn source_and_saved_ir_recheck_byte_array_api_and_length_operands() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_ne!(bad, text);
-    assert!(parse_ir(&bad).is_err());
+    assert!(parse_function_ir(&bad).is_err());
 }

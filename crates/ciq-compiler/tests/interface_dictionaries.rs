@@ -1,7 +1,7 @@
 use ciq_compiler::{
     DictionaryScalar, Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
     parse_unit_ir_with_api,
 };
 
@@ -68,12 +68,12 @@ fn dictionaries_preserve_invariance_missing_key_null_and_api_requirements() {
                     "compare(1,2)"
                 };
                 let unsafe_read = format!("function f(d as {ty}) {{ return {lookup}.{member}; }}");
-                assert!(compile(&unsafe_read).is_err());
+                assert!(compile_function(&unsafe_read).is_err());
                 let guarded = format!(
                     "function f(d as {ty}) {{ var v={lookup}; if(v!=null) {{return v.{member};}} else {{return 0;}} }}"
                 );
-                let function = compile(&guarded).unwrap();
-                assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+                let function = compile_function(&guarded).unwrap();
+                assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
             }
             for other in [
                 "Toybox.Lang.Number",
@@ -94,27 +94,27 @@ fn dictionaries_preserve_invariance_missing_key_null_and_api_requirements() {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{interface},Toybox.Lang.Number>) {{return d.size();}}"
         );
-        let function = compile(&source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(&source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
 }
 
 #[test]
 fn interface_constants_retain_scalar_tags_and_nullable_value_contracts() {
     let source = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Comparable> { return {\"number\"=>97,\"char\"=>'a',\"boolean\"=>true,\"long\"=>1l,\"float\"=>1.0,\"double\"=>1.0d,\"string\"=>\"a\"}; }";
-    let function = compile(source).unwrap();
+    let function = compile_function(source).unwrap();
     assert!(function.operations().iter().any(|op| matches!(&op.operation,
         Operation::DictionaryConstant {entries,..} if matches!(entries[0].1,DictionaryScalar::Number(97)) && matches!(entries[1].1,DictionaryScalar::Char(97)))));
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     for interface in ["Comparable", "Comparator"] {
         let nullable = format!(
             "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.{interface} or Null> {{ return {{\"a\"=>null}}; }}"
         );
-        let function = compile(&nullable).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
-        assert!(compile(&nullable.replace(" or Null", "")).is_err());
+        let function = compile_function(&nullable).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
+        assert!(compile_function(&nullable.replace(" or Null", "")).is_err());
     }
-    assert!(compile(&source.replace("Comparable", "Comparator")).is_err());
+    assert!(compile_function(&source.replace("Comparable", "Comparator")).is_err());
 }
 
 #[test]

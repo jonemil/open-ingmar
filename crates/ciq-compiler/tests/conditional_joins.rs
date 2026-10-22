@@ -1,14 +1,14 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
-    parse_ir, parse_ir_with_api,
+    parse_function_ir, parse_function_ir_with_api,
 };
 
 const JOIN: &str = "ciq-ir\n.function f\n.block ^0\n.boolean %0 true\n.branch %0 ^1 ^2\n.block ^1\n.integer %1 11\n.jump-value ^3 %1\n.block ^2\n.integer %2 22\n.jump-value ^3 %2\n.block ^3\n.block-value %3 integer\n.return %3\n.end\n";
 
 #[test]
 fn typed_edges_roundtrip_and_lower_without_placeholder_or_frame_storage() {
-    let f = parse_ir(JOIN).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = parse_function_ir(JOIN).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let p = f.lower();
     assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     let text = p.to_text();
@@ -33,11 +33,11 @@ fn typed_edges_roundtrip_and_lower_without_placeholder_or_frame_storage() {
                 ),
             )
             .replace("%3 integer", &format!("%3 {tag}"));
-        let f = parse_ir(&input).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = parse_function_ir(&input).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         if tag == "char" {
             let old = ApiContext::new(ApiLevel(1, 2, 9), ApiLevel(1, 0, 0)).unwrap();
-            assert!(parse_ir_with_api(&input, old).is_err());
+            assert!(parse_function_ir_with_api(&input, old).is_err());
         }
     }
     let nullable = JOIN
@@ -45,8 +45,8 @@ fn typed_edges_roundtrip_and_lower_without_placeholder_or_frame_storage() {
         .replace(".integer %2 22", ".null %2")
         .replace("%3 integer", "%3 nullable-integer");
     assert_eq!(
-        parse_ir(&nullable).unwrap(),
-        parse_ir(&parse_ir(&nullable).unwrap().to_ir_text()).unwrap()
+        parse_function_ir(&nullable).unwrap(),
+        parse_function_ir(&parse_function_ir(&nullable).unwrap().to_ir_text()).unwrap()
     );
 }
 
@@ -70,15 +70,15 @@ fn malformed_edge_shapes_types_uses_and_stack_order_are_rejected() {
         JOIN.replace(".return %3", ".println %3\n.integer %4 1\n.return %4"),
         JOIN.replace(".return %3", ".call %4 M f %3\n.return %4"),
     ] {
-        assert!(parse_ir(&bad).is_err(), "accepted {bad}");
+        assert!(parse_function_ir(&bad).is_err(), "accepted {bad}");
     }
     let good = JOIN.replace(".return %3", ".integer %4 1\n.add %5 %3 %4\n.return %5");
-    parse_ir(&good).unwrap().lower().encode().unwrap();
+    parse_function_ir(&good).unwrap().lower().encode().unwrap();
 }
 
 #[test]
 fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
-    use ciq_compiler::{compile, compile_sources, parse_unit_ir};
+    use ciq_compiler::{compile_function, compile_sources, parse_unit_ir};
     for source in [
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return b ? 1 : 2; }",
         "function f() as Toybox.Lang.Char { return true ? 'a' : 'b'; }",
@@ -91,8 +91,8 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
         "function f() as Toybox.Lang.Boolean { return !(true ? false : true); }",
         "function f() as Toybox.Lang.Number { var a = [true ? 1 : 2, false ? 3 : 4]; return a[0]; }",
     ] {
-        let f = compile(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let p = f.lower();
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     }
@@ -109,7 +109,7 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
         "function f() as Toybox.Lang.Number { return true ? 1 :; }",
         "function f() as Toybox.Lang.Number { var n = \"x\".toNumber(); return n == null ? n + 1 : 0; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let unit = compile_sources(&[include_str!(
         "../../../examples/compiler-conditionals/app.mc"
@@ -132,23 +132,23 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
 
 #[test]
 fn conditional_depth_and_frame_boundaries_remain_enforced() {
-    use ciq_compiler::compile;
+    use ciq_compiler::compile_function;
     let parameters = (0..253)
         .map(|i| format!("p{i}"))
         .chain(std::iter::once("b as Toybox.Lang.Boolean".into()))
         .collect::<Vec<_>>()
         .join(",");
-    let f = compile(&format!(
+    let f = compile_function(&format!(
         "function f({parameters}) as Toybox.Lang.Number {{ return b ? 1 : 2; }}"
     ))
     .unwrap();
     assert!(!f.lower().to_text().contains("argcincsp"));
-    compile(&format!(
+    compile_function(&format!(
         "function f({parameters}) as Toybox.Lang.Number {{ System.println(true && false); return 1; }}"
     ))
     .unwrap();
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function f({parameters}) as Toybox.Lang.Number {{ return 1 + (b ? 1 : 2); }}"
         ))
         .is_err()
@@ -156,7 +156,7 @@ fn conditional_depth_and_frame_boundaries_remain_enforced() {
     for (depth, ok) in [(64, true), (65, false)] {
         let expression = format!("{}1{}", "true ? ".repeat(depth), " : 2".repeat(depth));
         assert_eq!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.Number {{ return {expression}; }}"
             ))
             .is_ok(),
@@ -167,7 +167,7 @@ fn conditional_depth_and_frame_boundaries_remain_enforced() {
 
 #[test]
 fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir() {
-    use ciq_compiler::{ReturnType, compile};
+    use ciq_compiler::{ReturnType, compile_function};
     for (source, expected) in [
         (
             "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n != null ? n : 0; }",
@@ -206,13 +206,13 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
             ReturnType::Integer,
         ),
     ] {
-        let f = compile(source).unwrap_or_else(|error| panic!("{source}: {error:?}"));
+        let f = compile_function(source).unwrap_or_else(|error| panic!("{source}: {error:?}"));
         assert_eq!(f.return_type(), expected);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let p = f.lower();
         assert_eq!(p, ciq_assembly::Program::parse(&p.to_text()).unwrap());
     }
-    let f = compile("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n != null ? n : 0; }")
+    let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n != null ? n : 0; }")
         .unwrap();
     let text = f.to_ir_text();
     assert!(
@@ -227,12 +227,12 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
                     "Toybox.Lang.Number"
                 )))
     );
-    assert!(parse_ir(&text.replace(".not-equal", ".equal")).is_err());
+    assert!(parse_function_ir(&text.replace(".not-equal", ".equal")).is_err());
 }
 
 #[test]
 fn inference_keeps_unproven_or_invalidated_nullable_arms_nullable() {
-    use ciq_compiler::compile;
+    use ciq_compiler::compile_function;
     for source in [
         "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return b ? n : 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n == null ? n : 0; }",
@@ -242,6 +242,6 @@ fn inference_keeps_unproven_or_invalidated_nullable_arms_nullable() {
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"7\".toNumber(); while (b) { n = null; } return b ? n : 0; }",
         "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var a = [b ? n : 0]; return a[0]; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
 }

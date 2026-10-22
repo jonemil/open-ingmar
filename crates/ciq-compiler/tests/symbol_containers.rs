@@ -1,7 +1,8 @@
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir, symbol_bindings,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
+    symbol_bindings,
 };
 
 #[test]
@@ -16,11 +17,11 @@ fn symbol_literals_use_runtime_construction_and_explicit_name_binding() {
             ".dictionary-begin",
         ),
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         let text = function.to_ir_text();
         assert!(text.contains(builder));
         assert!(!text.contains("-constant"));
-        assert_eq!(function, parse_ir(&text).unwrap());
+        assert_eq!(function, parse_function_ir(&text).unwrap());
         let assembly = function.lower();
         assert_eq!(
             assembly,
@@ -49,7 +50,7 @@ fn symbol_literals_use_runtime_construction_and_explicit_name_binding() {
             .unwrap();
         let id = line.split_whitespace().nth(1).unwrap();
         let edited = text.replace(line, &format!(".integer {id} 1"));
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
 }
 
@@ -64,29 +65,29 @@ fn container_signatures_keep_symbol_nullability_and_api_levels() {
         "Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Symbol or Null>",
     ] {
         let source = format!("function f(value as {ty}) as {ty} {{return value;}}");
-        let function = compile_with_api(&source, initial).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function_with_api(&source, initial).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for (method, element) in [("keys", "Symbol"), ("values", "Symbol or Null")] {
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Symbol,Toybox.Lang.Symbol or Null>) as Toybox.Lang.Array<Toybox.Lang.{element}> {{return d.{method}();}}"
         );
-        let function = compile(&source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(&source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Array<Toybox.Lang.Symbol or Null> {return [null];}",
         "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Symbol or Null> {return {\"a\"=>null};}",
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert!(function.operations().iter().any(|op| matches!(
             op.operation,
             Operation::ArrayConstant { .. } | Operation::DictionaryConstant { .. }
         )));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     let inferred = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Symbol,Toybox.Lang.Symbol> {var d={:alpha=>:beta};return d;}";
-    assert!(compile(inferred).is_ok());
+    assert!(compile_function(inferred).is_ok());
 }
 
 #[test]
@@ -103,12 +104,12 @@ fn fresh_guards_protect_symbol_key_arguments_and_indexed_snapshots() {
         let source = format!(
             "function f(d as {dictionary},k as Toybox.Lang.Symbol or Null) {{{operation}}}"
         );
-        assert!(compile(&source).is_err(), "{source}");
+        assert!(compile_function(&source).is_err(), "{source}");
         let guarded = format!(
             "function f(d as {dictionary},k as Toybox.Lang.Symbol or Null) {{if(k!=null){{{operation}}}}}"
         );
-        let function = compile(&guarded).unwrap_or_else(|e| panic!("{guarded}: {e}"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(&guarded).unwrap_or_else(|e| panic!("{guarded}: {e}"));
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
     for (receiver, read) in [
         ("Toybox.Lang.Array<Toybox.Lang.Symbol or Null>", "value[0]"),
@@ -117,12 +118,12 @@ fn fresh_guards_protect_symbol_key_arguments_and_indexed_snapshots() {
         let source = format!(
             "function f(value as {receiver}) as Toybox.Lang.String {{var item={read};if(item!=null){{return item.toString();}}return \"missing\";}}"
         );
-        let function = compile(&source).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function = compile_function(&source).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         let stale = format!(
             "function f(value as {receiver}) as Toybox.Lang.String {{if({read}!=null){{return {read}.toString();}}return \"missing\";}}"
         );
-        assert!(compile(&stale).is_err());
+        assert!(compile_function(&stale).is_err());
     }
 }
 
@@ -138,7 +139,7 @@ fn symbol_containers_do_not_widen_or_invent_scalar_payloads() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Symbol,Toybox.Lang.Symbol>){d.put(1,:alpha);}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Symbol or Null,Toybox.Lang.Number>){return d.size();}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for operation in [
         ".array-constant %0 symbol 0x00000001",
@@ -146,7 +147,7 @@ fn symbol_containers_do_not_widen_or_invent_scalar_payloads() {
         ".dictionary-constant %0 dictionary(symbol=>integer) number 0x00000001 number 0x00000002",
     ] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f\n{operation}\n.return %0\n.end\n"
             ))
             .is_err()

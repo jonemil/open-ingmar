@@ -1,13 +1,14 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
 fn symbols_bind_by_name_without_becoming_numbers_or_strings() {
-    let f = compile("function f() as Toybox.Lang.Symbol { return :alpha; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Symbol { return :alpha; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let asm = f.lower();
     assert!(asm.to_text().contains("spush @__ciq_symbol_alpha"));
     let symbols = ciq_assembly::Program::parse(".symbol alpha \"alpha\" id=0x01020304").unwrap();
@@ -48,8 +49,11 @@ fn symbol_contracts_keep_api_boundaries_user_calls_joins_and_native_methods() {
         "function f() as Toybox.Lang.Symbol { var s=:alpha; s=:beta; return s; }",
         "function f() as Toybox.Lang.Object { return :alpha; }",
     ] {
-        let f = compile_with_api(source, initial).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), initial).unwrap());
+        let f = compile_function_with_api(source, initial).unwrap();
+        assert_eq!(
+            f,
+            parse_function_ir_with_api(&f.to_ir_text(), initial).unwrap()
+        );
     }
     for (source, since) in [
         (
@@ -62,13 +66,14 @@ fn symbol_contracts_keep_api_boundaries_user_calls_joins_and_native_methods() {
         ),
     ] {
         let api = ApiContext::new(since, since).unwrap();
-        let f = compile_with_api(source, api).unwrap();
-        assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), api).unwrap());
-        assert!(compile_with_api(source, initial).is_err());
-        assert!(parse_ir_with_api(&f.to_ir_text(), initial).is_err());
+        let f = compile_function_with_api(source, api).unwrap();
+        assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), api).unwrap());
+        assert!(compile_function_with_api(source, initial).is_err());
+        assert!(parse_function_ir_with_api(&f.to_ir_text(), initial).is_err());
     }
-    let f = compile("function f(s as Toybox.Lang.Symbol) { return s.weak().toNumber(); }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f(s as Toybox.Lang.Symbol) { return s.weak().toNumber(); }")
+        .unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -84,7 +89,7 @@ fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
         ":alpha.method(:toNumber, :size)",
     ] {
         assert!(
-            compile(&format!("function f() {{ return {expression}; }}")).is_err(),
+            compile_function(&format!("function f() {{ return {expression}; }}")).is_err(),
             "accepted {expression}"
         );
     }
@@ -93,20 +98,20 @@ fn symbols_reject_numeric_operators_containers_and_invalid_method_binding() {
         "function f() { return :123; }",
         "function f() { var s=:alpha; s=1; s.toUpper(); return 0; }",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     for name in ["123", "a.b", "a/b", "\"\"", "unknown-name"] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f result=symbol\n.symbol %0 {name}\n.return %0\n.end\n"
             ))
             .is_err()
         );
     }
-    let text = compile("function f() as Toybox.Lang.Symbol { return :alpha; }")
+    let text = compile_function("function f() as Toybox.Lang.Symbol { return :alpha; }")
         .unwrap()
         .to_ir_text();
-    assert!(parse_ir(&text.replace("result=symbol", "result=long")).is_err());
+    assert!(parse_function_ir(&text.replace("result=symbol", "result=long")).is_err());
 }
 
 #[test]

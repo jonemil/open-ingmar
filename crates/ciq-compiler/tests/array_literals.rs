@@ -3,8 +3,8 @@ use ciq_compiler::{
     Function, LocatedOperation, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context() -> ApiContext {
@@ -36,9 +36,9 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
     let source = "function f(c as Toybox.Lang.Char) as Toybox.Lang.Array<Toybox.Lang.Char> { return [c, 'b']; }";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let ops = f.operations();
     let allocation = ops
         .iter()
@@ -62,8 +62,8 @@ fn array_literals_preserve_complete_pipelines_and_allocate_before_elements() {
             .count(),
         1
     );
-    let f = compile("function f() as Toybox.Lang.Char { return [(true || false).hashCode().toChar(), 'a'][0]; }").unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function("function f() as Toybox.Lang.Char { return [(true || false).hashCode().toChar(), 'a'][0]; }").unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -72,22 +72,22 @@ fn array_literals_enforce_element_api_and_resource_limits() {
         let source = format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Char> {{ return [{elements}]; }}"
         );
-        assert!(compile(&source).is_err(), "{source}");
+        assert!(compile_function(&source).is_err(), "{source}");
     }
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return ['a']; }";
-    let f = compile_with_api(source, context()).unwrap();
+    let f = compile_function_with_api(source, context()).unwrap();
     let old = ApiContext::new(ApiLevel(1, 2, 0), ApiLevel(1, 2, 0)).unwrap();
-    assert!(compile_with_api(source, old).is_err());
-    assert!(parse_ir_with_api(&f.to_ir_text(), old).is_err());
+    assert!(compile_function_with_api(source, old).is_err());
+    assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
     let list = |count| {
         format!(
             "function f() as Toybox.Lang.Array<Toybox.Lang.Char> {{ return [{}]; }}",
             vec!["'a' + 0"; count].join(",")
         )
     };
-    compile(&list(100)).unwrap();
+    compile_function(&list(100)).unwrap();
     assert!(
-        compile(&list(1020))
+        compile_function(&list(1020))
             .unwrap_err()
             .message
             .contains("1024-operation")
@@ -97,20 +97,25 @@ fn array_literals_enforce_element_api_and_resource_limits() {
         "[".repeat(65),
         "]".repeat(65)
     );
-    assert!(compile(&nested).unwrap_err().message.contains("nesting"));
+    assert!(
+        compile_function(&nested)
+            .unwrap_err()
+            .message
+            .contains("nesting")
+    );
 }
 
 #[test]
 fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements() {
     let text = "ciq-ir\n.function f\n.array-new %0 char\n.return %0\n.end\n";
-    let f = parse_ir(text).unwrap();
+    let f = parse_function_ir(text).unwrap();
     assert_eq!(f.return_type(), ReturnType::Array(ArrayElement::Char));
     assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     for bad in [".array-new %0 char 1", ".array-new char"] {
-        assert!(parse_ir(&text.replace(".array-new %0 char", bad)).is_err());
+        assert!(parse_function_ir(&text.replace(".array-new %0 char", bad)).is_err());
     }
-    let numbers = parse_ir(&text.replace("char", "number")).unwrap();
+    let numbers = parse_function_ir(&text.replace("char", "number")).unwrap();
     assert_eq!(
         numbers.return_type(),
         ReturnType::Array(ArrayElement::Number)
@@ -124,7 +129,8 @@ fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements
 #[test]
 fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
     let f =
-        compile("function f(n as Toybox.Lang.Number) as Void { n.abs(); var a = ['a']; }").unwrap();
+        compile_function("function f(n as Toybox.Lang.Number) as Void { n.abs(); var a = ['a']; }")
+            .unwrap();
     let mut ops: Vec<LocatedOperation> = f.operations().to_vec();
     let allocation = ops
         .iter()

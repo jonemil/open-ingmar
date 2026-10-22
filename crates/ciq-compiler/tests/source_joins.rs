@@ -1,4 +1,4 @@
-use ciq_compiler::{JoinType, Operation, compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{JoinType, Operation, compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASSES: &str = "class Token { function initialize() {} function value() { return 41; } } class Other { function initialize() {} function value() { return 9; } }";
 
@@ -97,6 +97,6 @@ fn saved_join_edges_cannot_forge_class_or_non_null_contracts() {
     let unknown = "ciq-ir\n.function f result=nullable-object\n.block ^0\n.null %0\n.jump-value ^1 %0\n.block ^1\n.block-value %1 nullable-source(Missing@Lang.Object)\n.return %1\n.end\n";
     // A standalone function retains unit obligations; a Null edge is compatible
     // with a nullable declaration, but the enclosing unit must resolve its class.
-    parse_ir(unknown).unwrap();
+    parse_function_ir(unknown).unwrap();
     assert!(parse_unit_ir(&format!("ciq-unit\n.owner global\n{unknown}")).is_err());
 }

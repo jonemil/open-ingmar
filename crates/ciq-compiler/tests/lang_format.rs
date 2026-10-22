@@ -2,7 +2,8 @@ use ciq_assembly::Program;
 use ciq_compiler::{
     api::{self, ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_unit_ir,
 };
 
 #[test]
@@ -33,7 +34,7 @@ fn module_values_preserve_complete_saved_stages_and_explicit_bindings() {
             .contains("getmv @__ciq_sdk_Lang @__ciq_native_format\nfrpush")
     );
 
-    let f = compile(
+    let f = compile_function(
         "function f(a as Lang.Array<Lang.Number>) as Lang.String {return Lang.format(\"$1$\", a);}",
     )
     .unwrap();
@@ -81,12 +82,15 @@ fn format_accepts_erased_arrays_without_mutable_covariance() {
         "function f() as Lang.String {var s = Lang.format(\"$1$\", [true,1l,2.5,3.5d]);return s.toUpper();}",
         "function f() as Void {Lang.format(\"$1$\", [1]);}",
     ] {
-        let f = compile_with_api(source, context).unwrap_or_else(|e| panic!("{source}: {e:?}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function_with_api(source, context)
+            .unwrap_or_else(|e| panic!("{source}: {e:?}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     assert!(
-        compile("function f(a as Lang.Array<Lang.Number>) as Lang.Array<Lang.Object> {return a;}")
-            .is_err()
+        compile_function(
+            "function f(a as Lang.Array<Lang.Number>) as Lang.Array<Lang.Object> {return a;}"
+        )
+        .is_err()
     );
 }
 
@@ -107,18 +111,21 @@ fn native_module_calls_recheck_contracts_and_saved_ir_edits() {
         "return WatchUi.requestUpdate();",
     ] {
         assert!(
-            compile(&format!("function f() as Lang.String {{{body}}}")).is_err(),
+            compile_function(&format!("function f() as Lang.String {{{body}}}")).is_err(),
             "{body}"
         );
     }
     assert!(
-        compile("function f(a as Lang.Object) as Lang.String {return Lang.format(\"$1$\", a);}")
-            .is_err()
+        compile_function(
+            "function f(a as Lang.Object) as Lang.String {return Lang.format(\"$1$\", a);}"
+        )
+        .is_err()
     );
     assert!(
-        compile("function f() as Toybox.Lang.Number {return Lang.format(\"x\", []);}").is_err()
+        compile_function("function f() as Toybox.Lang.Number {return Lang.format(\"x\", []);}")
+            .is_err()
     );
-    let text = compile("function f() as Lang.String {return Lang.format(\"$1$\", [1]);}")
+    let text = compile_function("function f() as Lang.String {return Lang.format(\"$1$\", [1]);}")
         .unwrap()
         .to_ir_text();
     for edited in [
@@ -128,7 +135,7 @@ fn native_module_calls_recheck_contracts_and_saved_ir_edits() {
         text.replace(".call-native-module ", ".call-native-module-discard "),
         text.replace("Toybox.Lang format", "Toybox.Lang format %999"),
     ] {
-        assert!(parse_ir(&edited).is_err(), "{edited}");
+        assert!(parse_function_ir(&edited).is_err(), "{edited}");
     }
     for invalid in [
         ".call-native-module",
@@ -146,9 +153,9 @@ fn native_module_calls_recheck_contracts_and_saved_ir_edits() {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
-    let text = compile(
+    let text = compile_function(
         "function f(a as Lang.Array<Lang.Number>) as Lang.String {return Lang.format(\"$1$\", a);}",
     )
     .unwrap()
@@ -163,7 +170,7 @@ fn native_module_calls_recheck_contracts_and_saved_ir_edits() {
         .position(|line| line.starts_with(".parameter "))
         .unwrap();
     lines.swap(string, array);
-    let error = parse_ir(&lines.join("\n")).unwrap_err();
+    let error = parse_function_ir(&lines.join("\n")).unwrap_err();
     assert!(error.message.contains("evaluation order"), "{error}");
 }
 

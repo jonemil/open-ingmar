@@ -1,6 +1,7 @@
 use ciq_assembly::Program;
 use ciq_compiler::{
-    CompilationUnit, FunctionDeclaration, compile, compile_sources, parse_unit_ir, symbol_bindings,
+    CompilationUnit, FunctionDeclaration, compile_function, compile_sources, parse_unit_ir,
+    symbol_bindings,
 };
 use std::{fs, process::Command};
 
@@ -115,7 +116,10 @@ fn source_unit_checks_callees_arity_types_and_file_locations() {
         (1, 3, 12)
     );
     // Single-function compilation retains its intentionally external callee mode.
-    assert!(compile("function f() as Toybox.Lang.Number { return Missing.external(); }").is_ok());
+    assert!(
+        compile_function("function f() as Toybox.Lang.Number { return Missing.external(); }")
+            .is_ok()
+    );
 }
 
 #[test]
@@ -137,7 +141,7 @@ fn duplicate_and_conflicting_declarations_fail_for_source_typed_and_text_units()
     }
     let declaration = FunctionDeclaration {
         module: Some("A".into()),
-        function: compile("function f() as Toybox.Lang.Number { return 1; }").unwrap(),
+        function: compile_function("function f() as Toybox.Lang.Number { return 1; }").unwrap(),
     };
     let duplicate =
         CompilationUnit::new(vec![declaration.clone(), declaration.clone()]).unwrap_err();
@@ -196,7 +200,8 @@ fn reopened_modules_and_recursive_calls_share_collected_signatures() {
             .message
             .contains("unresolved")
     );
-    let caller = compile("function f() as Toybox.Lang.Number { return A.second(); }").unwrap();
+    let caller =
+        compile_function("function f() as Toybox.Lang.Number { return A.second(); }").unwrap();
     let error = CompilationUnit::new(vec![
         FunctionDeclaration {
             module: None,
@@ -433,7 +438,7 @@ fn global_calls_keep_owner_identity_signatures_and_saved_stages() {
         "ciq-ir\n.function f\n.call-global-discard\n.return-void\n.end\n",
         "ciq-ir\n.function f\n.call-global %0 bad-name\n.return %0\n.end\n",
     ] {
-        assert!(ciq_compiler::parse_ir(text).is_err(), "{text}");
+        assert!(ciq_compiler::parse_function_ir(text).is_err(), "{text}");
     }
 }
 

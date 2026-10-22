@@ -2,7 +2,7 @@ use ciq_compiler::{
     ClassBase,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir,
+    compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
 };
 
 const APP: &str = include_str!("../../../examples/compiler-root-objects/app.mc");
@@ -109,7 +109,7 @@ fn constructor_identity_scope_and_view_specific_contracts_stay_checked() {
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
-    assert!(parse_ir("ciq-ir\n.function initialize receiver=instance\n.base-initialize Lang.Object\n.return-void\n.end\n").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function initialize receiver=instance\n.base-initialize Lang.Object\n.return-void\n.end\n").is_err());
     let unit = compile_sources(&[APP, OBJECTS]).unwrap();
     let text = unit.to_ir_text();
     let collision = text.replace(".field-number count 1", ".field-number Object 1");
@@ -188,14 +188,14 @@ fn root_reference_contracts_reject_erasure_wrong_classes_and_early_exposure() {
         let text = format!(
             "ciq-ir\n.function f parameters=1 parameter-types={tag} result={tag}\n.parameter %0 0\n.return %0\n.end\n"
         );
-        assert!(parse_ir(&text).is_err(), "{tag}");
+        assert!(parse_function_ir(&text).is_err(), "{tag}");
     }
 }
 
 #[test]
 fn single_function_source_cannot_guess_an_unresolved_class_base() {
     let source = "function f(c as C) as C { return c; }";
-    let error = ciq_compiler::compile(source).unwrap_err();
+    let error = ciq_compiler::compile_function(source).unwrap_err();
     assert!(error.to_string().contains("compilation-unit declarations"));
 }
 

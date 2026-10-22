@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
-    compile, compile_sources, compile_with_api, parse_ir, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -12,15 +12,15 @@ fn method_arrays_preserve_signatures_construction_and_saved_stages() {
             let source = format!(
                 "function f(a as Toybox.Lang.Array<{ty}>,flag as Toybox.Lang.Boolean) as Toybox.Lang.Array<{ty}> {{{body}}}"
             );
-            let f = compile_with_api(&source, initial).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function_with_api(&source, initial).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
     }
     for source in [
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Method> {return [m,m];}",
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Method or Null> {return [m,null];}",
     ] {
-        let f = compile(source).unwrap();
+        let f = compile_function(source).unwrap();
         assert!(
             f.operations()
                 .iter()
@@ -31,7 +31,7 @@ fn method_arrays_preserve_signatures_construction_and_saved_stages() {
                 .iter()
                 .any(|op| matches!(op.operation, Operation::ArrayConstant { .. }))
         );
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let asm = f.lower();
         assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
     }
@@ -56,8 +56,8 @@ fn nullable_indexed_methods_require_local_snapshots() {
         "var b=a.reverse();var c=b.slice(0,b.size());var saved=c[0];if(null!=saved){saved.invoke();}",
     ] {
         let source = format!("function f(a as {ty},m as Toybox.Lang.Method) as Void {{{body}}}");
-        let f = compile(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for body in [
         "a[0].invoke();",
@@ -65,13 +65,13 @@ fn nullable_indexed_methods_require_local_snapshots() {
         "var saved=a[0];if(saved!=null){saved=null;saved.invoke();}",
     ] {
         let source = format!("function f(a as {ty}) as Void {{{body}}}");
-        assert!(compile(&source).is_err(), "accepted {source}");
+        assert!(compile_function(&source).is_err(), "accepted {source}");
     }
     let source = format!(
         "function f(a as {ty}) as Void {{var saved=a[0];if(saved!=null){{saved.invoke();}}}}"
     );
-    let text = compile(&source).unwrap().to_ir_text();
-    assert!(parse_ir(&text.replace(".not-equal ", ".equal ")).is_err());
+    let text = compile_function(&source).unwrap().to_ir_text();
+    assert!(parse_function_ir(&text.replace(".not-equal ", ".equal ")).is_err());
 }
 
 #[test]
@@ -84,22 +84,22 @@ fn method_array_invariance_and_payload_validation_survive_ir_reload() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Method>,b as Toybox.Lang.Array<Toybox.Lang.Method or Null>) as Void {a.addAll(b);}",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Method>) as Void {a.sort(null);}",
     ] {
-        assert!(compile(source).is_err(), "accepted {source}");
+        assert!(compile_function(source).is_err(), "accepted {source}");
     }
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Method or Null> {return [null];}";
-    let f = compile(source).unwrap();
+    let f = compile_function(source).unwrap();
     assert!(
         f.operations()
             .iter()
             .any(|op| matches!(op.operation, Operation::ArrayConstant { .. }))
     );
     let text = f.to_ir_text();
-    assert_eq!(f, parse_ir(&text).unwrap());
+    assert_eq!(f, parse_function_ir(&text).unwrap());
     for edited in [
         text.replace("nullable-method null", "method null"),
         text.replace("nullable-method null", "nullable-method 0x00000001"),
     ] {
         assert_ne!(text, edited);
-        assert!(parse_ir(&edited).is_err());
+        assert!(parse_function_ir(&edited).is_err());
     }
 }

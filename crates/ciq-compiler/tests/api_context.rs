@@ -1,7 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel, core},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir_with_api, parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context(target: &str, minimum: &str) -> ApiContext {
@@ -39,20 +40,20 @@ fn availability_errors_precede_argument_validation_in_source_and_ir() {
         ("1.3.0", "1.3.0", "argument count"),
     ] {
         let context = context(target, minimum);
-        let source_error = compile_with_api(source, context).unwrap_err();
-        let ir_error = parse_ir_with_api(text, context).unwrap_err();
+        let source_error = compile_function_with_api(source, context).unwrap_err();
+        let ir_error = parse_function_ir_with_api(text, context).unwrap_err();
         assert!(source_error.message.contains(expected), "{source_error}");
         assert_eq!(source_error.message, ir_error.message);
         assert!(source_error.offset > 0);
         assert_eq!(ir_error.line, 5);
     }
     assert!(
-        compile(source)
+        compile_function(source)
             .unwrap_err()
             .message
             .contains("argument count")
     );
-    let unknown = compile_with_api(
+    let unknown = compile_function_with_api(
         "function show(n as Toybox.Lang.Number) as Void { System.println(n.missing()); }",
         context("1.0.0", "1.0.0"),
     )
@@ -115,7 +116,7 @@ fn explicit_context_preserves_native_text_and_complete_application_paths() {
         build_console_application(&unit, &options).unwrap(),
         build_console_application(&resumed, &options).unwrap()
     );
-    let function = compile_with_api(
+    let function = compile_function_with_api(
         "function show(n as Toybox.Lang.Number) as Void { System.println(n.format(\"%02d\")); }",
         context,
     )
@@ -123,7 +124,7 @@ fn explicit_context_preserves_native_text_and_complete_application_paths() {
     function.validate_api(context).unwrap();
     assert_eq!(
         function,
-        parse_ir_with_api(&function.to_ir_text(), context).unwrap()
+        parse_function_ir_with_api(&function.to_ir_text(), context).unwrap()
     );
     let lifecycle = compile_sources_with_api(
         &[

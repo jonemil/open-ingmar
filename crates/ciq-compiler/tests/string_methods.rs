@@ -1,8 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources_with_api, compile_with_api, parse_ir, parse_ir_with_api,
-    parse_unit_ir_with_api,
+    compile_function, compile_function_with_api, compile_sources_with_api, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir_with_api,
 };
 
 fn context(level: ApiLevel) -> ApiContext {
@@ -45,11 +45,11 @@ fn string_group_preserves_complete_app_and_symbolic_pipelines() {
             0x008004c3,
         ),
     ] {
-        let f = compile(&format!("function f() {{ {body} }}")).unwrap();
+        let f = compile_function(&format!("function f() {{ {body} }}")).unwrap();
         let symbols = ciq_assembly::Program::parse(&format!(".symbol method \"{name}\" id=0x{id:08x}\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol print \"println\" id=0x00800067")).unwrap();
         let bindings = ciq_compiler::symbol_bindings(&f.lower(), &symbols).unwrap();
         assert_eq!(bindings[&format!("__ciq_native_{name}")], id);
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
@@ -63,8 +63,8 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
         "function f() as Toybox.Lang.Boolean { return \"a\".equals(true); }",
         "function f() as Toybox.Lang.Number or Null { return \"FF\".toNumberWithBase(16); }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for source in [
         "function f() as Toybox.Lang.Number { return \"a\".compareTo(null); }",
@@ -83,15 +83,16 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
         "function f() as Toybox.Lang.Number { return \"a\".equals(\"b\") + 1; }",
         "function f() as Void { var n = 7.toNumberWithBase(2); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     let f =
-        compile("function f() as Toybox.Lang.Number { return \"a\".compareTo(\"b\"); }").unwrap();
+        compile_function("function f() as Toybox.Lang.Number { return \"a\".compareTo(\"b\"); }")
+            .unwrap();
     let text = f.to_ir_text();
     assert!(text.contains(".string %1 \"b\""));
-    assert!(parse_ir(&text.replace(".string %1 \"b\"", ".null %1")).is_err());
-    assert!(parse_ir(&text.replace("compareTo", "toNumberWithBase")).is_err());
-    let f = compile("function f() as Toybox.Lang.Number { var n = \"10\".toNumberWithBase(2); if (n == null) { return 0; } return n; }").unwrap();
+    assert!(parse_function_ir(&text.replace(".string %1 \"b\"", ".null %1")).is_err());
+    assert!(parse_function_ir(&text.replace("compareTo", "toNumberWithBase")).is_err());
+    let f = compile_function("function f() as Toybox.Lang.Number { var n = \"10\".toNumberWithBase(2); if (n == null) { return 0; } return n; }").unwrap();
     let mut operations = f.operations().to_vec();
     for op in &mut operations {
         if let ciq_compiler::Operation::Branch {
@@ -118,26 +119,26 @@ fn string_method_introductions_are_checked_in_source_and_text() {
             ApiLevel(4, 9, 9),
         ),
     ] {
-        let text = compile(source).unwrap().to_ir_text();
+        let text = compile_function(source).unwrap().to_ir_text();
         for (target, minimum, expected) in [
             (previous, ApiLevel(1, 0, 0), "unavailable on target"),
             (introduced, previous, "application minimum API"),
         ] {
             let context = ApiContext::new(target, minimum).unwrap();
-            let source_error = compile_with_api(source, context).unwrap_err();
-            let text_error = parse_ir_with_api(&text, context).unwrap_err();
+            let source_error = compile_function_with_api(source, context).unwrap_err();
+            let text_error = parse_function_ir_with_api(&text, context).unwrap_err();
             assert!(source_error.message.contains(expected));
             assert_eq!(source_error.message, text_error.message);
         }
         assert_eq!(
-            compile_with_api(source, context(introduced)).unwrap(),
-            parse_ir_with_api(&text, context(introduced)).unwrap()
+            compile_function_with_api(source, context(introduced)).unwrap(),
+            parse_function_ir_with_api(&text, context(introduced)).unwrap()
         );
     }
     for source in [
         "function f() as Toybox.Lang.Number { return \"a\".hashCode(); }",
         "function f() as Toybox.Lang.Boolean { return \"a\".equals(null); }",
     ] {
-        compile_with_api(source, context(ApiLevel(1, 0, 0))).unwrap();
+        compile_function_with_api(source, context(ApiLevel(1, 0, 0))).unwrap();
     }
 }

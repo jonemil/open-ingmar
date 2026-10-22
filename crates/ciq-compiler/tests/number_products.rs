@@ -1,12 +1,12 @@
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 use ciq_mc::{Opcode, decode};
 
 fn evaluate(source: &str) -> i32 {
-    let function = compile(&format!("function f() {{ return {source}; }}")).unwrap();
-    assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+    let function = compile_function(&format!("function f() {{ return {source}; }}")).unwrap();
+    assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     let program = function.lower();
     assert_eq!(
         program,
@@ -89,7 +89,7 @@ fn number_products_preserve_precedence_associativity_signs_and_overflow() {
     }
     for (source, byte) in [("7 * 3", 5), ("7 / 3", 6), ("7 % 3", 9)] {
         assert_eq!(
-            compile(&format!("function f() {{ return {source}; }}"))
+            compile_function(&format!("function f() {{ return {source}; }}"))
                 .unwrap()
                 .lower()
                 .encode()
@@ -133,7 +133,7 @@ fn products_reject_wrong_types_and_malformed_expressions_through_saved_ir() {
         for value in ["true", "null", "'a'", "\"5\"", "[5]", "new WatchUi.View()"] {
             for expression in [format!("5 {op} {value}"), format!("{value} {op} 5")] {
                 assert!(
-                    compile(&format!("function f() {{ return {expression}; }}")).is_err(),
+                    compile_function(&format!("function f() {{ return {expression}; }}")).is_err(),
                     "{expression}"
                 );
             }
@@ -149,18 +149,21 @@ fn products_reject_wrong_types_and_malformed_expressions_through_saved_ir() {
             let text = format!(
                 "ciq-ir\n.function f\n.integer %0 5\n{literal}\n.{directive} %2 %0 %1\n.return %2\n.end\n"
             );
-            assert!(parse_ir(&text).is_err(), "{text}");
+            assert!(parse_function_ir(&text).is_err(), "{text}");
         }
         for operands in ["%2 %0", "%2 %0 %1 %3", "%2 %0 %9"] {
-            assert!(parse_ir(&format!("ciq-ir\n.function f\n.integer %0 5\n.integer %1 2\n.{directive} {operands}\n.return %2\n.end\n")).is_err());
+            assert!(parse_function_ir(&format!("ciq-ir\n.function f\n.integer %0 5\n.integer %1 2\n.{directive} {operands}\n.return %2\n.end\n")).is_err());
         }
     }
     for expression in ["5 ** 2", "5 /", "5 %", "5 *= 2", "5 /= 2", "5 %= 2"] {
-        assert!(compile(&format!("function f() {{ return {expression}; }}")).is_err());
+        assert!(compile_function(&format!("function f() {{ return {expression}; }}")).is_err());
     }
     // Nullability must be proven, rather than accepting the possible Number arm.
-    assert!(compile("function f(n as Toybox.Lang.String) { return n.toNumber() / 2; }").is_err());
-    compile("function f(n as Toybox.Lang.String) { var value = n.toNumber(); if (value == null) { return 0; } return value / 2; }").unwrap();
+    assert!(
+        compile_function("function f(n as Toybox.Lang.String) { return n.toNumber() / 2; }")
+            .is_err()
+    );
+    compile_function("function f(n as Toybox.Lang.String) { var value = n.toNumber(); if (value == null) { return 0; } return value / 2; }").unwrap();
 }
 
 #[test]
@@ -170,10 +173,10 @@ fn potentially_failing_operations_cannot_be_reordered_even_without_calls() {
             ".integer %0 17\n.integer %1 0\n.{first} %2 %0 %1\n.integer %3 20\n.integer %4 0\n.divide %5 %3 %4\n"
         );
         let valid = format!("ciq-ir\n.function f\n{body}.subtract %6 %2 %5\n.return %6\n.end\n");
-        parse_ir(&valid).unwrap();
+        parse_function_ir(&valid).unwrap();
         let wrong = valid.replace(".subtract %6 %2 %5", ".subtract %6 %5 %2");
         assert!(
-            parse_ir(&wrong)
+            parse_function_ir(&wrong)
                 .unwrap_err()
                 .message
                 .contains("evaluation order")
@@ -181,7 +184,8 @@ fn potentially_failing_operations_cannot_be_reordered_even_without_calls() {
     }
     // A zero divisor stays a runtime operation; the compiler does not fold it.
     for expression in ["1 / 0", "1 % 0"] {
-        let function = compile(&format!("function f() {{ return {expression}; }}")).unwrap();
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        let function =
+            compile_function(&format!("function f() {{ return {expression}; }}")).unwrap();
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
     }
 }

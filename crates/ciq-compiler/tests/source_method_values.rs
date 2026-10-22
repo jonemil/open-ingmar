@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Operation,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -31,10 +31,10 @@ fn source_callbacks_and_self_survive_saved_stages_and_application_generation() {
 #[test]
 fn self_requires_a_receiver_and_stays_an_opaque_object() {
     let text = "ciq-ir\n.function f receiver=instance result=object\n.self %0\n.return %0\n.end\n";
-    let f = parse_ir(text).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = parse_function_ir(text).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert!(f.lower().to_text().contains("getself"));
-    assert!(parse_ir(&text.replace(" receiver=instance", "")).is_err());
+    assert!(parse_function_ir(&text.replace(" receiver=instance", "")).is_err());
     for source in [
         "function f() as Toybox.Lang.Object { return self; }",
         "function f() as Toybox.Lang.Method { return self.method(:f); }",
@@ -48,7 +48,7 @@ fn self_requires_a_receiver_and_stays_an_opaque_object() {
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
-    assert!(compile("function f() as Toybox.Lang.Object { return self; }").is_err());
+    assert!(compile_function("function f() as Toybox.Lang.Object { return self; }").is_err());
 }
 
 #[test]
@@ -68,7 +68,7 @@ function f() as Toybox.Lang.Number { var v=new V(); return v.method(8); }
     assert!(text.contains(".call-object "));
     assert!(!text.contains(".call-native "));
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
-    let f = parse_ir(
+    let f = parse_function_ir(
         "ciq-ir\n.function f receiver=instance result=object\n.self %0\n.return %0\n.end\n",
     )
     .unwrap();

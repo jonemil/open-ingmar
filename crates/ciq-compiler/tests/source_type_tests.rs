@@ -1,4 +1,4 @@
-use ciq_compiler::{compile_sources, parse_ir, parse_unit_ir};
+use ciq_compiler::{compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASS: &str = "class C { function initialize() {} function value() { return 7; } } class Other { function initialize() {} }";
 
@@ -68,11 +68,11 @@ fn saved_targets_and_branch_proofs_are_revalidated() {
         }
     }
     let text = "ciq-ir\n.function f parameters=1 parameter-types=object\n.block ^0\n.parameter %0 0\n.local $0 %0\n.read %1 $0\n.instanceof %2 %1 source(C@Lang.Object)\n.branch %2 ^1 ^2\n.block ^1\n.read %3 $0\n.call-object %4 %3 C value\n.return %4\n.block ^2\n.integer %5 0\n.return %5\n.end\n";
-    parse_ir(text).unwrap(); // Declaration resolution remains a unit obligation.
-    assert!(parse_ir(&text.replace(".branch %2 ^1 ^2", ".branch %2 ^1 ^1")).is_err());
+    parse_function_ir(text).unwrap(); // Declaration resolution remains a unit obligation.
+    assert!(parse_function_ir(&text.replace(".branch %2 ^1 ^2", ".branch %2 ^1 ^1")).is_err());
     let stale = text.replace(".instanceof", ".integer %6 1\n.assign $0 %6\n.instanceof");
-    assert!(parse_ir(&stale).is_err());
-    parse_ir(&text.replace(".read %3 $0", ".take %3 $0")).unwrap();
+    assert!(parse_function_ir(&stale).is_err());
+    parse_function_ir(&text.replace(".read %3 $0", ".take %3 $0")).unwrap();
 }
 
 #[test]

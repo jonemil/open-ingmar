@@ -2,7 +2,7 @@ use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     Function, LocatedOperation, Operation, ReturnType, ValueId,
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, parse_ir, parse_unit_ir,
+    compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
 use ciq_mc::{Opcode, decode};
 use std::{fs, process::Command};
@@ -30,10 +30,10 @@ fn nonreturning_functions_preserve_declared_results_through_saved_ir() {
         ("Symbol", "symbol"),
     ] {
         let source = format!("function never() as Toybox.Lang.{annotation} {{for(;;){{}}}}");
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         let text = function.to_ir_text();
         assert!(text.contains(&format!(" result={tag}\n")), "{text}");
-        assert_eq!(function, parse_ir(&text).unwrap());
+        assert_eq!(function, parse_function_ir(&text).unwrap());
         assert_eq!(
             function.lower(),
             Program::parse(&function.assembly()).unwrap()
@@ -42,7 +42,7 @@ fn nonreturning_functions_preserve_declared_results_through_saved_ir() {
         // returns can expose that loss inside this body.
         assert_ne!(
             function.return_type(),
-            parse_ir(&text.replace(&format!(" result={tag}"), ""))
+            parse_function_ir(&text.replace(&format!(" result={tag}"), ""))
                 .unwrap()
                 .return_type()
         );
@@ -52,9 +52,9 @@ fn nonreturning_functions_preserve_declared_results_through_saved_ir() {
         "function f() as Toybox.Lang.Number {for(;;){return;}}",
         "function f() as Toybox.Lang.Number {while(true){}}",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    assert!(parse_ir("ciq-ir\n.function f result=integer\n.return-void\n.end\n").is_err());
+    assert!(parse_function_ir("ciq-ir\n.function f result=integer\n.return-void\n.end\n").is_err());
 }
 
 #[test]
@@ -95,10 +95,10 @@ fn empty_explicit_and_falling_through_functions_have_void_returns() {
         "function f(x as Toybox.Lang.Number) as Void { while (x > 0) { return; } }",
         "function f(x as Toybox.Lang.Number) as Void { if (x == 0) { return; } else { return; } }",
     ] {
-        let function = compile(source).unwrap();
+        let function = compile_function(source).unwrap();
         assert_eq!(function.return_type(), ReturnType::Void, "{source}");
         assert!(function.to_ir_text().starts_with("ciq-ir\n"));
-        assert_eq!(function, parse_ir(&function.to_ir_text()).unwrap());
+        assert_eq!(function, parse_function_ir(&function.to_ir_text()).unwrap());
         let assembly = function.lower();
         assert_eq!(
             assembly.items(),
@@ -114,7 +114,7 @@ fn empty_explicit_and_falling_through_functions_have_void_returns() {
     assert_eq!(instructions.len(), 2);
     assert_eq!(instructions[0].instruction.opcode(), Opcode::Argc);
     assert_eq!(instructions[1].instruction.opcode(), Opcode::Return);
-    let explicit = compile("function f() as Void { return; }").unwrap();
+    let explicit = compile_function("function f() as Void { return; }").unwrap();
     let span = explicit.operations()[0].span.unwrap();
     assert_eq!(
         &"function f() as Void { return; }"[span.start..span.end],
@@ -134,7 +134,7 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
         "function f() as Void { var M = 1; M.run(); }",
         "function f(M as Toybox.Lang.Number) as Void { M.run(); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for body in [
         ".return-void\n.return-void",
@@ -146,7 +146,7 @@ fn mixed_returns_unreachable_statements_and_invalid_void_ir_are_rejected() {
         ".integer %0 1\n.integer %1 2\n.call-discard M run %1 %0\n.return-void",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err(),
+            parse_function_ir(&format!("ciq-ir\n.function f\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
@@ -199,11 +199,12 @@ fn unit_signatures_reject_void_values_and_check_statement_call_arity() {
 #[test]
 fn statement_calls_preserve_argument_order_and_discard_results() {
     let function =
-        compile("function f() as Void { M.run(M.left(), M.right()); M.empty(); return; }").unwrap();
+        compile_function("function f() as Void { M.run(M.left(), M.right()); M.empty(); return; }")
+            .unwrap();
     let text = function.to_ir_text();
     assert!(text.contains(".call-discard M run %0 %1"));
     assert!(text.contains(".call-discard M empty"));
-    assert_eq!(parse_ir(&text).unwrap(), function);
+    assert_eq!(parse_function_ir(&text).unwrap(), function);
     let assembly = function.lower();
     let instructions: Vec<_> = assembly
         .items()

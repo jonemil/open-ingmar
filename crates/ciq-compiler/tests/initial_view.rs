@@ -1,7 +1,7 @@
 use ciq_compiler::{
     Function, Operation, ReturnType, TupleShape,
     application::{ConsoleApplication, build_console_application},
-    compile_sources, parse_ir, parse_unit_ir,
+    compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -115,15 +115,15 @@ fn callback_result_shape_cannot_be_forged_by_source_or_saved_ir() {
         ".new-native %0 Toybox.WatchUi.View\n.tuple-new %1 %0\n.return %1",
     ] {
         assert!(
-            parse_ir(&format!(
+            parse_function_ir(&format!(
                 "ciq-ir\n.function f parameters=1 parameter-types=view\n{body}\n.end\n"
             ))
             .is_err()
         );
     }
-    let f = parse_ir("ciq-ir\n.function f parameters=1 parameter-types=view\n.parameter %0 0\n.tuple-new %1 %0\n.return %1\n.end\n").unwrap();
+    let f = parse_function_ir("ciq-ir\n.function f parameters=1 parameter-types=view\n.parameter %0 0\n.tuple-new %1 %0\n.return %1\n.end\n").unwrap();
     assert_eq!(f.return_type(), ReturnType::Tuple(TupleShape::OneView));
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let mut ops = f.operations().to_vec();
     let last = ops.pop().unwrap();
     let result = if let Operation::Return { value } = last.operation {

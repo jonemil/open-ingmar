@@ -2,7 +2,8 @@ use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_sources_with_api, parse_ir, parse_unit_ir_with_api,
+    compile_function, compile_sources, compile_sources_with_api, parse_function_ir,
+    parse_unit_ir_with_api,
 };
 
 #[test]
@@ -31,7 +32,7 @@ fn logical_values_preserve_complete_application_and_snapshot_call_order() {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    let f = compile(
+    let f = compile_function(
         "function f() as Toybox.Lang.Number { return M.first() + (true && false).hashCode(); }",
     )
     .unwrap();
@@ -58,8 +59,8 @@ fn logical_values_support_user_self_and_native_argument_contexts() {
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return n == null || n > 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Boolean { return !(n == null) && n > 0; }",
     ] {
-        let f = compile(source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     compile_sources(&["class App extends Application.AppBase {
         function f() as Toybox.Lang.Boolean { return self.take(true || false); }
@@ -79,9 +80,10 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
         "function f() as Toybox.Lang.Number { return -(true && false); }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
-    let f = compile("function f() as Toybox.Lang.Boolean { return true && false; }").unwrap();
+    let f =
+        compile_function("function f() as Toybox.Lang.Boolean { return true && false; }").unwrap();
     let mut operations = f.operations().to_vec();
     let assigned = operations
         .iter()
@@ -104,7 +106,7 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
         .lines()
         .find(|line| line.starts_with(".local "))
         .unwrap();
-    assert!(parse_ir(&text.replace(init, "")).is_err());
+    assert!(parse_function_ir(&text.replace(init, "")).is_err());
 }
 
 #[test]
@@ -113,11 +115,11 @@ fn hidden_temporaries_share_the_frame_budget_with_source_locals_and_parameters()
         .map(|n| format!("p{n}"))
         .collect::<Vec<_>>()
         .join(",");
-    compile(&format!(
+    compile_function(&format!(
         "function f({params}) as Toybox.Lang.Boolean {{ return true && false; }}"
     ))
     .unwrap();
-    let error = compile(&format!(
+    let error = compile_function(&format!(
         "function f({params}) as Toybox.Lang.Boolean {{ var flag = true && false; return flag; }}"
     ))
     .unwrap_err();

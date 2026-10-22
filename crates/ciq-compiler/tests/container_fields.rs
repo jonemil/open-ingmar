@@ -235,10 +235,10 @@ fn field_payload_types_enforce_api_minimums_even_without_reads() {
 #[test]
 fn dictionary_joins_preserve_invariance_and_do_not_enable_casts() {
     let source = "function f(flag as Lang.Boolean,a as Lang.Dictionary<Lang.String,Lang.Number>,b as Lang.Dictionary<Lang.String,Lang.Number>) as Lang.Dictionary<Lang.String,Lang.Number>{return flag?a:b;}";
-    let f = ciq_compiler::compile(source).unwrap();
+    let f = ciq_compiler::compile_function(source).unwrap();
     let text = f.to_ir_text();
     assert!(text.contains("dictionary(string=>integer)"));
-    assert_eq!(f, ciq_compiler::parse_ir(&text).unwrap());
+    assert_eq!(f, ciq_compiler::parse_function_ir(&text).unwrap());
     let edited = text
         .lines()
         .map(|line| {
@@ -251,19 +251,19 @@ fn dictionary_joins_preserve_invariance_and_do_not_enable_casts() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_ne!(text, edited);
-    assert!(ciq_compiler::parse_ir(&edited).is_err());
+    assert!(ciq_compiler::parse_function_ir(&edited).is_err());
     for body in [
         "return flag?a:null;",
         "return a as Lang.Dictionary<Lang.String,Lang.Number>;",
     ] {
         let invalid = source.replace("return flag?a:b;", body);
-        assert!(ciq_compiler::compile(&invalid).is_err());
+        assert!(ciq_compiler::compile_function(&invalid).is_err());
     }
     let invalid = source.replace(
         "b as Lang.Dictionary<Lang.String,Lang.Number>",
         "b as Lang.Dictionary<Lang.String,Lang.Object>",
     );
-    assert!(ciq_compiler::compile(&invalid).is_err());
+    assert!(ciq_compiler::compile_function(&invalid).is_err());
 }
 
 #[test]

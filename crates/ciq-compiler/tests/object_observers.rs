@@ -1,7 +1,8 @@
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile, compile_sources, compile_with_api, parse_ir, parse_ir_with_api, parse_unit_ir,
+    compile_function, compile_function_with_api, compile_sources, parse_function_ir,
+    parse_function_ir_with_api, parse_unit_ir,
 };
 
 #[test]
@@ -22,25 +23,27 @@ fn array_observers_preserve_element_contracts_and_inherited_api_requirements() {
                 let source = format!(
                     "function f(a as {array}) as Toybox.Lang.{result} {{ return a.{call}; }}"
                 );
-                let f = compile_with_api(&source, api).unwrap();
-                assert_eq!(f, parse_ir_with_api(&f.to_ir_text(), api).unwrap());
+                let f = compile_function_with_api(&source, api).unwrap();
+                assert_eq!(f, parse_function_ir_with_api(&f.to_ir_text(), api).unwrap());
                 let asm = f.lower();
                 assert_eq!(asm, ciq_assembly::Program::parse(&asm.to_text()).unwrap());
             }
             let source = format!(
                 "function f(a as {array}, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Boolean {{ return a.equals(b); }}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Toybox.Lang.Boolean { return a.equals(a); }";
-    let f = compile(source).unwrap();
-    assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+    let f = compile_function(source).unwrap();
+    assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let early = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
     let chars = source.replace("Toybox.WatchUi.View", "Toybox.Lang.Char");
-    assert!(compile_with_api(&chars, early).is_err());
-    assert!(parse_ir_with_api(&compile(&chars).unwrap().to_ir_text(), early).is_err());
+    assert!(compile_function_with_api(&chars, early).is_err());
+    assert!(
+        parse_function_ir_with_api(&compile_function(&chars).unwrap().to_ir_text(), early).is_err()
+    );
 }
 
 #[test]
@@ -64,8 +67,8 @@ fn scalar_and_container_equality_share_the_bounded_argument_profile() {
             let source = format!(
                 "function f() as Toybox.Lang.Boolean {{ var a = {receiver}; return a.equals({argument}); }}"
             );
-            let f = compile(&source).unwrap();
-            assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+            let f = compile_function(&source).unwrap();
+            assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         }
     }
     for ty in [
@@ -74,8 +77,8 @@ fn scalar_and_container_equality_share_the_bounded_argument_profile() {
         let source = format!(
             "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, b as Toybox.Lang.{ty} or Null) as Toybox.Lang.Boolean {{ return a.equals(b); }}"
         );
-        let f = compile(&source).unwrap();
-        assert_eq!(f, parse_ir(&f.to_ir_text()).unwrap());
+        let f = compile_function(&source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
 }
 
@@ -91,20 +94,20 @@ fn observers_do_not_enable_object_erasure_weak_callbacks_or_equality_operators()
         "return a.sort(null);",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) {{ {body} }}"
             ))
             .is_err(),
             "accepted {body}"
         );
     }
-    let f = compile("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Boolean { return a.equals(a); }").unwrap();
+    let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Boolean { return a.equals(a); }").unwrap();
     let text = f.to_ir_text();
     let edited = text.replace(" equals", " hashCode");
     assert_ne!(text, edited);
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
     let edited = text.replace(" equals", " weak");
-    assert!(parse_ir(&edited).is_err());
+    assert!(parse_function_ir(&edited).is_err());
 }
 
 #[test]

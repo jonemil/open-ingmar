@@ -1,5 +1,5 @@
 use ciq_assembly::{Item, Program};
-use ciq_compiler::{compile, parse_ir, string_bindings, symbol_bindings};
+use ciq_compiler::{compile_function, parse_function_ir, string_bindings, symbol_bindings};
 use ciq_mc::{Opcode, decode};
 use ciq_prg::data::Source;
 
@@ -18,8 +18,8 @@ fn strings_prints_and_interleaved_locals_survive_native_and_text_pipelines() {
         System.println(text);
         return number;
     }"#;
-    let function = compile(source).unwrap();
-    assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
+    let function = compile_function(source).unwrap();
+    assert_eq!(parse_function_ir(&function.to_ir_text()).unwrap(), function);
     let program = function.lower();
     let text = Program::parse(&program.to_text()).unwrap();
     assert_eq!(program.items(), text.items());
@@ -73,10 +73,11 @@ fn strings_prints_and_interleaved_locals_survive_native_and_text_pipelines() {
 
 #[test]
 fn literal_binding_requires_unique_content_and_valid_placement() {
-    let program =
-        compile("function probe() as Toybox.Lang.Number { System.println(\"hello\"); return 1; }")
-            .unwrap()
-            .lower();
+    let program = compile_function(
+        "function probe() as Toybox.Lang.Number { System.println(\"hello\"); return 1; }",
+    )
+    .unwrap()
+    .lower();
     for data in [
         "",
         ".string other \"different\"",
@@ -126,7 +127,7 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
         "function probe() as Toybox.Lang.Number { System.println(\"raw\nnewline\"); return 1; }",
         "function probe() as Toybox.Lang.Number { System.println(\"unterminated); return 1; }",
     ] {
-        assert!(compile(source).is_err(), "{source}");
+        assert!(compile_function(source).is_err(), "{source}");
     }
     for body in [
         ".string %0 \"x\"\n.local $0 %0\n.read %1 $0\n.integer %2 1\n.subtract %3 %1 %2\n.return %3",
@@ -136,11 +137,12 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
         ".integer %0, 1\n.return %0",
     ] {
         assert!(
-            parse_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
+            parse_function_ir(&format!("ciq-ir\n.function probe\n{body}\n.end")).is_err(),
             "{body}"
         );
     }
-    let error = compile("function probe() as Toybox.Lang.Number { return \"x\"; }").unwrap_err();
+    let error =
+        compile_function("function probe() as Toybox.Lang.Number { return \"x\"; }").unwrap_err();
     assert_eq!(error.column, 42);
     assert!(error.message.contains("return type does not match"));
 }
@@ -149,26 +151,26 @@ fn source_and_ir_reject_unsupported_string_types_and_print_shapes() {
 fn utf8_literal_size_and_string_escape_limits_are_checked() {
     let largest = "a".repeat(65535);
     assert!(
-        compile(&format!(
+        compile_function(&format!(
             "function probe() as Toybox.Lang.Number {{ System.println(\"{largest}\"); return 0; }}"
         ))
         .is_ok()
     );
     for oversized in ["a".repeat(65536), "é".repeat(32768)] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function probe() as Toybox.Lang.Number {{ System.println(\"{oversized}\"); return 0; }}"
             ))
             .is_err()
         );
     }
-    let function = compile(
+    let function = compile_function(
         r#"function probe() as Toybox.Lang.Number { System.println("\t\r\n\"\\"); return 0; }"#,
     )
     .unwrap();
-    assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
+    assert_eq!(parse_function_ir(&function.to_ir_text()).unwrap(), function);
     // IR uses assembly escapes, independently of the source escape subset.
-    assert!(parse_ir("ciq-ir\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());
+    assert!(parse_function_ir("ciq-ir\n.function probe\n.string %0 \"\\u{1f642} #\" # comment\n.println %0\n.integer %1 0\n.return %1\n.end").is_ok());
 }
 
 #[test]
@@ -184,14 +186,14 @@ fn source_escapes_decode_before_ir_and_assembly_serialization() {
         (r#""\\u0041""#, r"\u0041"),
     ] {
         let source = format!("function f() as Toybox.Lang.String {{ return {literal}; }}");
-        let function = compile(&source).unwrap();
+        let function = compile_function(&source).unwrap();
         let op = &function.operations()[0];
         assert!(
             matches!(&op.operation, ciq_compiler::Operation::String { value: actual, .. } if actual == value)
         );
         let span = op.span.unwrap();
         assert_eq!(&source[span.start..span.end], literal);
-        assert_eq!(parse_ir(&function.to_ir_text()).unwrap(), function);
+        assert_eq!(parse_function_ir(&function.to_ir_text()).unwrap(), function);
         let assembly = function.lower();
         assert_eq!(Program::parse(&assembly.to_text()).unwrap(), assembly);
     }
@@ -216,7 +218,7 @@ fn source_escapes_decode_before_ir_and_assembly_serialization() {
         "\"unfinished\\",
     ] {
         assert!(
-            compile(&format!(
+            compile_function(&format!(
                 "function f() as Toybox.Lang.String {{ return {literal}; }}"
             ))
             .is_err(),
@@ -230,13 +232,13 @@ fn source_escapes_decode_before_ir_and_assembly_serialization() {
             r"\u00e9".repeat(count)
         )
     };
-    compile(&source(32767)).unwrap();
-    assert!(compile(&source(32768)).is_err());
+    compile_function(&source(32767)).unwrap();
+    assert!(compile_function(&source(32768)).is_err());
 }
 
 #[test]
 fn assigned_strings_preserve_types_bindings_slots_and_pipeline_parity() {
-    let function = compile(include_str!(
+    let function = compile_function(include_str!(
         "../../../examples/compiler-probe/assignments.mc"
     ))
     .unwrap();
@@ -249,7 +251,7 @@ fn assigned_strings_preserve_types_bindings_slots_and_pipeline_parity() {
     let bytes = program.encode_with_references(&symbols, &strings).unwrap();
     assert_eq!(
         bytes,
-        parse_ir(&function.to_ir_text())
+        parse_function_ir(&function.to_ir_text())
             .unwrap()
             .lower()
             .encode_with_references(&symbols, &strings)
