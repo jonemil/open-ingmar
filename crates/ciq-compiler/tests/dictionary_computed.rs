@@ -57,7 +57,7 @@ fn conditional_operands_and_scalar_array_producers_preserve_builder_progress() {
     let f = compile_function(source).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let inferred = compile_function("function f(k as Toybox.Lang.String, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { var d = {k => n}; return d.size(); }").unwrap();
-    assert!(inferred.operations().iter().any(|op| matches!(op.operation, Operation::DictionaryBegin { dictionary_type, .. } if dictionary_type.value == ciq_compiler::DictionaryValue::NullableNumber)));
+    assert!(inferred.operations().iter().any(|op| matches!(op.operation, Operation::DictionaryBegin { ref dictionary_type, .. } if dictionary_type.value == ciq_compiler::DictionaryValue::NullableNumber)));
 }
 
 #[test]

@@ -333,12 +333,15 @@ source-base = "Lang.Object" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
+            | structural-tag | nullable-structural-tag
+nullable-structural-tag = "union(" structural-tag "|null)"
 array-tag = element-tag "-array"
 dictionary-tag = "dictionary(" dictionary-key-tag "=>" dictionary-value-tag ")"
 dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
-                   | "symbol" | "method" | "byte-array"
+                   | "symbol" | "method" | "byte-array" | structural-tag
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
+                     | structural-tag | nullable-structural-tag
 join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
@@ -408,6 +411,11 @@ parameter or call-result Array tag appends `-array` to its element tag; a join
 tag prepends `array-`. These Array tags describe element nullability. A nullable reference uses a
 union with Null, such as `union(number-array|null)`.
 The Number parameter/call tag is `number-array`.
+Structural elements use the full interface tag, such as
+`interface(m(size()=integer))-array`; nullable elements use
+`union(interface(m(size()=integer))|null)-array`. An outer union with Null
+independently describes a nullable Array reference. Separators in nested member
+or container tags do not split outer union/Dictionary components.
 
 Typed Dictionary tags are `dictionary(key=>value)` without whitespace inside the
 token. Key/value domains follow the [source

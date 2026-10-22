@@ -9,7 +9,7 @@ The [application specimen](../../examples/compiler-interfaces/README.md) checks
 two unrelated source implementations, an anonymous native `toString` contract,
 nullable interfaces, mutable fields, snapshots, and ordered compound updates.
 SDK and generated applications match all
-[26 console lines](../../examples/compiler-interfaces/expected.txt). Both PRGs
+[37 console lines](../../examples/compiler-interfaces/expected.txt). Both PRGs
 support structured CODE/DATA export/reassembly and identical repeat exports,
 without required raw fallback. No interface runtime class or new opcode is
 needed: ordinary symbol lookup/calls and property writes execute the program.
@@ -31,6 +31,11 @@ The following additions were compiled against the same AppBase scaffold:
   an `echo(Token) as Token` method, and a method returning Token or SpareToken.
   Reads survive later field mutation; returned source objects support ordinary
   member calls. These paths compile and execute in both toolchains.
+- Counter-valued Arrays accept unrelated implementations, indexed replacement,
+  `add`, `addAll`, `slice`, and nullable allocation/read snapshots. A Dictionary
+  with Counter keys and nullable Counter values supports literals, indexed and
+  method access, `keys`, `hasKey`, and removal. Both applications produce the same
+  values; structural keys use the ordinary inherited Object equality/hash behavior.
 
 These observations support exact method signatures and invariant mutable fields
 on this SDK. Recursive contracts remain outside the current finite-member

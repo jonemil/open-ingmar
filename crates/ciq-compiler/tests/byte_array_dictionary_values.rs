@@ -63,7 +63,7 @@ fn dictionary_null_constants_and_unused_types_keep_payload_and_api_checks() {
     ] {
         let ty = DictionaryType {
             key: ciq_compiler::DictionaryKey::String,
-            value,
+            value: value.clone(),
         };
         let suffix = if value == DictionaryValue::NullableByteArray {
             " or Null"

@@ -35,10 +35,10 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
             "function empty() as Toybox.Lang.Array<Toybox.Lang.{name}> {{ return []; }}"
         ))
         .unwrap();
-        assert_eq!(f.return_type(), ReturnType::Array(element));
+        assert_eq!(f.return_type(), ReturnType::Array(element.clone()));
         assert_eq!(f.operations().len(), 2);
         assert!(
-            matches!(f.operations()[0].operation, Operation::ArrayNew { element_type, .. } if element_type == element)
+            matches!(f.operations()[0].operation, Operation::ArrayNew { ref element_type, .. } if *element_type == element)
         );
         assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x14, 0x16]);
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());

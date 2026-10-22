@@ -74,6 +74,41 @@ module InterfaceUse {
         var chosen = box.choose(false, token, new SpareToken());
         System.println(chosen.id());
     }
+    function counterArray() as Lang.Array<Counter> {
+        return [new FirstCounter(), new SecondCounter()];
+    }
+    function nullableArray() as Lang.Array<Counter or Null> { return new [2]; }
+    function counterDictionary(key as Counter) as Lang.Dictionary<Counter, Counter or Null> {
+        return {key => new SecondCounter()};
+    }
+    function containers() as Void {
+        var values = InterfaceUse.counterArray();
+        System.println(values[0].label());
+        values[0] = new SecondCounter();
+        System.println(values[0].add(1));
+        values.add(new FirstCounter());
+        var copy = values.slice(null, null);
+        System.println(copy.size());
+        values.addAll(copy);
+        System.println(values.size());
+        var nullable = InterfaceUse.nullableArray();
+        System.println(nullable[0] == null);
+        nullable[1] = new FirstCounter();
+        var item = nullable[1];
+        if (item != null) { System.println(item.label()); }
+        var key = new FirstCounter();
+        var dictionary = InterfaceUse.counterDictionary(key);
+        var value = dictionary.get(key);
+        if (value != null) { System.println(value.label()); }
+        dictionary[key] = new FirstCounter();
+        var saved = dictionary[key];
+        dictionary.put(key, null);
+        if (saved != null) { System.println(saved.count); }
+        System.println(dictionary.hasKey(key));
+        System.println(dictionary.keys()[0].label());
+        dictionary.remove(key);
+        System.println(dictionary.hasKey(key));
+    }
     function run(first as Lang.Boolean) as Void {
         var counter = InterfaceUse.choose(first);
         System.println(counter.label());
@@ -105,6 +140,7 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(InterfaceUse.text(41));
         System.println(InterfaceUse.maybe(null));
         InterfaceUse.tokens();
+        InterfaceUse.containers();
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

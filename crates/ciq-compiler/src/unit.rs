@@ -99,7 +99,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
         Operation::DictionaryRead { dictionary, .. }
         | Operation::DictionaryWrite { dictionary, .. } => interface_keys(&function.value_types[dictionary]),
         Operation::DictionaryFill { builder, .. } => function.operations().iter().any(|located| {
-            matches!(located.operation, Operation::DictionaryBegin { builder: id, dictionary_type, .. }
+            matches!(located.operation, Operation::DictionaryBegin { builder: id, ref dictionary_type, .. }
                 if id == *builder && matches!(dictionary_type.key, crate::DictionaryKey::Interface(_)))
         }),
         Operation::NativeModuleCall { module, member, .. }
@@ -612,9 +612,9 @@ impl InstanceField {
                     ReturnType::LangObject
                 }
             }
-            FieldKind::Array { element } => ReturnType::Array(*element),
+            FieldKind::Array { element } => ReturnType::Array(element.clone()),
             FieldKind::Dictionary { dictionary_type } => {
-                ReturnType::TypedDictionary(*dictionary_type)
+                ReturnType::TypedDictionary(dictionary_type.clone())
             }
             FieldKind::Scalar { ty, nullable } => ty.result_type(*nullable),
             FieldKind::Numeric { alias, nullable } => alias.result_type(*nullable),
@@ -953,8 +953,10 @@ impl CompilationUnit {
             }
             let mut field_names = BTreeSet::new();
             for field in &class.fields {
-                if let FieldKind::Array { element } = field.kind {
-                    if crate::ArrayElement::from_api_type(&element.api_type()) != Some(element) {
+                if let FieldKind::Array { ref element } = field.kind {
+                    if crate::ArrayElement::from_api_type(&element.api_type())
+                        != Some(element.clone())
+                    {
                         return Err(fail(
                             Some(at),
                             None,
@@ -1082,10 +1084,8 @@ impl CompilationUnit {
                         }),
                 )
             {
-                if crate::structural::contains(&ty) {
-                    if let Some(mut result) = crate::unions::result(ty) {
-                        crate::structural::resolve_result(&mut result, &mut collect).unwrap();
-                    }
+                if let Some(mut result) = crate::unions::result(ty) {
+                    crate::structural::resolve_result(&mut result, &mut collect).unwrap();
                 }
             }
             for name in source_classes {
@@ -1243,11 +1243,11 @@ impl CompilationUnit {
                 .filter_map(|located| {
                     if let Operation::ArrayBegin {
                         builder,
-                        element_type,
+                        ref element_type,
                         ..
                     } = located.operation
                     {
-                        Some((builder, element_type))
+                        Some((builder, element_type.clone()))
                     } else {
                         None
                     }
@@ -1259,11 +1259,11 @@ impl CompilationUnit {
                 .filter_map(|located| {
                     if let Operation::DictionaryBegin {
                         builder,
-                        dictionary_type,
+                        ref dictionary_type,
                         ..
                     } = located.operation
                     {
-                        Some((builder, dictionary_type))
+                        Some((builder, dictionary_type.clone()))
                     } else {
                         None
                     }
@@ -1430,35 +1430,28 @@ impl CompilationUnit {
                 let check_element = |element: crate::ArrayElement,
                                      value: crate::ValueId|
                  -> Result<(), UnitError> {
-                    if let crate::ArrayElement::Interface(interface)
-                    | crate::ArrayElement::NullableInterface(interface) = element
-                    {
-                        self.check_interface_value(
-                            function,
-                            &origins,
-                            value,
-                            interface,
-                            matches!(element, crate::ArrayElement::NullableInterface(_)),
-                        )
-                        .map_err(|message| fail(Some(index), Some(operation), message))?;
-                    }
-                    Ok(())
+                    let expected = crate::unions::result(element.api_type()).unwrap();
+                    self.check_value_contract(function, &origins, value, &expected, context)
+                        .map_err(|message| fail(Some(index), Some(operation), message))
                 };
-                let check_dictionary_value =
-                    |dictionary: crate::DictionaryType, value| match dictionary.value {
-                        crate::DictionaryValue::Interface(interface) => {
-                            check_element(crate::ArrayElement::Interface(interface), value)
-                        }
-                        crate::DictionaryValue::NullableInterface(interface) => {
-                            check_element(crate::ArrayElement::NullableInterface(interface), value)
-                        }
-                        _ => Ok(()),
+                let check_dictionary_value = |dictionary: crate::DictionaryType, value| {
+                    let crate::api::Type::Dictionary { value: ty, .. } = dictionary.api_type()
+                    else {
+                        unreachable!()
                     };
+                    self.check_value_contract(
+                        function,
+                        &origins,
+                        value,
+                        &crate::unions::result(*ty).unwrap(),
+                        context,
+                    )
+                    .map_err(|message| fail(Some(index), Some(operation), message))
+                };
                 let check_dictionary_key = |dictionary: crate::DictionaryType, value| {
-                    if let crate::DictionaryKey::Interface(interface) = dictionary.key {
-                        check_element(crate::ArrayElement::Interface(interface), value)?;
-                    }
-                    Ok(())
+                    let expected = crate::unions::result(dictionary.key.api_type()).unwrap();
+                    self.check_value_contract(function, &origins, value, &expected, context)
+                        .map_err(|message| fail(Some(index), Some(operation), message))
                 };
                 match &located.operation {
                     Operation::DictionaryFill {
@@ -1466,8 +1459,8 @@ impl CompilationUnit {
                     } => {
                         if let Some(dictionary) = dictionary_builders.get(builder) {
                             for (key, value) in entries {
-                                check_dictionary_key(*dictionary, *key)?;
-                                check_dictionary_value(*dictionary, *value)?;
+                                check_dictionary_key(dictionary.clone(), *key)?;
+                                check_dictionary_value(dictionary.clone(), *value)?;
                             }
                         }
                     }
@@ -1476,25 +1469,25 @@ impl CompilationUnit {
                         key,
                         value,
                     } => {
-                        if let crate::ValueType::TypedDictionary(dictionary) =
+                        if let crate::ValueType::TypedDictionary(ref dictionary) =
                             function.value_types[dictionary]
                         {
-                            check_dictionary_key(dictionary, *key)?;
-                            check_dictionary_value(dictionary, *value)?;
+                            check_dictionary_key(dictionary.clone(), *key)?;
+                            check_dictionary_value(dictionary.clone(), *value)?;
                         }
                     }
                     Operation::DictionaryRead {
                         dictionary, key, ..
                     } => {
-                        if let crate::ValueType::TypedDictionary(dictionary) =
+                        if let crate::ValueType::TypedDictionary(ref dictionary) =
                             function.value_types[dictionary]
                         {
-                            check_dictionary_key(dictionary, *key)?;
+                            check_dictionary_key(dictionary.clone(), *key)?;
                         }
                     }
                     Operation::ArrayFill { builder, value, .. } => {
                         if let Some(element) = array_builders.get(builder) {
-                            check_element(*element, *value)?;
+                            check_element(element.clone(), *value)?;
                         }
                     }
                     Operation::ArrayFillMany {
@@ -1502,13 +1495,39 @@ impl CompilationUnit {
                     } => {
                         if let Some(element) = array_builders.get(builder) {
                             for value in values {
-                                check_element(*element, *value)?;
+                                check_element(element.clone(), *value)?;
                             }
                         }
                     }
-                    Operation::ArrayWrite { array, value, .. } => {
-                        if let crate::ValueType::Array(element) = function.value_types[array] {
-                            check_element(element, *value)?;
+                    Operation::ArrayWrite {
+                        array,
+                        index: key,
+                        value,
+                    } => {
+                        for part in
+                            crate::unions::alternatives(&function.value_types[array].api_type())
+                        {
+                            if let crate::api::Type::Array(element) = part {
+                                if let Some(element) = crate::ArrayElement::from_api_type(element) {
+                                    check_element(element, *value)?;
+                                }
+                            } else if let Some(dictionary) =
+                                crate::DictionaryType::from_api_type(part)
+                            {
+                                check_dictionary_key(dictionary.clone(), *key)?;
+                                check_dictionary_value(dictionary, *value)?;
+                            }
+                        }
+                    }
+                    Operation::ArrayRead {
+                        array, index: key, ..
+                    } => {
+                        for part in
+                            crate::unions::alternatives(&function.value_types[array].api_type())
+                        {
+                            if let Some(dictionary) = crate::DictionaryType::from_api_type(part) {
+                                check_dictionary_key(dictionary, *key)?;
+                            }
                         }
                     }
                     Operation::NativeCall {

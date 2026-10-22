@@ -2,6 +2,20 @@
 use crate::{ParameterType, ReturnType, api::Type};
 use std::collections::BTreeMap;
 
+/// Extract one finite structural contract and its optional Null alternative.
+pub(crate) fn value_shape(ty: &Type) -> Option<(&crate::StructuralInterface, bool)> {
+    match ty {
+        Type::Structural(shape) => Some((shape, false)),
+        Type::Union(parts) if parts.len() == 2 && parts.contains(&Type::Null) => {
+            let Type::Structural(shape) = parts.iter().find(|ty| **ty != Type::Null)? else {
+                return None;
+            };
+            Some((shape, true))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn contains(ty: &Type) -> bool {
     match ty {
         Type::Structural(_) => true,
@@ -76,7 +90,12 @@ pub(crate) fn resolve_parameter<E>(
         shape.resolve_sources(resolve)?;
     } else if let ParameterType::Union(ty) = ty {
         resolve_api(ty, resolve)?;
+    } else if let ParameterType::Array(element) = ty {
+        resolve_element(element, resolve)?;
+    } else if let ParameterType::TypedDictionary(dictionary) = ty {
+        resolve_dictionary(dictionary, resolve)?;
     }
+
     Ok(())
 }
 
@@ -96,6 +115,33 @@ pub(crate) fn resolve_result<E>(
         shape.resolve_sources(resolve)?;
     } else if let ReturnType::Union(ty) = ty {
         resolve_api(ty, resolve)?;
+    } else if let ReturnType::Array(element) = ty {
+        resolve_element(element, resolve)?;
+    } else if let ReturnType::TypedDictionary(dictionary) = ty {
+        resolve_dictionary(dictionary, resolve)?;
+    }
+
+    Ok(())
+}
+
+fn resolve_element<E>(
+    element: &mut crate::ArrayElement,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    if let crate::ArrayElement::Structural { shape, .. } = element {
+        shape.resolve_sources(resolve)?;
+    }
+    Ok(())
+}
+fn resolve_dictionary<E>(
+    dictionary: &mut crate::DictionaryType,
+    resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
+) -> Result<(), E> {
+    if let crate::DictionaryKey::Structural(shape) = &mut dictionary.key {
+        shape.resolve_sources(resolve)?;
+    }
+    if let crate::DictionaryValue::Structural { shape, .. } = &mut dictionary.value {
+        shape.resolve_sources(resolve)?;
     }
     Ok(())
 }
@@ -105,6 +151,11 @@ fn resolve_api<E>(
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
     match ty {
+        Type::Array(element) => resolve_api(element, resolve)?,
+        Type::Dictionary { key, value } => {
+            resolve_api(key, resolve)?;
+            resolve_api(value, resolve)?;
+        }
         Type::Structural(shape) => shape.resolve_sources(resolve)?,
         Type::Union(parts) => {
             for ty in parts {
@@ -190,6 +241,8 @@ impl StructuralInterface {
                 ReturnType::SourceUnion(contract) => {
                     contract.native().iter().all(|ty| type_depth(ty, depth + 1))
                 }
+                ReturnType::Array(element) => element_depth(element, depth + 1),
+                ReturnType::TypedDictionary(dictionary) => dictionary_depth(dictionary, depth + 1),
                 _ => depth <= 64,
             }
         }
@@ -200,8 +253,32 @@ impl StructuralInterface {
                 ParameterType::SourceUnion(contract) => {
                     contract.native().iter().all(|ty| type_depth(ty, depth + 1))
                 }
+                ParameterType::Array(element) => element_depth(element, depth + 1),
+                ParameterType::TypedDictionary(dictionary) => {
+                    dictionary_depth(dictionary, depth + 1)
+                }
                 _ => depth <= 64,
             }
+        }
+        fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
+            depth <= 64
+                && match element {
+                    crate::ArrayElement::Structural { shape, .. } => shape_depth(shape, depth + 1),
+                    _ => true,
+                }
+        }
+        fn dictionary_depth(dictionary: &crate::DictionaryType, depth: usize) -> bool {
+            depth <= 64
+                && match &dictionary.key {
+                    crate::DictionaryKey::Structural(shape) => shape_depth(shape, depth + 1),
+                    _ => true,
+                }
+                && match &dictionary.value {
+                    crate::DictionaryValue::Structural { shape, .. } => {
+                        shape_depth(shape, depth + 1)
+                    }
+                    _ => true,
+                }
         }
         fn shape_depth(shape: &StructuralInterface, depth: usize) -> bool {
             depth <= 64

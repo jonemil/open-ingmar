@@ -161,8 +161,13 @@ impl NativeClass {
 }
 
 /// Supported invariant Array element contracts, independent of VM storage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A finite source interface contract, optionally admitting Null elements.
+    Structural {
+        shape: Box<StructuralInterface>,
+        nullable: bool,
+    },
     /// Dynamic elements, including Null, inferred from unknown source values.
     Any,
     /// A non-null Object value; concrete members require a narrower proof.
@@ -204,12 +209,23 @@ pub enum ArrayElement {
 }
 
 impl ArrayElement {
+    fn validate(&self) -> Result<(), String> {
+        if let Self::Structural { shape, .. } = self {
+            shape.validate()?;
+        }
+        Ok(())
+    }
+
     /// Return the API element contract, including its Null alternative if present.
-    pub fn api_type(self) -> api::Type {
+    pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Structural { shape, nullable } => {
+                let ty = api::Type::Structural(shape.clone());
+                return if *nullable { ty.with_null() } else { ty };
+            }
             Self::Any => return api::Type::Any,
             Self::LangObject | Self::NullableObject => "Toybox.Lang.Object",
-            Self::Numeric { alias, nullable } => return alias.api_type(nullable),
+            Self::Numeric { alias, nullable } => return alias.api_type(*nullable),
             Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
             Self::Number | Self::NullableNumber => "Toybox.Lang.Number",
             Self::Double | Self::NullableDouble => "Toybox.Lang.Double",
@@ -231,17 +247,24 @@ impl ArrayElement {
         }
     }
 
-    fn nullable_base(self) -> Option<Self> {
+    fn nullable_base(&self) -> Option<Self> {
         match self {
+            Self::Structural {
+                shape,
+                nullable: true,
+            } => Some(Self::Structural {
+                shape: shape.clone(),
+                nullable: false,
+            }),
             Self::NullableObject => Some(Self::LangObject),
             Self::Numeric {
                 alias,
                 nullable: true,
             } => Some(Self::Numeric {
-                alias,
+                alias: *alias,
                 nullable: false,
             }),
-            Self::NullableInterface(interface) => Some(Self::Interface(interface)),
+            Self::NullableInterface(interface) => Some(Self::Interface(*interface)),
             Self::NullableNumber => Some(Self::Number),
             Self::NullableDouble => Some(Self::Double),
             Self::NullableFloat => Some(Self::Float),
@@ -258,21 +281,36 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if let Some((shape, nullable)) = crate::structural::value_shape(ty) {
+            shape.validate().ok()?;
+            return Some(Self::Structural {
+                shape: Box::new(shape.clone()),
+                nullable,
+            });
+        }
         if let Some((alias, nullable)) = NumericAlias::from_api_type(ty) {
             return Some(Self::Numeric { alias, nullable });
         }
         type_text::ARRAY_ELEMENTS
             .iter()
-            .copied()
             .find(|element| element.api_type() == *ty)
+            .cloned()
     }
 
-    fn text(self) -> &'static str {
-        match self {
+    fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Structural { shape, nullable } = self {
+            return if *nullable {
+                format!("union({}|null)", shape.tag()).into()
+            } else {
+                shape.tag().into()
+            };
+        }
+        let text = match self {
+            Self::Structural { .. } => unreachable!(),
             Self::Any => "any",
             Self::LangObject => "object",
             Self::NullableObject => "nullable-object",
-            Self::Numeric { alias, nullable } => alias.value_tag(nullable),
+            Self::Numeric { alias, nullable } => alias.value_tag(*nullable),
             Self::Interface(InterfaceType::Comparable) => "comparable",
             Self::Interface(InterfaceType::Comparator) => "comparator",
             Self::NullableInterface(InterfaceType::Comparable) => "nullable-comparable",
@@ -302,7 +340,8 @@ impl ArrayElement {
             Self::Object(NativeClass::View) => "view",
             Self::Object(NativeClass::Dc) => "dc",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
-        }
+        };
+        text.into()
     }
 }
 
@@ -632,7 +671,7 @@ impl ParameterType {
             Self::NullableSourceObject(class) => {
                 api::Type::named(class.base.api_name()).with_null()
             }
-            Self::Array(element) => ValueType::Array(*element).api_type(),
+            Self::Array(element) => ValueType::Array(element.clone()).api_type(),
             Self::NullableDictionary => ValueType::NullableDictionary.api_type(),
         }
     }
@@ -691,7 +730,7 @@ impl ReturnType {
                 api::Type::named(class.base.api_name()).with_null()
             }
             Self::Tuple(shape) => shape.api_type(),
-            Self::Array(element) => ValueType::Array(*element).api_type(),
+            Self::Array(element) => ValueType::Array(element.clone()).api_type(),
             Self::Void => api::Type::Void,
         }
     }
@@ -1718,6 +1757,55 @@ impl Function {
         declared_result: Option<ReturnType>,
         infer_joins: bool,
     ) -> Result<Self, IrError> {
+        let validate_parameter = |parameter: &ParameterType| -> Result<(), String> {
+            match parameter {
+                ParameterType::Array(element) => element.validate(),
+                ParameterType::TypedDictionary(dictionary) => dictionary.validate(),
+                ParameterType::Structural(shape) => shape.validate(),
+                _ => Ok(()),
+            }
+        };
+        for parameter in &parameter_types {
+            validate_parameter(parameter).map_err(|message| IrError {
+                operation: None,
+                message,
+            })?;
+        }
+        if let Some(result) = &declared_result {
+            let checked = match result {
+                ReturnType::Array(element) => element.validate(),
+                ReturnType::TypedDictionary(dictionary) => dictionary.validate(),
+                ReturnType::Structural(shape) => shape.validate(),
+                _ => Ok(()),
+            };
+            checked.map_err(|message| IrError {
+                operation: None,
+                message,
+            })?;
+        }
+        for (index, located) in operations.iter().enumerate() {
+            let checked = match &located.operation {
+                Operation::ArrayBegin { element_type, .. }
+                | Operation::ArrayNew { element_type, .. }
+                | Operation::ArrayConstant { element_type, .. }
+                | Operation::ArrayAllocate { element_type, .. } => element_type.validate(),
+                Operation::DictionaryBegin {
+                    dictionary_type, ..
+                }
+                | Operation::DictionaryConstant {
+                    dictionary_type, ..
+                } => dictionary_type.validate(),
+                Operation::DictionaryNew {
+                    dictionary_type: Some(dictionary),
+                    ..
+                } => dictionary.validate(),
+                _ => Ok(()),
+            };
+            checked.map_err(|message| IrError {
+                operation: Some(index),
+                message,
+            })?;
+        }
         let invalid = || IrError {
             operation: None,
             message: "unsupported union contract".into(),
@@ -1994,10 +2082,22 @@ impl Function {
                 }
                 Operation::DictionaryConstant {
                     result,
-                    dictionary_type,
+                    ref dictionary_type,
                     ref entries,
                 } => {
-                    dictionary::constant_type(entries, Some(dictionary_type))
+                    if let Some(context) = context {
+                        let api::Type::Dictionary { key, value } = dictionary_type.api_type()
+                        else {
+                            unreachable!()
+                        };
+                        for (k, v) in entries {
+                            native::structural_api(&key, &k.api_type(), Some(context))
+                                .map_err(|e| fail(&e))?;
+                            native::structural_api(&value, &v.api_type(), Some(context))
+                                .map_err(|e| fail(&e))?;
+                        }
+                    }
+                    dictionary::constant_type(entries, Some(dictionary_type.clone()))
                         .map_err(|e| fail(&e))?;
                     if let Some(context) = context {
                         for (key, value) in entries {
@@ -2008,16 +2108,17 @@ impl Function {
                             }
                         }
                     }
-                    types.insert(result, ValueType::TypedDictionary(dictionary_type));
+                    types.insert(result, ValueType::TypedDictionary(dictionary_type.clone()));
                     (Some(result), vec![])
                 }
                 Operation::DictionaryNew {
                     result,
-                    dictionary_type,
+                    ref dictionary_type,
                 } => {
                     types.insert(
                         result,
                         dictionary_type
+                            .clone()
                             .map(ValueType::TypedDictionary)
                             .unwrap_or(ValueType::Dictionary),
                     );
@@ -2116,6 +2217,10 @@ impl Function {
                         .0
                         .element_type()
                         .expect("validated indexed builder");
+                    if origins.contract(value).is_none() {
+                        native::structural_api(&expected, &type_of(value).api_type(), context)
+                            .map_err(|e| fail(&e))?;
+                    }
                     if !native::accepts(&expected, &type_of(value).api_type())
                         && !origins.deferred_interface(&expected, value)
                     {
@@ -2132,6 +2237,12 @@ impl Function {
                         .0
                         .element_type()
                         .expect("validated indexed builder");
+                    for value in values {
+                        if origins.contract(*value).is_none() {
+                            native::structural_api(&expected, &type_of(*value).api_type(), context)
+                                .map_err(|e| fail(&e))?;
+                        }
+                    }
                     if values.iter().any(|v| {
                         !native::accepts(&expected, &type_of(*v).api_type())
                             && !origins.deferred_interface(&expected, *v)
@@ -2147,7 +2258,9 @@ impl Function {
                         result,
                         match builders[&builder].0 {
                             builders::Contract::ByteArray => ValueType::ByteArray,
-                            builders::Contract::Array(element) => ValueType::Array(element),
+                            builders::Contract::Array(ref element) => {
+                                ValueType::Array(element.clone())
+                            }
                             _ => unreachable!("validated indexed builder"),
                         },
                     );
@@ -2695,10 +2808,10 @@ impl Function {
                 }
                 Operation::ArrayConstant {
                     result,
-                    element_type,
+                    ref element_type,
                     ref values,
                 } => {
-                    if element_type == ArrayElement::Any
+                    if *element_type == ArrayElement::Any
                         || values.is_empty()
                         || !values.iter().all(|value| {
                             native::accepts(&element_type.api_type(), &value.api_type())
@@ -2708,12 +2821,18 @@ impl Function {
                             "constant payloads must match a nonempty supported Array contract",
                         ));
                     }
-                    let ty = ValueType::Array(element_type);
+                    let ty = ValueType::Array(element_type.clone());
                     if let Some(context) = context {
                         context
                             .check_type(api::core(), &ty.api_type())
                             .map_err(|message| fail(&message))?;
                         for value in values {
+                            native::structural_api(
+                                &element_type.api_type(),
+                                &value.api_type(),
+                                Some(context),
+                            )
+                            .map_err(|e| fail(&e))?;
                             context
                                 .check_type(api::core(), &value.api_type())
                                 .map_err(|message| fail(&message))?;
@@ -2745,16 +2864,16 @@ impl Function {
                 }
                 Operation::ArrayNew {
                     result,
-                    element_type,
+                    ref element_type,
                 }
                 | Operation::ArrayAllocate {
                     result,
-                    element_type,
+                    ref element_type,
                     ..
                 } => {
                     let inputs = if let Operation::ArrayAllocate { length, .. } = located.operation
                     {
-                        if element_type != ArrayElement::Any
+                        if *element_type != ArrayElement::Any
                             && element_type.nullable_base().is_none()
                         {
                             return Err(fail("sized Array allocation requires nullable elements"));
@@ -2766,11 +2885,11 @@ impl Function {
                     } else {
                         vec![]
                     };
-                    if matches!(element_type, ArrayElement::Object(class) if class != NativeClass::View)
+                    if matches!(element_type, ArrayElement::Object(class) if *class != NativeClass::View)
                     {
                         return Err(fail("object arrays support only the View element contract"));
                     }
-                    let ty = ValueType::Array(element_type);
+                    let ty = ValueType::Array(element_type.clone());
                     if let Some(context) = context {
                         context
                             .check_type(api::core(), &ty.api_type())
@@ -2838,8 +2957,21 @@ impl Function {
                 } => {
                     let element = match type_of(array) {
                         ValueType::Union(ref ty) => {
-                            unions::index_read(ty, &type_of(index).api_type())
-                                .map_err(|e| fail(&e))?
+                            let mut results = Vec::new();
+                            for part in unions::alternatives(ty) {
+                                let key = if matches!(part, api::Type::Dictionary { .. }) {
+                                    origins.native_arguments(
+                                        part,
+                                        "get",
+                                        [(index, type_of(index).api_type())],
+                                    )[0]
+                                    .clone()
+                                } else {
+                                    type_of(index).api_type()
+                                };
+                                results.push(unions::index_read(part, &key).map_err(|e| fail(&e))?);
+                            }
+                            unions::normalize(results)
                         }
                         ValueType::Any => api::Type::Any,
                         ValueType::Array(element) => element.api_type(),
@@ -2865,12 +2997,35 @@ impl Function {
                 } => {
                     let element = match type_of(array) {
                         ValueType::Union(ref ty) => {
-                            unions::index_write(
-                                ty,
-                                &type_of(index).api_type(),
-                                &type_of(value).api_type(),
-                            )
-                            .map_err(|e| fail(&e))?;
+                            for part in unions::alternatives(ty) {
+                                let (key, value_type) =
+                                    if matches!(part, api::Type::Dictionary { .. }) {
+                                        let args = origins.native_arguments(
+                                            part,
+                                            "put",
+                                            [
+                                                (index, type_of(index).api_type()),
+                                                (value, type_of(value).api_type()),
+                                            ],
+                                        );
+                                        native::value_call(part, "put", &args, context)
+                                            .map_err(|e| fail(&e))?;
+                                        (args[0].clone(), args[1].clone())
+                                    } else if matches!(part, api::Type::Array(_)) {
+                                        let args = origins.native_arguments(
+                                            part,
+                                            "add",
+                                            [(value, type_of(value).api_type())],
+                                        );
+                                        native::value_call(part, "add", &args, context)
+                                            .map_err(|e| fail(&e))?;
+                                        (type_of(index).api_type(), args[0].clone())
+                                    } else {
+                                        (type_of(index).api_type(), type_of(value).api_type())
+                                    };
+                                unions::index_write(part, &key, &value_type)
+                                    .map_err(|e| fail(&e))?;
+                            }
                             api::Type::Any
                         }
                         ValueType::Any => api::Type::Any,
@@ -2889,6 +3044,10 @@ impl Function {
                         && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
                     {
                         return Err(fail("array writes require a non-null Number index"));
+                    }
+                    if origins.contract(value).is_none() {
+                        native::structural_api(&element, &type_of(value).api_type(), context)
+                            .map_err(|e| fail(&e))?;
                     }
                     if !native::accepts(&element, &type_of(value).api_type())
                         && !origins.deferred_interface(&element, value)
@@ -3773,7 +3932,7 @@ impl Function {
             text.push_str(&match operation.operation {
                 Operation::DictionaryConstant {
                     result,
-                    dictionary_type,
+                    ref dictionary_type,
                     ref entries,
                 } => format!(
                     ".dictionary-constant %{} {} {}",
@@ -3787,11 +3946,12 @@ impl Function {
                 ),
                 Operation::DictionaryNew {
                     result,
-                    dictionary_type,
+                    ref dictionary_type,
                 } => format!(
                     ".dictionary-new %{}{}",
                     result.0,
                     dictionary_type
+                        .clone()
                         .map(|ty| format!(" type={}", ty.text()))
                         .unwrap_or_default()
                 ),
@@ -4017,7 +4177,7 @@ impl Function {
                 }
                 Operation::DictionaryBegin {
                     builder,
-                    dictionary_type,
+                    ref dictionary_type,
                     length,
                 } => format!(
                     ".dictionary-begin &{} {} {}",
@@ -4043,7 +4203,7 @@ impl Function {
                 }
                 Operation::ArrayBegin {
                     builder,
-                    element_type,
+                    ref element_type,
                     length,
                 } => format!(
                     ".array-begin &{} {} {}",
@@ -4071,7 +4231,7 @@ impl Function {
                 ),
                 Operation::ArrayConstant {
                     result,
-                    element_type,
+                    ref element_type,
                     ref values,
                 } => format!(
                     ".array-constant %{} {}{}",
@@ -4110,7 +4270,7 @@ impl Function {
                 }
                 Operation::ArrayNew {
                     result,
-                    element_type,
+                    ref element_type,
                 } => format!(".array-new %{} {}", result.0, element_type.text()),
                 Operation::ByteArrayConstant { result, ref values } => {
                     let bytes = values
@@ -4127,7 +4287,7 @@ impl Function {
                 }
                 Operation::ArrayAllocate {
                     result,
-                    element_type,
+                    ref element_type,
                     length,
                 } => format!(
                     ".array-allocate %{} {} %{}",

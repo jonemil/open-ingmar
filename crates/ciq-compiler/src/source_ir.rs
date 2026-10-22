@@ -4,7 +4,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum ConstructionType {
     ByteOptions,
     Array(crate::ArrayElement),
@@ -766,7 +766,7 @@ fn emit_call(
 
 /// Resolved break destination and optional loop latch for a structured construct.
 /// Switches intercept break while continue searches for the enclosing loop.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct ControlTargets {
     break_to: BlockId,
     continue_to: Option<BlockId>,
@@ -965,7 +965,7 @@ impl Builder<'_> {
         let join = self.block_id();
         self.condition(*condition, locals, on_true, on_false)?;
         self.push(Operation::Block { block: on_true }, None);
-        let left = self.value_with_context(*when_true, locals, expected)?;
+        let left = self.value_with_context(*when_true, locals, expected.clone())?;
         self.push(
             Operation::JumpValue {
                 target: join,
@@ -1027,7 +1027,7 @@ impl Builder<'_> {
         }
         let expected = expected.and_then(|ty| {
             if let ConstructionType::Dictionary(ty) = ty {
-                Some(ty)
+                Some(ty.clone())
             } else {
                 None
             }
@@ -1037,7 +1037,12 @@ impl Builder<'_> {
             .map(|(key, value)| Some((scalar(key)?, scalar(value)?)))
             .collect::<Option<Vec<_>>>()
         {
-            if expected.is_some_and(|ty| matches!(ty.key, crate::DictionaryKey::Interface(_))) {
+            if expected.as_ref().is_some_and(|ty| {
+                matches!(
+                    ty.key,
+                    crate::DictionaryKey::Interface(_) | crate::DictionaryKey::Structural(_)
+                )
+            }) {
                 if constants.first().is_some_and(|(first, _)| {
                     constants.iter().any(|(key, _)| {
                         std::mem::discriminant(key) != std::mem::discriminant(first)
@@ -1072,7 +1077,7 @@ impl Builder<'_> {
             .all(|(key, value)| !key.needs_materialization() && !value.needs_materialization());
         let builder = crate::BuilderId(self.local_id(span)?.0);
         let length = entries.len() as u32;
-        let provisional = expected.unwrap_or(crate::DictionaryType {
+        let provisional = expected.clone().unwrap_or(crate::DictionaryType {
             key: crate::DictionaryKey::String,
             value: crate::DictionaryValue::Number,
         });
@@ -1122,7 +1127,7 @@ impl Builder<'_> {
         let allocation = self.operations.iter_mut().find(|op| matches!(op.operation, Operation::DictionaryBegin { builder: id, .. } if id == builder)).expect("Dictionary allocation precedes its entries");
         allocation.operation = Operation::DictionaryBegin {
             builder,
-            dictionary_type,
+            dictionary_type: dictionary_type.clone(),
             length,
         };
         self.types.set_dictionary(builder, dictionary_type);
@@ -1201,11 +1206,12 @@ impl Builder<'_> {
             })
             .collect::<Option<Vec<_>>>();
         if let Some(values) = constant {
-            let element_type = expected.or(values[0].0);
+            let element_type = expected.clone().or(values[0].0.clone());
             if let Some(element_type) = element_type.filter(|element| {
                 values.iter().all(|v| {
                     let actual =
-                        v.0.map(|ty| ty.api_type())
+                        v.0.as_ref()
+                            .map(|ty| ty.api_type())
                             .unwrap_or(crate::api::Type::Null);
                     crate::native::accepts(&element.api_type(), &actual)
                 })
@@ -1245,7 +1251,7 @@ impl Builder<'_> {
         self.push(
             Operation::ArrayBegin {
                 builder,
-                element_type: expected.unwrap_or(crate::ArrayElement::Char),
+                element_type: expected.clone().unwrap_or(crate::ArrayElement::Char),
                 length,
             },
             Some(span),
@@ -1265,7 +1271,7 @@ impl Builder<'_> {
                 }).expect("literal allocation was emitted before its elements");
                 allocation.operation = Operation::ArrayBegin {
                     builder,
-                    element_type,
+                    element_type: element_type.clone(),
                     length,
                 };
                 self.types.set_builder(builder, element_type);
@@ -1605,7 +1611,7 @@ impl Builder<'_> {
             .into_iter()
             .enumerate()
             .map(|(index, argument)| {
-                self.snapshot_with_context(argument, locals, expected.get(index).copied().flatten())
+                self.snapshot_with_context(argument, locals, expected.get(index).cloned().flatten())
             })
             .collect()
     }
@@ -2041,6 +2047,7 @@ impl Builder<'_> {
                 || matches!(
                     element,
                     crate::ArrayElement::Interface(_)
+                        | crate::ArrayElement::Structural { .. }
                         | crate::ArrayElement::Numeric { .. }
                         | crate::ArrayElement::LangObject
                 ) =>

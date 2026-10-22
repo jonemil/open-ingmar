@@ -301,6 +301,9 @@ contracts, proof obligations, and field accesses.
   parser. After alias expansion and normalization, they must match the existing
   supported element/key/value contracts; this does not add nested containers,
   exact source-class contents, or arbitrary heterogeneous unions.
+  Finite structural interfaces are permitted as elements/keys/values; only
+  elements and values may add Null. Member signatures retain their separate
+  source-class contract domain.
 - Signature unions: up to 254 value atoms, including Null and supported native
   container references and exact source-class atoms. Class-containing unions
   preserve exact identities separately from native alternatives. The normalized

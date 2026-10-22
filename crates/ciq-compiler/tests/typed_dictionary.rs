@@ -20,16 +20,16 @@ fn empty_construction_retains_typed_contracts_without_changing_vm_allocation() {
             ("String or Null", DictionaryValue::NullableString),
         ] {
             let ty = DictionaryType {
-                key: key_kind,
+                key: key_kind.clone(),
                 value: value_kind,
             };
             let source = format!(
                 "function f() as Toybox.Lang.Dictionary<Toybox.Lang.{key}, Toybox.Lang.{value}> {{ return {{}}; }}"
             );
             let f = compile_function(&source).unwrap();
-            assert_eq!(f.return_type(), ReturnType::TypedDictionary(ty));
+            assert_eq!(f.return_type(), ReturnType::TypedDictionary(ty.clone()));
             assert!(
-                matches!(f.operations()[0].operation, Operation::DictionaryNew { dictionary_type: Some(actual), .. } if actual == ty)
+                matches!(f.operations()[0].operation, Operation::DictionaryNew { dictionary_type: Some(ref actual), .. } if *actual == ty)
             );
             assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
             assert_eq!(f.lower().encode().unwrap(), [0x35, 1, 0x37, 0x2f, 0x16]);

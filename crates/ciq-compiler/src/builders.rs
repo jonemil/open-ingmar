@@ -5,7 +5,7 @@ use crate::{
 };
 use std::collections::{BTreeMap, VecDeque};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) enum Contract {
     Array(ArrayElement),
     ByteArray,
@@ -13,7 +13,7 @@ pub(crate) enum Contract {
     ByteOptions,
 }
 impl Contract {
-    pub(crate) fn element_type(self) -> Option<crate::api::Type> {
+    pub(crate) fn element_type(&self) -> Option<crate::api::Type> {
         match self {
             Self::Array(element) => Some(element.api_type()),
             Self::ByteArray => Some(crate::api::Type::Union(vec![
@@ -23,9 +23,9 @@ impl Contract {
             Self::Dictionary(_) | Self::ByteOptions => None,
         }
     }
-    pub(crate) fn dictionary(self) -> Option<DictionaryType> {
+    pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
         if let Self::Dictionary(ty) = self {
-            Some(ty)
+            Some(ty.clone())
         } else {
             None
         }
@@ -46,19 +46,19 @@ pub(crate) fn validate(
     for (index, op) in operations.iter().enumerate() {
         if let Operation::ArrayBegin {
             builder,
-            element_type,
+            ref element_type,
             length,
         } = op.operation
         {
             if length == 0 || length > i32::MAX as u32 {
                 return Err(fail(index, "builder length requires a positive Number"));
             }
-            if matches!(element_type, ArrayElement::Object(class) if class != crate::NativeClass::View)
+            if matches!(element_type, ArrayElement::Object(class) if *class != crate::NativeClass::View)
             {
                 return Err(fail(index, "object builders support only View elements"));
             }
             if declarations
-                .insert(builder, (Contract::Array(element_type), length))
+                .insert(builder, (Contract::Array(element_type.clone()), length))
                 .is_some()
             {
                 return Err(fail(index, "duplicate array builder declaration"));
@@ -84,7 +84,7 @@ pub(crate) fn validate(
     for (index, op) in operations.iter().enumerate() {
         if let Operation::DictionaryBegin {
             builder,
-            dictionary_type,
+            ref dictionary_type,
             length,
         } = op.operation
         {
@@ -95,7 +95,10 @@ pub(crate) fn validate(
                 ));
             }
             if declarations
-                .insert(builder, (Contract::Dictionary(dictionary_type), length))
+                .insert(
+                    builder,
+                    (Contract::Dictionary(dictionary_type.clone()), length),
+                )
                 .is_some()
             {
                 return Err(fail(index, "duplicate container builder declaration"));

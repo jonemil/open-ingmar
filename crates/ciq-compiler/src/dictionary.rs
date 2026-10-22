@@ -98,7 +98,10 @@ pub(crate) fn constant_type(
         DictionaryType::from_api_type(&Type::dictionary(first.api_type(), value))
             .ok_or_else(fail)?
     };
-    if matches!(ty.key, DictionaryKey::Interface(_)) {
+    if matches!(
+        ty.key,
+        DictionaryKey::Interface(_) | crate::DictionaryKey::Structural(_)
+    ) {
         return Err("interface Dictionary keys require runtime construction".into());
     }
     let Type::Dictionary { key, value } = ty.api_type() else {
@@ -174,9 +177,11 @@ pub(crate) fn constant_record(
     }
 }
 
-/// Supported non-null scalar, Method, and comparison-interface Dictionary keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Supported non-null scalar, Method, and interface Dictionary keys.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryKey {
+    /// A non-null source interface key; equality/hash dispatch remain runtime operations.
+    Structural(Box<crate::StructuralInterface>),
     /// A non-null Numeric, Integer, or Decimal key, retaining its runtime type.
     Numeric(crate::NumericAlias),
     /// A ByteArray reference; Dictionary key comparison uses runtime identity.
@@ -195,8 +200,9 @@ pub enum DictionaryKey {
 
 impl DictionaryKey {
     /// Return the invariant key contract without erasing numeric alternatives.
-    pub fn api_type(self) -> Type {
+    pub fn api_type(&self) -> Type {
         let name = match self {
+            Self::Structural(shape) => return Type::Structural(shape.clone()),
             Self::Numeric(alias) => return alias.api_type(false),
             Self::Interface(crate::InterfaceType::Comparable) => "Comparable",
             Self::Interface(crate::InterfaceType::Comparator) => "Comparator",
@@ -216,8 +222,13 @@ impl DictionaryKey {
 }
 
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A source interface value, optionally permitting explicitly stored Null.
+    Structural {
+        shape: Box<crate::StructuralInterface>,
+        nullable: bool,
+    },
     /// A non-null erased Object; lookups additionally permit absent-key Null.
     LangObject,
     /// An erased Object or an explicitly stored Null value.
@@ -256,24 +267,38 @@ pub enum DictionaryValue {
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
-/// Explicit nested type parameters and arbitrary unions are unsupported.
+/// Nested container parameters and arbitrary unions are unsupported.
 /// Object values may hold nested references without retaining their parameters;
 /// numeric typedefs retain their bounded scalar alternatives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DictionaryType {
     pub key: DictionaryKey,
     pub value: DictionaryValue,
 }
 
 impl DictionaryType {
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        if let DictionaryKey::Structural(shape) = &self.key {
+            shape.validate()?;
+        }
+        if let DictionaryValue::Structural { shape, .. } = &self.value {
+            shape.validate()?;
+        }
+        Ok(())
+    }
+
     /// Return the generic API type without erasing either mutable parameter.
-    pub fn api_type(self) -> Type {
+    pub fn api_type(&self) -> Type {
         let key = self.key.api_type();
-        let (value, nullable) = match self.value {
+        let (value, nullable) = match &self.value {
+            DictionaryValue::Structural { shape, nullable } => {
+                let ty = Type::Structural(shape.clone());
+                return Type::dictionary(key, if *nullable { ty.with_null() } else { ty });
+            }
             DictionaryValue::LangObject => ("Object", false),
             DictionaryValue::NullableObject => ("Object", true),
             DictionaryValue::Numeric { alias, nullable } => {
-                return Type::dictionary(key, alias.api_type(nullable));
+                return Type::dictionary(key, alias.api_type(*nullable));
             }
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => ("Comparable", false),
             DictionaryValue::Interface(crate::InterfaceType::Comparator) => ("Comparator", false),
@@ -322,6 +347,10 @@ impl DictionaryType {
             return None;
         };
         let key = match key.as_ref() {
+            Type::Structural(shape) => {
+                shape.validate().ok()?;
+                DictionaryKey::Structural(shape.clone())
+            }
             ty if crate::NumericAlias::from_api_type(ty).is_some_and(|(_, nullable)| !nullable) => {
                 DictionaryKey::Numeric(crate::NumericAlias::from_api_type(ty)?.0)
             }
@@ -350,6 +379,16 @@ impl DictionaryType {
             return Some(Self {
                 key,
                 value: DictionaryValue::Numeric { alias, nullable },
+            });
+        }
+        if let Some((shape, nullable)) = crate::structural::value_shape(value) {
+            shape.validate().ok()?;
+            return Some(Self {
+                key,
+                value: DictionaryValue::Structural {
+                    shape: Box::new(shape.clone()),
+                    nullable,
+                },
             });
         }
         for value_kind in [
@@ -383,7 +422,7 @@ impl DictionaryType {
             DictionaryValue::NullableChar,
         ] {
             let candidate = Self {
-                key,
+                key: key.clone(),
                 value: value_kind,
             };
             if candidate.api_type() == *ty {
@@ -393,8 +432,11 @@ impl DictionaryType {
         None
     }
 
-    pub(crate) fn text(self) -> String {
-        let key = match self.key {
+    pub(crate) fn text(&self) -> String {
+        let key = match &self.key {
+            DictionaryKey::Structural(shape) => {
+                return format!("dictionary({}=>{})", shape.tag(), self.value_text());
+            }
             DictionaryKey::Numeric(alias) => alias.value_tag(false),
             DictionaryKey::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryKey::Interface(crate::InterfaceType::Comparator) => "comparator",
@@ -409,10 +451,23 @@ impl DictionaryType {
             DictionaryKey::Method => "method",
             DictionaryKey::ByteArray => "byte-array",
         };
-        let value = match self.value {
+        let value = self.value_text();
+        format!("dictionary({key}=>{value})")
+    }
+
+    fn value_text(&self) -> String {
+        if let DictionaryValue::Structural { shape, nullable } = &self.value {
+            return if *nullable {
+                format!("union({}|null)", shape.tag())
+            } else {
+                shape.tag()
+            };
+        }
+        let value = match &self.value {
+            DictionaryValue::Structural { .. } => unreachable!(),
             DictionaryValue::LangObject => "object",
             DictionaryValue::NullableObject => "nullable-object",
-            DictionaryValue::Numeric { alias, nullable } => alias.value_tag(nullable),
+            DictionaryValue::Numeric { alias, nullable } => alias.value_tag(*nullable),
             DictionaryValue::Interface(crate::InterfaceType::Comparable) => "comparable",
             DictionaryValue::Interface(crate::InterfaceType::Comparator) => "comparator",
             DictionaryValue::NullableInterface(crate::InterfaceType::Comparable) => {
@@ -444,16 +499,22 @@ impl DictionaryType {
             DictionaryValue::NullableSymbol => "nullable-symbol",
             DictionaryValue::NullableChar => "nullable-char",
         };
-        format!("dictionary({key}=>{value})")
+        value.into()
     }
 
     pub(crate) fn parse(text: &str) -> Option<Self> {
-        let (key, value) = text
-            .strip_prefix("dictionary(")?
-            .strip_suffix(')')?
-            .split_once("=>")?;
+        let body = text.strip_prefix("dictionary(")?.strip_suffix(')')?;
+        let parts = crate::structural::split(body, '=').ok()?;
+        let [key, value] = parts.as_slice() else {
+            return None;
+        };
+        let key = *key;
+        let value = value.strip_prefix('>')?;
         Some(Self {
             key: match key {
+                tag if tag.starts_with("interface(") => {
+                    DictionaryKey::Structural(Box::new(crate::structural::parse(tag).ok()?))
+                }
                 tag if crate::NumericAlias::parse_tag(tag)
                     .is_some_and(|(_, nullable)| !nullable) =>
                 {
@@ -474,6 +535,14 @@ impl DictionaryType {
                 _ => return None,
             },
             value: match value {
+                tag if tag.starts_with("interface(") || tag.starts_with("union(") => {
+                    let ty = crate::type_text::call_result(tag).ok()?.api_type();
+                    let (shape, nullable) = crate::structural::value_shape(&ty)?;
+                    DictionaryValue::Structural {
+                        shape: Box::new(shape.clone()),
+                        nullable,
+                    }
+                }
                 "object" => DictionaryValue::LangObject,
                 "nullable-object" => DictionaryValue::NullableObject,
                 tag if crate::NumericAlias::parse_tag(tag).is_some() => {

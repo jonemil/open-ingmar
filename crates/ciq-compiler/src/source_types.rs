@@ -80,7 +80,7 @@ impl Types {
                 dictionary_type,
                 ..
             } => {
-                self.dictionaries.insert(*builder, *dictionary_type);
+                self.dictionaries.insert(*builder, dictionary_type.clone());
                 return;
             }
             Operation::DictionaryFinish { result, builder } => (
@@ -99,6 +99,7 @@ impl Types {
                 *result,
                 Some(
                     dictionary_type
+                        .clone()
                         .map(|ty| ty.api_type())
                         .unwrap_or_else(|| Type::named("Toybox.Lang.Dictionary")),
                 ),
@@ -111,7 +112,7 @@ impl Types {
                 element_type,
                 ..
             } => {
-                self.builders.insert(*builder, *element_type);
+                self.builders.insert(*builder, element_type.clone());
                 return;
             }
             Operation::ArrayFinish { result, builder } if self.byte_arrays.contains(builder) => {

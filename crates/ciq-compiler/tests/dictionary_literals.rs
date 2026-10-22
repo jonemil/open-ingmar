@@ -76,7 +76,7 @@ fn homogeneous_inference_and_context_retain_nullable_values() {
         let source = format!("function f() {{ var d = {literal}; return d.size(); }}");
         let f = compile_function(&source).unwrap();
         assert!(f.operations().iter().any(|op| matches!(op.operation,
-            Operation::DictionaryConstant { dictionary_type, .. } if dictionary_type == DictionaryType { key, value })));
+            Operation::DictionaryConstant { ref dictionary_type, .. } if *dictionary_type == DictionaryType { key: key.clone(), value: value.clone() })));
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let source = "module D {

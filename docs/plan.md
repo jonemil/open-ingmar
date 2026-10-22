@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support structural interface contracts as Array elements and Dictionary
-  keys/values through annotations, saved IR, and container operations.
 - [ ] Parse callback signatures with argument/result types; check assignments
   and calls against the resolved signature.
 - [ ] Support positional tuple types, construction, indexing, and assignability

@@ -218,12 +218,20 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
-    ARRAY_ELEMENTS.iter().copied().find(|e| e.text() == tag)
+    if tag.starts_with("interface(") || tag.starts_with("union(") {
+        return ArrayElement::from_api_type(&call_result(tag).ok()?.api_type());
+    }
+    ARRAY_ELEMENTS.iter().find(|e| e.text() == tag).cloned()
 }
 
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if (tag.starts_with("interface(") || tag.starts_with("union(")) && tag.ends_with("-array") {
+        return element(tag.strip_suffix("-array").unwrap())
+            .map(ReturnType::Array)
+            .ok_or("unsupported array element contract");
+    }
     if tag.starts_with("interface(") {
         return crate::structural::parse(tag).map(|shape| ReturnType::Structural(Box::new(shape)));
     }
@@ -238,7 +246,9 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
         let mut classes = Vec::new();
         let mut native = Vec::new();
         for part in parts {
-            if part.starts_with("source-union(") || part.starts_with("union(") {
+            if (part.starts_with("source-union(") || part.starts_with("union("))
+                && part.ends_with(')')
+            {
                 return Err("nested source union tags are not supported");
             }
             match call_result(part)? {
@@ -261,10 +271,11 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
         if parts.len() < 2
             || parts.len() > crate::MAX_PARAMETERS
             || parts.iter().any(|p| {
-                p.starts_with("union(")
-                    || p.starts_with("source-union(")
-                    || p.starts_with("source(")
-                    || p.starts_with("nullable-source(")
+                p.ends_with(')')
+                    && (p.starts_with("union(")
+                        || p.starts_with("source-union(")
+                        || p.starts_with("source(")
+                        || p.starts_with("nullable-source("))
             })
         {
             return Err("invalid native union alternatives");
@@ -551,10 +562,10 @@ mod tests {
         }
         for e in ARRAY_ELEMENTS {
             let tag = e.text();
-            assert_eq!(element(tag), Some(*e));
+            assert_eq!(element(&tag), Some(e.clone()));
             assert_eq!(
                 call_result(&format!("{tag}-array")),
-                Ok(ReturnType::Array(*e))
+                Ok(ReturnType::Array(e.clone()))
             );
             assert_eq!(
                 join(&format!("array-{tag}")),

@@ -3399,6 +3399,33 @@ results retain it for later source dispatch, storage, and null refinement.
 For a union receiver, each alternative checks its own argument/field contract;
 read and call results join all possible source/native alternatives.
 
+Arrays admit a finite structural interface as their invariant element type,
+optionally `or Null`. Dictionaries admit a non-null structural key and a
+structural value optionally `or Null`. For example, `Array<Counter>` and
+`Dictionary<Counter, Counter or Null>` preserve Counter's full contract.
+Typedefs and anonymous interfaces use the same rules. Source-class types inside
+the member signatures still resolve across files; this does not permit exact
+source-class types as container contents.
+
+Expected container types supply literal context, including empty literals.
+Source implementations require witnesses at literal fills, indexed writes,
+Dictionary key reads, and native container method arguments. Union receivers
+check every possible content contract. Native witnesses require their actual
+members at the selected API levels. Mutable container types remain invariant:
+structural subtyping does not widen an existing container's element/key/value
+type. Nullable element/value storage and nullable container references are
+independent contracts.
+
+Reads, Dictionary `keys`/`values`, and Array `slice`/`reverse` preserve the
+declared content types. A saved nullable read can be guarded and used after a
+later mutation; testing one direct read does not refine another. Existing
+container method profiles apply, including their equality/hash behavior and
+callback effects. A structural key uses ordinary runtime Dictionary dispatch;
+it receives no synthetic identity or hash implementation. Source-object entries
+and structural keys use runtime construction; compatible native scalar
+elements/values may use existing tagged constants. Containers retain their
+existing nesting and heterogeneous-union restrictions.
+
 `receiver.field` reads and writes require a declared structural field. Ordinary
 assignments, compound assignments, and statement increments/decrements check the
 field's type and evaluate the receiver once before the RHS. Container literals

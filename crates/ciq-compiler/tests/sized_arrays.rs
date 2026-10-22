@@ -23,7 +23,7 @@ fn sized_allocations_preserve_nullable_contracts_and_native_lowering() {
         ))
         .unwrap();
         assert!(f.operations().iter().any(|o| matches!(o.operation,
-            Operation::ArrayAllocate { element_type, .. } if element_type == element)));
+            Operation::ArrayAllocate { ref element_type, .. } if *element_type == element)));
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
         let assembly = f.lower();
         assert_eq!(

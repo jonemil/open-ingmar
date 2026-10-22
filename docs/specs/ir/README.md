@@ -96,6 +96,18 @@ native projection. Union receivers check each signature's arguments and join
 results without discarding exact source alternatives. Reads remain snapshots;
 mutation does not change an earlier read's contract or runtime value.
 
+`ArrayElement::Structural`, `DictionaryKey::Structural`, and
+`DictionaryValue::Structural` retain finite member maps instead of erasing them
+to Object. Array elements and Dictionary values carry a separate nullable flag;
+keys exclude Null. These owned contracts use Clone rather than Copy.
+Container construction/mutation operations retain their ordinary forms and
+derive full content types from the receiver or builder. Unit validation proves
+source implementations at every ingress, including lookup keys. Native
+signature projection alone cannot discharge that proof. Nested source member
+references resolve within container contracts, and depth checks traverse them.
+The [frontend rules](../frontend/README.md#source-interface-types) own invariance,
+literal context, snapshot behavior, and applicable container operations.
+
 Function checks may defer an exact source implementation to unit validation.
 The unit resolves the required source/native member signatures at every checked
 boundary before application generation. Opaque native base types cannot invent

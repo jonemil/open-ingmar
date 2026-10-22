@@ -264,6 +264,15 @@ pub(crate) fn value_call(
     {
         return Err("native call argument count does not match its API contract".into());
     }
+    for (index, actual) in arguments.iter().enumerate() {
+        if let Some(expected) = signature
+            .parameters
+            .get(index)
+            .or(signature.variadic.as_ref())
+        {
+            structural_api(expected, actual, context)?;
+        }
+    }
     if !arguments.iter().enumerate().all(|(index, actual)| {
         signature
             .parameters

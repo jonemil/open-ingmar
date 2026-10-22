@@ -6,6 +6,8 @@ mutable fields. Reads/writes, compound assignments, increments, nullable
 snapshots, and branching values preserve receiver identity and evaluation order.
 Source-class fields and method arguments/results retain exact identities,
 including nullable snapshots and a two-class method result.
+Arrays and Dictionaries preserve interface contents through construction,
+mutation, copies, nullable snapshots, and structural key lookup.
 
 From the repository root, using new output paths:
 

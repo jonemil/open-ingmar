@@ -15,7 +15,10 @@ fn byte_array_elements_preserve_invariant_types_and_all_construction_paths() {
             "function f(a as Toybox.Lang.Array<Toybox.Lang.ByteArray{nullable}>) as Toybox.Lang.Array<Toybox.Lang.ByteArray{nullable}> {{return a;}}"
         );
         let f = compile_function(&source).unwrap();
-        assert_eq!(f.parameter_types(), &[ParameterType::Array(element)]);
+        assert_eq!(
+            f.parameter_types(),
+            &[ParameterType::Array(element.clone())]
+        );
         assert_eq!(f.return_type(), ReturnType::Array(element));
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
