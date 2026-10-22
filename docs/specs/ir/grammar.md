@@ -219,6 +219,8 @@ object-operation = ".new-native" value-id class-path
                  | ".base-initialize" native-base
                  | ".tuple-new" value-id value-id*
                  | ".tuple-write" value-id value-id value-id value-id
+                 | ".tuple-add" value-id value-id value-id
+                 | ".tuple-add-all" value-id value-id value-id
 ```
 
 User-call and field-read result defaults are `integer`; canonical output omits
@@ -306,7 +308,8 @@ common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
            | callback-tag | tuple-tag
-tuple-tag = "tuple(" call-result-tag (";" call-result-tag)* ")"
+tuple-tag = "tuple(" tuple-slots? ")"
+tuple-slots = call-result-tag (";" call-result-tag)*
 callback-tag = "callback(" callback-arguments? "=>" callback-result-tag ")"
 callback-arguments = parameter-tag (";" parameter-tag)*
 callback-result-tag = parameter-tag | "void"

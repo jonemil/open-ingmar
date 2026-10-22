@@ -45,6 +45,8 @@ enum Directive {
     NewNative,
     TupleNew,
     TupleWrite,
+    TupleAdd,
+    TupleAddAll,
     NewSource,
     Constant,
     CallNativeDiscard,
@@ -318,6 +320,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".new-native") => (Directive::NewNative, 3),
             Some(".tuple-new") => (Directive::TupleNew, call_width()),
             Some(".tuple-write") => (Directive::TupleWrite, 5),
+            Some(".tuple-add") => (Directive::TupleAdd, 4),
+            Some(".tuple-add-all") => (Directive::TupleAddAll, 4),
             Some(".new-source") => (Directive::NewSource, call_width()),
             Some(".constant") => (Directive::Constant, 4),
             Some(".call-native-discard") => (Directive::CallNativeDiscard, call_width()),
@@ -574,6 +578,12 @@ pub(crate) fn parse_function_ir_context(
                         .map(|v| parse_value(v))
                         .collect::<Result<_, _>>()?,
                 },
+                Directive::TupleAdd | Directive::TupleAddAll => Operation::TupleAppend {
+                    result: parse_value(&fields[1])?,
+                    array: parse_value(&fields[2])?,
+                    value: parse_value(&fields[3])?,
+                    spread: matches!(directive, Directive::TupleAddAll),
+                },
                 Directive::TupleWrite => Operation::TupleWrite {
                     result: parse_value(&fields[1])?,
                     array: parse_value(&fields[2])?,
@@ -581,8 +591,8 @@ pub(crate) fn parse_function_ir_context(
                     value: parse_value(&fields[4])?,
                 },
                 Directive::TupleNew => {
-                    if width < 3 {
-                        return Err(fail(*at, "tuple allocation requires at least one slot"));
+                    if width < 2 {
+                        return Err(fail(*at, "tuple allocation requires a result"));
                     }
                     Operation::TupleNew {
                         result: fields

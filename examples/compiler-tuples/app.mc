@@ -96,6 +96,53 @@ module Mutation {
     }
 }
 
+module Append {
+    function value(x as [Lang.Number]) as [Lang.Number, Lang.String] {
+        return x.add("appended");
+    }
+    function all(x as [Lang.Number], tail as [Token, Lang.String]) as Lang.Number {
+        x.addAll(tail);
+        return x[1].number();
+    }
+    function empty(x as Pair) as Lang.Number {
+        x.addAll([]);
+        return x.size();
+    }
+    function aliasResult() as Lang.Boolean {
+        var x = [1, "old"];
+        var y = x.add(true);
+        return y[2];
+    }
+    function literal(x as [Lang.Number]) as [Lang.Number, Lang.Number, Lang.Number] {
+        x.addAll([2, 3]);
+        return x;
+    }
+    function branch(x as [Lang.Number], flag as Lang.Boolean) as Lang.Number {
+        if (flag) { x.add("tail"); }
+        return x.size();
+    }
+    function source(x as [Lang.Number]) as Lang.Number {
+        x.add(new Token());
+        return x[1].number();
+    }
+    function effects(x as [Lang.Number]) as Lang.String {
+        x.add(Tuples.text());
+        return x[1];
+    }
+    function nested(x as [Lang.Number]) as Lang.Number {
+        x.add(x.add("tail").size());
+        return x.size();
+    }
+    function mixed(x as [Lang.Number]) as Lang.Boolean {
+        x.addAll(["tail", true]);
+        return x[2];
+    }
+    function container(x as [Lang.Number]) as Lang.Number {
+        x.add([]);
+        return x[1].size();
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -138,6 +185,18 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(Mutation.branch(false));
         System.println(Mutation.compound([39, "compound"]));
         System.println(Mutation.conditional([0, "conditional"], true));
+        System.println(Append.value([1])[1]);
+        System.println(Append.all([1], [new Token(), "tail"]));
+        System.println(Append.empty([1, "old"]));
+        System.println(Append.aliasResult());
+        System.println(Append.literal([1])[2]);
+        System.println(Append.branch([1], true));
+        System.println(Append.branch([1], false));
+        System.println(Append.source([1]));
+        System.println(Append.effects([1]));
+        System.println(Append.nested([1]));
+        System.println(Append.mixed([1]));
+        System.println(Append.container([1]));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

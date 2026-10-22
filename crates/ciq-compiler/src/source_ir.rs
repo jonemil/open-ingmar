@@ -878,7 +878,138 @@ struct Builder<'a> {
     controls: Vec<ControlTargets>,
 }
 
+/// Identify direct named receivers of the two shape-changing Array append calls.
+/// This is syntax discovery only; source types decide whether tuple staging applies.
+fn tuple_append_name(expression: &parser::Expression) -> Option<(&str, bool)> {
+    use parser::ExpressionKind as E;
+    let (name, member) = match &expression.kind {
+        E::ModuleCall { module, member, .. } => (module.as_str(), member.as_str()),
+        E::ValueCall {
+            receiver, member, ..
+        } => {
+            let E::Local(name) = &receiver.kind else {
+                return None;
+            };
+            (name.as_str(), member.as_str())
+        }
+        _ => return None,
+    };
+    match member {
+        "add" => Some((name, false)),
+        "addAll" => Some((name, true)),
+        _ => None,
+    }
+}
+
 impl Builder<'_> {
+    /// Include tuple append effects when deciding which expression trees need
+    /// staged operands. Ordinary Arrays retain their existing staging rules.
+    fn needs_staging(
+        &self,
+        expression: &parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> bool {
+        if expression.needs_materialization() {
+            return true;
+        }
+        let mut needed = false;
+        expression.visit(&mut |expression| {
+            if let Some((name, _)) = tuple_append_name(expression) {
+                needed |= locals
+                    .get(name)
+                    .and_then(|local| self.types.local_type(*local))
+                    .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some());
+            }
+        });
+        needed
+    }
+
+    /// Append to a named tuple and publish the new local contract. Evaluate
+    /// arguments before reading the unchanged named reference so nested appends
+    /// to that receiver contribute their updated shape to the outer operation.
+    fn tuple_append(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        use parser::{Expression, ExpressionKind as E};
+        let span = expression.span;
+        let (name, spread) = tuple_append_name(&expression).expect("known named append");
+        if self
+            .controls
+            .iter()
+            .any(|control| control.continue_to.is_some())
+        {
+            return Err(Diagnostic::at(
+                self.source,
+                span.start,
+                "tuple append in loops requires a generalized Array shape",
+            ));
+        }
+        let name = name.to_owned();
+        let local = locals[&name];
+        let arguments = match expression.kind {
+            E::ModuleCall { arguments, .. } | E::ValueCall { arguments, .. } => arguments,
+            _ => unreachable!(),
+        };
+        let [argument]: [Expression; 1] = arguments.try_into().map_err(|_| {
+            Diagnostic::at(
+                self.source,
+                span.start,
+                "tuple add/addAll require exactly one argument",
+            )
+        })?;
+        let argument = if let E::ArrayLiteral(elements) = argument.kind {
+            let value = self.tuple_value(elements, None, argument.span, locals)?;
+            let temporary = self.local_id(argument.span)?;
+            self.push(
+                Operation::LocalInitialize {
+                    local: temporary,
+                    value,
+                },
+                Some(argument.span),
+            );
+            Expression {
+                kind: E::Temporary(temporary),
+                span: argument.span,
+            }
+        } else {
+            self.snapshot(argument, locals)?
+        };
+        self.promote_variable(local);
+        let array = self.value(
+            Expression {
+                kind: E::Local(name.clone()),
+                span,
+            },
+            locals,
+        )?;
+        let value = self.value(argument, locals)?;
+        self.types
+            .append_type(array, value, spread)
+            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::TupleAppend {
+                result,
+                array,
+                value,
+                spread,
+            },
+            Some(span),
+        );
+        self.push(
+            Operation::LocalAssign {
+                local,
+                value: result,
+            },
+            Some(span),
+        );
+        Ok(Expression {
+            kind: E::Local(name),
+            span,
+        })
+    }
     /// Promote a named slot when assignment changes its inferred contract.
     /// Preserve frame identity and earlier value snapshots; hidden temporaries
     /// keep fixed contracts and do not participate in variable inference.
@@ -1239,9 +1370,9 @@ impl Builder<'_> {
                 });
             }
         }
-        let grouped = entries
-            .iter()
-            .all(|(key, value)| !key.needs_materialization() && !value.needs_materialization());
+        let grouped = entries.iter().all(|(key, value)| {
+            !self.needs_staging(key, locals) && !self.needs_staging(value, locals)
+        });
         let builder = crate::BuilderId(self.local_id(span)?.0);
         let length = entries.len() as u32;
         let provisional = expected.clone().unwrap_or(crate::DictionaryType {
@@ -1424,7 +1555,7 @@ impl Builder<'_> {
             }
         }
         let builder = crate::BuilderId(self.local_id(span)?.0);
-        let grouped = elements.iter().all(|e| !e.needs_materialization());
+        let grouped = elements.iter().all(|e| !self.needs_staging(e, locals));
         let element = if grouped || expected.is_some() {
             None
         } else {
@@ -1546,7 +1677,7 @@ impl Builder<'_> {
             result
         } else {
             let builder = crate::BuilderId(self.local_id(span)?.0);
-            let grouped = elements.iter().all(|e| !e.needs_materialization());
+            let grouped = elements.iter().all(|e| !self.needs_staging(e, locals));
             self.push(
                 Operation::ByteArrayBegin {
                     builder,
@@ -1612,6 +1743,14 @@ impl Builder<'_> {
     ) -> Result<parser::Expression, Diagnostic> {
         use parser::ExpressionKind as E;
         let span = expression.span;
+        if tuple_append_name(&expression).is_some_and(|(name, _)| {
+            locals
+                .get(name)
+                .and_then(|local| self.types.local_type(*local))
+                .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
+        }) {
+            return self.tuple_append(expression, locals);
+        }
         let kind = resolve_implicit_call(
             self.source,
             expression.kind,
@@ -1773,7 +1912,7 @@ impl Builder<'_> {
     ) -> Result<Vec<ValueId>, Diagnostic> {
         let arguments = if arguments
             .iter()
-            .any(parser::Expression::needs_materialization)
+            .any(|expression| self.needs_staging(expression, locals))
         {
             self.snapshot_arguments(arguments, locals, expected)?
         } else {
@@ -2276,7 +2415,7 @@ impl Builder<'_> {
             {
                 self.array_literal(elements, Some(element), span, locals)?
             }
-            (expression, _) if expression.needs_materialization() => {
+            (expression, _) if self.needs_staging(&expression, locals) => {
                 self.prepare(expression, locals)?
             }
             (expression, _) => expression,
@@ -2380,7 +2519,7 @@ impl Builder<'_> {
                 span: target_span,
             };
             let mut value = change(old);
-            if value.needs_materialization() {
+            if self.needs_staging(&value, locals) {
                 value = self.snapshot(value, locals)?;
             }
             let receiver = self.value(receiver, locals)?;
@@ -2435,7 +2574,7 @@ impl Builder<'_> {
             span: target_span,
         };
         let mut value = change(old);
-        if value.needs_materialization() {
+        if self.needs_staging(&value, locals) {
             value = self.snapshot(value, locals)?;
         }
         let array = self.value(array, locals)?;
@@ -2736,9 +2875,9 @@ impl Builder<'_> {
                         .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some());
                     // Keep earlier operands stable across control-flow staging
                     // in any later expression; plain operands need no temporaries.
-                    let (array, index, value) = if array.needs_materialization()
-                        || index.needs_materialization()
-                        || value.needs_materialization()
+                    let (array, index, value) = if self.needs_staging(&array, locals)
+                        || self.needs_staging(&index, locals)
+                        || self.needs_staging(&value, locals)
                     {
                         (
                             self.snapshot(array, locals)?,
@@ -2759,43 +2898,44 @@ impl Builder<'_> {
                     value,
                     ..
                 } => {
-                    let (receiver, value) =
-                        if receiver.needs_materialization() || value.needs_materialization() {
-                            let receiver = self.snapshot(receiver, locals)?;
-                            let parser::ExpressionKind::Temporary(local) = receiver.kind else {
-                                unreachable!()
-                            };
-                            let ty = crate::structural::field_type(
-                                self.types.local_type(local).ok_or_else(|| {
-                                    Diagnostic::at(
-                                        self.source,
-                                        span.start,
-                                        "unknown structural receiver type",
-                                    )
-                                })?,
-                                &member,
-                            )
-                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-                            let value =
-                                self.snapshot_with_context(value, locals, construction_type(&ty))?;
-                            (self.value(receiver, locals)?, self.value(value, locals)?)
-                        } else {
-                            let receiver = self.value(receiver, locals)?;
-                            let ty = crate::structural::field_type(
-                                self.types.value_type(receiver).ok_or_else(|| {
-                                    Diagnostic::at(
-                                        self.source,
-                                        span.start,
-                                        "unknown structural receiver type",
-                                    )
-                                })?,
-                                &member,
-                            )
-                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-                            let value =
-                                self.value_with_context(value, locals, construction_type(&ty))?;
-                            (receiver, value)
+                    let (receiver, value) = if self.needs_staging(&receiver, locals)
+                        || self.needs_staging(&value, locals)
+                    {
+                        let receiver = self.snapshot(receiver, locals)?;
+                        let parser::ExpressionKind::Temporary(local) = receiver.kind else {
+                            unreachable!()
                         };
+                        let ty = crate::structural::field_type(
+                            self.types.local_type(local).ok_or_else(|| {
+                                Diagnostic::at(
+                                    self.source,
+                                    span.start,
+                                    "unknown structural receiver type",
+                                )
+                            })?,
+                            &member,
+                        )
+                        .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                        let value =
+                            self.snapshot_with_context(value, locals, construction_type(&ty))?;
+                        (self.value(receiver, locals)?, self.value(value, locals)?)
+                    } else {
+                        let receiver = self.value(receiver, locals)?;
+                        let ty = crate::structural::field_type(
+                            self.types.value_type(receiver).ok_or_else(|| {
+                                Diagnostic::at(
+                                    self.source,
+                                    span.start,
+                                    "unknown structural receiver type",
+                                )
+                            })?,
+                            &member,
+                        )
+                        .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                        let value =
+                            self.value_with_context(value, locals, construction_type(&ty))?;
+                        (receiver, value)
+                    };
                     self.push(
                         Operation::MemberWrite {
                             receiver,
@@ -3461,6 +3601,18 @@ fn tuple_write_receivers(statements: &[parser::Statement]) -> std::collections::
     use parser::{ExpressionKind as E, Statement as S};
     let mut names = std::collections::BTreeSet::new();
     for statement in statements {
+        if let S::Call { module, member, .. } = statement {
+            if matches!(member.as_str(), "add" | "addAll") {
+                names.insert(module.as_str());
+            }
+        }
+        for expression in statement.expressions() {
+            expression.visit(&mut |expression| {
+                if let Some((name, _)) = tuple_append_name(expression) {
+                    names.insert(name);
+                }
+            });
+        }
         let receiver = match statement {
             S::ArrayAssign { array, .. } => Some(array),
             S::Update { target, .. } | S::PlaceCompound { target, .. } => {

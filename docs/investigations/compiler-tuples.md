@@ -115,11 +115,34 @@ called with a local `[1]` likewise does not prevent returning that local's
 index zero as Number. This agrees with the documented lack of tuple mutation
 tracking across calls. The complete application also passes strict SDK checking
 for a conditional slot replacement joined with the original tuple, Number slot
-compound updates,
-and replacement values containing nested tuples or exact source instances.
+compound updates, and replacement values containing nested tuples or exact
+source instances.
 A separate strict probe accepts rebinding a `[Lang.Number]` parameter to
 `["changed"]` and returning `[Lang.String]`. These observations do not establish
 constant folding of arbitrary index expressions or other Array mutators.
+
+Strict probes also accept returning `x.add("tail")` directly as
+`[Number, String]` for `x as [Number]`, and returning `x.addAll(y)` as
+`[Number, String, Boolean]` for `y as [String, Boolean]`. After storing the
+returned alias, `x[1]` is still accepted as String. Appending `[2, 3]` adds two
+Number slots, while `addAll([])` preserves the original shape.
+
+A nested append exposes another SDK tracking limit:
+
+```monkeyc
+function nested(x as [Lang.Number])
+    as [Lang.Number, Lang.String, Lang.Number] {
+    x.add(x.add("tail").size());
+    return x;
+}
+```
+
+SDK 9.2.0 strict checking rejects this return, reporting `[Number, Number]`;
+it drops the inner append's String slot from the final static receiver view.
+The complete application's `Append.nested` instead returns the size and prints
+`3` in both SDK and independently generated PRGs. This confirms both runtime
+appends. Our direct named-receiver tracking retains both slots; it does not
+establish tracking through arbitrary aliases.
 
 ## Runtime construction and typed transport
 
@@ -133,11 +156,13 @@ and ordered slot effects. The application also checks inferred mixed scalar
 tokens, Null-only tuples, nested literals, source slots selected by nested
 inference, and ordered computed effects inside nested literals. Direct slot
 replacement changes parameter/local contracts, including nested/source values;
-the console
-also checks both paths of a branch join, compound updates, and a conditional RHS.
+the console also checks both paths of a branch join, compound updates, and a
+conditional RHS. Append checks cover returned aliases, source-class tails,
+homogeneous/mixed/empty literal arguments, argument effects, branch-dependent
+cardinality, and the nested append above.
 Both SDK and generated PRGs reconstructed through structured section export
-without required CODE/DATA fallback. It does not
-establish mutation tracking through arbitrary aliases, across calls, or
+without required CODE/DATA fallback. It does not establish mutation tracking
+through arbitrary aliases, across calls, or
 inference for every unconstrained literal.
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

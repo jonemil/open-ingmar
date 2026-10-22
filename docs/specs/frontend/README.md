@@ -227,13 +227,33 @@ function replace(x as [Number, String]) as [String, String] {
 }
 ```
 
-Parameter annotations constrain entry values. Parameters used as slot-write
+`add(value)` appends one slot; `addAll(tail)` appends every slot of a positional
+tail. Both return the same Array reference and update the named receiver's
+contract. Direct Array literals passed to these calls are packed positionally,
+including homogeneous and empty literals. `addAll([])` keeps the shape;
+`add([])` appends an empty tuple slot. Other unconstrained empty literals still
+require an expected Array context. Receiver/tail unions retain each possible
+shape, and branch joins use the updated local contracts. These methods require
+API 1.3.0. Each derived append result, summed over its possible shapes, has a
+64 KiB canonical-signature budget. This compiler work bound prevents repeated
+self-appends from expanding type metadata exponentially; it is not a VM or
+device Array limit.
+
+Append arguments evaluate before the final receiver read. A named local cannot
+be rebound by argument expressions, so its reference is unchanged; nested
+appends to that name contribute their updated slots before the outer append.
+This avoids the SDK's observed loss of the inner append's static shape.
+
+Parameter annotations constrain entry values. Parameters used as tuple mutation
 receivers have an inferred local view that may change inside the body.
 Mutation tracking is local to the named receiver: aliases and callers retain
 their previous static views, matching the SDK's
 observed limits. This does not guarantee that an aliased runtime slot still has
 its previous type. Dynamic-index writes, writes through fields/nested receivers,
-and writes through nullable tuple parameters are currently rejected.
+and writes through nullable tuple parameters are currently rejected. Append
+calls through computed/field receivers or nullable locals (including after a
+guard), unknown-length `addAll` arguments, and tuple appends inside loops are
+also rejected until their storage/shape contracts can be represented.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts
@@ -612,7 +632,7 @@ Evaluate the RHS before storing; earlier reads keep their snapshots and later
 reads observe the replacement. Writes invalidate that parameter's null/class
 refinements, including on loop backedges. Ordinary parameter writes use the
 existing parameter slot. Non-null [tuple parameters](#positional-tuples) used as
-slot-write receivers instead have an inferred local view so mutation can change
+mutation receivers instead have an inferred local view so mutation can change
 their positional
 contract; their entry annotations still constrain calls. See
 [assignment evidence](../../investigations/compiler-assignments.md#parameter-writes-and-local-annotations).

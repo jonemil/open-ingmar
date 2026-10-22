@@ -1,7 +1,7 @@
 //! Positional Array contracts shared by source construction and saved IR.
 use crate::{ReturnType, ValueId, api::Type};
 
-/// An ordered, nonempty tuple of value contracts, independent of VM storage.
+/// An ordered tuple of value contracts, independent of VM storage.
 /// Slots retain exact source identities, including within nested tuples.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TupleType {
@@ -9,8 +9,8 @@ pub struct TupleType {
 }
 
 impl TupleType {
-    /// Normalize slot contracts and construct a positional tuple. Reject empty
-    /// shapes, unsupported slots (including Void and graphics contexts), and
+    /// Normalize slot contracts and construct a positional tuple. Reject
+    /// unsupported slots (including Void and graphics contexts), and
     /// nesting beyond the shared 64-level signature limit.
     pub fn new(slots: Vec<ReturnType>) -> Result<Self, &'static str> {
         let mut tuple = Self { slots };
@@ -31,8 +31,8 @@ impl TupleType {
     }
 
     pub(crate) fn validate(&self) -> Result<(), &'static str> {
-        if self.slots.is_empty() || self.slots.len() > i32::MAX as usize {
-            return Err("tuple requires a nonempty representable slot count");
+        if self.slots.len() > i32::MAX as usize {
+            return Err("tuple requires a representable slot count");
         }
         if self
             .slots
@@ -123,11 +123,81 @@ pub(crate) fn parse(tag: &str) -> Result<TupleType, &'static str> {
         .and_then(|body| body.strip_suffix(')'))
         .ok_or("invalid tuple contract")?;
     TupleType::new(
-        crate::structural::split(body, ';')?
-            .into_iter()
-            .map(crate::type_text::call_result)
-            .collect::<Result<_, _>>()?,
+        if body.is_empty() {
+            vec![]
+        } else {
+            crate::structural::split(body, ';')?
+        }
+        .into_iter()
+        .map(crate::type_text::call_result)
+        .collect::<Result<_, _>>()?,
     )
+}
+
+/// Derive the receiver's positional contract after Array.add or Array.addAll.
+/// Spreading requires a tuple contract with a known slot count; it never claims
+/// a fixed length for an ordinary Array. Check the native method's API level.
+pub(crate) fn append_contract(
+    receiver: &Type,
+    value: &ReturnType,
+    spread: bool,
+    context: Option<crate::api::ApiContext>,
+) -> Result<Type, String> {
+    if let Some(context) = context {
+        context.check_type(crate::api::core(), receiver)?;
+        context.method(
+            crate::api::core(),
+            "Toybox.Lang.Array",
+            if spread { "addAll" } else { "add" },
+        )?;
+    }
+    let tail = if spread {
+        match value {
+            ReturnType::Tuple(tuple) => vec![tuple.slots.clone()],
+            ReturnType::Union(Type::Union(parts)) => parts
+                .iter()
+                .map(|part| {
+                    if let Type::TupleValue(tuple) = part {
+                        Ok(tuple.slots.clone())
+                    } else {
+                        Err("tuple addAll requires positional argument alternatives")
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => {
+                return Err("tuple addAll requires an argument with known positional shape".into());
+            }
+        }
+    } else {
+        vec![vec![value.clone()]]
+    };
+    let mut results = Vec::new();
+    // Repeated self-appends can double a flat or nested signature with each
+    // operation. Bound derived metadata before cloning the concatenated slots;
+    // this is a compiler work budget, independent of VM Array capacity.
+    let mut signature_budget = 64 * 1024usize;
+    for part in crate::unions::alternatives(receiver) {
+        let Type::TupleValue(tuple) = part else {
+            return Err("tuple append requires non-null positional receivers".into());
+        };
+        for tail in &tail {
+            let separator = usize::from(!tuple.slots.is_empty() && !tail.is_empty());
+            let bytes = tuple.tag().len()
+                + tail
+                    .iter()
+                    .map(|slot| crate::type_text::result_tag(slot).len())
+                    .sum::<usize>()
+                + tail.len().saturating_sub(1)
+                + separator;
+            signature_budget = signature_budget
+                .checked_sub(bytes)
+                .ok_or("tuple append exceeds the 64 KiB derived-signature budget")?;
+            let mut slots = tuple.slots.clone();
+            slots.extend_from_slice(tail);
+            results.push(TupleType::new(slots)?.api_type());
+        }
+    }
+    Ok(crate::unions::normalize(results))
 }
 
 /// Recover an evaluated slot contract, retaining source provenance separately

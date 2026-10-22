@@ -1491,11 +1491,13 @@ SDK-observed constructor separately from target binding.
 
 ### Positional result construction
 
-`.tuple-new` constructs a fresh nonempty positional Array. Typed IR uses
+`.tuple-new` constructs a fresh positional Array. Typed IR uses
 `TupleNew { result, elements }`; validation infers a `TupleType` from the
 evaluated operands, including exact source identities. Parameters, results,
 locals, fields, callbacks, and unions use the same `tuple(tag;tag;...)`
-contract. Nested tuple tags retain their slot contracts. Void slots and nesting
+contract; `tuple()` represents an empty positional value, including a literal
+append argument. Source annotation syntax still requires at least one slot.
+Nested tuple tags retain their slot contracts. Void slots and nesting
 beyond the shared 64-level signature limit are rejected.
 
 Every operand must be a local/parameter read evaluated earlier. Store effectful
@@ -1519,9 +1521,23 @@ The index must be a direct Integer operand in bounds for every receiver
 alternative. No result-type assertion supplies or overrides this proof.
 Store the result back to the named receiver's inferred local to make later reads
 use the new view. Branch joins use ordinary inferred-local domains. Tuple
-parameters requiring slot writes have entry reads stored into inferred locals
+parameters requiring tuple mutations have entry reads stored into inferred locals
 without changing their calling convention or the capacity for read-only
 parameters. Aliased locals retain their own static views.
+
+`.tuple-add %result %array %value` and
+`.tuple-add-all %result %array %tail` invoke the corresponding Array methods.
+Typed IR uses `TupleAppend { result, array, value, spread }`. Both operations
+return the receiver reference with its derived appended slot contracts;
+`spread` requires a positional tail, including `tuple()`. Receiver/tail unions
+produce the possible concatenated shapes, retaining exact source identities.
+Validation checks API 1.3.0 and the actual operands on reload, without trusting
+an asserted result or tail length. Store the result into the receiver's inferred
+local before emitting subsequent reads. Derived result signatures have a shared
+64 KiB budget across the possible shapes, checked before concatenating slots;
+this bounds metadata growth rather than runtime Array capacity.
+General growing loop domains and unknown-length Array tails are outside this
+profile.
 
 [VM lowering](../lowering/README.md#positional-result-construction).
 

@@ -1251,6 +1251,14 @@ pub enum Operation {
         index: ValueId,
         value: ValueId,
     },
+    /// Invoke Array.add or Array.addAll and return the same Array reference
+    /// with the derived appended slots. Spreading requires a positional value.
+    TupleAppend {
+        result: ValueId,
+        array: ValueId,
+        value: ValueId,
+        spread: bool,
+    },
     /// Allocate and initialize one supported native object with no arguments.
     /// Constructor availability is checked separately from class availability;
     /// allocation and initialization failures belong to the runtime.
@@ -2846,6 +2854,24 @@ impl Function {
                     types.insert(result, ValueType::Tuple(shape));
                     (Some(result), elements.clone())
                 }
+                Operation::TupleAppend {
+                    result,
+                    array,
+                    value,
+                    spread,
+                } => {
+                    let slot = tuples::value_contract(&origins, value, &type_of(value).api_type())
+                        .map_err(fail)?;
+                    let ty =
+                        tuples::append_contract(&type_of(array).api_type(), &slot, spread, context)
+                            .map_err(|message| fail(&message))?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty)
+                            .ok_or_else(|| fail("unsupported appended tuple contract"))?,
+                    );
+                    (Some(result), vec![array, value])
+                }
                 Operation::TupleWrite {
                     result,
                     array,
@@ -3783,6 +3809,7 @@ impl Function {
                     | Operation::WeakReferenceNew { .. }
                     | Operation::TupleNew { .. }
                     | Operation::TupleWrite { .. }
+                    | Operation::TupleAppend { .. }
                     | Operation::SourceNew { .. }
                     | Operation::NativeCallStatement { .. }
                     | Operation::NativeCall { .. }
@@ -3939,6 +3966,9 @@ impl Function {
                                 } => {
                                     tasks.extend(arguments.iter().rev().map(|v| Task::Value(*v)));
                                     tasks.push(Task::Value(*receiver));
+                                }
+                                Operation::TupleAppend { array, value, .. } => {
+                                    tasks.extend([Task::Value(*value), Task::Value(*array)]);
                                 }
                                 Operation::TupleWrite {
                                     array,
@@ -4297,6 +4327,18 @@ impl Function {
                         .iter()
                         .map(|value| format!(" %{}", value.0))
                         .collect::<String>()
+                ),
+                Operation::TupleAppend {
+                    result,
+                    array,
+                    value,
+                    spread,
+                } => format!(
+                    ".tuple-{} %{} %{} %{}",
+                    if spread { "add-all" } else { "add" },
+                    result.0,
+                    array.0,
+                    value.0
                 ),
                 Operation::TupleWrite {
                     result,

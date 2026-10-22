@@ -3,7 +3,8 @@
 [app.mc](app.mc) exercises contextual tuple construction, positional and dynamic
 reads, nested/source slots, nullable guards, fields, typed callbacks, conditional
 construction, Array widening, mixed-token/nested literal inference, named slot
-replacement, branch joins, compound updates, and left-to-right slot effects.
+replacement, `add`/`addAll` cardinality, empty append arguments, returned aliases,
+branch joins, compound updates, and left-to-right slot effects.
 
 From the repository root, using fresh output paths:
 

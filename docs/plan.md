@@ -37,9 +37,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Track tuple `add`/`addAll` cardinality changes through locals, parameters,
-  branches, and saved IR. Support slot writes through nullable tuple parameters,
-  fields, and nested receivers. Handle dynamic-index writes losing
+- [ ] Represent tuple appends in loops and `addAll` with unknown-length Array
+  arguments by losing positional shape where required. Enable tuple appends
+  after nullable-local guards and tuple mutation through nullable parameters,
+  fields, and computed/nested receivers. Handle dynamic-index writes losing
   positional shape. Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
   `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
   resolve mutation/alias limits against the

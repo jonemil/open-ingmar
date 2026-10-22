@@ -43,6 +43,27 @@ impl Types {
         }
     }
 
+    /// Resolve an append's candidate result with exact source slot provenance.
+    /// Surface unsupported shapes and metadata-budget errors before variable
+    /// inference would lose the failed operation's result type.
+    pub(crate) fn append_type(
+        &self,
+        array: ValueId,
+        value: ValueId,
+        spread: bool,
+    ) -> Result<Type, String> {
+        let receiver = self
+            .values
+            .get(&array)
+            .ok_or("cannot resolve tuple receiver")?;
+        let value_type = self
+            .values
+            .get(&value)
+            .ok_or("cannot resolve tuple append argument")?;
+        let slot = crate::tuples::value_contract(&self.origins, value, value_type)?;
+        crate::tuples::append_contract(receiver, &slot, spread, None)
+    }
+
     /// Record a candidate result using shared operator and native contracts.
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
@@ -136,6 +157,12 @@ impl Types {
                     .map(|ty| ty.api_type()),
             ),
             Operation::SourceNew { result, base, .. } => (*result, base.constructed_type()),
+            Operation::TupleAppend {
+                result,
+                array,
+                value,
+                spread,
+            } => (*result, self.append_type(*array, *value, *spread).ok()),
             Operation::TupleWrite {
                 result,
                 array,

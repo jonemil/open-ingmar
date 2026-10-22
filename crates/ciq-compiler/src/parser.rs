@@ -172,6 +172,51 @@ pub(crate) enum Statement {
 }
 
 impl Statement {
+    /// Return this statement's immediate expressions, including case patterns.
+    /// Nested statement bodies are visited separately by their control-flow owner.
+    pub(crate) fn expressions(&self) -> Vec<&Expression> {
+        match self {
+            Self::MemberAssign {
+                receiver, value, ..
+            } => vec![receiver, value],
+            Self::Update { target, .. } => vec![target],
+            Self::PlaceCompound { target, value, .. } => vec![target, value],
+            Self::ArrayAssign {
+                array,
+                index,
+                value,
+                ..
+            } => vec![array, index, value],
+            Self::FieldAssign { value, .. } | Self::Assign { value, .. } => vec![value],
+            Self::Local(local) => local.initializer.iter().collect(),
+            Self::Println { argument, .. } => vec![argument],
+            Self::Call { arguments, .. } | Self::NativeModuleCall { arguments, .. } => {
+                arguments.iter().collect()
+            }
+            Self::ValueCall { expression, .. } => vec![expression],
+            Self::Return { value, .. } => value.iter().collect(),
+            Self::If { condition, .. }
+            | Self::While { condition, .. }
+            | Self::DoWhile { condition, .. } => vec![condition],
+            Self::For { condition, .. } => condition.iter().collect(),
+            Self::Switch {
+                selector, cases, ..
+            } => std::iter::once(selector)
+                .chain(cases.iter().filter_map(|case| {
+                    if let CasePattern::Value(value) = &case.pattern {
+                        Some(value)
+                    } else {
+                        None
+                    }
+                }))
+                .collect(),
+            Self::BaseInitialize { .. }
+            | Self::Break { .. }
+            | Self::Continue { .. }
+            | Self::Block { .. } => vec![],
+        }
+    }
+
     pub fn span(&self) -> Span {
         match self {
             Self::Local(local) => local.span,
@@ -339,6 +384,93 @@ pub(crate) enum ExpressionKind {
 }
 
 impl Expression {
+    /// Visit an expression and its children without resolving names or types.
+    /// The shared traversal lets source staging and parameter mutation discovery
+    /// recognize calls inside ordinary expression trees consistently.
+    pub(crate) fn visit<'a>(&'a self, visitor: &mut impl FnMut(&'a Self)) {
+        use ExpressionKind as E;
+        visitor(self);
+        match &self.kind {
+            E::MemberRead { receiver, .. } => receiver.visit(visitor),
+            E::Conditional {
+                condition,
+                when_true,
+                when_false,
+            } => {
+                condition.visit(visitor);
+                when_true.visit(visitor);
+                when_false.visit(visitor);
+            }
+            E::Step { operand, .. }
+            | E::Cast { operand, .. }
+            | E::InstanceOf { operand, .. }
+            | E::Positive(operand)
+            | E::Negate(operand)
+            | E::Not(operand)
+            | E::Complement(operand)
+            | E::ArrayAllocate(operand)
+            | E::ByteArrayAllocate(operand) => operand.visit(visitor),
+            E::ArrayRead {
+                array: left,
+                index: right,
+            }
+            | E::Logical { left, right, .. }
+            | E::Binary { left, right, .. }
+            | E::Compare { left, right, .. }
+            | E::Has {
+                receiver: left,
+                symbol: right,
+            } => {
+                left.visit(visitor);
+                right.visit(visitor);
+            }
+            E::ValueCall {
+                receiver,
+                arguments,
+                ..
+            } => {
+                receiver.visit(visitor);
+                for argument in arguments {
+                    argument.visit(visitor);
+                }
+            }
+            E::SourceNew { arguments, .. }
+            | E::UnqualifiedCall { arguments, .. }
+            | E::GlobalCall { arguments, .. }
+            | E::OwnerCall { arguments, .. }
+            | E::ModuleCall { arguments, .. }
+            | E::ArrayLiteral(arguments)
+            | E::ByteArrayLiteral(arguments) => {
+                for argument in arguments {
+                    argument.visit(visitor);
+                }
+            }
+            E::DictionaryLiteral(entries) => {
+                for (key, value) in entries {
+                    key.visit(visitor);
+                    value.visit(visitor);
+                }
+            }
+            E::Symbol(_)
+            | E::DictionaryNew
+            | E::Joined(_)
+            | E::SelfValue
+            | E::SelfField(_)
+            | E::NativeConstant { .. }
+            | E::NativeNew { .. }
+            | E::Temporary(_)
+            | E::Char(_)
+            | E::Null
+            | E::Boolean(_)
+            | E::Integer(_)
+            | E::Long(_)
+            | E::Double(_)
+            | E::Float(_)
+            | E::String(_)
+            | E::Local(_) => {}
+        }
+    }
+
     /// Report whether this tree needs control flow or staged array construction.
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {

@@ -125,9 +125,9 @@ fn saved_ir_rechecks_slot_and_nested_source_claims() {
     assert_ne!(text, forged);
     assert!(parse_unit_ir(&forged).is_err());
     for tag in [
-        "tuple()",
+        "tuple(;)",
         "tuple(void)",
-        "tuple(tuple())",
+        "tuple(tuple(void))",
         "one-view",
         "view-delegate",
     ] {
@@ -157,7 +157,6 @@ fn malformed_shapes_indexes_and_unproven_slot_identities_are_rejected() {
         "class A {} function f(x as [Toybox.Lang.Object]) as [A] { return x; }",
         "function f(x as []) { return x; }",
         "function f(x as [Toybox.Graphics.Dc]) { return x; }",
-        "function f(x as [Toybox.Lang.Number]) { x.add(2); }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
@@ -206,7 +205,7 @@ fn tuple_writes_reject_stale_results_unknown_indices_and_unnamed_receivers() {
     );
     let text = unit.to_ir_text();
     assert!(text.contains(".tuple-write"));
-    assert!(parse_unit_ir(&text.replace("result=tuple(string)", "result=tuple(number)")).is_err());
+    assert!(parse_unit_ir(&text.replace("result=tuple(string)", "result=tuple(integer)")).is_err());
 }
 
 #[test]
@@ -222,4 +221,90 @@ fn read_only_tuple_parameters_preserve_the_full_parameter_frame_budget() {
         "function f({parameters}) as Toybox.Lang.Number {{ p0[0] = 42; return p0[0]; }}"
     ));
     assert!(compile_sources(&[&format!("function f({parameters}) as Toybox.Lang.Number {{ p0[0] = 42; p1[0] = 43; return p0[0]; }}")]).is_err());
+}
+
+#[test]
+fn tuple_appends_keep_cardinality_source_identity_and_saved_stage_contracts() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        class Token { function number() as Lang.Number { return 41; } }
+        function addResult(x as [Lang.Number]) as [Lang.Number, Lang.String] { return x.add("tail"); }
+        function allResult(x as [Lang.Number], y as [Lang.String, Lang.Boolean]) as [Lang.Number, Lang.String, Lang.Boolean] { return x.addAll(y); }
+        function literal(x as [Lang.Number]) as [Lang.Number, Lang.Number, Lang.Number] { x.addAll([2,3]); return x; }
+        function empty(x as [Lang.Number]) as [Lang.Number] { x.addAll([]); return x; }
+        function local() as Lang.String { var x=[1,"old"]; x.add("tail"); return x[2]; }
+        function source() as Lang.Number { var x=[1,"old"]; x.add(new Token()); return x[2].number(); }
+        function allSource(x as [Lang.Number], tail as [Token]) as Lang.Number { x.addAll(tail); return x[1].number(); }
+        function returnedAlias(x as [Lang.Number]) as Lang.String { var y=x.add("tail"); return y[1]; }
+        function updatedReceiver(x as [Lang.Number]) as Lang.String { var y=x.add("tail"); return x[1]; }
+        function nested(x as [Lang.Number]) as [Lang.Number, Lang.String, Lang.Number] { x.add(x.add("tail").size()); return x; }
+        function expression(x as [Lang.Number]) as Lang.Number { return x.add("tail").size()+x.size(); }
+        function branching(x as [Lang.Number], flag as Lang.Boolean) as Lang.Number { if (flag) { x.add("tail"); } return x.size(); }
+        function afterBranch(x as [Lang.Number], flag as Lang.Boolean) as Lang.Boolean { if (flag) { x.add("tail"); } x.add(true); return x[0] == 1; }
+        function conditionalTail(x as [Lang.Number], flag as Lang.Boolean) as Lang.Number { x.addAll(flag ? [2,"text"] : [3,false]); return x.size(); }
+        function addContainer(x as [Lang.Number]) as Lang.String { x.add([2,"nested"]); return x[1][1]; }
+        function addEmpty(x as [Lang.Number]) as Lang.Number { x.add([]); return x[1].size(); }
+        function callerAlias() as Lang.Number { var x=[1,"old"]; var y=x; y.add(2); return x[0]; }
+    "#,
+    );
+}
+
+#[test]
+fn tuple_append_rejects_unknown_shapes_wrong_arity_stale_results_and_loops() {
+    for source in [
+        r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number] { x.add("tail"); return x; }"#,
+        r#"function f(x as [Toybox.Lang.Number], y as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(y); }"#,
+        r#"function f(x as [Toybox.Lang.Number]) { x.add(); }"#,
+        r#"function f(x as [Toybox.Lang.Number]) { x.addAll(1); }"#,
+        r#"function f(x as [Toybox.Lang.Number], flag as Toybox.Lang.Boolean) { while(flag) { x.addAll(x); } }"#,
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+    let unit = round_trip(
+        r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number,Toybox.Lang.String] { return x.add("tail"); }"#,
+    );
+    let text = unit.to_ir_text();
+    assert!(text.contains(".tuple-add "));
+    let forged = text.replace(
+        "result=tuple(integer;string)",
+        "result=tuple(integer;integer)",
+    );
+    assert_ne!(text, forged);
+    assert!(parse_unit_ir(&forged).is_err());
+}
+
+#[test]
+fn tuple_append_and_empty_tail_recheck_api_availability_after_reload() {
+    use ciq_compiler::{
+        api::{ApiContext, ApiLevel},
+        compile_sources_with_api, parse_unit_ir_with_api,
+    };
+    let initial = ApiContext::new(ApiLevel(1, 0, 0), ApiLevel(1, 0, 0)).unwrap();
+    let available = ApiContext::new(ApiLevel(1, 3, 0), ApiLevel(1, 3, 0)).unwrap();
+    for body in ["return x.add(2);", "return x.addAll([]);"] {
+        let source = format!("function f(x as [Toybox.Lang.Number]) {{ {body} }}");
+        assert!(compile_sources_with_api(&[&source], initial).is_err());
+        let unit = compile_sources_with_api(&[&source], available).unwrap();
+        assert_eq!(
+            unit,
+            parse_unit_ir_with_api(&unit.to_ir_text(), available).unwrap()
+        );
+        assert!(parse_unit_ir_with_api(&unit.to_ir_text(), initial).is_err());
+    }
+}
+
+#[test]
+fn tuple_self_appends_bound_flat_and_nested_signature_growth() {
+    for append in ["x.addAll(x);", "x.add(x);"] {
+        let source = format!(
+            "function f() {{ var x=[1,\"seed\"]; {} return x.size(); }}",
+            append.repeat(16)
+        );
+        let error = compile_sources(&[&source]).unwrap_err();
+        assert!(
+            error.to_string().contains("derived-signature budget"),
+            "{error}"
+        );
+    }
 }

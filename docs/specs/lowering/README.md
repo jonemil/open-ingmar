@@ -57,7 +57,7 @@ counts.
 
 Parameter writes evaluate the RHS, then emit `lputv <index + 1>`. They reuse the
 existing parameter slot, leave the hidden receiver in slot 0 intact, and
-allocate no local copy. Non-null tuple parameters used as slot-write receivers
+allocate no local copy. Non-null tuple parameters used as mutation receivers
 start with a read into an inferred local, which counts toward the same frame
 budget; their mutations use that local view. Read-only tuple parameters keep
 their ABI slots. A write affects this frame's value; earlier evaluation
@@ -369,6 +369,11 @@ existing Array read instructions. Tuple slot replacement emits the receiver,
 stack for storage under its updated IR contract. Compound targets capture the
 receiver before reading/updating the slot; immediate indexes retain their
 positional proof across staging. No new VM opcode or DATA record is required.
+Tuple `add`/`addAll` use ordinary native method calls: read the receiver,
+`getsv` with `__ciq_native_add`/`__ciq_native_addAll`, `frpush`, read the saved
+argument, and `invokem 2`. Store the returned reference under its updated
+contract. Empty positional values allocate with length zero and `newa`;
+`addAll([])` still invokes `addAll` rather than dropping the call.
 Array availability and each slot's native types are checked separately; View
 construction requires its initializer's 2.1.0 level. No allocation failure
 timing or memory equivalence with SDK lowering is implied. See the

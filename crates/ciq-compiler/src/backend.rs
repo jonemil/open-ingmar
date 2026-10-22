@@ -155,6 +155,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::NativeConstant { result, .. }
             | Operation::TupleNew { result, .. }
             | Operation::TupleWrite { result, .. }
+            | Operation::TupleAppend { result, .. }
             | Operation::Compare { result, .. }
             | Operation::ParameterRead { result, .. }
             | Operation::LocalRead { result, .. }
@@ -758,6 +759,21 @@ fn expression(
                     class: crate::NativeClass::Dc,
                     ..
                 } => unreachable!("Dc construction is not admitted"),
+                Operation::TupleAppend {
+                    array,
+                    value,
+                    spread,
+                    ..
+                } => {
+                    tasks.extend([
+                        Task::Invoke(1),
+                        Task::Value(*value),
+                        Task::Context,
+                        Task::NativeMember(if *spread { "addAll" } else { "add" }.into()),
+                        Task::Value(*array),
+                    ]);
+                    continue;
+                }
                 Operation::TupleWrite {
                     array,
                     index,
