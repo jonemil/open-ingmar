@@ -72,7 +72,10 @@ remain deferred in [the plan](plan.md).
 
 Within `ciq-compiler`, `parser` and `names` handle source syntax and native-name
 bindings. One declaration parser returns a `ParsedUnit` for each source file;
-unit compilation collects these before resolution. The isolated-function entry
+typedef collection first captures owner/file environments across the supplied
+files. Targets reuse annotation parsing, with cached expansion and cycle/depth
+checks, before bodies enter semantic IR. Unit compilation collects the parsed
+declarations before call resolution. The isolated-function entry
 selects one global body from that same result, retaining external-call binding
 without unit ownership/signature validation. `source_ir` constructs semantic
 operations. Candidate types and source

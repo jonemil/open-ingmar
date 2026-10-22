@@ -27,10 +27,11 @@ establish availability, assignability, or executable API support.
 ```text
 source-input = source-file
 source-file = native-declaration* declaration*
-declaration = function | module | class
-module = "module" identifier "{" native-declaration* function+ "}"
+declaration = function | module | class | typedef
+typedef = "typedef" identifier "as" value-type ";"
+module = "module" identifier "{" native-declaration* (function | typedef)+ "}"
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (field | function)* "}"
+        "{" native-declaration* (field | function | typedef)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
@@ -54,6 +55,8 @@ functions, module functions, and class methods. Its `block` expands in
 All source entry points use this file grammar. The fragment entry additionally
 requires exactly one global function and no classes or module-owned functions;
 this is an input-shape restriction, not a separate parser or language grammar.
+Typedef declarations may accompany the fragment. Their targets use `value-type`
+below and must resolve before body construction.
 A compilation unit requires 1..=256 function/method bodies across its files.
 Object-rooted classes may omit all methods; the frontend supplies their default
 initializer when absent. Other bases require at least one method. Synthesized
@@ -228,15 +231,13 @@ value-atom = named-value-type | "Null"
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 result-type = value-type | "Void"
-array-element = scalar-or-alias | core-reference | interface-type
-              | (scalar-or-alias | core-reference | interface-type) "or" "Null"
-              | view-type
-dictionary-key = scalar-or-alias | symbol-type | method-type | bytearray-type
-               | interface-type
-dictionary-value = scalar-or-alias | core-reference | interface-type
-                 | (scalar-or-alias | core-reference | interface-type) "or" "Null"
+array-element = value-type
+dictionary-key = value-type
+dictionary-value = value-type
 named-value-type = scalar-or-alias | core-reference | interface-type | enum-type
                  | dictionary-type | view-type | delegate-type | source-class-type
+                 | type-alias
+type-alias = path
 scalar-or-alias = scalar-type | numeric-alias-type
 scalar-type = path
 numeric-alias-type = path
@@ -260,7 +261,7 @@ field-type = value-type
 class-target = runtime-class-type | source-class-type
 runtime-class-type = path
 cast-target = cast-named-type | nullable-cast-type "or" "Null"
-cast-named-type = nullable-cast-type | enum-type | dictionary-type
+cast-named-type = nullable-cast-type | enum-type | dictionary-type | type-alias
 nullable-cast-type = scalar-or-alias | core-reference | source-class-type
 ```
 
@@ -275,8 +276,16 @@ no imports. These semantic type domains mean:
 - Object, View, delegate, and AppBase type leaves resolve to Lang.Object,
   WatchUi.View, WatchUi.BehaviorDelegate, and Application.AppBase respectively.
 - Source class: an exact constructible source-class name from this unit.
+- Type alias: a scoped source typedef. Expansion must fit the destination's
+  existing value, element, key, field, or cast contract. Alias names are not
+  runtime class targets. Declaration scope and expansion bounds follow
+  [type aliases](README.md#type-aliases).
 - Dictionary type by itself denotes an opaque Lang.Dictionary; its parameterized
   form specifies the bounded key/value contracts.
+- Array element and Dictionary key/value expressions use the shared value-type
+  parser. After alias expansion and normalization, they must match the existing
+  supported element/key/value contracts; this does not add nested containers,
+  exact source-class contents, or arbitrary heterogeneous unions.
 - Signature unions: up to 254 value atoms, including Null and supported native
   container references and exact source-class atoms. Class-containing unions
   preserve exact identities separately from native alternatives. The normalized

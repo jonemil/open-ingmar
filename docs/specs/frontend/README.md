@@ -425,6 +425,39 @@ widening is introduced. See the
 
 ## Declarations and name resolution
 
+### Type aliases
+
+`typedef Name as Type;` declares a type alias at global, module, or class scope.
+The target uses the same value-type grammar as annotations. All files contribute
+declarations before aliases and bodies resolve, allowing forward and cross-file
+references. A bare name selects the current owner's alias before a global alias;
+`Owner.Name` selects a module/class-owned alias. Targets retain the native imports
+and aliases of their declaration, independently of the importing caller's file.
+Modules containing only typedefs contribute types without executable methods.
+
+Aliases expand to existing native, container, exact source, or mixed-union
+contracts. They can name parameter/results, fields, container arguments, and
+supported lexical cast targets. Destination restrictions still apply: an alias
+cannot enable unsupported container contents or general union casts. Expansion
+preserves exact source identities and container invariance. Unused declarations
+are checked for unresolved targets and, with an explicit API context, native
+type availability. Alias names are erased before semantic IR construction;
+saved IR retains expanded contracts and no typedef records.
+
+Duplicate aliases in one owner, missing targets, and collisions with a global
+class/module are errors. Alias and function names may coincide. Source aliases
+take precedence over imported native types in type positions. A typedef has no
+runtime class value: it cannot supply an `instanceof` target or constructor.
+Void is not a typedef target. Existing Null, initialization, and call rules apply
+to the expanded type.
+
+The current profile permits at most 256 typedef declarations per unit and bounds
+annotation/uncached alias expansion depth at 64. Resolved dependencies are cached;
+sharing an alias does not repeatedly expand its dependency graph. Cycles are
+diagnosed, including container-guarded recursion that the SDK accepts but this
+profile cannot yet represent. The latter limitation is tracked with nested
+container work in the plan.
+
 ### User calls and owner lookup
 
 Qualified calls resolve to a top-level user module in the compilation unit.

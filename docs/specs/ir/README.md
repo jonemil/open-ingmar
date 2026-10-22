@@ -72,6 +72,10 @@ content contracts. Fields and lexical casts retain their existing domains.
 
 ### Validation
 
+Source typedefs are resolved before IR construction. Function signatures, field
+contracts, and operation types retain the expanded types; neither typed IR nor
+saved text needs alias declarations or a separate alias-resolution pass.
+
 `Function::new` validates explicitly constructed operations;
 `compile_function(source)` constructs an immutable Function through the same
 validator. `parse_function_ir` resumes saved function text with those checks.

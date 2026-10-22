@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Parse `typedef` declarations, resolve aliases across owners/files, and
-  diagnose recursive aliases.
 - [ ] Parse named and anonymous `interface` types with method and field members;
   check structural assignment and member calls against their signatures.
 - [ ] Parse callback signatures with argument/result types; check assignments
@@ -51,6 +49,10 @@ implemented contracts; investigations retain evidence, not another backlog.
   and general unions without adding runtime conversions.
 - [ ] Support disabled, gradual, informative, and strict type-checking policies;
   distinguish dynamic operations, ambiguity, and proven type errors.
+- [ ] Represent SDK-accepted container-guarded recursive typedefs, such as
+  `typedef Tree as Array<Tree>`, through annotations, IR, and container use.
+  Requires nested Array/Dictionary contracts below; unguarded alias cycles
+  remain errors.
 
 ### 2. Declarations, namespaces, and member storage
 

@@ -33,6 +33,8 @@ and future Rust toolchain experiments.
   erasure, typed container fields, conditional writes, and reference ownership.
 - [compiler-numeric-unions](compiler-numeric-unions/README.md): Numeric,
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
+- [compiler-typedefs](compiler-typedefs/README.md): scoped and cross-file aliases,
+  containers, nullable source identities, fields, and casts.
 - [compiler-byte-arrays](compiler-byte-arrays/README.md): constant/computed
   literals, allocation, byte indexing, mutation, observers, and callbacks.
 - [compiler-source-methods](compiler-source-methods/README.md): source/self

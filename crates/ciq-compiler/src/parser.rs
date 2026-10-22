@@ -51,6 +51,9 @@ fn reserved_word(name: &str) -> bool {
 }
 
 use crate::{Diagnostic, Span};
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 const NAN_LITERAL_BITS: u32 = 0x7fc00000;
 
@@ -409,6 +412,290 @@ struct Parser<'a> {
     dictionary_entry: bool,
     names: crate::names::Names,
     native_base: Option<crate::ClassBase>,
+    aliases: Rc<Aliases<'a>>,
+    owner: Option<String>,
+    resolving: Vec<String>,
+    type_depth: usize,
+}
+
+struct Alias<'a> {
+    source: &'a str,
+    source_index: usize,
+    name_at: usize,
+    target: usize,
+    end: usize,
+    names: crate::names::Names,
+    owner: Option<String>,
+}
+
+#[derive(Default)]
+pub(crate) struct Aliases<'a> {
+    declarations: BTreeMap<String, Alias<'a>>,
+    classes: BTreeSet<String>,
+    owners: BTreeSet<String>,
+    resolved: RefCell<BTreeMap<String, crate::ParameterType>>,
+}
+
+impl Aliases<'_> {
+    pub(crate) fn validate_api(
+        &self,
+        context: crate::api::ApiContext,
+    ) -> Result<(), crate::SourceDiagnostic> {
+        for (key, alias) in &self.declarations {
+            let ty = self.resolved.borrow()[key].api_type();
+            context
+                .check_type(crate::api::core(), &ty)
+                .map_err(|message| crate::SourceDiagnostic {
+                    source: alias.source_index,
+                    diagnostic: Diagnostic::at(alias.source, alias.name_at, message),
+                })?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Parser<'a> {
+    fn new(source: &'a str, aliases: Rc<Aliases<'a>>) -> Self {
+        Self {
+            source,
+            offset: 0,
+            lookahead: None,
+            expressions: 0,
+            dictionary_entry: false,
+            names: crate::names::Names::default(),
+            native_base: None,
+            aliases,
+            owner: None,
+            resolving: Vec::new(),
+            type_depth: 0,
+        }
+    }
+
+    fn alias_key(&self, path: &str) -> Option<String> {
+        let owned = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
+        owned
+            .filter(|key| self.aliases.declarations.contains_key(key))
+            .or_else(|| {
+                self.aliases
+                    .declarations
+                    .contains_key(path)
+                    .then(|| path.into())
+            })
+    }
+
+    /// Resolve an alias in its declaration's native-name and owner environment.
+    /// Reuse annotation parsing so alias targets have no separate type grammar.
+    fn alias_parameter(
+        &self,
+        path: &str,
+        at: usize,
+    ) -> Result<Option<crate::ParameterType>, Diagnostic> {
+        let Some(key) = self.alias_key(path) else {
+            return Ok(None);
+        };
+        if let Some(ty) = self.aliases.resolved.borrow().get(&key) {
+            return Ok(Some(ty.clone()));
+        }
+        if self.resolving.contains(&key) {
+            return Err(self.error(at, format!("recursive typedef {key:?}")));
+        }
+        if self.resolving.len() >= 64 {
+            return Err(self.error(at, "typedef expansion exceeds 64 levels"));
+        }
+        let alias = &self.aliases.declarations[&key];
+        let mut parser = Self::new(alias.source, self.aliases.clone());
+        parser.offset = alias.target;
+        parser.names = alias.names.clone();
+        parser.owner = alias.owner.clone();
+        parser.resolving = self.resolving.clone();
+        parser.resolving.push(key.clone());
+        parser.type_depth = self.type_depth;
+        let result = (|| {
+            let ty = parser.parameter_annotation(alias.target)?;
+            let end = parser.expect(Kind::Punctuation(';'), "';' after typedef")?;
+            if end.span.start != alias.end {
+                return Err(parser.error(end.span.start, "invalid typedef target"));
+            }
+            if let Some(contract) = ty.source_contract() {
+                for class in contract.classes() {
+                    if !self.aliases.classes.contains(&class.name) {
+                        return Err(parser.error(
+                            alias.target,
+                            format!("unknown typedef target class {:?}", class.name),
+                        ));
+                    }
+                }
+            }
+            Ok(ty)
+        })();
+        match result {
+            Ok(ty) => {
+                self.aliases.resolved.borrow_mut().insert(key, ty.clone());
+                Ok(Some(ty))
+            }
+            Err(error) => Err(self.error(at, format!("typedef {key:?}: {}", error.message))),
+        }
+    }
+
+    /// Skip a balanced body while collecting declarations, without interpreting it.
+    fn skip_body(&mut self) -> Result<(), Diagnostic> {
+        while self.peek()? != Kind::Punctuation('{') {
+            if self.token()?.kind == Kind::End {
+                return Err(self.error(self.offset, "expected function body"));
+            }
+        }
+        self.token()?;
+        let mut depth = 1usize;
+        while depth != 0 {
+            match self.token()?.kind {
+                Kind::Punctuation('{') => depth += 1,
+                Kind::Punctuation('}') => depth -= 1,
+                Kind::End => return Err(self.error(self.offset, "unterminated body")),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn skip_typedef(&mut self) -> Result<(), Diagnostic> {
+        self.expect(Kind::Word("typedef"), "'typedef'")?;
+        self.identifier()?;
+        self.expect(Kind::Word("as"), "'as' after typedef name")?;
+        // Targets were parsed and validated during alias collection.
+        while self.token()?.kind != Kind::Punctuation(';') {
+            if self.offset >= self.source.len() {
+                return Err(self.error(self.offset, "expected ';' after typedef"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Collect typedef targets across files before parsing annotations and bodies.
+/// Capture declaration environments, reject duplicate/cyclic aliases, and check
+/// even unused targets. Function bodies are parsed only by the ordinary parser.
+pub(crate) fn collect_aliases<'a>(
+    sources: &[&'a str],
+) -> Result<Rc<Aliases<'a>>, crate::SourceDiagnostic> {
+    let mut aliases = Aliases::default();
+    for (source_index, source) in sources.iter().enumerate() {
+        let mut parser = Parser::new(source, Rc::default());
+        let result = (|| {
+            parser.imports()?;
+            let mut outer_names = None;
+            while parser.peek()? != Kind::End {
+                match parser.peek()? {
+                    Kind::Word("typedef") => {
+                        parser.token()?;
+                        let name = parser.identifier()?;
+                        let Kind::Word(name_text) = name.kind else {
+                            unreachable!()
+                        };
+                        let key = parser.owner.as_ref().map_or_else(
+                            || name_text.into(),
+                            |owner| format!("{owner}.{name_text}"),
+                        );
+                        parser.expect(Kind::Word("as"), "'as' after typedef name")?;
+                        let target = parser.offset;
+                        let end = loop {
+                            let token = parser.token()?;
+                            match token.kind {
+                                Kind::Punctuation(';') => break token.span.start,
+                                Kind::Punctuation('{') | Kind::End => {
+                                    return Err(parser.error(
+                                        token.span.start,
+                                        "unsupported or unterminated typedef target",
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        };
+                        if aliases.declarations.len() >= 256 {
+                            return Err(parser
+                                .error(name.span.start, "unit exceeds 256 typedef declarations"));
+                        }
+                        if aliases
+                            .declarations
+                            .insert(
+                                key.clone(),
+                                Alias {
+                                    source,
+                                    source_index,
+                                    name_at: name.span.start,
+                                    target,
+                                    end,
+                                    names: parser.names.clone(),
+                                    owner: parser.owner.clone(),
+                                },
+                            )
+                            .is_some()
+                        {
+                            return Err(
+                                parser.error(name.span.start, format!("duplicate typedef {key:?}"))
+                            );
+                        }
+                    }
+                    Kind::Word("module" | "class") if parser.owner.is_none() => {
+                        let class = parser.token()?.kind == Kind::Word("class");
+                        let name = parser.identifier()?;
+                        let Kind::Word(name) = name.kind else {
+                            unreachable!()
+                        };
+                        aliases.owners.insert(name.into());
+                        if class {
+                            aliases.classes.insert(name.into());
+                        }
+                        while parser.peek()? != Kind::Punctuation('{') {
+                            if parser.token()?.kind == Kind::End {
+                                return Err(parser.error(parser.offset, "expected owner body"));
+                            }
+                        }
+                        parser.token()?;
+                        parser.owner = Some(name.into());
+                        outer_names = Some(parser.names.clone());
+                        parser.imports()?;
+                    }
+                    Kind::Punctuation('}') if parser.owner.is_some() => {
+                        parser.token()?;
+                        parser.owner = None;
+                        parser.names = outer_names.take().unwrap();
+                    }
+                    Kind::Word("function") => {
+                        parser.skip_body()?;
+                    }
+                    Kind::Word("var") if parser.owner.is_some() => {
+                        // The main parser checks the supported field syntax.
+                        while parser.token()?.kind != Kind::Punctuation(';') {
+                            if parser.offset >= source.len() {
+                                return Err(parser.error(parser.offset, "unterminated field"));
+                            }
+                        }
+                    }
+                    _ => return Err(parser.error(parser.offset, "expected declaration")),
+                }
+            }
+            Ok(())
+        })();
+        result.map_err(|diagnostic| crate::SourceDiagnostic {
+            source: source_index,
+            diagnostic,
+        })?;
+    }
+    let aliases = Rc::new(aliases);
+    for (key, alias) in &aliases.declarations {
+        let mut parser = Parser::new(alias.source, aliases.clone());
+        parser.owner = alias.owner.clone();
+        let result = if aliases.owners.contains(key) {
+            Err(parser.error(alias.name_at, "typedef conflicts with a class or module"))
+        } else {
+            parser.alias_parameter(key, alias.name_at).map(|_| ())
+        };
+        result.map_err(|diagnostic| crate::SourceDiagnostic {
+            source: alias.source_index,
+            diagnostic,
+        })?;
+    }
+    Ok(aliases)
 }
 
 #[derive(Clone, Copy)]
@@ -460,169 +747,38 @@ fn integer_value(digits: &str, negative: bool, width: IntegerWidth) -> Option<i6
 }
 
 impl<'a> Parser<'a> {
-    /// Parse invariant Dictionary key/value annotations after its canonical path.
-    /// Keys are non-null; scalar/interface values may also include Null.
+    /// Parse Dictionary arguments through the shared value-type grammar.
     fn dictionary_annotation(&mut self) -> Result<Option<crate::DictionaryType>, Diagnostic> {
         if self.peek()? != Kind::Punctuation('<') {
             return Ok(None);
         }
         self.token()?;
         let at = self.offset;
-        let key = match self.type_path()?.as_str() {
-            "Toybox.Lang.Number" => crate::DictionaryKey::Number,
-            "Toybox.Lang.Integer" => crate::DictionaryKey::Numeric(crate::NumericAlias::Integer),
-            "Toybox.Lang.Decimal" => crate::DictionaryKey::Numeric(crate::NumericAlias::Decimal),
-            "Toybox.Lang.Numeric" => crate::DictionaryKey::Numeric(crate::NumericAlias::Numeric),
-            "Toybox.Lang.Double" => crate::DictionaryKey::Double,
-            "Toybox.Lang.Float" => crate::DictionaryKey::Float,
-            "Toybox.Lang.Long" => crate::DictionaryKey::Long,
-            "Toybox.Lang.String" => crate::DictionaryKey::String,
-            "Toybox.Lang.Boolean" => crate::DictionaryKey::Boolean,
-            "Toybox.Lang.Char" => crate::DictionaryKey::Char,
-            "Toybox.Lang.Symbol" => crate::DictionaryKey::Symbol,
-            "Toybox.Lang.Method" => crate::DictionaryKey::Method,
-            "Toybox.Lang.ByteArray" => crate::DictionaryKey::ByteArray,
-            "Toybox.Lang.Comparable" => {
-                crate::DictionaryKey::Interface(crate::InterfaceType::Comparable)
-            }
-            "Toybox.Lang.Comparator" => {
-                crate::DictionaryKey::Interface(crate::InterfaceType::Comparator)
-            }
-            _ => return Err(self.error(at, "unsupported Dictionary key contract")),
-        };
+        let key = self.parameter_annotation(at)?;
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
-        let mut value = match self.type_path()?.as_str() {
-            "Toybox.Lang.Number" => crate::DictionaryValue::Number,
-            "Toybox.Lang.Object" => crate::DictionaryValue::LangObject,
-            "Toybox.Lang.Integer" => crate::DictionaryValue::Numeric {
-                alias: crate::NumericAlias::Integer,
-                nullable: false,
-            },
-            "Toybox.Lang.Decimal" => crate::DictionaryValue::Numeric {
-                alias: crate::NumericAlias::Decimal,
-                nullable: false,
-            },
-            "Toybox.Lang.Numeric" => crate::DictionaryValue::Numeric {
-                alias: crate::NumericAlias::Numeric,
-                nullable: false,
-            },
-            "Toybox.Lang.Double" => crate::DictionaryValue::Double,
-            "Toybox.Lang.Float" => crate::DictionaryValue::Float,
-            "Toybox.Lang.Long" => crate::DictionaryValue::Long,
-            "Toybox.Lang.String" => crate::DictionaryValue::String,
-            "Toybox.Lang.Boolean" => crate::DictionaryValue::Boolean,
-            "Toybox.Lang.Char" => crate::DictionaryValue::Char,
-            "Toybox.Lang.Symbol" => crate::DictionaryValue::Symbol,
-            "Toybox.Lang.Method" => crate::DictionaryValue::Method,
-            "Toybox.Lang.WeakReference" => crate::DictionaryValue::WeakReference,
-            "Toybox.Lang.ByteArray" => crate::DictionaryValue::ByteArray,
-            "Toybox.Lang.Comparable" => {
-                crate::DictionaryValue::Interface(crate::InterfaceType::Comparable)
-            }
-            "Toybox.Lang.Comparator" => {
-                crate::DictionaryValue::Interface(crate::InterfaceType::Comparator)
-            }
-            _ => {
-                return Err(self.error(at, "unsupported Dictionary value contract"));
-            }
-        };
-        if self.peek()? == Kind::Word("or") {
-            self.token()?;
-            self.expect(Kind::Word("Null"), "'Null'")?;
-            value = match value {
-                crate::DictionaryValue::Number => crate::DictionaryValue::NullableNumber,
-                crate::DictionaryValue::LangObject => crate::DictionaryValue::NullableObject,
-                crate::DictionaryValue::Numeric { alias, .. } => crate::DictionaryValue::Numeric {
-                    alias,
-                    nullable: true,
-                },
-                crate::DictionaryValue::Double => crate::DictionaryValue::NullableDouble,
-                crate::DictionaryValue::Float => crate::DictionaryValue::NullableFloat,
-                crate::DictionaryValue::Long => crate::DictionaryValue::NullableLong,
-                crate::DictionaryValue::String => crate::DictionaryValue::NullableString,
-                crate::DictionaryValue::Boolean => crate::DictionaryValue::NullableBoolean,
-                crate::DictionaryValue::Char => crate::DictionaryValue::NullableChar,
-                crate::DictionaryValue::Symbol => crate::DictionaryValue::NullableSymbol,
-                crate::DictionaryValue::Method => crate::DictionaryValue::NullableMethod,
-                crate::DictionaryValue::WeakReference => {
-                    crate::DictionaryValue::NullableWeakReference
-                }
-                crate::DictionaryValue::ByteArray => crate::DictionaryValue::NullableByteArray,
-                crate::DictionaryValue::Interface(interface) => {
-                    crate::DictionaryValue::NullableInterface(interface)
-                }
-                _ => unreachable!(),
-            };
-        }
+        let value = self.parameter_annotation(self.offset)?;
         self.expect(Kind::Punctuation('>'), "'>'")?;
-        Ok(Some(crate::DictionaryType { key, value }))
+        if key.source_contract().is_some() || value.source_contract().is_some() {
+            return Err(self.error(at, "unsupported Dictionary source-class contract"));
+        }
+        crate::DictionaryType::from_api_type(&crate::api::Type::dictionary(
+            key.api_type(),
+            value.api_type(),
+        ))
+        .map(Some)
+        .ok_or_else(|| self.error(at, "unsupported Dictionary key/value contract"))
     }
 
     fn array_annotation(&mut self) -> Result<crate::ArrayElement, Diagnostic> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
-        let mut element = match self.type_path()?.as_str() {
-            "Toybox.Lang.Comparable" => {
-                crate::ArrayElement::Interface(crate::InterfaceType::Comparable)
-            }
-            "Toybox.Lang.Comparator" => {
-                crate::ArrayElement::Interface(crate::InterfaceType::Comparator)
-            }
-            "Toybox.Lang.Char" => crate::ArrayElement::Char,
-            "Toybox.Lang.Symbol" => crate::ArrayElement::Symbol,
-            "Toybox.Lang.Method" => crate::ArrayElement::Method,
-            "Toybox.Lang.WeakReference" => crate::ArrayElement::WeakReference,
-            "Toybox.Lang.ByteArray" => crate::ArrayElement::ByteArray,
-            "Toybox.Lang.Boolean" => crate::ArrayElement::Boolean,
-            "Toybox.Lang.Number" => crate::ArrayElement::Number,
-            "Toybox.Lang.Object" => crate::ArrayElement::LangObject,
-            "Toybox.Lang.Integer" => crate::ArrayElement::Numeric {
-                alias: crate::NumericAlias::Integer,
-                nullable: false,
-            },
-            "Toybox.Lang.Decimal" => crate::ArrayElement::Numeric {
-                alias: crate::NumericAlias::Decimal,
-                nullable: false,
-            },
-            "Toybox.Lang.Numeric" => crate::ArrayElement::Numeric {
-                alias: crate::NumericAlias::Numeric,
-                nullable: false,
-            },
-            "Toybox.Lang.Double" => crate::ArrayElement::Double,
-            "Toybox.Lang.Float" => crate::ArrayElement::Float,
-            "Toybox.Lang.Long" => crate::ArrayElement::Long,
-            "Toybox.Lang.String" => crate::ArrayElement::String,
-            "Toybox.WatchUi.View" => crate::ArrayElement::Object(crate::NativeClass::View),
-            _ => return Err(self.error(at, "unsupported Array element annotation")),
-        };
-        if self.peek()? == Kind::Word("or") {
-            self.token()?;
-            self.expect(Kind::Word("Null"), "'Null'")?;
-            element = match element {
-                crate::ArrayElement::Interface(interface) => {
-                    crate::ArrayElement::NullableInterface(interface)
-                }
-                crate::ArrayElement::Number => crate::ArrayElement::NullableNumber,
-                crate::ArrayElement::LangObject => crate::ArrayElement::NullableObject,
-                crate::ArrayElement::Numeric { alias, .. } => crate::ArrayElement::Numeric {
-                    alias,
-                    nullable: true,
-                },
-                crate::ArrayElement::Double => crate::ArrayElement::NullableDouble,
-                crate::ArrayElement::Float => crate::ArrayElement::NullableFloat,
-                crate::ArrayElement::Long => crate::ArrayElement::NullableLong,
-                crate::ArrayElement::String => crate::ArrayElement::NullableString,
-                crate::ArrayElement::Char => crate::ArrayElement::NullableChar,
-                crate::ArrayElement::Symbol => crate::ArrayElement::NullableSymbol,
-                crate::ArrayElement::Method => crate::ArrayElement::NullableMethod,
-                crate::ArrayElement::WeakReference => crate::ArrayElement::NullableWeakReference,
-                crate::ArrayElement::ByteArray => crate::ArrayElement::NullableByteArray,
-                crate::ArrayElement::Boolean => crate::ArrayElement::NullableBoolean,
-                _ => return Err(self.error(at, "nullable Array elements require Number or String")),
-            };
-        }
+        let element = self.parameter_annotation(at)?;
         self.expect(Kind::Punctuation('>'), "'>'")?;
-        Ok(element)
+        if element.source_contract().is_some() {
+            return Err(self.error(at, "unsupported Array source-class element contract"));
+        }
+        crate::ArrayElement::from_api_type(&element.api_type())
+            .ok_or_else(|| self.error(at, "unsupported Array element annotation"))
     }
     fn path(&mut self) -> Result<String, Diagnostic> {
         let token = self.identifier()?;
@@ -1147,10 +1303,32 @@ impl<'a> Parser<'a> {
             }
             casts += 1;
             let at = self.token()?.span.start;
-            let class = self.type_path()?;
-            let mut target = crate::api::core()
-                .type_alias(&class)
-                .unwrap_or_else(|| crate::api::Type::named(class));
+            let path = self.path()?;
+            let mut target = if let Some(parameter) = self.alias_parameter(&path, at)? {
+                if let Some(contract) = parameter.source_contract() {
+                    let mut parts = contract
+                        .classes()
+                        .iter()
+                        .map(|class| crate::api::Type::named(&class.name))
+                        .collect::<Vec<_>>();
+                    parts.extend(contract.native().iter().cloned());
+                    if contract.nullable() {
+                        parts.push(crate::api::Type::Null);
+                    }
+                    crate::unions::normalize(parts)
+                } else {
+                    parameter.api_type()
+                }
+            } else {
+                let class = self
+                    .names
+                    .type_name(&path)
+                    .map_err(|message| self.error(at, message))?
+                    .unwrap_or(path);
+                crate::api::core()
+                    .type_alias(&class)
+                    .unwrap_or_else(|| crate::api::Type::named(class))
+            };
             if self.peek()? == Kind::Word("or") {
                 // Leave logical OR available unless its next token is Null.
                 let saved = self.token()?.span.start;
@@ -2202,6 +2380,9 @@ impl<'a> Parser<'a> {
     fn runtime_class(&mut self) -> Result<String, Diagnostic> {
         let at = self.offset;
         let class = self.type_path()?;
+        if self.alias_key(&class).is_some() {
+            return Err(self.error(at, "typedef names are not runtime classes"));
+        }
         if class.contains('.') && crate::native_bindings::lang_class(&class).is_none() {
             return Err(self.error(at, "instanceof requires a supported runtime class"));
         }
@@ -2445,7 +2626,16 @@ impl Parser<'_> {
     /// Parse one existing signature atom, including bounded container parameters.
     fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
         let at = self.offset;
-        let ty = match self.type_path()?.as_str() {
+        let path = self.path()?;
+        if let Some(ty) = self.alias_parameter(&path, at)? {
+            return Ok(ty);
+        }
+        let path = self
+            .names
+            .type_name(&path)
+            .map_err(|message| self.error(at, message))?
+            .unwrap_or(path);
+        let ty = match path.as_str() {
             "Null" => crate::ParameterType::Null,
             "Toybox.Lang.Number" => crate::ParameterType::Integer,
             "Toybox.Lang.Object" => crate::ParameterType::LangObject,
@@ -2508,6 +2698,19 @@ impl Parser<'_> {
     /// Parse `or` alternatives, normalizing native unions without erasing a
     /// source class into its native base. Source and native alternatives retain distinct contracts.
     fn parameter_annotation(&mut self, at: usize) -> Result<crate::ParameterType, Diagnostic> {
+        if self.type_depth >= 64 {
+            return Err(self.error(at, "type annotation exceeds 64 levels"));
+        }
+        self.type_depth += 1;
+        let result = self.parameter_annotation_inner(at);
+        self.type_depth -= 1;
+        result
+    }
+
+    fn parameter_annotation_inner(
+        &mut self,
+        at: usize,
+    ) -> Result<crate::ParameterType, Diagnostic> {
         let first = self.parameter_atom()?;
         if self.peek()? != Kind::Word("or") {
             return Ok(first);
@@ -2520,20 +2723,20 @@ impl Parser<'_> {
             }
             parts.push(self.parameter_atom()?);
         }
-        let sources = parts
-            .iter()
-            .filter_map(|p| match p {
-                crate::ParameterType::SourceObject(c)
-                | crate::ParameterType::NullableSourceObject(c) => Some(c.clone()),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+        let mut sources = Vec::new();
+        let mut native = Vec::new();
+        for part in &parts {
+            if let Some(contract) = part.source_contract() {
+                sources.extend(contract.classes().iter().cloned());
+                native.extend(contract.native().iter().cloned());
+                if contract.nullable() {
+                    native.push(crate::api::Type::Null);
+                }
+            } else {
+                native.push(part.api_type());
+            }
+        }
         if !sources.is_empty() {
-            let native = parts
-                .iter()
-                .filter(|p| p.source_contract().is_none())
-                .map(crate::ParameterType::api_type)
-                .collect();
             return crate::SourceUnion::with_native(sources, native, false)
                 .map(crate::SourceUnion::parameter)
                 .map_err(|message| self.error(at, message));
@@ -2637,16 +2840,11 @@ pub(crate) struct ParsedClass {
 /// Parse one source file into owned declarations, retaining function bodies.
 /// Resolves file-local native names without binding user calls or selecting
 /// VM instructions. Both fragment and compilation-unit inputs use this parser.
-pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
-    let mut parser = Parser {
-        source,
-        offset: 0,
-        lookahead: None,
-        expressions: 0,
-        dictionary_entry: false,
-        names: crate::names::Names::default(),
-        native_base: None,
-    };
+pub(crate) fn declarations<'a>(
+    source: &'a str,
+    aliases: Rc<Aliases<'a>>,
+) -> Result<ParsedUnit, Diagnostic> {
+    let mut parser = Parser::new(source, aliases);
     let mut unit = ParsedUnit {
         functions: Vec::new(),
         classes: Vec::new(),
@@ -2654,6 +2852,10 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
     let mut count = 0;
     parser.imports()?;
     while parser.peek()? != Kind::End {
+        if parser.peek()? == Kind::Word("typedef") {
+            parser.skip_typedef()?;
+            continue;
+        }
         if matches!(parser.peek()?, Kind::Word("module" | "class")) {
             let is_class = parser.token()?.kind == Kind::Word("class");
             let token = parser.identifier()?;
@@ -2691,11 +2893,16 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.expect(Kind::Punctuation('{'), "'{'")?;
             let outer_names = parser.names.clone();
+            parser.owner = Some(name.into());
             parser.native_base = class_base;
             parser.imports()?;
             let mut methods = Vec::new();
             let mut fields = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
+                if parser.peek()? == Kind::Word("typedef") {
+                    parser.skip_typedef()?;
+                    continue;
+                }
                 if is_class && parser.peek()? == Kind::Word("var") {
                     parser.token()?;
                     let token = parser.identifier()?;
@@ -2780,8 +2987,17 @@ pub(crate) fn declarations(source: &str) -> Result<ParsedUnit, Diagnostic> {
             }
             parser.token()?;
             parser.names = outer_names;
+            parser.owner = None;
             parser.native_base = None;
-            if methods.is_empty() && class_base != Some(crate::ClassBase::LangObject) {
+            let has_aliases = parser
+                .aliases
+                .declarations
+                .keys()
+                .any(|key| key.starts_with(&format!("{name}.")));
+            if methods.is_empty()
+                && class_base != Some(crate::ClassBase::LangObject)
+                && !has_aliases
+            {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }
             if is_class {

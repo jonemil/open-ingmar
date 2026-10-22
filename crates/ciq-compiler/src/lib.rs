@@ -4215,7 +4215,7 @@ impl Function {
 /// Compile an isolated Monkey C function into validated function IR.
 ///
 /// Uses the same declaration parser as [`compile_sources`], then requires exactly
-/// one global function with optional leading native imports/aliases. Checks
+/// one global function with native name declarations and typedefs. Checks
 /// types, local initialization, control flow, and effect order and retains source
 /// spans. User module calls may remain unresolved for later external symbol
 /// binding; callee signatures and ownership are not validated here.
@@ -4240,7 +4240,13 @@ fn compile_fragment(
     source: &str,
     context: Option<api::ApiContext>,
 ) -> Result<Function, Diagnostic> {
-    let parsed = parser::declarations(source)?;
+    let aliases = parser::collect_aliases(&[source]).map_err(|error| error.diagnostic)?;
+    if let Some(context) = context {
+        aliases
+            .validate_api(context)
+            .map_err(|error| error.diagnostic)?;
+    }
+    let parsed = parser::declarations(source, aliases)?;
     if !parsed.classes.is_empty() || parsed.functions.len() != 1 || parsed.functions[0].0.is_some()
     {
         return Err(Diagnostic::at(

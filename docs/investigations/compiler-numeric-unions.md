@@ -172,5 +172,38 @@ For SDK reproduction, reuse the minimal-console manifest/resources with
 class. Use the specimen checker with `compiler-numeric-containers`; current
 captures are in `scratch/check-numeric-containers-v4/`.
 
+## Source typedefs
+
+SDK/compiler/simulator 9.2.0 / fr265 accept the independently authored
+[two-file alias specimen](../../examples/compiler-typedefs/README.md), with
+global, module, and class-local typedefs. Forward/cross-file targets, native
+unions, nullable exact classes, container arguments, fields, and a scalar cast
+produce the same [nine console lines](../../examples/compiler-typedefs/expected.txt)
+in SDK and generated apps. Both PRGs reconstruct through structured CODE/DATA
+without required raw fallback. Aliases require no new runtime records/opcodes.
+
+Controlled declaration probes against the same AppBase scaffold found:
+
+- `typedef A as B; typedef B as A;` is rejected: both poly types reference self.
+- An unused `typedef Recursive as Array<Recursive>;` compiles. This establishes
+  acceptance of container-guarded recursion, not recursive-value operations.
+  The current compiler diagnoses it because its container contracts are finite.
+- An unused `typedef A as Missing;` is rejected as an unresolved type. A Void
+  typedef target is rejected syntactically.
+- `typedef T as Number;` permits `value as T`, but `value instanceof T` is
+  rejected as an undefined runtime symbol.
+- A typedef and class with the same global name conflict. A typedef and function
+  with the same name compile. A source `Number` alias changes imported Number
+  annotations to its target, including callers declared earlier in the file.
+
+For reproduction, reuse the minimal-console manifest/resources in an ignored
+SDK project, select `../../examples/compiler-typedefs` as its source path, and
+set application ID `d85412c0790f4ee98cbebc2ac5479af1`. Build with
+`scripts/build-example.sh` and use `scripts/check-example.py` for preparation
+and simulation. The cached SDK PRG is indexed in `scratch/sdk-cache/sdk-index.json`;
+per-change validation output is disposable after review. The source syntax is
+also described in Garmin's [Monkey Types article][monkey-types].
+
+[monkey-types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
 [language]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/

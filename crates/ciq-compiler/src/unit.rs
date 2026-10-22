@@ -2101,6 +2101,10 @@ impl std::error::Error for SourceDiagnostic {}
 /// must remain unique. Calls on self resolve within their own class.
 /// Resolves the supported native module aliases and imported superclass names;
 /// native bindings are file-local and inherited by class/module scopes.
+/// Collects scoped typedefs across files before parsing annotations, expanding
+/// them in their declaration's native-name environment. Rejects duplicate,
+/// unresolved, cyclic, or unsupported targets, including unused aliases.
+/// Returned IR contains expanded contracts rather than alias declarations.
 /// Supplies an empty zero-argument Void initializer for Object-rooted classes
 /// without one, preserving it as an ordinary method in the returned unit.
 /// All user callees must be present. Rejects empty units and more than 256
@@ -2129,11 +2133,16 @@ fn compile_sources_context(
     let mut classes = Vec::new();
     let mut origins = Vec::new();
     let mut class_origins = Vec::new();
+    let aliases = parser::collect_aliases(sources)?;
+    if let Some(context) = context {
+        aliases.validate_api(context)?;
+    }
     let mut parsed_sources = sources
         .iter()
         .enumerate()
         .map(|(source, text)| {
-            parser::declarations(text).map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
+            parser::declarations(text, aliases.clone())
+                .map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;
     // Normalize Object's default initializer before collecting signatures, so
