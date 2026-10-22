@@ -224,11 +224,14 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("interface(") {
+        return crate::structural::parse(tag).map(|shape| ReturnType::Structural(Box::new(shape)));
+    }
     if let Some(body) = tag
         .strip_prefix("source-union(")
         .and_then(|s| s.strip_suffix(')'))
     {
-        let parts = body.split('|').collect::<Vec<_>>();
+        let parts = crate::structural::split(body, '|')?;
         if !(2..=crate::MAX_PARAMETERS).contains(&parts.len()) {
             return Err("invalid source union alternatives");
         }
@@ -254,7 +257,7 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
             .strip_prefix("union(")
             .and_then(|s| s.strip_suffix(')'))
             .ok_or("invalid union tag")?;
-        let parts = body.split('|').collect::<Vec<_>>();
+        let parts = crate::structural::split(body, '|')?;
         if parts.len() < 2
             || parts.len() > crate::MAX_PARAMETERS
             || parts.iter().any(|p| {
@@ -311,6 +314,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::Structural(shape)) => Ok(ParameterType::Structural(shape)),
         Ok(ReturnType::SourceUnion(contract)) => Ok(contract.parameter()),
         Ok(ReturnType::SourceObject(class)) => Ok(ParameterType::SourceObject(class)),
         Ok(ReturnType::NullableSourceObject(class)) => {
@@ -360,6 +364,7 @@ pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
 /// Print a call-result tag without adding metadata keys or erasing source identity.
 pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
     match ty {
+        ReturnType::Structural(shape) => Cow::Owned(shape.tag()),
         ReturnType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ReturnType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ReturnType::TypedDictionary(ty) => Cow::Owned(ty.text()),
@@ -382,6 +387,7 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 /// Print parameter metadata using the same spellings as its reader.
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
     match ty {
+        ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
         ParameterType::Union(ty) => Cow::Owned(crate::unions::text(ty)),
         ParameterType::Array(element) => Cow::Owned(format!("{}-array", element.text())),
         ParameterType::TypedDictionary(ty) => Cow::Owned(ty.text()),

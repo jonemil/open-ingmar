@@ -69,12 +69,18 @@ pub(crate) struct ParsedFunction {
 }
 
 pub(crate) enum Statement {
+    MemberAssign {
+        receiver: Expression,
+        member: String,
+        value: Expression,
+        span: Span,
+    },
     Update {
         target: Expression,
         increment: bool,
         span: Span,
     },
-    ArrayCompound {
+    PlaceCompound {
         target: Expression,
         kind: crate::BinaryOp,
         value: Expression,
@@ -170,9 +176,10 @@ impl Statement {
         match self {
             Self::Local(local) => local.span,
             Self::Update { span, .. } => *span,
-            Self::FieldAssign { span, .. }
+            Self::MemberAssign { span, .. }
+            | Self::FieldAssign { span, .. }
             | Self::ArrayAssign { span, .. }
-            | Self::ArrayCompound { span, .. } => *span,
+            | Self::PlaceCompound { span, .. } => *span,
             Self::Println { span, .. }
             | Self::Assign { span, .. }
             | Self::Return { span, .. }
@@ -221,6 +228,10 @@ pub(crate) enum NativeConstructor {
 }
 
 pub(crate) enum ExpressionKind {
+    MemberRead {
+        receiver: Box<Expression>,
+        member: String,
+    },
     Symbol(String),
     DictionaryNew,
     DictionaryLiteral(Vec<(Expression, Expression)>),
@@ -331,6 +342,7 @@ impl Expression {
     /// Report whether this tree needs control flow or staged array construction.
     pub(crate) fn needs_materialization(&self) -> bool {
         match &self.kind {
+            ExpressionKind::MemberRead { receiver, .. } => receiver.needs_materialization(),
             ExpressionKind::Conditional { .. }
             | ExpressionKind::Logical { .. }
             | ExpressionKind::ArrayLiteral(_)
@@ -540,11 +552,20 @@ impl<'a> Parser<'a> {
     /// Skip a balanced body while collecting declarations, without interpreting it.
     fn skip_body(&mut self) -> Result<(), Diagnostic> {
         while self.peek()? != Kind::Punctuation('{') {
+            if self.peek()? == Kind::Word("interface") {
+                self.token()?;
+                self.skip_braces()?;
+                continue;
+            }
             if self.token()?.kind == Kind::End {
                 return Err(self.error(self.offset, "expected function body"));
             }
         }
-        self.token()?;
+        self.skip_braces()
+    }
+
+    fn skip_braces(&mut self) -> Result<(), Diagnostic> {
+        self.expect(Kind::Punctuation('{'), "'{'")?;
         let mut depth = 1usize;
         while depth != 0 {
             match self.token()?.kind {
@@ -559,14 +580,15 @@ impl<'a> Parser<'a> {
 
     fn skip_typedef(&mut self) -> Result<(), Diagnostic> {
         self.expect(Kind::Word("typedef"), "'typedef'")?;
-        self.identifier()?;
-        self.expect(Kind::Word("as"), "'as' after typedef name")?;
-        // Targets were parsed and validated during alias collection.
-        while self.token()?.kind != Kind::Punctuation(';') {
-            if self.offset >= self.source.len() {
-                return Err(self.error(self.offset, "expected ';' after typedef"));
-            }
-        }
+        let name = self.identifier()?;
+        let Kind::Word(name) = name.kind else {
+            unreachable!()
+        };
+        // Collection already checked the full target, including nested member
+        // semicolons. Advance past its declaration terminator, not the first ';'.
+        let key = self.alias_key(name).expect("collected typedef");
+        self.offset = self.aliases.declarations[&key].end + 1;
+        self.lookahead = None;
         Ok(())
     }
 }
@@ -597,11 +619,18 @@ pub(crate) fn collect_aliases<'a>(
                         );
                         parser.expect(Kind::Word("as"), "'as' after typedef name")?;
                         let target = parser.offset;
+                        let mut braces = 0usize;
                         let end = loop {
                             let token = parser.token()?;
                             match token.kind {
-                                Kind::Punctuation(';') => break token.span.start,
-                                Kind::Punctuation('{') | Kind::End => {
+                                Kind::Punctuation(';') if braces == 0 => break token.span.start,
+                                Kind::Punctuation('{') => braces += 1,
+                                Kind::Punctuation('}') => {
+                                    braces = braces.checked_sub(1).ok_or_else(|| {
+                                        parser.error(token.span.start, "unbalanced typedef target")
+                                    })?
+                                }
+                                Kind::End => {
                                     return Err(parser.error(
                                         token.span.start,
                                         "unsupported or unterminated typedef target",
@@ -1112,6 +1141,23 @@ impl<'a> Parser<'a> {
         Ok(self.lookahead.as_ref().unwrap().kind)
     }
     fn node(&mut self, kind: ExpressionKind, span: Span) -> Result<Expression, Diagnostic> {
+        fn receiver(kind: &ExpressionKind) -> Option<&Expression> {
+            match kind {
+                ExpressionKind::MemberRead { receiver, .. }
+                | ExpressionKind::ValueCall { receiver, .. } => Some(receiver.as_ref()),
+                ExpressionKind::ArrayRead { array, .. } => Some(array.as_ref()),
+                _ => None,
+            }
+        }
+        let mut current = &kind;
+        let mut lookups = 0;
+        while let Some(next) = receiver(current) {
+            lookups += 1;
+            if lookups > 64 {
+                return Err(self.error(span.start, "expression nesting exceeds 64 levels"));
+            }
+            current = &next.kind;
+        }
         self.expressions += 1;
         if self.expressions > crate::MAX_OPERATIONS {
             return Err(self.error(span.start, "expression exceeds 1024-operation limit"));
@@ -1643,8 +1689,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
-        let mut expression = if self.peek()? == Kind::Punctuation('[') {
+    fn primary_base(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let expression = if self.peek()? == Kind::Punctuation('[') {
             let open = self.token()?;
             if depth >= 64 {
                 return Err(self.error(open.span.start, "expression nesting exceeds 64 levels"));
@@ -1696,6 +1742,20 @@ impl<'a> Parser<'a> {
         } else {
             self.atom(depth)?
         };
+        Ok(expression)
+    }
+
+    fn primary(&mut self, depth: usize) -> Result<Expression, Diagnostic> {
+        let expression = self.primary_base(depth)?;
+        self.postfix(expression, depth)
+    }
+
+    /// Parse suffixes after the base expression has released its parsing frame.
+    fn postfix(
+        &mut self,
+        mut expression: Expression,
+        depth: usize,
+    ) -> Result<Expression, Diagnostic> {
         let mut call_depth = depth;
         while matches!(
             self.peek()?,
@@ -1725,6 +1785,20 @@ impl<'a> Parser<'a> {
                 unreachable!()
             };
             let start = expression.span.start;
+            if self.peek()? != Kind::Punctuation('(') {
+                expression = self.node(
+                    ExpressionKind::MemberRead {
+                        receiver: Box::new(expression),
+                        member: member.into(),
+                    },
+                    Span {
+                        start,
+                        end: token.span.end,
+                    },
+                )?;
+                call_depth += 1;
+                continue;
+            }
             let (arguments, end) = self.call_arguments(start, call_depth)?;
             call_depth += 1;
             expression = self.node(
@@ -1940,7 +2014,8 @@ impl<'a> Parser<'a> {
             return self.node(ExpressionKind::Local(name.into()), span);
         };
         if let ExpressionKind::ModuleCall { arguments, .. }
-        | ExpressionKind::UnqualifiedCall { arguments, .. } = &mut expression.kind
+        | ExpressionKind::UnqualifiedCall { arguments, .. }
+        | ExpressionKind::ValueCall { arguments, .. } = &mut expression.kind
         {
             let (parsed, end) = self.call_arguments(span.start, depth)?;
             *arguments = parsed;
@@ -1995,6 +2070,46 @@ impl<'a> Parser<'a> {
                 },
             );
         }
+        if name != "Toybox"
+            && !self.names.bound(name)
+            && self.names.module(module).is_none()
+            && !self.names.app_base(module)
+            && !self.names.view(module)
+            && !self.names.behavior_delegate(module)
+            && (self.peek()? != Kind::Punctuation('(') || module.contains('.'))
+        {
+            let mut parts = path.split('.');
+            let mut receiver = self.node(
+                ExpressionKind::Local(parts.next().unwrap().into()),
+                Span {
+                    start,
+                    end: start + name.len(),
+                },
+            )?;
+            let mut remaining = parts.peekable();
+            while let Some(member) = remaining.next() {
+                let kind = if remaining.peek().is_none() && self.peek()? == Kind::Punctuation('(') {
+                    ExpressionKind::ValueCall {
+                        receiver: Box::new(receiver),
+                        member: member.into(),
+                        arguments: Vec::new(),
+                    }
+                } else {
+                    ExpressionKind::MemberRead {
+                        receiver: Box::new(receiver),
+                        member: member.into(),
+                    }
+                };
+                receiver = self.node(
+                    kind,
+                    Span {
+                        start,
+                        end: self.offset,
+                    },
+                )?;
+            }
+            return Ok(receiver);
+        }
         let module = if let Some(native) = self.names.module(module) {
             native.name()
         } else if self.native_base.is_some() && (module == "AppBase" || self.names.app_base(module))
@@ -2036,6 +2151,7 @@ impl<'a> Parser<'a> {
             expression.kind,
             ExpressionKind::Local(_)
                 | ExpressionKind::SelfField(_)
+                | ExpressionKind::MemberRead { .. }
                 | ExpressionKind::ArrayRead { .. }
         ) {
             return Err(self.error(
@@ -2066,6 +2182,12 @@ impl<'a> Parser<'a> {
                     span,
                 },
                 ExpressionKind::SelfField(name) => Statement::FieldAssign { name, value, span },
+                ExpressionKind::MemberRead { receiver, member } => Statement::MemberAssign {
+                    receiver: *receiver,
+                    member,
+                    value,
+                    span,
+                },
                 ExpressionKind::Local(name) => Statement::Assign { name, value, span },
                 _ => unreachable!("checked assignment target"),
             }
@@ -2083,8 +2205,8 @@ impl<'a> Parser<'a> {
         span: Span,
     ) -> Result<Statement, Diagnostic> {
         let (name, field) = match &target.kind {
-            ExpressionKind::ArrayRead { .. } => {
-                return Ok(Statement::ArrayCompound {
+            ExpressionKind::ArrayRead { .. } | ExpressionKind::MemberRead { .. } => {
+                return Ok(Statement::PlaceCompound {
                     target,
                     kind,
                     value,
@@ -2219,7 +2341,7 @@ impl<'a> Parser<'a> {
                 Statement::Assign { .. }
                     | Statement::FieldAssign { .. }
                     | Statement::ArrayAssign { .. }
-                    | Statement::ArrayCompound { .. }
+                    | Statement::PlaceCompound { .. }
                     | Statement::Update { .. }
             ) {
                 return Err(self.error(start, "for headers require declarations, assignments, or updates; standalone calls are unsupported"));
@@ -2623,9 +2745,110 @@ impl<'a> Parser<'a> {
 }
 
 impl Parser<'_> {
+    /// Parse source interface requirements without executable member bodies.
+    /// Reuse annotation resolution; exact source member contracts need a richer
+    /// structural representation and are rejected rather than projected away.
+    fn structural_annotation(&mut self) -> Result<crate::StructuralInterface, Diagnostic> {
+        let start = self
+            .expect(Kind::Word("interface"), "'interface'")?
+            .span
+            .start;
+        self.expect(Kind::Punctuation('{'), "'{' after interface")?;
+        let mut shape = crate::StructuralInterface {
+            fields: BTreeMap::new(),
+            methods: BTreeMap::new(),
+        };
+        while self.peek()? != Kind::Punctuation('}') {
+            if shape.fields.len() + shape.methods.len() >= 256 {
+                return Err(self.error(start, "interface exceeds 256 members"));
+            }
+            let kind = self.token()?;
+            if !matches!(kind.kind, Kind::Word("var" | "function")) {
+                return Err(
+                    self.error(kind.span.start, "expected interface var or function member")
+                );
+            }
+            let name = self.identifier()?;
+            let Kind::Word(name) = name.kind else {
+                unreachable!()
+            };
+            if shape.fields.contains_key(name) || shape.methods.contains_key(name) {
+                return Err(self.error(kind.span.start, "duplicate interface member"));
+            }
+            if kind.kind == Kind::Word("var") {
+                let ty = self.structural_member_type(start, false)?;
+                shape.fields.insert(name.into(), ty);
+            } else {
+                self.expect(Kind::Punctuation('('), "'('")?;
+                let mut parameters = Vec::new();
+                let mut names = BTreeSet::new();
+                if self.peek()? != Kind::Punctuation(')') {
+                    loop {
+                        if parameters.len() >= crate::MAX_PARAMETERS {
+                            return Err(
+                                self.error(start, "interface method exceeds 254 parameters")
+                            );
+                        }
+                        let argument = self.identifier()?;
+                        let Kind::Word(argument) = argument.kind else {
+                            unreachable!()
+                        };
+                        if !names.insert(argument) {
+                            return Err(self.error(start, "duplicate interface parameter"));
+                        }
+                        parameters.push(self.structural_member_type(start, false)?);
+                        if self.peek()? != Kind::Punctuation(',') {
+                            break;
+                        }
+                        self.token()?;
+                    }
+                }
+                self.expect(Kind::Punctuation(')'), "')'")?;
+                let result = self.structural_member_type(start, true)?;
+                shape
+                    .methods
+                    .insert(name.into(), crate::StructuralMethod { parameters, result });
+            }
+            self.expect(Kind::Punctuation(';'), "';' after interface member")?;
+        }
+        self.token()?;
+        shape
+            .validate()
+            .map_err(|message| self.error(start, message))?;
+        Ok(shape)
+    }
+
+    fn structural_member_type(
+        &mut self,
+        at: usize,
+        result: bool,
+    ) -> Result<crate::api::Type, Diagnostic> {
+        if self.peek()? != Kind::Word("as") {
+            return Ok(crate::api::Type::Any);
+        }
+        self.token()?;
+        if result && self.peek()? == Kind::Word("Void") {
+            self.token()?;
+            return Ok(crate::api::Type::Void);
+        }
+        let parameter = self.parameter_annotation(at)?;
+        if parameter.source_contract().is_some() {
+            return Err(self.error(
+                at,
+                "exact source-class interface member contracts are not supported",
+            ));
+        }
+        Ok(parameter.api_type())
+    }
+
     /// Parse one existing signature atom, including bounded container parameters.
     fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
         let at = self.offset;
+        if self.peek()? == Kind::Word("interface") {
+            return self
+                .structural_annotation()
+                .map(|shape| crate::ParameterType::Structural(Box::new(shape)));
+        }
         let path = self.path()?;
         if let Some(ty) = self.alias_parameter(&path, at)? {
             return Ok(ty);

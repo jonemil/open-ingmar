@@ -216,6 +216,16 @@ impl Types {
                     .retain(|fact| fact.place() != crate::type_flow::Place::Parameter(*index));
                 return;
             }
+            Operation::MemberRead {
+                result,
+                receiver,
+                member,
+            } => (
+                *result,
+                self.values
+                    .get(receiver)
+                    .and_then(|ty| crate::structural::field_type(ty, member).ok()),
+            ),
             Operation::SelfFieldRead {
                 result,
                 result_type,

@@ -70,6 +70,32 @@ those facts. Every possible native receiver/operand must support an operation;
 result alternatives are normalized. Container reference unions retain invariant
 content contracts. Fields and lexical casts retain their existing domains.
 
+### Source interface contracts
+
+`StructuralInterface` contains name-ordered fields and `StructuralMethod`
+signatures. `api::Type::Structural`, parameter/result contracts, joins, and fixed
+storage retain these finite shapes; typedef names do not survive expansion.
+Typed construction and text reload validate names, member/argument/depth limits,
+and canonical supported types. Mutable fields are invariant and method
+signatures match exactly. Exact source member types must not be replaced by
+their native projection; this profile rejects those unsupported contracts.
+
+`.member-read result receiver name` derives its value type from the receiver's
+declared field. `.member-write receiver name value` checks the value against
+every possible receiver alternative. Receiver and value IDs obey ordinary
+use/order rules. Reads and writes participate in effect scheduling; declarations
+or edited metadata cannot move a read across a write. Instance calls reuse
+`.call-native`/`.call-native-discard` with the receiver's structural declaration
+supplying arity, argument, and result contracts. The operation names cover
+structural dispatch as well as catalogue-provided members.
+
+Function checks may defer an exact source implementation to unit validation.
+The unit resolves the required source/native member signatures at every checked
+boundary before application generation. Opaque native base types cannot invent
+structural witnesses. [Frontend rules](../frontend/README.md#source-interface-types)
+own assignment, nullability, and observable behavior; [type tags](grammar.md#type-tags)
+own saved spelling.
+
 ### Validation
 
 Source typedefs are resolved before IR construction. Function signatures, field

@@ -100,6 +100,18 @@ impl ApiContext {
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::Structural(shape) => {
+                shape.validate()?;
+                for ty in shape.fields.values().chain(
+                    shape
+                        .methods
+                        .values()
+                        .flat_map(|m| m.parameters.iter().chain(std::iter::once(&m.result))),
+                ) {
+                    self.check_type(catalogue, ty)?;
+                }
+                Ok(())
+            }
             Type::Options(fields) => fields
                 .values()
                 .try_for_each(|ty| self.check_type(catalogue, ty)),
@@ -183,6 +195,8 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// Source-declared structural fields and instance-method contracts.
+    Structural(Box<crate::StructuralInterface>),
     /// Dynamic value, including Null; operations defer unknown types to runtime.
     Any,
     /// Mutable Array with an explicit element contract. Array element contracts
@@ -1365,6 +1379,21 @@ mod tests {
         let api = core();
         fn check_type(api: &Catalogue, ty: &Type) {
             match ty {
+                Type::Structural(shape) => {
+                    for ty in
+                        shape
+                            .fields
+                            .values()
+                            .chain(shape.methods.values().flat_map(|method| {
+                                method
+                                    .parameters
+                                    .iter()
+                                    .chain(std::iter::once(&method.result))
+                            }))
+                    {
+                        check_type(api, ty);
+                    }
+                }
                 Type::Array(element) => {
                     assert!(api.class("Toybox.Lang.Array").is_some());
                     check_type(api, element);

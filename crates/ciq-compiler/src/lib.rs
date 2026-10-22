@@ -34,7 +34,9 @@ mod parser;
 mod source_ir;
 mod source_objects;
 mod source_union;
+mod structural;
 pub use source_union::SourceUnion;
+pub use structural::{StructuralInterface, StructuralMethod};
 mod source_types;
 mod type_flow;
 mod type_text;
@@ -419,6 +421,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// Source structural member contract, independent of a runtime class.
+    Structural(Box<StructuralInterface>),
     /// A normalized union of supported native value contracts.
     Union(api::Type),
     /// The Null value alone.
@@ -498,6 +502,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Source structural member contract, independent of a runtime class.
+    Structural(Box<StructuralInterface>),
     /// A normalized union of supported native value contracts.
     Union(api::Type),
     /// The Null value alone.
@@ -580,6 +586,7 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
@@ -637,6 +644,7 @@ impl ReturnType {
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
             Self::Any => api::Type::Any,
@@ -691,6 +699,7 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
+    Structural(Box<StructuralInterface>),
     Union(api::Type),
     /// Dynamic value, including Null, with operations checked at runtime.
     Any,
@@ -796,6 +805,7 @@ impl ValueType {
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(&self) -> api::Type {
         match self {
+            Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Any => api::Type::Any,
             Self::ByteArrayOptions => api::Type::byte_options(),
@@ -888,6 +898,10 @@ impl ValueType {
         }
 
         match ty {
+            api::Type::Structural(shape) => shape
+                .validate()
+                .ok()
+                .map(|()| Self::Structural(shape.clone())),
             api::Type::Any => Some(Self::Any),
             ty if *ty == TupleShape::OneView.api_type() => Some(Self::Tuple(TupleShape::OneView)),
             ty if *ty == TupleShape::ViewDelegate.api_type() => {
@@ -967,6 +981,18 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
+    /// Read a declared structural field, evaluating the receiver once.
+    MemberRead {
+        result: ValueId,
+        receiver: ValueId,
+        member: String,
+    },
+    /// Write a structural field after evaluating its receiver and new value.
+    MemberWrite {
+        receiver: ValueId,
+        member: String,
+        value: ValueId,
+    },
     /// Push a named symbol; assembly/application binding supplies its ID.
     Symbol {
         result: ValueId,
@@ -1921,6 +1947,14 @@ impl Function {
                         }
                         _ => true,
                     };
+                    if origins.contract(value).is_none() {
+                        native::structural_api(
+                            &contract.api_type(),
+                            &type_of(value).api_type(),
+                            context,
+                        )
+                        .map_err(|message| fail(&message))?;
+                    }
                     if !infer_joins
                         && (!source_matches
                             || !native::accepts(&contract.api_type(), &type_of(value).api_type()))
@@ -2330,6 +2364,43 @@ impl Function {
                     }
                     types.insert(result, ValueType::LangObject);
                     (Some(result), vec![])
+                }
+                Operation::MemberRead {
+                    result,
+                    receiver,
+                    ref member,
+                } => {
+                    validate_call_names(None, member).map_err(fail)?;
+                    let ty = crate::structural::field_type(&type_of(receiver).api_type(), member)
+                        .map_err(|message| fail(&message))?;
+                    types.insert(
+                        result,
+                        ValueType::from_api_type(&ty)
+                            .ok_or_else(|| fail("unsupported structural field result"))?,
+                    );
+                    (Some(result), vec![receiver])
+                }
+                Operation::MemberWrite {
+                    receiver,
+                    ref member,
+                    value,
+                } => {
+                    validate_call_names(None, member).map_err(fail)?;
+                    for receiver_type in crate::unions::alternatives(&type_of(receiver).api_type())
+                    {
+                        let target = crate::structural::field_type(receiver_type, member)
+                            .map_err(|message| fail(&message))?;
+                        if origins.contract(value).is_none() {
+                            native::structural_api(&target, &type_of(value).api_type(), context)
+                                .map_err(|message| fail(&message))?;
+                        }
+                        if !native::accepts(&target, &type_of(value).api_type())
+                            && !origins.deferred_interface(&target, value)
+                        {
+                            return Err(fail("structural field write type mismatch"));
+                        }
+                    }
+                    (None, vec![receiver, value])
                 }
                 Operation::SelfFieldRead {
                     result,
@@ -2872,6 +2943,10 @@ impl Function {
                         .get(index)
                         .ok_or_else(|| fail("parameter index is outside the function signature"))?;
                     let target = expected.api_type();
+                    if origins.contract(value).is_none() {
+                        native::structural_api(&target, &type_of(value).api_type(), context)
+                            .map_err(|message| fail(&message))?;
+                    }
                     if !native::accepts(&target, &type_of(value).api_type())
                         && !origins.deferred_interface(&target, value)
                     {
@@ -3090,9 +3165,19 @@ impl Function {
                         (None, vec![value])
                     } else {
                         let incoming = type_of(value);
+                        if origins.contract(value).is_none() {
+                            native::structural_api(
+                                &local_types[&local].api_type(),
+                                &incoming.api_type(),
+                                context,
+                            )
+                            .map_err(|message| fail(&message))?;
+                        }
                         let source_interface = matches!(
                             local_types[&local],
-                            ValueType::Interface(_) | ValueType::NullableInterface(_)
+                            ValueType::Interface(_)
+                                | ValueType::NullableInterface(_)
+                                | ValueType::Structural(_)
                         ) && origins.contract(value).is_some();
                         if local_types[&local] != incoming
                             && local_types[&local] != ValueType::Any
@@ -3203,10 +3288,16 @@ impl Function {
                                 ));
                             }
                         }
-                        let source_witness = matches!(
-                            contract,
-                            ReturnType::Interface(_) | ReturnType::NullableInterface(_)
-                        ) && origins.contract(value).is_some();
+                        if origins.contract(value).is_none() {
+                            native::structural_api(
+                                &contract.api_type(),
+                                &type_of(value).api_type(),
+                                context,
+                            )
+                            .map_err(|message| fail(&message))?;
+                        }
+                        let source_witness =
+                            origins.deferred_interface(&contract.api_type(), value);
                         if !source_witness
                             && !native::accepts(&contract.api_type(), &type_of(value).api_type())
                         {
@@ -3225,6 +3316,7 @@ impl Function {
                             ValueType::NullableDecimal => ReturnType::NullableDecimal,
                             ValueType::Union(ref ty) => ReturnType::Union(ty.clone()),
                             ValueType::Any => ReturnType::Any,
+                            ValueType::Structural(shape) => ReturnType::Structural(shape),
                             ValueType::Integer => ReturnType::Integer,
                             ValueType::Long => ReturnType::Long,
                             ValueType::Double => ReturnType::Double,
@@ -3393,6 +3485,8 @@ impl Function {
                     | Operation::Discard { .. }
                     | Operation::LocalAssign { .. }
                     | Operation::ParameterAssign { .. }
+                    | Operation::MemberRead { .. }
+                    | Operation::MemberWrite { .. }
                     | Operation::SelfFieldRead { .. }
                     | Operation::SelfFieldAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
@@ -3407,6 +3501,9 @@ impl Function {
             let mut schedule = Vec::new();
             for (index, located) in operations.iter().enumerate() {
                 let roots = match &located.operation {
+                    Operation::MemberWrite {
+                        receiver, value, ..
+                    } => vec![*receiver, *value],
                     Operation::DictionaryWrite {
                         dictionary: array,
                         key: index,
@@ -3474,6 +3571,9 @@ impl Function {
                             let at = definitions[&value];
                             tasks.push(Task::Emit(at));
                             match &operations[at].operation {
+                                Operation::MemberRead { receiver, .. } => {
+                                    tasks.push(Task::Value(*receiver))
+                                }
                                 Operation::ByteArrayAllocate {
                                     length: operand, ..
                                 }
@@ -3756,6 +3856,16 @@ impl Function {
                 }
                 Operation::Char { result, value } => format!(".char %{} 0x{value:08x}", result.0),
                 Operation::Boolean { result, value } => format!(".boolean %{} {value}", result.0),
+                Operation::MemberRead {
+                    result,
+                    receiver,
+                    ref member,
+                } => format!(".member-read %{0} %{1} {member}", result.0, receiver.0),
+                Operation::MemberWrite {
+                    receiver,
+                    ref member,
+                    value,
+                } => format!(".member-write %{0} {member} %{1}", receiver.0, value.0),
                 Operation::SelfFieldRead {
                     result,
                     ref field,
@@ -4285,7 +4395,8 @@ fn validate_call_arguments(
         types.get(v).is_some_and(|t| {
             !matches!(
                 t,
-                ValueType::Union(_)
+                ValueType::Structural(_)
+                    | ValueType::Union(_)
                     | ValueType::Any
                     | ValueType::Integer
                     | ValueType::String
@@ -4340,6 +4451,7 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::Structural(shape) => Ok(ValueType::Structural(shape)),
         ReturnType::Union(ty) => ValueType::from_api_type(&ty).ok_or("unsupported union result"),
         ReturnType::Null => Ok(ValueType::Null),
         ReturnType::Any => Ok(ValueType::Any),

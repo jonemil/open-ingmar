@@ -37,8 +37,11 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Parse named and anonymous `interface` types with method and field members;
-  check structural assignment and member calls against their signatures.
+- [ ] Preserve exact source-class contracts in structural interface fields and
+  method parameters/results through annotations, saved IR, witness checks, and
+  member access.
+- [ ] Support structural interface contracts as Array elements and Dictionary
+  keys/values through annotations, saved IR, and container operations.
 - [ ] Parse callback signatures with argument/result types; check assignments
   and calls against the resolved signature.
 - [ ] Support positional tuple types, construction, indexing, and assignability
@@ -49,10 +52,12 @@ implemented contracts; investigations retain evidence, not another backlog.
   and general unions without adding runtime conversions.
 - [ ] Support disabled, gradual, informative, and strict type-checking policies;
   distinguish dynamic operations, ambiguity, and proven type errors.
-- [ ] Represent SDK-accepted container-guarded recursive typedefs, such as
-  `typedef Tree as Array<Tree>`, through annotations, IR, and container use.
-  Requires nested Array/Dictionary contracts below; unguarded alias cycles
-  remain errors.
+- [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,
+  and value operations: container-guarded aliases such as
+  `typedef Tree as Array<Tree>` and interfaces such as
+  `typedef Recursive as interface { function next() as Recursive; };`.
+  Container recursion requires nested Array/Dictionary contracts below;
+  unguarded alias cycles remain errors.
 
 ### 2. Declarations, namespaces, and member storage
 

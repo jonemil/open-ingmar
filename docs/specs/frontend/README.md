@@ -3328,7 +3328,7 @@ Symbol fields are supported: `:offset` requires Number and defaults to 0;
 wrong field types are rejected. A literal containing an Endian constant/local
 under `:endianness` can infer this record contract for reuse through a saved
 local. An arbitrary homogeneous Dictionary cannot claim the record proof.
-General structural source annotations and record mutation remain unsupported.
+General Symbol-keyed record annotations and record mutation remain unsupported.
 
 Private construction allocates before field effects, preserves source order, and
 exposes the record only after every declared field is filled. Values use
@@ -3345,6 +3345,67 @@ runtime-class refinement before class-specific operations. See the
 [evidence](../../investigations/byte-arrays.md#source-and-ir-profile).
 
 ## Structural interfaces
+
+### Source interface types
+
+`interface { ... }` declares a lexical member contract, used anonymously in an
+annotation or named through `typedef`. For example:
+
+```monkeyc
+typedef Counter as interface {
+    var count as Toybox.Lang.Number;
+    function add(n as Toybox.Lang.Number) as Toybox.Lang.Number;
+};
+function advance(counter as Counter) as Toybox.Lang.Number {
+    counter.count += 1;
+    return counter.add(2);
+}
+```
+
+Fields and method parameters/results use supported native value contracts,
+containers, unions, or nested structural interfaces; omitted annotations mean
+Any. Methods may return Void. Exact source-class contracts inside members and
+recursive interfaces are not yet represented. General Array/Dictionary content
+contracts retain their existing restrictions. Members have no bodies or default
+values. Duplicate names, more than 256 members, more than 254 arguments, and
+contract nesting beyond 64 levels are rejected.
+
+An interface's identity is its member contract, independent of typedef names
+or declaration order. A source class must expose every required field with
+exactly the same type and every method with exactly the declared parameter and
+result types. Method parameter widening/result narrowing do not establish a
+witness. Extra members are allowed. Declared methods and inherited native
+methods participate in checking; general source inheritance retains its own
+restrictions. Supported native values can satisfy method-only contracts through
+their API declarations. Existing Comparable/Comparator contracts interoperate
+with equivalent source interface method requirements.
+Known native implementations must provide every required method at both selected
+API levels. A lexical method name alone imposes no native API introduction:
+a source implementation can define its own method with that name.
+
+Unit validation checks witnesses at arguments, returns, parameter/fixed-local
+writes, field writes, and control-flow joins. Every exact source alternative
+must satisfy a union boundary. An erased Object cannot claim unknown members;
+Any retains the language's gradual checks. Interface values can be passed to a
+weaker structural contract or Object view when their declarations establish it.
+Nullable interfaces require a non-null proof before member access. Interface
+names are lexical types and cannot be runtime class tests or constructors.
+
+`receiver.field` reads and writes require a declared structural field. Ordinary
+assignments, compound assignments, and statement increments/decrements check the
+field's type and evaluate the receiver once before the RHS. Container literals
+receive the declared field context. Saved scalar/nullable reads remain snapshots
+after the field changes; testing one direct read does not prove a later read
+non-null. Source-class receiver fields still require the separate source-member
+access profile; a source identity is not automatically a structural annotation.
+
+IR stores the expanded contract and its checked member operations. Dispatch uses
+ordinary field symbols and member calls, with no interface runtime class,
+conversion, or discriminator. Calls through an erased structural receiver are
+conservatively treated as potential shutdown callbacks during constructor
+initialization analysis. See [IR representation](../ir/README.md#source-interface-contracts),
+[lowering](../lowering/README.md#structural-members), and
+[SDK evidence](../../investigations/compiler-structural-interfaces.md).
 
 ### Comparison interface values
 

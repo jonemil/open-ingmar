@@ -252,10 +252,15 @@ impl Origins {
     /// Report a source witness that requires a unit-level interface proof.
     pub(crate) fn deferred_interface(&self, expected: &crate::api::Type, value: ValueId) -> bool {
         self.values.contains_key(&value)
-            && matches!(
-                crate::ValueType::from_api_type(expected),
-                Some(crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_))
-            )
+            && (crate::structural::contains(expected)
+                || matches!(
+                    crate::ValueType::from_api_type(expected),
+                    Some(
+                        crate::ValueType::Interface(_)
+                            | crate::ValueType::NullableInterface(_)
+                            | crate::ValueType::Structural(_)
+                    )
+                ))
     }
 
     /// Project exact source arguments to non-null interface types for call
@@ -284,6 +289,13 @@ impl Origins {
                             crate::ValueType::Interface(interface)
                             | crate::ValueType::NullableInterface(interface),
                         ) => interface.api_type(self.values[&value].nullable()),
+                        _ if crate::structural::contains(expected) => {
+                            if self.values[&value].nullable() {
+                                expected.clone().with_null()
+                            } else {
+                                expected.clone()
+                            }
+                        }
                         _ => unreachable!("deferred interface argument"),
                     }
                 } else {

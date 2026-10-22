@@ -91,6 +91,10 @@ shares saved-type spellings while retaining each consumer's accepted domain.
 `source_union` normalizes exact class alternatives while `source_objects`
 tracks their provenance. Source identities remain separate from native API
 projections, which cannot authorize source dispatch or interface witnesses.
+`structural` owns finite source interface contracts and their saved tags;
+`native` checks declared member use, and `unit` proves source implementations.
+Base-expression and postfix parsing use separate frames so suffix extensions
+preserve the established expression-depth budget.
 `backend` selects VM instructions;
 `application` generates the bounded bootstrap and metadata. Keep these
 responsibilities separate even where they currently share a source file.

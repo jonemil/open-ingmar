@@ -167,6 +167,8 @@ storage-operation = ".parameter" value-id decimal-usize
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata?
                   | ".assign-self" identifier value-id
+                  | ".member-read" value-id value-id identifier
+                  | ".member-write" value-id identifier value-id
 unary-operation = unary-directive value-id value-id
 unary-directive = ".positive" | ".negate" | ".not" | ".complement"
                 | ".increment" | ".decrement"
@@ -301,7 +303,15 @@ call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-sourc
 declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
-           | dictionary-tag | "view" | "dc" | "behavior-delegate"
+           | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
+structural-tag = "interface(" structural-members? ")"
+structural-members = structural-member-tag (";" structural-member-tag)*
+structural-member-tag = "f(" identifier "=" structural-value-tag ")"
+                      | "m(" identifier "(" structural-arguments? ")="
+                        structural-result-tag ")"
+structural-arguments = structural-value-tag (";" structural-value-tag)*
+structural-value-tag = native-parameter-tag | union-tag
+structural-result-tag = structural-value-tag | "void"
 scalar-tag = "integer" | other-scalar-tag
 other-scalar-tag = "long" | "float" | "double" | "string" | "boolean" | "char"
 nullable-scalar-tag = "nullable-" scalar-tag
@@ -332,6 +342,7 @@ join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nul
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null" | "byte-options"
          | source-tag | nullable-source-tag | source-union-tag
+         | structural-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
@@ -344,6 +355,16 @@ when one represents the normalized type. Null is a standalone native signature
 tag. A union is one whitespace-free token, including when an atom contains
 Dictionary punctuation. Fields admit these value tags under the field
 restrictions above; cast domains remain separate.
+
+Structural tags contain name-ordered field records followed by name-ordered
+methods; declaration order is not identity. Empty contracts use `interface()`.
+For example, `interface(f(value=integer);m(add(integer)=integer))` requires a
+mutable Number field and a one-Number-argument, Number-result method. `void` is
+permitted only as a method result. Nested interface/union tags are single
+tokens; separators inside nested parentheses do not split outer members or
+alternatives. Duplicate members and source identities inside member contracts
+are rejected. The [structural contract rules](README.md#source-interface-contracts)
+define limits, canonical types, and witness checking.
 
 Source-union tags contain 2 through 254 atoms, including at least one exact
 source class, and at most 254 alternatives after normalization. Classes sort by

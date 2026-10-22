@@ -58,7 +58,14 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
-    if let Some(alternatives) = receiver.numeric_alternatives() {
+    if let api::Type::Structural(shape) = receiver {
+        return shape
+            .methods
+            .get(member)
+            .map(|m| m.parameters.clone())
+            .or_else(|| value_parameters(&api::Type::named("Toybox.Lang.Object"), member));
+    }
+    if let api::Type::Union(alternatives) = receiver {
         let first = value_parameters(&alternatives[0], member)?;
         return alternatives
             .iter()
@@ -129,6 +136,32 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::Structural(shape) = receiver {
+        if let Some(context) = context {
+            context.check_type(api::core(), receiver)?;
+        }
+        if let Some(method) = shape.methods.get(member) {
+            for (expected, actual) in method.parameters.iter().zip(arguments) {
+                structural_api(expected, actual, context)?;
+            }
+            if method.parameters.len() != arguments.len()
+                || !method
+                    .parameters
+                    .iter()
+                    .zip(arguments)
+                    .all(|(expected, actual)| accepts(expected, actual))
+            {
+                return Err("interface call arguments do not match its signature".into());
+            }
+            return Ok(method.result.clone());
+        }
+        return value_call(
+            &api::Type::named("Toybox.Lang.Object"),
+            member,
+            arguments,
+            context,
+        );
+    }
     if *receiver == api::Type::Any {
         if arguments.len() > crate::MAX_PARAMETERS {
             return Err("call exceeds 254-argument limit".into());
@@ -568,6 +601,17 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
     }
+    if let api::Type::Structural(shape) = expected {
+        return shape.accepts(actual);
+    }
+    if let api::Type::Structural(_) = actual {
+        if let api::Type::Named(name) = expected {
+            if let Some(required) = crate::StructuralInterface::from_api(name) {
+                return required.accepts(actual);
+            }
+        }
+        return *expected == api::Type::named("Toybox.Lang.Object");
+    }
     if let (api::Type::Tuple(expected), api::Type::Tuple(actual)) = (expected, actual) {
         return expected.len() == actual.len()
             && expected
@@ -602,6 +646,66 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         }
     }
     false
+}
+
+/// Check API introductions used to prove a native structural implementation.
+/// A lexical method name alone has no API level; a known native implementation
+/// must provide that member on both selected levels. Type validity is separate.
+pub(crate) fn structural_api(
+    expected: &api::Type,
+    actual: &api::Type,
+    context: Option<api::ApiContext>,
+) -> Result<(), String> {
+    let Some(context) = context else {
+        return Ok(());
+    };
+    if !crate::structural::contains(expected)
+        || *actual == api::Type::Any
+        || !accepts(expected, actual)
+    {
+        return Ok(());
+    }
+    if let api::Type::Union(parts) = actual {
+        return parts
+            .iter()
+            .try_for_each(|ty| structural_api(expected, ty, Some(context)));
+    }
+    if let api::Type::Union(parts) = expected {
+        let mut last = None;
+        for ty in parts.iter().filter(|ty| accepts(ty, actual)) {
+            match structural_api(ty, actual, Some(context)) {
+                Ok(()) => return Ok(()),
+                Err(error) => last = Some(error),
+            }
+        }
+        return Err(last.unwrap_or_else(|| "native structural witness is unavailable".into()));
+    }
+    if let api::Type::Structural(shape) = expected {
+        if matches!(actual, api::Type::Structural(_)) {
+            return Ok(());
+        }
+        context.check_type(api::core(), actual)?;
+        for name in shape.methods.keys() {
+            let required = api::core()
+                .method_for_type(actual, name)
+                .map(|method| method.declaration.required_api)
+                .or_else(|| {
+                    if let api::Type::Named(path) = actual {
+                        api::core()
+                            .interface(path)?
+                            .methods
+                            .iter()
+                            .find(|method| method.name == *name)
+                            .map(|method| method.since)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or("native structural member is not declared")?;
+            context.require(&format!("{actual:?}.{name}"), required)?;
+        }
+    }
+    Ok(())
 }
 
 /// Resolve a module function's parameter declarations for literal construction.

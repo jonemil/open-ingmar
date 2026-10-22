@@ -348,6 +348,8 @@ pub fn build_console_application(
                 .flat_map(|f| f.operations())
                 .filter_map(|op| {
                     if let crate::Operation::Symbol { name, .. }
+                    | crate::Operation::MemberRead { member: name, .. }
+                    | crate::Operation::MemberWrite { member: name, .. }
                     | crate::Operation::NativeCall { member: name, .. }
                     | crate::Operation::NativeCallStatement { member: name, .. } = &op.operation
                     {
@@ -384,18 +386,8 @@ pub fn build_console_application(
     }
     let mut bindings = crate::native_bindings::code_bindings();
 
-    for function in unit
-        .declarations()
-        .iter()
-        .map(|d| &d.function)
-        .chain(unit.classes().iter().flat_map(|c| &c.methods))
-    {
-        bindings.insert(
-            format!("__ciq_member_{}", function.name()),
-            ids[function.name()],
-        );
-    }
     for (name, id) in &ids {
+        bindings.insert(format!("__ciq_member_{name}"), *id);
         bindings.insert(format!("__ciq_native_{name}"), *id);
     }
     for (module, id) in &module_ids {

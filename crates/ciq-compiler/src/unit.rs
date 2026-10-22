@@ -119,7 +119,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
             crate::unions::alternatives(&receiver_type).iter().filter_map(crate::ValueType::from_api_type).any(|ty| {
             matches!(
                 ty,
-                crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
+                crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_) | crate::ValueType::Structural(_)
             ) || (member == "sort"
                 && arguments.iter().any(|a| {
                     (crate::source_objects::class(function.operations(), *a, function.parameter_types().to_vec()).is_none()
@@ -727,6 +727,7 @@ impl CompilationUnit {
     /// to semantic IR; this does not validate a device or application profile.
     pub fn validate_api(&self, context: crate::api::ApiContext) -> Result<(), UnitError> {
         self.validate_declaration_api(context)?;
+        self.validate_context(Some(context))?;
         for (index, body) in self
             .declarations
             .iter()
@@ -821,6 +822,10 @@ impl CompilationUnit {
     }
 
     fn validate(&self) -> Result<(), UnitError> {
+        self.validate_context(None)
+    }
+
+    fn validate_context(&self, context: Option<crate::api::ApiContext>) -> Result<(), UnitError> {
         let fail = |declaration, operation, message| UnitError {
             declaration,
             operation,
@@ -1301,7 +1306,84 @@ impl CompilationUnit {
                     }
                 })
                 .collect::<BTreeMap<_, _>>();
+            let structural_locals = function
+                .operations()
+                .iter()
+                .filter_map(|located| {
+                    let (local, ty) = match &located.operation {
+                        Operation::LocalDeclare { local, value_type } => {
+                            (*local, value_type.api_type())
+                        }
+                        Operation::LocalInitialize { local, value } => {
+                            (*local, function.value_types[value].api_type())
+                        }
+                        _ => return None,
+                    };
+                    crate::structural::contains(&ty).then_some((local, ty))
+                })
+                .collect::<BTreeMap<_, _>>();
+            let structural_blocks = function
+                .operations()
+                .windows(2)
+                .filter_map(|pair| match (&pair[0].operation, &pair[1].operation) {
+                    (Operation::Block { block }, Operation::BlockParameter { value_type, .. })
+                        if crate::structural::contains(&value_type.api_type()) =>
+                    {
+                        Some((*block, value_type.api_type()))
+                    }
+                    _ => None,
+                })
+                .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::MemberWrite {
+                    receiver,
+                    member,
+                    value,
+                } = &located.operation
+                {
+                    for receiver_type in
+                        crate::unions::alternatives(&function.value_types[receiver].api_type())
+                    {
+                        let expected = crate::structural::field_type(receiver_type, member)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                        self.check_value_contract(
+                            function,
+                            &origins,
+                            *value,
+                            &crate::unions::result(expected).unwrap(),
+                            context,
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                }
+                let structural_boundary = match &located.operation {
+                    Operation::Return { value } => {
+                        Some((function.return_type().api_type(), *value))
+                    }
+                    Operation::ParameterAssign { index, value } => {
+                        Some((function.parameter_types()[*index].api_type(), *value))
+                    }
+                    Operation::LocalAssign { local, value } => {
+                        structural_locals.get(local).cloned().map(|ty| (ty, *value))
+                    }
+                    Operation::JumpValue { target, value } => structural_blocks
+                        .get(target)
+                        .cloned()
+                        .map(|ty| (ty, *value)),
+                    _ => None,
+                };
+                if let Some((expected, value)) =
+                    structural_boundary.filter(|(ty, _)| crate::structural::contains(ty))
+                {
+                    self.check_value_contract(
+                        function,
+                        &origins,
+                        value,
+                        &crate::unions::result(expected).unwrap(),
+                        context,
+                    )
+                    .map_err(|message| fail(Some(index), Some(operation), message))?;
+                }
                 let source_boundary = match &located.operation {
                     Operation::Return { value } => function
                         .return_type()
@@ -1320,7 +1402,7 @@ impl CompilationUnit {
                     _ => None,
                 };
                 if let Some((expected, value)) = source_boundary {
-                    self.check_source_value(function, &origins, value, &expected)
+                    self.check_source_value(function, &origins, value, &expected, context)
                         .map_err(|message| fail(Some(index), Some(operation), message))?;
                 }
                 let check_element = |element: crate::ArrayElement,
@@ -1418,6 +1500,24 @@ impl CompilationUnit {
                         member,
                         arguments,
                     } => {
+                        for (argument, expected) in arguments.iter().zip(
+                            crate::native::value_parameters(
+                                &function.value_types[receiver].api_type(),
+                                member,
+                            )
+                            .unwrap_or_default(),
+                        ) {
+                            if crate::structural::contains(&expected) {
+                                self.check_value_contract(
+                                    function,
+                                    &origins,
+                                    *argument,
+                                    &crate::unions::result(expected).unwrap(),
+                                    context,
+                                )
+                                .map_err(|message| fail(Some(index), Some(operation), message))?;
+                            }
+                        }
                         if matches!(
                             function.value_types[receiver],
                             crate::ValueType::Array(_) | crate::ValueType::TypedDictionary(_)
@@ -1521,11 +1621,12 @@ impl CompilationUnit {
                             ));
                         }
                         Operation::SelfFieldAssign { value, .. } => {
-                            self.check_field_value(
+                            self.check_value_contract(
                                 function,
                                 &origins,
                                 *value,
                                 &declaration.result_type(),
+                                context,
                             )
                             .map_err(|message| fail(Some(index), Some(operation), message))?;
                         }
@@ -1682,6 +1783,17 @@ impl CompilationUnit {
                         ));
                     }
                     for (argument, parameter) in arguments.iter().zip(*parameters) {
+                        if crate::structural::contains(&parameter.api_type()) {
+                            self.check_value_contract(
+                                function,
+                                &origins,
+                                *argument,
+                                &crate::unions::result(parameter.api_type()).unwrap(),
+                                context,
+                            )
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                            continue;
+                        }
                         if let crate::ParameterType::Interface(interface)
                         | crate::ParameterType::NullableInterface(interface) = parameter
                         {
@@ -1697,7 +1809,9 @@ impl CompilationUnit {
                         }
                         if let Some(expected) = parameter.source_contract() {
                             if self
-                                .check_source_value(function, &origins, *argument, &expected)
+                                .check_source_value(
+                                    function, &origins, *argument, &expected, context,
+                                )
                                 .is_err()
                             {
                                 return Err(fail(
@@ -1757,38 +1871,55 @@ impl CompilationUnit {
         Ok(())
     }
 
-    /// Check a field write against its full value contract. Exact class
+    /// Check a stored or passed value against its full contract. Exact class
     /// provenance and structural interface witnesses remain separate from the
     /// native projection, including when interfaces occur inside native unions.
-    fn check_field_value(
+    fn check_value_contract(
         &self,
         function: &Function,
         origins: &crate::source_objects::Origins,
         value: crate::ValueId,
         expected: &ReturnType,
+        context: Option<crate::api::ApiContext>,
     ) -> Result<(), String> {
         if function.value_types[&value] == crate::ValueType::Any {
             return Ok(());
         }
         if let Some(contract) = expected.source_contract() {
-            return self.check_source_value(function, origins, value, &contract);
+            return self.check_source_value(function, origins, value, &contract, context);
         }
         let target = expected.api_type();
+        if origins.contract(value).is_none() {
+            crate::native::structural_api(
+                &target,
+                &function.value_types[&value].api_type(),
+                context,
+            )?;
+        }
         if let Some(actual) = origins.contract(value) {
             if actual.nullable() && !crate::native::accepts(&target, &crate::api::Type::Null) {
                 return Err("nullable field assignment requires a non-null proof".into());
             }
-            let natives = actual
-                .native()
-                .iter()
-                .all(|ty| crate::native::accepts(&target, ty));
+            let natives = actual.native().iter().all(|ty| {
+                crate::native::accepts(&target, ty)
+                    && crate::native::structural_api(&target, ty, context).is_ok()
+            });
             let classes = actual.classes().iter().all(|class| {
-                crate::native::accepts(&target, &crate::api::Type::named(class.base.api_name()))
+                (crate::native::accepts(&target, &crate::api::Type::named(class.base.api_name()))
+                    && crate::native::structural_api(
+                        &target,
+                        &crate::api::Type::named(class.base.api_name()),
+                        context,
+                    )
+                    .is_ok())
                     || crate::unions::alternatives(&target).iter().any(|ty| {
                         if let Some(crate::ValueType::Interface(interface)) =
                             crate::ValueType::from_api_type(ty)
                         {
                             self.check_interface_signature(class.as_str(), interface.name())
+                                .is_ok()
+                        } else if let crate::api::Type::Structural(shape) = ty {
+                            self.check_structural_signature(class.as_str(), shape, context)
                                 .is_ok()
                         } else {
                             false
@@ -1812,22 +1943,34 @@ impl CompilationUnit {
         origins: &crate::source_objects::Origins,
         value: crate::ValueId,
         expected: &crate::SourceUnion,
+        context: Option<crate::api::ApiContext>,
     ) -> Result<(), String> {
         if function.value_types[&value] == crate::ValueType::Any {
             return Ok(());
         }
         let accepted = if let Some(actual) = origins.contract(value) {
+            for ty in actual.native() {
+                crate::native::structural_api(&expected.native_type(), ty, context)?;
+            }
             expected.accepts_with(actual, |class, ty| {
                 if let Some(crate::ValueType::Interface(interface)) =
                     crate::ValueType::from_api_type(ty)
                 {
                     self.check_interface_signature(class.as_str(), interface.name())
                         .is_ok()
+                } else if let crate::api::Type::Structural(shape) = ty {
+                    self.check_structural_signature(class.as_str(), shape, context)
+                        .is_ok()
                 } else {
                     false
                 }
             })
         } else {
+            crate::native::structural_api(
+                &expected.native_type(),
+                &function.value_types[&value].api_type(),
+                context,
+            )?;
             expected.accepts_api(&function.value_types[&value].api_type())
         };
         if accepted {
@@ -1898,6 +2041,71 @@ impl CompilationUnit {
                 .chain(std::iter::once(&member.result))
             {
                 context.check_type(catalogue, ty)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_structural_signature(
+        &self,
+        class: &str,
+        shape: &crate::StructuralInterface,
+        context: Option<crate::api::ApiContext>,
+    ) -> Result<(), String> {
+        let declaration = self
+            .classes
+            .iter()
+            .find(|c| c.name == class)
+            .ok_or("unknown structural implementation class")?;
+        for (name, expected) in &shape.fields {
+            let field = declaration
+                .fields
+                .iter()
+                .find(|f| f.name == *name)
+                .ok_or_else(|| format!("{class} does not implement field {name}"))?;
+            if field.result_type().source_contract().is_some()
+                || field.result_type().api_type() != *expected
+            {
+                return Err(format!(
+                    "{class}.{name} does not have the invariant interface field type"
+                ));
+            }
+        }
+        for (name, required) in &shape.methods {
+            let actual = if let Some(method) = declaration.methods.iter().find(|m| m.name() == name)
+            {
+                if method.return_type().source_contract().is_some()
+                    || method
+                        .parameter_types()
+                        .iter()
+                        .any(|p| p.source_contract().is_some())
+                {
+                    return Err("exact source interface member signatures are not supported".into());
+                }
+                crate::StructuralMethod {
+                    parameters: method
+                        .parameter_types()
+                        .iter()
+                        .map(crate::ParameterType::api_type)
+                        .collect(),
+                    result: method.return_type().api_type(),
+                }
+            } else {
+                let method = crate::api::core()
+                    .method_for_type(&crate::api::Type::named(declaration.base.api_name()), name)
+                    .ok_or_else(|| format!("{class} does not implement method {name}"))?;
+                if let Some(context) = context {
+                    context.require(&format!("{class}.{name}"), method.declaration.required_api)?;
+                }
+                crate::StructuralMethod {
+                    parameters: method.parameters,
+                    result: method.result,
+                }
+            };
+            if !required.accepts(&actual) {
+                return Err(format!(
+                    "{class}.{name} does not satisfy its interface signature"
+                ));
             }
         }
         Ok(())
@@ -2324,7 +2532,7 @@ fn compile_sources_context(
         declarations,
         classes,
     };
-    unit.validate()
+    unit.validate_context(context)
         .and_then(|()| context.map_or(Ok(()), |context| unit.validate_declaration_api(context)))
         .map_err(|error| {
             let bodies = unit
@@ -2734,6 +2942,7 @@ fn parse_unit_ir_context(
         .and_then(|unit| {
             if let Some(context) = context {
                 unit.validate_declaration_api(context)?;
+                unit.validate_context(Some(context))?;
             }
             Ok(unit)
         })

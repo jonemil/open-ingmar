@@ -146,6 +146,31 @@ fn emit(
         expression.span,
     )?;
     match kind {
+        kind @ parser::ExpressionKind::MemberRead { .. } => {
+            let mut members = Vec::new();
+            let mut base = parser::Expression {
+                kind,
+                span: expression.span,
+            };
+            while let parser::ExpressionKind::MemberRead { receiver, member } = base.kind {
+                members.push((member, base.span));
+                base = *receiver;
+            }
+            let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
+            for (member, span) in members.into_iter().rev() {
+                let result = ValueId(operations.len() as u32);
+                operations.push(LocatedOperation {
+                    operation: Operation::MemberRead {
+                        result,
+                        receiver,
+                        member,
+                    },
+                    span: Some(span),
+                });
+                receiver = result;
+            }
+            Ok(receiver)
+        }
         kind @ (parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
         | parser::ExpressionKind::GlobalCall { .. }
@@ -208,6 +233,9 @@ fn emit_non_call(
         parser::ExpressionKind::Joined(value) => return Ok(value),
         parser::ExpressionKind::Conditional { .. } => {
             unreachable!("conditional must be materialized")
+        }
+        parser::ExpressionKind::MemberRead { .. } => {
+            unreachable!("member chain dispatched before non-call emission")
         }
         parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
             result: ValueId(operations.len() as u32),
@@ -1403,6 +1431,10 @@ impl Builder<'_> {
             span,
         )?;
         let kind = match kind {
+            E::MemberRead { receiver, member } => E::MemberRead {
+                receiver: Box::new(self.prepare(*receiver, locals)?),
+                member,
+            },
             kind @ E::ByteArrayAllocate(_) => {
                 return self.snapshot(parser::Expression { kind, span }, locals);
             }
@@ -2065,10 +2097,10 @@ impl Builder<'_> {
         Ok(result)
     }
 
-    /// Evaluate an indexed compound target once, then read, combine, and write.
-    /// Keep captured array/index in typed locals; stage a branching RHS before
+    /// Evaluate an indexed or member compound target once, then update its value.
+    /// Keep location operands in typed locals; stage a branching RHS before
     /// defining the final write operands so their IDs remain block-local.
-    fn array_compound(
+    fn place_compound(
         &mut self,
         target: parser::Expression,
         kind: crate::BinaryOp,
@@ -2076,7 +2108,7 @@ impl Builder<'_> {
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<(), Diagnostic> {
-        self.array_change(target, span, locals, |old| {
+        self.place_change(target, span, locals, |old| {
             let value_span = Span {
                 start: old.span.start,
                 end: value.span.end,
@@ -2092,9 +2124,9 @@ impl Builder<'_> {
         })
     }
 
-    /// Capture an array location once and emit a checked read/change/write.
-    /// The change may stage control flow without reevaluating either location operand.
-    fn array_change(
+    /// Capture an indexed or member location and emit a checked read/change/write.
+    /// The change may stage control flow without reevaluating location operands.
+    fn place_change(
         &mut self,
         target: parser::Expression,
         span: Span,
@@ -2103,6 +2135,37 @@ impl Builder<'_> {
     ) -> Result<(), Diagnostic> {
         use parser::{Expression, ExpressionKind as E};
         let target_span = target.span;
+        if let E::MemberRead { receiver, member } = target.kind {
+            let receiver = self.snapshot(*receiver, locals)?;
+            let E::Temporary(local) = receiver.kind else {
+                unreachable!()
+            };
+            let old = Expression {
+                kind: E::MemberRead {
+                    receiver: Box::new(Expression {
+                        kind: E::Temporary(local),
+                        span: receiver.span,
+                    }),
+                    member: member.clone(),
+                },
+                span: target_span,
+            };
+            let mut value = change(old);
+            if value.needs_materialization() {
+                value = self.snapshot(value, locals)?;
+            }
+            let receiver = self.value(receiver, locals)?;
+            let value = self.value(value, locals)?;
+            self.push(
+                Operation::MemberWrite {
+                    receiver,
+                    member,
+                    value,
+                },
+                Some(span),
+            );
+            return Ok(());
+        }
         let E::ArrayRead { array, index } = target.kind else {
             unreachable!("parsed indexed compound target")
         };
@@ -2185,8 +2248,8 @@ impl Builder<'_> {
             },
             span,
         };
-        if matches!(target.kind, E::ArrayRead { .. }) {
-            return self.array_change(target, span, locals, step);
+        if matches!(target.kind, E::ArrayRead { .. } | E::MemberRead { .. }) {
+            return self.place_change(target, span, locals, step);
         }
         let operation = match &target.kind {
             E::Local(name) => {
@@ -2410,13 +2473,13 @@ impl Builder<'_> {
                 } => {
                     self.update(target, increment, span, locals)?;
                 }
-                parser::Statement::ArrayCompound {
+                parser::Statement::PlaceCompound {
                     target,
                     kind,
                     value,
                     ..
                 } => {
-                    self.array_compound(target, kind, value, span, locals)?;
+                    self.place_compound(target, kind, value, span, locals)?;
                 }
                 parser::Statement::ArrayAssign {
                     array,
@@ -2458,6 +2521,58 @@ impl Builder<'_> {
                         }
                     };
                     self.push(operation, Some(span));
+                }
+                parser::Statement::MemberAssign {
+                    receiver,
+                    member,
+                    value,
+                    ..
+                } => {
+                    let (receiver, value) =
+                        if receiver.needs_materialization() || value.needs_materialization() {
+                            let receiver = self.snapshot(receiver, locals)?;
+                            let parser::ExpressionKind::Temporary(local) = receiver.kind else {
+                                unreachable!()
+                            };
+                            let ty = crate::structural::field_type(
+                                self.types.local_type(local).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        self.source,
+                                        span.start,
+                                        "unknown structural receiver type",
+                                    )
+                                })?,
+                                &member,
+                            )
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                            let value =
+                                self.snapshot_with_context(value, locals, construction_type(&ty))?;
+                            (self.value(receiver, locals)?, self.value(value, locals)?)
+                        } else {
+                            let receiver = self.value(receiver, locals)?;
+                            let ty = crate::structural::field_type(
+                                self.types.value_type(receiver).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        self.source,
+                                        span.start,
+                                        "unknown structural receiver type",
+                                    )
+                                })?,
+                                &member,
+                            )
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                            let value =
+                                self.value_with_context(value, locals, construction_type(&ty))?;
+                            (receiver, value)
+                        };
+                    self.push(
+                        Operation::MemberWrite {
+                            receiver,
+                            member,
+                            value,
+                        },
+                        Some(span),
+                    );
                 }
                 parser::Statement::FieldAssign { name, value, .. } => {
                     let expected = self

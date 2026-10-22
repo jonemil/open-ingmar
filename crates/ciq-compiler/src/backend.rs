@@ -126,6 +126,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Double { result, .. }
             | Operation::Float { result, .. }
             | Operation::SelfValue { result }
+            | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
@@ -472,6 +473,36 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                     &mut items,
                 );
                 items.push(instruction(Opcode::Aputv, vec![]));
+                continue;
+            }
+            Operation::MemberWrite {
+                receiver,
+                ref member,
+                value,
+            } => {
+                expression(
+                    receiver,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &function.value_types,
+                    &literal_aliases,
+                    &mut items,
+                );
+                items.push(instruction(
+                    Opcode::Spush,
+                    vec![Operand::Symbol(format!("__ciq_member_{member}"))],
+                ));
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &function.value_types,
+                    &literal_aliases,
+                    &mut items,
+                );
+                items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
             Operation::SelfFieldAssign { ref field, value } => {
@@ -825,6 +856,12 @@ fn expression(
                     )],
                 ),
                 Operation::SelfValue { .. } => (Opcode::Getself, vec![]),
+                Operation::MemberRead {
+                    receiver, member, ..
+                } => {
+                    tasks.extend([Task::SourceMember(member.clone()), Task::Value(*receiver)]);
+                    continue;
+                }
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],

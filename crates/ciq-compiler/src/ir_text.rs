@@ -2,6 +2,8 @@
 /// Several spellings may share a form, such as `.read` and `.take`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
+    MemberRead,
+    MemberWrite,
     Integer,
     Return,
     Add,
@@ -253,6 +255,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".instanceof") => (Directive::Instanceof, 4),
             Some(".has") => (Directive::Has, 4),
             Some(".cast") => (Directive::Cast, 4),
+            Some(".member-read") => (Directive::MemberRead, 4),
+            Some(".member-write") => (Directive::MemberWrite, 4),
             Some(".array-read") => (Directive::ArrayRead, 4),
             Some(".dictionary-read") => (Directive::DictionaryRead, 4),
             Some(".dictionary-write") => (Directive::DictionaryWrite, 4),
@@ -833,6 +837,16 @@ pub(crate) fn parse_function_ir_context(
                 Directive::DictionaryWrite => Operation::DictionaryWrite {
                     dictionary: parse_value(&fields[1])?,
                     key: parse_value(&fields[2])?,
+                    value: parse_value(&fields[3])?,
+                },
+                Directive::MemberRead => Operation::MemberRead {
+                    result: parse_value(&fields[1])?,
+                    receiver: parse_value(&fields[2])?,
+                    member: fields[3].clone(),
+                },
+                Directive::MemberWrite => Operation::MemberWrite {
+                    receiver: parse_value(&fields[1])?,
+                    member: fields[2].clone(),
                     value: parse_value(&fields[3])?,
                 },
                 Directive::ArrayWrite => Operation::ArrayWrite {

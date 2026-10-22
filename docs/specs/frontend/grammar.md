@@ -113,6 +113,7 @@ case-label = "case" expression ":" | "case" "instanceof" class-target ":"
 break-statement = "break" ";"
 continue-statement = "continue" ";"
 assign-target = identifier | "self" "." identifier | primary "[" expression "]"
+              | primary "." identifier
               | "(" assign-target ")"
 update-target = assign-target
 compound-operator = "+=" | "-=" | "*=" | "/=" | "%="
@@ -162,8 +163,9 @@ product = cast (("*" | "/" | "%" | "&" | "<<" | ">>") cast)*
 cast = unary ("as" cast-target)*
 unary = "!" unary | "~" unary | ("+" | "-") primary | primary
 primary = atom postfix*
-postfix = member-call | index-access
+postfix = member-call | member-access | index-access
 member-call = "." identifier "(" argument-list? ")"
+member-access = "." identifier
 index-access = "[" expression "]"
 atom = literal | identifier | "self" | self-field
      | named-call | native-constant
@@ -227,10 +229,16 @@ rules below define paths; the domains following them restrict name resolution.
 
 ```text
 value-type = value-atom ("or" value-atom)*
-value-atom = named-value-type | "Null"
+value-atom = named-value-type | "Null" | structural-interface
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 result-type = value-type | "Void"
+structural-interface = "interface" "{" interface-member* "}"
+interface-member = "var" identifier ("as" value-type)? ";"
+                 | "function" identifier "(" interface-parameters? ")"
+                   ("as" result-type)? ";"
+interface-parameters = interface-parameter ("," interface-parameter)*
+interface-parameter = identifier ("as" value-type)?
 array-element = value-type
 dictionary-key = value-type
 dictionary-value = value-type
@@ -267,6 +275,13 @@ nullable-cast-type = scalar-or-alias | core-reference | source-class-type
 
 Paths resolve through the native-name environment; canonical `Toybox` paths need
 no imports. These semantic type domains mean:
+
+`structural-interface` is a finite lexical member contract, optionally named by
+a typedef. Members have no bodies/defaults; omitted annotations mean Any.
+Void is permitted only as a method result. Member names are unique across
+fields and methods, with at most 256 members and 254 parameters per method.
+The [source interface profile](README.md#source-interface-types) restricts member
+contracts, proof obligations, and field accesses.
 
 - Scalar: Number, Long, Float, Double, String, Boolean, or Char in Lang.
   Numeric alias: Lang.Numeric, Lang.Integer, or Lang.Decimal.

@@ -53,6 +53,10 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::Structural(shape) => shape
+            .validate()
+            .ok()
+            .map(|()| ParameterType::Structural(shape)),
         Type::Null => Some(ParameterType::Null),
         Type::Array(ref e) => crate::ArrayElement::from_api_type(e).map(ParameterType::Array),
         Type::Dictionary { .. } => {
@@ -68,6 +72,10 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::Structural(shape) => shape
+            .validate()
+            .ok()
+            .map(|()| ReturnType::Structural(shape)),
         Type::Null => Some(ReturnType::Null),
         Type::Array(ref e) => crate::ArrayElement::from_api_type(e).map(ReturnType::Array),
         Type::Dictionary { .. } => {

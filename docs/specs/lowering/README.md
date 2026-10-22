@@ -225,6 +225,21 @@ checks; lowering emits no conversion, discriminator, or implicit runtime guard.
 Generic value-field metadata starts as Null, with required source constructor
 writes supplying non-null initial values.
 
+### Structural members
+
+Structural interface contracts carry no runtime class or conversion. Calls use
+the ordinary receiver/member lookup and invocation sequence. `.member-read`
+evaluates the receiver and emits `getsv` with the field symbol;
+`.member-write` evaluates the receiver, pushes the field symbol, evaluates the
+new value, and emits `putv`. Member references bind by their stored short names,
+including fields without a directly visible source-class receiver.
+
+Compound writes and steps capture the receiver once before reading the old
+field. Existing typed temporaries stage branching RHS values without moving the
+read across effects or keeping values live across block edges. Direct scalar
+assignments retain ordinary expression lowering. Interface shapes and nullable
+snapshots add static checks without discriminator bytes or new opcodes.
+
 ## Control flow
 
 ### Terminal conditions
