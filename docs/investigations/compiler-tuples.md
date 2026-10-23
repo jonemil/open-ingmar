@@ -201,6 +201,56 @@ the replacement field's size and `3` for the captured append result's size.
 Later field reads must load the actual property; writing the captured receiver
 back would change the program's behavior.
 
+## Other-instance field probes
+
+**Experimentally observed, 2026-10-23:** SDK 9.2.0, strict checking, fr265,
+minimum API 3.0.0, `-O 0`. Use the wrapper above with these declarations:
+
+```monkeyc
+typedef Pair as [Lang.Number, Lang.String];
+typedef Record as interface { var pair as Pair; };
+typedef Other as interface { var pair as Pair; };
+class Box {
+    var pair as Pair;
+    function initialize() { self.pair = [1, "seed"]; }
+}
+```
+
+For `function f(x as Record, y as Record)`, after
+`x.pair[0] = "changed"`, returning `y.pair[0]` as String succeeds; returning it
+as Number fails. Making `y` an `Other` instead reverses both outcomes, despite
+the identical structural shapes. Two separate inline interface annotations also
+remain independent. An alias `var y = x` shares the change; assigning another
+Record parameter to `x` does not restore the Number slot view.
+
+After `x.pair.add(true)`, returning the field as
+`[Number, String, Boolean]` succeeds and returning it as Pair fails. A conditional
+String replacement accepts a Number-or-String result and rejects Number alone.
+An intervening empty global call restores the Number view and makes a String
+return fail. Constructing a new owner or calling an owner-producing function
+also restores the declared view.
+
+For `x as Box`, the same String slot replacement instead leaves subsequent
+`x.pair[0]` reads accepted as Number and rejected as String. Returning
+`x.pair.add(true)` directly still satisfies the extended three-slot annotation.
+Source-instance access and structural annotation access therefore have different
+observed refinement rules.
+
+**Interpretation:** structural field refinement follows declaration identity,
+not object identity or structural shape equality. The accepted String result
+through `y` does not prove that its runtime field changed. Our expanded
+structural shapes currently discard the declaration identity needed to reproduce
+this checking behavior; keying flow by identical shapes would conflate distinct
+typedefs and inline annotations.
+
+The complete application's `ExternalFields` module checks ordinary source
+instance behavior with both SDK and generated PRGs. Matching simulator output
+covers owner-before-RHS evaluation once, independent owners after reassignment,
+retained aliases, scalar updates, nullable/source references, tuple writes,
+chained append results, and field replacement during argument evaluation.
+Fresh reads observe the actual property, including its runtime Array size;
+declared positional metadata does not assert an unchanged runtime shape.
+
 ## Runtime construction and typed transport
 
 **Experimentally observed, 2026-10-23:** strict SDK 9.2.0 probes accept an

@@ -37,12 +37,16 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Track tuple field contracts for structural/other-instance receivers
-  (`obj.field`), including owner identity, aliases, and reassignment.
-  Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
-  `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
-  resolve mutation/alias limits against the
-  [SDK tuple probes](investigations/compiler-tuples.md).
+- [ ] Preserve structural declaration identity through source and saved IR
+  before tracking tuple-valued structural fields. Match the
+  [SDK probes](investigations/compiler-tuples.md#other-instance-field-probes):
+  parameters sharing a typedef share field refinements; distinct typedefs and
+  inline declarations stay independent. Cover writes/appends, branch joins,
+  aliases/reassignment, and call resets. Keep structural assignability
+  independent of this flow identity.
+- [ ] Enable tuple receivers for `remove`, `removeAll`, `reverse`, `slice`,
+  `sort`, `indexOf`, `method`, and `weak`, checking resulting shape/element
+  contracts and mutation effects across saved stages.
 - [ ] Apply the exact source-class and nested element contracts in the
   [Array worklist](#array) when tuples lose positional shape; support a
   Null-only element domain without inventing non-Null alternatives.
@@ -80,8 +84,6 @@ implemented contracts; investigations retain evidence, not another backlog.
   Number/Symbol defaults and preserve per-instance evaluation order.
 - [ ] Resolve bare field names in instance methods with the SDK's local,
   parameter, field, and outer-owner shadowing rules.
-- [ ] Support field reads/writes through another source instance, including
-  compound assignment and updates with single receiver evaluation.
 - [ ] Support nested module declarations and qualified names through multiple
   module levels; reuse reopened-module collection across files.
 - [ ] Support classes declared inside modules and owner-qualified class names

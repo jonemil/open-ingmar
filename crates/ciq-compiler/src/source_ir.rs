@@ -161,11 +161,15 @@ fn emit(
             let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
             for (member, span) in members.into_iter().rev() {
                 let result = ValueId(operations.len() as u32);
+                let field_type = calls
+                    .source_field(operations, receiver, &member)
+                    .map_err(|message| Diagnostic::at(source, span.start, message))?;
                 operations.push(LocatedOperation {
                     operation: Operation::MemberRead {
                         result,
                         receiver,
                         member,
+                        field_type,
                     },
                     span: Some(span),
                 });
@@ -1198,8 +1202,8 @@ impl Builder<'_> {
     }
 
     /// Write an indexed value, updating a named tuple's storage view when known.
-    /// Computed receivers retain independent parent/alias views. Direct field
-    /// receivers require separate field-flow tracking and remain rejected.
+    /// Computed receivers retain independent parent/alias views. Self fields
+    /// use field-flow tracking; source-instance fields retain declared views.
     fn indexed_write(
         &mut self,
         target: Option<LocalId>,
@@ -1220,7 +1224,7 @@ impl Builder<'_> {
                 .value_type(array)
                 .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
         {
-            if field_receiver {
+            if field_receiver && !crate::source_fields::read(&self.operations, array) {
                 return Err(Diagnostic::at(
                     self.source,
                     span.start,
@@ -1974,7 +1978,11 @@ impl Builder<'_> {
                     && (self.positional_snapshot(&receiver) || loop_field)
                     && matches!(member.as_str(), "add" | "addAll")
                 {
-                    if field_receiver {
+                    let source_field = matches!(receiver.kind, E::Temporary(local)
+                        if self.operations.iter().any(|op| matches!(&op.operation,
+                            Operation::LocalInitialize { local: at, value }
+                            if *at == local && crate::source_fields::read(&self.operations, *value))));
+                    if field_receiver && !source_field {
                         return Err(Diagnostic::at(
                             self.source,
                             span.start,
@@ -2680,11 +2688,16 @@ impl Builder<'_> {
             }
             let receiver = self.value(receiver, locals)?;
             let value = self.value(value, locals)?;
+            let field_type = self
+                .calls
+                .source_field(&self.operations, receiver, &member)
+                .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
             self.push(
                 Operation::MemberWrite {
                     receiver,
                     member,
                     value,
+                    field_type,
                 },
                 Some(span),
             );
@@ -3056,49 +3069,75 @@ impl Builder<'_> {
                     value,
                     ..
                 } => {
-                    let (receiver, value) = if self.needs_staging(&receiver, locals)
+                    let (receiver, value, field_type) = if self.needs_staging(&receiver, locals)
                         || self.needs_staging(&value, locals)
                     {
+                        // Keep the owner in a frame local across RHS control flow.
                         let receiver = self.snapshot(receiver, locals)?;
                         let parser::ExpressionKind::Temporary(local) = receiver.kind else {
                             unreachable!()
                         };
-                        let ty = crate::structural::field_type(
-                            self.types.local_type(local).ok_or_else(|| {
-                                Diagnostic::at(
-                                    self.source,
-                                    span.start,
-                                    "unknown structural receiver type",
-                                )
-                            })?,
-                            &member,
-                        )
-                        .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                        let field_type = self
+                            .types
+                            .local_contract(local)
+                            .map(|contract| self.calls.declared_source_field(contract, &member))
+                            .transpose()
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                        let ty = if let Some(ty) = &field_type {
+                            ty.api_type()
+                        } else {
+                            crate::structural::field_type(
+                                self.types.local_type(local).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        self.source,
+                                        span.start,
+                                        "unknown field receiver type",
+                                    )
+                                })?,
+                                &member,
+                            )
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?
+                        };
                         let value =
                             self.snapshot_with_context(value, locals, construction_type(&ty))?;
-                        (self.value(receiver, locals)?, self.value(value, locals)?)
+                        (
+                            self.value(receiver, locals)?,
+                            self.value(value, locals)?,
+                            field_type,
+                        )
                     } else {
                         let receiver = self.value(receiver, locals)?;
-                        let ty = crate::structural::field_type(
-                            self.types.value_type(receiver).ok_or_else(|| {
-                                Diagnostic::at(
-                                    self.source,
-                                    span.start,
-                                    "unknown structural receiver type",
-                                )
-                            })?,
-                            &member,
+                        let field_type = self
+                            .calls
+                            .source_field(&self.operations, receiver, &member)
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                        let ty = if let Some(ty) = &field_type {
+                            ty.api_type()
+                        } else {
+                            crate::structural::field_type(
+                                self.types.value_type(receiver).ok_or_else(|| {
+                                    Diagnostic::at(
+                                        self.source,
+                                        span.start,
+                                        "unknown field receiver type",
+                                    )
+                                })?,
+                                &member,
+                            )
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?
+                        };
+                        (
+                            receiver,
+                            self.value_with_context(value, locals, construction_type(&ty))?,
+                            field_type,
                         )
-                        .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-                        let value =
-                            self.value_with_context(value, locals, construction_type(&ty))?;
-                        (receiver, value)
                     };
                     self.push(
                         Operation::MemberWrite {
                             receiver,
                             member,
                             value,
+                            field_type,
                         },
                         Some(span),
                     );
@@ -3453,12 +3492,43 @@ pub(crate) struct CallContext {
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     parameter_types: Vec<crate::ParameterType>,
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
+    pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
     pub(crate) current_module: Option<String>,
 }
 impl CallContext {
     pub(crate) fn new() -> Self {
         Self::default()
     }
+    /// Resolve source field metadata from exact receiver identities. Structural
+    /// receivers continue to resolve their fields from their expanded shape.
+    fn source_field(
+        &self,
+        ops: &[LocatedOperation],
+        receiver: ValueId,
+        member: &str,
+    ) -> Result<Option<crate::ReturnType>, String> {
+        let Some(contract) =
+            crate::source_objects::contract(ops, receiver, self.parameter_types.clone())
+        else {
+            return Ok(None);
+        };
+        self.declared_source_field(&contract, member).map(Some)
+    }
+
+    /// Select a declaration for candidate emission. Prefix CFGs may not yet
+    /// carry complete null proofs; final validation requires a non-null receiver.
+    fn declared_source_field(
+        &self,
+        receiver: &crate::SourceUnion,
+        member: &str,
+    ) -> Result<crate::ReturnType, String> {
+        let mut receiver = receiver.clone();
+        receiver.nullable = false;
+        crate::source_fields::contract(&receiver, member, |class, field| {
+            self.source_fields.get(&class.name)?.get(field).cloned()
+        })
+    }
+
     /// Resolve an expression's source type target before emitting semantic IR.
     fn source_class(&self, name: &str) -> Result<crate::SourceClass, String> {
         let base = self

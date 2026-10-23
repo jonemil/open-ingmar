@@ -314,6 +314,54 @@ module FieldCases {
     }
 }
 
+class ExternalOwner {
+    var count as Lang.Number;
+    var pair as Pair;
+    var token as Token or Null;
+    function initialize() { self.count = 1; self.pair = [1, "external"]; }
+}
+
+module ExternalFields {
+    function owner(x as ExternalOwner) as ExternalOwner {
+        System.println("external-owner");
+        return x;
+    }
+    function rhs() as Lang.Number { System.println("external-rhs"); return 2; }
+    function run() as Void {
+        var x = new ExternalOwner();
+        owner(x).count += rhs();
+        x.count++;
+        x.count--;
+        System.println(x.count);
+        x.count = true ? 7 : 8;
+        System.println(x.count);
+        var y = x;
+        x = new ExternalOwner();
+        y.count = 9;
+        System.println(x.count);
+        System.println(y.count);
+        x.token = new Token();
+        var token = x.token;
+        if (token != null) { System.println(token.number()); }
+        x.token = null;
+        System.println(x.token == null);
+        x.pair = [2, "assigned"];
+        x.pair[0] += 3;
+        x.pair[0]++;
+        System.println(x.pair[0]);
+        System.println(x.pair.add(true).addAll([3, "tail"]).size());
+        System.println(x.pair.size());
+        var captured = new TupleFieldBox();
+        System.println(captured.pair.add(captured.resetAndValue()).size());
+        System.println(captured.pair.size());
+        var source = new Holder();
+        System.println(source.pair[0].number());
+        for (var i = 0; i < 2; i++) { source.optional = [i, "loop"]; }
+        var optional = source.optional;
+        if (optional != null) { System.println(optional[0]); }
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -400,6 +448,7 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(matrix[0][0]);
         System.println(Receivers.chain()[3]);
         FieldCases.run();
+        ExternalFields.run();
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

@@ -281,11 +281,17 @@ impl Types {
                 result,
                 receiver,
                 member,
+                field_type,
             } => (
                 *result,
-                self.values
-                    .get(receiver)
-                    .and_then(|ty| crate::structural::field_type(ty, member).ok()),
+                field_type
+                    .as_ref()
+                    .map(crate::ReturnType::api_type)
+                    .or_else(|| {
+                        self.values
+                            .get(receiver)
+                            .and_then(|ty| crate::structural::field_type(ty, member).ok())
+                    }),
             ),
             Operation::SelfFieldRead {
                 result,

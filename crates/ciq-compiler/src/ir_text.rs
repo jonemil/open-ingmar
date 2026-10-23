@@ -261,8 +261,30 @@ pub(crate) fn parse_function_ir_context(
             Some(".instanceof") => (Directive::Instanceof, 4),
             Some(".has") => (Directive::Has, 4),
             Some(".cast") => (Directive::Cast, 4),
-            Some(".member-read") => (Directive::MemberRead, 4),
-            Some(".member-write") => (Directive::MemberWrite, 4),
+            Some(".member-read") => (
+                Directive::MemberRead,
+                match call_width() {
+                    n @ (4 | 5) => n,
+                    _ => {
+                        return Err(fail(
+                            *at,
+                            "member read requires receiver, field, and optional contract",
+                        ));
+                    }
+                },
+            ),
+            Some(".member-write") => (
+                Directive::MemberWrite,
+                match call_width() {
+                    n @ (4 | 5) => n,
+                    _ => {
+                        return Err(fail(
+                            *at,
+                            "member write requires receiver, field, value, and optional contract",
+                        ));
+                    }
+                },
+            ),
             Some(".array-read") => (Directive::ArrayRead, 4),
             Some(".dictionary-read") => (Directive::DictionaryRead, 4),
             Some(".dictionary-write") => (Directive::DictionaryWrite, 4),
@@ -878,11 +900,31 @@ pub(crate) fn parse_function_ir_context(
                     result: parse_value(&fields[1])?,
                     receiver: parse_value(&fields[2])?,
                     member: fields[3].clone(),
+                    field_type: (width == 5)
+                        .then(|| &fields[4])
+                        .map(|tag| {
+                            let tag = tag
+                                .strip_prefix("field=")
+                                .ok_or_else(|| fail(offset, "expected source field contract"))?;
+                            crate::type_text::call_result(tag)
+                                .map_err(|message| fail(offset, message))
+                        })
+                        .transpose()?,
                 },
                 Directive::MemberWrite => Operation::MemberWrite {
                     receiver: parse_value(&fields[1])?,
                     member: fields[2].clone(),
                     value: parse_value(&fields[3])?,
+                    field_type: (width == 5)
+                        .then(|| &fields[4])
+                        .map(|tag| {
+                            let tag = tag
+                                .strip_prefix("field=")
+                                .ok_or_else(|| fail(offset, "expected source field contract"))?;
+                            crate::type_text::call_result(tag)
+                                .map_err(|message| fail(offset, message))
+                        })
+                        .transpose()?,
                 },
                 Directive::ArrayWrite => Operation::ArrayWrite {
                     array: parse_value(&fields[1])?,

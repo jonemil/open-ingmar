@@ -482,6 +482,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 receiver,
                 ref member,
                 value,
+                ..
             } => {
                 expression(
                     receiver,

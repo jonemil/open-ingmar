@@ -235,7 +235,9 @@ the ordinary receiver/member lookup and invocation sequence. `.member-read`
 evaluates the receiver and emits `getsv` with the field symbol;
 `.member-write` evaluates the receiver, pushes the field symbol, evaluates the
 new value, and emits `putv`. Member references bind by their stored short names,
-including fields without a directly visible source-class receiver.
+including fields without a directly visible source-class receiver. Exact source
+instances use the same operations and symbols; their `field=tag` metadata is a
+checked declaration contract and adds no runtime instruction or conversion.
 
 Compound writes and steps capture the receiver once before reading the old
 field. Existing typed temporaries stage branching RHS values without moving the

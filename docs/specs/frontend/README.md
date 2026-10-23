@@ -293,8 +293,11 @@ results. Named local aliases remain independent. Reads still load the actual
 field reference. If an argument call reassigns the field, a captured mutation
 acts on the earlier Array; it does not write that Array back into the field.
 Static field views retain the SDK's capture/alias limitations in this case.
-Tuple fields accessed through other owners (`obj.field`) still require owner
-identity tracking and remain outside this mutation profile.
+For exact source-instance receivers, `obj.field` reads retain the declared field
+contract after mutation, matching the SDK's observed checking limit. A captured
+append result carries its new shape without changing later property reads.
+Structural field receivers still require declaration-scoped refinement support
+and remain outside this mutation profile.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts
@@ -920,7 +923,8 @@ Unit validation rejects missing methods, wrong argument/result contracts, and
 ordinary calls to native lifecycle callbacks, even through a different receiver.
 Object-rooted classes may resolve supported inherited Object members below.
 Other undeclared native/source inheritance remains unsupported. Source
-inheritance and arbitrary receiver field access remain unsupported.
+inheritance remains unsupported. Field access follows the
+[source-instance field contract](#source-instance-field-access).
 
 Exact constructor identity is a flow-sensitive local refinement, not a new
 native API type. Generic View parameters, declared View returns, and Array<View>
@@ -1137,6 +1141,29 @@ read/result claims, assignment contracts, required initialization, and API
 availability. Reloading text cannot bypass these checks. Per-kind rules below
 specify defaults, identity, ownership, and permitted values.
 
+### Source-instance field access
+
+`receiver.field` reads and writes resolve declared fields on exact source-class
+values, including values returned by calls or earlier field reads. Every
+possible class in a receiver union must declare the same field contract.
+Nullable receivers require a live non-null proof; a native base or opaque Object
+does not establish a source identity. Field kinds and initialization requirements
+remain those specified below.
+
+Assignments check the declared contract and give container literals its expected
+shape. Compound assignments and statement updates capture the owner once before
+reading the old value. Branching RHS expressions retain that captured owner in
+a temporary; plain assignments use ordinary expression lowering. Rebinding a
+named receiver affects later accesses, while a previously captured reference
+still addresses the original object.
+
+Reads retain the declaration, including exact source identities and nullability.
+Testing one nullable property read does not refine a fresh read; use a local
+snapshot. Source tuple field writes and append results follow the
+[positional tuple rules](#positional-tuples). Saved IR carries source field
+contracts, and unit validation independently checks them against every receiver
+class. These tags do not authorize a cast or an undeclared property.
+
 ### Number instance fields
 
 Source classes may declare up to 256 fields with Number
@@ -1333,8 +1360,8 @@ not proven safe by it.
 
 After initialization, methods may read or replace the field with the same exact
 source class. Field reads retain identity for ordinary instance calls and source
-returns. Access remains limited to `self.<field>`; a getter can forward the
-reference to another caller. Reads/writes preserve the existing evaluation-order
+returns. Other exact source-instance receivers use the same declaration through
+[`receiver.field`](#source-instance-field-access). Reads/writes preserve the existing evaluation-order
 rules. These contracts apply to typed and saved IR as well as source.
 
 Nullable writes accept the exact declared source class, its nullable form, or
@@ -1359,7 +1386,8 @@ corresponding Comparator declaration, optionally `or Null`. Module aliases and
 imports resolve the type through the existing name rules. All require API 5.0.0,
 including unused declarations; source and saved-IR API entry points check field
 types independently of method references. Fields share the existing name,
-conflict, and 256-field limits. Access remains limited to `self.<field>`.
+conflict, and 256-field limits. Exact source-instance receivers can also use
+[`receiver.field`](#source-instance-field-access).
 
 Metadata creates ordinary Null slots (type `0x00`, value zero). A non-null field
 requires a source initializer and follows the straight-line
@@ -3625,8 +3653,9 @@ assignments, compound assignments, and statement increments/decrements check the
 field's type and evaluate the receiver once before the RHS. Container literals
 receive the declared field context. Saved scalar/nullable reads remain snapshots
 after the field changes; testing one direct read does not prove a later read
-non-null. Source-class receiver fields still require the separate source-member
-access profile; a source identity is not automatically a structural annotation.
+non-null. Source-class receivers use the
+[source-instance field contract](#source-instance-field-access); a source
+identity is not automatically a structural annotation.
 
 IR stores the expanded contract and its checked member operations. Dispatch uses
 ordinary field symbols and member calls, with no interface runtime class,

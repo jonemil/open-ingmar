@@ -150,11 +150,15 @@ impl Origins {
                 result,
                 receiver,
                 member,
+                field_type,
             } => {
-                if let Some(contract) = self
-                    .native_values
-                    .get(receiver)
-                    .and_then(|ty| crate::structural::field_contract(ty, member).ok())
+                if let Some(contract) = field_type
+                    .clone()
+                    .or_else(|| {
+                        self.native_values
+                            .get(receiver)
+                            .and_then(|ty| crate::structural::field_contract(ty, member).ok())
+                    })
                     .and_then(|ty| ty.source_contract())
                 {
                     self.values.insert(*result, contract);

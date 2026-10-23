@@ -99,6 +99,9 @@ it also derives native Array element unions when positional shape is lost.
 provenance across the CFG. It solves field/frame-local annotations together;
 `unit` anchors declared field contracts to the enclosing class. Runtime field
 reads remain ordinary property reads rather than cached values.
+`source_fields` shares invariant declaration lookup across exact source-instance
+receivers. Member-operation metadata retains their field contracts until unit
+validation can verify the declaring classes.
 `native` checks declared member use, and `unit` proves source implementations.
 Interface members reuse source-aware parameter/result contracts; API projection
 does not replace exact member identities or authorize source dispatch.

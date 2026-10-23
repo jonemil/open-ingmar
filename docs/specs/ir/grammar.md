@@ -167,8 +167,8 @@ storage-operation = ".parameter" value-id decimal-usize
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata? field-entry-metadata?
                   | ".assign-self" identifier value-id
-                  | ".member-read" value-id value-id identifier
-                  | ".member-write" value-id identifier value-id
+                  | ".member-read" value-id value-id identifier source-field-metadata?
+                  | ".member-write" value-id identifier value-id source-field-metadata?
                   | ".bind-method" value-id value-id value-id callback-tag
 unary-operation = unary-directive value-id value-id
 unary-directive = ".positive" | ".negate" | ".not" | ".complement"
@@ -215,6 +215,7 @@ call-operation = ".call" value-id module-name identifier
 class-set = identifier ("|" identifier)*
 call-result-metadata = "result=" call-result-tag
 field-entry-metadata = "declared=" call-result-tag
+source-field-metadata = "field=" call-result-tag
 object-operation = ".new-native" value-id class-path
                  | ".new-source" value-id identifier native-base value-id*
                  | ".base-initialize" native-base

@@ -32,6 +32,7 @@ mod native;
 mod native_bindings;
 mod operators;
 mod parser;
+mod source_fields;
 mod source_ir;
 mod source_objects;
 mod source_union;
@@ -1095,17 +1096,21 @@ impl ValueType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
-    /// Read a declared structural field, evaluating the receiver once.
+    /// Read a declared field, evaluating the receiver once. Source receivers
+    /// carry a field contract that the declaring unit must independently check.
     MemberRead {
         result: ValueId,
         receiver: ValueId,
         member: String,
+        field_type: Option<ReturnType>,
     },
-    /// Write a structural field after evaluating its receiver and new value.
+    /// Write a declared field after evaluating its receiver and new value.
+    /// A source field contract requires independent declaring-unit validation.
     MemberWrite {
         receiver: ValueId,
         member: String,
         value: ValueId,
+        field_type: Option<ReturnType>,
     },
     /// Push a named symbol; assembly/application binding supplies its ID.
     Symbol {
@@ -1967,6 +1972,19 @@ impl Function {
                     *result_type = contract.clone().result();
                 }
             }
+            if let Operation::MemberRead {
+                field_type: Some(ty),
+                ..
+            }
+            | Operation::MemberWrite {
+                field_type: Some(ty),
+                ..
+            } = &mut located.operation
+            {
+                if let Some(canonical) = FieldKind::value_contract(ty.clone()) {
+                    *ty = canonical;
+                }
+            }
             if let Operation::SelfFieldRead {
                 result_type,
                 declared_type,
@@ -2630,35 +2648,60 @@ impl Function {
                     result,
                     receiver,
                     ref member,
+                    ref field_type,
                 } => {
                     validate_call_names(None, member).map_err(fail)?;
-                    let ty = crate::structural::field_type(&type_of(receiver).api_type(), member)
-                        .map_err(|message| fail(&message))?;
-                    types.insert(
-                        result,
-                        ValueType::from_api_type(&ty)
-                            .ok_or_else(|| fail("unsupported structural field result"))?,
-                    );
+                    let ty = if let Some(ty) = field_type {
+                        crate::source_fields::receiver(origins.contract(receiver))
+                            .map_err(|e| fail(&e))?;
+                        if FieldKind::from_result(ty.clone()).is_none() {
+                            return Err(fail("unsupported source field contract"));
+                        }
+                        if let Some(context) = context {
+                            context
+                                .check_type(api::core(), &ty.api_type())
+                                .map_err(|e| fail(&e))?;
+                        }
+                        ty.clone()
+                    } else {
+                        crate::structural::field_contract(&type_of(receiver).api_type(), member)
+                            .map_err(|message| fail(&message))?
+                    };
+                    types.insert(result, call_result_type(ty).map_err(fail)?);
                     (Some(result), vec![receiver])
                 }
                 Operation::MemberWrite {
                     receiver,
                     ref member,
                     value,
+                    ref field_type,
                 } => {
                     validate_call_names(None, member).map_err(fail)?;
-                    for receiver_type in crate::unions::alternatives(&type_of(receiver).api_type())
-                    {
-                        let target = crate::structural::field_type(receiver_type, member)
-                            .map_err(|message| fail(&message))?;
-                        if let Some(expected) =
-                            crate::structural::field_contract(receiver_type, member)
-                                .map_err(|message| fail(&message))?
-                                .source_contract()
-                        {
+                    let targets = if let Some(ty) = field_type {
+                        crate::source_fields::receiver(origins.contract(receiver))
+                            .map_err(|e| fail(&e))?;
+                        if FieldKind::from_result(ty.clone()).is_none() {
+                            return Err(fail("unsupported source field contract"));
+                        }
+                        if let Some(context) = context {
+                            context
+                                .check_type(api::core(), &ty.api_type())
+                                .map_err(|e| fail(&e))?;
+                        }
+                        vec![ty.clone()]
+                    } else {
+                        crate::unions::alternatives(&type_of(receiver).api_type())
+                            .iter()
+                            .map(|ty| crate::structural::field_contract(ty, member))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|e| fail(&e))?
+                    };
+                    for expected in targets {
+                        let target = expected.api_type();
+                        if let Some(expected) = expected.source_contract() {
                             if !origins.accepts_contract(&expected, value) {
                                 return Err(fail(
-                                    "structural field write does not preserve source alternatives",
+                                    "field write does not preserve source alternatives",
                                 ));
                             }
                         }
@@ -2669,7 +2712,7 @@ impl Function {
                         if !native::accepts(&target, &type_of(value).api_type())
                             && !origins.deferred_interface(&target, value)
                         {
-                            return Err(fail("structural field write type mismatch"));
+                            return Err(fail("field write type mismatch"));
                         }
                     }
                     (None, vec![receiver, value])
@@ -4284,12 +4327,30 @@ impl Function {
                     result,
                     receiver,
                     ref member,
-                } => format!(".member-read %{0} %{1} {member}", result.0, receiver.0),
+                    ref field_type,
+                } => format!(
+                    ".member-read %{0} %{1} {member}{2}",
+                    result.0,
+                    receiver.0,
+                    field_type
+                        .as_ref()
+                        .map(|ty| format!(" field={}", type_text::result_tag(ty)))
+                        .unwrap_or_default()
+                ),
                 Operation::MemberWrite {
                     receiver,
                     ref member,
                     value,
-                } => format!(".member-write %{0} {member} %{1}", receiver.0, value.0),
+                    ref field_type,
+                } => format!(
+                    ".member-write %{0} {member} %{1}{2}",
+                    receiver.0,
+                    value.0,
+                    field_type
+                        .as_ref()
+                        .map(|ty| format!(" field={}", type_text::result_tag(ty)))
+                        .unwrap_or_default()
+                ),
                 Operation::SelfFieldRead {
                     result,
                     ref field,

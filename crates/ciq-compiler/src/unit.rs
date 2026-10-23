@@ -1380,10 +1380,51 @@ impl CompilationUnit {
                     )
                     .map_err(|message| fail(Some(index), Some(operation), message))?;
                 }
+                if let Operation::MemberRead {
+                    receiver,
+                    member,
+                    field_type: Some(claimed),
+                    ..
+                }
+                | Operation::MemberWrite {
+                    receiver,
+                    member,
+                    field_type: Some(claimed),
+                    ..
+                } = &located.operation
+                {
+                    let actual = crate::source_fields::contract(
+                        crate::source_fields::receiver(origins.contract(*receiver))
+                            .map_err(|message| fail(Some(index), Some(operation), message))?,
+                        member,
+                        |class, field| {
+                            self.classes
+                                .iter()
+                                .find(|c| c.name == class.name && c.base == class.base)?
+                                .fields
+                                .iter()
+                                .find(|f| f.name == field)
+                                .map(InstanceField::result_type)
+                        },
+                    )
+                    .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    if actual != *claimed {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "source field metadata does not match its declaration".into(),
+                        ));
+                    }
+                    if let Operation::MemberWrite { value, .. } = &located.operation {
+                        self.check_value_contract(function, &origins, *value, &actual, context)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                }
                 if let Operation::MemberWrite {
                     receiver,
                     member,
                     value,
+                    field_type: None,
                 } = &located.operation
                 {
                     for receiver_type in
@@ -2506,6 +2547,14 @@ fn compile_sources_context(
         }
         for class in &parsed.classes {
             calls.class_bases.insert(class.name.clone(), class.base);
+            calls.source_fields.insert(
+                class.name.clone(),
+                class
+                    .fields
+                    .iter()
+                    .map(|field| (field.name.clone(), field.result_type()))
+                    .collect(),
+            );
             for ast in &class.methods {
                 calls.insert(
                     (class.name.clone(), ast.name.clone()),

@@ -11,6 +11,8 @@ Computed/nested receiver cases check returned aliases, chained appends, nested
 stores/compound updates, and receiver/index/value effect order.
 Self-field cases check refined reads, branch/loop joins, nullable guards,
 reassignment/call invalidation, and captured receivers across field replacement.
+Other-instance cases cover scalar/reference/tuple fields, single owner
+evaluation, alias/reassignment behavior, and captured append results.
 
 From the repository root, using fresh output paths:
 

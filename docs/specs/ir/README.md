@@ -83,14 +83,22 @@ unions, remain distinct from their native projections. Unit validation resolves
 nested class references against constructible declarations and native bases,
 including references in otherwise unused field/local contracts.
 
-`.member-read result receiver name` derives its value type from the receiver's
-declared field. `.member-write receiver name value` checks the value against
-every possible receiver alternative. Receiver and value IDs obey ordinary
+`.member-read result receiver name` derives a structural field's value type
+from its receiver contract. `.member-write receiver name value` checks the value
+against every possible structural receiver alternative. For exact source-class
+receivers, both operations require `field=tag` carrying the field contract.
+Function validation checks receiver identity, non-nullness, supported field
+types, and write operands; unit validation resolves every receiver class and
+requires its declaration to match that tag. A source union requires identical
+field contracts on every class. Reads preserve exact source result identities.
+These source-instance reads retain the declared contract after tuple mutation;
+they do not use the current-instance refinements described under field flow.
+Receiver and value IDs obey ordinary
 use/order rules. Reads and writes participate in effect scheduling; declarations
 or edited metadata cannot move a read across a write. Instance calls reuse
 `.call-native`/`.call-native-discard` with the receiver's structural declaration
 supplying arity, argument, and result contracts. The operation names cover
-structural dispatch as well as catalogue-provided members.
+source fields, structural dispatch, and catalogue-provided members.
 Source provenance derives from the declared member contract, rather than its
 native projection. Union receivers check each signature's arguments and join
 results without discarding exact source alternatives. Reads remain snapshots;
