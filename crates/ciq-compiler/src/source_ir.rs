@@ -873,6 +873,9 @@ struct Builder<'a> {
     types: crate::source_types::Types,
     next_local: u32,
     named_locals: std::collections::BTreeSet<LocalId>,
+    // Named tuple-derived storage keeps inferred element contracts after its
+    // positional shape is lost. Ordinary typed Arrays use invariant native calls.
+    shape_arrays: std::collections::BTreeSet<LocalId>,
     pending_locals: BTreeMap<LocalId, usize>,
     next_block: u32,
     controls: Vec<ControlTargets>,
@@ -902,6 +905,22 @@ fn tuple_append_name(expression: &parser::Expression) -> Option<(&str, bool)> {
 }
 
 impl Builder<'_> {
+    fn tuple_storage(&self, local: LocalId) -> bool {
+        self.types.local_read_type(local).is_some_and(|ty| {
+            crate::tuples::read_contract(&ty, None).is_some()
+                || (self.shape_arrays.contains(&local)
+                    && self
+                        .controls
+                        .iter()
+                        .any(|control| control.continue_to.is_some())
+                    && crate::unions::alternatives(&ty).iter().all(|part| {
+                        matches!(
+                            part,
+                            crate::api::Type::Array(_) | crate::api::Type::TupleValue(_)
+                        )
+                    }))
+        })
+    }
     /// Include tuple append effects when deciding which expression trees need
     /// staged operands. Ordinary Arrays retain their existing staging rules.
     fn needs_staging(
@@ -917,8 +936,7 @@ impl Builder<'_> {
             if let Some((name, _)) = tuple_append_name(expression) {
                 needed |= locals
                     .get(name)
-                    .and_then(|local| self.types.local_type(*local))
-                    .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some());
+                    .is_some_and(|local| self.tuple_storage(*local));
             }
         });
         needed
@@ -935,17 +953,10 @@ impl Builder<'_> {
         use parser::{Expression, ExpressionKind as E};
         let span = expression.span;
         let (name, spread) = tuple_append_name(&expression).expect("known named append");
-        if self
+        let positional = !self
             .controls
             .iter()
-            .any(|control| control.continue_to.is_some())
-        {
-            return Err(Diagnostic::at(
-                self.source,
-                span.start,
-                "tuple append in loops requires a generalized Array shape",
-            ));
-        }
+            .any(|control| control.continue_to.is_some());
         let name = name.to_owned();
         let local = locals[&name];
         let arguments = match expression.kind {
@@ -986,7 +997,7 @@ impl Builder<'_> {
         )?;
         let value = self.value(argument, locals)?;
         self.types
-            .append_type(array, value, spread)
+            .append_type(array, value, spread, positional)
             .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
         let result = ValueId(self.operations.len() as u32);
         self.push(
@@ -995,6 +1006,7 @@ impl Builder<'_> {
                 array,
                 value,
                 spread,
+                positional,
             },
             Some(span),
         );
@@ -1005,6 +1017,7 @@ impl Builder<'_> {
             },
             Some(span),
         );
+        self.shape_arrays.insert(local);
         Ok(Expression {
             kind: E::Local(name),
             span,
@@ -1106,10 +1119,15 @@ impl Builder<'_> {
         value: ValueId,
         span: Span,
     ) -> Result<(), Diagnostic> {
-        if self
-            .types
-            .value_type(array)
-            .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
+        if (self
+            .controls
+            .iter()
+            .any(|control| control.continue_to.is_some())
+            && target.is_some_and(|local| self.shape_arrays.contains(&local)))
+            || self
+                .types
+                .value_type(array)
+                .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
         {
             let local = target.ok_or_else(|| {
                 Diagnostic::at(
@@ -1136,6 +1154,7 @@ impl Builder<'_> {
                 },
                 Some(span),
             );
+            self.shape_arrays.insert(local);
         } else {
             let operation = if matches!(
                 self.types.value_type(array),
@@ -1746,8 +1765,7 @@ impl Builder<'_> {
         if tuple_append_name(&expression).is_some_and(|(name, _)| {
             locals
                 .get(name)
-                .and_then(|local| self.types.local_type(*local))
-                .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
+                .is_some_and(|local| self.tuple_storage(*local))
         }) {
             return self.tuple_append(expression, locals);
         }
@@ -2976,7 +2994,21 @@ impl Builder<'_> {
                     if let Some(initializer) = local.initializer {
                         let value = self.value(initializer, locals)?;
                         id = self.local_id(span)?;
-                        self.push(Operation::LocalInitialize { local: id, value }, Some(span));
+                        // Positional locals need storage flow from declaration,
+                        // so an early guard can constrain a later mutation/loop.
+                        let operation = if self.types.value_type(value).is_some_and(|ty| {
+                            crate::unions::alternatives(ty)
+                                .iter()
+                                .any(|part| matches!(part, crate::api::Type::TupleValue(_)))
+                        }) {
+                            Operation::LocalVariable {
+                                local: id,
+                                value: Some(value),
+                            }
+                        } else {
+                            Operation::LocalInitialize { local: id, value }
+                        };
+                        self.push(operation, Some(span));
                     } else {
                         id = self.local_id(span)?;
                         self.pending_locals.insert(id, self.operations.len());
@@ -3004,6 +3036,9 @@ impl Builder<'_> {
                 }
                 parser::Statement::Assign { name, value, .. } => {
                     let place = self.named_place(&name, locals, span)?;
+                    if let crate::type_flow::Place::Local(local) = place {
+                        self.shape_arrays.remove(&local);
+                    }
                     let expected = match place {
                         crate::type_flow::Place::Local(local) => {
                             self.types.local_type(local).and_then(construction_type)
@@ -3034,7 +3069,11 @@ impl Builder<'_> {
                                 None
                             }
                         });
-                        if incoming
+                        if incoming.as_ref().is_some_and(|ty| {
+                            crate::unions::alternatives(&ty.api_type())
+                                .iter()
+                                .any(|part| matches!(part, crate::api::Type::TupleValue(_)))
+                        }) || incoming
                             .as_ref()
                             .is_some_and(|ty| self.types.local_type(local) != Some(&ty.api_type()))
                             || self.types.local_class(local) != incoming_class
@@ -3378,6 +3417,7 @@ fn build_body(
         types: crate::source_types::Types::new(candidate_parameters.clone()),
         next_local: 0,
         named_locals: std::collections::BTreeSet::new(),
+        shape_arrays: Default::default(),
         pending_locals: BTreeMap::new(),
         next_block: 1,
         controls: Vec::new(),
@@ -3392,9 +3432,11 @@ fn build_body(
     let tuple_writes = tuple_write_receivers(&ast.statements);
     for (name, index) in builder.parameters.clone() {
         if tuple_writes.contains(name.as_str())
-            && candidate_parameters
-                .get(index)
-                .is_some_and(|ty| crate::tuples::read_contract(&ty.api_type(), None).is_some())
+            && candidate_parameters.get(index).is_some_and(|ty| {
+                crate::unions::alternatives(&ty.api_type())
+                    .iter()
+                    .any(|part| matches!(part, crate::api::Type::TupleValue(_)))
+            })
         {
             let local = builder.local_id(ast.body_span)?;
             let value = ValueId(builder.operations.len() as u32);

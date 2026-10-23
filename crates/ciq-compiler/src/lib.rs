@@ -165,6 +165,9 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A canonical union of supported native element contracts, independent
+    /// of positional shape. Array assignment remains invariant.
+    Union(api::Type),
     /// A bound Method signature, optionally permitting Null elements.
     Callback {
         signature: Box<StructuralMethod>,
@@ -217,6 +220,11 @@ pub enum ArrayElement {
 
 impl ArrayElement {
     fn validate(&self) -> Result<(), String> {
+        if let Self::Union(ty) = self {
+            if Self::from_api_type(ty).as_ref() != Some(self) {
+                return Err("Array element union must use a supported canonical contract".into());
+            }
+        }
         if let Self::Callback { signature, .. } = self {
             callbacks::validate(signature)?;
         }
@@ -229,6 +237,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Union(ty) => return ty.clone(),
             Self::Callback {
                 signature,
                 nullable,
@@ -266,6 +275,15 @@ impl ArrayElement {
 
     fn nullable_base(&self) -> Option<Self> {
         match self {
+            Self::Union(api::Type::Union(parts)) if parts.contains(&api::Type::Null) => {
+                Self::from_api_type(&unions::normalize(
+                    parts
+                        .iter()
+                        .filter(|ty| **ty != api::Type::Null)
+                        .cloned()
+                        .collect(),
+                ))
+            }
             Self::Callback {
                 signature,
                 nullable: true,
@@ -322,13 +340,30 @@ impl ArrayElement {
         if let Some((alias, nullable)) = NumericAlias::from_api_type(ty) {
             return Some(Self::Numeric { alias, nullable });
         }
-        type_text::ARRAY_ELEMENTS
+        if let Some(element) = type_text::ARRAY_ELEMENTS
             .iter()
             .find(|element| element.api_type() == *ty)
             .cloned()
+        {
+            return Some(element);
+        }
+        if let api::Type::Union(parts) = ty {
+            if parts.len() > 1
+                && unions::normalize(parts.clone()) == *ty
+                && parts
+                    .iter()
+                    .all(|part| *part == api::Type::Null || Self::from_api_type(part).is_some())
+            {
+                return Some(Self::Union(ty.clone()));
+            }
+        }
+        None
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Union(ty) = self {
+            return unions::text(ty).into();
+        }
         if let Self::Callback {
             signature,
             nullable,
@@ -349,7 +384,7 @@ impl ArrayElement {
             };
         }
         let text = match self {
-            Self::Structural { .. } | Self::Callback { .. } => unreachable!(),
+            Self::Structural { .. } | Self::Callback { .. } | Self::Union(_) => unreachable!(),
             Self::Any => "any",
             Self::LangObject => "object",
             Self::NullableObject => "nullable-object",
@@ -1243,8 +1278,9 @@ pub enum Operation {
         result: ValueId,
         elements: Vec<ValueId>,
     },
-    /// Replace a known tuple slot and return the same Array reference under its
-    /// updated positional contract. The index must be a literal Number operand.
+    /// Replace a positional/inferred slot and return the same Array reference.
+    /// A known tuple index replaces its slot contract; dynamic indexes lose
+    /// positional shape and retain a checked Array element contract.
     TupleWrite {
         result: ValueId,
         array: ValueId,
@@ -1252,12 +1288,16 @@ pub enum Operation {
         value: ValueId,
     },
     /// Invoke Array.add or Array.addAll and return the same Array reference
-    /// with the derived appended slots. Spreading requires a positional value.
+    /// with derived slots or an unknown-length element contract. Unknown-length
+    /// tails and non-positional mode lose shape without erasing element types.
     TupleAppend {
         result: ValueId,
         array: ValueId,
         value: ValueId,
         spread: bool,
+        /// Retain slots when both inputs have known shape; false derives only
+        /// element types so repeated loop iterations cannot grow a tuple type.
+        positional: bool,
     },
     /// Allocate and initialize one supported native object with no arguments.
     /// Constructor availability is checked separately from class availability;
@@ -2859,12 +2899,18 @@ impl Function {
                     array,
                     value,
                     spread,
+                    positional,
                 } => {
                     let slot = tuples::value_contract(&origins, value, &type_of(value).api_type())
                         .map_err(fail)?;
-                    let ty =
-                        tuples::append_contract(&type_of(array).api_type(), &slot, spread, context)
-                            .map_err(|message| fail(&message))?;
+                    let ty = tuples::append_contract(
+                        &type_of(array).api_type(),
+                        &slot,
+                        spread,
+                        positional,
+                        context,
+                    )
+                    .map_err(|message| fail(&message))?;
                     types.insert(
                         result,
                         ValueType::from_api_type(&ty)
@@ -4333,8 +4379,10 @@ impl Function {
                     array,
                     value,
                     spread,
+                    positional,
                 } => format!(
-                    ".tuple-{} %{} %{} %{}",
+                    ".{}-{} %{} %{} %{}",
+                    if positional { "tuple" } else { "array" },
                     if spread { "add-all" } else { "add" },
                     result.0,
                     array.0,

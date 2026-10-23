@@ -308,6 +308,7 @@ fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
 fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
     depth <= 64
         && match element {
+            crate::ArrayElement::Union(ty) => type_depth(ty, depth + 1),
             crate::ArrayElement::Callback { signature, .. } => {
                 signature_depth(signature, depth + 1)
             }

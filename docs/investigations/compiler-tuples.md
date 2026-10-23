@@ -146,6 +146,30 @@ establish tracking through arbitrary aliases.
 
 ## Runtime construction and typed transport
 
+**Experimentally observed, 2026-10-23:** strict SDK 9.2.0 probes accept an
+unknown-length `Array<Number>` tail on `[Number, String]`, returning
+`Array<Number or String>`. A `for` loop appending String values to the same
+tuple also satisfies that Array return. Writing Boolean through a dynamic
+Number index satisfies `Array<Number or String or Boolean>` instead of the
+original tuple contract.
+
+After shape loss, ordinary Array invariance applies. For example:
+
+```monkeyc
+function follow(x as [Lang.Number, Lang.String],
+                tail as Lang.Array<Lang.Number>) as Lang.Number {
+    x.addAll(tail);
+    x.add(true); // rejected: the Array elements are Number or String
+    return x.size();
+}
+```
+
+Replacing `x.add(true)` with another `x.addAll(tail)` is also rejected: the
+second call requires `Array<Number or String>`, while the tail is still
+`Array<Number>`. These checks are distinct from the first tuple-to-Array
+transition. The compiler retains these invariant call requirements after
+shape loss outside loop inference.
+
 **Experimentally observed, 2026-10-22:** the
 [complete application](../../examples/compiler-tuples/README.md) built with SDK
 9.2.0 strict checking and independently through source, saved IR, and assembly
@@ -160,6 +184,10 @@ the console also checks both paths of a branch join, compound updates, and a
 conditional RHS. Append checks cover returned aliases, source-class tails,
 homogeneous/mixed/empty literal arguments, argument effects, branch-dependent
 cardinality, and the nested append above.
+The 2026-10-23 extension checks unknown-length tails, zero/multiple loop
+iterations, `while`/`do` loops, multiple append types, dynamic writes, and nullable
+tuple locals/parameters on both guarded paths. Both SDK and generated output
+match the complete expected console.
 Both SDK and generated PRGs reconstructed through structured section export
 without required CODE/DATA fallback. It does not establish mutation tracking
 through arbitrary aliases, across calls, or

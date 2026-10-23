@@ -39,6 +39,7 @@ pub(crate) fn inputs(
     ops: &[LocatedOperation],
     values: &BTreeMap<ValueId, JoinType>,
 ) -> BTreeMap<BlockId, State> {
+    let facts = crate::type_flow::inputs(structure, ops);
     let vars = ops
         .iter()
         .filter_map(|op| {
@@ -85,6 +86,24 @@ pub(crate) fn inputs(
                     union(state.entry(local).or_default(), domain);
                 }
             }
+            // Persist proven edge restrictions in the storage domain. A guard
+            // before a loop must still exclude its Null input after a non-null
+            // mutation kills the original guard fact on the backedge.
+            if let Some(facts) = facts.get(&block).filter(|facts| !facts.is_empty()) {
+                for (&local, domain) in &mut state {
+                    if facts.contains(&crate::type_flow::Fact::NonNull(
+                        crate::type_flow::Place::Local(local),
+                    )) && domain.iter().all(|ty| {
+                        matches!(ty, JoinType::Api(ty)
+                            if crate::unions::alternatives(ty).iter().all(|part|
+                                matches!(part, Type::TupleValue(_) | Type::Array(_) | Type::Null)))
+                    }) {
+                        if let Some(ty) = proven(domain, local, facts) {
+                            *domain = vec![ty];
+                        }
+                    }
+                }
+            }
             let mut output = state.clone();
             for (at, op) in ops.iter().enumerate() {
                 if structure.blocks[at] == block {
@@ -105,6 +124,34 @@ pub(crate) fn inputs(
 /// Preserve supported native and exact source alternatives. Unsupported private
 /// domains retain the conservative Object/Null view.
 fn view(domain: &[JoinType]) -> Option<JoinType> {
+    let parts = domain
+        .iter()
+        .filter_map(|ty| {
+            if let JoinType::Api(ty) = ty {
+                Some(ty)
+            } else {
+                None
+            }
+        })
+        .flat_map(crate::unions::alternatives)
+        .collect::<Vec<_>>();
+    if parts.iter().any(|ty| matches!(ty, Type::TupleValue(_)))
+        && parts.iter().any(|ty| matches!(ty, Type::Array(_)))
+        && domain.iter().all(|ty| matches!(ty, JoinType::Api(_)))
+        && parts
+            .iter()
+            .all(|ty| matches!(ty, Type::TupleValue(_) | Type::Array(_) | Type::Null))
+    {
+        let nullable = parts.contains(&&Type::Null);
+        let types = parts
+            .into_iter()
+            .filter(|ty| **ty != Type::Null)
+            .cloned()
+            .collect::<Vec<_>>();
+        if let Ok(ty) = crate::tuples::array_contract(&types, &[]) {
+            return Some(JoinType::Api(if nullable { ty.with_null() } else { ty }));
+        }
+    }
     let mut result = domain.first()?.clone();
     for ty in &domain[1..] {
         result = crate::joins::contract_result(&result, ty).unwrap_or_else(|| {

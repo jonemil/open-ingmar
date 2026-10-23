@@ -1515,29 +1515,43 @@ Unit checks resolve nested class/native-base claims and retain native callback
 slot/cardinality checks.
 
 `.tuple-write %result %array %index %value` replaces one slot and returns the
-same runtime Array reference. Validation derives the updated tuple contract
-from the receiver and replacement value, retaining exact source identities.
-The index must be a direct Integer operand in bounds for every receiver
-alternative. No result-type assertion supplies or overrides this proof.
+same runtime Array reference. A direct Integer operand must be in bounds for
+every tuple alternative and replaces that slot's contract, retaining exact
+source identities. A dynamic Number index loses positional shape and derives
+an Array element union from the receiver and replacement value. Existing
+inferred Array receivers retain an element domain instead of gaining slots.
+No result-type assertion supplies or overrides this proof.
 Store the result back to the named receiver's inferred local to make later reads
 use the new view. Branch joins use ordinary inferred-local domains. Tuple
 parameters requiring tuple mutations have entry reads stored into inferred locals
 without changing their calling convention or the capacity for read-only
 parameters. Aliased locals retain their own static views.
+Named tuple-valued local initializers and assignments use inferred-variable
+storage from declaration, including nullable tuples. This lets an early guard
+constrain a later mutation without treating the declaration as a fixed slot view.
 
 `.tuple-add %result %array %value` and
 `.tuple-add-all %result %array %tail` invoke the corresponding Array methods.
-Typed IR uses `TupleAppend { result, array, value, spread }`. Both operations
-return the receiver reference with its derived appended slot contracts;
-`spread` requires a positional tail, including `tuple()`. Receiver/tail unions
-produce the possible concatenated shapes, retaining exact source identities.
+Typed IR uses `TupleAppend { result, array, value, spread, positional }`.
+The tuple forms set `positional=true`: known shapes concatenate slots, including
+an empty `tuple()` tail, retaining exact source identities. An unknown-length
+Array tail loses positional shape and joins the native element contracts.
+`.array-add` and `.array-add-all` have the same operands but set
+`positional=false`, deriving an element contract even for known tuple inputs.
+The frontend uses these forms for loop-carried tuple storage; their result is
+the same runtime receiver reference. Generalized elements must fit a supported
+Array profile; unsupported source/nested/Null-only domains are rejected.
 Validation checks API 1.3.0 and the actual operands on reload, without trusting
 an asserted result or tail length. Store the result into the receiver's inferred
 local before emitting subsequent reads. Derived result signatures have a shared
 64 KiB budget across the possible shapes, checked before concatenating slots;
 this bounds metadata growth rather than runtime Array capacity.
-General growing loop domains and unknown-length Array tails are outside this
-profile.
+Inferred-local joins merge an initial tuple and Array outcomes into the common
+Array element view. This is specific to tuple-derived storage; ordinary Array
+assignment/call contracts remain invariant. Non-null edge proofs narrow tuple
+and Array storage domains before forwarding them into loops. They do not
+introduce a bottom type for unrelated source-class paths. Saved reads are
+checked against these reconstructed domains, not accepted as slot assertions.
 
 [VM lowering](../lowering/README.md#positional-result-construction).
 

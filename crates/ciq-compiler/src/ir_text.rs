@@ -47,6 +47,8 @@ enum Directive {
     TupleWrite,
     TupleAdd,
     TupleAddAll,
+    ArrayAdd,
+    ArrayAddAll,
     NewSource,
     Constant,
     CallNativeDiscard,
@@ -322,6 +324,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".tuple-write") => (Directive::TupleWrite, 5),
             Some(".tuple-add") => (Directive::TupleAdd, 4),
             Some(".tuple-add-all") => (Directive::TupleAddAll, 4),
+            Some(".array-add") => (Directive::ArrayAdd, 4),
+            Some(".array-add-all") => (Directive::ArrayAddAll, 4),
             Some(".new-source") => (Directive::NewSource, call_width()),
             Some(".constant") => (Directive::Constant, 4),
             Some(".call-native-discard") => (Directive::CallNativeDiscard, call_width()),
@@ -578,11 +582,15 @@ pub(crate) fn parse_function_ir_context(
                         .map(|v| parse_value(v))
                         .collect::<Result<_, _>>()?,
                 },
-                Directive::TupleAdd | Directive::TupleAddAll => Operation::TupleAppend {
+                Directive::TupleAdd
+                | Directive::TupleAddAll
+                | Directive::ArrayAdd
+                | Directive::ArrayAddAll => Operation::TupleAppend {
                     result: parse_value(&fields[1])?,
                     array: parse_value(&fields[2])?,
                     value: parse_value(&fields[3])?,
-                    spread: matches!(directive, Directive::TupleAddAll),
+                    spread: matches!(directive, Directive::TupleAddAll | Directive::ArrayAddAll),
+                    positional: matches!(directive, Directive::TupleAdd | Directive::TupleAddAll),
                 },
                 Directive::TupleWrite => Operation::TupleWrite {
                     result: parse_value(&fields[1])?,

@@ -51,6 +51,7 @@ impl Types {
         array: ValueId,
         value: ValueId,
         spread: bool,
+        positional: bool,
     ) -> Result<Type, String> {
         let receiver = self
             .values
@@ -61,7 +62,7 @@ impl Types {
             .get(&value)
             .ok_or("cannot resolve tuple append argument")?;
         let slot = crate::tuples::value_contract(&self.origins, value, value_type)?;
-        crate::tuples::append_contract(receiver, &slot, spread, None)
+        crate::tuples::append_contract(receiver, &slot, spread, positional, None)
     }
 
     /// Record a candidate result using shared operator and native contracts.
@@ -162,7 +163,11 @@ impl Types {
                 array,
                 value,
                 spread,
-            } => (*result, self.append_type(*array, *value, *spread).ok()),
+                positional,
+            } => (
+                *result,
+                self.append_type(*array, *value, *spread, *positional).ok(),
+            ),
             Operation::TupleWrite {
                 result,
                 array,
@@ -506,6 +511,23 @@ impl Types {
     /// Read a stored local's candidate type; final IR checking remains authoritative.
     pub(crate) fn local_type(&self, local: LocalId) -> Option<&Type> {
         self.locals.get(&local)
+    }
+    /// Return a local read's candidate type under current null/class facts,
+    /// without changing the storage declaration used by later control flow.
+    pub(crate) fn local_read_type(&self, local: LocalId) -> Option<std::borrow::Cow<'_, Type>> {
+        self.locals.get(&local).map(|ty| {
+            if self
+                .facts
+                .iter()
+                .any(|fact| fact.place() == crate::type_flow::Place::Local(local))
+            {
+                std::borrow::Cow::Owned(
+                    self.refined(ty.clone(), crate::type_flow::Place::Local(local)),
+                )
+            } else {
+                std::borrow::Cow::Borrowed(ty)
+            }
+        })
     }
     pub(crate) fn local_class(&self, local: LocalId) -> Option<&str> {
         self.origins.local_class(local)

@@ -94,6 +94,7 @@ projections, which cannot authorize source dispatch or interface witnesses.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;
+it also derives native Array element unions when positional shape is lost.
 `native` checks declared member use, and `unit` proves source implementations.
 Interface members reuse source-aware parameter/result contracts; API projection
 does not replace exact member identities or authorize source dispatch.

@@ -193,7 +193,6 @@ fn tuple_slot_replacement_updates_locals_parameters_branches_and_source_identity
 fn tuple_writes_reject_stale_results_unknown_indices_and_unnamed_receivers() {
     for source in [
         r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number] { x[0] = "changed"; return x; }"#,
-        r#"function f(x as [Toybox.Lang.Number], i as Toybox.Lang.Number) { x[i] = 2; }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x[1] = 2; }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x["bad"] = 2; }"#,
         r#"function f(x as [[Toybox.Lang.Number]]) { x[0][0] = "changed"; }"#,
@@ -254,10 +253,8 @@ fn tuple_appends_keep_cardinality_source_identity_and_saved_stage_contracts() {
 fn tuple_append_rejects_unknown_shapes_wrong_arity_stale_results_and_loops() {
     for source in [
         r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number] { x.add("tail"); return x; }"#,
-        r#"function f(x as [Toybox.Lang.Number], y as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(y); }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x.add(); }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x.addAll(1); }"#,
-        r#"function f(x as [Toybox.Lang.Number], flag as Toybox.Lang.Boolean) { while(flag) { x.addAll(x); } }"#,
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
@@ -307,4 +304,74 @@ fn tuple_self_appends_bound_flat_and_nested_signature_growth() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn shape_loss_retains_native_element_unions_through_loops_and_saved_ir() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        function unknown(x as [Lang.Number, Lang.String], tail as Lang.Array<Lang.Number>) as Lang.Array<Lang.Number or Lang.String> { x.addAll(tail); return x; }
+        function forLoop(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Array<Lang.Number or Lang.String> { for(var i=0;i<n;i++) { x.add("new"); } return x; }
+        function whileLoop(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Number { while(n>0) { x.add("new"); n--; } return x.size(); }
+        function doLoop(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Number { do { x.add(7); n--; } while(n>0); return x.size(); }
+        function twoWrites(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Array<Lang.Number or Lang.String or Lang.Boolean or Lang.Char> { for(var i=0;i<n;i++) { x.add('a'); x.add(true); } return x; }
+        function allLoop(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Number { for(var i=0;i<n;i++) { x.addAll([2,"tail"]); } return x.size(); }
+        function indexed(x as [Lang.Number, Lang.String], i as Lang.Number) as Lang.Array<Lang.Number or Lang.String or Lang.Boolean> { x[i]=false; return x; }
+        function indexedThenAppend(x as [Lang.Number, Lang.String], i as Lang.Number) as Lang.Number { x[i]=false; x.add(true); return x.size(); }
+        function erasedThenWrite(x as [Lang.Number, Lang.String], tail as Lang.Array<Lang.Number>) as Lang.Number { x.addAll(tail); x[0]=7; return x.size(); }
+        function branch(x as [Lang.Number, Lang.String], tail as Lang.Array<Lang.Number>, flag as Lang.Boolean) as Lang.Array<Lang.Number or Lang.String> { if(flag) { x.addAll(tail); } return x; }
+        function nestedLoop(x as [Lang.Number, Lang.String], n as Lang.Number) as Lang.Number { for(var i=0;i<n;i++) { for(var j=0;j<n;j++) { x.add(7); } } return x.size(); }
+        function nullableElements(x as [Lang.Number, Lang.String or Null], tail as Lang.Array<Lang.Boolean>) as Lang.Number { x.addAll(tail); return x.size(); }
+    "#,
+    );
+}
+
+#[test]
+fn shape_loss_rejects_stale_slots_erasure_and_invariant_array_mutation() {
+    for source in [
+        r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], i as Toybox.Lang.Number) as [Toybox.Lang.Number,Toybox.Lang.String] { x[i]=2; return x; }"#,
+        r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], i as Toybox.Lang.Number) as Toybox.Lang.Number { x[i]=2; return x[0]; }"#,
+        r#"function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) { x.add("wrong"); }"#,
+        r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], tail as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(tail); x.add(true); }"#,
+        r#"function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number or Toybox.Lang.String> { return x; }"#,
+        r#"class A {} function f(x as [A,Toybox.Lang.String], tail as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(tail); }"#,
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+}
+
+#[test]
+fn nullable_tuple_mutation_uses_live_storage_guards() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        typedef Pair as [Lang.Number, Lang.String];
+        function append(x as Pair or Null) as Lang.Number { if(x != null) { x.add(true); return x.size(); } return 0; }
+        function replace(x as Pair or Null) as Lang.Boolean { if(x != null) { x[0]=false; return x[0]; } return true; }
+        function indexed(x as Pair or Null, i as Lang.Number) as Lang.Number { if(x != null) { x[i]=false; return x.size(); } return 0; }
+        function local(flag as Lang.Boolean) as Lang.Number { var x=flag ? [1,"old"] : null; if(x != null) { x.add(true); return x.size(); } return 0; }
+        function guardedLoop(x as Pair or Null, n as Lang.Number) as Lang.Number { if(x != null) { for(var i=0;i<n;i++) { x.add(true); } return x.size(); } return 0; }
+        function pending(x as Pair or Null) as Lang.Number { var copy; copy=x; if(copy!=null) { copy.add(true); return copy.size(); } return 0; }
+    "#,
+    );
+    for source in [
+        r#"function f(x as [Toybox.Lang.Number] or Null) { x.add(true); }"#,
+        r#"function f(x as [Toybox.Lang.Number] or Null) { x[0]=true; }"#,
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+}
+
+#[test]
+fn union_array_saved_reads_cannot_forge_invariant_storage_views() {
+    let text = "ciq-ir\n.function f parameters=1 parameter-types=integer-array result=union(integer|string)-array\n.parameter %0 0\n.variable $0 %0\n.read-variable %1 $0 array-union(integer|string)\n.return %1\n.end\n";
+    assert!(ciq_compiler::parse_function_ir(text).is_err());
+    let source = r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], n as Toybox.Lang.Number) as Toybox.Lang.Number { for(var i=0;i<n;i++) { x.add(7); } return x.size(); }"#;
+    let unit = round_trip(source);
+    let saved = unit.to_ir_text();
+    assert!(saved.contains(".array-add "));
+    let forged = saved.replace("array-union(integer|string)", "tuple(integer;string)");
+    assert_ne!(saved, forged);
+    assert!(parse_unit_ir(&forged).is_err());
 }

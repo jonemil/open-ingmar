@@ -141,6 +141,7 @@ pub(crate) fn append_contract(
     receiver: &Type,
     value: &ReturnType,
     spread: bool,
+    positional: bool,
     context: Option<crate::api::ApiContext>,
 ) -> Result<Type, String> {
     if let Some(context) = context {
@@ -150,6 +151,17 @@ pub(crate) fn append_contract(
             "Toybox.Lang.Array",
             if spread { "addAll" } else { "add" },
         )?;
+    }
+    if !positional
+        || read_contract(receiver, None).is_none()
+        || (spread && read_contract(&value.api_type(), None).is_none())
+    {
+        return if spread {
+            array_contract(&[receiver.clone(), value.api_type()], &[]).map_err(String::from)
+        } else {
+            array_contract(std::slice::from_ref(receiver), std::slice::from_ref(value))
+                .map_err(String::from)
+        };
     }
     let tail = if spread {
         match value {
@@ -263,8 +275,14 @@ pub(crate) fn write_contract(
     value: &ReturnType,
 ) -> Result<Type, &'static str> {
     match receiver {
+        Type::TupleValue(_) if index.is_none() => {
+            array_contract(std::slice::from_ref(receiver), std::slice::from_ref(value))
+        }
+        Type::Array(_) => {
+            array_contract(std::slice::from_ref(receiver), std::slice::from_ref(value))
+        }
         Type::TupleValue(tuple) => {
-            let index = index.ok_or("dynamic tuple writes require generalized Array contracts")?;
+            let index = index.expect("known tuple index");
             tuple.read(Some(index))?;
             let mut slots = tuple.slots.clone();
             slots[index as usize] = value.clone();
@@ -278,4 +296,41 @@ pub(crate) fn write_contract(
         )),
         _ => Err("tuple writes require non-null positional receivers"),
     }
+}
+
+/// Join the contents of positional/Array inputs into an unknown-length Array.
+/// Preserve supported native alternatives; reject exact source or nested storage
+/// contracts that cannot yet be represented without erasing their identities.
+pub(crate) fn array_contract(inputs: &[Type], extra: &[ReturnType]) -> Result<Type, &'static str> {
+    fn elements(ty: &Type, out: &mut Vec<ReturnType>) -> Result<(), &'static str> {
+        match ty {
+            Type::TupleValue(tuple) => out.extend_from_slice(tuple.slots()),
+            Type::Array(element) => out.push(
+                crate::unions::result(*element.clone())
+                    .ok_or("unsupported Array element contract")?,
+            ),
+            Type::Union(parts) => {
+                for part in parts {
+                    elements(part, out)?;
+                }
+            }
+            _ => return Err("shape loss requires non-null Array or tuple inputs"),
+        }
+        Ok(())
+    }
+    let mut slots = extra.to_vec();
+    for input in inputs {
+        elements(input, &mut slots)?;
+    }
+    if slots.iter().any(|slot| slot.source_contract().is_some()) {
+        return Err("shape loss cannot yet retain exact source-class Array elements");
+    }
+    let ty = if slots.is_empty() {
+        Type::Any
+    } else {
+        crate::unions::normalize(slots.iter().map(ReturnType::api_type).collect())
+    };
+    let element = crate::ArrayElement::from_api_type(&ty)
+        .ok_or("shape loss requires a supported native Array element domain")?;
+    Ok(Type::Array(Box::new(element.api_type())))
 }

@@ -5,6 +5,8 @@ reads, nested/source slots, nullable guards, fields, typed callbacks, conditiona
 construction, Array widening, mixed-token/nested literal inference, named slot
 replacement, `add`/`addAll` cardinality, empty append arguments, returned aliases,
 branch joins, compound updates, and left-to-right slot effects.
+It also covers unknown-length tails, loop-carried Array element unions,
+dynamic-index writes, and guarded nullable mutation.
 
 From the repository root, using fresh output paths:
 

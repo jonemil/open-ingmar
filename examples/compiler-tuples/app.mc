@@ -143,6 +143,59 @@ module Append {
     }
 }
 
+module Widen {
+    function tail() as Lang.Array<Lang.Number> { return [7, 8]; }
+    function all(x as Pair) as Lang.Array<Lang.Number or Lang.String> {
+        x.addAll(tail());
+        return x;
+    }
+    function forLoop(x as Pair, n as Lang.Number) as Lang.Array<Lang.Number or Lang.String> {
+        for (var i = 0; i < n; i++) { x.add("new"); }
+        return x;
+    }
+    function whileLoop(x as Pair, n as Lang.Number) as Lang.Number {
+        while (n > 0) { x.add("new"); n--; }
+        return x.size();
+    }
+    function doLoop(x as Pair, n as Lang.Number) as Lang.Number {
+        do { x.add(7); n--; } while (n > 0);
+        return x.size();
+    }
+    function many(x as Pair, n as Lang.Number) as Lang.Number {
+        for (var i = 0; i < n; i++) { x.add('a'); x.add(true); }
+        return x.size();
+    }
+    function indexed(x as Pair, i as Lang.Number) as Lang.Array<Lang.Number or Lang.String or Lang.Boolean> {
+        x[i] = false;
+        return x;
+    }
+    function afterIndexed(x as Pair, i as Lang.Number) as Lang.Number {
+        x[i] = false;
+        x.add(true);
+        return x.size();
+    }
+    function guarded(x as Pair or Null, n as Lang.Number) as Lang.Number {
+        if (x != null) {
+            for (var i = 0; i < n; i++) { x.add(true); }
+            return x.size();
+        }
+        return 0;
+    }
+    function local(flag as Lang.Boolean) as Lang.Number {
+        var x = flag ? [1, "old"] : null;
+        if (x != null) { x.add(true); return x.size(); }
+        return 0;
+    }
+    function allLoop(x as Pair, n as Lang.Number) as Lang.Number {
+        for (var i = 0; i < n; i++) { x.addAll([2, "tail"]); }
+        return x.size();
+    }
+    function guardedReplace(x as Pair or Null) as Lang.Boolean {
+        if (x != null) { x[0] = false; return x[0]; }
+        return true;
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -197,6 +250,23 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(Append.nested([1]));
         System.println(Append.mixed([1]));
         System.println(Append.container([1]));
+        var widened = Widen.all([1, "seed"]);
+        System.println(widened.size());
+        System.println(widened[1]);
+        System.println(Widen.forLoop([1, "seed"], 3).size());
+        System.println(Widen.forLoop([1, "seed"], 0).size());
+        System.println(Widen.whileLoop([1, "seed"], 2));
+        System.println(Widen.doLoop([1, "seed"], 0));
+        System.println(Widen.many([1, "seed"], 2));
+        System.println(Widen.indexed([1, "seed"], 0)[0]);
+        System.println(Widen.afterIndexed([1, "seed"], 0));
+        System.println(Widen.guarded([1, "seed"], 2));
+        System.println(Widen.guarded(null, 2));
+        System.println(Widen.local(true));
+        System.println(Widen.local(false));
+        System.println(Widen.allLoop([1, "seed"], 2));
+        System.println(Widen.guardedReplace([1, "seed"]));
+        System.println(Widen.guardedReplace(null));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

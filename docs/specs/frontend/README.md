@@ -227,17 +227,32 @@ function replace(x as [Number, String]) as [String, String] {
 }
 ```
 
-`add(value)` appends one slot; `addAll(tail)` appends every slot of a positional
-tail. Both return the same Array reference and update the named receiver's
+`add(value)` appends one slot; `addAll(tail)` appends the tail's elements.
+Both return the same Array reference and update the named receiver's
 contract. Direct Array literals passed to these calls are packed positionally,
 including homogeneous and empty literals. `addAll([])` keeps the shape;
 `add([])` appends an empty tuple slot. Other unconstrained empty literals still
-require an expected Array context. Receiver/tail unions retain each possible
-shape, and branch joins use the updated local contracts. These methods require
+require an expected Array context. Known receiver/tail shapes retain each
+possible slot layout. These methods require
 API 1.3.0. Each derived append result, summed over its possible shapes, has a
 64 KiB canonical-signature budget. This compiler work bound prevents repeated
 self-appends from expanding type metadata exponentially; it is not a VM or
 device Array limit.
+
+An unknown-length Array tail or a dynamic-index write loses positional shape.
+Its resulting Array element contract joins the original slots and the incoming
+elements, retaining supported native unions such as `Array<Number or String>`.
+Exact source-class and nested collection elements cannot yet lose shape without
+erasing their contracts; these cases are rejected. Null-only element domains
+are also outside the current Array profiles.
+
+Appends inside `for`, `while`, and `do` loops use element contracts from the
+first iteration. Loop joins combine the initial tuple with the possible Array
+results, including the zero-iteration path. This stabilizes the stored type
+without enumerating tuple lengths. Subsequent reads require the element union;
+they cannot retain a positional slot proof. Outside loop inference, an Array's
+derived element contract is invariant: later writes/calls must satisfy it, and
+an `Array<Number>` tail does not satisfy an `Array<Number or String>` parameter.
 
 Append arguments evaluate before the final receiver read. A named local cannot
 be rebound by argument expressions, so its reference is unchanged; nested
@@ -247,13 +262,11 @@ This avoids the SDK's observed loss of the inner append's static shape.
 Parameter annotations constrain entry values. Parameters used as tuple mutation
 receivers have an inferred local view that may change inside the body.
 Mutation tracking is local to the named receiver: aliases and callers retain
-their previous static views, matching the SDK's
-observed limits. This does not guarantee that an aliased runtime slot still has
-its previous type. Dynamic-index writes, writes through fields/nested receivers,
-and writes through nullable tuple parameters are currently rejected. Append
-calls through computed/field receivers or nullable locals (including after a
-guard), unknown-length `addAll` arguments, and tuple appends inside loops are
-also rejected until their storage/shape contracts can be represented.
+their previous static views, matching the SDK's observed limits. This does not
+guarantee that an aliased runtime slot still has its previous type. Nullable
+tuple locals and parameters require a live non-null guard before mutation.
+Guarded loop entries retain that non-null storage domain across non-null
+mutations. Mutation through fields or computed/nested receivers remains rejected.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts

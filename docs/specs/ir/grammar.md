@@ -221,6 +221,8 @@ object-operation = ".new-native" value-id class-path
                  | ".tuple-write" value-id value-id value-id value-id
                  | ".tuple-add" value-id value-id value-id
                  | ".tuple-add-all" value-id value-id value-id
+                 | ".array-add" value-id value-id value-id
+                 | ".array-add-all" value-id value-id value-id
 ```
 
 User-call and field-read result defaults are `integer`; canonical output omits
@@ -343,6 +345,7 @@ element-tag = "any" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
+            | union-tag
 nullable-structural-tag = "union(" structural-tag "|null)"
 nullable-callback-tag = "union(" callback-tag "|null)"
 array-tag = element-tag "-array"
@@ -361,6 +364,10 @@ local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
 ```
+
+Union Array elements require supported native element alternatives; Void,
+exact source-class elements, and nested collection elements are not admitted
+through this rule. Known numeric/nullable profiles keep their canonical tags.
 
 A union tag has 2 through 254 alternatives before normalization. Nested union
 tags, top-level source identities, and Void are not native union atoms. Tuple

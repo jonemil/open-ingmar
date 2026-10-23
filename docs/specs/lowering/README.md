@@ -374,6 +374,10 @@ Tuple `add`/`addAll` use ordinary native method calls: read the receiver,
 argument, and `invokem 2`. Store the returned reference under its updated
 contract. Empty positional values allocate with length zero and `newa`;
 `addAll([])` still invokes `addAll` rather than dropping the call.
+The `.array-add`/`.array-add-all` IR forms select those same instructions;
+losing tuple shape changes the checked contract, not the runtime call.
+Dynamic-index tuple writes use the same receiver duplication and `aputv` path
+as known-slot writes, leaving runtime bounds checks in place.
 Array availability and each slot's native types are checked separately; View
 construction requires its initializer's 2.1.0 level. No allocation failure
 timing or memory equivalence with SDK lowering is implied. See the
