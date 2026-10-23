@@ -550,6 +550,7 @@ struct Token<'a> {
 
 struct Parser<'a> {
     source: &'a str,
+    source_index: usize,
     offset: usize,
     lookahead: Option<Token<'a>>,
     expressions: usize,
@@ -602,6 +603,7 @@ impl<'a> Parser<'a> {
     fn new(source: &'a str, aliases: Rc<Aliases<'a>>) -> Self {
         Self {
             source,
+            source_index: 0,
             offset: 0,
             lookahead: None,
             expressions: 0,
@@ -648,6 +650,7 @@ impl<'a> Parser<'a> {
         }
         let alias = &self.aliases.declarations[&key];
         let mut parser = Self::new(alias.source, self.aliases.clone());
+        parser.source_index = alias.source_index;
         parser.offset = alias.target;
         parser.names = alias.names.clone();
         parser.owner = alias.owner.clone();
@@ -734,6 +737,7 @@ pub(crate) fn collect_aliases<'a>(
     let mut aliases = Aliases::default();
     for (source_index, source) in sources.iter().enumerate() {
         let mut parser = Parser::new(source, Rc::default());
+        parser.source_index = source_index;
         let result = (|| {
             parser.imports()?;
             let mut outer_names = None;
@@ -845,6 +849,7 @@ pub(crate) fn collect_aliases<'a>(
     let aliases = Rc::new(aliases);
     for (key, alias) in &aliases.declarations {
         let mut parser = Parser::new(alias.source, aliases.clone());
+        parser.source_index = alias.source_index;
         parser.owner = alias.owner.clone();
         let result = if aliases.owners.contains(key) {
             Err(parser.error(alias.name_at, "typedef conflicts with a class or module"))
@@ -2886,6 +2891,7 @@ impl Parser<'_> {
             .start;
         self.expect(Kind::Punctuation('{'), "'{' after interface")?;
         let mut shape = crate::StructuralInterface {
+            declaration: None,
             fields: BTreeMap::new(),
             methods: BTreeMap::new(),
         };
@@ -2951,6 +2957,12 @@ impl Parser<'_> {
             self.expect(Kind::Punctuation(';'), "';' after interface member")?;
         }
         self.token()?;
+        if shape.fields.values().any(crate::field_flow::positional) {
+            shape.declaration = Some(crate::StructuralDeclaration {
+                source: self.source_index,
+                offset: start,
+            });
+        }
         shape
             .validate()
             .map_err(|message| self.error(start, message))?;
@@ -3263,8 +3275,10 @@ pub(crate) struct ParsedClass {
 pub(crate) fn declarations<'a>(
     source: &'a str,
     aliases: Rc<Aliases<'a>>,
+    source_index: usize,
 ) -> Result<ParsedUnit, Diagnostic> {
     let mut parser = Parser::new(source, aliases);
+    parser.source_index = source_index;
     let mut unit = ParsedUnit {
         functions: Vec::new(),
         classes: Vec::new(),

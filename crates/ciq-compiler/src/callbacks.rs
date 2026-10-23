@@ -8,6 +8,7 @@ pub(crate) fn validate(signature: &StructuralMethod) -> Result<(), String> {
         return Err("callback nesting exceeds 64 levels".into());
     }
     StructuralInterface {
+        declaration: None,
         fields: BTreeMap::new(),
         methods: [("invoke".into(), signature.clone())].into(),
     }
@@ -124,8 +125,11 @@ pub(crate) fn check_binding(
             .unwrap_or_default()
     };
     if classes.is_empty()
-        && native_signature(&function.value_types[&receiver].api_type(), member, context)?
-            != *expected
+        && !expected.accepts(&native_signature(
+            &function.value_types[&receiver].api_type(),
+            member,
+            context,
+        )?)
     {
         return Err("bound Method signature does not match its native target".into());
     }
@@ -151,7 +155,7 @@ pub(crate) fn check_binding(
                     context,
                 )?
             };
-        if actual != *expected {
+        if !expected.accepts(&actual) {
             return Err("bound Method signature does not match its source target".into());
         }
     }

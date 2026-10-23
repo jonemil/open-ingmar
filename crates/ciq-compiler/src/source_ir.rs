@@ -148,35 +148,15 @@ fn emit(
         expression.span,
     )?;
     match kind {
-        kind @ parser::ExpressionKind::MemberRead { .. } => {
-            let mut members = Vec::new();
-            let mut base = parser::Expression {
-                kind,
-                span: expression.span,
-            };
-            while let parser::ExpressionKind::MemberRead { receiver, member } = base.kind {
-                members.push((member, base.span));
-                base = *receiver;
-            }
-            let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
-            for (member, span) in members.into_iter().rev() {
-                let result = ValueId(operations.len() as u32);
-                let field_type = calls
-                    .source_field(operations, receiver, &member)
-                    .map_err(|message| Diagnostic::at(source, span.start, message))?;
-                operations.push(LocatedOperation {
-                    operation: Operation::MemberRead {
-                        result,
-                        receiver,
-                        member,
-                        field_type,
-                    },
-                    span: Some(span),
-                });
-                receiver = result;
-            }
-            Ok(receiver)
-        }
+        kind @ parser::ExpressionKind::MemberRead { .. } => emit_member_chain(
+            source,
+            kind,
+            expression.span,
+            locals,
+            parameters,
+            operations,
+            calls,
+        ),
         kind @ (parser::ExpressionKind::ValueCall { .. }
         | parser::ExpressionKind::ModuleCall { .. }
         | parser::ExpressionKind::GlobalCall { .. }
@@ -220,6 +200,55 @@ fn emit(
             calls,
         ),
     }
+}
+
+/// Emit a property chain with declaration and flow metadata, evaluating its
+/// base once. Keep this work outside the recursive expression dispatch frame.
+fn emit_member_chain(
+    source: &str,
+    kind: parser::ExpressionKind,
+    span: Span,
+    locals: &BTreeMap<String, LocalId>,
+    parameters: &BTreeMap<String, usize>,
+    operations: &mut Vec<LocatedOperation>,
+    calls: &CallContext,
+) -> Result<ValueId, Diagnostic> {
+    let mut members = Vec::new();
+    let mut base = parser::Expression { kind, span };
+    while let parser::ExpressionKind::MemberRead { receiver, member } = base.kind {
+        members.push((member, base.span));
+        base = *receiver;
+    }
+    let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
+    for (member, span) in members.into_iter().rev() {
+        let result = ValueId(operations.len() as u32);
+        let field_type = calls
+            .source_field(operations, receiver, &member)
+            .map_err(|message| Diagnostic::at(source, span.start, message))?;
+        let view_type = if field_type.is_none() {
+            crate::field_flow::prefix_member_read(
+                operations,
+                receiver,
+                &member,
+                calls.parameter_types.clone(),
+            )
+            .map_err(|message| Diagnostic::at(source, span.start, message))?
+        } else {
+            None
+        };
+        operations.push(LocatedOperation {
+            operation: Operation::MemberRead {
+                result,
+                receiver,
+                member,
+                field_type,
+                view_type,
+            },
+            span: Some(span),
+        });
+        receiver = result;
+    }
+    Ok(receiver)
 }
 
 fn emit_non_call(
@@ -1218,13 +1247,16 @@ impl Builder<'_> {
             .iter()
             .any(|control| control.continue_to.is_some())
             && (target.is_some_and(|local| self.shape_arrays.contains(&local))
-                || crate::field_flow::direct_field(&self.operations, array).is_some()))
+                || crate::field_flow::tracked_receiver(&self.operations, array)))
             || self
                 .types
                 .value_type(array)
                 .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
         {
-            if field_receiver && !crate::source_fields::read(&self.operations, array) {
+            if field_receiver
+                && !crate::source_fields::read(&self.operations, array)
+                && !crate::field_flow::tracked_receiver(&self.operations, array)
+            {
                 return Err(Diagnostic::at(
                     self.source,
                     span.start,
@@ -1963,7 +1995,7 @@ impl Builder<'_> {
                 } else {
                     None
                 };
-                let loop_field = self_field.as_ref().is_some_and(|field| {
+                let loop_self_field = self_field.as_ref().is_some_and(|field| {
                     self.calls
                         .field_types
                         .get(field)
@@ -1974,6 +2006,9 @@ impl Builder<'_> {
                     .any(|control| control.continue_to.is_some());
                 let computed_receiver = !matches!(receiver.kind, E::Local(_));
                 let receiver = self.snapshot(*receiver, locals)?;
+                let loop_field = loop_self_field
+                    || (self.controls.iter().any(|c| c.continue_to.is_some())
+                        && matches!(receiver.kind, E::Temporary(local) if crate::field_flow::captured_receiver(&self.operations, local)));
                 if computed_receiver
                     && (self.positional_snapshot(&receiver) || loop_field)
                     && matches!(member.as_str(), "add" | "addAll")
@@ -1982,7 +2017,9 @@ impl Builder<'_> {
                         if self.operations.iter().any(|op| matches!(&op.operation,
                             Operation::LocalInitialize { local: at, value }
                             if *at == local && crate::source_fields::read(&self.operations, *value))));
-                    if field_receiver && !source_field {
+                    let tracked_field = matches!(receiver.kind, E::Temporary(local)
+                        if crate::field_flow::captured_receiver(&self.operations, local));
+                    if field_receiver && !source_field && !tracked_field {
                         return Err(Diagnostic::at(
                             self.source,
                             span.start,

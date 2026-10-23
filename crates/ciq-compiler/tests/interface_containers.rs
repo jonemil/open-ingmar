@@ -166,6 +166,7 @@ fn typed_array_operations_reject_invalid_structural_member_contracts() {
         ValueId,
     };
     let shape = StructuralInterface {
+        declaration: None,
         fields: [("value".into(), ReturnType::Void)].into(),
         methods: Default::default(),
     };

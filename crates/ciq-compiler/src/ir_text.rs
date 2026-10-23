@@ -902,11 +902,20 @@ pub(crate) fn parse_function_ir_context(
                     member: fields[3].clone(),
                     field_type: (width == 5)
                         .then(|| &fields[4])
+                        .filter(|tag| !tag.starts_with("view="))
                         .map(|tag| {
                             let tag = tag
                                 .strip_prefix("field=")
                                 .ok_or_else(|| fail(offset, "expected source field contract"))?;
                             crate::type_text::call_result(tag)
+                                .map_err(|message| fail(offset, message))
+                        })
+                        .transpose()?,
+                    view_type: (width == 5)
+                        .then(|| &fields[4])
+                        .filter(|tag| tag.starts_with("view="))
+                        .map(|tag| {
+                            crate::type_text::call_result(&tag[5..])
                                 .map_err(|message| fail(offset, message))
                         })
                         .transpose()?,

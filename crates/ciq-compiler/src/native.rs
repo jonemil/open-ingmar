@@ -89,7 +89,15 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
         let first = value_parameters(&alternatives[0], member)?;
         return alternatives
             .iter()
-            .all(|ty| value_parameters(ty, member).as_ref() == Some(&first))
+            .all(|ty| {
+                value_parameters(ty, member).is_some_and(|other| {
+                    other.len() == first.len()
+                        && first
+                            .iter()
+                            .zip(&other)
+                            .all(|(a, b)| crate::structural::same_type(a, b))
+                })
+            })
             .then_some(first);
     }
     if let api::Type::Named(name) = receiver {
@@ -658,7 +666,7 @@ fn scalar_comparable(actual: &api::Type) -> bool {
 /// an Array alone cannot establish a tuple's length or positional contracts.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
-    if expected == actual
+    if crate::structural::same_type(expected, actual)
         || (*expected == api::Type::Any || *actual == api::Type::Any)
             && *expected != api::Type::Void
             && *actual != api::Type::Void
@@ -672,7 +680,7 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     }
     if let api::Type::Callback(expected_signature) = expected {
         return match actual {
-            api::Type::Callback(actual_signature) => expected_signature == actual_signature,
+            api::Type::Callback(actual_signature) => expected_signature.accepts(actual_signature),
             api::Type::Named(name) if name == "Toybox.Lang.Method" => true,
             api::Type::Union(parts) => parts.iter().all(|ty| accepts(expected, ty)),
             _ => false,

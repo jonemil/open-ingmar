@@ -238,10 +238,29 @@ observed refinement rules.
 
 **Interpretation:** structural field refinement follows declaration identity,
 not object identity or structural shape equality. The accepted String result
-through `y` does not prove that its runtime field changed. Our expanded
-structural shapes currently discard the declaration identity needed to reproduce
-this checking behavior; keying flow by identical shapes would conflate distinct
-typedefs and inline annotations.
+through `y` does not prove that its runtime field changed; keying flow by
+identical shapes would conflate distinct typedefs and inline annotations.
+
+Further strict probes distinguish union groups from their constituents. After
+`x.pair[0] = "changed"`, with `x as Record or Other`:
+
+| Other receiver annotation | Accepted slot-zero result |
+|---|---|
+| `y as Other` | Number; String rejected |
+| `y as Record or Other` | String; Number rejected |
+| `y as Combined`, with `typedef Combined as Record or Other` | String |
+
+Reading `x.pair[0]` itself also accepts String. These outcomes support a separate
+view for the canonical declaration group, shared across equivalent union
+annotations, without changing the component declarations' views.
+
+The complete application's `StructuralFields` module also passes strict
+checking for field reassignment, nullable field guards, branch joins, and
+loop-carried appends. SDK and generated simulator output match. Its shared-view
+function returns a statically String-typed slot as runtime Number `1` when the
+two arguments are different fresh owners. This directly demonstrates the
+checker limitation; the generated program must still load the actual receiver's
+field rather than cache another owner's reference or value.
 
 The complete application's `ExternalFields` module checks ordinary source
 instance behavior with both SDK and generated PRGs. Matching simulator output

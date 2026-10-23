@@ -2,6 +2,82 @@
 use crate::{ParameterType, ReturnType, api::Type};
 use std::collections::BTreeMap;
 
+/// Compare value contracts by shape, retaining exact source classes while
+/// ignoring structural declaration provenance at any nesting depth.
+pub(crate) fn same_result(a: &ReturnType, b: &ReturnType) -> bool {
+    match (a.source_contract(), b.source_contract()) {
+        (Some(a), Some(b)) => {
+            a.classes == b.classes
+                && a.nullable == b.nullable
+                && same_alternatives(&a.native, &b.native)
+        }
+        (None, None) => same_type(&a.api_type(), &b.api_type()),
+        _ => false,
+    }
+}
+
+fn same_parameter(a: &ParameterType, b: &ParameterType) -> bool {
+    match (a.source_contract(), b.source_contract()) {
+        (Some(a), Some(b)) => {
+            a.classes == b.classes
+                && a.nullable == b.nullable
+                && same_alternatives(&a.native, &b.native)
+        }
+        (None, None) => same_type(&a.api_type(), &b.api_type()),
+        _ => false,
+    }
+}
+
+fn same_alternatives(a: &[Type], b: &[Type]) -> bool {
+    a.iter().all(|a| b.iter().any(|b| same_type(a, b)))
+        && b.iter().all(|b| a.iter().any(|a| same_type(a, b)))
+}
+
+/// Compare invariant type shapes without making static flow provenance nominal.
+/// This is equality, not widening or subtype assignability.
+pub(crate) fn same_type(a: &Type, b: &Type) -> bool {
+    if a == b {
+        return true;
+    }
+    match (a, b) {
+        (Type::Structural(a), Type::Structural(b)) => {
+            a.fields.len() == b.fields.len()
+                && a.methods.len() == b.methods.len()
+                && a.fields.iter().all(|(name, ty)| {
+                    b.fields
+                        .get(name)
+                        .is_some_and(|other| same_result(ty, other))
+                })
+                && a.methods.iter().all(|(name, method)| {
+                    b.methods
+                        .get(name)
+                        .is_some_and(|other| method.accepts(other))
+                })
+        }
+        (Type::Callback(a), Type::Callback(b)) => a.accepts(b),
+        (Type::Array(a), Type::Array(b)) => same_type(a, b),
+        (Type::Dictionary { key: a, value: av }, Type::Dictionary { key: b, value: bv }) => {
+            same_type(a, b) && same_type(av, bv)
+        }
+        (Type::TupleValue(a), Type::TupleValue(b)) => {
+            a.slots.len() == b.slots.len()
+                && a.slots.iter().zip(&b.slots).all(|(a, b)| same_result(a, b))
+        }
+        (Type::Tuple(a), Type::Tuple(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_type(a, b))
+        }
+        (Type::Union(a), Type::Union(b)) => same_alternatives(a, b),
+        (Type::Union(a), b) => !a.is_empty() && a.iter().all(|a| same_type(a, b)),
+        (a, Type::Union(b)) => !b.is_empty() && b.iter().all(|b| same_type(a, b)),
+        (Type::Options(a), Type::Options(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(name, ty)| b.get(name).is_some_and(|other| same_type(ty, other)))
+        }
+        _ => false,
+    }
+}
+
 /// Extract one finite structural contract and its optional Null alternative.
 pub(crate) fn value_shape(ty: &Type) -> Option<(&crate::StructuralInterface, bool)> {
     match ty {
@@ -241,13 +317,27 @@ fn resolve_api<E>(
 }
 
 /// Required member types for a source `interface` expression.
-/// Names are structural: declaration order and typedef names carry no identity.
+/// Assignability depends on member shapes. Optional declaration provenance
+/// distinguishes tuple-field flow views without introducing a runtime class.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralInterface {
+    /// Source declaration provenance for tuple-field flow. This participates in
+    /// saved model identity, but structural assignability ignores it.
+    pub declaration: Option<StructuralDeclaration>,
     /// Mutable member fields with invariant value contracts.
     pub fields: BTreeMap<String, ReturnType>,
     /// Required instance methods, indexed by member name.
     pub methods: BTreeMap<String, StructuralMethod>,
+}
+
+/// A structural declaration's location within the supplied source sequence.
+/// Saved IR retains this static identity; it has no VM or runtime representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StructuralDeclaration {
+    /// Index in the source sequence supplied to compilation.
+    pub source: usize,
+    /// Byte offset of the interface declaration in that source.
+    pub offset: usize,
 }
 
 /// A fixed-arity instance method required by a structural interface.
@@ -384,6 +474,9 @@ impl StructuralInterface {
     /// Check supported names, arity, and member contracts before IR use.
     /// Interface declarations do not create runtime class values or method bodies.
     pub fn validate(&self) -> Result<(), String> {
+        if self.declaration.is_some() && !self.fields.values().any(crate::field_flow::positional) {
+            return Err("declaration provenance requires a tuple-valued field".into());
+        }
         if !shape_depth(self, 0) {
             return Err("interface contract nesting exceeds 64 levels".into());
         }
@@ -442,16 +535,17 @@ impl StructuralInterface {
 
     pub(crate) fn accepts(&self, actual: &Type) -> bool {
         if let Type::Structural(other) = actual {
-            return self
-                .fields
-                .iter()
-                .all(|(name, ty)| other.fields.get(name) == Some(ty))
-                && self.methods.iter().all(|(name, method)| {
-                    other
-                        .methods
-                        .get(name)
-                        .is_some_and(|other| method.accepts(other))
-                });
+            return self.fields.iter().all(|(name, ty)| {
+                other
+                    .fields
+                    .get(name)
+                    .is_some_and(|other| same_result(ty, other))
+            }) && self.methods.iter().all(|(name, method)| {
+                other
+                    .methods
+                    .get(name)
+                    .is_some_and(|other| method.accepts(other))
+            });
         }
         if let Type::Named(name) = actual {
             if let Some(actual) = Self::from_api(name) {
@@ -469,6 +563,7 @@ impl StructuralInterface {
     pub(crate) fn from_api(name: &str) -> Option<Self> {
         let declaration = crate::api::core().interface(name)?;
         Some(Self {
+            declaration: None,
             fields: BTreeMap::new(),
             methods: declaration
                 .methods
@@ -487,6 +582,10 @@ impl StructuralInterface {
     }
 
     pub(crate) fn tag(&self) -> String {
+        let declaration = self
+            .declaration
+            .into_iter()
+            .map(|d| format!("d({}@{})", d.source, d.offset));
         let fields = self
             .fields
             .iter()
@@ -507,7 +606,11 @@ impl StructuralInterface {
         });
         format!(
             "interface({})",
-            fields.chain(methods).collect::<Vec<_>>().join(";")
+            declaration
+                .chain(fields)
+                .chain(methods)
+                .collect::<Vec<_>>()
+                .join(";")
         )
     }
 }
@@ -546,12 +649,35 @@ pub(crate) fn parse(tag: &str) -> Result<StructuralInterface, &'static str> {
         .and_then(|s| s.strip_suffix(')'))
         .ok_or("invalid interface tag")?;
     let mut shape = StructuralInterface {
+        declaration: None,
         fields: BTreeMap::new(),
         methods: BTreeMap::new(),
     };
     if !body.is_empty() {
         for member in split(body, ';')? {
-            if let Some(field) = member.strip_prefix("f(").and_then(|s| s.strip_suffix(')')) {
+            if let Some(origin) = member.strip_prefix("d(").and_then(|s| s.strip_suffix(')')) {
+                let (source, offset) = origin
+                    .split_once('@')
+                    .ok_or("invalid structural declaration")?;
+                let number = |text: &str| {
+                    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+                        return Err("invalid structural declaration location");
+                    }
+                    text.parse::<usize>()
+                        .map_err(|_| "structural declaration location exceeds usize")
+                };
+                if shape
+                    .declaration
+                    .replace(StructuralDeclaration {
+                        source: number(source)?,
+                        offset: number(offset)?,
+                    })
+                    .is_some()
+                {
+                    return Err("duplicate structural declaration provenance");
+                }
+            } else if let Some(field) = member.strip_prefix("f(").and_then(|s| s.strip_suffix(')'))
+            {
                 let (name, tag) = field.split_once('=').ok_or("invalid interface field tag")?;
                 if shape
                     .fields
@@ -629,6 +755,12 @@ impl StructuralMethod {
     }
 
     pub(crate) fn accepts(&self, actual: &Self) -> bool {
-        self == actual
+        self.parameters.len() == actual.parameters.len()
+            && self
+                .parameters
+                .iter()
+                .zip(&actual.parameters)
+                .all(|(a, b)| same_parameter(a, b))
+            && same_result(&self.result, &actual.result)
     }
 }

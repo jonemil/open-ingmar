@@ -38,7 +38,7 @@ mod source_objects;
 mod source_union;
 mod structural;
 pub use source_union::SourceUnion;
-pub use structural::{StructuralInterface, StructuralMethod};
+pub use structural::{StructuralDeclaration, StructuralInterface, StructuralMethod};
 mod field_flow;
 mod source_types;
 mod tuples;
@@ -1103,6 +1103,8 @@ pub enum Operation {
         receiver: ValueId,
         member: String,
         field_type: Option<ReturnType>,
+        /// Reconstructed tuple-field flow view for a structural declaration.
+        view_type: Option<ReturnType>,
     },
     /// Write a declared field after evaluating its receiver and new value.
     /// A source field contract requires independent declaring-unit validation.
@@ -2649,8 +2651,14 @@ impl Function {
                     receiver,
                     ref member,
                     ref field_type,
+                    ref view_type,
                 } => {
                     validate_call_names(None, member).map_err(fail)?;
+                    if field_type.is_some() && view_type.is_some() {
+                        return Err(fail(
+                            "source field metadata cannot carry a structural flow view",
+                        ));
+                    }
                     let ty = if let Some(ty) = field_type {
                         crate::source_fields::receiver(origins.contract(receiver))
                             .map_err(|e| fail(&e))?;
@@ -2664,8 +2672,15 @@ impl Function {
                         }
                         ty.clone()
                     } else {
-                        crate::structural::field_contract(&type_of(receiver).api_type(), member)
-                            .map_err(|message| fail(&message))?
+                        let declared = crate::structural::field_contract(
+                            &type_of(receiver).api_type(),
+                            member,
+                        )
+                        .map_err(|message| fail(&message))?;
+                        if view_type.is_some() && !crate::field_flow::positional(&declared) {
+                            return Err(fail("structural flow view requires a tuple-valued field"));
+                        }
+                        view_type.clone().unwrap_or(declared)
                     };
                     types.insert(result, call_result_type(ty).map_err(fail)?);
                     (Some(result), vec![receiver])
@@ -4328,6 +4343,7 @@ impl Function {
                     receiver,
                     ref member,
                     ref field_type,
+                    ref view_type,
                 } => format!(
                     ".member-read %{0} %{1} {member}{2}",
                     result.0,
@@ -4335,6 +4351,9 @@ impl Function {
                     field_type
                         .as_ref()
                         .map(|ty| format!(" field={}", type_text::result_tag(ty)))
+                        .or_else(|| view_type
+                            .as_ref()
+                            .map(|ty| format!(" view={}", type_text::result_tag(ty))))
                         .unwrap_or_default()
                 ),
                 Operation::MemberWrite {
@@ -4881,7 +4900,7 @@ fn compile_fragment(
             .validate_api(context)
             .map_err(|error| error.diagnostic)?;
     }
-    let parsed = parser::declarations(source, aliases)?;
+    let parsed = parser::declarations(source, aliases, 0)?;
     if !parsed.classes.is_empty() || parsed.functions.len() != 1 || parsed.functions[0].0.is_some()
     {
         return Err(Diagnostic::at(

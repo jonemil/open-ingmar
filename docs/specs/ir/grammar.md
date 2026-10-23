@@ -167,7 +167,7 @@ storage-operation = ".parameter" value-id decimal-usize
                   | (".read" | ".take") value-id local-id
                   | ".read-self" value-id identifier call-result-metadata? field-entry-metadata?
                   | ".assign-self" identifier value-id
-                  | ".member-read" value-id value-id identifier source-field-metadata?
+                  | ".member-read" value-id value-id identifier member-read-metadata?
                   | ".member-write" value-id identifier value-id source-field-metadata?
                   | ".bind-method" value-id value-id value-id callback-tag
 unary-operation = unary-directive value-id value-id
@@ -216,6 +216,7 @@ class-set = identifier ("|" identifier)*
 call-result-metadata = "result=" call-result-tag
 field-entry-metadata = "declared=" call-result-tag
 source-field-metadata = "field=" call-result-tag
+member-read-metadata = source-field-metadata | "view=" call-result-tag
 object-operation = ".new-native" value-id class-path
                  | ".new-source" value-id identifier native-base value-id*
                  | ".base-initialize" native-base
@@ -317,7 +318,10 @@ tuple-slots = call-result-tag (";" call-result-tag)*
 callback-tag = "callback(" callback-arguments? "=>" callback-result-tag ")"
 callback-arguments = parameter-tag (";" parameter-tag)*
 callback-result-tag = parameter-tag | "void"
-structural-tag = "interface(" structural-members? ")"
+structural-tag = "interface(" structural-body? ")"
+structural-body = structural-declaration (";" structural-members)?
+                | structural-members
+structural-declaration = "d(" decimal-usize "@" decimal-usize ")"
 structural-members = structural-member-tag (";" structural-member-tag)*
 structural-member-tag = "f(" identifier "=" structural-value-tag ")"
                       | "m(" identifier "(" structural-arguments? ")="
@@ -388,6 +392,15 @@ Nullable callbacks use an ordinary union with Null. Array element tags and
 Dictionary key/value tags retain full callback signatures under their content
 restrictions. `.bind-method` records a checked signature claim; the
 [callback rules](README.md#typed-callback-contracts) define validation and erasure.
+
+Structural declaration provenance is optional and precedes the member map in
+canonical output: `interface(d(0@81);f(pair=tuple(integer;string)))`. It is valid
+only for a shape containing a tuple-valued field. The location is a source index
+and byte offset, scoped to the unit; saved IR does not need the original files.
+Provenance distinguishes field-flow views without making assignability nominal.
+Structural reads may use `view=tag`; source-instance reads use `field=tag`.
+These alternatives cannot be combined. Their proofs and omitted-metadata rules
+are specified under [source interface contracts](README.md#source-interface-contracts).
 
 Structural tags contain name-ordered field records followed by name-ordered
 methods; declaration order is not identity. Empty contracts use `interface()`.

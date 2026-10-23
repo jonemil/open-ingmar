@@ -37,13 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Preserve structural declaration identity through source and saved IR
-  before tracking tuple-valued structural fields. Match the
-  [SDK probes](investigations/compiler-tuples.md#other-instance-field-probes):
-  parameters sharing a typedef share field refinements; distinct typedefs and
-  inline declarations stay independent. Cover writes/appends, branch joins,
-  aliases/reassignment, and call resets. Keep structural assignability
-  independent of this flow identity.
 - [ ] Enable tuple receivers for `remove`, `removeAll`, `reverse`, `slice`,
   `sort`, `indexOf`, `method`, and `weak`, checking resulting shape/element
   contracts and mutation effects across saved stages.

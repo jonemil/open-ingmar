@@ -362,6 +362,79 @@ module ExternalFields {
     }
 }
 
+typedef FieldRecord as interface { var pair as Pair; };
+typedef OtherRecord as interface { var pair as Pair; };
+typedef OptionalRecord as interface { var pair as Pair or Null; };
+class OptionalFieldOwner { var pair as Pair or Null; }
+
+module StructuralFields {
+    function write(x as FieldRecord) as Lang.String {
+        x.pair[0] = "structural";
+        return x.pair[0];
+    }
+    function shared(x as FieldRecord, y as FieldRecord) as Lang.String {
+        x.pair[0] = "shared";
+        return y.pair[0];
+    }
+    function distinct(x as FieldRecord, y as OtherRecord) as Lang.Number {
+        x.pair[0] = "distinct";
+        return y.pair[0];
+    }
+    function aliased(x as FieldRecord) as Lang.String {
+        var y = x;
+        y.pair[0] = "alias";
+        return x.pair[0];
+    }
+    function append(x as FieldRecord) as Lang.Number {
+        x.pair.add(true);
+        x.pair.addAll([2, "tail"]);
+        return x.pair.size();
+    }
+    function branch(x as FieldRecord, flag as Lang.Boolean) as Lang.Number or Lang.Boolean {
+        if (flag) { x.pair[0] = true; }
+        return x.pair[0];
+    }
+    function replace(x as FieldRecord) as Lang.Number {
+        x.pair[0] = "old";
+        x.pair = [7, "replacement"];
+        return x.pair[0];
+    }
+    function reset(x as FieldRecord) as Void { x.pair = [8, "reset"]; }
+    function afterCall(x as FieldRecord) as Lang.Number {
+        x.pair[0] = "old";
+        reset(x);
+        return x.pair[0];
+    }
+    function repeated(x as FieldRecord, n as Lang.Number)
+        as Lang.Array<Lang.Number or Lang.String or Lang.Boolean> {
+        for (var i = 0; i < n; i++) { x.pair.add(true); }
+        return x.pair;
+    }
+    function optional(x as OptionalRecord) as Lang.Number {
+        if (x.pair != null) { x.pair.add(true); return x.pair.size(); }
+        return 0;
+    }
+    function run() as Void {
+        System.println(write(new ExternalOwner()));
+        var owner = new ExternalOwner();
+        System.println(shared(owner, owner));
+        System.println(shared(new ExternalOwner(), new ExternalOwner()));
+        System.println(distinct(new ExternalOwner(), new ExternalOwner()));
+        System.println(aliased(new ExternalOwner()));
+        System.println(append(new ExternalOwner()));
+        System.println(branch(new ExternalOwner(), true));
+        System.println(branch(new ExternalOwner(), false));
+        System.println(replace(new ExternalOwner()));
+        System.println(afterCall(new ExternalOwner()));
+        System.println(repeated(new ExternalOwner(), 0).size());
+        System.println(repeated(new ExternalOwner(), 2).size());
+        var selected = new OptionalFieldOwner();
+        System.println(optional(selected));
+        selected.pair = [1, "optional"];
+        System.println(optional(selected));
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -449,6 +522,7 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(Receivers.chain()[3]);
         FieldCases.run();
         ExternalFields.run();
+        StructuralFields.run();
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

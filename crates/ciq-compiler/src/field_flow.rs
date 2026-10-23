@@ -4,7 +4,43 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-type State = BTreeMap<String, ReturnType>;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum Field {
+    SelfField(String),
+    Structural(Vec<crate::StructuralDeclaration>, String),
+}
+type State = BTreeMap<Field, ReturnType>;
+
+/// Resolve a field on a canonical structural declaration group. A union's
+/// group is distinct from its constituents, matching the SDK's polytype views.
+fn member_fields(receiver: &Type, member: &str) -> Vec<(Field, ReturnType)> {
+    let mut origins = Vec::new();
+    let mut declared = None;
+    for part in crate::unions::alternatives(receiver) {
+        let Type::Structural(shape) = part else {
+            return vec![];
+        };
+        let Some(origin) = shape.declaration else {
+            return vec![];
+        };
+        let Some(ty) = shape.fields.get(member).filter(|ty| positional(ty)) else {
+            return vec![];
+        };
+        origins.push(origin);
+        declared = match declared {
+            None => Some(ty.clone()),
+            Some(previous) => join(&previous, ty),
+        };
+        if declared.is_none() {
+            return vec![];
+        }
+    }
+    origins.sort();
+    origins.dedup();
+    declared
+        .map(|ty| vec![(Field::Structural(origins, member.into()), ty)])
+        .unwrap_or_default()
+}
 
 /// Check whether a declaration includes a positional field alternative.
 pub(crate) fn positional(ty: &ReturnType) -> bool {
@@ -98,52 +134,108 @@ fn value_contract(types: &crate::source_types::Types, value: ValueId) -> Option<
 }
 
 /// Derive field-read contracts without trusting their claimed result types.
-/// Fixed receiver captures preserve direct field provenance; inferred aliases
-/// establish independent views. Calls and explicit field assignments reset views.
+/// Direct captures retain field provenance. Named tuple aliases establish
+/// independent views; structural owner aliases retain their declaration identity.
 pub(crate) fn reads(
     ops: &[LocatedOperation],
     parameters: Vec<ParameterType>,
 ) -> Result<BTreeMap<usize, ReturnType>, IrError> {
+    let structure = crate::control_flow::prefix(ops);
+    let facts = crate::type_flow::inputs(&structure, ops);
     let mut entry = State::new();
+    let mut read_fields = BTreeMap::<usize, Vec<Field>>::new();
+    let mut assign_fields = BTreeMap::<usize, Vec<Field>>::new();
+    let mut types = crate::source_types::Types::new(parameters.clone());
     for (at, located) in ops.iter().enumerate() {
-        if let Operation::SelfFieldRead {
-            field,
-            result_type,
-            declared_type,
-            ..
-        } = &located.operation
-        {
-            let declared = declared_type.as_ref().unwrap_or(result_type);
-            if declared_type.is_some() && !positional(declared) {
-                return Err(fail(
-                    at,
-                    "field entry metadata requires a positional contract",
-                ));
-            }
-            if positional(declared) {
-                if let Some(old) = entry.get(field) {
-                    if declared_type.is_some() && old != declared {
-                        return Err(fail(at, "inconsistent field entry contracts"));
-                    }
-                } else {
-                    entry.insert(field.clone(), declared.clone());
+        let op = &located.operation;
+        crate::type_flow::update(&mut types.facts, &facts, op);
+        let mut declarations = Vec::new();
+        match op {
+            Operation::SelfFieldRead {
+                field,
+                result_type,
+                declared_type,
+                ..
+            } => {
+                let declared = declared_type.as_ref().unwrap_or(result_type);
+                if declared_type.is_some() && !positional(declared) {
+                    return Err(fail(
+                        at,
+                        "field entry metadata requires a positional contract",
+                    ));
+                }
+                if positional(declared) {
+                    declarations.push((Field::SelfField(field.clone()), declared.clone()));
+                    read_fields.insert(
+                        at,
+                        declarations.iter().map(|(key, _)| key.clone()).collect(),
+                    );
                 }
             }
+            Operation::MemberRead {
+                receiver,
+                member,
+                field_type: None,
+                view_type,
+                ..
+            } => {
+                declarations = types
+                    .value_type(*receiver)
+                    .map(|ty| member_fields(ty, member))
+                    .unwrap_or_default();
+                if !declarations.is_empty() {
+                    read_fields.insert(
+                        at,
+                        declarations.iter().map(|(key, _)| key.clone()).collect(),
+                    );
+                } else if view_type.is_some() {
+                    return Err(fail(
+                        at,
+                        "structural flow view requires tuple-field declaration provenance",
+                    ));
+                }
+            }
+            Operation::SelfFieldAssign { field, .. } => {
+                assign_fields.insert(at, vec![Field::SelfField(field.clone())]);
+            }
+            Operation::MemberWrite {
+                receiver,
+                member,
+                field_type: None,
+                ..
+            } => {
+                declarations = types
+                    .value_type(*receiver)
+                    .map(|ty| member_fields(ty, member))
+                    .unwrap_or_default();
+                if !declarations.is_empty() {
+                    assign_fields.insert(
+                        at,
+                        declarations.iter().map(|(key, _)| key.clone()).collect(),
+                    );
+                }
+            }
+            _ => {}
         }
+        for (key, declared) in declarations {
+            if entry.get(&key).is_some_and(|old| *old != declared) {
+                return Err(fail(at, "inconsistent field entry contracts"));
+            }
+            entry.insert(key, declared);
+        }
+        types.observe(op);
     }
     if entry.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let structure = crate::control_flow::prefix(ops);
-    let facts = crate::type_flow::inputs(&structure, ops);
     let mut types = crate::source_types::Types::new(parameters);
-    let mut origins = BTreeMap::<ValueId, String>::new();
-    let mut locals = BTreeMap::<LocalId, String>::new();
-    let mut conditions = BTreeMap::<ValueId, (String, bool)>::new();
-    let mut guard_origins = BTreeMap::<ValueId, String>::new();
-    let mut guard_locals = BTreeMap::<LocalId, String>::new();
-    let mut events = BTreeMap::<usize, (String, ReturnType)>::new();
-    let mut assignments = BTreeMap::<usize, (String, ReturnType)>::new();
+    let mut origins = BTreeMap::<ValueId, Vec<Field>>::new();
+    let mut locals = BTreeMap::<LocalId, Vec<Field>>::new();
+    let mut conditions = BTreeMap::<ValueId, (Vec<Field>, bool)>::new();
+    let mut guard_origins = BTreeMap::<ValueId, Vec<Field>>::new();
+    let mut guard_locals = BTreeMap::<LocalId, Vec<Field>>::new();
+    let mut events = BTreeMap::<usize, (Vec<Field>, ReturnType)>::new();
+    let mut branches = BTreeMap::new();
     for (at, located) in ops.iter().enumerate() {
         let op = &located.operation;
         crate::type_flow::update(&mut types.facts, &facts, op);
@@ -151,18 +243,49 @@ pub(crate) fn reads(
         if barrier(op) {
             guard_origins.clear();
             guard_locals.clear();
+            conditions.clear();
+        }
+        if let Some(fields) = read_fields.get(&at) {
+            let result = match op {
+                Operation::SelfFieldRead { result, .. } | Operation::MemberRead { result, .. } => {
+                    *result
+                }
+                _ => unreachable!(),
+            };
+            origins.insert(result, fields.clone());
+            guard_origins.insert(result, fields.clone());
+        }
+        if let Some(fields) = assign_fields.get(&at) {
+            guard_origins.retain(|_, keys| !keys.iter().any(|key| fields.contains(key)));
+            guard_locals.retain(|_, keys| !keys.iter().any(|key| fields.contains(key)));
+            conditions.retain(|_, (keys, _)| !keys.iter().any(|key| fields.contains(key)));
+            let value = match op {
+                Operation::SelfFieldAssign { value, .. } | Operation::MemberWrite { value, .. } => {
+                    *value
+                }
+                _ => unreachable!(),
+            };
+            let ty = value_contract(&types, value)
+                .ok_or_else(|| fail(at, "cannot derive field assignment contract"))?;
+            events.insert(
+                at,
+                (
+                    fields
+                        .iter()
+                        .filter(|key| entry.contains_key(*key))
+                        .cloned()
+                        .collect(),
+                    ty,
+                ),
+            );
         }
         match op {
-            Operation::SelfFieldRead { result, field, .. } if entry.contains_key(field) => {
-                origins.insert(*result, field.clone());
-                guard_origins.insert(*result, field.clone());
-            }
             Operation::LocalInitialize { local, value } => {
-                if let Some(field) = origins.get(value) {
-                    locals.insert(*local, field.clone());
+                if let Some(fields) = origins.get(value) {
+                    locals.insert(*local, fields.clone());
                 }
-                if let Some(field) = guard_origins.get(value) {
-                    guard_locals.insert(*local, field.clone());
+                if let Some(fields) = guard_origins.get(value) {
+                    guard_locals.insert(*local, fields.clone());
                 }
             }
             Operation::LocalAssign { local, .. } | Operation::LocalVariable { local, .. } => {
@@ -170,30 +293,23 @@ pub(crate) fn reads(
                 guard_locals.remove(local);
             }
             Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
-                if let Some(field) = locals.get(local) {
-                    origins.insert(*result, field.clone());
+                if let Some(fields) = locals.get(local) {
+                    origins.insert(*result, fields.clone());
                 }
-                if let Some(field) = guard_locals.get(local) {
-                    guard_origins.insert(*result, field.clone());
-                }
-            }
-            Operation::SelfFieldAssign { field, value } if entry.contains_key(field) => {
-                guard_origins.retain(|_, name| name != field);
-                guard_locals.retain(|_, name| name != field);
-                if let Some(ty) = value_contract(&types, *value) {
-                    assignments.insert(at, (field.clone(), ty));
+                if let Some(fields) = guard_locals.get(local) {
+                    guard_origins.insert(*result, fields.clone());
                 }
             }
             Operation::TupleWrite { result, array, .. }
             | Operation::TupleAppend { result, array, .. } => {
-                if let Some(field) = origins.get(array).cloned() {
-                    origins.insert(*result, field.clone());
+                if let Some(fields) = origins.get(array).cloned() {
+                    origins.insert(*result, fields.clone());
                     if guard_origins.contains_key(array) {
-                        guard_origins.insert(*result, field.clone());
+                        guard_origins.insert(*result, fields.clone());
                     }
                     let ty = value_contract(&types, *result)
                         .ok_or_else(|| fail(at, "cannot derive tuple field mutation contract"))?;
-                    events.insert(at, (field, ty));
+                    events.insert(at, (fields, ty));
                 }
             }
             Operation::Compare {
@@ -206,60 +322,45 @@ pub(crate) fn reads(
                 crate::ComparisonOp::Equal | crate::ComparisonOp::NotEqual
             ) =>
             {
-                let field = if types.value_type(*left) == Some(&Type::Null) {
+                let fields = if types.value_type(*left) == Some(&Type::Null) {
                     guard_origins.get(right)
                 } else if types.value_type(*right) == Some(&Type::Null) {
                     guard_origins.get(left)
                 } else {
                     None
                 };
-                if let Some(field) = field {
+                if let Some(fields) = fields {
                     conditions.insert(
                         *result,
-                        (field.clone(), *kind == crate::ComparisonOp::NotEqual),
+                        (fields.clone(), *kind == crate::ComparisonOp::NotEqual),
                     );
                 }
             }
+            Operation::Branch {
+                condition,
+                on_true,
+                on_false,
+            } => {
+                if let Some(test) = conditions.get(condition) {
+                    branches.insert(structure.blocks[at], (*on_true, *on_false, test.clone()));
+                }
+            }
             Operation::Not { result, operand } => {
-                if let Some((field, non_null)) = conditions.get(operand).cloned() {
-                    conditions.insert(*result, (field, !non_null));
+                if let Some((fields, non_null)) = conditions.get(operand).cloned() {
+                    conditions.insert(*result, (fields, !non_null));
                 }
             }
             _ => {}
         }
     }
-    let branches = ops
-        .iter()
-        .enumerate()
-        .filter_map(|(at, located)| {
-            if let Operation::Branch {
-                condition,
-                on_true,
-                on_false,
-            } = located.operation
-            {
-                conditions
-                    .get(&condition)
-                    .map(|test| (structure.blocks[at], (on_true, on_false, test.clone())))
-            } else {
-                None
-            }
-        })
-        .collect::<BTreeMap<_, _>>();
     let transfer = |state: &mut State, at: usize| {
-        let op = &ops[at].operation;
-        if barrier(op) {
+        if barrier(&ops[at].operation) {
             *state = entry.clone();
         }
-        if let Operation::SelfFieldAssign { field, .. } = op {
-            if let Some((_, ty)) = assignments.get(&at) {
-                state.insert(field.clone(), ty.clone());
-            } else if let Some(ty) = entry.get(field) {
+        if let Some((fields, ty)) = events.get(&at) {
+            for field in fields {
                 state.insert(field.clone(), ty.clone());
             }
-        }
-        if let Some((field, ty)) = events.get(&at) {
-            state.insert(field.clone(), ty.clone());
         }
     };
     let mut incoming = structure
@@ -279,11 +380,13 @@ pub(crate) fn reads(
                 let Some(mut state) = outgoing[pred].clone() else {
                     continue;
                 };
-                if let Some((yes, no, (field, positive))) = branches.get(pred) {
+                if let Some((yes, no, (fields, positive))) = branches.get(pred) {
                     if yes != no {
                         let non_null = if block == *yes { *positive } else { !*positive };
-                        if let Some(ty) = state.get_mut(field) {
-                            *ty = restrict(ty, non_null);
+                        for field in fields {
+                            if let Some(ty) = state.get_mut(field) {
+                                *ty = restrict(ty, non_null);
+                            }
                         }
                     }
                 }
@@ -299,7 +402,7 @@ pub(crate) fn reads(
                 }
             }
             let mut output = state.clone();
-            for (at, _) in ops.iter().enumerate() {
+            for at in 0..ops.len() {
                 if structure.blocks[at] == block {
                     transfer(&mut output, at);
                 }
@@ -322,10 +425,14 @@ pub(crate) fn reads(
         if let Operation::Block { block } = located.operation {
             state = incoming[&block].clone().unwrap_or_else(|| entry.clone());
         }
-        if let Operation::SelfFieldRead { field, .. } = &located.operation {
-            if let Some(ty) = state.get(field) {
-                result.insert(at, ty.clone());
-            }
+        if let Some(fields) = read_fields.get(&at) {
+            let mut views = fields.iter().map(|field| state[field].clone());
+            let first = views.next().expect("tracked field alternatives");
+            let ty = views.try_fold(first, |a, b| {
+                join(&a, &b)
+                    .ok_or_else(|| fail(at, "field alternatives have no supported view join"))
+            })?;
+            result.insert(at, ty);
         }
         transfer(&mut state, at);
     }
@@ -356,6 +463,30 @@ pub(crate) fn prefix_read(
         .ok_or_else(|| "cannot derive tuple field read".into())
 }
 
+/// Infer a new structural field read from its declared owner provenance and
+/// already-emitted effects. Untracked declarations retain ordinary field reads.
+pub(crate) fn prefix_member_read(
+    ops: &[LocatedOperation],
+    receiver: ValueId,
+    member: &str,
+    parameters: Vec<ParameterType>,
+) -> Result<Option<ReturnType>, String> {
+    let mut candidate = ops.to_vec();
+    candidate.push(LocatedOperation {
+        operation: Operation::MemberRead {
+            result: ValueId(ops.len() as u32),
+            receiver,
+            member: member.into(),
+            field_type: None,
+            view_type: None,
+        },
+        span: None,
+    });
+    Ok(reads(&candidate, parameters)
+        .map_err(|e| e.message)?
+        .remove(&ops.len()))
+}
+
 /// Solve field and frame-local read annotations together after all backedges
 /// are known. Reject unsupported joins or inference that does not converge.
 pub(crate) fn normalize(
@@ -365,6 +496,13 @@ pub(crate) fn normalize(
     if !ops.iter().any(|op| {
         matches!(&op.operation, Operation::SelfFieldRead { result_type, declared_type, .. }
         if declared_type.is_some() || positional(result_type))
+            || matches!(
+                &op.operation,
+                Operation::MemberRead {
+                    field_type: None,
+                    ..
+                }
+            )
     }) {
         return crate::local_flow::normalize(ops, parameters);
     }
@@ -372,11 +510,20 @@ pub(crate) fn normalize(
         let inferred = reads(ops, parameters.clone())?;
         let mut changed = false;
         for (at, ty) in inferred {
-            if let Operation::SelfFieldRead { result_type, .. } = &mut ops[at].operation {
-                if *result_type != ty {
-                    *result_type = ty;
-                    changed = true;
+            match &mut ops[at].operation {
+                Operation::SelfFieldRead { result_type, .. } => {
+                    if *result_type != ty {
+                        *result_type = ty;
+                        changed = true;
+                    }
                 }
+                Operation::MemberRead { view_type, .. } => {
+                    if view_type.as_ref() != Some(&ty) {
+                        *view_type = Some(ty);
+                        changed = true;
+                    }
+                }
+                _ => unreachable!(),
             }
         }
         let before = ops.to_vec();
@@ -395,25 +542,52 @@ pub(crate) fn validate(
     ops: &[LocatedOperation],
     parameters: Vec<ParameterType>,
 ) -> Result<(), IrError> {
-    for (at, ty) in reads(ops, parameters)? {
-        if let Operation::SelfFieldRead { result_type, .. } = &ops[at].operation {
-            if *result_type != ty {
+    let mut types = crate::source_types::Types::new(parameters.clone());
+    let inferred = reads(ops, parameters)?;
+    if inferred.is_empty() {
+        return Ok(());
+    }
+    let structure = crate::control_flow::prefix(ops);
+    let facts = crate::type_flow::inputs(&structure, ops);
+    for (at, op) in ops.iter().enumerate() {
+        crate::type_flow::update(&mut types.facts, &facts, &op.operation);
+        if let Some(expected) = inferred.get(&at) {
+            let claimed = match &op.operation {
+                Operation::SelfFieldRead { result_type, .. } => result_type.clone(),
+                Operation::MemberRead {
+                    receiver,
+                    member,
+                    view_type,
+                    ..
+                } => view_type
+                    .clone()
+                    .or_else(|| {
+                        types
+                            .value_type(*receiver)
+                            .and_then(|ty| crate::structural::field_contract(ty, member).ok())
+                    })
+                    .ok_or_else(|| fail(at, "cannot resolve structural field declaration"))?,
+                _ => unreachable!(),
+            };
+            if claimed != *expected {
                 return Err(fail(
                     at,
                     "field read contract is not established on every incoming path",
                 ));
             }
         }
+        types.observe(&op.operation);
     }
     Ok(())
 }
 
-/// Recover a direct field receiver through immutable staging captures. Named
-/// inferred aliases deliberately do not update the field's flow view.
-pub(crate) fn direct_field(ops: &[LocatedOperation], mut value: ValueId) -> Option<String> {
+/// Check direct field provenance through immutable staging captures and append
+/// results. Named inferred tuple aliases deliberately keep independent views.
+pub(crate) fn tracked_receiver(ops: &[LocatedOperation], mut value: ValueId) -> bool {
     for _ in 0..=ops.len() {
-        let operation = ops.iter().find_map(|op| match &op.operation {
+        let Some(operation) = ops.iter().find_map(|op| match &op.operation {
             Operation::SelfFieldRead { result, .. }
+            | Operation::MemberRead { result, .. }
             | Operation::LocalRead { result, .. }
             | Operation::LocalTake { result, .. }
             | Operation::TupleAppend { result, .. }
@@ -423,24 +597,40 @@ pub(crate) fn direct_field(ops: &[LocatedOperation], mut value: ValueId) -> Opti
                 Some(&op.operation)
             }
             _ => None,
-        })?;
+        }) else {
+            return false;
+        };
         match operation {
             Operation::SelfFieldRead {
-                field,
                 declared_type: Some(_),
                 ..
-            } => return Some(field.clone()),
+            }
+            | Operation::MemberRead {
+                view_type: Some(_), ..
+            } => return true,
             Operation::LocalRead { local, .. } | Operation::LocalTake { local, .. } => {
-                value = ops.iter().find_map(|op| match op.operation {
-                    Operation::LocalInitialize { local: at, value } if at == *local => Some(value),
-                    _ => None,
-                })?;
+                let Some(original) = capture(ops, *local) else {
+                    return false;
+                };
+                value = original;
             }
             Operation::TupleAppend { array, .. } | Operation::TupleWrite { array, .. } => {
                 value = *array
             }
-            _ => return None,
+            _ => return false,
         }
     }
-    None
+    false
+}
+
+fn capture(ops: &[LocatedOperation], local: LocalId) -> Option<ValueId> {
+    ops.iter().find_map(|op| match op.operation {
+        Operation::LocalInitialize { local: at, value } if at == local => Some(value),
+        _ => None,
+    })
+}
+
+/// Check whether one immutable staging local captures a tracked field receiver.
+pub(crate) fn captured_receiver(ops: &[LocatedOperation], local: LocalId) -> bool {
+    capture(ops, local).is_some_and(|value| tracked_receiver(ops, value))
 }

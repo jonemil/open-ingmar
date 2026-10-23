@@ -75,7 +75,14 @@ content contracts. Fields and lexical casts retain their existing domains.
 `StructuralInterface` contains name-ordered fields with `ReturnType` contracts
 and `StructuralMethod` signatures with `ParameterType` arguments and a
 `ReturnType` result. `api::Type::Structural`, parameter/result contracts, joins,
-and fixed storage retain these finite shapes; typedef names do not survive expansion.
+and fixed storage retain these finite shapes. Typedef names are expanded;
+interfaces with tuple-valued fields additionally retain `StructuralDeclaration`
+provenance: source-sequence index and declaration byte offset. Canonical text
+writes it as `d(source@offset)` before the member map. Separate declarations can
+have identical shapes while retaining independent field-flow views. Model
+equality retains provenance for exact saved-stage checks; structural
+assignability and invariant signature comparison ignore it, including nested
+containers, fields, callbacks, and exact source-aware member contracts.
 Typed construction and text reload validate names, member/argument/depth limits,
 and canonical supported types. Mutable fields are invariant and method
 signatures match exactly. Exact source member types, including nullable/mixed
@@ -102,7 +109,17 @@ source fields, structural dispatch, and catalogue-provided members.
 Source provenance derives from the declared member contract, rather than its
 native projection. Union receivers check each signature's arguments and join
 results without discarding exact source alternatives. Reads remain snapshots;
-mutation does not change an earlier read's contract or runtime value.
+field replacement does not change an earlier read's contract or captured
+reference. Container mutation can still change the object referenced by a read.
+
+Structural tuple-field reads may carry `view=tag` instead of source-instance
+`field=tag`. Field flow reconstructs the view from declaration provenance;
+it is not an unchecked result assertion. A union's canonical set of declaration
+locations identifies its own flow group, distinct from each constituent.
+Source compilation supplies provenance for tuple-bearing interface declarations.
+An anonymous saved shape without provenance has ordinary declaration-based
+reads and cannot claim a flow view. Omitting `view=` on a tracked read requires
+its reconstructed view to equal the ordinary declared field contract.
 
 `ArrayElement::Structural`, `DictionaryKey::Structural`, and
 `DictionaryValue::Structural` retain finite member maps instead of erasing them
@@ -1928,7 +1945,7 @@ Graphics.Dc alternatives are rejected. Unit declaration validation resolves
 every exact class/native-base pair, including unused union fields; API checks
 visit every retained type.
 
-Field-read result metadata normalizes in both typed and parsed IR. Ordinary
+Field-read result metadata normalizes in both typed and parsed IR. Source-instance
 fields use their declaration's full contract. Positional self-fields may carry
 `declared=tag` after the result metadata: the unit checks that entry tag against
 the class declaration, while field flow derives and checks the result view.
@@ -1949,6 +1966,10 @@ outcomes into an element domain. Direct Null-test edges restrict nullable views.
 Field and local read annotations are normalized together after backedges exist.
 Reload reconstructs the same flow and rejects stale result claims, inconsistent
 entries, and declarations that fail to match the enclosing class.
+Structural fields reuse this analysis with declaration-group keys. Their entry
+contracts come from receiver shapes rather than class-field metadata; member
+writes establish checked incoming views. Frame-local owner copies retain the
+structural declaration group, while named tuple aliases keep independent views.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

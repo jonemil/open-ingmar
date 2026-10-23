@@ -371,6 +371,7 @@ fn union_receivers_check_each_exact_signature_and_join_source_results() {
 #[test]
 fn typed_interface_construction_rejects_void_fields_without_panicking() {
     let shape = ciq_compiler::StructuralInterface {
+        declaration: None,
         fields: [("value".into(), ciq_compiler::ReturnType::Void)].into(),
         methods: Default::default(),
     };

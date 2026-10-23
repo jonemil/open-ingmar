@@ -296,8 +296,15 @@ Static field views retain the SDK's capture/alias limitations in this case.
 For exact source-instance receivers, `obj.field` reads retain the declared field
 contract after mutation, matching the SDK's observed checking limit. A captured
 append result carries its new shape without changing later property reads.
-Structural field receivers still require declaration-scoped refinement support
-and remain outside this mutation profile.
+Tuple-valued structural fields use declaration-scoped views with the same write,
+append, join, guard, assignment, and call-reset rules. Receivers sharing a typedef
+share its field view, including owner aliases and reassignment between parameters
+of that typedef. Distinct typedefs or inline interface declarations keep separate
+views even when their member shapes match. A structural union has its own view
+keyed by its declaration alternatives: equivalent unions share refinements while
+their individual constituents retain independent views. These checking rules
+do not prove that distinct runtime owners alias or that every owner's field
+actually changed. Named tuple aliases still retain their independent views.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts
@@ -3592,8 +3599,9 @@ existing restrictions. Members have no bodies or default values. Duplicate
 names, more than 256 members, more than 254 arguments, and contract nesting
 beyond 64 levels are rejected.
 
-An interface's identity is its member contract, independent of typedef names
-or declaration order. A source class must expose every required field with
+Structural assignability depends on member contracts, independently of typedef
+names, declaration order, and tuple-field flow provenance. A source class must
+expose every required field with
 exactly the same type and every method with exactly the declared parameter and
 result types. Method parameter widening/result narrowing do not establish a
 witness. Extra members are allowed. Declared methods and inherited native

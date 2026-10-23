@@ -13,6 +13,8 @@ Self-field cases check refined reads, branch/loop joins, nullable guards,
 reassignment/call invalidation, and captured receivers across field replacement.
 Other-instance cases cover scalar/reference/tuple fields, single owner
 evaluation, alias/reassignment behavior, and captured append results.
+Structural cases check declaration-scoped field views, distinct same-shaped
+typedefs, owner aliases, branches, loops, nullable guards, and call resets.
 
 From the repository root, using fresh output paths:
 

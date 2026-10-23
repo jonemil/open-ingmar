@@ -238,6 +238,9 @@ new value, and emits `putv`. Member references bind by their stored short names,
 including fields without a directly visible source-class receiver. Exact source
 instances use the same operations and symbols; their `field=tag` metadata is a
 checked declaration contract and adds no runtime instruction or conversion.
+Structural `d(source@offset)` provenance and field-read `view=tag` metadata
+likewise add no runtime representation; refined reads still load the actual
+receiver's property.
 
 Compound writes and steps capture the receiver once before reading the old
 field. Existing typed temporaries stage branching RHS values without moving the

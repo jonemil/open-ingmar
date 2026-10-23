@@ -282,10 +282,12 @@ impl Types {
                 receiver,
                 member,
                 field_type,
+                view_type,
             } => (
                 *result,
                 field_type
                     .as_ref()
+                    .or(view_type.as_ref())
                     .map(crate::ReturnType::api_type)
                     .or_else(|| {
                         self.values

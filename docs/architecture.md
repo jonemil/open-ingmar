@@ -96,7 +96,9 @@ projections, which cannot authorize source dispatch or interface witnesses.
 the derived contracts for slot replacement and append operations;
 it also derives native Array element unions when positional shape is lost.
 `field_flow` reconstructs method-local field views and captured receiver
-provenance across the CFG. It solves field/frame-local annotations together;
+provenance across the CFG. Current-instance fields use field names; structural
+fields use canonical groups of declaration locations, independently of runtime
+owner identity. It solves field/frame-local annotations together;
 `unit` anchors declared field contracts to the enclosing class. Runtime field
 reads remain ordinary property reads rather than cached values.
 `source_fields` shares invariant declaration lookup across exact source-instance

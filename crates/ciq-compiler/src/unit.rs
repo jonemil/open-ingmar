@@ -2189,7 +2189,7 @@ impl CompilationUnit {
                 .iter()
                 .find(|f| f.name == *name)
                 .ok_or_else(|| format!("{class} does not implement field {name}"))?;
-            if field.result_type() != *expected {
+            if !crate::structural::same_result(&field.result_type(), expected) {
                 return Err(format!(
                     "{class}.{name} does not have the invariant interface field type"
                 ));
@@ -2459,7 +2459,7 @@ fn compile_sources_context(
         .iter()
         .enumerate()
         .map(|(source, text)| {
-            parser::declarations(text, aliases.clone())
+            parser::declarations(text, aliases.clone(), source)
                 .map_err(|diagnostic| SourceDiagnostic { source, diagnostic })
         })
         .collect::<Result<Vec<_>, _>>()?;

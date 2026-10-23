@@ -151,9 +151,11 @@ impl Origins {
                 receiver,
                 member,
                 field_type,
+                view_type,
             } => {
                 if let Some(contract) = field_type
                     .clone()
+                    .or_else(|| view_type.clone())
                     .or_else(|| {
                         self.native_values
                             .get(receiver)
