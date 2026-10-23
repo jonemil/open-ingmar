@@ -144,6 +144,42 @@ The complete application's `Append.nested` instead returns the size and prints
 appends. Our direct named-receiver tracking retains both slots; it does not
 establish tracking through arbitrary aliases.
 
+## Field and computed receiver probes
+
+**Experimentally observed, 2026-10-23:** SDK 9.2.0 strict checking distinguishes
+direct fields from indexed aliases. Use the same fr265/minimum 3.0.0 wrapper and
+build procedure above, with `Pair` defined as `[Lang.Number, Lang.String]`.
+
+For a `Box` with `var pair as Pair`, initialized to `[1, "seed"]`, assigning
+`self.pair[0] = "changed"` permits returning `self.pair[0]` as String and rejects
+a Number return. After `self.pair.add(true)`, returning the field as
+`[Number, String, Boolean]` succeeds. Returning that append expression directly
+also succeeds. These observations require a method-local refined field view;
+the declared entry contract alone cannot check subsequent reads.
+
+For `x as [Pair, Lang.Boolean]`, the SDK rejects this attempted parent update:
+
+```monkeyc
+function changed(x as [Pair, Lang.Boolean])
+    as [Lang.Number, Lang.String, Lang.Number] {
+    x[0].add(2);
+    return x[0];
+}
+```
+
+The diagnostic still describes `x[0]` as Pair. Similarly, after
+`x[0][0] = "changed"`, returning `x[0][0]` as String is rejected while a Number
+return is accepted. This is a static tracking limit, not proof that the nested
+runtime value remains Number. Returning `makePair().add(true)` directly with a
+three-slot annotation succeeds.
+
+The complete application's `Receivers` module checks this runtime distinction:
+an indexed append returns the extended reference, the parent observes the same
+mutated Array, and a nested write changes the stored value. Console markers
+check computed/chained calls and nested stores evaluate receiver, index, and
+value effects once in order. Direct field refinements remain outside the
+compiler's current profile.
+
 ## Runtime construction and typed transport
 
 **Experimentally observed, 2026-10-23:** strict SDK 9.2.0 probes accept an

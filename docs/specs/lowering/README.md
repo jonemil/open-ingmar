@@ -378,6 +378,11 @@ The `.array-add`/`.array-add-all` IR forms select those same instructions;
 losing tuple shape changes the checked contract, not the runtime call.
 Dynamic-index tuple writes use the same receiver duplication and `aputv` path
 as known-slot writes, leaving runtime bounds checks in place.
+Computed receiver calls reuse the staged native-call path. Capture the receiver
+once, evaluate arguments once in order, invoke the method, and save its returned
+reference if consumed later. Nested stores use `aputv` on the captured inner
+Array; they neither copy nor replace the outer container. Discarding a tuple
+write's result does not discard the store itself.
 Array availability and each slot's native types are checked separately; View
 construction requires its initializer's 2.1.0 level. No allocation failure
 timing or memory equivalence with SDK lowering is implied. See the

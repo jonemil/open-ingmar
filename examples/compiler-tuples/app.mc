@@ -196,6 +196,42 @@ module Widen {
     }
 }
 
+module Receivers {
+    function pair() as Pair {
+        System.println("computed-receiver");
+        return [1, "seed"];
+    }
+    function flag() as Lang.Boolean {
+        System.println("computed-argument");
+        return false;
+    }
+    function value() as [Lang.Number, Lang.String, Lang.Boolean] {
+        return pair().add(flag());
+    }
+    function all() as [Lang.Number, Lang.String, Lang.Number, Lang.String] {
+        return pair().addAll([2, "tail"]);
+    }
+    function nested(x as [Pair, Lang.Boolean]) as [Lang.Number, Lang.String, Lang.Number] {
+        return x[0].add(2);
+    }
+    function write(x as [Pair, Lang.Boolean]) as Void { x[0][0] = "nested-write"; }
+    function compound(x as [Pair, Lang.Boolean]) as Lang.Number {
+        x[0][0] += 2;
+        x[0][0]++;
+        return x[0][0];
+    }
+    function matrix() as [Pair, Pair] {
+        System.println("matrix");
+        return [[1, "left"], [2, "right"]];
+    }
+    function index() as Lang.Number { System.println("index"); return 0; }
+    function number() as Lang.Number { System.println("value"); return 7; }
+    function orderedWrite() as Void { matrix()[index()][0] = number(); }
+    function chain() as [Lang.Number, Lang.String, Lang.Number, Lang.Boolean] {
+        return pair().add(2).add(true);
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -267,6 +303,20 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         System.println(Widen.allLoop([1, "seed"], 2));
         System.println(Widen.guardedReplace([1, "seed"]));
         System.println(Widen.guardedReplace(null));
+        System.println(Receivers.value()[2]);
+        System.println(Receivers.all()[3]);
+        var nested = [[1, "seed"], true];
+        System.println(Receivers.nested(nested)[2]);
+        System.println(nested[0].size());
+        var changed = [[1, "seed"], true];
+        Receivers.write(changed);
+        System.println(changed[0][0]);
+        System.println(Receivers.compound([[1, "seed"], true]));
+        Receivers.orderedWrite();
+        var matrix = Receivers.matrix();
+        matrix[Receivers.index()][0] = Receivers.number();
+        System.println(matrix[0][0]);
+        System.println(Receivers.chain()[3]);
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

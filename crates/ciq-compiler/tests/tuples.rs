@@ -190,12 +190,11 @@ fn tuple_slot_replacement_updates_locals_parameters_branches_and_source_identity
 }
 
 #[test]
-fn tuple_writes_reject_stale_results_unknown_indices_and_unnamed_receivers() {
+fn tuple_writes_reject_stale_results_and_invalid_indices() {
     for source in [
         r#"function f(x as [Toybox.Lang.Number]) as [Toybox.Lang.Number] { x[0] = "changed"; return x; }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x[1] = 2; }"#,
         r#"function f(x as [Toybox.Lang.Number]) { x["bad"] = 2; }"#,
-        r#"function f(x as [[Toybox.Lang.Number]]) { x[0][0] = "changed"; }"#,
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
@@ -374,4 +373,46 @@ fn union_array_saved_reads_cannot_forge_invariant_storage_views() {
     let forged = saved.replace("array-union(integer|string)", "tuple(integer;string)");
     assert_ne!(saved, forged);
     assert!(parse_unit_ir(&forged).is_err());
+}
+
+#[test]
+fn computed_and_nested_receivers_preserve_results_and_parent_alias_limits() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        typedef Pair as [Lang.Number,Lang.String];
+        class Token { function value() as Lang.Number { return 41; } }
+        function pair() as Pair { return [1,"seed"]; }
+        function add() as [Lang.Number,Lang.String,Lang.Boolean] { return pair().add(true); }
+        function all() as [Lang.Number,Lang.String,Lang.Number,Lang.String] { return pair().addAll([2,"tail"]); }
+        function source() as Lang.Number { return pair().add(new Token())[2].value(); }
+        function empty() as Pair { return pair().addAll([]); }
+        function chain() as [Lang.Number,Lang.String,Lang.Number,Lang.Boolean] { return pair().add(2).add(true); }
+        function branch(flag as Lang.Boolean) as Lang.Number { return (flag ? pair() : [2,"other"]).add(true).size(); }
+        function nestedResult(x as [Pair,Lang.Boolean]) as [Lang.Number,Lang.String,Lang.Boolean] { return x[0].add(true); }
+        function nestedAlias(x as [Pair,Lang.Boolean]) as Pair { x[0].add(2); return x[0]; }
+        function changed(x as [Pair,Lang.Boolean]) as Lang.Number { x[0][0]="changed"; return x[0][0]; }
+        function compound(x as [Pair,Lang.Boolean]) as Lang.Number { x[0][0]+=2; x[0][0]++; return x[0][0]; }
+        function freshWrite() as Void { pair()[0]=2; }
+        function matrix() as [Pair,Pair] { return [[1,"left"],[2,"right"]]; }
+        function index() as Lang.Number { return 0; }
+        function value() as Lang.Number { return 7; }
+        function captured() as Void { matrix()[index()][0]=value(); }
+    "#,
+    );
+}
+
+#[test]
+fn direct_tuple_fields_still_require_field_contract_flow() {
+    for body in [
+        "self.pair[0]=2;",
+        "self.pair.add(true);",
+        "return self.pair.add(true);",
+    ] {
+        let source = format!(
+            r#"class Box {{ var pair as [Toybox.Lang.Number,Toybox.Lang.String]; function initialize() {{self.pair=[1,"seed"];}} function f() {{ {body} }} }}"#
+        );
+        let error = compile_sources(&[&source]).unwrap_err();
+        assert!(error.to_string().contains("field contract flow"), "{error}");
+    }
 }

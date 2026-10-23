@@ -37,7 +37,8 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support tuple mutation through fields and computed/nested receivers.
+- [ ] Track tuple field mutation through subsequent reads and control-flow
+  joins, retaining the field's declared entry contract and actual reference reads.
   Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
   `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
   resolve mutation/alias limits against the

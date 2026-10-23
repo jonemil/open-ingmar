@@ -246,18 +246,28 @@ Exact source-class and nested collection elements cannot yet lose shape without
 erasing their contracts; these cases are rejected. Null-only element domains
 are also outside the current Array profiles.
 
-Appends inside `for`, `while`, and `do` loops use element contracts from the
-first iteration. Loop joins combine the initial tuple with the possible Array
+Appends to named tuple storage inside `for`, `while`, and `do` loops use
+element contracts from the first iteration. Loop joins combine the initial tuple with the possible Array
 results, including the zero-iteration path. This stabilizes the stored type
 without enumerating tuple lengths. Subsequent reads require the element union;
 they cannot retain a positional slot proof. Outside loop inference, an Array's
 derived element contract is invariant: later writes/calls must satisfy it, and
 an `Array<Number>` tail does not satisfy an `Array<Number or String>` parameter.
 
-Append arguments evaluate before the final receiver read. A named local cannot
-be rebound by argument expressions, so its reference is unchanged; nested
+For named receivers, append arguments evaluate before the final receiver read.
+A named local cannot be rebound by argument expressions, so its reference is unchanged; nested
 appends to that name contribute their updated slots before the outer append.
 This avoids the SDK's observed loss of the inner append's static shape.
+
+Computed and indexed tuple receivers are evaluated once before their append
+arguments. The returned reference gets its derived slot contract, so
+`makePair().add(true)` and `outer[0].add(true)` may produce a new tuple view.
+Nested indexed assignments and compound updates likewise capture their receiver
+and index once. The containing tuple and other aliases retain their previous
+static views: mutating `outer[0][0]` does not retype a later `outer[0]` read.
+This matches the SDK's nested-receiver tracking limit, rather than proving that
+the parent's slot contents are unchanged. Literal indexes keep their positional
+proof while other operands are staged.
 
 Parameter annotations constrain entry values. Parameters used as tuple mutation
 receivers have an inferred local view that may change inside the body.
@@ -266,7 +276,9 @@ their previous static views, matching the SDK's observed limits. This does not
 guarantee that an aliased runtime slot still has its previous type. Nullable
 tuple locals and parameters require a live non-null guard before mutation.
 Guarded loop entries retain that non-null storage domain across non-null
-mutations. Mutation through fields or computed/nested receivers remains rejected.
+mutations. Direct field receivers still require field-contract flow tracking
+and are rejected; their declared annotations must not silently become stale
+slot proofs.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts

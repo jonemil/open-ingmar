@@ -933,6 +933,12 @@ impl Builder<'_> {
         }
         let mut needed = false;
         expression.visit(&mut |expression| {
+            if matches!(&expression.kind, parser::ExpressionKind::ValueCall { receiver, member, .. }
+                if matches!(member.as_str(), "add" | "addAll")
+                    && !matches!(receiver.kind, parser::ExpressionKind::Local(_)))
+            {
+                needed = true;
+            }
             if let Some((name, _)) = tuple_append_name(expression) {
                 needed |= locals
                     .get(name)
@@ -942,27 +948,15 @@ impl Builder<'_> {
         needed
     }
 
-    /// Append to a named tuple and publish the new local contract. Evaluate
-    /// arguments before reading the unchanged named reference so nested appends
-    /// to that receiver contribute their updated shape to the outer operation.
-    fn tuple_append(
+    /// Evaluate an append argument once, retaining positional literal contents.
+    /// Empty literals have a known zero-slot shape instead of an unknown Array.
+    fn append_argument(
         &mut self,
-        expression: parser::Expression,
+        arguments: Vec<parser::Expression>,
+        span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
         use parser::{Expression, ExpressionKind as E};
-        let span = expression.span;
-        let (name, spread) = tuple_append_name(&expression).expect("known named append");
-        let positional = !self
-            .controls
-            .iter()
-            .any(|control| control.continue_to.is_some());
-        let name = name.to_owned();
-        let local = locals[&name];
-        let arguments = match expression.kind {
-            E::ModuleCall { arguments, .. } | E::ValueCall { arguments, .. } => arguments,
-            _ => unreachable!(),
-        };
         let [argument]: [Expression; 1] = arguments.try_into().map_err(|_| {
             Diagnostic::at(
                 self.source,
@@ -987,6 +981,84 @@ impl Builder<'_> {
         } else {
             self.snapshot(argument, locals)?
         };
+        Ok(argument)
+    }
+
+    /// Append through an evaluated receiver without rebinding its parent place.
+    /// The result gets its own slot view; aliases retain their previous views.
+    fn computed_tuple_append(
+        &mut self,
+        receiver: parser::Expression,
+        arguments: Vec<parser::Expression>,
+        spread: bool,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        let argument = self.append_argument(arguments, span, locals)?;
+        let array = self.value(receiver, locals)?;
+        let value = self.value(argument, locals)?;
+        self.types
+            .append_type(array, value, spread, true)
+            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+        let result = ValueId(self.operations.len() as u32);
+        self.push(
+            Operation::TupleAppend {
+                result,
+                array,
+                value,
+                spread,
+                positional: true,
+            },
+            Some(span),
+        );
+        let local = self.local_id(span)?;
+        self.push(
+            Operation::LocalInitialize {
+                local,
+                value: result,
+            },
+            Some(span),
+        );
+        Ok(parser::Expression {
+            kind: parser::ExpressionKind::Temporary(local),
+            span,
+        })
+    }
+
+    /// Check an evaluated receiver's candidate positional profile. The final IR
+    /// validator independently checks its null safety and slot contracts.
+    fn positional_snapshot(&self, receiver: &parser::Expression) -> bool {
+        match receiver.kind {
+            parser::ExpressionKind::Temporary(local) => self
+                .types
+                .local_type(local)
+                .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some()),
+            _ => false,
+        }
+    }
+
+    /// Append to a named tuple and publish the new local contract. Evaluate
+    /// arguments before reading the unchanged named reference so nested appends
+    /// to that receiver contribute their updated shape to the outer operation.
+    fn tuple_append(
+        &mut self,
+        expression: parser::Expression,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<parser::Expression, Diagnostic> {
+        use parser::{Expression, ExpressionKind as E};
+        let span = expression.span;
+        let (name, spread) = tuple_append_name(&expression).expect("known named append");
+        let positional = !self
+            .controls
+            .iter()
+            .any(|control| control.continue_to.is_some());
+        let name = name.to_owned();
+        let local = locals[&name];
+        let arguments = match expression.kind {
+            E::ModuleCall { arguments, .. } | E::ValueCall { arguments, .. } => arguments,
+            _ => unreachable!(),
+        };
+        let argument = self.append_argument(arguments, span, locals)?;
         self.promote_variable(local);
         let array = self.value(
             Expression {
@@ -1108,9 +1180,9 @@ impl Builder<'_> {
         }
     }
 
-    /// Write an indexed value and update a named tuple's inferred storage view.
-    /// Reject tuple writes through unnamed aliases rather than retain a stale
-    /// positional proof for fields or nested receivers.
+    /// Write an indexed value, updating a named tuple's storage view when known.
+    /// Computed receivers retain independent parent/alias views. Direct field
+    /// receivers require separate field-flow tracking and remain rejected.
     fn indexed_write(
         &mut self,
         target: Option<LocalId>,
@@ -1118,6 +1190,7 @@ impl Builder<'_> {
         index: ValueId,
         value: ValueId,
         span: Span,
+        field_receiver: bool,
     ) -> Result<(), Diagnostic> {
         if (self
             .controls
@@ -1129,14 +1202,16 @@ impl Builder<'_> {
                 .value_type(array)
                 .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some())
         {
-            let local = target.ok_or_else(|| {
-                Diagnostic::at(
+            if field_receiver {
+                return Err(Diagnostic::at(
                     self.source,
                     span.start,
-                    "tuple mutation requires a named local or parameter receiver",
-                )
-            })?;
-            self.promote_variable(local);
+                    "tuple field mutation requires field contract flow tracking",
+                ));
+            }
+            if let Some(local) = target {
+                self.promote_variable(local);
+            }
             let result = ValueId(self.operations.len() as u32);
             self.push(
                 Operation::TupleWrite {
@@ -1147,14 +1222,18 @@ impl Builder<'_> {
                 },
                 Some(span),
             );
-            self.push(
-                Operation::LocalAssign {
-                    local,
-                    value: result,
-                },
-                Some(span),
-            );
-            self.shape_arrays.insert(local);
+            if let Some(local) = target {
+                self.push(
+                    Operation::LocalAssign {
+                        local,
+                        value: result,
+                    },
+                    Some(span),
+                );
+                self.shape_arrays.insert(local);
+            } else {
+                self.push(Operation::Discard { value: result }, Some(span));
+            }
         } else {
             let operation = if matches!(
                 self.types.value_type(array),
@@ -1813,10 +1892,15 @@ impl Builder<'_> {
             E::Positive(operand) => E::Positive(Box::new(self.prepare(*operand, locals)?)),
             E::Complement(operand) => E::Complement(Box::new(self.prepare(*operand, locals)?)),
             E::Negate(operand) => E::Negate(Box::new(self.prepare(*operand, locals)?)),
-            E::ArrayRead { array, index } => E::ArrayRead {
-                array: Box::new(self.snapshot(*array, locals)?),
-                index: Box::new(self.snapshot(*index, locals)?),
-            },
+            E::ArrayRead { array, index } => {
+                let array = self.snapshot(*array, locals)?;
+                let index =
+                    self.snapshot_index(*index, locals, self.positional_snapshot(&array))?;
+                E::ArrayRead {
+                    array: Box::new(array),
+                    index: Box::new(index),
+                }
+            }
             E::Binary { kind, left, right } => E::Binary {
                 kind,
                 left: Box::new(self.snapshot(*left, locals)?),
@@ -1851,7 +1935,29 @@ impl Builder<'_> {
                 member,
                 arguments,
             } => {
+                let field_receiver =
+                    matches!(receiver.kind, E::SelfField(_) | E::MemberRead { .. });
+                let computed_receiver = !matches!(receiver.kind, E::Local(_));
                 let receiver = self.snapshot(*receiver, locals)?;
+                if computed_receiver
+                    && self.positional_snapshot(&receiver)
+                    && matches!(member.as_str(), "add" | "addAll")
+                {
+                    if field_receiver {
+                        return Err(Diagnostic::at(
+                            self.source,
+                            span.start,
+                            "tuple field mutation requires field contract flow tracking",
+                        ));
+                    }
+                    return self.computed_tuple_append(
+                        receiver,
+                        arguments,
+                        member == "addAll",
+                        span,
+                        locals,
+                    );
+                }
                 let expected = self.receiver_argument_context(&receiver, &member);
                 E::ValueCall {
                     receiver: Box::new(receiver),
@@ -2555,6 +2661,7 @@ impl Builder<'_> {
         let E::ArrayRead { array, index } = target.kind else {
             unreachable!("parsed indexed compound target")
         };
+        let field_receiver = matches!(array.kind, E::SelfField(_) | E::MemberRead { .. });
         let target = if let E::Local(name) = &array.kind {
             locals.get(name).copied()
         } else {
@@ -2598,7 +2705,7 @@ impl Builder<'_> {
         let array = self.value(array, locals)?;
         let index = self.value(index, locals)?;
         let value = self.value(value, locals)?;
-        self.indexed_write(target, array, index, value, span)
+        self.indexed_write(target, array, index, value, span, field_receiver)
     }
 
     /// Resolve a named assignment target to declared local or parameter storage.
@@ -2883,22 +2990,26 @@ impl Builder<'_> {
                     value,
                     ..
                 } => {
+                    let field_receiver = matches!(
+                        array.kind,
+                        parser::ExpressionKind::SelfField(_)
+                            | parser::ExpressionKind::MemberRead { .. }
+                    );
                     let target = if let parser::ExpressionKind::Local(name) = &array.kind {
                         locals.get(name).copied()
                     } else {
                         None
                     };
-                    let positional = target
-                        .and_then(|local| self.types.local_type(local))
-                        .is_some_and(|ty| crate::tuples::read_contract(ty, None).is_some());
                     // Keep earlier operands stable across control-flow staging
                     // in any later expression; plain operands need no temporaries.
                     let (array, index, value) = if self.needs_staging(&array, locals)
                         || self.needs_staging(&index, locals)
                         || self.needs_staging(&value, locals)
                     {
+                        let array = self.snapshot(array, locals)?;
+                        let positional = self.positional_snapshot(&array);
                         (
-                            self.snapshot(array, locals)?,
+                            array,
                             self.snapshot_index(index, locals, positional)?,
                             self.snapshot(value, locals)?,
                         )
@@ -2908,7 +3019,7 @@ impl Builder<'_> {
                     let array = self.value(array, locals)?;
                     let index = self.value(index, locals)?;
                     let value = self.value(value, locals)?;
-                    self.indexed_write(target, array, index, value, span)?;
+                    self.indexed_write(target, array, index, value, span, field_receiver)?;
                 }
                 parser::Statement::MemberAssign {
                     receiver,

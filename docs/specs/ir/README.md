@@ -1522,7 +1522,9 @@ an Array element union from the receiver and replacement value. Existing
 inferred Array receivers retain an element domain instead of gaining slots.
 No result-type assertion supplies or overrides this proof.
 Store the result back to the named receiver's inferred local to make later reads
-use the new view. Branch joins use ordinary inferred-local domains. Tuple
+use the new view. For a computed/nested receiver, discard the write result
+without changing its parent's static view. Branch joins use ordinary inferred
+local domains. Tuple
 parameters requiring tuple mutations have entry reads stored into inferred locals
 without changing their calling convention or the capacity for read-only
 parameters. Aliased locals retain their own static views.
@@ -1546,6 +1548,11 @@ an asserted result or tail length. Store the result into the receiver's inferred
 local before emitting subsequent reads. Derived result signatures have a shared
 64 KiB budget across the possible shapes, checked before concatenating slots;
 this bounds metadata growth rather than runtime Array capacity.
+Computed appends use the same operations with an already captured receiver.
+Their returned reference may be saved in a fixed temporary with the new
+contract, independently of the original parent/alias view. No retyping assertion
+or additional saved operation is needed. Stage receiver effects before argument
+effects, and retain direct Integer indexes when staging positional reads.
 Inferred-local joins merge an initial tuple and Array outcomes into the common
 Array element view. This is specific to tuple-derived storage; ordinary Array
 assignment/call contracts remain invariant. Non-null edge proofs narrow tuple
