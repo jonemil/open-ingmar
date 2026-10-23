@@ -383,6 +383,10 @@ once, evaluate arguments once in order, invoke the method, and save its returned
 reference if consumed later. Nested stores use `aputv` on the captured inner
 Array; they neither copy nor replace the outer container. Discarding a tuple
 write's result does not discard the store itself.
+Flow-refined self-field reads use the same property-read instructions as other
+fields. Declared/result tags only affect semantic checking. Captured field
+mutations use the previously loaded Array reference and never insert a
+write-back to the field; subsequent reads load the actual current property.
 Array availability and each slot's native types are checked separately; View
 construction requires its initializer's 2.1.0 level. No allocation failure
 timing or memory equivalence with SDK lowering is implied. See the

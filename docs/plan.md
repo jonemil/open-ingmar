@@ -37,8 +37,8 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Track tuple field mutation through subsequent reads and control-flow
-  joins, retaining the field's declared entry contract and actual reference reads.
+- [ ] Track tuple field contracts for structural/other-instance receivers
+  (`obj.field`), including owner identity, aliases, and reassignment.
   Enable `remove`, `removeAll`, `reverse`, `slice`, `sort`,
   `indexOf`, `method`, and `weak` with their resulting shape/element contracts;
   resolve mutation/alias limits against the

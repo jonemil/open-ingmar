@@ -533,13 +533,20 @@ pub(crate) fn parse_function_ir_context(
                         return Err(fail(*at, "expected .read-self result field [result=type]"));
                     }
                     let (result_type, arguments_at) = call_contract(fields, 3, *at, source)?;
-                    if arguments_at != width {
+                    let declared_type = fields
+                        .get(arguments_at)
+                        .and_then(|field| field.strip_prefix("declared="))
+                        .map(crate::type_text::call_result)
+                        .transpose()
+                        .map_err(|e| fail(*at, e))?;
+                    if arguments_at + usize::from(declared_type.is_some()) != width {
                         return Err(fail(*at, "unexpected field read operands"));
                     }
                     Operation::SelfFieldRead {
                         result: parse_value(&fields[1])?,
                         field: fields[2].clone(),
                         result_type,
+                        declared_type,
                     }
                 }
                 Directive::AssignSelf => Operation::SelfFieldAssign {

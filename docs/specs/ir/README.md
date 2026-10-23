@@ -1920,14 +1920,27 @@ Graphics.Dc alternatives are rejected. Unit declaration validation resolves
 every exact class/native-base pair, including unused union fields; API checks
 visit every retained type.
 
-Field-read result metadata normalizes in both typed and parsed IR and must equal
-the declaration's full contract. It does
-not record a last-written subtype or grant a proof for another field read.
+Field-read result metadata normalizes in both typed and parsed IR. Ordinary
+fields use their declaration's full contract. Positional self-fields may carry
+`declared=tag` after the result metadata: the unit checks that entry tag against
+the class declaration, while field flow derives and checks the result view.
+The declared tag does not assert a runtime cast or override the flow proof.
 Writes check assignability and every required structural interface witness.
 Generic field metadata contains Null; non-null contracts participate in the
 existing required-initialization prefix checks. The
 [frontend field rules](../frontend/README.md#union-fields) own defaults, snapshot
 semantics, and contextual construction. No union discriminator is stored.
+
+For positional self-fields, direct read provenance passes through immutable
+receiver captures and tuple mutations. `TupleWrite`/`TupleAppend` results update
+the corresponding field view without inserting a field assignment. Inferred
+local aliases do not transfer this field provenance. Ordinary calls reset views
+to their declared entries; explicit field assignments establish their checked
+value contracts. CFG joins retain possible slot contracts or merge tuple/Array
+outcomes into an element domain. Direct Null-test edges restrict nullable views.
+Field and local read annotations are normalized together after backedges exist.
+Reload reconstructs the same flow and rejects stale result claims, inconsistent
+entries, and declarations that fail to match the enclosing class.
 
 Instance field operations are `.read-self` and `.assign-self`, with optional
 source spans. Reads define Number by default;

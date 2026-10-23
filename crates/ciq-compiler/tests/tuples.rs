@@ -401,18 +401,3 @@ fn computed_and_nested_receivers_preserve_results_and_parent_alias_limits() {
     "#,
     );
 }
-
-#[test]
-fn direct_tuple_fields_still_require_field_contract_flow() {
-    for body in [
-        "self.pair[0]=2;",
-        "self.pair.add(true);",
-        "return self.pair.add(true);",
-    ] {
-        let source = format!(
-            r#"class Box {{ var pair as [Toybox.Lang.Number,Toybox.Lang.String]; function initialize() {{self.pair=[1,"seed"];}} function f() {{ {body} }} }}"#
-        );
-        let error = compile_sources(&[&source]).unwrap_err();
-        assert!(error.to_string().contains("field contract flow"), "{error}");
-    }
-}

@@ -177,8 +177,29 @@ The complete application's `Receivers` module checks this runtime distinction:
 an indexed append returns the extended reference, the parent observes the same
 mutated Array, and a nested write changes the stored value. Console markers
 check computed/chained calls and nested stores evaluate receiver, index, and
-value effects once in order. Direct field refinements remain outside the
-compiler's current profile.
+value effects once in order.
+
+**Experimentally observed, 2026-10-23:** SDK 9.2.0 strict, unoptimized fr265
+probes refine subsequent `self.pair` reads after direct writes and appends.
+Starting with `[Number, String]`, a conditional Boolean replacement of slot zero
+accepts a `Number or Boolean` result but rejects a Number-only result. Loop
+appends accept the widened Array element domain. Mutating a named local alias
+does not refine subsequent field reads.
+
+An intervening self call restores the declaration's static view, even when the
+called method is empty. After replacing slot zero with String, a subsequent
+self call makes a Number return accepted and a String return rejected. This is
+type-checking behavior, not evidence that the call restores the stored values.
+Explicit field reassignment also establishes a new view.
+
+Receiver capture and field replacement remain distinct. With a two-slot field,
+`self.pair.add(self.resetAndValue())` has a three-slot expression result even
+when `resetAndValue()` replaces the field before returning Boolean. The
+[complete application](../../examples/compiler-tuples/app.mc) reproduces this
+case: both SDK and independently generated simulator programs print `2` for
+the replacement field's size and `3` for the captured append result's size.
+Later field reads must load the actual property; writing the captured receiver
+back would change the program's behavior.
 
 ## Runtime construction and typed transport
 

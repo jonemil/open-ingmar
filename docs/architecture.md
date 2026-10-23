@@ -95,6 +95,10 @@ projections, which cannot authorize source dispatch or interface witnesses.
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;
 it also derives native Array element unions when positional shape is lost.
+`field_flow` reconstructs method-local field views and captured receiver
+provenance across the CFG. It solves field/frame-local annotations together;
+`unit` anchors declared field contracts to the enclosing class. Runtime field
+reads remain ordinary property reads rather than cached values.
 `native` checks declared member use, and `unit` proves source implementations.
 Interface members reuse source-aware parameter/result contracts; API projection
 does not replace exact member identities or authorize source dispatch.

@@ -165,7 +165,7 @@ storage-operation = ".parameter" value-id decimal-usize
                   | ".read-variable" value-id local-id local-contract-tag
                   | (".local" | ".assign") local-id value-id
                   | (".read" | ".take") value-id local-id
-                  | ".read-self" value-id identifier call-result-metadata?
+                  | ".read-self" value-id identifier call-result-metadata? field-entry-metadata?
                   | ".assign-self" identifier value-id
                   | ".member-read" value-id value-id identifier
                   | ".member-write" value-id identifier value-id
@@ -214,6 +214,7 @@ call-operation = ".call" value-id module-name identifier
                | ".call-native-module-discard" module-name identifier value-id*
 class-set = identifier ("|" identifier)*
 call-result-metadata = "result=" call-result-tag
+field-entry-metadata = "declared=" call-result-tag
 object-operation = ".new-native" value-id class-path
                  | ".new-source" value-id identifier native-base value-id*
                  | ".base-initialize" native-base

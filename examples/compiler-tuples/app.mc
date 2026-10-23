@@ -232,6 +232,88 @@ module Receivers {
     }
 }
 
+class TupleFieldBox {
+    var pair as Pair;
+    var optional as Pair or Null;
+    function initialize() { self.pair = [1, "seed"]; }
+    function write() as Lang.String { self.pair[0] = "field-write"; return self.pair[0]; }
+    function append() as [Lang.Number, Lang.String, Lang.Boolean] {
+        self.pair.add(true);
+        return self.pair;
+    }
+    function branch(flag as Lang.Boolean) as Lang.Number or Lang.Boolean {
+        if (flag) { self.pair[0] = true; }
+        return self.pair[0];
+    }
+    function reset() as Void { self.pair = [7, "reset"]; }
+    function afterReset() as Lang.Number {
+        self.pair[0] = "changed";
+        self.reset();
+        return self.pair[0];
+    }
+    function afterAssign() as Lang.Number {
+        self.pair[0] = "changed";
+        self.pair = [7, "assigned"];
+        return self.pair[0];
+    }
+    function repeated(n as Lang.Number) as Lang.Array<Lang.Number or Lang.String or Lang.Boolean> {
+        for (var i = 0; i < n; i++) { self.pair.add(true); }
+        return self.pair;
+    }
+    function setOptional() as Void { self.optional = [7, "optional"]; }
+    function guarded(n as Lang.Number) as Lang.Number {
+        if (self.optional != null) {
+            for (var i = 0; i < n; i++) { self.optional.add(true); }
+            return self.optional.size();
+        }
+        return 0;
+    }
+    function indexed(i as Lang.Number) as Lang.Array<Lang.Number or Lang.String or Lang.Boolean> {
+        self.pair[i] = false;
+        return self.pair;
+    }
+    function compound() as Lang.Number {
+        self.pair[0] += 2;
+        self.pair[0]++;
+        return self.pair[0];
+    }
+    function resetAndValue() as Lang.Boolean { self.reset(); return true; }
+    function captured() as Lang.Number {
+        self.pair.add(self.resetAndValue());
+        return self.pair.size();
+    }
+    function capturedResult() as Lang.Number {
+        var old = self.pair.add(self.resetAndValue());
+        return old.size();
+    }
+    function source() as Lang.Number {
+        self.pair[0] = new Token();
+        return self.pair[0].number();
+    }
+}
+
+module FieldCases {
+    function run() as Void {
+        System.println(new TupleFieldBox().write());
+        System.println(new TupleFieldBox().append()[2]);
+        System.println(new TupleFieldBox().branch(true));
+        System.println(new TupleFieldBox().branch(false));
+        System.println(new TupleFieldBox().afterReset());
+        System.println(new TupleFieldBox().afterAssign());
+        System.println(new TupleFieldBox().repeated(0).size());
+        System.println(new TupleFieldBox().repeated(2).size());
+        var optional = new TupleFieldBox();
+        System.println(optional.guarded(2));
+        optional.setOptional();
+        System.println(optional.guarded(2));
+        System.println(new TupleFieldBox().indexed(0)[0]);
+        System.println(new TupleFieldBox().compound());
+        System.println(new TupleFieldBox().captured());
+        System.println(new TupleFieldBox().capturedResult());
+        System.println(new TupleFieldBox().source());
+    }
+}
+
 class MinimalConsoleApp extends Toybox.Application.AppBase {
     function initialize() { AppBase.initialize(); }
     function onStart(state) {
@@ -317,6 +399,7 @@ class MinimalConsoleApp extends Toybox.Application.AppBase {
         matrix[Receivers.index()][0] = Receivers.number();
         System.println(matrix[0][0]);
         System.println(Receivers.chain()[3]);
+        FieldCases.run();
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

@@ -239,15 +239,31 @@ fn emit_non_call(
         parser::ExpressionKind::MemberRead { .. } => {
             unreachable!("member chain dispatched before non-call emission")
         }
-        parser::ExpressionKind::SelfField(field) => Operation::SelfFieldRead {
-            result: ValueId(operations.len() as u32),
-            result_type: calls
+        parser::ExpressionKind::SelfField(field) => {
+            let declared = calls
                 .field_types
                 .get(&field)
                 .cloned()
-                .unwrap_or(crate::ReturnType::Integer),
-            field,
-        },
+                .unwrap_or(crate::ReturnType::Integer);
+            let tracked = crate::field_flow::positional(&declared);
+            let result_type = if tracked {
+                crate::field_flow::prefix_read(
+                    operations,
+                    &field,
+                    &declared,
+                    calls.parameter_types.clone(),
+                )
+                .map_err(|message| Diagnostic::at(source, expression.span.start, message))?
+            } else {
+                declared.clone()
+            };
+            Operation::SelfFieldRead {
+                result: ValueId(operations.len() as u32),
+                field,
+                result_type,
+                declared_type: tracked.then_some(declared),
+            }
+        }
         parser::ExpressionKind::SourceNew { class, arguments } => {
             let base = calls.class_bases.get(&class).copied().ok_or_else(|| {
                 Diagnostic::at(
@@ -991,6 +1007,7 @@ impl Builder<'_> {
         receiver: parser::Expression,
         arguments: Vec<parser::Expression>,
         spread: bool,
+        positional: bool,
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
@@ -998,7 +1015,7 @@ impl Builder<'_> {
         let array = self.value(receiver, locals)?;
         let value = self.value(argument, locals)?;
         self.types
-            .append_type(array, value, spread, true)
+            .append_type(array, value, spread, positional)
             .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
         let result = ValueId(self.operations.len() as u32);
         self.push(
@@ -1007,7 +1024,7 @@ impl Builder<'_> {
                 array,
                 value,
                 spread,
-                positional: true,
+                positional,
             },
             Some(span),
         );
@@ -1196,7 +1213,8 @@ impl Builder<'_> {
             .controls
             .iter()
             .any(|control| control.continue_to.is_some())
-            && target.is_some_and(|local| self.shape_arrays.contains(&local)))
+            && (target.is_some_and(|local| self.shape_arrays.contains(&local))
+                || crate::field_flow::direct_field(&self.operations, array).is_some()))
             || self
                 .types
                 .value_type(array)
@@ -1935,12 +1953,25 @@ impl Builder<'_> {
                 member,
                 arguments,
             } => {
-                let field_receiver =
-                    matches!(receiver.kind, E::SelfField(_) | E::MemberRead { .. });
+                let field_receiver = matches!(receiver.kind, E::MemberRead { .. });
+                let self_field = if let E::SelfField(field) = &receiver.kind {
+                    Some(field.clone())
+                } else {
+                    None
+                };
+                let loop_field = self_field.as_ref().is_some_and(|field| {
+                    self.calls
+                        .field_types
+                        .get(field)
+                        .is_some_and(crate::field_flow::positional)
+                }) && self
+                    .controls
+                    .iter()
+                    .any(|control| control.continue_to.is_some());
                 let computed_receiver = !matches!(receiver.kind, E::Local(_));
                 let receiver = self.snapshot(*receiver, locals)?;
                 if computed_receiver
-                    && self.positional_snapshot(&receiver)
+                    && (self.positional_snapshot(&receiver) || loop_field)
                     && matches!(member.as_str(), "add" | "addAll")
                 {
                     if field_receiver {
@@ -1954,6 +1985,7 @@ impl Builder<'_> {
                         receiver,
                         arguments,
                         member == "addAll",
+                        !loop_field,
                         span,
                         locals,
                     );
@@ -2661,7 +2693,7 @@ impl Builder<'_> {
         let E::ArrayRead { array, index } = target.kind else {
             unreachable!("parsed indexed compound target")
         };
-        let field_receiver = matches!(array.kind, E::SelfField(_) | E::MemberRead { .. });
+        let field_receiver = matches!(array.kind, E::MemberRead { .. });
         let target = if let E::Local(name) = &array.kind {
             locals.get(name).copied()
         } else {
@@ -2990,11 +3022,8 @@ impl Builder<'_> {
                     value,
                     ..
                 } => {
-                    let field_receiver = matches!(
-                        array.kind,
-                        parser::ExpressionKind::SelfField(_)
-                            | parser::ExpressionKind::MemberRead { .. }
-                    );
+                    let field_receiver =
+                        matches!(array.kind, parser::ExpressionKind::MemberRead { .. });
                     let target = if let parser::ExpressionKind::Local(name) = &array.kind {
                         locals.get(name).copied()
                     } else {
@@ -3592,7 +3621,7 @@ fn build_body(
             }),
         );
     }
-    crate::local_flow::normalize(&mut builder.operations, body_calls.parameter_types.clone())
+    crate::field_flow::normalize(&mut builder.operations, body_calls.parameter_types.clone())
         .map_err(|error| {
             Diagnostic::at(
                 source,

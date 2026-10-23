@@ -38,6 +38,7 @@ mod source_union;
 mod structural;
 pub use source_union::SourceUnion;
 pub use structural::{StructuralInterface, StructuralMethod};
+mod field_flow;
 mod source_types;
 mod tuples;
 mod type_flow;
@@ -1237,13 +1238,16 @@ pub enum Operation {
     SelfValue {
         result: ValueId,
     },
-    /// Read a Number or non-null source reference on the current instance.
-    /// Unit validation checks the claimed result against the field declaration
-    /// and prevents reference reads before constructor initialization.
+    /// Read the actual current-instance field under a checked result contract.
+    /// Unit validation anchors its declaration and initialization; positional
+    /// field flow independently verifies any refined result view.
     SelfFieldRead {
         result: ValueId,
         field: String,
         result_type: ReturnType,
+        /// Declared entry contract for a flow-refined positional field. Unit
+        /// validation anchors it to the class; function validation derives the view.
+        declared_type: Option<ReturnType>,
     },
     /// Replace a declared field on the current instance, preserving its type.
     SelfFieldAssign {
@@ -1963,9 +1967,19 @@ impl Function {
                     *result_type = contract.clone().result();
                 }
             }
-            if let Operation::SelfFieldRead { result_type, .. } = &mut located.operation {
+            if let Operation::SelfFieldRead {
+                result_type,
+                declared_type,
+                ..
+            } = &mut located.operation
+            {
                 if let Some(canonical) = FieldKind::value_contract(result_type.clone()) {
                     *result_type = canonical;
+                }
+                if let Some(declared) = declared_type {
+                    if let Some(canonical) = FieldKind::value_contract(declared.clone()) {
+                        *declared = canonical;
+                    }
                 }
             }
         }
@@ -2664,12 +2678,15 @@ impl Function {
                     result,
                     ref field,
                     ref result_type,
+                    ref declared_type,
                 } => {
                     if !instance_method {
                         return Err(fail("self field reads require an instance receiver"));
                     }
                     validate_call_names(None, field).map_err(fail)?;
-                    if FieldKind::from_result(result_type.clone()).is_none() {
+                    if FieldKind::from_result(declared_type.as_ref().unwrap_or(result_type).clone())
+                        .is_none()
+                    {
                         return Err(fail("unsupported instance field result contract"));
                     }
                     types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
@@ -3822,6 +3839,7 @@ impl Function {
             }
         }
         joins::validate_stack_uses(&operations, &consumers)?;
+        field_flow::validate(&operations, parameter_types.clone())?;
         if operations.iter().any(|located| {
             matches!(
                 located.operation,
@@ -4276,11 +4294,16 @@ impl Function {
                     result,
                     ref field,
                     ref result_type,
+                    ref declared_type,
                 } => {
                     format!(
-                        ".read-self %{} {field}{}",
+                        ".read-self %{} {field}{}{}",
                         result.0,
-                        call_type_text(result_type)
+                        call_type_text(result_type),
+                        declared_type
+                            .as_ref()
+                            .map(|ty| format!(" declared={}", type_text::result_tag(ty)))
+                            .unwrap_or_default()
                     )
                 }
                 Operation::SelfFieldAssign { ref field, value } => {

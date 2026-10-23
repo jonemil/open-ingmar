@@ -276,9 +276,25 @@ their previous static views, matching the SDK's observed limits. This does not
 guarantee that an aliased runtime slot still has its previous type. Nullable
 tuple locals and parameters require a live non-null guard before mutation.
 Guarded loop entries retain that non-null storage domain across non-null
-mutations. Direct field receivers still require field-contract flow tracking
-and are rejected; their declared annotations must not silently become stale
-slot proofs.
+mutations.
+
+Direct `self.field` receivers retain a method-local view for positional field
+contracts. Indexed replacement, `add`/`addAll`, and compound updates change that
+view; later reads use its slot types or Array element domain. Branches join the
+possible contracts, loops lose positional shape where needed, and direct Null
+guards narrow nullable field views. Each method starts from the field's declared
+contract. Explicit assignment uses its checked incoming contract; ordinary
+calls, constructors, and printing resume checking at the declared contract.
+As in the SDK, forgetting a field refinement does not undo its runtime mutation
+or guarantee its values have returned to their declared types.
+
+Field view tracking follows direct receiver captures, including chained append
+results. Named local aliases remain independent. Reads still load the actual
+field reference. If an argument call reassigns the field, a captured mutation
+acts on the earlier Array; it does not write that Array back into the field.
+Static field views retain the SDK's capture/alias limitations in this case.
+Tuple fields accessed through other owners (`obj.field`) still require owner
+identity tracking and remain outside this mutation profile.
 
 The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
 Other Array/Object methods remain rejected until their shape/effect contracts

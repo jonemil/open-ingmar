@@ -1692,8 +1692,12 @@ impl CompilationUnit {
                             )
                         })?;
                     match &located.operation {
-                        Operation::SelfFieldRead { result_type, .. }
-                            if *result_type != declaration.result_type() =>
+                        Operation::SelfFieldRead {
+                            result_type,
+                            declared_type,
+                            ..
+                        } if *declared_type.as_ref().unwrap_or(result_type)
+                            != declaration.result_type() =>
                         {
                             return Err(fail(
                                 Some(index),

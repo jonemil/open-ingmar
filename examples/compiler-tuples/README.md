@@ -9,6 +9,8 @@ It also covers unknown-length tails, loop-carried Array element unions,
 dynamic-index writes, and guarded nullable mutation.
 Computed/nested receiver cases check returned aliases, chained appends, nested
 stores/compound updates, and receiver/index/value effect order.
+Self-field cases check refined reads, branch/loop joins, nullable guards,
+reassignment/call invalidation, and captured receivers across field replacement.
 
 From the repository root, using fresh output paths:
 
