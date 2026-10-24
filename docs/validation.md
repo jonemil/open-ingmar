@@ -1,32 +1,32 @@
 # Development and validation
 
-Choose checks by the affected behavior. Keep feedback quick during development,
-then validate the final change once. A failed check needs diagnosis; a passing
-check needs repetition only after a relevant edit or an unresolved concern.
-GitHub CI continues to run the full Rust and documentation checks.
+Choose checks by the affected behavior. Use focused checks during development,
+then run one final check for the affected scope. Diagnose failures before
+restarting gates; repeat a passed check only after a relevant edit or an
+unresolved concern. GitHub CI continues to run the full Rust and documentation
+checks.
 
-Use the [workflow measurement protocol](workflow-measurement.md) when profiling
-development time. Separate tool/job timings from estimated model time and account
-for overlapping background work before changing these checks.
+Use the [workflow measurement protocol](workflow-measurement.md) only when
+profiling is requested. Keep measured tool/job time separate from unattributed
+time and account for overlapping background work.
 
 ## Work cycle
 
-1. Read the next planned increment and relevant contracts. Search for definitions
-   before reading narrow source excerpts; reuse context already available.
-2. For uncertain SDK behavior, establish one minimal accepted/rejected specimen
-   before expanding it. Keep adjacent discoveries in the plan rather than
-   automatically widening the change.
-3. Implement the affected stages and run focused tests. After parser/AST edits,
-   run existing nesting/depth tests early; after frame allocation changes, run
-   slot-boundary tests early. Preserve the supported limits.
-4. Once implementation is stable, start the applicable final checks below with
-   the [workspace runner](../scripts/README.md#workspace-validation). Keep Cargo
-   checks serial; run the freshly built example audit alongside them. Prepare
-   documentation and the final summary while checks run, then inspect the verdict.
-   Update each fact in its authoritative
-   document: architecture for component boundaries, specs for contracts and
-   rationale, investigations for evidence, plan for remaining work. Link instead
-   of repeating explanations.
+1. Read the prioritized item, relevant contracts, and nearby positive and
+   negative tests. Reuse existing fixtures and update obsolete rejection
+   expectations as part of the feature change.
+2. If SDK behavior is uncertain, test a minimal specimen early. Then implement
+   the coherent feature group across its affected stages, with boundary tests.
+3. Before the final gate, review the changed contracts and callback paths, run
+   focused tests, and confirm the example exercises the feature.
+4. Run one applicable final check with the
+   [workspace runner](../scripts/README.md#workspace-validation). Its Cargo
+   checks are serial and its audit lane overlaps them. While checks run, update
+   documentation or review only work that cannot change check inputs. Inspect
+   the final verdict and diagnostics. After a late edit, repeat only affected
+   checks. Put each fact in its authoritative document: architecture for
+   boundaries, specs for contracts, investigations for evidence, and plan for
+   remaining work. Link rather than duplicate explanations.
 
 ## Check selection
 
@@ -41,11 +41,11 @@ for overlapping background work before changing these checks.
 - **Python/shell helpers:** focused helper tests, then exercise changed success
   and failure paths and the relevant real integration.
 
-Several categories can apply together. Retain CI's full checks as a backstop; conditional local
-checks do not weaken CI. The full example audit remains a final gate for compiler
-and binary-toolchain changes while the implementation is developing. Reuse
-unchanged SDK specimens; rebuild when their source, configuration, SDK, or target
-changes. Full workspace tests need not run for documentation-only/helper-only work.
+Several categories can apply together. Retain CI's full checks as a backstop;
+conditional local checks do not weaken CI. The full example audit is a final
+gate for compiler and binary-toolchain changes. Reuse unchanged SDK specimens;
+rebuild when their source, configuration, SDK, or target changes. Full workspace
+tests need not run for documentation-only/helper-only work.
 
 See [build commands](../README.md#build-and-check),
 [script commands](../scripts/README.md), and

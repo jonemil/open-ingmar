@@ -54,7 +54,7 @@ python3 scripts/check-workspace.py command --output scratch/checks/sdk-build \
 
 Arguments after `--` run directly, without an implicit shell. The command's exit
 status and category are retained. Use the categories in the
-[measurement protocol](../docs/workflow-measurement.md#activity-categories).
+[measurement protocol](../docs/workflow-measurement.md#record).
 
 ## Console specimen check
 
