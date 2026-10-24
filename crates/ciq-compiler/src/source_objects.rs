@@ -23,6 +23,7 @@ type Contract = crate::SourceUnion;
 
 #[derive(Default)]
 pub(crate) struct Origins {
+    symbols: BTreeMap<ValueId, String>,
     integers: BTreeMap<ValueId, i32>,
     values: BTreeMap<ValueId, Contract>,
     native_values: BTreeMap<ValueId, crate::api::Type>,
@@ -36,6 +37,9 @@ pub(crate) struct Origins {
 }
 
 impl Origins {
+    pub(crate) fn symbol(&self, value: ValueId) -> Option<&str> {
+        self.symbols.get(&value).map(String::as_str)
+    }
     pub(crate) fn integer(&self, value: ValueId) -> Option<i32> {
         self.integers.get(&value).copied()
     }
@@ -71,6 +75,35 @@ impl Origins {
         operation: &Operation,
         facts: &std::collections::BTreeSet<crate::type_flow::Fact>,
     ) -> Result<(), &'static str> {
+        if let Operation::Symbol { result, name } = operation {
+            self.symbols.insert(*result, name.clone());
+        }
+        let record_read = match operation {
+            Operation::DictionaryRead {
+                result,
+                dictionary,
+                key,
+            } => Some((*result, *dictionary, *key)),
+            Operation::NativeCall {
+                result,
+                receiver,
+                member,
+                arguments,
+            } if member == "get" && arguments.len() == 1 => {
+                Some((*result, *receiver, arguments[0]))
+            }
+            _ => None,
+        };
+        if let Some((result, receiver, key)) = record_read {
+            if let Some(crate::api::Type::Options(fields)) = self.native_values.get(&receiver) {
+                if let Some(contract) =
+                    crate::unions::result(crate::records::read(fields, self.symbol(key)))
+                        .and_then(|r| r.source_contract())
+                {
+                    self.values.insert(result, contract);
+                }
+            }
+        }
         if let Operation::Integer { result, value } = operation {
             self.integers.insert(*result, *value);
         }
@@ -81,6 +114,13 @@ impl Origins {
         } = operation
         {
             if let Some(result_type) = self.native_values.get(array).and_then(|ty| {
+                if let crate::api::Type::Options(fields) = ty {
+                    return crate::unions::result(crate::records::read(
+                        fields,
+                        self.symbol(*index),
+                    ))
+                    .map(Ok);
+                }
                 crate::tuples::read_contract(ty, self.integer(*index)).or_else(|| {
                     crate::unions::index_read(ty, &crate::api::Type::named("Toybox.Lang.Number"))
                         .ok()

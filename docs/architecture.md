@@ -98,6 +98,9 @@ Container elements carry exact identities in `Type::SourceValue` and
 `ArrayElement::Source`; `source_objects` restores origins on reads and supplies
 source-aware operands at element boundaries. API availability uses their native
 projection, while assignability and unit resolution retain their full contracts.
+`records` owns optional Symbol-keyed field contracts, saved tags, and nullable
+read results. Record construction shares Dictionary builders; native method
+lookup uses the Dictionary catalogue, with per-key validation in IR checks.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;

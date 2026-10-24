@@ -12,6 +12,7 @@
 //! and returns an unsigned PRG for the supported console bootstrap profile.
 
 pub mod api;
+use std::collections::BTreeMap;
 pub mod application;
 pub mod backend;
 mod bindings;
@@ -20,6 +21,7 @@ mod callbacks;
 mod casts;
 mod control_flow;
 mod dictionary;
+mod records;
 pub use bindings::{
     array_bindings, byte_array_bindings, dictionary_bindings, string_bindings, symbol_bindings,
 };
@@ -405,7 +407,10 @@ impl ArrayElement {
         };
         if matches!(
             base,
-            api::Type::Array(_) | api::Type::Dictionary { .. } | api::Type::TupleValue(_)
+            api::Type::Array(_)
+                | api::Type::Dictionary { .. }
+                | api::Type::TupleValue(_)
+                | api::Type::Options(_)
         ) {
             unions::result(base.clone())?;
             return Some(Self::Nested {
@@ -632,6 +637,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// Structural Symbol-keyed Dictionary; every named field may be absent.
+    Options(BTreeMap<String, api::Type>),
     /// A bound Method with a checked fixed argument/result signature.
     Callback(Box<StructuralMethod>),
     /// Source structural member contract, independent of a runtime class.
@@ -715,6 +722,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// Structural Symbol-keyed Dictionary; every named field may be absent.
+    Options(BTreeMap<String, api::Type>),
     /// Positional Array slots, retaining exact source contracts.
     Tuple(TupleType),
     /// A bound Method with a checked fixed argument/result signature.
@@ -805,6 +814,7 @@ impl ParameterType {
         match self {
             Self::Tuple(tuple) => tuple.api_type(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Options(fields) => api::Type::Options(fields.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
@@ -864,6 +874,7 @@ impl ReturnType {
     pub fn api_type(&self) -> api::Type {
         match self {
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Options(fields) => api::Type::Options(fields.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Null => api::Type::Null,
@@ -925,7 +936,7 @@ enum ValueType {
     Union(api::Type),
     /// Dynamic value, including Null, with operations checked at runtime.
     Any,
-    ByteArrayOptions,
+    Options(BTreeMap<String, api::Type>),
     /// A Lang.NumberFormat enum value, distinct from Number and Endian.
     NumberFormat,
     /// A Lang.Endian enum value, distinct from Number and NumberFormat.
@@ -1028,10 +1039,11 @@ impl ValueType {
     fn api_type(&self) -> api::Type {
         match self {
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
+            Self::Options(fields) => api::Type::Options(fields.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
             Self::Union(ty) => ty.clone(),
             Self::Any => api::Type::Any,
-            Self::ByteArrayOptions => api::Type::byte_options(),
+
             Self::Integer => api::Type::named("Toybox.Lang.Number"),
             Self::Long => api::Type::named("Toybox.Lang.Long"),
             Self::Double => api::Type::named("Toybox.Lang.Double"),
@@ -1190,7 +1202,9 @@ impl ValueType {
             _ if *ty == Self::NullableSymbol.api_type() => Some(Self::NullableSymbol),
             _ if *ty == Self::NullableMethod.api_type() => Some(Self::NullableMethod),
             _ if *ty == Self::NullableWeakReference.api_type() => Some(Self::NullableWeakReference),
-            _ if *ty == api::Type::byte_options() => Some(Self::ByteArrayOptions),
+            api::Type::Options(fields) => records::validate(fields)
+                .ok()
+                .map(|_| Self::Options(fields.clone())),
             _ if *ty == api::Type::numeric() => Some(Self::Numeric),
             _ if *ty == api::Type::integer() => Some(Self::IntegerAlias),
             _ if *ty == api::Type::decimal() => Some(Self::Decimal),
@@ -1236,9 +1250,10 @@ pub enum Operation {
         result: ValueId,
         name: String,
     },
-    /// Allocate private ByteArray conversion options before field effects.
-    ByteOptionsBegin {
+    /// Allocate a private Symbol-keyed record before evaluating its entries.
+    RecordBegin {
         builder: BuilderId,
+        fields: BTreeMap<String, api::Type>,
         length: u32,
     },
     /// Allocate a private Dictionary before evaluating its entries. Length is the
@@ -2390,10 +2405,10 @@ impl Function {
                     }
                     (None, vec![])
                 }
-                Operation::ByteOptionsBegin { .. } => {
+                Operation::RecordBegin { ref fields, .. } => {
                     if let Some(context) = context {
                         context
-                            .check_type(api::core(), &api::Type::byte_options())
+                            .check_type(api::core(), &api::Type::Options(fields.clone()))
                             .map_err(|e| fail(&e))?;
                     }
                     (None, vec![])
@@ -2404,7 +2419,7 @@ impl Function {
                     ref entries,
                     ..
                 } => {
-                    if matches!(builders[&builder].0, builders::Contract::ByteOptions) {
+                    if let builders::Contract::Record(ref fields) = builders[&builder].0 {
                         for &(key, value) in entries {
                             let name = operations[..index]
                                 .iter()
@@ -2415,13 +2430,19 @@ impl Function {
                                     _ => None,
                                 })
                                 .ok_or_else(|| fail("option key must be a literal Symbol"))?;
-                            let expected = match name {
-                                "offset" => ValueType::Integer,
-                                "endianness" => ValueType::Endian,
-                                _ => return Err(fail("unknown ByteArray conversion option")),
-                            };
-                            if type_of(value) != expected {
-                                return Err(fail("option value must match its named field type"));
+                            if let Some(expected) = fields.get(name) {
+                                let actual = origins.element_value(
+                                    expected,
+                                    value,
+                                    type_of(value).api_type(),
+                                );
+                                if !native::accepts(expected, &actual)
+                                    && !origins.deferred_interface(expected, value)
+                                {
+                                    return Err(fail(
+                                        "record value does not match its named field type",
+                                    ));
+                                }
                             }
                         }
                     } else {
@@ -2457,8 +2478,8 @@ impl Function {
                 Operation::DictionaryFinish { result, builder } => {
                     types.insert(
                         result,
-                        if matches!(builders[&builder].0, builders::Contract::ByteOptions) {
-                            ValueType::ByteArrayOptions
+                        if let builders::Contract::Record(ref fields) = builders[&builder].0 {
+                            ValueType::Options(fields.clone())
                         } else {
                             ValueType::TypedDictionary(
                                 builders[&builder]
@@ -3038,6 +3059,19 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
+                    if let (ValueType::Options(ref fields), "put", [key, value]) =
+                        (type_of(receiver), member.as_str(), arguments.as_slice())
+                    {
+                        let expected =
+                            records::write_type(fields, origins.symbol(*key)).map_err(fail)?;
+                        if !native::accepts(
+                            expected,
+                            &origins.element_value(expected, *value, type_of(*value).api_type()),
+                        ) && !origins.deferred_interface(expected, *value)
+                        {
+                            return Err(fail("record write does not match its field contract"));
+                        }
+                    }
                     let arguments_types = origins.native_arguments(
                         &type_of(receiver).api_type(),
                         member,
@@ -3247,10 +3281,13 @@ impl Function {
                     dictionary,
                     key,
                 } => {
-                    if !matches!(type_of(dictionary), ValueType::TypedDictionary(_)) {
+                    if !matches!(
+                        type_of(dictionary),
+                        ValueType::TypedDictionary(_) | ValueType::Options(_)
+                    ) {
                         return Err(fail("Dictionary reads require a typed non-null Dictionary"));
                     }
-                    let ty = native::value_call(
+                    let mut ty = native::value_call(
                         &type_of(dictionary).api_type(),
                         "get",
                         &origins.native_arguments(
@@ -3261,6 +3298,9 @@ impl Function {
                         context,
                     )
                     .map_err(|e| fail(&e))?;
+                    if let ValueType::Options(ref fields) = type_of(dictionary) {
+                        ty = records::read(fields, origins.symbol(key));
+                    }
                     types.insert(
                         result,
                         ValueType::from_api_type(&ty)
@@ -3273,10 +3313,30 @@ impl Function {
                     key,
                     value,
                 } => {
-                    if !matches!(type_of(dictionary), ValueType::TypedDictionary(_)) {
+                    if !matches!(
+                        type_of(dictionary),
+                        ValueType::TypedDictionary(_) | ValueType::Options(_)
+                    ) {
                         return Err(fail(
                             "Dictionary writes require a typed non-null Dictionary",
                         ));
+                    }
+                    if let ValueType::Options(ref fields) = type_of(dictionary) {
+                        if let Some(expected) =
+                            origins.symbol(key).and_then(|name| fields.get(name))
+                        {
+                            if !native::accepts(
+                                expected,
+                                &origins.element_value(expected, value, type_of(value).api_type()),
+                            ) && !origins.deferred_interface(expected, value)
+                            {
+                                return Err(fail("record write does not match its field contract"));
+                            }
+                        } else {
+                            return Err(fail(
+                                "record writes require a declared literal Symbol key",
+                            ));
+                        }
                     }
                     native::value_call(
                         &type_of(dictionary).api_type(),
@@ -3313,7 +3373,9 @@ impl Function {
                                 } else {
                                     type_of(index).api_type()
                                 };
-                                results.push(if let api::Type::TupleValue(tuple) = part {
+                                results.push(if let api::Type::Options(fields) = part {
+                                    records::read(fields, origins.symbol(index))
+                                } else if let api::Type::TupleValue(tuple) = part {
                                     if !native::accepts(
                                         &api::Type::named("Toybox.Lang.Number"),
                                         &key,
@@ -3330,6 +3392,9 @@ impl Function {
                             unions::normalize(results)
                         }
                         ValueType::Any => api::Type::Any,
+                        ValueType::Options(ref fields) => {
+                            records::read(fields, origins.symbol(index))
+                        }
                         ValueType::Tuple(ref tuple) => {
                             tuple.read(origins.integer(index)).map_err(fail)?.api_type()
                         }
@@ -3341,8 +3406,10 @@ impl Function {
                             ));
                         }
                     };
-                    if !matches!(type_of(array), ValueType::Any | ValueType::Union(_))
-                        && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
+                    if !matches!(
+                        type_of(array),
+                        ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
+                    ) && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
                     {
                         return Err(fail("array reads require a non-null Number index"));
                     }
@@ -3573,6 +3640,12 @@ impl Function {
                     )
                     .map_err(fail)?
                     .unwrap_or(result_type);
+                    let result_type = records::refine_result(
+                        &type_of(receiver).api_type(),
+                        member,
+                        arguments.first().and_then(|v| origins.symbol(*v)),
+                        result_type,
+                    );
                     let result_type = ValueType::from_api_type(&result_type)
                         .ok_or_else(|| fail("native call result type has no supported lowering"))?;
                     types.insert(result, result_type);
@@ -4054,7 +4127,7 @@ impl Function {
                     | Operation::ArrayConstant { .. }
                     | Operation::DictionaryConstant { .. }
                     | Operation::DictionaryBegin { .. }
-                    | Operation::ByteOptionsBegin { .. }
+                    | Operation::RecordBegin { .. }
                     | Operation::DictionaryFill { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ArrayFill { .. }
@@ -4112,7 +4185,7 @@ impl Function {
                     Operation::LocalVariable { value: None, .. }
                     | Operation::LocalDeclare { .. }
                     | Operation::DictionaryBegin { .. }
-                    | Operation::ByteOptionsBegin { .. }
+                    | Operation::RecordBegin { .. }
                     | Operation::ArrayBegin { .. }
                     | Operation::ByteArrayBegin { .. } => vec![],
                     Operation::DictionaryFill { entries, .. } => entries
@@ -4638,8 +4711,16 @@ impl Function {
                 Operation::WeakReferenceNew { result } => {
                     format!(".new-native %{} Toybox.Lang.WeakReference", result.0)
                 }
-                Operation::ByteOptionsBegin { builder, length } => {
-                    format!(".byte-options-begin &{} {length}", builder.0)
+                Operation::RecordBegin {
+                    builder,
+                    ref fields,
+                    length,
+                } => {
+                    format!(
+                        ".record-begin &{} {} {length}",
+                        builder.0,
+                        records::tag(fields)
+                    )
                 }
                 Operation::DictionaryBegin {
                     builder,
@@ -5075,6 +5156,7 @@ fn validate_call_arguments(
                     | ValueType::Structural(_)
                     | ValueType::Callback(_)
                     | ValueType::Union(_)
+                    | ValueType::Options(_)
                     | ValueType::Any
                     | ValueType::Integer
                     | ValueType::String
@@ -5129,6 +5211,10 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::Options(fields) => {
+            records::validate(&fields)?;
+            Ok(ValueType::Options(fields))
+        }
         ReturnType::Structural(shape) => Ok(ValueType::Structural(shape)),
         ReturnType::Callback(signature) => Ok(ValueType::Callback(signature)),
         ReturnType::Union(ty) => ValueType::from_api_type(&ty).ok_or("unsupported union result"),

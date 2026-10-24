@@ -554,7 +554,6 @@ struct Parser<'a> {
     offset: usize,
     lookahead: Option<Token<'a>>,
     expressions: usize,
-    dictionary_entry: bool,
     names: crate::names::Names,
     native_base: Option<crate::ClassBase>,
     aliases: Rc<Aliases<'a>>,
@@ -607,7 +606,6 @@ impl<'a> Parser<'a> {
             offset: 0,
             lookahead: None,
             expressions: 0,
-            dictionary_entry: false,
             names: crate::names::Names::default(),
             native_base: None,
             aliases,
@@ -686,15 +684,39 @@ impl<'a> Parser<'a> {
 
     /// Skip a balanced body while collecting declarations, without interpreting it.
     fn skip_body(&mut self) -> Result<(), Diagnostic> {
-        while self.peek()? != Kind::Punctuation('{') {
+        let mut parentheses = 0usize;
+        let mut type_nesting = 0usize;
+        let mut type_start = false;
+        loop {
+            if self.peek()? == Kind::Punctuation('{') {
+                if parentheses > 0 || type_nesting > 0 || type_start {
+                    self.skip_braces()?;
+                    type_start = false;
+                    continue;
+                }
+                break;
+            }
             if self.peek()? == Kind::Word("interface") {
                 self.token()?;
                 self.skip_braces()?;
                 continue;
             }
-            if self.token()?.kind == Kind::End {
-                return Err(self.error(self.offset, "expected function body"));
+            match self.token()?.kind {
+                Kind::Punctuation('(') => parentheses += 1,
+                Kind::Punctuation(')') => parentheses = parentheses.saturating_sub(1),
+                Kind::Punctuation('<' | '[') => type_nesting += 1,
+                Kind::Punctuation('>' | ']') | Kind::GreaterEqual => {
+                    type_nesting = type_nesting.saturating_sub(1);
+                }
+                Kind::ShiftRight => type_nesting = type_nesting.saturating_sub(2),
+                Kind::Word("as" | "or") => {
+                    type_start = true;
+                    continue;
+                }
+                Kind::End => return Err(self.error(self.offset, "expected function body")),
+                _ => {}
             }
+            type_start = false;
         }
         self.skip_braces()
     }
@@ -1714,11 +1736,8 @@ impl<'a> Parser<'a> {
         };
         self.node(ExpressionKind::Negate(Box::new(operand)), span)
     }
-    /// Parse Dictionary expressions while excluding nested Dictionary literal syntax.
+    /// Parse Dictionary entries; the destination contract validates nested values.
     fn dictionary_literal(&mut self, start: usize, depth: usize) -> Result<Expression, Diagnostic> {
-        if self.dictionary_entry {
-            return Err(self.error(start, "nested Dictionary literal syntax is unsupported"));
-        }
         if self.peek()? == Kind::Punctuation('}') {
             let close = self.token()?;
             return self.node(
@@ -1734,7 +1753,6 @@ impl<'a> Parser<'a> {
             if depth >= 64 {
                 return Err(self.error(start, "expression nesting exceeds 64 levels"));
             }
-            self.dictionary_entry = true;
             let key = self.expression(depth + 1)?;
             self.expect(
                 Kind::Punctuation('='),
@@ -1745,7 +1763,6 @@ impl<'a> Parser<'a> {
                 "'=>' between Dictionary key and value",
             )?;
             let value = self.expression(depth + 1)?;
-            self.dictionary_entry = false;
             entries.push((key, value));
             if self.peek()? != Kind::Punctuation(',') {
                 break;
@@ -3006,6 +3023,33 @@ impl Parser<'_> {
     /// Parse one existing signature atom, including bounded container parameters.
     fn parameter_atom(&mut self) -> Result<crate::ParameterType, Diagnostic> {
         let at = self.offset;
+        if self.peek()? == Kind::Punctuation('{') {
+            self.token()?;
+            let mut fields = BTreeMap::new();
+            while self.peek()? != Kind::Punctuation('}') {
+                self.expect(Kind::Punctuation(':'), "literal Symbol field")?;
+                let Kind::Word(name) = self.identifier()?.kind else {
+                    unreachable!()
+                };
+                let name = name.to_owned();
+                self.expect(Kind::Word("as"), "'as' and a record field type")?;
+                let field = self.parameter_annotation(self.offset)?;
+                let ty = field
+                    .source_contract()
+                    .map(|c| crate::api::Type::SourceValue(Box::new(c)))
+                    .unwrap_or_else(|| field.api_type());
+                if fields.insert(name, ty).is_some() {
+                    return Err(self.error(at, "duplicate record key"));
+                }
+                if self.peek()? != Kind::Punctuation(',') {
+                    break;
+                }
+                self.token()?;
+            }
+            self.expect(Kind::Punctuation('}'), "'}'")?;
+            crate::records::validate(&fields).map_err(|message| self.error(at, message))?;
+            return Ok(crate::ParameterType::Options(fields));
+        }
         if self.peek()? == Kind::Punctuation('[') {
             self.token()?;
             let mut slots = Vec::new();

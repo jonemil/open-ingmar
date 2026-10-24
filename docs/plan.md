@@ -37,8 +37,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support structural Symbol-keyed option-record annotations, optional fields,
-  assignment, and mutation beyond the private ByteArray options builder.
+- [ ] Track option-record field type/shape changes after replacement, insertion,
+  and dynamic-key writes through locals, parameters, fields, and control-flow
+  merges; preserve alias effects instead of requiring stable declared keys.
 - [ ] Support lexical `as` assertions for parameterized containers, interfaces,
   and general unions without adding runtime conversions.
 - [ ] Support disabled, gradual, informative, and strict type-checking policies;
@@ -202,9 +203,6 @@ executable profiles.
 
 - [ ] Probe Number/Char union Array inputs to `addAll`; implement SDK-accepted
   combinations beyond the current homogeneous profiles.
-- [ ] Pass general typed option-record values to `encodeNumber`/`decodeNumber`,
-  including mutation and calls returning records, instead of requiring the
-  current private literal-builder proof.
 
 ### WeakReference
 

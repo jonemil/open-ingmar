@@ -253,7 +253,7 @@ pub(crate) fn exact_type(contract: &ReturnType) -> Type {
 /// Report positional contracts that may carry source witnesses at a boundary.
 pub(crate) fn contains(ty: &Type) -> bool {
     match ty {
-        Type::TupleValue(_) => true,
+        Type::TupleValue(_) | Type::Options(_) => true,
         Type::Array(element) => contains(element),
         Type::Union(parts) => parts.iter().any(contains),
         Type::SourceValue(contract) => contract.native().iter().any(contains),
@@ -283,6 +283,15 @@ pub(crate) fn matches_with(
         }
     }
     match (expected, actual) {
+        (Type::Dictionary { key, value }, Type::Options(fields)) => {
+            crate::native::accepts(key, &Type::named("Toybox.Lang.Symbol"))
+                && fields.values().all(|ty| matches_with(value, ty, leaf))
+        }
+        (Type::Options(expected), Type::Options(actual)) => actual.iter().all(|(key, ty)| {
+            expected
+                .get(key)
+                .is_none_or(|required| matches_with(required, ty, leaf))
+        }),
         (Type::TupleValue(expected), Type::TupleValue(actual)) => {
             expected.slots().len() == actual.slots().len()
                 && expected

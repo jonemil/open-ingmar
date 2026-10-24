@@ -2574,8 +2574,9 @@ Arrays support invariant Symbol and Symbol-or-Null elements from API 1.0.0.
 Symbol Dictionary keys are non-null; values may be Symbol or Symbol-or-Null,
 combined with other supported key/value contracts. An expected contract types
 empty and nullable literals. Uncontextual Array literals use positional
-inference, including scalar/Symbol mixtures; homogeneous Symbol Dictionary
-literals infer their key/value contracts. Existing mutation, collection,
+inference, including scalar/Symbol mixtures. Nonempty literals with only
+literal Symbol keys instead infer [per-key records](#symbol-keyed-records);
+expected Dictionary contracts retain homogeneous key/value construction. Existing mutation, collection,
 Object observer, and enumeration
 profiles apply. `reverse` and `slice` return independent Arrays. Symbol is not a
 Comparable witness; non-null elements require a non-null checked
@@ -3415,15 +3416,17 @@ mixed numeric classes under explicit or already established alias contracts.
 
 Nonempty `{key => value, ...}` literals accept expressions producing homogeneous
 numeric, String, Boolean, Char, or Symbol keys and homogeneous values with
-optional Null. Without context, a non-null value establishes the value type; any
+optional Null. Literal Symbol keys instead select record inference without
+context. For the homogeneous profile, a non-null value establishes the value type; any
 Null makes it nullable. Null-only values require an expected nullable contract.
 Typed contexts check every entry without changing invariant key/value types.
 Null keys, mixed scalar kinds without an expected interface, numeric alias, or
 Object contract, and container-valued entries outside the Object value profile
 are unsupported. Container separators follow the
 [literal grammar](grammar.md#lexical-rules-and-literals). Nested Dictionary
-literal syntax is also unsupported, including inside entry call arguments.
-Ordinary calls and Array reads may produce scalar entries.
+literals are parsed and checked against their destination contract; per-key
+records admit nested records. Ordinary calls and Array reads may produce scalar
+entries.
 
 Literal-only entries use `hpush` and a [scalar DATA
 constant](../formats/data.md#dictionary-constants). Signed Number tokens use the
@@ -3662,17 +3665,16 @@ integer representations without a separate runtime class or conversion opcode.
 An explicit lexical assertion can claim an enum type without validating its
 value.
 
-Both conversion calls require an options argument. Direct literals, including
-`{}`, receive a checked record contract from call context. Up to two literal
-Symbol fields are supported: `:offset` requires Number and defaults to 0;
-`:endianness` requires Endian and defaults to little endian. Unknown keys or
-wrong field types are rejected. A literal containing an Endian constant/local
-under `:endianness` can infer this record contract for reuse through a saved
-local. An arbitrary homogeneous Dictionary cannot claim the record proof.
-General Symbol-keyed record annotations and record mutation remain unsupported.
+Both conversion calls require an options argument with optional `:offset`
+(Number, default 0) and `:endianness` (Endian, default little endian) fields.
+Direct literals receive this contract from call context; typed records may also
+come from parameters, locals, fields, conditionals, or calls. Extra keys are
+allowed; known fields must have compatible types. Ordinary homogeneous
+Dictionaries do not establish a per-key record contract.
+
 
 Private construction allocates before field effects, preserves source order, and
-exposes the record only after every declared field is filled. Values use
+exposes the record only after every supplied entry is filled. Values use
 ordinary runtime Dictionary storage. Invalid asserted formats/endian values,
 offset bounds, conversion ranges, and failures remain native checks; no masking,
 conversion, or portable exception guarantee is added by the compiler.
@@ -3684,6 +3686,28 @@ runtime-class refinement before class-specific operations. See the
 [example](../../../examples/compiler-byte-arrays/README.md),
 [IR contract](../ir/README.md#bytearray-values-and-allocation), and
 [evidence](../../investigations/byte-arrays.md#source-and-ir-profile).
+
+## Symbol-keyed records
+
+An annotation such as `{:name as String, :count as Number}` describes a
+Dictionary with independently typed, optional Symbol fields. Every field may be
+absent; additional keys are allowed. Typedefs and nested annotations use the
+same contract. Nonempty literals containing only literal Symbol keys infer a
+record from their value contracts; `{}` requires a destination contract.
+Construction checks known fields and preserves evaluation order.
+
+Indexed reads and `get(:name)` produce the declared field type joined with Null.
+Unknown or dynamic keys produce Any. Records retain source-class identities and
+nested container contracts through annotations and saved IR. Assignment checks
+common known fields; missing and extra fields are permitted. Record literals
+can satisfy compatible homogeneous Dictionary contracts.
+
+Indexed writes and `put` currently require a declared literal Symbol key and a
+value compatible with that field. `remove` leaves the optional contract intact.
+Changing field types, adding keys after construction, and dynamic-key writes
+require evolving record-flow inference and are rejected in this profile.
+Records use ordinary Dictionary methods and runtime storage; annotations add no
+wrappers or conversions. Lexical casts cannot manufacture a record contract.
 
 ## Structural interfaces
 

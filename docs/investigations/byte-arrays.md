@@ -191,3 +191,34 @@ Build with `scripts/build-example.sh`, then use `scripts/check-example.py`
 and `simulate <prepared directory>` in the Rust/SDK environments respectively.
 
 [lang]: https://developer.garmin.com/connect-iq/api-docs/Toybox/Lang.html
+
+## Structural conversion options
+
+Reviewed 2026-10-24 against the public Monkey Types and ByteArray references.
+
+The public [Monkey Types documentation][types] defines Dictionary annotations
+with independently typed keys. All fields are optional and extra keys are
+allowed. Our Symbol-keyed profile uses this contract for ByteArray options.
+
+SDK 9.2.0 strict probes on fr265 accept returned/nested records, omitted and
+extra fields, and mutation. A read of a declared Number field is Number or Null;
+a dynamic Symbol read is Any. Replacing that field with a String is accepted
+and changes subsequent reads to String or Null. Our stable-field mutation
+profile rejects such type changes pending record-flow inference.
+
+The strict SDK accepts this replacement and return contract:
+
+```monkeyc
+function replace(o as {:x as Toybox.Lang.Number}) as Toybox.Lang.String or Null {
+    o[:x] = "changed";
+    return o[:x];
+}
+```
+
+[compiler-option-records](../../examples/compiler-option-records/README.md)
+checks annotated/inferred records, nested reads, saved values, class storage,
+`put`/`remove`, and ByteArray conversion. SDK and generated PRGs print the same
+12 expected lines in the simulator. Its full export/reassembly audit has no
+CODE or DATA fallback; record storage requires no new encoding.
+
+[types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

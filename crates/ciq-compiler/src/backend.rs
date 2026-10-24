@@ -179,7 +179,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 );
             }
             Operation::DictionaryBegin { builder, .. }
-            | Operation::ByteOptionsBegin { builder, .. }
+            | Operation::RecordBegin { builder, .. }
             | Operation::ArrayBegin { builder, .. }
             | Operation::ByteArrayBegin { builder, .. } => {
                 builders.insert(
@@ -211,7 +211,9 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             Operation::DictionaryBegin {
                 builder, length, ..
             }
-            | Operation::ByteOptionsBegin { builder, length } => {
+            | Operation::RecordBegin {
+                builder, length, ..
+            } => {
                 let (opcode, operands) = integer(length as i32);
                 items.push(instruction(opcode, operands));
                 items.push(instruction(Opcode::Newd, vec![]));

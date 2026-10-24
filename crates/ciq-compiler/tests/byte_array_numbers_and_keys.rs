@@ -132,7 +132,6 @@ fn option_records_recheck_fields_enum_identity_and_builder_completion() {
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.ENDIAN_BIG,{});}",
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.NUMBER_FORMAT_FLOAT,{:endianness=>1});}",
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.NUMBER_FORMAT_FLOAT,{:offset=>Lang.ENDIAN_BIG});}",
-        "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.NUMBER_FORMAT_FLOAT,{:unknown=>0});}",
     ] {
         assert!(compile_function(source).is_err(), "accepted {source}");
     }
@@ -144,13 +143,13 @@ fn option_records_recheck_fields_enum_identity_and_builder_completion() {
         let f = compile_function(source).unwrap_or_else(|e| panic!("{source}: {e}"));
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
-    let text = "ciq-ir\n.function f\n.byte-options-begin &0 2\n.symbol %0 offset\n.integer %1 0\n.dictionary-fill &0 0 %0 %1\n.symbol %2 endianness\n.constant %3 Toybox.Lang ENDIAN_BIG\n.dictionary-fill &0 1 %2 %3\n.dictionary-finish %4 &0\n.discard %4\n.integer %5 1\n.return %5\n.end\n";
+    let text = "ciq-ir\n.function f\n.record-begin &0 options(endianness=endian;offset=integer) 2\n.symbol %0 offset\n.integer %1 0\n.dictionary-fill &0 0 %0 %1\n.symbol %2 endianness\n.constant %3 Toybox.Lang ENDIAN_BIG\n.dictionary-fill &0 1 %2 %3\n.dictionary-finish %4 &0\n.discard %4\n.integer %5 1\n.return %5\n.end\n";
     assert_eq!(text, parse_function_ir(text).unwrap().to_ir_text());
     for edited in [
-        text.replace("begin &0 2", "begin &0 3"),
-        text.replace("begin &0 2", "begin &0 1"),
+        text.replace("offset=integer) 2", "offset=integer) 3"),
+        text.replace("offset=integer) 2", "offset=integer) 1"),
         text.replace("fill &0 1", "fill &0 0"),
-        text.replace("%0 offset", "%0 unknown"),
+        text.replace("%0 offset", "%0 "),
         text.replace("ENDIAN_BIG", "NUMBER_FORMAT_FLOAT"),
         text.replace(".integer %1 0", ".constant %1 Toybox.Lang ENDIAN_LITTLE"),
     ] {

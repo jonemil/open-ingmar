@@ -128,9 +128,14 @@ impl ApiContext {
                 }
                 Ok(())
             }
-            Type::Options(fields) => fields
-                .values()
-                .try_for_each(|ty| self.check_type(catalogue, ty)),
+            Type::Options(fields) => {
+                crate::records::validate(fields)?;
+                self.check_class(catalogue, "Toybox.Lang.Dictionary")?;
+                self.check_class(catalogue, "Toybox.Lang.Symbol")?;
+                fields
+                    .values()
+                    .try_for_each(|ty| self.check_type(catalogue, ty))
+            }
             Type::SourceValue(contract) => self.check_type(catalogue, &contract.api_type()),
             Type::Array(element) => {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
@@ -235,8 +240,7 @@ pub enum Type {
     },
     /// Positional Array shape with an exact number of typed slots.
     Tuple(Vec<Type>),
-    /// Symbol-keyed options with optional named fields. This describes the API
-    /// shape; executable callers must satisfy a supported Dictionary profile.
+    /// Structural Symbol-keyed Dictionary with optional named fields.
     Options(BTreeMap<String, Type>),
     Named(String),
     /// A generic class parameter substituted from a concrete receiver type.
@@ -478,6 +482,10 @@ impl Catalogue {
             Type::Array(element) => {
                 bindings = vec![("Element", element.as_ref())];
                 ("Toybox.Lang.Array", &bindings)
+            }
+            Type::Options(_) => {
+                bindings = vec![("Key", &Type::Any), ("Value", &Type::Any)];
+                ("Toybox.Lang.Dictionary", &bindings)
             }
             Type::Dictionary { key, value } => {
                 bindings = vec![("Key", key.as_ref()), ("Value", value.as_ref())];

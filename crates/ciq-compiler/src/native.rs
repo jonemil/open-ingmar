@@ -62,6 +62,12 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if matches!(receiver, api::Type::Options(_)) {
+        return value_parameters(
+            &api::Type::dictionary(api::Type::named("Toybox.Lang.Symbol"), api::Type::Any),
+            member,
+        );
+    }
     if let api::Type::SourceValue(contract) = receiver {
         return value_parameters(&contract.api_type(), member);
     }
@@ -341,6 +347,10 @@ pub(crate) fn value_call(
         }
     }
     let class = match receiver {
+        api::Type::Options(fields) => {
+            crate::records::validate(fields)?;
+            "Toybox.Lang.Dictionary"
+        }
         api::Type::Dictionary { .. }
             if crate::DictionaryType::from_api_type(receiver).is_some() =>
         {
@@ -722,6 +732,17 @@ fn scalar_comparable(actual: &api::Type) -> bool {
 /// This positional adaptation also applies inside nested Array element domains.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
+    if let (api::Type::Dictionary { key, value }, api::Type::Options(fields)) = (expected, actual) {
+        return accepts(key, &api::Type::named("Toybox.Lang.Symbol"))
+            && fields.values().all(|ty| accepts(value, ty));
+    }
+    if let (api::Type::Options(expected), api::Type::Options(actual)) = (expected, actual) {
+        return actual.iter().all(|(key, ty)| {
+            expected
+                .get(key)
+                .is_none_or(|required| accepts(required, ty))
+        });
+    }
     if crate::structural::same_type(expected, actual)
         || (*expected == api::Type::Any || *actual == api::Type::Any)
             && *expected != api::Type::Void
@@ -828,7 +849,7 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         let actual = match actual {
             api::Type::Named(actual) => actual.as_str(),
             api::Type::Array(_) | api::Type::Tuple(_) => "Toybox.Lang.Array",
-            api::Type::Dictionary { .. } => "Toybox.Lang.Dictionary",
+            api::Type::Dictionary { .. } | api::Type::Options(_) => "Toybox.Lang.Dictionary",
             _ => return false,
         };
         if expected == "Toybox.Lang.Object" && crate::InterfaceType::from_name(actual).is_some() {

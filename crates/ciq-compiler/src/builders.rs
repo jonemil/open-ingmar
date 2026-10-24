@@ -10,7 +10,7 @@ pub(crate) enum Contract {
     Array(ArrayElement),
     ByteArray,
     Dictionary(DictionaryType),
-    ByteOptions,
+    Record(BTreeMap<String, crate::api::Type>),
 }
 impl Contract {
     pub(crate) fn element_type(&self) -> Option<crate::api::Type> {
@@ -20,7 +20,7 @@ impl Contract {
                 crate::api::Type::named("Toybox.Lang.Number"),
                 crate::api::Type::named("Toybox.Lang.Char"),
             ])),
-            Self::Dictionary(_) | Self::ByteOptions => None,
+            Self::Dictionary(_) | Self::Record(_) => None,
         }
     }
     pub(crate) fn dictionary(&self) -> Option<DictionaryType> {
@@ -106,12 +106,18 @@ pub(crate) fn validate(
         }
     }
     for (index, op) in operations.iter().enumerate() {
-        if let Operation::ByteOptionsBegin { builder, length } = op.operation {
-            if length > 2 {
-                return Err(fail(index, "ByteArray options permit at most two fields"));
+        if let Operation::RecordBegin {
+            builder,
+            length,
+            ref fields,
+        } = op.operation
+        {
+            if length > i32::MAX as u32 {
+                return Err(fail(index, "record length exceeds the supported range"));
             }
+            crate::records::validate(fields).map_err(|message| fail(index, message))?;
             if declarations
-                .insert(builder, (Contract::ByteOptions, length))
+                .insert(builder, (Contract::Record(fields.clone()), length))
                 .is_some()
             {
                 return Err(fail(index, "duplicate container builder declaration"));
@@ -148,7 +154,7 @@ pub(crate) fn validate(
         for &index in &blocks[&block] {
             match operations[index].operation {
                 Operation::DictionaryBegin { builder, .. }
-                | Operation::ByteOptionsBegin { builder, .. }
+                | Operation::RecordBegin { builder, .. }
                 | Operation::ArrayBegin { builder, .. }
                 | Operation::ByteArrayBegin { builder, .. } => {
                     if active.insert(builder, 0).is_some() {
@@ -225,8 +231,7 @@ pub(crate) fn validate(
                     ref entries,
                 } => {
                     if declarations.get(&builder).is_none_or(|(contract, _)| {
-                        contract.dictionary().is_none()
-                            && !matches!(contract, Contract::ByteOptions)
+                        contract.dictionary().is_none() && !matches!(contract, Contract::Record(_))
                     }) {
                         return Err(fail(index, "Dictionary fill requires a Dictionary builder"));
                     }
@@ -246,8 +251,7 @@ pub(crate) fn validate(
                 }
                 Operation::DictionaryFinish { result: _, builder } => {
                     if declarations.get(&builder).is_none_or(|(contract, _)| {
-                        contract.dictionary().is_none()
-                            && !matches!(contract, Contract::ByteOptions)
+                        contract.dictionary().is_none() && !matches!(contract, Contract::Record(_))
                     }) {
                         return Err(fail(
                             index,

@@ -201,6 +201,10 @@ pub(crate) fn resolve_parameter<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.parameter();
+    } else if let ParameterType::Options(fields) = ty {
+        for value in fields.values_mut() {
+            resolve_api(value, resolve)?;
+        }
     } else if let ParameterType::Tuple(tuple) = ty {
         for slot in &mut tuple.slots {
             resolve_result(slot, resolve)?;
@@ -232,6 +236,10 @@ pub(crate) fn resolve_result<E>(
             resolve_api(ty, resolve)?;
         }
         *ty = contract.result();
+    } else if let ReturnType::Options(fields) = ty {
+        for value in fields.values_mut() {
+            resolve_api(value, resolve)?;
+        }
     } else if let ReturnType::Tuple(tuple) = ty {
         for slot in &mut tuple.slots {
             resolve_result(slot, resolve)?;
@@ -322,6 +330,11 @@ fn resolve_api<E>(
             }
         }
         Type::Array(element) => resolve_api(element, resolve)?,
+        Type::Options(fields) => {
+            for ty in fields.values_mut() {
+                resolve_api(ty, resolve)?;
+            }
+        }
         Type::Dictionary { key, value } => {
             resolve_api(key, resolve)?;
             resolve_api(value, resolve)?;

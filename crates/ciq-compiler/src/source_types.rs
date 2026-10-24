@@ -14,7 +14,7 @@ pub(crate) struct Types {
     builders: BTreeMap<crate::BuilderId, ArrayElement>,
     byte_arrays: std::collections::BTreeSet<crate::BuilderId>,
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
-    options: std::collections::BTreeSet<crate::BuilderId>,
+    options: BTreeMap<crate::BuilderId, BTreeMap<String, Type>>,
     origins: crate::source_objects::Origins,
     removal_captures: crate::local_flow::RemovalCaptures,
     pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
@@ -93,12 +93,16 @@ impl Types {
             Operation::VariableRead {
                 result, value_type, ..
             } => (*result, Some(value_type.api_type())),
-            Operation::ByteOptionsBegin { builder, .. } => {
-                self.options.insert(*builder);
+            Operation::RecordBegin {
+                builder, fields, ..
+            } => {
+                self.options.insert(*builder, fields.clone());
                 return;
             }
-            Operation::DictionaryFinish { result, builder } if self.options.contains(builder) => {
-                (*result, Some(Type::byte_options()))
+            Operation::DictionaryFinish { result, builder }
+                if self.options.contains_key(builder) =>
+            {
+                (*result, Some(Type::Options(self.options[builder].clone())))
             }
             Operation::ByteArrayBegin { builder, .. } => {
                 self.byte_arrays.insert(*builder);
@@ -342,6 +346,9 @@ impl Types {
                     .get(dictionary)
                     .zip(self.values.get(key))
                     .and_then(|(receiver, key_type)| {
+                        if let Type::Options(fields) = receiver {
+                            return Some(crate::records::read(fields, self.origins.symbol(*key)));
+                        }
                         native::value_call(
                             receiver,
                             "get",
@@ -364,6 +371,9 @@ impl Types {
                 self.values
                     .get(array)
                     .and_then(|ty| match candidate(ty).as_ref() {
+                        Type::Options(fields) => {
+                            Some(crate::records::read(fields, self.origins.symbol(*index)))
+                        }
                         Type::Union(_) => crate::tuples::read_contract(
                             candidate(ty).as_ref(),
                             self.origins.integer(*index),
@@ -426,6 +436,12 @@ impl Types {
                     let result =
                         native::value_call(&candidate(receiver), member, &argument_types, None)
                             .ok()?;
+                    let result = crate::records::refine_result(
+                        &candidate(receiver),
+                        member,
+                        arguments.first().and_then(|v| self.origins.symbol(*v)),
+                        result,
+                    );
                     crate::tuples::refine_slice(
                         &candidate(receiver),
                         member,
@@ -592,6 +608,9 @@ impl Types {
         }
     }
 
+    pub(crate) fn set_record(&mut self, builder: crate::BuilderId, fields: BTreeMap<String, Type>) {
+        self.options.insert(builder, fields);
+    }
     /// Select the private builder's final element contract after the first element.
     pub(crate) fn set_dictionary(&mut self, builder: crate::BuilderId, ty: crate::DictionaryType) {
         self.dictionaries.insert(builder, ty);

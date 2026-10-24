@@ -44,6 +44,11 @@ Contents:
 
 ## Values and storage
 
+Structural option records use the Dictionary allocation/fill/finish path:
+`RecordBegin` selects `newd`, and reads/writes use ordinary Dictionary calls.
+Per-key contracts and nullable read types are erased without runtime guards.
+
+
 ### Parameters and positional arguments
 
 Backend prologue counts parameters plus one context slot; parameter index 0

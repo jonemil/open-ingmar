@@ -1233,15 +1233,23 @@ runtime construction rather than scalar constants.
 `.constant` retains enum identity and introduction level; lowering pushes its
 integer value. Decode retains its Numeric result after reload.
 
-`.byte-options-begin` allocates a private Dictionary for zero to two fields.
-Existing `.dictionary-fill` operations require direct literal Symbol keys:
-`offset` with Number, or `endianness` with Endian. Values are staged before
-key/value setup when needed. `.dictionary-finish` exposes a sealed
-`byte-options` record after complete ordered fills, clearing builder ownership.
-The `byte-options` tag also supports matching conditional edges; lexical casts
-cannot manufacture this proof. Native and saved IR check field names/types,
-counts, order, block/value uses, and the shared frame limit. CODE uses ordinary
-Dictionary construction and calls; no codec opcode or new DATA framing is added.
+`.record-begin &builder options(key=type;...) count` allocates a private
+Symbol-keyed Dictionary with a structural record contract. Schemas have at most
+256 distinct ASCII identifier keys and share the 64-level type-depth limit.
+Types retain nested/source contracts; Void and Dc fields are rejected. Canonical
+text sorts fields by key. Every field is optional, and extra constructor keys
+are permitted. Each `.dictionary-fill` checks a literal Symbol key, the known
+field's value type, and its ordered entry index. `.dictionary-finish` exposes
+the record only after all `count` entries have been filled.
+
+The `options(...)` tag is accepted in signatures, locals, fields, joins, and
+nested containers. Dictionary reads and native `get` with a known literal key
+produce that field type joined with Null; other keys produce Any. Writes and
+native `put` require a declared literal key with a compatible value. Saved IR
+revalidates these contracts, builder ownership, API availability, source
+identities, and constructor callback effects. Lexical casts cannot create a
+record proof. Lowering uses ordinary Dictionary allocation and calls; it adds
+no opcode, wrapper, or DATA framing.
 
 `.byte-array-new` allocates a fresh zero-filled ByteArray. Length must be an
 earlier same-block non-null Number value. Validate API 3.0.0, single-use/block

@@ -243,7 +243,8 @@ array-operation = ".array-new" value-id element-tag
                 | ".array-begin" builder-id element-tag decimal-u32
                 | ".byte-array-new" value-id value-id
                 | ".byte-array-constant" value-id byte-payload
-                | (".byte-array-begin" | ".byte-options-begin") builder-id decimal-u32
+                | ".byte-array-begin" builder-id decimal-u32
+                | ".record-begin" builder-id record-tag decimal-u32
                 | ".array-fill" builder-id decimal-u32 value-id
                 | ".array-fill-many" builder-id decimal-u32 value-id+
                 | ".array-finish" value-id builder-id
@@ -312,7 +313,10 @@ declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
            | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
-           | callback-tag | tuple-tag
+           | callback-tag | tuple-tag | record-tag
+record-tag = "options(" record-fields? ")"
+record-fields = record-field-tag (";" record-field-tag)*
+record-field-tag = identifier "=" call-result-tag
 tuple-tag = "tuple(" tuple-slots? ")"
 tuple-slots = call-result-tag (";" call-result-tag)*
 callback-tag = "callback(" callback-arguments? "=>" callback-result-tag ")"
@@ -354,7 +358,7 @@ element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | union-tag | nested-element-tag | exact-element-tag
 exact-element-tag = "exact(" (source-tag | nullable-source-tag | source-union-tag) ")"
 nested-element-tag = ["nullable-"] "nested(" nested-container-tag ")"
-nested-container-tag = array-tag | dictionary-tag | tuple-tag
+nested-container-tag = array-tag | dictionary-tag | tuple-tag | record-tag
 nullable-structural-tag = "union(" structural-tag "|null)"
 nullable-callback-tag = "union(" callback-tag "|null)"
 array-tag = element-tag "-array"
@@ -366,9 +370,9 @@ dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
 join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
-         | "array-" element-tag | "null" | "byte-options"
+         | "array-" element-tag | "null"
          | source-tag | nullable-source-tag | source-union-tag
-         | structural-tag | callback-tag | tuple-tag
+         | structural-tag | callback-tag | tuple-tag | record-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | enum-tag | "dictionary"
@@ -468,7 +472,7 @@ contracts](../frontend/README.md#dictionaries), with additional supported
 core/interface/alias domains documented in their semantic pages. Keys exclude
 Null. Typed Dictionary tags work for signatures, user-call results, fields, and
 matching conditional joins; casts do not accept them. Join tags also admit
-`null` and `byte-options`; standalone View/Dc/delegate tags are not join tags.
+`null` and `options(...)`; standalone View/Dc/delegate tags are not join tags.
 A tag's existence in one context does not imply acceptance in another context.
 [Value operations](README.md#values-and-storage) and [container operations](README.md#containers-and-private-construction) own
 consumer-specific restrictions.

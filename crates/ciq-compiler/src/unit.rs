@@ -94,6 +94,7 @@ fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
 fn callback_value_type(ty: &crate::api::Type) -> bool {
     use crate::api::Type;
     match ty {
+        crate::api::Type::Options(_) => true,
         Type::SourceValue(_) => true,
         Type::Any | Type::Structural(_) => true,
         Type::Named(name) => {
@@ -187,6 +188,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || (interface_keys(&ty)
                     && matches!(member.as_str(), "get" | "put" | "hasKey" | "remove" | "toString"))
                 || matches!(ty, crate::ValueType::Dictionary
+                    | crate::ValueType::Options(_)
                     | crate::ValueType::NullableDictionary | crate::ValueType::LangObject
                     | crate::ValueType::NullableObject if member == "toString")
                 || matches!(ty, crate::ValueType::Method
@@ -1549,6 +1551,15 @@ impl CompilationUnit {
                     self.check_value_contract(function, &origins, value, &expected, context)
                         .map_err(|message| fail(Some(index), Some(operation), message))
                 };
+                let check_record = |fields: &BTreeMap<String, crate::api::Type>,
+                                    key: crate::ValueId,
+                                    value: crate::ValueId| {
+                    if let Some(ty) = origins.symbol(key).and_then(|key| fields.get(key)) {
+                        self.check_api_value_contract(function, &origins, value, ty, context)
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    }
+                    Ok::<(), UnitError>(())
+                };
                 let check_dictionary_value = |dictionary: crate::DictionaryType, value| {
                     let crate::api::Type::Dictionary { value: ty, .. } = dictionary.api_type()
                     else {
@@ -1572,6 +1583,20 @@ impl CompilationUnit {
                     Operation::DictionaryFill {
                         builder, entries, ..
                     } => {
+                        if let Some(fields) = function.operations().iter().find_map(|op| match &op
+                            .operation
+                        {
+                            Operation::RecordBegin {
+                                builder: owner,
+                                fields,
+                                ..
+                            } if owner == builder => Some(fields),
+                            _ => None,
+                        }) {
+                            for (key, value) in entries {
+                                check_record(fields, *key, *value)?;
+                            }
+                        }
                         if let Some(dictionary) = dictionary_builders.get(builder) {
                             for (key, value) in entries {
                                 check_dictionary_key(dictionary.clone(), *key)?;
@@ -1584,6 +1609,11 @@ impl CompilationUnit {
                         key,
                         value,
                     } => {
+                        if let crate::ValueType::Options(ref fields) =
+                            function.value_types[dictionary]
+                        {
+                            check_record(fields, *key, *value)?;
+                        }
                         if let crate::ValueType::TypedDictionary(ref dictionary) =
                             function.value_types[dictionary]
                         {
@@ -1656,6 +1686,13 @@ impl CompilationUnit {
                         member,
                         arguments,
                     } => {
+                        if let (crate::ValueType::Options(fields), "put", [key, value]) = (
+                            &function.value_types[receiver],
+                            member.as_str(),
+                            arguments.as_slice(),
+                        ) {
+                            check_record(fields, *key, *value)?;
+                        }
                         for alternative in
                             crate::unions::alternatives(&function.value_types[receiver].api_type())
                         {

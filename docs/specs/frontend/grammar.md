@@ -234,7 +234,7 @@ rules below define paths; the domains following them restrict name resolution.
 
 ```text
 value-type = value-atom ("or" value-atom)*
-value-atom = named-value-type | "Null" | structural-interface | callback-type | tuple-type
+value-atom = named-value-type | "Null" | structural-interface | callback-type | tuple-type | option-record
            | array-type "<" array-element ">"
            | dictionary-type "<" dictionary-key "," dictionary-value ">"
 result-type = value-type | "Void"
@@ -246,6 +246,8 @@ interface-parameters = interface-parameter ("," interface-parameter)*
 interface-parameter = identifier ("as" value-type)?
 callback-type = "Method" "(" interface-parameters? ")" ("as" result-type)?
 tuple-type = "[" value-type ("," value-type)* "]"
+option-record = "{" (record-field ("," record-field)* ","?)? "}"
+record-field = symbol-literal "as" value-type
 array-element = value-type
 dictionary-key = value-type
 dictionary-value = value-type

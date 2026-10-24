@@ -99,7 +99,7 @@ enum Directive {
     ByteArrayNew,
     ByteArrayConstant,
     ByteArrayBegin,
-    ByteOptionsBegin,
+    RecordBegin,
     CallNativeModule,
 }
 
@@ -331,7 +331,7 @@ pub(crate) fn parse_function_ir_context(
             Some(".array-new") => (Directive::ArrayNew, 3),
             Some(".array-allocate") => (Directive::ArrayAllocate, 4),
             Some(".byte-array-new") => (Directive::ByteArrayNew, 3),
-            Some(".byte-options-begin") => (Directive::ByteOptionsBegin, 3),
+            Some(".record-begin") => (Directive::RecordBegin, 4),
             Some(".byte-array-constant") => (Directive::ByteArrayConstant, 3),
             Some(".byte-array-begin") => (Directive::ByteArrayBegin, 3),
             Some(".dictionary-begin") => (Directive::DictionaryBegin, 4),
@@ -814,9 +814,11 @@ pub(crate) fn parse_function_ir_context(
                     result: parse_value(&fields[1])?,
                     builder: parse_builder(&fields[2])?,
                 },
-                Directive::ByteOptionsBegin => Operation::ByteOptionsBegin {
+                Directive::RecordBegin => Operation::RecordBegin {
                     builder: parse_builder(&fields[1])?,
-                    length: fields[2]
+                    fields: crate::records::parse(&fields[2])
+                        .map_err(|message| fail(*at, message))?,
+                    length: fields[3]
                         .parse()
                         .map_err(|_| fail(*at, "invalid option field count"))?,
                 },

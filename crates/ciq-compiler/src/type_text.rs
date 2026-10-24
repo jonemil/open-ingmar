@@ -247,6 +247,9 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("options(") {
+        return crate::records::parse(tag).map(ReturnType::Options);
+    }
     if tag.starts_with("tuple(") {
         return crate::tuples::parse(tag).map(ReturnType::Tuple);
     }
@@ -350,6 +353,7 @@ pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
         return Ok(parameter.clone());
     }
     match call_result(tag) {
+        Ok(ReturnType::Options(fields)) => Ok(ParameterType::Options(fields)),
         Ok(ReturnType::Tuple(tuple)) => Ok(ParameterType::Tuple(tuple)),
         Ok(ReturnType::Structural(shape)) => Ok(ParameterType::Structural(shape)),
         Ok(ReturnType::Callback(signature)) => Ok(ParameterType::Callback(signature)),
@@ -399,6 +403,9 @@ pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
 
 /// Print a call-result tag without adding metadata keys or erasing source identity.
 pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
+    if let ReturnType::Options(fields) = ty {
+        return Cow::Owned(crate::records::tag(fields));
+    }
     match ty {
         ReturnType::Structural(shape) => Cow::Owned(shape.tag()),
         ReturnType::Callback(signature) => Cow::Owned(crate::callbacks::tag(signature)),
@@ -422,6 +429,9 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 
 /// Print parameter metadata using the same spellings as its reader.
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
+    if let ParameterType::Options(fields) = ty {
+        return Cow::Owned(crate::records::tag(fields));
+    }
     match ty {
         ParameterType::Tuple(tuple) => Cow::Owned(tuple.tag()),
         ParameterType::Structural(shape) => Cow::Owned(shape.tag()),
@@ -447,11 +457,11 @@ pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
 
 /// Parse an API join tag, retaining its prefix notation; source joins use `JoinType`.
 pub(super) fn join(tag: &str) -> Option<Type> {
+    if tag.starts_with("options(") {
+        return crate::records::parse(tag).ok().map(Type::Options);
+    }
     if tag == "null" {
         return Some(Type::Null);
-    }
-    if tag == "byte-options" {
-        return Some(Type::byte_options());
     }
     if let Some(element) = tag.strip_prefix("array-").and_then(element) {
         return Some(Type::Array(Box::new(element.api_type())));
@@ -470,6 +480,9 @@ pub(super) fn join(tag: &str) -> Option<Type> {
 
 /// Print a supported join type without broadening its accepted domain.
 pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
+    if let Type::Options(fields) = ty {
+        return Some(Cow::Owned(crate::records::tag(fields)));
+    }
     if let Type::TupleValue(tuple) = ty {
         return Some(Cow::Owned(tuple.tag()));
     }
@@ -478,9 +491,6 @@ pub(super) fn join_tag(ty: &Type) -> Option<Cow<'static, str>> {
     }
     if *ty == Type::Null {
         return Some(Cow::Borrowed("null"));
-    }
-    if *ty == Type::byte_options() {
-        return Some(Cow::Borrowed("byte-options"));
     }
     if let Some(dictionary) = crate::DictionaryType::from_api_type(ty) {
         return Some(Cow::Owned(dictionary.text()));
@@ -557,7 +567,7 @@ mod tests {
             ("comparable", [true, true, true, true, false]),
             ("view", [true, true, true, false, false]),
             ("tuple(view)", [true, true, true, true, false]),
-            ("byte-options", [false, false, false, true, false]),
+            ("options(offset=integer)", [true, true, true, true, false]),
             ("null", [true, true, true, true, false]),
             ("void", [false; 5]),
         ] {

@@ -37,10 +37,9 @@ neither classes nor enums. NumberFormat and Endian are declared enum types from
 API 1.0.0; their published constants require 3.1.0. Executable signatures retain
 these enum identities, while `.constant` retains the member's introduction level
 and lowers to its integer value. ByteArray conversion methods declare optional
-`offset`/`endianness` fields; the
-[bounded source option builder](../frontend/README.md#bytearray) checks each
-field before exposing a record, independently of general structural
-assignability.
+`offset`/`endianness` fields using the shared
+[Symbol-keyed record contract](../frontend/README.md#symbol-keyed-records).
+Construction and assignment check known fields without requiring their presence.
 
 Structural interfaces record required method signatures separately from classes.
 `Catalogue::interface()` resolves them without class inheritance or

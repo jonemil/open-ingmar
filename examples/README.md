@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-option-records](compiler-option-records/README.md): optional
+  Symbol-keyed records, nested fields, mutation, and ByteArray conversion calls.
 - [compiler-object-tests](compiler-object-tests/README.md): runtime class and
   member predicates, refinement, lexical casts, and evaluation order.
 - [compiler-tuples](compiler-tuples/README.md): positional/nested/source slots,

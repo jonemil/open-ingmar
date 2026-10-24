@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ConstructionType {
-    ByteOptions,
+    Options(BTreeMap<String, crate::api::Type>),
     Tuple(crate::TupleType),
     Array(crate::ArrayElement),
     Dictionary(crate::DictionaryType),
@@ -26,9 +26,7 @@ fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
             let first = candidates.next()?;
             candidates.all(|other| other == first).then_some(first)
         }
-        crate::api::Type::Options(_) if *ty == crate::api::Type::byte_options() => {
-            Some(ConstructionType::ByteOptions)
-        }
+        crate::api::Type::Options(fields) => Some(ConstructionType::Options(fields.clone())),
         crate::api::Type::Array(element) => {
             crate::ArrayElement::from_api_type(element).map(ConstructionType::Array)
         }
@@ -637,7 +635,7 @@ fn emit_array_read(
     let result = ValueId(operations.len() as u32);
     if matches!(
         crate::source_types::value_type(operations, array, calls.parameter_types.clone()),
-        Some(crate::api::Type::Dictionary { .. })
+        Some(crate::api::Type::Dictionary { .. } | crate::api::Type::Options(_))
     ) {
         Ok(Operation::DictionaryRead {
             result,
@@ -1316,7 +1314,7 @@ impl Builder<'_> {
         } else {
             let operation = if matches!(
                 self.types.value_type(array),
-                Some(crate::api::Type::Dictionary { .. })
+                Some(crate::api::Type::Dictionary { .. } | crate::api::Type::Options(_))
             ) {
                 Operation::DictionaryWrite {
                     dictionary: array,
@@ -2457,16 +2455,9 @@ impl Builder<'_> {
         }
 
         let inferred_options = expected.is_none()
-            && matches!(&expression.kind,
-            parser::ExpressionKind::DictionaryLiteral(entries) if entries.iter().any(|(key,value)| {
-                if !matches!(&key.kind, parser::ExpressionKind::Symbol(name) if name=="endianness") {return false;}
-                match &value.kind {
-                    parser::ExpressionKind::NativeConstant {module,member,..} => crate::api::core().constant(module, member).is_some_and(|c| c.ty==crate::api::Type::named("Toybox.Lang.Endian")),
-                    parser::ExpressionKind::Local(name) => locals.get(name).and_then(|local| self.types.local_type(*local)).is_some_and(|ty| *ty==crate::api::Type::named("Toybox.Lang.Endian")),
-                    _=>false,
-                }
-            }));
-        if (matches!(expected, Some(ConstructionType::ByteOptions)) || inferred_options)
+            && matches!(&expression.kind, parser::ExpressionKind::DictionaryLiteral(entries)
+                if !entries.is_empty() && entries.iter().all(|(key,_)| matches!(key.kind,parser::ExpressionKind::Symbol(_))));
+        if (matches!(expected, Some(ConstructionType::Options(_))) || inferred_options)
             && matches!(
                 &expression.kind,
                 parser::ExpressionKind::DictionaryNew
@@ -2481,12 +2472,18 @@ impl Builder<'_> {
             let span = expression.span;
             let builder = crate::BuilderId(self.local_id(span)?.0);
             self.push(
-                Operation::ByteOptionsBegin {
+                Operation::RecordBegin {
                     builder,
+                    fields: if let Some(ConstructionType::Options(fields)) = &expected {
+                        fields.clone()
+                    } else {
+                        BTreeMap::new()
+                    },
                     length: entries.len() as u32,
                 },
                 Some(span),
             );
+            let mut inferred_fields = BTreeMap::new();
             for (index, (key, value)) in entries.into_iter().enumerate() {
                 let parser::ExpressionKind::Symbol(name) = key.kind else {
                     return Err(Diagnostic::at(
@@ -2495,10 +2492,33 @@ impl Builder<'_> {
                         "option keys require literal Symbols",
                     ));
                 };
-                let value = self.snapshot(value, locals)?;
+                let context = if let Some(ConstructionType::Options(fields)) = &expected {
+                    fields.get(&name).and_then(construction_type)
+                } else {
+                    None
+                };
+                let value = self.snapshot_with_context(value, locals, context)?;
                 let key = ValueId(self.operations.len() as u32);
-                self.push(Operation::Symbol { result: key, name }, Some(span));
+                self.push(
+                    Operation::Symbol {
+                        result: key,
+                        name: name.clone(),
+                    },
+                    Some(span),
+                );
                 let value = self.value(value, locals)?;
+                let ty = self
+                    .types
+                    .join_contract(value)
+                    .map(|ty| {
+                        ty.source_contract()
+                            .map(|c| crate::api::Type::SourceValue(Box::new(c)))
+                            .unwrap_or_else(|| ty.api_type())
+                    })
+                    .ok_or_else(|| {
+                        Diagnostic::at(self.source, span.start, "cannot infer record value")
+                    })?;
+                inferred_fields.insert(name.clone(), ty);
                 self.push(
                     Operation::DictionaryFill {
                         builder,
@@ -2507,6 +2527,23 @@ impl Builder<'_> {
                     },
                     Some(span),
                 );
+            }
+            if expected.is_none() {
+                crate::records::validate(&inferred_fields)
+                    .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                for op in &mut self.operations {
+                    if let Operation::RecordBegin {
+                        builder: owner,
+                        fields,
+                        ..
+                    } = &mut op.operation
+                    {
+                        if *owner == builder {
+                            *fields = inferred_fields.clone();
+                        }
+                    }
+                }
+                self.types.set_record(builder, inferred_fields);
             }
             let result = ValueId(self.operations.len() as u32);
             self.push(Operation::DictionaryFinish { result, builder }, Some(span));
