@@ -472,7 +472,7 @@ with headless execution and a small API subset.
 
 ## Working basis
 
-Build an independent Rust toolchain using public documentation, reference
+Build an independent toolchain in Rust using public documentation, reference
 specimens compiled from our sources, and the official simulator. Do not
 reverse Garmin's compiler/SDK implementation. Documentation establishes source
 and API contracts; binary-format and dispatch conclusions require experiments.
