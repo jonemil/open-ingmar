@@ -864,8 +864,11 @@ pub(crate) fn structural_api(
     let Some(context) = context else {
         return Ok(());
     };
-    if !crate::structural::contains(expected)
+    if (!crate::structural::contains(expected)
+        && !crate::tuples::contains(expected)
+        && !crate::tuples::contains(actual))
         || *actual == api::Type::Any
+        || matches!(actual, api::Type::SourceValue(_))
         || !accepts(expected, actual)
     {
         return Ok(());
@@ -884,6 +887,26 @@ pub(crate) fn structural_api(
             }
         }
         return Err(last.unwrap_or_else(|| "native structural witness is unavailable".into()));
+    }
+    if let api::Type::TupleValue(actual) = actual {
+        let expected_slots = match expected {
+            api::Type::TupleValue(tuple) => tuple
+                .slots()
+                .iter()
+                .map(crate::tuples::exact_type)
+                .collect::<Vec<_>>(),
+            api::Type::Array(element) => vec![(**element).clone(); actual.slots().len()],
+            _ => return Ok(()),
+        };
+        return expected_slots
+            .iter()
+            .zip(actual.slots())
+            .try_for_each(|(expected, actual)| {
+                structural_api(expected, &crate::tuples::exact_type(actual), Some(context))
+            });
+    }
+    if let (api::Type::Array(expected), api::Type::Array(actual)) = (expected, actual) {
+        return structural_api(expected, actual, Some(context));
     }
     if let api::Type::Structural(shape) = expected {
         if matches!(actual, api::Type::Structural(_)) {

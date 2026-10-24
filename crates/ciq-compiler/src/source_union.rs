@@ -11,6 +11,63 @@ pub struct SourceUnion {
     pub(crate) nullable: bool,
     pub(crate) native: Vec<Type>,
 }
+
+/// Match value contracts with caller-supplied source and native proofs. Tuple
+/// slots retain exact identities; class bases cannot stand in for interface
+/// implementations. Ordinary container domains keep their invariant rules.
+pub(crate) fn matches_type_with(
+    expected: &Type,
+    actual: &Type,
+    source: &impl Fn(&SourceClass, &Type) -> bool,
+    native: &impl Fn(&Type, &Type) -> bool,
+) -> bool {
+    let class_matches = |target: &Type, class: &SourceClass| {
+        if crate::structural::contains(target)
+            || matches!(
+                crate::ValueType::from_api_type(target),
+                Some(crate::ValueType::Interface(_))
+            )
+        {
+            source(class, target)
+        } else {
+            native(target, &Type::named(class.base.api_name()))
+        }
+    };
+    crate::tuples::matches_with(
+        expected,
+        actual,
+        &|expected, actual| match (expected, actual) {
+            (Type::SourceValue(expected), Type::SourceValue(actual)) => {
+                (expected.nullable() || !actual.nullable())
+                    && actual
+                        .native()
+                        .iter()
+                        .all(|ty| matches_type_with(&expected.native_type(), ty, source, native))
+                    && actual.classes().iter().all(|class| {
+                        expected.classes().contains(class)
+                            || expected.native().iter().any(|ty| class_matches(ty, class))
+                    })
+            }
+            (Type::SourceValue(expected), actual) => {
+                matches_type_with(&expected.native_type(), actual, source, native)
+            }
+            (expected, Type::SourceValue(actual)) => {
+                (!actual.nullable() || native(expected, &Type::Null))
+                    && actual
+                        .native()
+                        .iter()
+                        .all(|ty| matches_type_with(expected, ty, source, native))
+                    && actual.classes().iter().all(|class| {
+                        crate::unions::alternatives(expected)
+                            .iter()
+                            .any(|ty| class_matches(ty, class))
+                    })
+            }
+            _ => native(expected, actual),
+        },
+    )
+}
+
 impl SourceUnion {
     /// Normalize exact class alternatives, rejecting empty/oversized sets,
     /// malformed identities, and bases that cannot be source-constructed.

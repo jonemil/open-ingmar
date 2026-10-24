@@ -349,8 +349,15 @@ example, `x.add(x.remove(1))` retains the captured tuple shape plus a Boolean
 slot, while `x.remove(x.add(2).size())` ends with an erased view. These SDK
 checking limits do not establish runtime cardinality. An Array-typed callee may
 still mutate the runtime Array.
-Structural slots may hold already checked interface values; fresh source-class
-witnesses are not inferred when packing a tuple.
+Source instances can establish named or structural interface slot contracts
+directly, including through inferred tuples, nullable/source unions, nested
+tuples, and tuple-to-Array adaptation. Unit validation checks each exact class's
+required fields and method signatures using the ordinary interface rules; an
+Object projection cannot establish a missing witness. Declared Array element
+domains remain invariant. Native methods used as structural witnesses retain
+their API requirements. The
+[interface-slot example](../../../examples/compiler-tuple-interfaces/README.md)
+checks construction, fields, callbacks, and mutable interface members.
 
 AppBase's [initial View callback](../sdk/README.md#source-initial-view-callback)
 still requires its direct literal and native slot profile. See the

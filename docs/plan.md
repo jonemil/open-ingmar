@@ -37,9 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Prove source-class structural witnesses when packing tuples with interface
-  slots, reusing unit-level member checks rather than requiring an already typed
-  interface value.
 - [ ] Support structural Symbol-keyed option-record annotations, optional fields,
   assignment, and mutation beyond the private ByteArray options builder.
 - [ ] Support lexical `as` assertions for parameterized containers, interfaces,

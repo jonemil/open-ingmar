@@ -88,8 +88,11 @@ callback checks. `api` owns declarations, `native` owns executable profiles,
 application generation, and `operators` owns operand/result rules. `type_text`
 shares saved-type spellings while retaining each consumer's accepted domain.
 `unions` normalizes native alternatives and adapts them to supported contracts;
-`source_union` normalizes exact class alternatives while `source_objects`
-tracks their provenance. Source identities remain separate from native API
+`source_union` normalizes exact class alternatives and shares boundary matching
+with `tuples`, whose slot traversal retains those identities. `source_objects`
+tracks provenance and defers unresolved class witnesses; `unit` supplies the
+member proofs using ordinary interface declaration checks. Source identities
+remain separate from native API
 projections, which cannot authorize source dispatch or interface witnesses.
 Container elements carry exact identities in `Type::SourceValue` and
 `ArrayElement::Source`; `source_objects` restores origins on reads and supplies

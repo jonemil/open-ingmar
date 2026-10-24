@@ -242,6 +242,66 @@ pub(crate) fn accepts(expected: &ReturnType, actual: &ReturnType) -> bool {
     crate::native::accepts(&expected.api_type(), &actual.api_type())
 }
 
+/// Retain exact source identities when adapting a slot to the shared type model.
+pub(crate) fn exact_type(contract: &ReturnType) -> Type {
+    contract
+        .source_contract()
+        .map(|c| Type::SourceValue(Box::new(c)))
+        .unwrap_or_else(|| contract.api_type())
+}
+
+/// Report positional contracts that may carry source witnesses at a boundary.
+pub(crate) fn contains(ty: &Type) -> bool {
+    match ty {
+        Type::TupleValue(_) => true,
+        Type::Array(element) => contains(element),
+        Type::Union(parts) => parts.iter().any(contains),
+        Type::SourceValue(contract) => contract.native().iter().any(contains),
+        _ => false,
+    }
+}
+
+/// Match positional values, delegating scalar/source proof to the caller.
+/// A function may defer a class witness; the unit must verify its declaration.
+/// Ordinary Array element domains stay invariant except for nested tuple views.
+pub(crate) fn matches_with(
+    expected: &Type,
+    actual: &Type,
+    leaf: &impl Fn(&Type, &Type) -> bool,
+) -> bool {
+    if *actual == Type::Any || *expected == Type::Any {
+        return crate::native::accepts(expected, actual);
+    }
+    if let Type::Union(parts) = actual {
+        return parts.iter().all(|part| matches_with(expected, part, leaf));
+    }
+    if let Type::Union(parts) = expected {
+        // A source contract may contain several classes plus Null/native arms.
+        // Its leaf proof distributes those arms across the expected union.
+        if !matches!(actual, Type::SourceValue(_)) {
+            return parts.iter().any(|part| matches_with(part, actual, leaf));
+        }
+    }
+    match (expected, actual) {
+        (Type::TupleValue(expected), Type::TupleValue(actual)) => {
+            expected.slots().len() == actual.slots().len()
+                && expected
+                    .slots()
+                    .iter()
+                    .zip(actual.slots())
+                    .all(|(e, a)| matches_with(&exact_type(e), &exact_type(a), leaf))
+        }
+        (Type::Array(element), Type::TupleValue(actual)) => actual
+            .slots()
+            .iter()
+            .all(|slot| matches_with(element, &exact_type(slot), leaf)),
+        (Type::Array(expected), Type::Array(actual)) => {
+            array_elements_match_with(expected, actual, leaf)
+        }
+        _ => leaf(expected, actual),
+    }
+}
+
 /// Resolve positional reads across tuple alternatives before native projection.
 /// Non-tuple alternatives are handled by the ordinary indexable-value checker.
 pub(crate) fn read_contract(
@@ -270,12 +330,22 @@ pub(crate) fn read_contract(
 /// views. Every alternative on each side must be represented; ordinary scalar
 /// or source element domains cannot widen through this adaptation.
 pub(crate) fn array_elements_match(expected: &Type, actual: &Type) -> bool {
+    array_elements_match_with(expected, actual, &crate::native::accepts)
+}
+
+fn array_elements_match_with(
+    expected: &Type,
+    actual: &Type,
+    leaf: &impl Fn(&Type, &Type) -> bool,
+) -> bool {
     let expected = crate::unions::alternatives(expected);
     let actual = crate::unions::alternatives(actual);
     let matches = |expected: &Type, actual: &Type| match (expected, actual) {
-        (Type::Array(expected), Type::Array(actual)) => array_elements_match(expected, actual),
+        (Type::Array(expected), Type::Array(actual)) => {
+            array_elements_match_with(expected, actual, leaf)
+        }
         (Type::Array(_), Type::TupleValue(_) | Type::Tuple(_)) => {
-            crate::native::accepts(expected, actual)
+            matches_with(expected, actual, leaf)
         }
         _ => crate::structural::same_type(expected, actual),
     };

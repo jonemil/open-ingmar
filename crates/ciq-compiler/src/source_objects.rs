@@ -312,6 +312,25 @@ impl Origins {
     }
     /// Report a source witness that requires a unit-level interface proof.
     pub(crate) fn deferred_interface(&self, expected: &crate::api::Type, value: ValueId) -> bool {
+        if let Some(actual) = self
+            .native_values
+            .get(&value)
+            .filter(|ty| crate::tuples::contains(ty))
+        {
+            return !crate::native::accepts(expected, actual)
+                && crate::source_union::matches_type_with(
+                    expected,
+                    actual,
+                    &|_, target| {
+                        crate::structural::contains(target)
+                            || matches!(
+                                crate::ValueType::from_api_type(target),
+                                Some(crate::ValueType::Interface(_))
+                            )
+                    },
+                    &crate::native::accepts,
+                );
+        }
         self.values.contains_key(&value)
             && (crate::structural::contains(expected)
                 || matches!(
@@ -357,7 +376,7 @@ impl Origins {
                                 expected.clone()
                             }
                         }
-                        _ => unreachable!("deferred interface argument"),
+                        _ => expected.clone(),
                     }
                 } else {
                     parameters
@@ -396,6 +415,10 @@ impl Origins {
     }
     pub(crate) fn accepts_contract(&self, expected: &crate::SourceUnion, value: ValueId) -> bool {
         self.dynamic.contains(&value)
+            || self.deferred_interface(
+                &crate::api::Type::SourceValue(Box::new(expected.clone())),
+                value,
+            )
             || (expected.nullable && self.nulls.contains(&value))
             || self
                 .values

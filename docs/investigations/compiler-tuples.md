@@ -59,6 +59,21 @@ with `[3]` also permits returning that slot as `[Number]`. These observations
 support recursive tuple-to-Array matching without assigning an ordinary Array
 contract to every replacement literal.
 
+## Interface slots
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking, fr265,
+minimum API 5.0.0, and optimization disabled accept the
+[interface-slot specimen](../../examples/compiler-tuple-interfaces/README.md).
+Direct and inferred tuples retain source implementations of structural field/
+method contracts and the named Comparable/Comparator interfaces. Nullable
+slots, nested tuples/Arrays, stored fields, source calls, and Method invocation
+are accepted. SDK and independently generated PRGs produce the same
+[console output](../../examples/compiler-tuple-interfaces/expected.txt), including
+mutation through an interface-valued slot. No witness object or additional
+runtime conversion is needed. The ordinary
+[interface signature evidence](compiler-structural-interfaces.md) defines the
+member matching rules.
+
 ## Assignment and construction
 
 This succeeds; replacing the return annotation with `Array<Lang.Number>` fails:

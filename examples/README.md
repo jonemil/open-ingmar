@@ -11,6 +11,8 @@ and future Rust toolchain experiments.
   typed construction, fields, callbacks, indexing, and evaluation order.
 - [compiler-literal-inference](compiler-literal-inference/README.md): empty,
   homogeneous, computed, Symbol, and source literals with mutable slot inference.
+- [compiler-tuple-interfaces](compiler-tuple-interfaces/README.md): source-class
+  interface witnesses in tuple slots, nested containers, fields, and callbacks.
 - [compiler-tuple-methods](compiler-tuple-methods/README.md): tuple copies and
   slices, search, default/custom sorting, bound methods, and weak handles.
 - [compiler-source-arrays](compiler-source-arrays/README.md): exact source

@@ -1565,6 +1565,14 @@ retain/copy a shape. Explicit tuple and Array result headers preserve declared
 contracts even when a returned value has narrower positional information.
 User-call result metadata must match the callee's contract.
 
+Interface-valued destination slots may require source-class witnesses from the
+constructed tuple. Slot contracts keep their exact classes until boundary
+validation resolves the required members. Function checking can retain that
+obligation; unit checking proves it at returns, arguments, fields, declared
+locals, and value edges, including on saved-IR reload. A forged signature cannot
+claim an implementation. Native structural members also retain API checks.
+These proofs add no runtime conversion, witness record, or VM instruction.
+
 `ArrayRead` also reads tuples. Validation selects a slot for a direct Integer
 operand or joins the possible slot contracts otherwise, using the
 [frontend rules](../frontend/README.md#positional-tuples). Source provenance is
