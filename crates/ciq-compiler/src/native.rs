@@ -613,6 +613,7 @@ fn check_arguments(
 /// Check the existing Array sorting profile for one possible element type.
 fn sort_element_supported(element: &api::Type, arguments: &[api::Type]) -> bool {
     match crate::ArrayElement::from_api_type(element) {
+        Some(crate::ArrayElement::Null) => false,
         Some(
             crate::ArrayElement::Numeric {
                 nullable: false, ..

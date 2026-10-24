@@ -160,6 +160,7 @@ const NAMED: &[(&str, ParameterType, ReturnType)] = &[
 ];
 
 pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
+    ArrayElement::Null,
     ArrayElement::Any,
     ArrayElement::LangObject,
     ArrayElement::NullableObject,

@@ -38,8 +38,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 ### 1. Inference, unions, and storage
 
 - [ ] Apply the exact source-class and nested element contracts in the
-  [Array worklist](#array) when tuples lose positional shape; support a
-  Null-only element domain without inventing non-Null alternatives.
+  [Array worklist](#array) when tuples lose positional shape.
 - [ ] Extend tuple inference to homogeneous/empty literals and computed scalar
   or source literals without a nested Array literal, including Symbol mixtures.
   Retain contextual Array construction and check existing Array method/assignment

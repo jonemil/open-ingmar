@@ -1326,7 +1326,11 @@ including signed floating zero and NaN payloads. String values are quoted text
 using the ordinary IR String escapes, for example `.array-constant %0 string
 "one" ""`. Boolean payloads use `true`/`false` or `ArrayConstantValue::Boolean`;
 numeric 0/1 do not substitute for them; Null requires a nullable element
-contract. Typed IR uses distinct `ArrayConstantValue::Number` and `::Char`
+contract or the Null-only element tag `null`. This tag uses `null-array` in
+parameter/result contracts and `array-null` in checked read/join contracts;
+`.array-constant %0 null null null` contains two Null slots. It also supports
+private construction and sized allocation without a non-Null base type.
+Typed IR uses distinct `ArrayConstantValue::Number` and `::Char`
 variants, `::Long`, `::Float`, or `::Double` for those exact bits, or `::String`
 for text; nullable contracts also permit `null` / `ArrayConstantValue::Null`.
 Every payload must match its element contract; other mixed types and nested
@@ -1569,7 +1573,8 @@ Array tail loses positional shape and joins the native element contracts.
 `positional=false`, deriving an element contract even for known tuple inputs.
 The frontend uses these forms for loop-carried tuple storage; their result is
 the same runtime receiver reference. Generalized elements must fit a supported
-Array profile; unsupported source/nested/Null-only domains are rejected.
+Array profile, including Null-only elements; unsupported source/nested domains
+are rejected.
 Validation checks API 1.3.0 and the actual operands on reload, without trusting
 an asserted result or tail length. Store the result into the receiver's inferred
 local before emitting subsequent reads. Derived result signatures have a shared

@@ -27,3 +27,15 @@ intentionally narrower than general nullable literal inference: direct literals
 use an explicit nullable expected contract. Existing Array references remain
 invariant. See the [source contract](../specs/frontend/README.md#nullable-array-elements)
 and [Array IR](../specs/ir/README.md#constant-arrays).
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking on `fr265`
+accepts `Array<Null>` for constant/computed/empty literals, `new[n]`, indexed
+writes, append/search/removal, reverse/slice, and positional shape loss through
+dynamic writes and an unknown-length Null-only append tail. The specimen's
+`NullArrays` module reproduces these cases. SDK and generated output match;
+both PRGs reconstruct without required CODE/DATA fallback.
+
+In contrast, `x.indexOf(1)` for `x as Array<Null>` is rejected as an invalid
+Number argument for a Null parameter. This typed Array signature is stricter
+than the independently observed positional tuple search profile. Null-only
+elements use the existing Null DATA token and ordinary Array VM instructions.

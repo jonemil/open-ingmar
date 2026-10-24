@@ -5,6 +5,8 @@ element contracts, literal/computed construction, guarded reads, Null writes, na
 mutation/search/transforms, shared references, fresh constant loads, and empty
 or Null-only contextual literals. Markers check conditional element effects.
 Boolean checks distinguish false from Null; Char reads use guarded conversions.
+`Array<Null>` checks contextual literals, allocation, tuple shape loss, and
+native mutation/search/copy methods without adding a non-Null element type.
 SDK and generated `fr265` programs match [expected output](expected.txt).
 
 From the repository root, using fresh output paths:

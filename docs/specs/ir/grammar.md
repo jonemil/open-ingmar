@@ -347,7 +347,7 @@ source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
 source-identity = identifier "@" source-base
 source-base = "Lang.Object" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
-element-tag = "any" | "number" | "nullable-number" | other-scalar-tag
+element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag

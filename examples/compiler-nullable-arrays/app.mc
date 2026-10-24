@@ -152,6 +152,43 @@ class MinimalConsoleApp extends Application.AppBase {
         first[0] = null;
         NullableArrays.showNumber(NullableArrays.numbers()[0]);
         NullableArrays.scalarArrays();
+        NullArrays.run();
         System.exit();
+    }
+}
+
+module NullArrays {
+    function value() as Null { return null; }
+    function literal() as Toybox.Lang.Array<Null> { return [null, null]; }
+    function computed() as Toybox.Lang.Array<Null> { return [NullArrays.value()]; }
+    function empty() as Toybox.Lang.Array<Null> { return []; }
+    function allocated() as Toybox.Lang.Array<Null> { return new[2]; }
+    function shape(x as [Null], i as Toybox.Lang.Number) as Toybox.Lang.Array<Null> {
+        x[i] = null;
+        return x;
+    }
+    function tail(x as [Null], y as Toybox.Lang.Array<Null>) as Toybox.Lang.Array<Null> {
+        x.addAll(y);
+        return x;
+    }
+    function run() as Void {
+        System.println("null-elements");
+        var x = NullArrays.literal();
+        System.println(x[0] == null);
+        x[0] = NullArrays.value();
+        x.add(null).addAll(NullArrays.computed());
+        System.println(x.size());
+        System.println(x.indexOf(null));
+        System.println(x.reverse()[0] == null);
+        System.println(x.slice(0, 2).size());
+        System.println(x.remove(null));
+        System.println(x.size());
+        System.println(x.removeAll(null));
+        System.println(x.size());
+        System.println(x.remove(null));
+        System.println(NullArrays.empty().size());
+        System.println(NullArrays.allocated()[1] == null);
+        System.println(NullArrays.shape([null], 0).size());
+        System.println(NullArrays.tail([null], NullArrays.computed()).size());
     }
 }

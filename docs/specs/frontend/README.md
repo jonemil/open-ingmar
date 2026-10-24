@@ -243,8 +243,9 @@ An unknown-length Array tail or a dynamic-index write loses positional shape.
 Its resulting Array element contract joins the original slots and the incoming
 elements, retaining supported native unions such as `Array<Number or String>`.
 Exact source-class and nested collection elements cannot yet lose shape without
-erasing their contracts; these cases are rejected. Null-only element domains
-are also outside the current Array profiles.
+erasing their contracts; these cases are rejected. Null-only slots retain
+`Array<Null>` when shape is lost, including through dynamic writes and loop
+appends.
 
 Appends to named tuple storage inside `for`, `while`, and `do` loops use
 element contracts from the first iteration. Loop joins combine the initial tuple with the possible Array
@@ -3185,6 +3186,13 @@ Object/reference-element ordering has a separate
 [evidence record](../../investigations/compiler-object-sort.md).
 
 ### Nullable Array elements
+
+`Array<Null>` retains a distinct invariant element contract. Contextual empty,
+constant, and computed literals, sized allocation, reads/writes, append/search/
+removal, reverse/slice, and matching joins preserve it. Slots accept only Null;
+search/removal arguments must also be Null under the typed Array signature.
+It cannot widen to `Array<Number or Null>` or `Array<Object or Null>`. Its
+sorting remains outside the supported nullable-element sorting profile.
 
 `Toybox.Lang.Array<T or Null>` supports numeric, String, Boolean, Char, or
 Symbol T with invariant element contracts and a non-null Array reference.

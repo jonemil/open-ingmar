@@ -167,6 +167,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// Only Null values; writes must not introduce a non-Null alternative.
+    Null,
     /// A canonical union of supported native element contracts, independent
     /// of positional shape. Array assignment remains invariant.
     Union(api::Type),
@@ -252,6 +254,7 @@ impl ArrayElement {
                 return if *nullable { ty.with_null() } else { ty };
             }
             Self::Any => return api::Type::Any,
+            Self::Null => return api::Type::Null,
             Self::LangObject | Self::NullableObject => "Toybox.Lang.Object",
             Self::Numeric { alias, nullable } => return alias.api_type(*nullable),
             Self::Interface(interface) | Self::NullableInterface(interface) => interface.name(),
@@ -388,6 +391,7 @@ impl ArrayElement {
         let text = match self {
             Self::Structural { .. } | Self::Callback { .. } | Self::Union(_) => unreachable!(),
             Self::Any => "any",
+            Self::Null => "null",
             Self::LangObject => "object",
             Self::NullableObject => "nullable-object",
             Self::Numeric { alias, nullable } => alias.value_tag(*nullable),
@@ -3098,9 +3102,7 @@ impl Function {
                 } => {
                     let inputs = if let Operation::ArrayAllocate { length, .. } = located.operation
                     {
-                        if *element_type != ArrayElement::Any
-                            && element_type.nullable_base().is_none()
-                        {
+                        if !native::accepts(&element_type.api_type(), &api::Type::Null) {
                             return Err(fail("sized Array allocation requires nullable elements"));
                         }
                         if !matches!(type_of(length), ValueType::Integer | ValueType::Any) {

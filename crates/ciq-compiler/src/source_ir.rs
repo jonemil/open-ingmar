@@ -2563,7 +2563,7 @@ impl Builder<'_> {
                     "sized Array allocation requires a concrete expected nullable Array element type",
                 ));
             };
-            if element_type.nullable_base().is_none() {
+            if element_type != crate::ArrayElement::Null && element_type.nullable_base().is_none() {
                 return Err(Diagnostic::at(
                     self.source,
                     expression.span.start,
@@ -2651,7 +2651,8 @@ impl Builder<'_> {
             ) if element.nullable_base().is_some()
                 || matches!(
                     element,
-                    crate::ArrayElement::Interface(_)
+                    crate::ArrayElement::Null
+                        | crate::ArrayElement::Interface(_)
                         | crate::ArrayElement::Structural { .. }
                         | crate::ArrayElement::Callback { .. }
                         | crate::ArrayElement::Method
