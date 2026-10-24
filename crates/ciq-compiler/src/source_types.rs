@@ -16,6 +16,7 @@ pub(crate) struct Types {
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
     options: std::collections::BTreeSet<crate::BuilderId>,
     origins: crate::source_objects::Origins,
+    removal_captures: crate::local_flow::RemovalCaptures,
     pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
 }
 
@@ -39,6 +40,7 @@ impl Types {
             dictionaries: BTreeMap::new(),
             options: Default::default(),
             origins: crate::source_objects::Origins::new(parameters),
+            removal_captures: Default::default(),
             facts: Default::default(),
         }
     }
@@ -68,6 +70,16 @@ impl Types {
     /// Record a candidate result using shared operator and native contracts.
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
+        if let Some(local) = self.removal_captures.observe(operation) {
+            if let Some(ty) = crate::tuples::removal_receiver(operation)
+                .and_then(|receiver| self.values.get(&receiver))
+                .and_then(crate::tuples::removal_contract)
+            {
+                if self.variables.contains(&local) {
+                    self.locals.insert(local, ty);
+                }
+            }
+        }
         let _ = self.origins.observe(operation, &self.facts);
         let (result, ty) = match operation {
             Operation::LocalVariable { local, value } => {

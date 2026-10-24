@@ -80,31 +80,41 @@ fn requests_exit(operation: &Operation) -> bool {
     matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
 }
 
-/// Treat erased comparison/element callbacks as possible shutdown requests.
-/// No exact body remains available for the reference-initialization proof.
 /// Identify tuple contents whose equality, printing, or default ordering can
 /// dispatch through source or erased object contracts, including nested values.
 fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
-    fn dynamic(ty: &crate::api::Type) -> bool {
-        use crate::api::Type;
-        match ty {
-            Type::Any | Type::Structural(_) => true,
-            Type::Named(name) => {
-                name == "Toybox.Lang.Object" || crate::InterfaceType::from_name(name).is_some()
-            }
-            Type::TupleValue(tuple) => tuple_callback_elements(tuple),
-            Type::Union(parts) | Type::Tuple(parts) => parts.iter().any(dynamic),
-            Type::Array(element) => dynamic(element),
-            Type::Dictionary { key, value } => dynamic(key) || dynamic(value),
-            _ => false,
-        }
-    }
     tuple
         .slots()
         .iter()
-        .any(|slot| slot.source_contract().is_some() || dynamic(&slot.api_type()))
+        .any(|slot| slot.source_contract().is_some() || callback_value_type(&slot.api_type()))
 }
 
+/// Check erased value contracts that can expose source equality or observer
+/// callbacks. Native/source base erasure does not prove a pure implementation.
+fn callback_value_type(ty: &crate::api::Type) -> bool {
+    use crate::api::Type;
+    match ty {
+        Type::Any | Type::Structural(_) => true,
+        Type::Named(name) => {
+            [
+                ClassBase::LangObject,
+                ClassBase::WatchUiView,
+                ClassBase::WatchUiBehaviorDelegate,
+            ]
+            .iter()
+            .any(|base| base.api_name() == name)
+                || crate::InterfaceType::from_name(name).is_some()
+        }
+        Type::TupleValue(tuple) => tuple_callback_elements(tuple),
+        Type::Union(parts) | Type::Tuple(parts) => parts.iter().any(callback_value_type),
+        Type::Array(element) => callback_value_type(element),
+        Type::Dictionary { key, value } => callback_value_type(key) || callback_value_type(value),
+        _ => false,
+    }
+}
+
+/// Treat erased comparison/element callbacks as possible shutdown requests.
+/// No exact body remains available for the reference-initialization proof.
 fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
     let interface_keys = |ty: &crate::ValueType| {
         crate::unions::alternatives(&ty.api_type()).iter().any(|p| {
@@ -153,13 +163,15 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                     )
                 }))
                 || matches!(&ty, crate::ValueType::Tuple(tuple)
-                    if tuple_callback_elements(tuple)
-                    && (matches!(member.as_str(), "toString" | "indexOf")
+                    if (tuple_callback_elements(tuple)
+                        || (matches!(member.as_str(), "indexOf" | "remove" | "removeAll")
+                            && arguments.iter().any(|argument| callback_value_type(&function.value_types[argument].api_type()))))
+                    && (matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll")
                         || (member == "sort" && arguments.iter().any(|argument|
                             matches!(function.value_types[argument], crate::ValueType::Null
                                 | crate::ValueType::NullableInterface(crate::InterfaceType::Comparator))))))
                 || matches!(ty, crate::ValueType::Array(
-                    crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
+                    crate::ArrayElement::Any | crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
                 || matches!(ty, crate::ValueType::Array(crate::ArrayElement::LangObject)
                     if member == "sort" && arguments.iter().any(|argument|

@@ -1,9 +1,12 @@
-# Tuple copy, query, sorting, and Object methods
+# Tuple methods and mutation views
 
 [app.mc](app.mc) checks reversed and sliced slot contracts, independent copies,
 negative/Null/clipped bounds, dynamic bounds, source/nested slots, search,
 default/custom sorting, typed method binding, weak handles, and effect order.
 Dynamic slices retain the SDK's erased Array element contract.
+Removal cases check Boolean results, receiver erasure, aliases/reassignment,
+calls, branches/loops, nullable and source/structural fields, nested/source
+elements, and receiver captures across argument mutations.
 
 From the repository root, using fresh output paths:
 

@@ -81,8 +81,8 @@ without unit ownership/signature validation. `source_ir` constructs semantic
 operations. Candidate types and source
 origins help construction but are not validation proofs. `Function` validation
 checks per-body invariants, using `local_flow` to check inferred variable reads
-against possible writes at each CFG point and sharing narrowing facts with
-`type_flow`. `unit` adds declaration, signature, field, and
+against possible writes and removal effects at each CFG point and sharing
+narrowing facts with `type_flow`. `unit` adds declaration, signature, field, and
 callback checks. `api` owns declarations, `native` owns executable profiles,
 `native_bindings` owns the pinned VM identities shared by runtime type tests and
 application generation, and `operators` owns operand/result rules. `type_text`
@@ -95,7 +95,11 @@ projections, which cannot authorize source dispatch or interface witnesses.
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;
 it also derives native Array element unions when positional shape is lost,
-reversed tuple shapes, and slice shapes from checked immediate operands.
+reversed tuple shapes, slice shapes from checked immediate operands, and the
+erased removal contract. `local_flow` shares direct-variable capture tracking
+with source candidate inference; field flow derives the corresponding property
+effects. These analyses preserve native call results independently of receiver
+views.
 `field_flow` reconstructs method-local field views and captured receiver
 provenance across the CFG. Current-instance fields use field names; structural
 fields use canonical groups of declaration locations, independently of runtime

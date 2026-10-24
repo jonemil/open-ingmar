@@ -5,6 +5,78 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) type Domain = Vec<JoinType>;
 pub(crate) type State = BTreeMap<LocalId, Domain>;
 
+/// Track direct variable references through immutable evaluation captures.
+/// Named variable aliases start independent roots. Rebinding breaks an earlier
+/// capture's connection; assignments of the same reference keep it live.
+#[derive(Default)]
+pub(crate) struct RemovalCaptures {
+    versions: BTreeMap<LocalId, usize>,
+    values: BTreeMap<ValueId, (LocalId, usize)>,
+    captures: BTreeMap<LocalId, (LocalId, usize)>,
+}
+
+impl RemovalCaptures {
+    /// Observe one operation and return the still-active inferred local addressed
+    /// by a removal. The caller independently checks its receiver/result types.
+    pub(crate) fn observe(&mut self, op: &Operation) -> Option<LocalId> {
+        match op {
+            Operation::LocalVariable { local, .. } | Operation::LocalDeclare { local, .. } => {
+                *self.versions.entry(*local).or_default() += 1;
+                self.captures.remove(local);
+            }
+            Operation::VariableRead { result, local, .. } => {
+                self.values
+                    .insert(*result, (*local, *self.versions.get(local).unwrap_or(&0)));
+            }
+            Operation::LocalInitialize { local, value } => {
+                if let Some(root) = self.values.get(value) {
+                    self.captures.insert(*local, *root);
+                }
+            }
+            Operation::LocalRead { result, local } | Operation::LocalTake { result, local } => {
+                if let Some(root) = self.captures.get(local) {
+                    self.values.insert(*result, *root);
+                }
+            }
+            Operation::LocalAssign { local, value } => {
+                let version = self.versions.entry(*local).or_default();
+                if self.values.get(value) != Some(&(*local, *version)) {
+                    *version += 1;
+                }
+                self.captures.remove(local);
+            }
+            Operation::TupleAppend { result, array, .. }
+            | Operation::TupleWrite { result, array, .. } => {
+                if let Some(root) = self.values.get(array) {
+                    self.values.insert(*result, *root);
+                }
+            }
+            _ => {}
+        }
+        let receiver = crate::tuples::removal_receiver(op)?;
+        let &(local, version) = self.values.get(&receiver)?;
+        (self.versions.get(&local).copied().unwrap_or(0) == version).then_some(local)
+    }
+}
+
+type RemovalEffects = BTreeMap<usize, (LocalId, JoinType)>;
+
+fn removal_effects(
+    ops: &[LocatedOperation],
+    values: &BTreeMap<ValueId, JoinType>,
+) -> RemovalEffects {
+    let mut captures = RemovalCaptures::default();
+    ops.iter()
+        .enumerate()
+        .filter_map(|(at, op)| {
+            let local = captures.observe(&op.operation)?;
+            let receiver = crate::tuples::removal_receiver(&op.operation)?;
+            let ty = crate::tuples::removal_contract(&values.get(&receiver)?.api_type())?;
+            Some((at, (local, JoinType::Api(ty))))
+        })
+        .collect()
+}
+
 fn union(target: &mut Domain, source: &[JoinType]) {
     for ty in source {
         if !target.contains(ty) {
@@ -13,7 +85,12 @@ fn union(target: &mut Domain, source: &[JoinType]) {
     }
 }
 
-fn transfer(state: &mut State, op: &Operation, values: &BTreeMap<ValueId, JoinType>) {
+fn transfer(
+    state: &mut State,
+    op: &Operation,
+    values: &BTreeMap<ValueId, JoinType>,
+    removal: Option<&(LocalId, JoinType)>,
+) {
     match op {
         Operation::LocalVariable { local, value } => {
             state.insert(
@@ -29,6 +106,11 @@ fn transfer(state: &mut State, op: &Operation, values: &BTreeMap<ValueId, JoinTy
         }
         _ => {}
     }
+    if let Some((local, ty)) = removal {
+        if let Some(domain) = state.get_mut(local) {
+            *domain = vec![ty.clone()];
+        }
+    }
 }
 
 /// Compute possible write contracts at each block entry to a least fixed point.
@@ -39,6 +121,7 @@ pub(crate) fn inputs(
     ops: &[LocatedOperation],
     values: &BTreeMap<ValueId, JoinType>,
 ) -> BTreeMap<BlockId, State> {
+    let removals = removal_effects(ops, values);
     let facts = crate::type_flow::inputs(structure, ops);
     let vars = ops
         .iter()
@@ -64,6 +147,11 @@ pub(crate) fn inputs(
             if let (Some(domain), Some(ty)) = (roots.get_mut(&local), values.get(&value)) {
                 union(domain, std::slice::from_ref(ty));
             }
+        }
+    }
+    for (local, ty) in removals.values() {
+        if let Some(domain) = roots.get_mut(local) {
+            union(domain, std::slice::from_ref(ty));
         }
     }
     let entry = structure.blocks.first().copied().unwrap_or(BlockId(0));
@@ -107,7 +195,7 @@ pub(crate) fn inputs(
             let mut output = state.clone();
             for (at, op) in ops.iter().enumerate() {
                 if structure.blocks[at] == block {
-                    transfer(&mut output, &op.operation, values);
+                    transfer(&mut output, &op.operation, values, removals.get(&at));
                 }
             }
             changed |= incoming[&block] != state || outgoing[&block] != output;
@@ -241,6 +329,7 @@ pub(crate) fn validate(
             )
         })
         .collect();
+    let removals = removal_effects(ops, &values);
     let incoming = inputs(structure, ops, &values);
     let facts = crate::type_flow::inputs(structure, ops);
     let mut current = State::new();
@@ -268,7 +357,7 @@ pub(crate) fn validate(
                 });
             }
         }
-        transfer(&mut current, &op.operation, &values);
+        transfer(&mut current, &op.operation, &values, removals.get(&at));
     }
     Ok(())
 }
@@ -289,12 +378,13 @@ pub(crate) fn prefix_read(
     }
     let structure = crate::control_flow::prefix(ops);
     let values = types.contracts();
+    let removals = removal_effects(ops, &values);
     let incoming = inputs(&structure, ops, &values);
     let block = structure.blocks.last().copied().unwrap_or(BlockId(0));
     let mut state = incoming.get(&block).cloned().unwrap_or_default();
     for (at, op) in ops.iter().enumerate() {
         if structure.blocks[at] == block {
-            transfer(&mut state, &op.operation, &values);
+            transfer(&mut state, &op.operation, &values, removals.get(&at));
         }
     }
     proven(state.get(&local)?, local, &types.facts)
@@ -345,6 +435,7 @@ pub(crate) fn normalize(
         }
         let values = types.contracts();
         let structure = crate::control_flow::prefix(ops);
+        let removals = removal_effects(ops, &values);
         let incoming = inputs(&structure, ops, &values);
         let facts = crate::type_flow::inputs(&structure, ops);
         let mut current = State::new();
@@ -370,7 +461,7 @@ pub(crate) fn normalize(
                     changed = true;
                 }
             }
-            transfer(&mut current, &op.operation, &values);
+            transfer(&mut current, &op.operation, &values, removals.get(&at));
         }
         if !changed {
             return Ok(());

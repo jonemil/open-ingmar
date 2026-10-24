@@ -255,6 +255,22 @@ pub(crate) fn reads(
             origins.insert(result, fields.clone());
             guard_origins.insert(result, fields.clone());
         }
+        if let Some(receiver) = crate::tuples::removal_receiver(op) {
+            if let Some(fields) = origins.get(&receiver) {
+                if let Some(ty) = types
+                    .value_type(receiver)
+                    .and_then(crate::tuples::removal_contract)
+                {
+                    events.insert(
+                        at,
+                        (
+                            fields.clone(),
+                            crate::unions::result(ty).expect("erased Array result"),
+                        ),
+                    );
+                }
+            }
+        }
         if let Some(fields) = assign_fields.get(&at) {
             guard_origins.retain(|_, keys| !keys.iter().any(|key| fields.contains(key)));
             guard_locals.retain(|_, keys| !keys.iter().any(|key| fields.contains(key)));

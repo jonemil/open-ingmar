@@ -930,9 +930,9 @@ struct Builder<'a> {
     controls: Vec<ControlTargets>,
 }
 
-/// Identify direct named receivers of the two shape-changing Array append calls.
-/// This is syntax discovery only; source types decide whether tuple staging applies.
-fn tuple_append_name(expression: &parser::Expression) -> Option<(&str, bool)> {
+/// Discover named mutation receivers; type checking selects positional or
+/// ordinary Array behavior after resolving the receiver.
+fn tuple_mutation_name(expression: &parser::Expression) -> Option<(&str, &str)> {
     use parser::ExpressionKind as E;
     let (name, member) = match &expression.kind {
         E::ModuleCall { module, member, .. } => (module.as_str(), member.as_str()),
@@ -946,6 +946,11 @@ fn tuple_append_name(expression: &parser::Expression) -> Option<(&str, bool)> {
         }
         _ => return None,
     };
+    matches!(member, "add" | "addAll" | "remove" | "removeAll").then_some((name, member))
+}
+
+fn tuple_append_name(expression: &parser::Expression) -> Option<(&str, bool)> {
+    let (name, member) = tuple_mutation_name(expression)?;
     match member {
         "add" => Some((name, false)),
         "addAll" => Some((name, true)),
@@ -1087,9 +1092,8 @@ impl Builder<'_> {
         }
     }
 
-    /// Append to a named tuple and publish the new local contract. Evaluate
-    /// arguments before reading the unchanged named reference so nested appends
-    /// to that receiver contribute their updated shape to the outer operation.
+    /// Append to named storage, retaining nested positional refinements. Capture
+    /// its original tuple view when an argument can erase that binding's view.
     fn tuple_append(
         &mut self,
         expression: parser::Expression,
@@ -1108,15 +1112,36 @@ impl Builder<'_> {
             E::ModuleCall { arguments, .. } | E::ValueCall { arguments, .. } => arguments,
             _ => unreachable!(),
         };
-        let argument = self.append_argument(arguments, span, locals)?;
         self.promote_variable(local);
-        let array = self.value(
-            Expression {
+        let mut can_erase = false;
+        for argument in &arguments {
+            argument.visit(&mut |expression| {
+                can_erase |= matches!(tuple_mutation_name(expression),
+                    Some((owner, "remove" | "removeAll")) if owner == name);
+            });
+        }
+        let receiver = if can_erase {
+            Some(self.snapshot(
+                Expression {
+                    kind: E::Local(name.clone()),
+                    span,
+                },
+                locals,
+            )?)
+        } else {
+            None
+        };
+        let argument = self.append_argument(arguments, span, locals)?;
+        let erased = self.types.local_read_type(local).is_some_and(|ty|
+            matches!(*ty, crate::api::Type::Array(ref element) if **element == crate::api::Type::Any));
+        let receiver = match (erased, receiver) {
+            (true, Some(receiver)) => receiver,
+            _ => Expression {
                 kind: E::Local(name.clone()),
                 span,
             },
-            locals,
-        )?;
+        };
+        let array = self.value(receiver, locals)?;
         let value = self.value(argument, locals)?;
         self.types
             .append_type(array, value, spread, positional)
@@ -3277,7 +3302,9 @@ impl Builder<'_> {
                     }
                     let expected = match place {
                         crate::type_flow::Place::Local(local) => {
-                            self.types.local_type(local).and_then(construction_type)
+                            self.types.local_type(local)
+                                .filter(|ty| !matches!(ty, crate::api::Type::Array(element) if **element == crate::api::Type::Any))
+                                .and_then(construction_type)
                         }
                         crate::type_flow::Place::Parameter(index) => {
                             construction_type(&self.calls.parameter_types[index].api_type())
@@ -3911,13 +3938,13 @@ fn tuple_write_receivers(statements: &[parser::Statement]) -> std::collections::
     let mut names = std::collections::BTreeSet::new();
     for statement in statements {
         if let S::Call { module, member, .. } = statement {
-            if matches!(member.as_str(), "add" | "addAll") {
+            if matches!(member.as_str(), "add" | "addAll" | "remove" | "removeAll") {
                 names.insert(module.as_str());
             }
         }
         for expression in statement.expressions() {
             expression.visit(&mut |expression| {
-                if let Some((name, _)) = tuple_append_name(expression) {
+                if let Some((name, _)) = tuple_mutation_name(expression) {
                     names.insert(name);
                 }
             });

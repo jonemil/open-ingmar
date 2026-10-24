@@ -307,7 +307,7 @@ do not prove that distinct runtime owners alias or that every owner's field
 actually changed. Named tuple aliases still retain their independent views.
 
 Tuple receivers also support `size`, `equals`, `hashCode`, `toString`,
-`indexOf`, `reverse`, `slice`, `sort`, `method`, and `weak`:
+`indexOf`, `remove`, `removeAll`, `reverse`, `slice`, `sort`, `method`, and `weak`:
 
 - `reverse` returns an independent tuple with reversed slot contracts, retaining
   nested and exact source identities.
@@ -319,6 +319,15 @@ Tuple receivers also support `size`, `equals`, `hashCode`, `toString`,
   does not establish an immediate-bound proof.
 - `indexOf` accepts a search value without restricting it to existing slot
   types and returns Number under the ordinary Array equality/search contract.
+- `remove`/`removeAll` accept a search value and return Boolean. They erase the
+  addressed positional view to `Array<Any>`, including when nothing is removed.
+  The result is not a replacement Array reference. Named locals and parameters,
+  self fields, and structural declaration groups retain this erasure through
+  branches and loops; an erased alternative absorbs a tuple at a join. Named
+  variable aliases and callers retain independent checked views, and other
+  source-instance properties retain their declarations. Ordinary typed Arrays
+  keep their invariant element contracts. Reassigning an erased inferred local
+  gives literals fresh context under the existing inference rules.
 - `sort` mutates the runtime elements and returns Void. Its checked slot view
   stays unchanged, matching the SDK; this does not prove that differently typed
   elements kept their positions. Non-null element/default-order and Comparator
@@ -329,8 +338,11 @@ Tuple receivers also support `size`, `equals`, `hashCode`, `toString`,
   direct call has a reversed tuple result. `weak` returns the ordinary weak
   handle; retrieval does not recover the tuple's static shape.
 
-`remove` and `removeAll` remain outside this profile until their receiver-view
-erasure is tracked. An Array-typed callee may still mutate the runtime Array.
+Argument effects do not necessarily replace a captured positional view. For
+example, `x.add(x.remove(1))` retains the captured tuple shape plus a Boolean
+slot, while `x.remove(x.add(2).size())` ends with an erased view. These SDK
+checking limits do not establish runtime cardinality. An Array-typed callee may
+still mutate the runtime Array.
 Structural slots may hold already checked interface values; fresh source-class
 witnesses are not inferred when packing a tuple.
 

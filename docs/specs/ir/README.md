@@ -516,9 +516,11 @@ assignment rules. `.read-variable %result $id <contract>` defines a fresh value
 with a checked read contract; ordinary `.read` and `.take` cannot read inferred
 storage. Hidden ownership-transfer temporaries retain fixed storage contracts.
 
-Validation reconstructs possible writes at each CFG point to a fixed point,
-replacing a slot's alternatives on assignment and combining them at incoming
-edges. Read contracts must accept the resulting view, refined only by shared
+Validation reconstructs possible writes and receiver-view effects at each CFG
+point to a fixed point, replacing a slot's alternatives on assignment and
+combining them at incoming edges. Positional native removals contribute the
+[erased receiver contract](#positional-result-construction).
+Read contracts must accept the resulting view, refined only by shared
 runtime-class/non-null facts. Metadata cannot assert a type unsupported by the
 incoming values. Exact source identities, supported numeric aliases, comparison
 interfaces, and nullable joins retain their contracts; other supported native
@@ -1584,6 +1586,27 @@ assignment/call contracts remain invariant. Non-null edge proofs narrow tuple
 and Array storage domains before forwarding them into loops. They do not
 introduce a bottom type for unrelated source-class paths. Saved reads are
 checked against these reconstructed domains, not accepted as slot assertions.
+
+Positional `remove`/`removeAll` use ordinary `.call-native` or
+`.call-native-discard`, with a Boolean result when retained. Their receiver
+effect is reconstructed separately: a direct inferred-variable read, including
+an immutable evaluation capture, erases that active local to `array-any`.
+Named variable aliases establish independent roots. A proven same-reference
+tuple update retains capture provenance; rebinding without that proof breaks
+it, so mutation through an old capture does not retype the replacement slot.
+Parameters needing this view are copied into inferred locals at entry, just as
+for other tuple mutations. No extra store or saved effect assertion supplies
+the erasure.
+
+Self and structural field flow apply the same erased view to their captured
+field keys. Other source-instance properties retain their declared contracts.
+An erased Array alternative absorbs positional source/nested contracts at joins;
+ordinary typed Arrays retain their element contracts. Explicit reassignment
+establishes a fresh local view under the existing construction/inference rules.
+Reload checks later read metadata against these effects, including after loops.
+Append construction retains a captured positional view when an argument removal
+erases the named binding, while surviving nested positional refinements still
+contribute to the outer append.
 
 [VM lowering](../lowering/README.md#positional-result-construction).
 

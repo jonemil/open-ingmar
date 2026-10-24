@@ -301,8 +301,28 @@ does not establish runtime comparability or preserve element positions.
 Removal probes show a different mutation contract: `remove` returns Boolean,
 while subsequent reads of a parameter, self field, or structural field expose
 `Array<Any>`. `removeAll` likewise erases the parameter's view. Reads through a
-different source-class instance still expose its declared Pair. These results
-require receiver-flow handling beyond an ordinary Boolean-producing call.
+different source-class instance still expose its declared Pair. The Boolean
+result and receiver view therefore require separate handling.
+
+**Experimentally observed, 2026-10-24:** strict SDK 9.2.0 probes accept returning
+the original Pair after removing through a named alias or inside a callee.
+Reassigning an erased local to a mixed literal recovers its positional view.
+Removal in a guarded nullable loop is accepted. For argument-order probes,
+annotating these functions with an incompatible String return exposes the
+following checked result types in SDK diagnostics:
+
+| Expression before `return x` | Checked type of `x` |
+|---|---|
+| `x[0] = x.remove(1)` | `[Boolean, String]` |
+| `x.add(x.remove(1))` | `[Number, String, Boolean]` |
+| `x.remove(x.add(2).size())` | `Array<Any>` |
+
+Here `x` initially has `[Number, String]`. These are checking rules, not runtime
+length guarantees: the first two expressions leave one and two elements,
+respectively. The method example reproduces these cases and removal through
+parameters, fields, structural records, aliases, branches, loops, and callbacks.
+SDK and generated simulator output match, and both PRGs round-trip through
+structured export without required CODE/DATA fallback.
 
 The [complete method example](../../examples/compiler-tuple-methods/README.md)
 uses minimum API 5.0.0 for its source Comparator. SDK and generated simulator

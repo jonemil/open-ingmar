@@ -376,6 +376,33 @@ pub(crate) fn write_contract(
     }
 }
 
+/// Return the erased view produced by a positional removal. Already-erased
+/// Arrays retain that view so loop inference has a stable fixed point; ordinary
+/// typed Arrays keep their existing invariant removal contracts.
+pub(crate) fn removal_contract(receiver: &Type) -> Option<Type> {
+    let parts = crate::unions::alternatives(receiver);
+    (!parts.is_empty()
+        && parts.iter().all(|part| match part {
+            Type::TupleValue(_) => true,
+            Type::Array(element) => **element == Type::Any,
+            _ => false,
+        }))
+    .then(|| Type::Array(Box::new(Type::Any)))
+}
+
+/// Identify Boolean-producing native removal calls, including discarded results.
+pub(crate) fn removal_receiver(op: &crate::Operation) -> Option<ValueId> {
+    match op {
+        crate::Operation::NativeCall {
+            receiver, member, ..
+        }
+        | crate::Operation::NativeCallStatement {
+            receiver, member, ..
+        } if matches!(member.as_str(), "remove" | "removeAll") => Some(*receiver),
+        _ => None,
+    }
+}
+
 /// Join the contents of positional/Array inputs into an unknown-length Array.
 /// Preserve supported native alternatives; reject exact source or nested storage
 /// contracts that cannot yet be represented without erasing their identities.
@@ -399,6 +426,11 @@ pub(crate) fn array_contract(inputs: &[Type], extra: &[ReturnType]) -> Result<Ty
     let mut slots = extra.to_vec();
     for input in inputs {
         elements(input, &mut slots)?;
+    }
+    // An explicit erased alternative absorbs even source/nested slot contracts;
+    // this does not invent a representable element type for un-erased inputs.
+    if slots.contains(&ReturnType::Any) {
+        return Ok(Type::Array(Box::new(Type::Any)));
     }
     if slots.iter().any(|slot| slot.source_contract().is_some()) {
         return Err("shape loss cannot yet retain exact source-class Array elements");

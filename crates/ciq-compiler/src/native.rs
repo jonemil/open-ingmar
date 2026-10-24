@@ -217,6 +217,8 @@ pub(crate) fn value_call(
                 | "hashCode"
                 | "toString"
                 | "indexOf"
+                | "remove"
+                | "removeAll"
                 | "reverse"
                 | "slice"
                 | "method"

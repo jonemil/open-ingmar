@@ -37,18 +37,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Enable tuple `remove`/`removeAll`, returning Boolean and erasing the
-  receiver's checked view to `Array<Any>`. Track named-local, parameter, self,
-  and structural field effects through calls, aliases, branches, loops, and
-  saved stages; retain declared views for other source-instance fields.
 - [ ] Apply the exact source-class and nested element contracts in the
   [Array worklist](#array) when tuples lose positional shape; support a
   Null-only element domain without inventing non-Null alternatives.
 - [ ] Extend tuple inference to homogeneous/empty literals and computed scalar
   or source literals without a nested Array literal, including Symbol mixtures.
   Retain contextual Array construction and check existing Array method/assignment
-  consumers under inferred slot contracts; tuple mutation support above is a
-  prerequisite for migrating existing mutable homogeneous Array users.
+  consumers under inferred slot contracts when migrating existing mutable
+  homogeneous Array users.
 - [ ] Prove source-class structural witnesses when packing tuples with interface
   slots, reusing unit-level member checks rather than requiring an already typed
   interface value.
