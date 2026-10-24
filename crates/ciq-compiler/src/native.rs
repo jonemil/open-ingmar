@@ -62,6 +62,9 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if let api::Type::SourceValue(contract) = receiver {
+        return value_parameters(&contract.api_type(), member);
+    }
     if matches!(receiver, api::Type::TupleValue(_)) {
         return value_parameters(&api::Type::Array(Box::new(api::Type::Any)), member);
     }
@@ -187,6 +190,9 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let api::Type::SourceValue(contract) = receiver {
+        return value_call(&contract.api_type(), member, arguments, context);
+    }
     if let api::Type::TupleValue(tuple) = receiver {
         tuple.validate()?;
         if let Some(context) = context {
@@ -721,6 +727,15 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     {
         return true;
     }
+    if let api::Type::SourceValue(expected) = expected {
+        return match actual {
+            api::Type::SourceValue(actual) => expected.accepts(actual),
+            _ => expected.accepts_api(actual),
+        };
+    }
+    if let api::Type::SourceValue(actual) = actual {
+        return accepts(expected, &actual.api_type());
+    }
     if matches!(expected, api::Type::Named(name) if name == crate::InterfaceType::Comparable.name())
         && scalar_comparable(actual)
     {
@@ -769,6 +784,15 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
         };
     }
     if let api::Type::TupleValue(actual) = actual {
+        if let api::Type::Array(element) = expected {
+            return actual.slots().iter().all(|slot| {
+                let ty = slot
+                    .source_contract()
+                    .map(|c| api::Type::SourceValue(Box::new(c)))
+                    .unwrap_or_else(|| slot.api_type());
+                accepts(element, &ty)
+            });
+        }
         return accepts(
             expected,
             &api::Type::Tuple(actual.slots().iter().map(ReturnType::api_type).collect()),

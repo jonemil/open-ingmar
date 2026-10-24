@@ -239,6 +239,7 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         }
         Type::Union(types) => types.iter().all(|ty| string_operand(ty, boolean)),
         Type::Void
+        | Type::SourceValue(_)
         | Type::Array(_)
         | Type::Dictionary { .. }
         | Type::Tuple(_)

@@ -243,8 +243,9 @@ An unknown-length Array tail or a dynamic-index write loses positional shape.
 Its resulting Array element contract joins the original slots and the incoming
 elements, retaining supported native unions such as `Array<Number or String>`.
 Nested Arrays, supported typed Dictionaries, and positional tuples retain
-their inner contracts when shape is lost. Direct exact source-class elements
-cannot yet lose shape without erasing their identities and are rejected.
+their inner contracts when shape is lost. Exact source classes and supported
+native alternatives likewise retain an invariant element union, without
+substituting the classes' native bases.
 Null-only slots retain
 `Array<Null>` when shape is lost, including through dynamic writes and loop
 appends.
@@ -1028,8 +1029,9 @@ access. Exact source annotations and reference fields preserve the Object-rooted
 class and its Object projection. Source tests/assertions can recover exact
 identity after erasure. Object-element Arrays erase exact source identities
 under the
-[container contract](#object-containers). Exact source-class Array
-elements and source superclass chains remain unsupported.
+[container contract](#object-containers). Typed [source-class Array
+elements](#source-class-array-elements) retain those identities instead. Source
+superclass chains remain unsupported.
 
 Complete application DATA gives each class an Object base reference and a
 return-only hidden allocation constructor. Its explicit or default `initialize`
@@ -3225,6 +3227,33 @@ Reassigning that scalar invalidates its null proof. See the
 [example](../../../examples/compiler-nullable-arrays/README.md) and
 [evidence](../../investigations/compiler-nullable-arrays.md).
 
+### Source-class Array elements
+
+`Array<SourceClass>` retains exact class identity through typed literals,
+indexing/writes, `add`, `addAll`, `indexOf`, `remove`, `removeAll`, `reverse`,
+and `slice`. Nullable source elements and unions of source classes with other
+supported Array element types retain their complete contracts. Named typedefs,
+fields, parameters/results, nested Arrays, and tuple shape loss share these
+rules. General inference from unconstrained source literals remains separate.
+
+Existing Array references are invariant: neither a shared native base nor an
+unrelated source class establishes the required element identity. Empty and
+computed literals acquire their contract from context. Sized allocation requires
+nullable elements; Null-only constants use the existing Null DATA encoding and
+remain independently mutable on each load. A nullable read needs a guarded
+snapshot before source dispatch.
+
+Source element observers/equality and checked custom sorting retain callback
+initialization checks. Sorting uses the existing Comparator signature and
+source assertion rules; default source-element ordering and nullable-element
+sorting remain unsupported. Reverse/slice copy the outer Array while sharing
+source objects. Unit validation resolves source identities even in unused
+contracts, and saved-IR read/call claims must agree with their retained origins.
+The source-union budget is 254 alternatives including Null.
+
+See the [example](../../../examples/compiler-source-arrays/README.md) and
+[SDK evidence](../../investigations/compiler-nullable-arrays.md#source-class-array-elements).
+
 ### Nested Array elements
 
 Array elements may themselves be parameterized Arrays, supported typed
@@ -3260,8 +3289,8 @@ See the [example](../../../examples/compiler-nested-arrays/README.md) and
 references with invariant erased element contracts. Dictionary values likewise
 accept `Lang.Object` or `Lang.Object or Null` with any supported key contract;
 Object keys remain unsupported. Canonical names, imports, and Lang aliases work
-in signatures and contextual construction. Exact source-class element/value
-contracts and nested Dictionary key/value parameters remain separate requirements.
+in signatures and contextual construction. Exact source-class Dictionary values
+and nested Dictionary key/value parameters remain separate requirements.
 
 Object slots accept supported scalar classes, numeric aliases, source/native
 objects, comparison interfaces, and container/Method/WeakReference references.

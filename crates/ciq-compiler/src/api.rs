@@ -131,6 +131,7 @@ impl ApiContext {
             Type::Options(fields) => fields
                 .values()
                 .try_for_each(|ty| self.check_type(catalogue, ty)),
+            Type::SourceValue(contract) => self.check_type(catalogue, &contract.api_type()),
             Type::Array(element) => {
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
                 self.check_type(catalogue, element)
@@ -220,6 +221,9 @@ pub enum Type {
     Structural(Box<crate::StructuralInterface>),
     /// Dynamic value, including Null; operations defer unknown types to runtime.
     Any,
+    /// Exact source identities carried by a container element contract.
+    /// Native base projection cannot establish this contract.
+    SourceValue(Box<crate::SourceUnion>),
     /// Mutable Array with an explicit element contract. Array element contracts
     /// are invariant; this does not imply executable support for every element.
     Array(Box<Type>),
@@ -1442,6 +1446,9 @@ mod tests {
                 Type::Options(fields) => fields.values().for_each(|ty| check_type(api, ty)),
                 Type::Union(types) | Type::Tuple(types) => {
                     types.iter().for_each(|ty| check_type(api, ty))
+                }
+                Type::SourceValue(_) => {
+                    panic!("core API declarations cannot contain source identities")
                 }
                 Type::Any | Type::Null | Type::Void => {}
             }

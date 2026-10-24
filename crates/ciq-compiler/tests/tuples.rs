@@ -334,7 +334,6 @@ fn shape_loss_rejects_stale_slots_erasure_and_invariant_array_mutation() {
         r#"function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) { x.add("wrong"); }"#,
         r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], tail as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(tail); x.add(true); }"#,
         r#"function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number or Toybox.Lang.String> { return x; }"#,
-        r#"class A {} function f(x as [A,Toybox.Lang.String], tail as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(tail); }"#,
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }

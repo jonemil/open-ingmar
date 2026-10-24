@@ -94,6 +94,7 @@ fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
 fn callback_value_type(ty: &crate::api::Type) -> bool {
     use crate::api::Type;
     match ty {
+        Type::SourceValue(_) => true,
         Type::Any | Type::Structural(_) => true,
         Type::Named(name) => {
             [
@@ -173,7 +174,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(ty, crate::ValueType::Array(
                     crate::ArrayElement::Any | crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
-                || matches!(&ty, crate::ValueType::Array(element @ (crate::ArrayElement::Nested { .. } | crate::ArrayElement::Union(_)))
+                || matches!(&ty, crate::ValueType::Array(element @ (crate::ArrayElement::Source(_) | crate::ArrayElement::Nested { .. } | crate::ArrayElement::Union(_)))
                     if callback_value_type(&element.api_type())
                         && matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
                 || matches!(ty, crate::ValueType::Array(crate::ArrayElement::LangObject)

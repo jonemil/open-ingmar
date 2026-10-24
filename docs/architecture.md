@@ -91,6 +91,10 @@ shares saved-type spellings while retaining each consumer's accepted domain.
 `source_union` normalizes exact class alternatives while `source_objects`
 tracks their provenance. Source identities remain separate from native API
 projections, which cannot authorize source dispatch or interface witnesses.
+Container elements carry exact identities in `Type::SourceValue` and
+`ArrayElement::Source`; `source_objects` restores origins on reads and supplies
+source-aware operands at element boundaries. API availability uses their native
+projection, while assignability and unit resolution retain their full contracts.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;

@@ -80,11 +80,14 @@ impl Origins {
             index,
         } = operation
         {
-            if let Some(result_type) = self
-                .native_values
-                .get(array)
-                .and_then(|ty| crate::tuples::read_contract(ty, self.integer(*index)))
-            {
+            if let Some(result_type) = self.native_values.get(array).and_then(|ty| {
+                crate::tuples::read_contract(ty, self.integer(*index)).or_else(|| {
+                    crate::unions::index_read(ty, &crate::api::Type::named("Toybox.Lang.Number"))
+                        .ok()
+                        .and_then(crate::unions::result)
+                        .map(Ok)
+                })
+            }) {
                 if let Some(contract) = result_type.ok().and_then(|ty| ty.source_contract()) {
                     self.values.insert(*result, contract);
                 }
@@ -357,10 +360,29 @@ impl Origins {
                         _ => unreachable!("deferred interface argument"),
                     }
                 } else {
-                    ty
+                    parameters
+                        .get(index)
+                        .map(|expected| self.element_value(expected, value, ty.clone()))
+                        .unwrap_or(ty)
                 }
             })
             .collect()
+    }
+
+    /// Retain an operand's source identity when checking a source element
+    /// boundary. An erased native base cannot supply a missing identity.
+    pub(crate) fn element_value(
+        &self,
+        expected: &crate::api::Type,
+        value: ValueId,
+        ty: crate::api::Type,
+    ) -> crate::api::Type {
+        if matches!(expected, crate::api::Type::SourceValue(_)) {
+            if let Some(contract) = self.contract(value) {
+                return crate::api::Type::SourceValue(Box::new(contract.clone()));
+            }
+        }
+        ty
     }
 
     /// Return the exact source contract retained by a value, if any.

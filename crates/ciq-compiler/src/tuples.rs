@@ -404,8 +404,8 @@ pub(crate) fn removal_receiver(op: &crate::Operation) -> Option<ValueId> {
 }
 
 /// Join the contents of positional/Array inputs into an unknown-length Array.
-/// Preserve supported native alternatives; reject exact source or nested storage
-/// contracts that cannot yet be represented without erasing their identities.
+/// Preserve native, nested, and exact source alternatives under their supported
+/// element contracts. Reject domains exceeding their representation budgets.
 pub(crate) fn array_contract(inputs: &[Type], extra: &[ReturnType]) -> Result<Type, &'static str> {
     fn elements(ty: &Type, out: &mut Vec<ReturnType>) -> Result<(), &'static str> {
         match ty {
@@ -432,13 +432,19 @@ pub(crate) fn array_contract(inputs: &[Type], extra: &[ReturnType]) -> Result<Ty
     if slots.contains(&ReturnType::Any) {
         return Ok(Type::Array(Box::new(Type::Any)));
     }
-    if slots.iter().any(|slot| slot.source_contract().is_some()) {
-        return Err("shape loss cannot yet retain exact source-class Array elements");
-    }
     let ty = if slots.is_empty() {
         Type::Any
     } else {
-        crate::unions::normalize(slots.iter().map(ReturnType::api_type).collect())
+        crate::unions::normalize(
+            slots
+                .iter()
+                .map(|slot| {
+                    slot.source_contract()
+                        .map(|c| Type::SourceValue(Box::new(c)))
+                        .unwrap_or_else(|| slot.api_type())
+                })
+                .collect(),
+        )
     };
     let element = crate::ArrayElement::from_api_type(&ty)
         .ok_or("shape loss requires a supported native Array element domain")?;

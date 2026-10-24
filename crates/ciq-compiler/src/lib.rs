@@ -167,6 +167,9 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// Exact source classes and optional native/Null alternatives. Mutable
+    /// Array assignment retains this invariant contract.
+    Source(Box<SourceUnion>),
     /// A nested Array, typed Dictionary, or positional tuple, retaining its
     /// inner contract. Nullability applies to the element reference.
     Nested {
@@ -230,6 +233,26 @@ pub enum ArrayElement {
 
 impl ArrayElement {
     fn validate(&self) -> Result<(), String> {
+        if let Self::Source(contract) = self {
+            SourceUnion::with_native(
+                contract.classes.clone(),
+                contract.native.clone(),
+                contract.nullable,
+            )
+            .map_err(String::from)?;
+            if contract.native == [api::Type::Any] {
+                return Err("Any absorbs an exact source element contract".into());
+            }
+            if contract
+                .native
+                .iter()
+                .any(|ty| Self::from_api_type(ty).is_none())
+            {
+                return Err(
+                    "source element native alternatives must fit supported Array contracts".into(),
+                );
+            }
+        }
         if let Self::Nested { .. } = self {
             if Self::from_api_type(&self.api_type()).as_ref() != Some(self) {
                 return Err(
@@ -254,6 +277,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Source(contract) => return api::Type::SourceValue(contract.clone()),
             Self::Nested { contract, nullable } => {
                 let ty = *contract.clone();
                 return if *nullable { ty.with_null() } else { ty };
@@ -297,6 +321,11 @@ impl ArrayElement {
 
     fn nullable_base(&self) -> Option<Self> {
         match self {
+            Self::Source(contract) if contract.nullable => {
+                let mut contract = *contract.clone();
+                contract.nullable = false;
+                Some(Self::Source(Box::new(contract)))
+            }
             Self::Nested {
                 contract,
                 nullable: true,
@@ -355,6 +384,19 @@ impl ArrayElement {
         if !structural::type_depth(ty, 1) {
             return None;
         }
+        if let api::Type::SourceValue(contract) = ty {
+            if contract.native == [api::Type::Any] {
+                return Some(Self::Any);
+            }
+            if contract
+                .native
+                .iter()
+                .any(|ty| Self::from_api_type(ty).is_none())
+            {
+                return None;
+            }
+            return Some(Self::Source(contract.clone()));
+        }
         let parts = unions::alternatives(ty);
         let (base, nullable) = match parts {
             [base] => (base, false),
@@ -398,9 +440,10 @@ impl ArrayElement {
         if let api::Type::Union(parts) = ty {
             if parts.len() > 1
                 && unions::normalize(parts.clone()) == *ty
-                && parts
-                    .iter()
-                    .all(|part| *part == api::Type::Null || Self::from_api_type(part).is_some())
+                && parts.iter().all(|part| {
+                    !matches!(part, api::Type::SourceValue(_))
+                        && (*part == api::Type::Null || Self::from_api_type(part).is_some())
+                })
             {
                 return Some(Self::Union(ty.clone()));
             }
@@ -409,6 +452,13 @@ impl ArrayElement {
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Source(contract) = self {
+            return format!(
+                "exact({})",
+                type_text::result_tag(&contract.clone().result())
+            )
+            .into();
+        }
         if let Self::Nested { contract, nullable } = self {
             let result = unions::result(*contract.clone()).expect("validated nested element");
             return format!(
@@ -441,7 +491,8 @@ impl ArrayElement {
             };
         }
         let text = match self {
-            Self::Nested { .. }
+            Self::Source(_)
+            | Self::Nested { .. }
             | Self::Structural { .. }
             | Self::Callback { .. }
             | Self::Union(_) => unreachable!(),
@@ -1067,9 +1118,16 @@ impl ValueType {
             if normalized != *ty {
                 return Self::from_api_type(&normalized);
             }
+            if parts
+                .iter()
+                .any(|part| matches!(part, api::Type::SourceValue(_)))
+            {
+                return None;
+            }
         }
 
         match ty {
+            api::Type::SourceValue(contract) => Self::from_api_type(&contract.api_type()),
             api::Type::Callback(signature) => callbacks::validate(signature)
                 .ok()
                 .map(|()| Self::Callback(signature.clone())),
@@ -2421,8 +2479,10 @@ impl Function {
                         native::structural_api(&expected, &type_of(value).api_type(), context)
                             .map_err(|e| fail(&e))?;
                     }
-                    if !native::accepts(&expected, &type_of(value).api_type())
-                        && !origins.deferred_interface(&expected, value)
+                    if !native::accepts(
+                        &expected,
+                        &origins.element_value(&expected, value, type_of(value).api_type()),
+                    ) && !origins.deferred_interface(&expected, value)
                     {
                         return Err(fail("array builder element must match its declared type"));
                     }
@@ -2444,8 +2504,10 @@ impl Function {
                         }
                     }
                     if values.iter().any(|v| {
-                        !native::accepts(&expected, &type_of(*v).api_type())
-                            && !origins.deferred_interface(&expected, *v)
+                        !native::accepts(
+                            &expected,
+                            &origins.element_value(&expected, *v, type_of(*v).api_type()),
+                        ) && !origins.deferred_interface(&expected, *v)
                     }) {
                         return Err(fail(
                             "array builder elements must match their declared type",
@@ -3346,8 +3408,10 @@ impl Function {
                         native::structural_api(&element, &type_of(value).api_type(), context)
                             .map_err(|e| fail(&e))?;
                     }
-                    if !native::accepts(&element, &type_of(value).api_type())
-                        && !origins.deferred_interface(&element, value)
+                    if !native::accepts(
+                        &element,
+                        &origins.element_value(&element, value, type_of(value).api_type()),
+                    ) && !origins.deferred_interface(&element, value)
                     {
                         return Err(fail(
                             "array write value must match the receiver's element type",

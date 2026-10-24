@@ -40,6 +40,9 @@ pub(crate) fn same_type(a: &Type, b: &Type) -> bool {
         return true;
     }
     match (a, b) {
+        (Type::SourceValue(a), Type::SourceValue(b)) => {
+            same_result(&a.clone().result(), &b.clone().result())
+        }
         (Type::Structural(a), Type::Structural(b)) => {
             a.fields.len() == b.fields.len()
                 && a.methods.len() == b.methods.len()
@@ -252,6 +255,14 @@ fn resolve_element<E>(
     element: &mut crate::ArrayElement,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::ArrayElement::Source(contract) = element {
+        for class in &mut contract.classes {
+            resolve(class)?;
+        }
+        for ty in &mut contract.native {
+            resolve_api(ty, resolve)?;
+        }
+    }
     if let crate::ArrayElement::Nested { contract, .. } = element {
         resolve_api(contract, resolve)?;
     }
@@ -297,6 +308,14 @@ fn resolve_api<E>(
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
     match ty {
+        Type::SourceValue(contract) => {
+            for class in &mut contract.classes {
+                resolve(class)?;
+            }
+            for ty in &mut contract.native {
+                resolve_api(ty, resolve)?;
+            }
+        }
         Type::TupleValue(tuple) => {
             for slot in &mut tuple.slots {
                 resolve_result(slot, resolve)?;
@@ -355,6 +374,7 @@ pub(crate) fn type_depth(ty: &Type, depth: usize) -> bool {
         return false;
     }
     match ty {
+        Type::SourceValue(contract) => contract.native().iter().all(|ty| type_depth(ty, depth + 1)),
         Type::TupleValue(tuple) => tuple.slots.iter().all(|ty| result_depth(ty, depth + 1)),
         Type::Structural(shape) => shape_depth(shape, depth + 1),
         Type::Callback(signature) => signature_depth(signature, depth + 1),
@@ -401,6 +421,9 @@ fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
 fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
     depth <= 64
         && match element {
+            crate::ArrayElement::Source(contract) => {
+                contract.native().iter().all(|ty| type_depth(ty, depth + 1))
+            }
             crate::ArrayElement::Nested { contract, .. } => type_depth(contract, depth + 1),
             crate::ArrayElement::Union(ty) => type_depth(ty, depth + 1),
             crate::ArrayElement::Callback { signature, .. } => {

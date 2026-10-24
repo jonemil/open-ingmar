@@ -1,8 +1,10 @@
-//! Normalize native union alternatives and adapt their supported contracts.
+//! Normalize union alternatives, retaining exact source element contracts.
 use crate::{ParameterType, ReturnType, ValueType, api::Type};
 
 /// Flatten and deduplicate alternatives, absorbing Any and preserving the
-/// established numeric alias order. Null is last; other ordering is canonical.
+/// established numeric alias order. Exact element identities merge under the
+/// source-union budget; an over-budget union remains unrepresentable by value
+/// consumers rather than panicking. Null is last in ordinary native unions.
 pub(crate) fn normalize(types: Vec<Type>) -> Type {
     fn flatten(ty: Type, out: &mut Vec<Type>) {
         if let Type::Union(parts) = ty {
@@ -22,6 +24,26 @@ pub(crate) fn normalize(types: Vec<Type>) -> Type {
     }
     if out.contains(&Type::Any) {
         return Type::Any;
+    }
+    if out.iter().any(|ty| matches!(ty, Type::SourceValue(_))) {
+        let original = out.clone();
+        let mut classes = Vec::new();
+        let mut native = Vec::new();
+        let mut nullable = false;
+        for ty in out {
+            if let Type::SourceValue(contract) = ty {
+                classes.extend(contract.classes);
+                native.extend(contract.native);
+                nullable |= contract.nullable;
+            } else if ty == Type::Null {
+                nullable = true;
+            } else {
+                native.push(ty);
+            }
+        }
+        return crate::SourceUnion::with_native(classes, native, nullable)
+            .map(|contract| Type::SourceValue(Box::new(contract)))
+            .unwrap_or(Type::Union(original));
     }
     out.sort_by_key(|ty| {
         let rank = match ty {
@@ -53,6 +75,7 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
         return Some(p);
     }
     match ty {
+        Type::SourceValue(contract) => Some(contract.parameter()),
         Type::TupleValue(tuple) => tuple.validate().ok().map(|()| ParameterType::Tuple(tuple)),
         Type::Callback(signature) => crate::callbacks::validate(&signature)
             .ok()
@@ -76,6 +99,7 @@ pub(crate) fn result(ty: Type) -> Option<ReturnType> {
         return Some(r);
     }
     match ty {
+        Type::SourceValue(contract) => Some(contract.result()),
         Type::TupleValue(tuple) => tuple.validate().ok().map(|()| ReturnType::Tuple(tuple)),
         Type::Callback(signature) => crate::callbacks::validate(&signature)
             .ok()
@@ -201,4 +225,38 @@ pub(crate) fn index_write(receiver: &Type, key: &Type, value: &Type) -> Result<(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_element_joins_reject_excess_alternatives_without_panicking() {
+        let classes = (0..crate::MAX_PARAMETERS)
+            .map(|i| crate::SourceClass::parse(&format!("C{i}@Lang.Object")).unwrap())
+            .collect();
+        let first = crate::SourceUnion::new(classes, false).unwrap();
+        let second = crate::SourceUnion::new(
+            vec![crate::SourceClass::parse("Extra@Lang.Object").unwrap()],
+            false,
+        )
+        .unwrap();
+        // Exact identities belong in the class list, never in the native
+        // alternatives of a public source-union contract.
+        assert!(
+            crate::SourceUnion::with_native(
+                first.classes().to_vec(),
+                vec![Type::SourceValue(Box::new(second.clone()))],
+                false,
+            )
+            .is_err()
+        );
+        let joined = normalize(vec![
+            Type::SourceValue(Box::new(first)),
+            Type::SourceValue(Box::new(second)),
+        ]);
+        assert!(crate::ArrayElement::from_api_type(&joined).is_none());
+        assert!(result(Type::Array(Box::new(joined))).is_none());
+    }
 }

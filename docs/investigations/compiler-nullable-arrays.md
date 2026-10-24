@@ -58,3 +58,22 @@ changes the original, while replacing a copied outer slot does not. Search and
 removal accept the checked inner container; the example checks first/all removal
 with shared references. Ordered fill markers execute once in source order.
 Both PRGs reconstruct through structured CODE/DATA without required raw fallback.
+
+## Source-class Array elements
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking, `fr265`,
+`-O 0`, accepts the [source element specimen](../../examples/compiler-source-arrays/README.md)
+with minimum API 5.0.0 for Comparator. It covers contextual source literals,
+Null-only constants, nullable allocation, indexed writes, append/search/removal,
+reverse/slice, class unions, nested Arrays, and tuple shape loss through unknown
+append tails, dynamic writes, and loops.
+
+The custom Comparator accepts Object parameters and uses source assertions before
+reading Token values. SDK and generated simulator output match for sorting,
+source-union method dispatch, guarded nullable reads, and post-removal source
+method calls. Copies retain shared source objects: changing an object's field is
+visible through both Arrays, while replacing a copied outer slot leaves the
+original slot unchanged. Loading a Null-only constant again returns a fresh
+mutable Array. Both PRGs reconstruct through structured CODE/DATA without
+required raw fallback. These tests do not establish source inheritance,
+unconstrained literal inference, or nullable/default source-element sorting.

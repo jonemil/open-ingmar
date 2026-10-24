@@ -77,12 +77,10 @@ fn container_field_and_source_union_aliases_retain_existing_contracts() {
     ));
     let wrong = source.replace("self.value=v", "self.value=41");
     assert!(compile_sources(&[&wrong]).is_err());
-    assert!(
-        compile_sources(&[
-            "typedef T as Token; class Token {} function f(n as Toybox.Lang.Array<T>) {} "
-        ])
-        .is_err()
-    );
+    compile_sources(&[
+        "typedef T as Token; class Token {} function f(n as Toybox.Lang.Array<T>) {} ",
+    ])
+    .unwrap();
 }
 
 #[test]

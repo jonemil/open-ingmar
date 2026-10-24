@@ -1302,7 +1302,19 @@ The outer parameter/result tag is `nested(number-array)-array`; its checked
 read/join tag is `array-nested(number-array)`. `nullable-nested(...)` also
 permits Null inner references and supports sized outer allocation. Recursive
 contracts use the shared 64-level depth bound and retain source identities
-inside tuple/interface contents. Direct source-class elements remain unsupported.
+inside tuple/interface contents.
+
+`exact(<source-result-tag>)` retains exact source element identities, including
+native/Null alternatives. For example, `exact(source(Token@Lang.Object))` uses
+`exact(source(Token@Lang.Object))-array` in parameters/results and
+`array-exact(source(Token@Lang.Object))` in checked read/join contracts. These
+contracts resolve through ordinary unit declarations and the source-union
+254-alternative budget. An erased native base cannot prove a source element
+write or call argument. Array reads restore source origins independently of
+VM/native projections. Only Null fits a flat constant payload under a nullable
+source-only element contract; source references use private construction.
+No new opcode or DATA record is introduced. See
+[source semantics](../frontend/README.md#source-class-array-elements).
 
 These elements use ordinary private Array construction and typed fills; there
 is no nested-reference DATA constant token or new VM opcode. Reload validation
@@ -1588,8 +1600,8 @@ Array tail loses positional shape and joins the native element contracts.
 `positional=false`, deriving an element contract even for known tuple inputs.
 The frontend uses these forms for loop-carried tuple storage; their result is
 the same runtime receiver reference. Generalized elements must fit a supported
-Array profile, including Null-only and nested container elements; unsupported
-direct source-class domains are rejected.
+Array profile, including Null-only, nested container, and exact source elements.
+Unrepresentable or over-budget element domains are rejected.
 Validation checks API 1.3.0 and the actual operands on reload, without trusting
 an asserted result or tail length. Store the result into the receiver's inferred
 local before emitting subsequent reads. Derived result signatures have a shared

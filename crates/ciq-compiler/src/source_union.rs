@@ -42,7 +42,9 @@ impl SourceUnion {
         for ty in crate::unions::alternatives(&normalized) {
             if *ty == Type::Null {
                 nullable = true;
-            } else if crate::unions::parameter(ty.clone()).is_some() {
+            } else if !matches!(ty, Type::SourceValue(_))
+                && crate::unions::parameter(ty.clone()).is_some()
+            {
                 native.push(ty.clone());
             } else {
                 return Err("unsupported native source-union alternative");

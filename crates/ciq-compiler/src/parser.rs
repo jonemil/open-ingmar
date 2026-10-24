@@ -940,8 +940,8 @@ impl<'a> Parser<'a> {
         let at = self.offset;
         let element = self.parameter_annotation(at)?;
         self.close_type_arguments()?;
-        if element.source_contract().is_some() {
-            return Err(self.error(at, "unsupported Array source-class element contract"));
+        if let Some(contract) = element.source_contract() {
+            return Ok(crate::ArrayElement::Source(Box::new(contract)));
         }
         crate::ArrayElement::from_api_type(&element.api_type())
             .ok_or_else(|| self.error(at, "unsupported Array element annotation"))

@@ -2655,6 +2655,7 @@ impl Builder<'_> {
                 || matches!(
                     element,
                     crate::ArrayElement::Null
+                        | crate::ArrayElement::Source(_)
                         | crate::ArrayElement::Nested { .. }
                         | crate::ArrayElement::Interface(_)
                         | crate::ArrayElement::Structural { .. }

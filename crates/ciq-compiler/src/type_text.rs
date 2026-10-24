@@ -219,6 +219,12 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
+    if let Some(body) = tag.strip_prefix("exact(").and_then(|s| s.strip_suffix(')')) {
+        crate::structural::split(tag, '\0').ok()?;
+        return Some(ArrayElement::Source(Box::new(
+            call_result(body).ok()?.source_contract()?,
+        )));
+    }
     let nested = tag
         .strip_prefix("nested(")
         .map(|body| (body, false))
