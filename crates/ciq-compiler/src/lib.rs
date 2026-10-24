@@ -167,6 +167,12 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A nested Array, typed Dictionary, or positional tuple, retaining its
+    /// inner contract. Nullability applies to the element reference.
+    Nested {
+        contract: Box<api::Type>,
+        nullable: bool,
+    },
     /// Only Null values; writes must not introduce a non-Null alternative.
     Null,
     /// A canonical union of supported native element contracts, independent
@@ -224,6 +230,13 @@ pub enum ArrayElement {
 
 impl ArrayElement {
     fn validate(&self) -> Result<(), String> {
+        if let Self::Nested { .. } = self {
+            if Self::from_api_type(&self.api_type()).as_ref() != Some(self) {
+                return Err(
+                    "nested Array elements require a bounded supported container contract".into(),
+                );
+            }
+        }
         if let Self::Union(ty) = self {
             if Self::from_api_type(ty).as_ref() != Some(self) {
                 return Err("Array element union must use a supported canonical contract".into());
@@ -241,6 +254,10 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Nested { contract, nullable } => {
+                let ty = *contract.clone();
+                return if *nullable { ty.with_null() } else { ty };
+            }
             Self::Union(ty) => return ty.clone(),
             Self::Callback {
                 signature,
@@ -280,6 +297,13 @@ impl ArrayElement {
 
     fn nullable_base(&self) -> Option<Self> {
         match self {
+            Self::Nested {
+                contract,
+                nullable: true,
+            } => Some(Self::Nested {
+                contract: contract.clone(),
+                nullable: false,
+            }),
             Self::Union(api::Type::Union(parts)) if parts.contains(&api::Type::Null) => {
                 Self::from_api_type(&unions::normalize(
                     parts
@@ -328,6 +352,25 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if !structural::type_depth(ty, 1) {
+            return None;
+        }
+        let parts = unions::alternatives(ty);
+        let (base, nullable) = match parts {
+            [base] => (base, false),
+            [base, api::Type::Null] => (base, true),
+            _ => (ty, false),
+        };
+        if matches!(
+            base,
+            api::Type::Array(_) | api::Type::Dictionary { .. } | api::Type::TupleValue(_)
+        ) {
+            unions::result(base.clone())?;
+            return Some(Self::Nested {
+                contract: Box::new(base.clone()),
+                nullable,
+            });
+        }
         if let Some((signature, nullable)) = callbacks::value_signature(ty) {
             callbacks::validate(signature).ok()?;
             return Some(Self::Callback {
@@ -366,6 +409,15 @@ impl ArrayElement {
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Nested { contract, nullable } = self {
+            let result = unions::result(*contract.clone()).expect("validated nested element");
+            return format!(
+                "{}nested({})",
+                if *nullable { "nullable-" } else { "" },
+                type_text::result_tag(&result)
+            )
+            .into();
+        }
         if let Self::Union(ty) = self {
             return unions::text(ty).into();
         }
@@ -389,7 +441,10 @@ impl ArrayElement {
             };
         }
         let text = match self {
-            Self::Structural { .. } | Self::Callback { .. } | Self::Union(_) => unreachable!(),
+            Self::Nested { .. }
+            | Self::Structural { .. }
+            | Self::Callback { .. }
+            | Self::Union(_) => unreachable!(),
             Self::Any => "any",
             Self::Null => "null",
             Self::LangObject => "object",

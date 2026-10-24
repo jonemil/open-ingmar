@@ -1750,7 +1750,10 @@ impl Builder<'_> {
         );
         for (index, expression) in elements.into_iter().enumerate() {
             let element_span = expression.span;
-            let value = self.value(expression, locals)?;
+            let context = expected
+                .as_ref()
+                .and_then(|element| construction_type(&element.api_type()));
+            let value = self.value_with_context(expression, locals, context)?;
             if index == 0 && expected.is_none() {
                 let element_type = self
                     .types
@@ -2652,6 +2655,7 @@ impl Builder<'_> {
                 || matches!(
                     element,
                     crate::ArrayElement::Null
+                        | crate::ArrayElement::Nested { .. }
                         | crate::ArrayElement::Interface(_)
                         | crate::ArrayElement::Structural { .. }
                         | crate::ArrayElement::Callback { .. }

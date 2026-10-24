@@ -1289,11 +1289,26 @@ references. Numeric alias tags follow the [alias grammar](#numeric-aliases).
 and call-result tags are `object-array` and `nullable-object-array`, and their
 conditional-edge tags are `array-object` and `array-nullable-object`.
 Construction uses `Operation::ArrayNew` with the corresponding `ArrayElement`
-variant. Other parsed element contracts are rejected. Definition/use, block, and
+variant. Definition/use, block, and
 effect checks apply even when the allocation result is consumed later. API
 checking requires Array and the element type: 5.0.0 for comparison interfaces,
 1.3.0 for Char, 1.2.0 for WeakReference, 3.0.0 for ByteArray, otherwise 1.0.0
 within this profile.
+
+`nested(<container-result-tag>)` retains an inner Array, supported typed
+Dictionary, or positional tuple. For example, `nested(number-array)` and
+`nested(dictionary(string=>integer))` describe Array and Dictionary elements.
+The outer parameter/result tag is `nested(number-array)-array`; its checked
+read/join tag is `array-nested(number-array)`. `nullable-nested(...)` also
+permits Null inner references and supports sized outer allocation. Recursive
+contracts use the shared 64-level depth bound and retain source identities
+inside tuple/interface contents. Direct source-class elements remain unsupported.
+
+These elements use ordinary private Array construction and typed fills; there
+is no nested-reference DATA constant token or new VM opcode. Reload validation
+reconstructs inner contracts before checking reads, writes, and native calls.
+Source resolution and observer callback checks traverse the nested contracts.
+See [source semantics](../frontend/README.md#nested-array-elements).
 
 Parameter/user-call Array categories append `-array` to these element tags, for
 example `long-array`, `nullable-double-array`, or `view-array`. Nullability
@@ -1573,8 +1588,8 @@ Array tail loses positional shape and joins the native element contracts.
 `positional=false`, deriving an element contract even for known tuple inputs.
 The frontend uses these forms for loop-carried tuple storage; their result is
 the same runtime receiver reference. Generalized elements must fit a supported
-Array profile, including Null-only elements; unsupported source/nested domains
-are rejected.
+Array profile, including Null-only and nested container elements; unsupported
+direct source-class domains are rejected.
 Validation checks API 1.3.0 and the actual operands on reload, without trusting
 an asserted result or tail length. Store the result into the receiver's inferred
 local before emitting subsequent reads. Derived result signatures have a shared

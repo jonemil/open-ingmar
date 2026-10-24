@@ -923,7 +923,7 @@ impl<'a> Parser<'a> {
         let key = self.parameter_annotation(at)?;
         self.expect(Kind::Punctuation(','), "',' and a Dictionary value type")?;
         let value = self.parameter_annotation(self.offset)?;
-        self.expect(Kind::Punctuation('>'), "'>'")?;
+        self.close_type_arguments()?;
         if key.source_contract().is_some() || value.source_contract().is_some() {
             return Err(self.error(at, "unsupported Dictionary source-class contract"));
         }
@@ -939,13 +939,26 @@ impl<'a> Parser<'a> {
         self.expect(Kind::Punctuation('<'), "'<' and an Array element type")?;
         let at = self.offset;
         let element = self.parameter_annotation(at)?;
-        self.expect(Kind::Punctuation('>'), "'>'")?;
+        self.close_type_arguments()?;
         if element.source_contract().is_some() {
             return Err(self.error(at, "unsupported Array source-class element contract"));
         }
         crate::ArrayElement::from_api_type(&element.api_type())
             .ok_or_else(|| self.error(at, "unsupported Array element annotation"))
     }
+    /// Consume one generic closing bracket, leaving an adjacent bracket or
+    /// assignment for its enclosing parser. Expression shifts keep their lexer
+    /// tokens; only type-argument parsing splits `>>` and `>=` here.
+    fn close_type_arguments(&mut self) -> Result<(), Diagnostic> {
+        let token = self.token()?;
+        if self.source.as_bytes().get(token.span.start) != Some(&b'>') {
+            return Err(self.error(token.span.start, "expected '>'"));
+        }
+        self.offset = token.span.start + 1;
+        self.lookahead = None;
+        Ok(())
+    }
+
     fn path(&mut self) -> Result<String, Diagnostic> {
         let token = self.identifier()?;
         let Kind::Word(name) = token.kind else {

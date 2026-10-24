@@ -37,7 +37,7 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Apply the exact source-class and nested element contracts in the
+- [ ] Apply the exact source-class element contracts in the
   [Array worklist](#array) when tuples lose positional shape.
 - [ ] Extend tuple inference to homogeneous/empty literals and computed scalar
   or source literals without a nested Array literal, including Symbol mixtures.
@@ -187,8 +187,6 @@ executable profiles.
 - [ ] Preserve exact source-class elements through literals, allocation,
   indexing/writes, `add`, `addAll`, `remove`, `removeAll`, `indexOf`, `slice`,
   `reverse`, and typed `sort` callbacks.
-- [ ] Support explicit nested Array/Dictionary element parameters and nested
-  literal construction; preserve inner contracts through the same methods.
 - [ ] Infer heterogeneous and scalar/Null literal elements, including `[]`
   without immediate call/return context; support their evolving local use.
 - [ ] Support sorting nullable elements through a checked custom comparator,

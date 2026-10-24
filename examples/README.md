@@ -11,6 +11,8 @@ and future Rust toolchain experiments.
   typed construction, fields, callbacks, indexing, and evaluation order.
 - [compiler-tuple-methods](compiler-tuple-methods/README.md): tuple copies and
   slices, search, default/custom sorting, bound methods, and weak handles.
+- [compiler-nested-arrays](compiler-nested-arrays/README.md): nested container
+  contracts, recursive literals, shared inner references, and shallow copies.
 - [ir-any](ir-any/README.md): hand-authored dynamic IR, saved-stage compilation,
   and an SDK source comparison for Any calls, arithmetic, indexing, and narrowing.
 - [compiler-root-objects](compiler-root-objects/README.md): Object-rooted source

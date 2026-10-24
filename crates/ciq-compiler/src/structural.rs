@@ -252,6 +252,9 @@ fn resolve_element<E>(
     element: &mut crate::ArrayElement,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::ArrayElement::Nested { contract, .. } = element {
+        resolve_api(contract, resolve)?;
+    }
     if let crate::ArrayElement::Callback { signature, .. } = element {
         resolve_signature(signature, resolve)?;
     }
@@ -347,7 +350,7 @@ pub struct StructuralMethod {
     pub result: ReturnType,
 }
 
-fn type_depth(ty: &Type, depth: usize) -> bool {
+pub(crate) fn type_depth(ty: &Type, depth: usize) -> bool {
     if depth > 64 {
         return false;
     }
@@ -398,6 +401,7 @@ fn parameter_depth(ty: &ParameterType, depth: usize) -> bool {
 fn element_depth(element: &crate::ArrayElement, depth: usize) -> bool {
     depth <= 64
         && match element {
+            crate::ArrayElement::Nested { contract, .. } => type_depth(contract, depth + 1),
             crate::ArrayElement::Union(ty) => type_depth(ty, depth + 1),
             crate::ArrayElement::Callback { signature, .. } => {
                 signature_depth(signature, depth + 1)

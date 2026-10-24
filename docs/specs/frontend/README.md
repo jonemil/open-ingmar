@@ -242,8 +242,10 @@ device Array limit.
 An unknown-length Array tail or a dynamic-index write loses positional shape.
 Its resulting Array element contract joins the original slots and the incoming
 elements, retaining supported native unions such as `Array<Number or String>`.
-Exact source-class and nested collection elements cannot yet lose shape without
-erasing their contracts; these cases are rejected. Null-only slots retain
+Nested Arrays, supported typed Dictionaries, and positional tuples retain
+their inner contracts when shape is lost. Direct exact source-class elements
+cannot yet lose shape without erasing their identities and are rejected.
+Null-only slots retain
 `Array<Null>` when shape is lost, including through dynamic writes and loop
 appends.
 
@@ -3223,14 +3225,43 @@ Reassigning that scalar invalidates its null proof. See the
 [example](../../../examples/compiler-nullable-arrays/README.md) and
 [evidence](../../investigations/compiler-nullable-arrays.md).
 
+### Nested Array elements
+
+Array elements may themselves be parameterized Arrays, supported typed
+Dictionaries, or positional tuples, optionally with Null. For example,
+`Array<Array<Number>>`, `Array<Dictionary<String, Number>>`, and
+`Array<[Number, String]>` preserve the complete inner contract. Existing
+Array references remain invariant at every level; native base projections
+cannot establish an exact source-class identity.
+
+Expected element types flow recursively into literal construction, including
+empty literals and conditional elements. Inner values retain their own
+evaluation order and allocation; no nested reference is stored as a DATA
+constant. Indexed reads/writes, `add`, `addAll`, `indexOf`, `remove`,
+`removeAll`, `reverse`, and `slice` use the ordinary typed Array contracts.
+Unknown-length tuple append tails and dynamic tuple writes retain these nested
+domains when positional shape is lost. Non-null nested elements accept a
+checked custom Comparator; default ordering and nullable-element sorting
+remain outside this profile.
+
+Outer copies from `reverse`/`slice` share inner references. Replacing a copied
+outer slot does not replace the original slot; mutating a shared inner object
+affects both references. Snapshot and guard a nullable inner reference before
+using it. Sized outer allocation requires nullable inner elements, since each
+new slot starts as Null. The shared 64-level contract bound also applies to
+nesting; adjacent generic closing brackets do not become expression shifts.
+
+See the [example](../../../examples/compiler-nested-arrays/README.md) and
+[SDK evidence](../../investigations/compiler-nullable-arrays.md#nested-array-elements).
+
 ### Object containers
 
 `Array<Lang.Object>` and `Array<Lang.Object or Null>` retain non-null Array
 references with invariant erased element contracts. Dictionary values likewise
 accept `Lang.Object` or `Lang.Object or Null` with any supported key contract;
 Object keys remain unsupported. Canonical names, imports, and Lang aliases work
-in signatures and contextual construction. Explicit nested parameters and exact
-source-class element/value contracts remain separate requirements.
+in signatures and contextual construction. Exact source-class element/value
+contracts and nested Dictionary key/value parameters remain separate requirements.
 
 Object slots accept supported scalar classes, numeric aliases, source/native
 objects, comparison interfaces, and container/Method/WeakReference references.
@@ -3314,8 +3345,9 @@ loop is inserted; invalid sizes and allocation failures remain runtime concerns.
 Reads preserve the nullable element contract after writes. Reassignment replaces
 the reference while aliases retain the previous array.
 
-An untyped `var a = new[n]`, non-null element contracts (even `new[0]`), nested
-arrays, and inference from later writes remain unsupported. Conditional arms can
+An untyped `var a = new[n]`, non-null element contracts (even `new[0]`),
+multidimensional allocation syntax, and inference from later writes remain
+unsupported. Conditional arms can
 select sized arrays when their invariant element contracts match. Type
 availability is checked independently of Array methods: nullable Number
 allocation requires API 1.0.0, while nullable Char requires 1.3.0. See

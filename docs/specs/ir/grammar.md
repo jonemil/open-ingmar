@@ -351,7 +351,9 @@ element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
-            | union-tag
+            | union-tag | nested-element-tag
+nested-element-tag = ["nullable-"] "nested(" nested-container-tag ")"
+nested-container-tag = array-tag | dictionary-tag | tuple-tag
 nullable-structural-tag = "union(" structural-tag "|null)"
 nullable-callback-tag = "union(" callback-tag "|null)"
 array-tag = element-tag "-array"

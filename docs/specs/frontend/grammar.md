@@ -301,8 +301,10 @@ contracts, proof obligations, and field accesses.
   form specifies the bounded key/value contracts.
 - Array element and Dictionary key/value expressions use the shared value-type
   parser. After alias expansion and normalization, they must match the existing
-  supported element/key/value contracts; this does not add nested containers,
-  exact source-class contents, or arbitrary heterogeneous unions.
+  supported element/key/value contracts. Array elements also permit nested
+  parameterized Arrays, supported typed Dictionaries, positional tuples, and
+  their Null alternatives. Nested Dictionary key/value parameters and direct
+  exact source-class contents remain unsupported.
   Finite structural interfaces are permitted as elements/keys/values; only
   elements and values may add Null. Member signatures retain their separate
   source-class contract domain.

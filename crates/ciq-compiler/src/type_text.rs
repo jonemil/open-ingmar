@@ -219,6 +219,19 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
+    let nested = tag
+        .strip_prefix("nested(")
+        .map(|body| (body, false))
+        .or_else(|| {
+            tag.strip_prefix("nullable-nested(")
+                .map(|body| (body, true))
+        });
+    if let Some((body, nullable)) = nested {
+        crate::structural::split(tag, '\0').ok()?;
+        let ty = call_result(body.strip_suffix(')')?).ok()?.api_type();
+        let element = ArrayElement::from_api_type(&if nullable { ty.with_null() } else { ty })?;
+        return matches!(element, ArrayElement::Nested { .. }).then_some(element);
+    }
     if tag.starts_with("interface(") || tag.starts_with("union(") || tag.starts_with("callback(") {
         return ArrayElement::from_api_type(&call_result(tag).ok()?.api_type());
     }

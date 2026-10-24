@@ -39,3 +39,22 @@ In contrast, `x.indexOf(1)` for `x as Array<Null>` is rejected as an invalid
 Number argument for a Null parameter. This typed Array signature is stricter
 than the independently observed positional tuple search profile. Null-only
 elements use the existing Null DATA token and ordinary Array VM instructions.
+
+## Nested Array elements
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking on `fr265`,
+`-O 0`, accepts `Array<Array<Number>>`, `Array<Dictionary<String, Number>>`,
+`Array<[Number, String]>`, and nullable inner Arrays in the
+[nested specimen](../../examples/compiler-nested-arrays/README.md).
+The specimen uses minimum API 5.0.0 for its custom Comparator. It covers nested
+literal context, empty inner containers, three-level generic annotations with
+adjacent closing brackets, guarded nullable reads, and sized outer allocation.
+Unknown-length append tails and dynamic writes preserve nested contracts when
+tuple shape is lost.
+
+SDK and generated simulator output match. Reverse/slice produce independent
+outer Arrays but share inner objects: a write through the inner reference
+changes the original, while replacing a copied outer slot does not. Search and
+removal accept the checked inner container; the example checks first/all removal
+with shared references. Ordered fill markers execute once in source order.
+Both PRGs reconstruct through structured CODE/DATA without required raw fallback.

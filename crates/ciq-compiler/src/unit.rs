@@ -173,6 +173,9 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                 || matches!(ty, crate::ValueType::Array(
                     crate::ArrayElement::Any | crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
+                || matches!(&ty, crate::ValueType::Array(element @ (crate::ArrayElement::Nested { .. } | crate::ArrayElement::Union(_)))
+                    if callback_value_type(&element.api_type())
+                        && matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
                 || matches!(ty, crate::ValueType::Array(crate::ArrayElement::LangObject)
                     if member == "sort" && arguments.iter().any(|argument|
                         matches!(function.value_types[argument], crate::ValueType::Null
