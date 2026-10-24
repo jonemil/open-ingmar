@@ -75,8 +75,8 @@ fn constructed_references_keep_invariant_contracts_and_observable_order() {
         "function f() as Void { var v = new Toybox.WatchUi.Unknown(); }",
         "function f() as Void { var v = new Toybox.WatchUi.View(1); }",
         "function f() as Void { var new = 1; }",
-        "function f() as Void { var a = [new Toybox.WatchUi.View(), 1]; }",
-        "function f() as Void { var a = [1, new Toybox.WatchUi.View()]; }",
+        "function f() as Toybox.Lang.Array<Toybox.WatchUi.View> { return [new Toybox.WatchUi.View(), 1]; }",
+        "function f() as Toybox.Lang.Array<Toybox.WatchUi.View> { return [1, new Toybox.WatchUi.View()]; }",
         "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a.add(1); }",
         "function f(a as Toybox.Lang.Array<Toybox.WatchUi.View>) as Void { a.addAll(['a']); }",
         "function f(v as Toybox.WatchUi.View) as Void { v = null; }",
@@ -89,7 +89,7 @@ fn constructed_references_keep_invariant_contracts_and_observable_order() {
         assert!(compile_function(source).is_err(), "{source}");
     }
     let f =
-        compile_function("function f(v as Toybox.WatchUi.View) as Toybox.Lang.Number { var a = [v]; a.add(v); return a.size(); }")
+        compile_function("function f(v as Toybox.WatchUi.View) as Toybox.Lang.Array<Toybox.WatchUi.View> { return [v]; }")
             .unwrap();
     let text = f.to_ir_text();
     let changed = text

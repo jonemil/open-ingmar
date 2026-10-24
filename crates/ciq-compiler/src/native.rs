@@ -545,6 +545,7 @@ pub(crate) fn value_call(
         && member == "addAll"
         && !matches!(arguments, [api::Type::Named(name)] if name == class)
         && !matches!(arguments, [api::Type::Array(element)] if matches!(element.as_ref(), api::Type::Named(name) if name == "Toybox.Lang.Number" || name == "Toybox.Lang.Char"))
+        && !matches!(arguments, [api::Type::TupleValue(tuple)] if ["Toybox.Lang.Number", "Toybox.Lang.Char"].iter().any(|name| tuple.slots().iter().all(|slot| slot.api_type() == api::Type::named(*name))))
     {
         return Err(
             "ByteArray.addAll requires ByteArray or an Array of non-null Numbers or Chars".into(),
@@ -718,6 +719,7 @@ fn scalar_comparable(actual: &api::Type) -> bool {
 /// Containers may widen to their declared class/base; their parameters are invariant.
 /// A positional tuple also satisfies Array<T> when every slot satisfies T;
 /// an Array alone cannot establish a tuple's length or positional contracts.
+/// This positional adaptation also applies inside nested Array element domains.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     if crate::structural::same_type(expected, actual)
@@ -761,6 +763,9 @@ pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
     }
     if let api::Type::Union(types) = expected {
         return types.iter().any(|ty| accepts(ty, actual));
+    }
+    if let (api::Type::Array(expected), api::Type::Array(actual)) = (expected, actual) {
+        return crate::tuples::array_elements_match(expected, actual);
     }
     if let api::Type::TupleValue(expected) = expected {
         return match actual {

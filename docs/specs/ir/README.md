@@ -440,9 +440,9 @@ contracts spell it `any`. The source frontend uses these contracts for
 
 Any may cross supported typed argument, assignment, and return boundaries
 without a conversion or generated guard. Concrete mismatches remain errors
-when neither side is Any. Container element contracts do not widen to Any;
-computed Array literals may select Any elements when their first value is
-dynamic. Their saved element tag is `any`, signature/call tag `any-array`, and
+when neither side is Any. Uncontextual source literals retain positional
+contracts, including individual Any slots. Unknown-length dynamic-element
+Arrays use saved element tag `any`, signature/call tag `any-array`, and
 join tag `array-any`. Reads produce Any; fills and writes admit values including
 Null. The element contract is invariant: an existing Array<Number> is not an
 Array<Any>. Dynamic-element arrays use ordinary construction/fill operations;
@@ -1553,8 +1553,8 @@ SDK-observed constructor separately from target binding.
 `TupleNew { result, elements }`; validation infers a `TupleType` from the
 evaluated operands, including exact source identities. Parameters, results,
 locals, fields, callbacks, and unions use the same `tuple(tag;tag;...)`
-contract; `tuple()` represents an empty positional value, including a literal
-append argument. Source annotation syntax still requires at least one slot.
+contract; `tuple()` represents an empty positional value, including an inferred
+empty literal. Source annotation syntax still requires at least one slot.
 Nested tuple tags retain their slot contracts. Void slots and nesting
 beyond the shared 64-level signature limit are rejected.
 

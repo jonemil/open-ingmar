@@ -1624,9 +1624,8 @@ impl Builder<'_> {
         })
     }
 
-    /// Build a literal as a positional tuple or homogeneous Array. Mixed scalar
-    /// tokens and nested literals without an Array context use tuple packing;
-    /// other Arrays use constants or allocate before ordered element evaluation.
+    /// Infer positional slots without context, or build the expected typed Array.
+    /// Typed Arrays use constants or allocate before ordered element evaluation.
     /// A private builder prevents uninitialized slots from escaping as values;
     /// branching elements stage values with empty-stack CFG edges. A nullable
     /// expected contract permits Null and the base type without widening an
@@ -1638,12 +1637,28 @@ impl Builder<'_> {
         span: Span,
         locals: &BTreeMap<String, LocalId>,
     ) -> Result<parser::Expression, Diagnostic> {
+        let Some(expected) = expected else {
+            let value = self.tuple_value(elements, None, span, locals)?;
+            let local = self.local_id(span)?;
+            self.push(Operation::LocalInitialize { local, value }, Some(span));
+            return Ok(parser::Expression {
+                kind: parser::ExpressionKind::Temporary(local),
+                span,
+            });
+        };
         if elements.is_empty() {
-            return Err(Diagnostic::at(
-                self.source,
-                span.start,
-                "empty array literal requires a concrete expected Array element type",
-            ));
+            let result = ValueId(self.operations.len() as u32);
+            self.push(
+                Operation::ArrayNew {
+                    result,
+                    element_type: expected,
+                },
+                Some(span),
+            );
+            return Ok(parser::Expression {
+                kind: parser::ExpressionKind::Joined(result),
+                span,
+            });
         }
         // Select only literal tokens, without folding computed expressions.
         let constant = elements
@@ -1681,38 +1696,19 @@ impl Builder<'_> {
                 _ => None,
             })
             .collect::<Option<Vec<_>>>();
-        if expected.is_none()
-            && (elements
-                .iter()
-                .any(|element| matches!(element.kind, parser::ExpressionKind::ArrayLiteral(_)))
-                || constant.as_ref().is_some_and(|values| {
-                    values[0].0.is_none() || values.iter().any(|value| value.0 != values[0].0)
-                }))
-        {
-            let value = self.tuple_value(elements, None, span, locals)?;
-            let local = self.local_id(span)?;
-            self.push(Operation::LocalInitialize { local, value }, Some(span));
-            return Ok(parser::Expression {
-                kind: parser::ExpressionKind::Temporary(local),
-                span,
-            });
-        }
         if let Some(values) = constant {
-            let element_type = expected.clone().or(values[0].0.clone());
-            if let Some(element_type) = element_type.filter(|element| {
-                values.iter().all(|v| {
-                    let actual =
-                        v.0.as_ref()
-                            .map(|ty| ty.api_type())
-                            .unwrap_or(crate::api::Type::Null);
-                    crate::native::accepts(&element.api_type(), &actual)
-                })
+            if values.iter().all(|v| {
+                let actual =
+                    v.0.as_ref()
+                        .map(|ty| ty.api_type())
+                        .unwrap_or(crate::api::Type::Null);
+                crate::native::accepts(&expected.api_type(), &actual)
             }) {
                 let result = ValueId(self.operations.len() as u32);
                 self.push(
                     Operation::ArrayConstant {
                         result,
-                        element_type,
+                        element_type: expected,
                         values: values.into_iter().map(|v| v.1).collect(),
                     },
                     Some(span),
@@ -1733,65 +1729,32 @@ impl Builder<'_> {
         }
         let builder = crate::BuilderId(self.local_id(span)?.0);
         let grouped = elements.iter().all(|e| !self.needs_staging(e, locals));
-        let element = if grouped || expected.is_some() {
-            None
-        } else {
-            Some(self.local_id(span)?)
-        };
         let mut values = Vec::new();
         let length = elements.len() as u32;
         self.push(
             Operation::ArrayBegin {
                 builder,
-                element_type: expected.clone().unwrap_or(crate::ArrayElement::Char),
+                element_type: expected.clone(),
                 length,
             },
             Some(span),
         );
         for (index, expression) in elements.into_iter().enumerate() {
             let element_span = expression.span;
-            let context = expected
-                .as_ref()
-                .and_then(|element| construction_type(&element.api_type()));
+            let context = construction_type(&expected.api_type());
             let value = self.value_with_context(expression, locals, context)?;
-            if index == 0 && expected.is_none() {
-                let element_type = self
-                    .types
-                    .element(value)
-                    .unwrap_or(crate::ArrayElement::Char);
-                // Materializing a logical element can insert an entry block.
-                // Locate the provisional allocation by identity, not position.
-                let allocation = self.operations.iter_mut().find(|op| {
-                    matches!(op.operation, Operation::ArrayBegin { builder: id, .. } if id == builder)
-                }).expect("literal allocation was emitted before its elements");
-                allocation.operation = Operation::ArrayBegin {
-                    builder,
-                    element_type: element_type.clone(),
-                    length,
-                };
-                self.types.set_builder(builder, element_type);
-            }
             if grouped {
                 values.push(value);
                 continue;
             }
-            let element = if expected.is_some() {
-                self.local_id(element_span)?
-            } else {
-                element.expect("staged literals reserve an element local")
-            };
-            let store = if index == 0 || expected.is_some() {
+            let element = self.local_id(element_span)?;
+            self.push(
                 Operation::LocalInitialize {
                     local: element,
                     value,
-                }
-            } else {
-                Operation::LocalAssign {
-                    local: element,
-                    value,
-                }
-            };
-            self.push(store, Some(element_span));
+                },
+                Some(element_span),
+            );
             let value = ValueId(self.operations.len() as u32);
             self.push(
                 Operation::LocalRead {
@@ -2620,30 +2583,6 @@ impl Builder<'_> {
                 self.calls,
             );
         }
-        if matches!(&expression.kind, parser::ExpressionKind::ArrayLiteral(elements) if elements.is_empty())
-        {
-            let element_type = expected
-                .and_then(|ty| match ty {
-                    ConstructionType::Array(element) => Some(element),
-                    _ => None,
-                })
-                .ok_or_else(|| {
-                    Diagnostic::at(
-                        self.source,
-                        expression.span.start,
-                        "empty array literal requires a concrete expected Array element type",
-                    )
-                })?;
-            let result = ValueId(self.operations.len() as u32);
-            self.push(
-                Operation::ArrayNew {
-                    result,
-                    element_type,
-                },
-                Some(expression.span),
-            );
-            return Ok(result);
-        }
         let expression = match (expression, expected) {
             (
                 parser::Expression {
@@ -2651,22 +2590,7 @@ impl Builder<'_> {
                     span,
                 },
                 Some(ConstructionType::Array(element)),
-            ) if element.nullable_base().is_some()
-                || matches!(
-                    element,
-                    crate::ArrayElement::Null
-                        | crate::ArrayElement::Source(_)
-                        | crate::ArrayElement::Nested { .. }
-                        | crate::ArrayElement::Interface(_)
-                        | crate::ArrayElement::Structural { .. }
-                        | crate::ArrayElement::Callback { .. }
-                        | crate::ArrayElement::Method
-                        | crate::ArrayElement::Numeric { .. }
-                        | crate::ArrayElement::LangObject
-                ) =>
-            {
-                self.array_literal(elements, Some(element), span, locals)?
-            }
+            ) => self.array_literal(elements, Some(element), span, locals)?,
             (expression, _) if self.needs_staging(&expression, locals) => {
                 self.prepare(expression, locals)?
             }
@@ -3311,6 +3235,9 @@ impl Builder<'_> {
                             self.types.local_type(local)
                                 .filter(|ty| !matches!(ty, crate::api::Type::Array(element) if **element == crate::api::Type::Any))
                                 .and_then(construction_type)
+                                // A positional local has an inferred flow view,
+                                // not a declaration fixing its next literal's slots.
+                                .filter(|ty| !matches!(ty, ConstructionType::Tuple(_)))
                         }
                         crate::type_flow::Place::Parameter(index) => {
                             construction_type(&self.calls.parameter_types[index].api_type())

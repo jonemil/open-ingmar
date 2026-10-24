@@ -519,7 +519,7 @@ fn cli_binds_constant_arrays_across_saved_stages_and_rejects_missing_data() {
     let data = dir.join("data.mcasm");
     fs::write(
         &source,
-        "function probe() as Toybox.Lang.Number { return [10, 20][0]; }",
+        "function probe() as Toybox.Lang.Array<Toybox.Lang.Number> { return [10, 20]; }",
     )
     .unwrap();
     fs::write(&data, ".string prefix \"before\"\n.array actual\n.element number=0x0000000a\n.element number=0x00000014\n.endarray\n").unwrap();

@@ -62,10 +62,10 @@ fn write_consumes_three_operands_without_result_or_hidden_slots() {
 #[test]
 fn writes_reject_wrong_types_unproven_nulls_and_nonassignment_targets() {
     for source in [
-        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = 'X'; return 0; }",
-        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = true; return 0; }",
-        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = null; return 0; }",
-        "function f() as Toybox.Lang.Number { var a = [1]; a[0] = [2]; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = 'X'; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = true; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = null; return 0; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { a[0] = [2]; return 0; }",
         "function f() as Toybox.Lang.Number { var a = [1]; a['X'] = 2; return 0; }",
         "function f() as Toybox.Lang.Number { var a = [1]; a[true] = 2; return 0; }",
         "function f() as Toybox.Lang.Number { var a = [1]; a[null] = 2; return 0; }",

@@ -41,9 +41,9 @@ fn boolean_element_contracts_do_not_convert_numbers_or_allow_null() {
     for source in [
         "function f() as Toybox.Lang.Array<Toybox.Lang.Boolean> { return [true, 1]; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Boolean> { return [true, null]; }",
-        "function f() { var a = [true]; a[0] = 1; }",
-        "function f() { var a = [true]; a.add(null); }",
-        "function f() { var a = [true]; a.addAll([1]); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>) { a[0] = 1; }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>) { a.add(null); }",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>) { a.addAll([1]); }",
         "function f() { var a = [true]; a[0]++; }",
         "function f() { var a = [true]; return a[0] + 1; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean or Null>) { return !a[0]; }",

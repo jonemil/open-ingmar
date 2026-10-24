@@ -191,16 +191,15 @@ arms propagate that context. Slot expressions evaluate left to right before
 packing the Array. The literal's length and each slot must satisfy the expected
 contract; nested literals receive their corresponding slot context.
 
-Without a declared Array context, flat lists of numeric, Boolean, Char, String,
-and Null tokens infer tuples when their token types differ or they contain
-Null. A literal containing a nested Array literal also infers a tuple; its
-other slots may contain computed or source values. For example,
+Without a declared Array context, every Array literal infers a tuple, including
+homogeneous lists, `[]`, computed expressions, Symbol mixtures, nullable values,
+and source instances. Each slot retains its evaluated value contract. For example,
 `var pair = [42, "answer"];` gives `pair[1]` a String contract, and
 `var nested = [[1, 2], [3, "value"]];` preserves each indexed container's type.
 These cases use the same slot validation and packing as declared tuples.
-Homogeneous and other computed literals retain the existing Array inference
-rules until their mutable consumers can use positional contracts. An expected
-Array element contract keeps homogeneous Array construction, including its
+Reassigning a positional local infers the replacement literal independently;
+the previous shape does not fix its length or element types. An expected
+Array element contract selects ordinary typed Array construction, including its
 permitted mixed/nullable contents; inferred tuples do not widen existing Arrays.
 Empty tuple annotations, variadic tuple syntax, and Graphics.Dc slots are
 rejected by this profile.
@@ -212,7 +211,11 @@ alternatives. Tuple alternatives are checked separately before joining results.
 Runtime bounds checks still apply to dynamic indexes. Assigning tuples requires
 equal length and per-slot assignability. A tuple may widen to `Array<T>` when
 every slot satisfies `T`; an Array contract cannot establish tuple length or
-positions. Existing Array element contracts remain invariant.
+positions. This tuple-to-Array adaptation also applies inside nested Array
+element domains and their unions. Every native/source element alternative must
+still be represented on both sides; it does not widen ordinary Array parameters.
+For example, `Array<[Number]>` can satisfy `Array<Array<Number>>`, while
+`Array<Array<Number>>` cannot become `Array<Array<Number or Null>>`.
 
 Writing a direct integer-literal index on a named tuple local or non-null tuple
 parameter replaces that slot's contract, including with a different type.
@@ -231,8 +234,7 @@ function replace(x as [Number, String]) as [String, String] {
 Both return the same Array reference and update the named receiver's
 contract. Direct Array literals passed to these calls are packed positionally,
 including homogeneous and empty literals. `addAll([])` keeps the shape;
-`add([])` appends an empty tuple slot. Other unconstrained empty literals still
-require an expected Array context. Known receiver/tail shapes retain each
+`add([])` appends an empty tuple slot. Known receiver/tail shapes retain each
 possible slot layout. These methods require
 API 1.3.0. Each derived append result, summed over its possible shapes, has a
 64 KiB canonical-signature budget. This compiler work bound prevents repeated
@@ -2564,9 +2566,10 @@ evidence](../../investigations/compiler-symbols.md).
 Arrays support invariant Symbol and Symbol-or-Null elements from API 1.0.0.
 Symbol Dictionary keys are non-null; values may be Symbol or Symbol-or-Null,
 combined with other supported key/value contracts. An expected contract types
-empty and nullable literals. Non-null Symbol literals can infer homogeneous
-Array/Dictionary contracts; arbitrary scalar/Symbol mixtures do not infer a
-broader union. Existing mutation, collection, Object observer, and enumeration
+empty and nullable literals. Uncontextual Array literals use positional
+inference, including scalar/Symbol mixtures; homogeneous Symbol Dictionary
+literals infer their key/value contracts. Existing mutation, collection,
+Object observer, and enumeration
 profiles apply. `reverse` and `slice` return independent Arrays. Symbol is not a
 Comparable witness; non-null elements require a non-null checked
 [Comparator](#source-comparators) for sorting.
@@ -2699,9 +2702,8 @@ See the [callback example](../../../examples/compiler-callbacks/README.md) and
 through parameters, results, locals, indexed reads/writes, and matching Array
 conditional arms. The value types require API 1.0.0; native Array methods retain
 their existing API requirements. A non-null-element Array cannot widen to a
-nullable-element Array. Empty/nullable literals need a concrete expected
-contract; otherwise a first non-null Method can establish the literal element
-type.
+nullable-element Array. Typed construction uses an expected element contract;
+uncontextual literals retain positional Method slots.
 
 Method-bearing literals allocate privately and fill in source order at runtime.
 They do not embed Method objects or addresses in DATA constants. Null-only
@@ -2890,39 +2892,38 @@ evaluation order, and a missing-parameter failure.
 
 ## Arrays
 
-Computed literals whose first element has type Any infer dynamic elements. For
-example, `function wrap(x) { return [x, 7]; }` constructs an Array with Any
-elements and exposes Any as the function result. Fills, indexed writes, and
-reads use the ordinary dynamic boundary rules, including Null values; the
-runtime Array remains a shared mutable reference. Existing concrete element
-contracts stay invariant. General heterogeneous inference without a dynamic
-first value follows the bounded [tuple inference rules](#positional-tuples).
-Unconstrained empty literals and explicit `Array<Any>` source annotations remain
-outside this profile.
+`Array<T>` describes an unknown-length Array with an invariant element contract.
+Expected parameter, result, field, and supported assignment contracts type fresh
+literals. Without that context, [tuple inference](#positional-tuples) preserves
+each slot, including Any: `[x, 7]` for an unannotated `x` has an Any first slot
+and a Number second slot. Dynamic boundaries do not erase the other positions.
+The runtime Array remains a shared mutable reference. Explicit `Array<Any>`
+source annotations remain outside this profile.
 
 ### Char arrays
 
-Nonempty Char-array literals accept Char-valued expressions, for example `['a',
-'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`. They produce a fresh
-non-null `Array<Char>` and may receive postfix reads/calls. Number literals
-follow the [Number-array contract](#number-arrays); View literals follow the
-[native object contract](../sdk/README.md#native-views); String literals follow the
+Under an expected `Array<Char>` contract, literals accept Char-valued expressions,
+for example `['a', 'b']`, `[65.toChar(), 'z']`, and `[Chars.make(), 'x']`.
+They produce a fresh non-null `Array<Char>` and may receive postfix reads/calls.
+Number literals follow the [Number-array contract](#number-arrays);
+View literals follow the [native object contract](../sdk/README.md#native-views);
+String literals follow the
 [String-array contract](#string-arrays). Mixed and nested literals may instead
 produce [positional tuples](#positional-tuples); they do not establish a Char
 Array contract. Container separators follow the
 [literal grammar](grammar.md#lexical-rules-and-literals). Empty literals follow
 the [contextual construction rules](#empty-array-literals).
 
-Homogeneous nonempty lists of Number, Char, or String tokens become typed IR
+Contextual nonempty lists of Number, Char, or String tokens become typed IR
 constants and DATA array records loaded with `apush`. Each execution creates a
 fresh mutable array. Computed expressions are not folded into these records.
 
 Other nonempty construction allocates the final length before evaluating
 elements left to right, once each, and stores each result with VM array
 instructions. A private builder prevents unfilled slots from escaping; branching
-elements use a reusable staging local. Builder and ordinary slots share the
-normal frame budget. Operation/nesting limits still apply. Allocation and store
-failures remain runtime obligations. See
+elements stage each evaluated result before storing it. Builder and ordinary
+slots share the normal frame budget. Operation/nesting limits still apply.
+Allocation and store failures remain runtime obligations. See
 [literal evidence](../../investigations/compiler-array-literals.md).
 
 String `toCharArray()` returns a non-null `Array<Char>` since API 1.3.0. The
@@ -3009,12 +3010,11 @@ availability separate from method availability. Nullable String receivers need
 proof before conversion. Nullable arrays and unsupported element types remain
 rejected.
 
-Nonempty literals such as `[1, 2]`, `[n, -n]`, and `[M.make(), 3]` produce a
-fresh `Array<Number>`. The first element selects the supported element type from
-its expression contract; every element must have that same non-null type.
-Parameters, locals, user/native calls, arithmetic, and element reads can supply
-the first element. Nullable values require the usual branch proof, including
-when used first. Allocation precedes element effects; evaluation and typed
+Under an expected `Array<Number>` contract, literals such as `[1, 2]`,
+`[n, -n]`, and `[M.make(), 3]` produce a fresh typed Array. Every element must
+satisfy the expected non-null Number contract. Parameters, locals, user/native
+calls, arithmetic, and element reads can supply elements. Nullable values require
+the usual branch proof. Allocation precedes element effects; evaluation and typed
 stores proceed left to right as for Char literals. Construction requires
 Array/Number availability (1.0.0), without an incidental native `add`
 requirement. Element calls and other Array methods retain their own API
@@ -3038,7 +3038,7 @@ Each element also supports `or Null` under the shared nullable-element rules.
 Guard a saved nullable read before scalar use; guarding one read does not narrow
 a later read of the same array. Non-null arrays reject Null values/arguments.
 
-Literal-only homogeneous arrays use typed DATA constants, preserving signed Long
+Contextually typed literal-only arrays use DATA constants, preserving signed Long
 and floating bit patterns. Nullable constants may contain Null. Computed
 literals use ordered private construction and may include branching elements;
 expected contracts reach empty and nullable literals. Repeated constant loads
@@ -3071,7 +3071,8 @@ not establish this homogeneous Array contract; see [tuple inference](#positional
 Nullable Array references require a non-null proof before receiver use.
 Nullable String elements have a [separate contract](#nullable-array-elements).
 
-Homogeneous literals such as `["one", "two"]` use pooled DATA constants.
+Under an expected String-array contract, literals such as `["one", "two"]` use
+pooled DATA constants.
 Repeated text shares a local pool entry; repeated execution loads independently
 mutable arrays. Computed literals, including conditional and guarded elements,
 use the same ordered private construction as Char/Number arrays. An expected
@@ -3092,10 +3093,10 @@ See the [example](../../../examples/compiler-string-arrays/README.md) and
 ### Boolean arrays
 
 `Toybox.Lang.Array<Toybox.Lang.Boolean>` is an invariant non-null
-Boolean-element contract. Literals infer Boolean; reads produce Boolean for
-conditions, logical operators, and native Boolean methods. Writes and
-element-taking Array methods require Boolean, with no Number conversion. Null
-elements remain unsupported. Typed parameters/results and direct contextual `[]`
+Boolean-element contract. Contextual literals check Boolean elements; reads
+produce Boolean for conditions, logical operators, and native Boolean methods.
+Writes and element-taking Array methods require Boolean, without Number
+conversion. Null elements remain unsupported. Typed parameters/results and direct contextual `[]`
 preserve the contract.
 
 Literal-only arrays use `apush` constants; computed elements use ordered private
@@ -3327,15 +3328,12 @@ and
 
 ### Empty array literals
 
-A direct `[]` requires a concrete expected `Array<Number>`, `Array<Char>`,
-`Array<String>`, `Array<Boolean>`, `Array<Symbol>`, `Array<View>`, or a
-supported
-[nullable element contract](#nullable-array-elements).
-Parentheses preserve direct context. Supported contexts are:
+A direct `[]` under a supported expected `Array<T>` contract constructs a typed
+empty Array. Parentheses preserve direct context. Supported contexts include:
 
 - An explicitly annotated array return: `return [];`.
 - A typed user-call argument, including module, cross-file, and self calls.
-- Assignment to an initialized array local: `var a = [1]; a = [];`.
+- Assignment to a local holding an ordinary typed Array.
 - A native argument whose resolved contract is an array, such as `a.addAll([])`.
 
 The literal allocates a fresh empty array at its position in evaluation order.
@@ -3344,14 +3342,14 @@ array. No `add` call or element-storage temporary is emitted. Empty
 Number/String/View allocation requires API 1.0.0; Char element availability
 requires 1.3.0. Enclosing calls retain their own API requirements.
 
-Context applies only to the direct empty literal, not through arbitrary
-operators or calls. `var a = []`, `[].size()`, and `return [].reverse()` are
-rejected, including the last case under an array return annotation. Local type
-annotations, nested empty literals without a slot context, and inference from
-later mutations are unsupported.
-Nonempty literals keep their independently inferred contract; argument/return
-context cannot coerce mixed elements or substitute Number and Char arrays. Saved
-IR records the concrete allocation type and rechecks all uses. See the
+Without Array context, `[]` has a zero-slot tuple contract. It supports ordinary
+tuple methods and evolving local use: `var a = []; a.add(1);` establishes a
+Number slot, and nested empty literals retain their own empty shapes. Any indexed
+read from a still-empty tuple is rejected. A zero-slot tuple can satisfy an
+ordinary Array contract, including after `[].reverse()`. Context does not flow
+backward through arbitrary calls; the result is checked against its consumer.
+Local type annotations remain unsupported. Saved IR records either the typed
+allocation or positional construction and rechecks all uses. See the
 [complete example](../../../examples/compiler-empty-arrays/README.md) and [evidence](../../investigations/compiler-empty-arrays.md).
 
 ### Sized array allocation
@@ -3580,16 +3578,18 @@ invariant non-null Number/Char element contract.
 
 `method(Symbol)` and `weak()` use the existing inherited binding/lifetime
 profiles. Weak retrieval remains Object-or-Null. Direct arguments to `addAll`
-need an established Array element contract; ambiguous empty Array inference does
-not choose Number or Char automatically.
+accept a ByteArray, a non-null Number/Char Array, or a homogeneous Number/Char
+tuple. An empty tuple is also accepted; nullable or mixed element domains do not
+establish this bounded bulk-copy profile.
 
 Annotated [fields](#bytearray-fields) preserve these reference contracts, with
 constructor initialization for non-null storage and guarded local snapshots for
 nullable reads.
 
 `Array<ByteArray>` and `Array<ByteArray or Null>` preserve invariant element
-contracts from API 3.0.0. Nonempty literals can infer non-null ByteArray
-elements; typed context also supports empty, nullable, and Null-only literals.
+contracts from API 3.0.0. Expected element contracts type fresh literals,
+including empty, nullable, and Null-only literals; uncontextual literals retain
+positional ByteArray slots.
 Computed elements use private Array initialization, preserving reference
 identity and evaluation order. ByteArray values are never embedded as scalar
 Array constant tokens; Null-only literals may use existing DATA constants.

@@ -104,6 +104,90 @@ fn mixed_literal_and_nested_inference_uses_the_shared_tuple_model() {
 }
 
 #[test]
+fn all_uncontextual_literals_infer_slots_and_resume_through_saved_stages() {
+    let source = r#"
+        using Toybox.Lang;
+        class Token { function number() as Lang.Number { return 41; } }
+        function homogeneous() as Lang.String {
+            var x = [1, 2]; x[0] = "changed"; return x[0];
+        }
+        function computed(n as Lang.Number) as Lang.String {
+            var x = [n + 1, "computed", :name]; return x[1];
+        }
+        function symbols() as Lang.Symbol { var x = [:name, 1]; return x[0]; }
+        function source() as Lang.Number { var x = [new Token()]; return x[0].number(); }
+        function nullable(x as Token or Null) as Token or Null { var xs = [x]; return xs[0]; }
+        function empty() as Lang.Number { var x = []; x.add(1); return x[0]; }
+        function rebind() as Lang.Symbol {
+            var x = [1, 2]; x = []; x.add(:name); return x[0];
+        }
+        function nestedEmpty() as Lang.Number { return [[], []][1].size(); }
+        function loop(n as Lang.Number) as Lang.Number {
+            var x = []; for (var i = 0; i < n; i++) { x.add(i); } return x.size();
+        }
+        function sorted() as Lang.Number { var x = [3, 1, 2]; x.sort(null); return x[0]; }
+        function remove() as Lang.Number { var x = [1, 2]; x.remove(1); return x.size(); }
+        function scalarNullable(n as Lang.Number or Null) as Lang.Number or Null {
+            var x = [n, 1]; return x[0];
+        }
+        function dynamic(x) { var xs = [x, 1]; return xs[0]; }
+    "#;
+    let unit = round_trip(source);
+    let text = unit.to_ir_text();
+    assert!(text.contains(".tuple-new %"), "{text}");
+    assert!(!text.contains(".array-begin"), "{text}");
+    assert!(!text.contains(".array-constant"), "{text}");
+    assert!(text.contains("tuple()"), "{text}");
+    round_trip(include_str!(
+        "../../../examples/compiler-literal-inference/app.mc"
+    ));
+}
+
+#[test]
+fn inferred_literal_consumers_check_slots_and_keep_explicit_arrays_invariant() {
+    round_trip(
+        r#"
+        using Toybox.Lang;
+        function numbers() as Lang.Array<Lang.Number> { return [1, 2]; }
+        function take(xs as Lang.Array<Lang.Number>) as Lang.Number { return xs.size(); }
+        function use() as Lang.Number {
+            var x = [1, 2]; x.addAll([3, 4]); x[0]++; return take(x);
+        }
+        function context() as Lang.Array<Lang.Symbol> { return [:name]; }
+        function emptyCopy() as Lang.Array<Lang.Number> { return [].reverse(); }
+        function widen() as Lang.Array<Lang.Number> { var x = []; return x; }
+        function nullableArray(xs as Lang.Array<Lang.Number or Null>) as Lang.Number {
+            var tail = [1, 2]; xs.addAll(tail); return xs.size();
+        }
+        function nested(xs as Lang.Array<[Lang.Number]>) as Lang.Array<Lang.Array<Lang.Number>> {
+            return xs;
+        }
+        function deep(xs as Lang.Array<Lang.Array<[Lang.Number]>>) as Lang.Array<Lang.Array<Lang.Array<Lang.Number>>> {
+            return xs;
+        }
+        function branch(flag as Lang.Boolean) as Lang.Number or Lang.String {
+            var x = [1]; if (flag) { x = ["changed"]; } return x[0];
+        }
+    "#,
+    );
+    for source in [
+        "function f() as Void { var x = []; x[0]; }",
+        "function f(i as Toybox.Lang.Number) as Void { var x = []; x[i]; }",
+        "function f() as Void { var x = [1, 2]; x[2]; }",
+        "function f() as Void { var x = [:name, 1]; x.sort(null); }",
+        "function f() as Toybox.Lang.Number { var x = [1, \"text\"]; return x[1]; }",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Void { x.add(:name); }",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Void { x.addAll([1, :name]); }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [1, :name]; }",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return x; }",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.Number>>) as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.Number or Null>> { return x; }",
+        "function f(x as Toybox.Lang.Array<[Toybox.Lang.Number]>) as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.String>> { return x; }",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+}
+
+#[test]
 fn tuple_lengths_and_indexes_use_full_number_encoding() {
     let slots = vec!["Toybox.Lang.Number"; 130].join(",");
     let elements = vec!["1"; 130].join(",");

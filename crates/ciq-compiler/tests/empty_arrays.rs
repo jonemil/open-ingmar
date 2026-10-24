@@ -59,6 +59,15 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a.reverse().addAll([]); return a.size(); }",
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Array<Toybox.Lang.Number> { if (b) { return []; } return [1]; }",
         "function f(b as Toybox.Lang.Boolean) { var a = [1]; while (b) { a = []; break; } return a.size(); }",
+        "function f() { var a = []; return a; }",
+        "function f() { return []; }",
+        "function f() { var n = 1; n = []; return n.size(); }",
+        "function f() { var a = [1]; a.add([]); return a[1].size(); }",
+        "function f() { var a = [1]; a.addAll(['a']); return a[1]; }",
+        "function f() { var a = ['a']; a = [1]; a.add('b'); return a[0]; }",
+        "function f() { return [].size(); }",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [].reverse(); }",
+        "function f() { var a = [[], []]; return a[0].size(); }",
     ] {
         let f = compile_function(source).unwrap();
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
@@ -68,23 +77,13 @@ fn contextual_empty_arrays_preserve_all_pipeline_boundaries() {
 #[test]
 fn expected_contracts_do_not_widen_elements_or_hide_bad_calls() {
     for source in [
-        "function f() { var a = []; }",
-        "function f() { return []; }",
         "function f() as Toybox.Lang.Number { return []; }",
-        "function f() { var n = 1; n = []; }",
-        "function f() { var a = [1]; a.add([]); }",
         "function f() { var a = [1]; a.unknown([]); }",
         "function f() { var a = [1]; a.addAll([], 1); }",
-        "function f() { var a = [1]; a.addAll(['a']); }",
-        "function f() { var a = ['a']; a = [1]; a.add('b'); }",
-        "function f() { return [].size(); }",
-        "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [].reverse(); }",
-        "function f() { var a = [[], []]; }",
     ] {
         assert!(compile_function(source).is_err(), "{source}");
     }
     for source in [
-        "module M { function count(n) { return n; } } function start() { return M.count([]); }",
         "module M { function count(a as Toybox.Lang.Array<Toybox.Lang.Char>) { return a.size(); } } function start() { return M.count([1]); }",
         "module M { function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a.size(); } } function start() { return M.count([], 1); }",
     ] {

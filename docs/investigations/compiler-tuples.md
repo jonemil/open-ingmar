@@ -40,6 +40,25 @@ optimization level zero. Successful cases return 0; type errors return 105;
 the rejected annotation syntax below returns 100. The functions need not run
 to reproduce these static checks.
 
+## Homogeneous, empty, and computed inference
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking, fr265,
+minimum API 5.0.0, and optimization disabled accept the
+[literal inference specimen](../../examples/compiler-literal-inference/README.md).
+It covers homogeneous and computed slots, `[]`, Symbol mixtures, exact source
+instances, reassigning a homogeneous local to an empty shape, append/loop flow,
+typed Array consumers, and homogeneous/empty tuple inputs to ByteArray.addAll.
+SDK and generated PRGs produce the same
+[expected console](../../examples/compiler-literal-inference/expected.txt).
+
+A diagnostic probe with `Numbers = Array<Number>` and `x as [Numbers]` writes
+`x[i] = [3]` for dynamic Number `i`, then returns `x` under an incompatible
+String annotation. The SDK reports `Array<[Number] or Array<Number>>`.
+Returning the same value as `Array<Numbers>` succeeds. Replacing a known slot
+with `[3]` also permits returning that slot as `[Number]`. These observations
+support recursive tuple-to-Array matching without assigning an ordinary Array
+contract to every replacement literal.
+
 ## Assignment and construction
 
 This succeeds; replacing the return annotation with `Array<Lang.Number>` fails:

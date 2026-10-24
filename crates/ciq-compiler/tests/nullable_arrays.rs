@@ -93,7 +93,6 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             "if (a[0] != null) { System.println(a[0].toString()); }".to_owned(),
             format!("a.add({other});"),
             format!("a[0] = {other};"),
-            format!("var b = [{literal}]; a.addAll(b);"),
         ] {
             let source = format!(
                 "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) {{ {body} }}"
@@ -182,7 +181,7 @@ fn computed_context_and_native_arguments_keep_exact_element_contracts() {
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let text = f.to_ir_text();
     assert!(parse_function_ir(&text.replace("nullable-number-array", "number-array")).is_err());
-    for bad in ["a.add(\"x\");", "var other = [1]; a.addAll(other);"] {
+    for bad in ["a.add(\"x\");", "a.addAll([\"wrong\"]);"] {
         assert!(compile_function(&source.replace("a.add(n);", bad)).is_err());
     }
     let receiver = Type::Array(Box::new(ArrayElement::NullableNumber.api_type()));

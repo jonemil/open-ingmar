@@ -259,9 +259,10 @@ are required. Nullability, field access, scalar operators, printing, and native
 View/Object member calls remain unsupported for these references. A View or
 array result cannot serve as the console bootstrap entry result.
 
-`Toybox.Lang.Array<Toybox.WatchUi.View>` is invariant. Literals infer View
-elements from construction, typed calls, parameters, locals, or element reads;
-direct empty literals use the usual contextual rules. All elements and typed
+`Toybox.Lang.Array<Toybox.WatchUi.View>` is invariant. Under that expected
+contract, literals accept View elements from construction, typed calls,
+parameters, locals, or element reads; uncontextual literals retain positional
+slots. Direct empty literals use the usual contextual rules. All elements and typed
 mutation/search arguments must be non-null Views. `addAll` takes another View
 array; `reverse`/`slice` preserve that array type, and indexing returns View.
 Array size/string/search/mutation/transform contracts use the shared generic

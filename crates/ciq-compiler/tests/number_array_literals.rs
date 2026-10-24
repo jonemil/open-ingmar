@@ -62,10 +62,10 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
         "function f() as Void { var a = [null]; a[0].hashCode(); }",
         "function f() as Toybox.Lang.Number { var a = [[1]]; return a[0]; }",
         "function f() as Toybox.Lang.Number { var a = [1, null]; return a[1] + 1; }",
-        "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n, 1]; }",
+        "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n, 1]; a[0] + 1; }",
         "function f(n as Toybox.Lang.Number or Null) as Void { var a = [n + 1]; }",
         "function f(s as Toybox.Lang.String or Null) as Void { var a = [s.length()]; }",
-        "function f() as Void { var n = \"x\".toNumber(); var a = [n]; }",
+        "function f() as Void { var n = \"x\".toNumber(); var a = [n]; a[0] + 1; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return [1]; }",
     ] {
         assert!(compile_function(source).is_err(), "{source}");

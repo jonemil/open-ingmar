@@ -194,6 +194,11 @@ access. An unqualified `call-name` resolves through
 [owner lookup](README.md#user-calls-and-owner-lookup); qualified calls and native
 base initializers follow their respective call contracts.
 
+An `array-literal` without `b` constructs a positional tuple unless a declared
+Array context supplies its element contract. This includes empty and homogeneous
+literals; [tuple semantics](README.md#positional-tuples) define inference,
+mutation, and contextual construction.
+
 The levels above bind from weakest to strongest. Binary groups associate left;
 conditional arms associate right. Comparison/test operators do not chain. `1 + 2
 << 2` means `1 + (2 << 2)`, and `2 << 1 * 3` means `(2 << 1) * 3`. Casts bind
@@ -328,7 +333,8 @@ Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
 source value/result contract. Bare Null and either order of native union atoms
 are accepted in signatures and fields. Lexical casts retain their separately
 checked domains; general union signature/field syntax does not extend casts.
-Nested type parameters and parenthesized type unions remain unsupported. Generic containers are invariant; see
+Parenthesized type unions remain unsupported. Generic containers preserve
+invariant element domains, with recursive tuple-to-Array adaptation; see
 [type rules](README.md#types-and-nullability) and the container semantic pages.
 
 ## Lexical rules and literals

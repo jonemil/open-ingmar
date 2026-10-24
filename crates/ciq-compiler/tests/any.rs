@@ -56,7 +56,7 @@ fn dynamic_operands_use_shared_operations_without_accepting_known_type_errors() 
         "function f(){return true-1;}",
         "function f(){return \"x\".missing();}",
         "function f(n as Toybox.Lang.Number){return n.length();}",
-        "function f(){var a=[1];a[0]=\"bad\";return 0;}",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>){a[0]=\"bad\";return 0;}",
     ] {
         assert!(compile_function(source).is_err(), "{source}");
     }
@@ -188,7 +188,7 @@ fn dynamic_lengths_and_elements_preserve_checked_container_contracts() {
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     let f = compile_function("function f(x){return [x,7];}").unwrap();
-    assert!(f.to_ir_text().contains(" any "));
+    assert!(f.to_ir_text().contains(".tuple-new"));
     for text in [
         "ciq-ir\n.function f\n.array-constant %0 any 0x00000001\n.return %0\n.end\n",
         "ciq-unit\n.owner global\nciq-ir\n.function use parameters=1 parameter-types=number-array\n.integer %0 0\n.return %0\n.end\n.owner global\nciq-ir\n.function f\n.array-new %0 any\n.call-global %1 use %0\n.return %1\n.end\n",

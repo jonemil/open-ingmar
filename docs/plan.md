@@ -37,11 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Extend tuple inference to homogeneous/empty literals and computed scalar
-  or source literals without a nested Array literal, including Symbol mixtures.
-  Retain contextual Array construction and check existing Array method/assignment
-  consumers under inferred slot contracts when migrating existing mutable
-  homogeneous Array users.
 - [ ] Prove source-class structural witnesses when packing tuples with interface
   slots, reusing unit-level member checks rather than requiring an already typed
   interface value.
@@ -182,8 +177,6 @@ executable profiles.
 
 ### Array
 
-- [ ] Infer heterogeneous and scalar/Null literal elements, including `[]`
-  without immediate call/return context; support their evolving local use.
 - [ ] Support sorting nullable elements through a checked custom comparator,
   after resolving the Comparator signature discrepancy above.
 - [ ] Check multidimensional `new [sizes]` and native Array constructor syntax;

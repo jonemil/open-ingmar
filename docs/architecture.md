@@ -98,7 +98,9 @@ projection, while assignability and unit resolution retain their full contracts.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;
-it also derives native Array element unions when positional shape is lost,
+all uncontextual Array literals use this positional model, while expected
+Array contracts select typed construction without first-element inference.
+It also derives native Array element unions when positional shape is lost,
 reversed tuple shapes, slice shapes from checked immediate operands, and the
 erased removal contract. `local_flow` shares direct-variable capture tracking
 with source candidate inference; field flow derives the corresponding property

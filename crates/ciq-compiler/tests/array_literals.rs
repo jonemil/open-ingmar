@@ -129,17 +129,12 @@ fn empty_typed_ir_allocation_has_verified_bytes_and_rejects_unsupported_elements
 #[test]
 fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
     let f =
-        compile_function("function f(n as Toybox.Lang.Number) as Void { n.abs(); var a = ['a']; }")
+        compile_function("function f(n as Toybox.Lang.Number) as Toybox.Lang.Array<Toybox.Lang.Char> { n.abs(); return ['a']; }")
             .unwrap();
     let mut ops: Vec<LocatedOperation> = f.operations().to_vec();
     let allocation = ops
         .iter()
-        .position(|op| {
-            matches!(
-                op.operation,
-                Operation::ArrayBegin { .. } | Operation::ArrayConstant { .. }
-            )
-        })
+        .position(|op| matches!(op.operation, Operation::ArrayConstant { .. }))
         .unwrap();
     let call = ops
         .iter()
@@ -150,7 +145,7 @@ fn allocation_is_order_sensitive_even_when_its_result_is_consumed_later() {
     let error = Function::with_signature(
         "bad".into(),
         vec![ParameterType::Integer],
-        ReturnType::Void,
+        ReturnType::Array(ArrayElement::Char),
         ops,
     )
     .unwrap_err();

@@ -530,12 +530,6 @@ impl Types {
         }
     }
 
-    pub(crate) fn element(&self, value: ValueId) -> Option<ArrayElement> {
-        self.values
-            .get(&value)
-            .and_then(|ty| ArrayElement::from_api_type(&candidate(ty)))
-    }
-
     /// Read a stored local's candidate type; final IR checking remains authoritative.
     pub(crate) fn local_type(&self, local: LocalId) -> Option<&Type> {
         self.locals.get(&local)
@@ -601,9 +595,6 @@ impl Types {
     /// Select the private builder's final element contract after the first element.
     pub(crate) fn set_dictionary(&mut self, builder: crate::BuilderId, ty: crate::DictionaryType) {
         self.dictionaries.insert(builder, ty);
-    }
-    pub(crate) fn set_builder(&mut self, builder: crate::BuilderId, element: ArrayElement) {
-        self.builders.insert(builder, element);
     }
 }
 

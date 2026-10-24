@@ -115,9 +115,10 @@ incompatible, or conflicting bindings fail. See
 
 ### Array allocation
 
-Lowering emits `ipushz; newa`, with no symbol or DATA binding. Nonempty source
-literals use constant loads or the [private construction
-operations](../ir/README.md#private-array-construction). The explicit IR element
+Lowering emits `ipushz; newa`, with no symbol or DATA binding. Contextually typed
+nonempty source literals use constant loads or the [private construction
+operations](../ir/README.md#private-array-construction); inferred literals use
+[positional construction](#positional-result-construction). The explicit IR element
 type preserves empty allocation after source contextual typing. See
 [nonempty construction](../../investigations/compiler-array-literals.md) and
 [empty construction](../../investigations/compiler-empty-arrays.md).

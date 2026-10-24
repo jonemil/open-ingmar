@@ -266,6 +266,27 @@ pub(crate) fn read_contract(
     }
 }
 
+/// Compare invariant Array element domains while permitting nested tuple-to-Array
+/// views. Every alternative on each side must be represented; ordinary scalar
+/// or source element domains cannot widen through this adaptation.
+pub(crate) fn array_elements_match(expected: &Type, actual: &Type) -> bool {
+    let expected = crate::unions::alternatives(expected);
+    let actual = crate::unions::alternatives(actual);
+    let matches = |expected: &Type, actual: &Type| match (expected, actual) {
+        (Type::Array(expected), Type::Array(actual)) => array_elements_match(expected, actual),
+        (Type::Array(_), Type::TupleValue(_) | Type::Tuple(_)) => {
+            crate::native::accepts(expected, actual)
+        }
+        _ => crate::structural::same_type(expected, actual),
+    };
+    actual
+        .iter()
+        .all(|a| expected.iter().any(|e| matches(e, a)))
+        && expected
+            .iter()
+            .all(|e| actual.iter().any(|a| matches(e, a)))
+}
+
 /// Reverse each positional alternative, retaining exact slot contracts.
 pub(crate) fn reverse_contract(receiver: &Type) -> Result<Type, &'static str> {
     let mut results = Vec::new();

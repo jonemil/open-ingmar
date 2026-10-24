@@ -7,6 +7,29 @@ use ciq_compiler::{
 };
 
 #[test]
+fn bulk_append_accepts_homogeneous_and_empty_positional_inputs() {
+    for source in [
+        "function f() as Toybox.Lang.ByteArray { var b = []b; b.addAll([]); b.addAll([1, 2]); b.addAll(['a']); return b; }",
+        "function f(n as Toybox.Lang.Number) as Toybox.Lang.ByteArray { var b = []b; var tail = [n, n + 1]; b.addAll(tail); return b; }",
+    ] {
+        let f = compile_function(source).unwrap();
+        assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
+        let assembly = f.lower();
+        assert_eq!(
+            assembly,
+            ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
+        );
+    }
+    for source in [
+        "function f(n as Toybox.Lang.Number or Null) { var b = []b; b.addAll([n]); }",
+        "function f() { var b = []b; b.addAll([1, null]); }",
+        "function f() { var b = []b; b.addAll([1, \"text\"]); }",
+    ] {
+        assert!(compile_function(source).is_err(), "accepted {source}");
+    }
+}
+
+#[test]
 fn complete_byte_array_program_preserves_native_text_and_application_boundaries() {
     let unit = compile_sources(&[include_str!(
         "../../../examples/compiler-byte-arrays/app.mc"

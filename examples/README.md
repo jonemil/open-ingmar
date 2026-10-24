@@ -9,6 +9,8 @@ and future Rust toolchain experiments.
   member predicates, refinement, lexical casts, and evaluation order.
 - [compiler-tuples](compiler-tuples/README.md): positional/nested/source slots,
   typed construction, fields, callbacks, indexing, and evaluation order.
+- [compiler-literal-inference](compiler-literal-inference/README.md): empty,
+  homogeneous, computed, Symbol, and source literals with mutable slot inference.
 - [compiler-tuple-methods](compiler-tuple-methods/README.md): tuple copies and
   slices, search, default/custom sorting, bound methods, and weak handles.
 - [compiler-source-arrays](compiler-source-arrays/README.md): exact source
