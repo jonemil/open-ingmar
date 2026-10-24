@@ -1,15 +1,9 @@
 use ciq_compiler::{compile_sources, parse_unit_ir};
+mod common;
 
 fn check(source: &str) -> ciq_compiler::CompilationUnit {
     let unit = compile_sources(&[source]).unwrap_or_else(|e| panic!("{source}\n{e}"));
-    let text = unit.to_ir_text();
-    assert_eq!(unit, parse_unit_ir(&text).unwrap());
-    let assembly = unit.lower();
-    assert_eq!(
-        assembly,
-        ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
-    );
-    unit
+    common::pipeline(unit)
 }
 
 #[test]
@@ -59,11 +53,6 @@ fn records_reject_forged_ir_and_preserve_api_and_constructor_effects() {
     let source = "class Box {var n as Toybox.Lang.Number;function initialize(o as {:x as Toybox.Lang.Object}){o.toString();self.n=1;}}";
     assert!(compile_sources(&[source]).is_err());
     check(&source.replace("o.toString();self.n=1;", "self.n=1;o.toString();"));
-    let unit = compile_sources(&[include_str!(
-        "../../../examples/compiler-option-records/app.mc"
-    )])
-    .unwrap();
-    assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
 }
 
 #[test]
@@ -127,4 +116,28 @@ fn saved_record_reads_cannot_claim_a_stale_field_contract() {
         .join("\n");
     assert_ne!(text.trim(), forged.trim());
     assert!(parse_unit_ir(&forged).is_err());
+}
+
+#[test]
+fn record_example_preserves_the_complete_application_pipeline() {
+    use ciq_compiler::{
+        api::{ApiContext, ApiLevel},
+        application::ConsoleApplication,
+        compile_sources_with_api,
+    };
+    let context = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(3, 1, 0)).unwrap();
+    let unit = compile_sources_with_api(
+        &[include_str!(
+            "../../../examples/compiler-option-records/app.mc"
+        )],
+        context,
+    )
+    .unwrap();
+    common::application(
+        &unit,
+        &ConsoleApplication {
+            id: 0xd06b2552a0784ae99dd65e4b1c329ef1u128.to_be_bytes(),
+            entry: "MinimalConsoleApp.onStart".into(),
+        },
+    );
 }

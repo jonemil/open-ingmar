@@ -7,6 +7,7 @@ use ciq_prg::{
     data::classes::{self, Record},
 };
 use std::{collections::BTreeSet, fs, process::Command};
+mod common;
 
 fn options(entry: &str) -> ConsoleApplication {
     ConsoleApplication {
@@ -89,7 +90,7 @@ fn complete_application_resolves_classes_modules_methods_and_literal_data() {
         "function main() as Toybox.Lang.Number { System.println(\"hello é\\n\"); return A.f() + B.f(); }",
         "module A { function f() as Toybox.Lang.Number { var n = 2; while (n > 0) { n = n - 1; } return n; } } module B { function f() as Toybox.Lang.Number { return 42; } }",
     ]).unwrap();
-    let app = build_console_application(&unit, &options("main")).unwrap();
+    let app = common::application(&unit, &options("main"));
     assert_eq!(Prg::parse(&app.to_bytes()).unwrap(), app);
     let records = classes(&app);
     assert_eq!(records.len(), 5);

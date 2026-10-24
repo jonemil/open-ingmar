@@ -28,11 +28,9 @@
   readability or maintenance under that guide.
   Keep our provisional formats current-only; do not add compatibility paths for
   superseded local grammars.
-- Follow [validation policy](docs/validation.md): focused checks while iterating,
-  one final check for the affected scope, and concise helper verdicts. Save full
-  logs under `scratch/`; inspect failures and unknown behavior. Repeat passed
-  checks only after relevant changes or unresolved concerns. Do not replace
-  necessary visual/semantic review with a successful process exit.
+- Follow [validation policy](docs/validation.md) for the work cycle, check
+  selection, and retries. Inspect failures and unknown behavior; a successful
+  process exit does not replace necessary visual or semantic review.
 - After validating a proposed commit, inspect the results, record needed
   findings, and remove its temporary builds, copied tools, exports, captures,
   and logs. Preserve `scratch/commit_msg`, unresolved evidence, and reusable
@@ -65,8 +63,5 @@
 - Enable workflow profiling only when the user explicitly requests it; follow
   [workflow measurement](docs/workflow-measurement.md). Normal validation stays
   enabled.
-- Reuse the [workspace validation runner](scripts/README.md#workspace-validation)
-  for final checks; overlap independent checks and documentation work, and use
-  completion-aware waiting instead of fixed sleeps.
 
 [EU Directive 2009/24/EC]: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024

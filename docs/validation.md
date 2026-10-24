@@ -12,26 +12,37 @@ time and account for overlapping background work.
 
 ## Work cycle
 
-1. Read the prioritized item, relevant contracts, and nearby positive and
-   negative tests. Reuse existing fixtures and update obsolete rejection
-   expectations as part of the feature change.
-2. If SDK behavior is uncertain, test a minimal specimen early. Then implement
-   the coherent feature group across its affected stages, with boundary tests.
-3. Before the final gate, review the changed contracts and callback paths, run
-   focused tests, and confirm the example exercises the feature.
-4. Run one applicable final check with the
-   [workspace runner](../scripts/README.md#workspace-validation). Its Cargo
-   checks are serial and its audit lane overlaps them. While checks run, update
-   documentation or review only work that cannot change check inputs. Inspect
-   the final verdict and diagnostics. After a late edit, repeat only affected
-   checks. Put each fact in its authoritative document: architecture for
-   boundaries, specs for contracts, investigations for evidence, and plan for
-   remaining work. Link rather than duplicate explanations.
+1. Implement a coherent feature group and its boundary tests. Read the relevant
+   contracts and nearby tests first; probe uncertain SDK behavior early.
+2. Run focused tests and review the change. Reuse the
+   [shared compiler test helpers](../crates/ciq-compiler/tests/common/mod.rs) for
+   pipeline checks and the affected complete application. Finish semantic review before the final gate.
+3. Start the applicable final checks with the
+   [workspace runner](../scripts/README.md#workspace-validation). Run the slow
+   audit speculatively alongside workspace tests and the remaining Cargo checks;
+   do not wait for the entire Rust lane to pass first. Finish documentation while
+   checks run, then inspect their verdicts and diagnostics.
+
+After a code fix, rerun focused tests and the affected example. Repeat the full
+example audit only if the fix affects shared behavior across examples or its
+scope is uncertain. Retain other passing results. Documentation-only edits need
+documentation checks. A simulator rerun is unnecessary when the final signed PRG
+is byte-identical to the already tested artifact.
+
+The shared Rust helper checks saved IR, direct/resumed assembly equality,
+assembly text, unsigned PRG generation, CODE decode/re-encode, and a complete
+DATA walk. Use its pipeline check for feature cases and its application check
+for complete examples. It does not replace semantic assertions, malformed-input
+tests, SDK/CLI reconstruction, signing, or runtime acceptance in the audit and
+specimen helpers. Extend existing tests rather than duplicating the full audit
+in Rust or adding a separate preflight checklist.
 
 ## Check selection
 
-- **Rust implementation:** relevant tests while iterating, then affected crate
-  tests. Finish with workspace tests, Clippy, and formatting once.
+- **Rust production code:** focused tests while iterating, then workspace tests,
+  Clippy, and formatting once.
+- **Rust tests/test helpers only:** affected test targets, Clippy, and formatting;
+  no full example audit unless toolchain behavior also changes.
 - **Language/API, lowering, VM or PRG formats:** focused native/text and malformed
   input tests, then affected specimen acceptance and the full example audit.
 - **Public APIs or Rustdoc:** build Rustdoc with the broken-link lint.
@@ -66,11 +77,10 @@ validating. Routine output should give a verdict and report/log location;
 inspect focused diagnostics
 on failure or when investigating unknown behavior. Preserve subprocess failure
 statuses and use fresh capture directories so stale output cannot pass a check.
-Batch independent checks when practical, while keeping simulator sessions serial.
-Use the runner's completion-aware `wait` in its container instead of fixed sleep
-and status-poll loops. Reuse its per-job timing report; do not generate another
-final-check script for each feature. Changes after launching checks require
-repeating only the checks affected by those changes.
+Keep simulator sessions serial. Use the runner's completion-aware `wait` in its
+container instead of fixed sleeps and status-poll loops. Reuse its reports and
+concise verdicts; inspect detailed logs on failure. Do not generate a final-check
+script for each feature.
 Do not add a helper for a trivial one-off command or repeat it manually after its
 equivalent automated check passes.
 
