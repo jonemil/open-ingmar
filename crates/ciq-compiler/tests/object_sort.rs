@@ -84,8 +84,9 @@ fn dynamic_object_ordering_keeps_api_checks_and_runtime_domains() {
     let old = ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(4, 2, 0)).unwrap();
     assert!(compile_function_with_api(source, old).is_err());
     assert!(parse_function_ir_with_api(&f.to_ir_text(), old).is_err());
-    // Statically erased element domains cannot promise runtime comparability.
-    assert!(compile_function("function f() as Void {var a = [\"1\", 1]; a.sort(null);}").is_err());
+    // Tuple sorting keeps the SDK's positional checking view. Acceptance does
+    // not guarantee runtime comparability between differently typed slots.
+    compile_function("function f() as Void {var a = [\"1\", 1]; a.sort(null);}").unwrap();
     let unit = compile_sources(&["module M {function values() as Lang.Array<Lang.Object> {return [\"1\",1];} function f() as Void {M.values().sort(null);}}"]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     for element in [

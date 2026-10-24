@@ -82,6 +82,29 @@ fn requests_exit(operation: &Operation) -> bool {
 
 /// Treat erased comparison/element callbacks as possible shutdown requests.
 /// No exact body remains available for the reference-initialization proof.
+/// Identify tuple contents whose equality, printing, or default ordering can
+/// dispatch through source or erased object contracts, including nested values.
+fn tuple_callback_elements(tuple: &crate::TupleType) -> bool {
+    fn dynamic(ty: &crate::api::Type) -> bool {
+        use crate::api::Type;
+        match ty {
+            Type::Any | Type::Structural(_) => true,
+            Type::Named(name) => {
+                name == "Toybox.Lang.Object" || crate::InterfaceType::from_name(name).is_some()
+            }
+            Type::TupleValue(tuple) => tuple_callback_elements(tuple),
+            Type::Union(parts) | Type::Tuple(parts) => parts.iter().any(dynamic),
+            Type::Array(element) => dynamic(element),
+            Type::Dictionary { key, value } => dynamic(key) || dynamic(value),
+            _ => false,
+        }
+    }
+    tuple
+        .slots()
+        .iter()
+        .any(|slot| slot.source_contract().is_some() || dynamic(&slot.api_type()))
+}
+
 fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
     let interface_keys = |ty: &crate::ValueType| {
         crate::unions::alternatives(&ty.api_type()).iter().any(|p| {
@@ -129,6 +152,12 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
                         crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_)
                     )
                 }))
+                || matches!(&ty, crate::ValueType::Tuple(tuple)
+                    if tuple_callback_elements(tuple)
+                    && (matches!(member.as_str(), "toString" | "indexOf")
+                        || (member == "sort" && arguments.iter().any(|argument|
+                            matches!(function.value_types[argument], crate::ValueType::Null
+                                | crate::ValueType::NullableInterface(crate::InterfaceType::Comparator))))))
                 || matches!(ty, crate::ValueType::Array(
                     crate::ArrayElement::Interface(_) | crate::ArrayElement::NullableInterface(_))
                     if matches!(member.as_str(), "toString" | "indexOf" | "remove" | "removeAll" | "sort"))
@@ -173,7 +202,15 @@ fn comparator_callee<'a>(
         } if member == "sort" => (*receiver, arguments),
         _ => return None,
     };
-    if !matches!(function.value_types[&receiver], crate::ValueType::Array(_)) {
+    if !crate::unions::alternatives(&function.value_types[&receiver].api_type())
+        .iter()
+        .all(|ty| {
+            matches!(
+                ty,
+                crate::api::Type::Array(_) | crate::api::Type::TupleValue(_)
+            )
+        })
+    {
         return None;
     }
     let [argument] = arguments.as_slice() else {

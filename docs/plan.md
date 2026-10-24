@@ -37,9 +37,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Enable tuple receivers for `remove`, `removeAll`, `reverse`, `slice`,
-  `sort`, `indexOf`, `method`, and `weak`, checking resulting shape/element
-  contracts and mutation effects across saved stages.
+- [ ] Enable tuple `remove`/`removeAll`, returning Boolean and erasing the
+  receiver's checked view to `Array<Any>`. Track named-local, parameter, self,
+  and structural field effects through calls, aliases, branches, loops, and
+  saved stages; retain declared views for other source-instance fields.
 - [ ] Apply the exact source-class and nested element contracts in the
   [Array worklist](#array) when tuples lose positional shape; support a
   Null-only element domain without inventing non-Null alternatives.

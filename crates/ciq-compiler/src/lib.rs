@@ -3441,6 +3441,17 @@ impl Function {
                         context,
                     )
                     .map_err(|message| fail(&message))?;
+                    let result_type = tuples::refine_slice(
+                        &type_of(receiver).api_type(),
+                        member,
+                        &argument_types,
+                        &arguments
+                            .iter()
+                            .map(|v| origins.integer(*v))
+                            .collect::<Vec<_>>(),
+                    )
+                    .map_err(fail)?
+                    .unwrap_or(result_type);
                     let result_type = ValueType::from_api_type(&result_type)
                         .ok_or_else(|| fail("native call result type has no supported lowering"))?;
                     types.insert(result, result_type);

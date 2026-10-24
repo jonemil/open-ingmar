@@ -306,9 +306,31 @@ their individual constituents retain independent views. These checking rules
 do not prove that distinct runtime owners alias or that every owner's field
 actually changed. Named tuple aliases still retain their independent views.
 
-The tuple receiver also supports `size`, `equals`, `hashCode`, and `toString`.
-Other Array/Object methods remain rejected until their shape/effect contracts
-are supported. An Array-typed callee may still mutate the runtime Array.
+Tuple receivers also support `size`, `equals`, `hashCode`, `toString`,
+`indexOf`, `reverse`, `slice`, `sort`, `method`, and `weak`:
+
+- `reverse` returns an independent tuple with reversed slot contracts, retaining
+  nested and exact source identities.
+- `slice` returns the selected subtuple when both bounds are immediate Numbers
+  or statically Null. Null selects the beginning/end, negative bounds count from
+  the end, and out-of-range bounds clip; an inverted range is empty. Dynamic
+  bounds produce `Array<Any>`, which cannot satisfy an invariant typed Array or
+  a positional return annotation. A mutable local initialized with a Number
+  does not establish an immediate-bound proof.
+- `indexOf` accepts a search value without restricting it to existing slot
+  types and returns Number under the ordinary Array equality/search contract.
+- `sort` mutates the runtime elements and returns Void. Its checked slot view
+  stays unchanged, matching the SDK; this does not prove that differently typed
+  elements kept their positions. Non-null element/default-order and Comparator
+  requirements reuse the Array profile. Source comparator callbacks participate
+  in constructor shutdown-effect checks.
+- `method` binds Array/Object members using their erased declared signatures.
+  For example, bound `reverse` returns `Array<Object or Null>`, even though a
+  direct call has a reversed tuple result. `weak` returns the ordinary weak
+  handle; retrieval does not recover the tuple's static shape.
+
+`remove` and `removeAll` remain outside this profile until their receiver-view
+erasure is tracked. An Array-typed callee may still mutate the runtime Array.
 Structural slots may hold already checked interface values; fresh source-class
 witnesses are not inferred when packing a tuple.
 
@@ -316,6 +338,8 @@ AppBase's [initial View callback](../sdk/README.md#source-initial-view-callback)
 still requires its direct literal and native slot profile. See the
 [complete example](../../../examples/compiler-tuples/README.md) and
 [SDK evidence](../../investigations/compiler-tuples.md).
+The [method example](../../../examples/compiler-tuple-methods/README.md) checks
+copying, search, sorting, binding, and weak handles through complete PRGs.
 
 ## Numbers and numeric aliases
 

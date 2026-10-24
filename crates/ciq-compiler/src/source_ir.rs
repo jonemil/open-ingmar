@@ -2035,6 +2035,26 @@ impl Builder<'_> {
                         locals,
                     );
                 }
+                if member == "slice" && self.positional_snapshot(&receiver) {
+                    let arguments = arguments
+                        .into_iter()
+                        .map(|argument| {
+                            if matches!(argument.kind, E::Integer(_) | E::Null) {
+                                Ok(argument)
+                            } else {
+                                self.snapshot(argument, locals)
+                            }
+                        })
+                        .collect::<Result<Vec<_>, Diagnostic>>()?;
+                    return Ok(parser::Expression {
+                        kind: E::ValueCall {
+                            receiver: Box::new(receiver),
+                            member,
+                            arguments,
+                        },
+                        span,
+                    });
+                }
                 let expected = self.receiver_argument_context(&receiver, &member);
                 E::ValueCall {
                     receiver: Box::new(receiver),

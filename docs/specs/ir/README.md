@@ -2054,6 +2054,16 @@ frontend metadata. Unknown or unsupported members, receivers, argument counts,
 and types are rejected. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
+Tuple receivers use these same native-call operations. `reverse` derives reversed
+slot contracts, including nested/source slots. For `slice`, validation additionally
+examines immediate Integer/Null operands: known bounds select a clipped subtuple;
+otherwise the result is `Array<Any>`. Immutable argument staging does not turn a
+mutable local into an immediate constant. Source construction preserves literal
+bounds until emission, and text reload reconstructs the same proof from operand
+definitions. No saved result claim or new directive supplies the slice shape.
+Typed method binding uses Array's erased declared signatures instead of these
+direct-call refinements.
+
 Scalar and Array values use the same parameter/user-call categories described in
 the [type grammar](grammar.md#type-tags), with `result=<category>` for valued
 calls. Function result categories are inferred from returns; those categories
@@ -2061,9 +2071,10 @@ are not `.function result=` fields. Each chained call checks the preceding
 result's type. Nullable Array receivers and unsupported element types cannot be
 introduced by text edits.
 
-Array `sort` uses a native call with one Null, exact source-comparator, or typed
-Comparator(-or-Null) argument and a supported scalar/comparison-interface Array
-receiver. Comparator elements require a non-null callback; nullable elements
+Array/tuple `sort` uses a native call with one Null, exact source-comparator, or
+typed Comparator(-or-Null) argument. Arrays check their element profile; tuples
+check every slot and retain their checked positional view. Comparator elements
+require a non-null callback; nullable elements
 remain unsupported. Its Void result is consumed by `.discard`, or the call uses
 `.call-native-discard`. Validation reapplies the [sorting
 contract](../frontend/README.md#source-comparators), including API 5.0.0 and

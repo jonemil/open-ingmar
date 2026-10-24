@@ -76,6 +76,17 @@ pub(crate) fn native_signature(
     member: &str,
     context: Option<crate::api::ApiContext>,
 ) -> Result<StructuralMethod, String> {
+    // Binding uses Array's erased declared signature; it does not run direct
+    // call specialization using the captured tuple's slot types or bounds.
+    let projected;
+    let receiver = if crate::tuples::read_contract(receiver, None).is_some() {
+        projected = crate::api::Type::Array(Box::new(
+            crate::api::Type::named("Toybox.Lang.Object").with_null(),
+        ));
+        &projected
+    } else {
+        receiver
+    };
     let method = crate::api::core()
         .method_for_type(receiver, member)
         .ok_or("unresolved native binding target")?;

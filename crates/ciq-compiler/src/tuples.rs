@@ -266,6 +266,84 @@ pub(crate) fn read_contract(
     }
 }
 
+/// Reverse each positional alternative, retaining exact slot contracts.
+pub(crate) fn reverse_contract(receiver: &Type) -> Result<Type, &'static str> {
+    let mut results = Vec::new();
+    for part in crate::unions::alternatives(receiver) {
+        let Type::TupleValue(tuple) = part else {
+            return Err("reverse requires non-null tuple alternatives");
+        };
+        results.push(TupleType::new(tuple.slots.iter().rev().cloned().collect())?.api_type());
+    }
+    Ok(crate::unions::normalize(results))
+}
+
+/// A checked slice bound. Dynamic bounds cannot establish a positional shape.
+#[derive(Clone, Copy)]
+pub(crate) enum SliceBound {
+    Constant(i32),
+    Null,
+    Dynamic,
+}
+
+/// Refine a validated native slice call using immediate Number/Null operands.
+/// Other calls or non-positional receivers retain their ordinary native result.
+pub(crate) fn refine_slice(
+    receiver: &Type,
+    member: &str,
+    arguments: &[Type],
+    integers: &[Option<i32>],
+) -> Result<Option<Type>, &'static str> {
+    if member != "slice" || read_contract(receiver, None).is_none() {
+        return Ok(None);
+    }
+    let [a, b] = arguments else {
+        return Err("tuple slice requires two bounds");
+    };
+    let [ai, bi] = integers else {
+        return Err("tuple slice requires two bound constants");
+    };
+    let bound = |ty: &Type, integer| match integer {
+        Some(n) => SliceBound::Constant(n),
+        None if *ty == Type::Null => SliceBound::Null,
+        _ => SliceBound::Dynamic,
+    };
+    slice_contract(receiver, [bound(a, *ai), bound(b, *bi)]).map(Some)
+}
+
+/// Refine a tuple slice after ordinary native argument validation. Literal bounds
+/// clip to each alternative's length; a dynamic bound yields Array<Any>.
+pub(crate) fn slice_contract(
+    receiver: &Type,
+    bounds: [SliceBound; 2],
+) -> Result<Type, &'static str> {
+    if bounds
+        .iter()
+        .any(|bound| matches!(bound, SliceBound::Dynamic))
+    {
+        return Ok(Type::Array(Box::new(Type::Any)));
+    }
+    let mut results = Vec::new();
+    for part in crate::unions::alternatives(receiver) {
+        let Type::TupleValue(tuple) = part else {
+            return Err("slice requires non-null tuple alternatives");
+        };
+        let length = tuple.slots.len() as i64;
+        let bound = |value, default| match value {
+            SliceBound::Null => default,
+            SliceBound::Constant(n) => {
+                let n = i64::from(n);
+                (if n < 0 { length + n } else { n }).clamp(0, length) as usize
+            }
+            SliceBound::Dynamic => unreachable!(),
+        };
+        let start = bound(bounds[0], 0);
+        let end = bound(bounds[1], tuple.slots.len()).max(start);
+        results.push(TupleType::new(tuple.slots[start..end].to_vec())?.api_type());
+    }
+    Ok(crate::unions::normalize(results))
+}
+
 /// Replace a known slot in each tuple alternative and return the new contract.
 /// Dynamic indices cannot establish a positional shape; reject them until
 /// generalized Array element unions can represent the resulting storage.

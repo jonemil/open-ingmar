@@ -94,7 +94,8 @@ projections, which cannot authorize source dispatch or interface witnesses.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;
-it also derives native Array element unions when positional shape is lost.
+it also derives native Array element unions when positional shape is lost,
+reversed tuple shapes, and slice shapes from checked immediate operands.
 `field_flow` reconstructs method-local field views and captured receiver
 provenance across the CFG. Current-instance fields use field names; structural
 fields use canonical groups of declaration locations, independently of runtime

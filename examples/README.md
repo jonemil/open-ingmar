@@ -9,6 +9,8 @@ and future Rust toolchain experiments.
   member predicates, refinement, lexical casts, and evaluation order.
 - [compiler-tuples](compiler-tuples/README.md): positional/nested/source slots,
   typed construction, fields, callbacks, indexing, and evaluation order.
+- [compiler-tuple-methods](compiler-tuple-methods/README.md): tuple copies and
+  slices, search, default/custom sorting, bound methods, and weak handles.
 - [ir-any](ir-any/README.md): hand-authored dynamic IR, saved-stage compilation,
   and an SDK source comparison for Any calls, arithmetic, indexing, and narrowing.
 - [compiler-root-objects](compiler-root-objects/README.md): Object-rooted source

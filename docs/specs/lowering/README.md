@@ -248,6 +248,12 @@ read across effects or keeping values live across block edges. Direct scalar
 assignments retain ordinary expression lowering. Interface shapes and nullable
 snapshots add static checks without discriminator bytes or new opcodes.
 
+Tuple `reverse`, `slice`, `indexOf`, `sort`, `method`, and `weak` reuse ordinary
+native dispatch. Positional copy results and immediate slice bounds affect
+semantic contracts; lowering still passes the receiver and arguments to the
+runtime in order. Copies are allocated by the native methods, and sorting mutates
+the supplied reference. No extra VM instruction or type-based copy is inserted.
+
 ## Control flow
 
 ### Terminal conditions

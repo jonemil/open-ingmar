@@ -63,7 +63,7 @@ pub(crate) fn constant(
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
     if matches!(receiver, api::Type::TupleValue(_)) {
-        return value_parameters(&api::Type::named("Toybox.Lang.Array"), member);
+        return value_parameters(&api::Type::Array(Box::new(api::Type::Any)), member);
     }
     if let api::Type::Callback(signature) = receiver {
         return if member == "invoke" {
@@ -189,21 +189,48 @@ pub(crate) fn value_call(
 ) -> Result<api::Type, String> {
     if let api::Type::TupleValue(tuple) = receiver {
         tuple.validate()?;
-        if !matches!(
-            member,
-            "size" | "isEmpty" | "equals" | "hashCode" | "toString"
-        ) {
-            return Err("tuple method requires mutation/shape tracking not yet supported".into());
-        }
         if let Some(context) = context {
             context.check_type(api::core(), receiver)?;
         }
-        return value_call(
-            &api::Type::named("Toybox.Lang.Array"),
+        if member == "sort" {
+            if let Some(context) = context {
+                context.method(api::core(), "Toybox.Lang.Array", member)?;
+            }
+            let signature = api::core()
+                .method_for_type(receiver, member)
+                .ok_or("unresolved tuple sort")?;
+            check_arguments(&signature, arguments, context)?;
+            if !tuple
+                .slots()
+                .iter()
+                .all(|slot| sort_element_supported(&slot.api_type(), arguments))
+            {
+                return Err("tuple sort requires non-null elements and a supported default order or non-null Comparator".into());
+            }
+            return Ok(api::Type::Void);
+        }
+        if !matches!(
             member,
-            arguments,
-            context,
-        );
+            "size"
+                | "isEmpty"
+                | "equals"
+                | "hashCode"
+                | "toString"
+                | "indexOf"
+                | "reverse"
+                | "slice"
+                | "method"
+                | "weak"
+        ) {
+            return Err("tuple method requires mutation/shape tracking not yet supported".into());
+        }
+        let projected = api::Type::Array(Box::new(api::Type::Any));
+        let result = value_call(&projected, member, arguments, context)?;
+        return if member == "reverse" {
+            crate::tuples::reverse_contract(receiver).map_err(String::from)
+        } else {
+            Ok(result)
+        };
     }
     if let api::Type::Callback(signature) = receiver {
         if let Some(context) = context {
@@ -328,32 +355,7 @@ pub(crate) fn value_call(
     let signature = api::core()
         .method_for_type(receiver, member)
         .ok_or("native member requires concrete container parameters")?;
-    if arguments.len() > crate::MAX_PARAMETERS {
-        return Err("native call exceeds 254-argument limit".into());
-    }
-    if arguments.len() < signature.parameters.len()
-        || (signature.variadic.is_none() && signature.parameters.len() != arguments.len())
-    {
-        return Err("native call argument count does not match its API contract".into());
-    }
-    for (index, actual) in arguments.iter().enumerate() {
-        if let Some(expected) = signature
-            .parameters
-            .get(index)
-            .or(signature.variadic.as_ref())
-        {
-            structural_api(expected, actual, context)?;
-        }
-    }
-    if !arguments.iter().enumerate().all(|(index, actual)| {
-        signature
-            .parameters
-            .get(index)
-            .or(signature.variadic.as_ref())
-            .is_some_and(|expected| accepts(expected, actual))
-    }) {
-        return Err("native call argument types do not match its API contract".into());
-    }
+    check_arguments(&signature, arguments, context)?;
     if class == "Toybox.Lang.String"
         && member == "substring"
         && arguments
@@ -549,29 +551,7 @@ pub(crate) fn value_call(
             return Err("Array.sort requires a checked Comparator or Null".into());
         }
         let supported_elements = match receiver {
-            api::Type::Array(element) => match crate::ArrayElement::from_api_type(element) {
-                Some(
-                    crate::ArrayElement::Numeric {
-                        nullable: false, ..
-                    }
-                    | crate::ArrayElement::Number
-                    | crate::ArrayElement::Long
-                    | crate::ArrayElement::Float
-                    | crate::ArrayElement::Double
-                    | crate::ArrayElement::Boolean
-                    | crate::ArrayElement::Char
-                    | crate::ArrayElement::String
-                    | crate::ArrayElement::LangObject
-                    | crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
-                ) => true,
-                // Other non-null reference elements have no default ordering
-                // profile, but a checked callback receives them as Object.
-                Some(element) if element.nullable_base().is_none() => accepts(
-                    &crate::InterfaceType::Comparator.api_type(false),
-                    &arguments[0],
-                ),
-                _ => false,
-            },
+            api::Type::Array(element) => sort_element_supported(element, arguments),
             _ => false,
         };
         if !supported_elements {
@@ -593,10 +573,75 @@ pub(crate) fn value_call(
     Ok(signature.result)
 }
 
+/// Check an instantiated API signature's arity, argument types, and witnesses.
+fn check_arguments(
+    signature: &api::InstantiatedMethod<'_>,
+    arguments: &[api::Type],
+    context: Option<api::ApiContext>,
+) -> Result<(), String> {
+    if arguments.len() > crate::MAX_PARAMETERS {
+        return Err("native call exceeds 254-argument limit".into());
+    }
+    if arguments.len() < signature.parameters.len()
+        || (signature.variadic.is_none() && signature.parameters.len() != arguments.len())
+    {
+        return Err("native call argument count does not match its API contract".into());
+    }
+    for (index, actual) in arguments.iter().enumerate() {
+        if let Some(expected) = signature
+            .parameters
+            .get(index)
+            .or(signature.variadic.as_ref())
+        {
+            structural_api(expected, actual, context)?;
+        }
+    }
+    if !arguments.iter().enumerate().all(|(index, actual)| {
+        signature
+            .parameters
+            .get(index)
+            .or(signature.variadic.as_ref())
+            .is_some_and(|expected| accepts(expected, actual))
+    }) {
+        return Err("native call argument types do not match its API contract".into());
+    }
+    Ok(())
+}
+
+/// Check the existing Array sorting profile for one possible element type.
+fn sort_element_supported(element: &api::Type, arguments: &[api::Type]) -> bool {
+    match crate::ArrayElement::from_api_type(element) {
+        Some(
+            crate::ArrayElement::Numeric {
+                nullable: false, ..
+            }
+            | crate::ArrayElement::Number
+            | crate::ArrayElement::Long
+            | crate::ArrayElement::Float
+            | crate::ArrayElement::Double
+            | crate::ArrayElement::Boolean
+            | crate::ArrayElement::Char
+            | crate::ArrayElement::String
+            | crate::ArrayElement::LangObject
+            | crate::ArrayElement::Interface(crate::InterfaceType::Comparable),
+        ) => true,
+        Some(element) if element.nullable_base().is_none() => accepts(
+            &crate::InterfaceType::Comparator.api_type(false),
+            &arguments[0],
+        ),
+        None if accepts(&api::Type::named("Toybox.Lang.Object"), element) => accepts(
+            &crate::InterfaceType::Comparator.api_type(false),
+            &arguments[0],
+        ),
+        _ => false,
+    }
+}
+
 /// Check value profiles used to select supported Object.method receivers.
 /// The caller separately excludes Null and union receivers.
 fn method_receiver_profile(ty: &api::Type) -> bool {
     match ty {
+        api::Type::TupleValue(tuple) => tuple.validate().is_ok(),
         api::Type::Null => true,
         api::Type::Named(name) => matches!(
             name.as_str(),

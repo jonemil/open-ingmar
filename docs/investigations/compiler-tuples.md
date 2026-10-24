@@ -270,6 +270,46 @@ chained append results, and field replacement during argument evaluation.
 Fresh reads observe the actual property, including its runtime Array size;
 declared positional metadata does not assert an unchanged runtime shape.
 
+## Copy, query, binding, and sorting probes
+
+**Experimentally observed, 2026-10-24:** SDK 9.2.0 strict checking on fr265,
+with the wrapper above and `Pair as [Lang.Number, Lang.String]`. Deliberately
+returning each method result under a String annotation exposes these diagnostic
+types; accepted annotations and the application below cross-check them.
+
+| Operation | Checked result or subsequent receiver view |
+|---|---|
+| `x.reverse()` | `[String, Number]` |
+| `x.slice(0, 1)` | `[Number]` |
+| `x.slice(null, null)` | Pair |
+| `x.slice(-1, null)` | `[String]` |
+| `x.slice(0, 99)` | Pair |
+| `x.slice(i, null)`, with `i as Number` | `Array<Any>` |
+| `x.indexOf(true)` | Number; the search value need not match a slot |
+| `x.sort(null)` | Void; later reads keep their checked slot positions |
+| `x.weak()` | WeakReference |
+| `x.method(:size)` | `Method() as Number` |
+| `x.method(:reverse)` | `Method() as Array<Object or Null>` |
+| `x.method(:slice)` | nullable Number bounds, `Array<Object or Null>` result |
+
+Dynamic slicing is not compatible with an invariant `Array<Number>` or
+`Array<Object or Null>` result annotation; both are rejected. A bound copy method
+uses its erased declaration rather than the direct call's positional result.
+Mixed Number/String tuples are accepted by `sort(null)`; this static acceptance
+does not establish runtime comparability or preserve element positions.
+
+Removal probes show a different mutation contract: `remove` returns Boolean,
+while subsequent reads of a parameter, self field, or structural field expose
+`Array<Any>`. `removeAll` likewise erases the parameter's view. Reads through a
+different source-class instance still expose its declared Pair. These results
+require receiver-flow handling beyond an ordinary Boolean-producing call.
+
+The [complete method example](../../examples/compiler-tuple-methods/README.md)
+uses minimum API 5.0.0 for its source Comparator. SDK and generated simulator
+outputs match for independent copies, clipped/negative/Null bounds, dynamic
+bounds, exact source/nested slots, search, default/custom sorting, binding,
+weak retrieval while the receiver remains live, and receiver/bound effect order.
+
 ## Runtime construction and typed transport
 
 **Experimentally observed, 2026-10-23:** strict SDK 9.2.0 probes accept an

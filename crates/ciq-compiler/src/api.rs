@@ -467,6 +467,10 @@ impl Catalogue {
         let bindings;
         let (class, substitutions): (&str, &[(&str, &Type)]) = match receiver {
             Type::Named(name) => (name, &[]),
+            Type::TupleValue(_) => {
+                bindings = vec![("Element", &Type::Any)];
+                ("Toybox.Lang.Array", &bindings)
+            }
             Type::Array(element) => {
                 bindings = vec![("Element", element.as_ref())];
                 ("Toybox.Lang.Array", &bindings)

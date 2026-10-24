@@ -406,17 +406,25 @@ impl Types {
                                 .map(|ty| (*id, candidate(ty).into_owned()))
                         })
                         .collect();
-                    native::value_call(
+                    let argument_types = self.origins.native_arguments(
                         &candidate(receiver),
                         member,
-                        &self.origins.native_arguments(
-                            &candidate(receiver),
-                            member,
-                            argument_types?,
-                        ),
-                        None,
+                        argument_types?,
+                    );
+                    let result =
+                        native::value_call(&candidate(receiver), member, &argument_types, None)
+                            .ok()?;
+                    crate::tuples::refine_slice(
+                        &candidate(receiver),
+                        member,
+                        &argument_types,
+                        &arguments
+                            .iter()
+                            .map(|v| self.origins.integer(*v))
+                            .collect::<Vec<_>>(),
                     )
                     .ok()
+                    .map(|view| view.unwrap_or(result))
                 });
                 (*result, ty)
             }
