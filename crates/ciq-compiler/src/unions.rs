@@ -207,6 +207,10 @@ pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
 
 /// Check a write against every possible receiver without widening its elements.
 pub(crate) fn index_write(receiver: &Type, key: &Type, value: &Type) -> Result<(), String> {
+    if matches!(receiver, Type::Options(_)) {
+        return crate::native::value_call(receiver, "put", &[key.clone(), value.clone()], None)
+            .map(|_| ());
+    }
     for part in alternatives(receiver) {
         let expected = match part {
             Type::Any => Type::Any,

@@ -1,8 +1,9 @@
 # Structural option records
 
 [app.mc](app.mc) checks optional Symbol fields, missing/extra keys, nested
-records, inferred literal schemas, stable field mutation, class storage, and
-ByteArray conversion using returned or reused options.
+records, inferred literal schemas, class storage, and ByteArray conversion using
+returned or reused options. The evolving-record cases cover changed/added fields,
+shared aliases, branches, loops, dynamic keys, and nested references.
 Compare [expected output](expected.txt).
 
 From the repository root, using fresh output paths:

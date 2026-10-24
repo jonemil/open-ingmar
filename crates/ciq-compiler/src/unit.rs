@@ -1609,11 +1609,6 @@ impl CompilationUnit {
                         key,
                         value,
                     } => {
-                        if let crate::ValueType::Options(ref fields) =
-                            function.value_types[dictionary]
-                        {
-                            check_record(fields, *key, *value)?;
-                        }
                         if let crate::ValueType::TypedDictionary(ref dictionary) =
                             function.value_types[dictionary]
                         {
@@ -1686,13 +1681,6 @@ impl CompilationUnit {
                         member,
                         arguments,
                     } => {
-                        if let (crate::ValueType::Options(fields), "put", [key, value]) = (
-                            &function.value_types[receiver],
-                            member.as_str(),
-                            arguments.as_slice(),
-                        ) {
-                            check_record(fields, *key, *value)?;
-                        }
                         for alternative in
                             crate::unions::alternatives(&function.value_types[receiver].api_type())
                         {

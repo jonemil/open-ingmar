@@ -21,6 +21,7 @@ mod callbacks;
 mod casts;
 mod control_flow;
 mod dictionary;
+mod record_flow;
 mod records;
 pub use bindings::{
     array_bindings, byte_array_bindings, dictionary_bindings, string_bindings, symbol_bindings,
@@ -2006,6 +2007,7 @@ impl Function {
         let validate_parameter = |parameter: &ParameterType| -> Result<(), String> {
             match parameter {
                 ParameterType::Tuple(tuple) => tuple.validate().map_err(String::from),
+                ParameterType::Options(fields) => records::validate(fields).map_err(String::from),
                 ParameterType::Array(element) => element.validate(),
                 ParameterType::TypedDictionary(dictionary) => dictionary.validate(),
                 ParameterType::Structural(shape) => shape.validate(),
@@ -2022,6 +2024,7 @@ impl Function {
         if let Some(result) = &declared_result {
             let checked = match result {
                 ReturnType::Tuple(tuple) => tuple.validate().map_err(String::from),
+                ReturnType::Options(fields) => records::validate(fields).map_err(String::from),
                 ReturnType::Array(element) => element.validate(),
                 ReturnType::TypedDictionary(dictionary) => dictionary.validate(),
                 ReturnType::Structural(shape) => shape.validate(),
@@ -2033,6 +2036,31 @@ impl Function {
                 message,
             })?;
         }
+        let records_enabled = record_flow::needed(&operations, &parameter_types);
+        let mut candidates = source_types::Types::new(parameter_types.clone());
+        if records_enabled {
+            for op in &operations {
+                candidates.observe(&op.operation);
+            }
+        }
+        let record_inputs =
+            record_flow::inputs(&operations, &parameter_types, &candidates.api_types());
+        let record_cyclic = if records_enabled {
+            record_flow::cyclic(&operations)
+        } else {
+            Default::default()
+        };
+        let mut record_state = record_flow::State::new(&parameter_types);
+        let record_symbols = operations
+            .iter()
+            .filter_map(|op| {
+                if let Operation::Symbol { result, name } = &op.operation {
+                    Some((*result, name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
         for (index, located) in operations.iter().enumerate() {
             let checked = match &located.operation {
                 Operation::ArrayBegin { element_type, .. }
@@ -2240,7 +2268,7 @@ impl Function {
         let mut variable_locals = std::collections::BTreeSet::new();
         let refinement_inputs = type_flow::inputs(&structure, &operations);
         let mut refinements = std::collections::BTreeSet::new();
-        let mut types = std::collections::BTreeMap::new();
+        let mut types = std::collections::BTreeMap::<ValueId, ValueType>::new();
         let mut locals = std::collections::BTreeSet::new();
         let mut uses = std::collections::BTreeMap::new();
         let mut consumers = std::collections::BTreeMap::new();
@@ -2253,6 +2281,17 @@ impl Function {
             };
             if located.span.is_some_and(|span| span.start > span.end) {
                 return Err(fail("source span ends before it starts"));
+            }
+            if let Operation::Block { block } = located.operation {
+                record_state = record_inputs[&block].clone();
+            }
+            for (value, ty) in types.iter_mut().filter(|_| records_enabled) {
+                if !uses.contains_key(value) {
+                    let actual = record_state.value_type(*value, &ty.api_type());
+                    if let Some(actual) = ValueType::from_api_type(&actual) {
+                        *ty = actual;
+                    }
+                }
             }
             let type_of = |v| types.get(&v).cloned().unwrap_or(ValueType::Integer);
             let inferred_operation = if infer_joins {
@@ -3059,19 +3098,6 @@ impl Function {
                     ref member,
                     ref arguments,
                 } => {
-                    if let (ValueType::Options(ref fields), "put", [key, value]) =
-                        (type_of(receiver), member.as_str(), arguments.as_slice())
-                    {
-                        let expected =
-                            records::write_type(fields, origins.symbol(*key)).map_err(fail)?;
-                        if !native::accepts(
-                            expected,
-                            &origins.element_value(expected, *value, type_of(*value).api_type()),
-                        ) && !origins.deferred_interface(expected, *value)
-                        {
-                            return Err(fail("record write does not match its field contract"));
-                        }
-                    }
                     let arguments_types = origins.native_arguments(
                         &type_of(receiver).api_type(),
                         member,
@@ -3321,23 +3347,6 @@ impl Function {
                             "Dictionary writes require a typed non-null Dictionary",
                         ));
                     }
-                    if let ValueType::Options(ref fields) = type_of(dictionary) {
-                        if let Some(expected) =
-                            origins.symbol(key).and_then(|name| fields.get(name))
-                        {
-                            if !native::accepts(
-                                expected,
-                                &origins.element_value(expected, value, type_of(value).api_type()),
-                            ) && !origins.deferred_interface(expected, value)
-                            {
-                                return Err(fail("record write does not match its field contract"));
-                            }
-                        } else {
-                            return Err(fail(
-                                "record writes require a declared literal Symbol key",
-                            ));
-                        }
-                    }
                     native::value_call(
                         &type_of(dictionary).api_type(),
                         "put",
@@ -3424,37 +3433,39 @@ impl Function {
                     let element = match type_of(array) {
                         ValueType::Union(ref ty) => {
                             for part in unions::alternatives(ty) {
-                                let (key, value_type) =
-                                    if matches!(part, api::Type::Dictionary { .. }) {
-                                        let args = origins.native_arguments(
-                                            part,
-                                            "put",
-                                            [
-                                                (index, type_of(index).api_type()),
-                                                (value, type_of(value).api_type()),
-                                            ],
-                                        );
-                                        native::value_call(part, "put", &args, context)
-                                            .map_err(|e| fail(&e))?;
-                                        (args[0].clone(), args[1].clone())
-                                    } else if matches!(part, api::Type::Array(_)) {
-                                        let args = origins.native_arguments(
-                                            part,
-                                            "add",
-                                            [(value, type_of(value).api_type())],
-                                        );
-                                        native::value_call(part, "add", &args, context)
-                                            .map_err(|e| fail(&e))?;
-                                        (type_of(index).api_type(), args[0].clone())
-                                    } else {
-                                        (type_of(index).api_type(), type_of(value).api_type())
-                                    };
+                                let (key, value_type) = if matches!(
+                                    part,
+                                    api::Type::Dictionary { .. } | api::Type::Options(_)
+                                ) {
+                                    let args = origins.native_arguments(
+                                        part,
+                                        "put",
+                                        [
+                                            (index, type_of(index).api_type()),
+                                            (value, type_of(value).api_type()),
+                                        ],
+                                    );
+                                    native::value_call(part, "put", &args, context)
+                                        .map_err(|e| fail(&e))?;
+                                    (args[0].clone(), args[1].clone())
+                                } else if matches!(part, api::Type::Array(_)) {
+                                    let args = origins.native_arguments(
+                                        part,
+                                        "add",
+                                        [(value, type_of(value).api_type())],
+                                    );
+                                    native::value_call(part, "add", &args, context)
+                                        .map_err(|e| fail(&e))?;
+                                    (type_of(index).api_type(), args[0].clone())
+                                } else {
+                                    (type_of(index).api_type(), type_of(value).api_type())
+                                };
                                 unions::index_write(part, &key, &value_type)
                                     .map_err(|e| fail(&e))?;
                             }
                             api::Type::Any
                         }
-                        ValueType::Any => api::Type::Any,
+                        ValueType::Any | ValueType::Options(_) => api::Type::Any,
                         ValueType::Array(element) => element.api_type(),
                         ValueType::ByteArray => api::Type::Union(vec![
                             api::Type::named("Toybox.Lang.Number"),
@@ -3466,8 +3477,10 @@ impl Function {
                             ));
                         }
                     };
-                    if !matches!(type_of(array), ValueType::Any | ValueType::Union(_))
-                        && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
+                    if !matches!(
+                        type_of(array),
+                        ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
+                    ) && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
                     {
                         return Err(fail("array writes require a non-null Number index"));
                     }
@@ -3760,6 +3773,25 @@ impl Function {
                     if type_text::local_contract_tag(value_type).is_none() {
                         return Err(fail("unsupported variable read contract"));
                     }
+                    if record_flow::has_view(&value_type.api_type())
+                        && record_state.local_type(local).is_none()
+                    {
+                        return Err(fail("record variable read has no established reference"));
+                    }
+                    if let Some(actual) = record_state.local_type(local) {
+                        let actual = ValueType::from_api_type(&actual)
+                            .map(|ty| {
+                                type_flow::refine(ty, type_flow::Place::Local(local), &refinements)
+                                    .api_type()
+                            })
+                            .unwrap_or(actual);
+                        if actual != value_type.api_type() {
+                            return Err(fail(
+                                "record variable read contract disagrees with current heap view",
+                            ));
+                        }
+                    }
+
                     types.insert(
                         result,
                         ValueType::from_api_type(&value_type.api_type())
@@ -4019,7 +4051,22 @@ impl Function {
                     (None, vec![value])
                 }
             };
+            if records_enabled {
+                record_state.observe(
+                    &located.operation,
+                    &types.iter().map(|(v, t)| (*v, t.api_type())).collect(),
+                    &record_symbols,
+                    record_cyclic.contains(&structure.blocks[index]),
+                );
+            }
             if let Some(result) = result {
+                if let Some(ty) = types.get(&result).filter(|_| records_enabled) {
+                    record_state.note_result(result, &ty.api_type());
+                    let actual = record_state.value_type(result, &ty.api_type());
+                    if let Some(actual) = ValueType::from_api_type(&actual) {
+                        types.insert(result, actual);
+                    }
+                }
                 if type_flow::read_place(&located.operation).is_some()
                     || matches!(located.operation, Operation::LocalTake { .. })
                 {

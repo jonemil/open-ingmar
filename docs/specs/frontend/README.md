@@ -3702,12 +3702,29 @@ nested container contracts through annotations and saved IR. Assignment checks
 common known fields; missing and extra fields are permitted. Record literals
 can satisfy compatible homogeneous Dictionary contracts.
 
-Indexed writes and `put` currently require a declared literal Symbol key and a
-value compatible with that field. `remove` leaves the optional contract intact.
-Changing field types, adding keys after construction, and dynamic-key writes
-require evolving record-flow inference and are rejected in this profile.
-Records use ordinary Dictionary methods and runtime storage; annotations add no
-wrappers or conversions. Lexical casts cannot manufacture a record contract.
+Indexed writes and `put` may replace a field's type or add a literal Symbol
+field. Reads after a write use the current field contract, still joined with
+Null. Direct aliases share these effects; rebinding a variable changes its
+reference without changing older aliases. Nested records retain shared child
+references. Parameters and current-instance fields use the same memory views.
+`remove` makes a known field absent. Dynamic-key writes join the supplied value
+type into all known fields because the key may select any of them.
+
+Branches merge possible references and field contracts. A write through several
+possible references conservatively joins the old and new types. Repeated
+allocation sites and writes inside loops also use conservative joins. These are
+static views of ordinary Dictionary storage; no wrappers or runtime type checks
+are introduced.
+
+Separately obtained external references may alias. Their field views include
+possible writes through other external references. Calls without a record
+mutation summary erase mutable field knowledge to Any. A checked call result
+establishes its declared record contract without restoring earlier aliases.
+Construction keeps its
+private builder unexposed until completion. This is conservative intraprocedural
+inference, not an interprocedural alias or method-effect analysis. Lexical casts
+cannot manufacture a record contract. Schemas exceeding the finite field/depth
+budget lose their field precision to Any rather than retaining a stale type.
 
 ## Structural interfaces
 

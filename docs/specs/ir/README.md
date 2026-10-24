@@ -1203,6 +1203,40 @@ effects and can fail there. Finishing either builder kind clears its private
 strong reference; a completed container is owned by the produced value and its
 subsequent consumers.
 
+### Structural option records
+
+`.record-begin &builder options(key=type;...) count` allocates a private
+Symbol-keyed Dictionary with a structural record contract. Schemas have at most
+256 distinct ASCII identifier keys and share the 64-level type-depth limit.
+Types retain nested/source contracts; Void and Dc fields are rejected. Canonical
+text sorts fields by key. Every field is optional, and extra constructor keys
+are permitted. Each `.dictionary-fill` checks a literal Symbol key, the known
+field's value type, and its ordered entry index. `.dictionary-finish` exposes
+the record only after all `count` entries have been filled.
+
+The `options(...)` tag is accepted in signatures, locals, fields, joins, and
+nested containers. Dictionary reads and native `get` with a known literal key
+produce that field type joined with Null; other keys produce Any. Dictionary
+writes and native `put` update record memory views instead of requiring the
+entry schema's value type. Literal keys replace/add fields; dynamic keys join
+the value into every known field. Native `remove` records absence.
+
+Validation reconstructs reference identities through frame captures, parameters,
+current-instance fields, nested record entries, and value edges. Aliases share
+updates; rebinding changes the slot's reference. CFG joins merge possible
+references and schemas. Ambiguous receivers and cyclic allocation/write sites
+use weak updates. External aliases are conservative; calls without checked
+mutation summaries erase field precision; checked result contracts establish
+fresh result views without restoring older aliases. Unfinished builders retain their
+construction contract. Variable-read metadata must match the independently
+reconstructed, branch-refined heap view; it cannot claim stale field types.
+
+Saved IR also checks builder ownership, API availability, source identities,
+and constructor callback effects. Lexical casts cannot create a record proof.
+Lowering uses ordinary Dictionary allocation and calls; it adds no opcode,
+wrapper, or DATA framing.
+
+
 ### ByteArray values and allocation
 
 `byte-array` denotes a non-null `Toybox.Lang.ByteArray`; `nullable-byte-array`
@@ -1232,24 +1266,6 @@ runtime construction rather than scalar constants.
 `endian` are distinct parameter/result/cast/join tags, not `integer`.
 `.constant` retains enum identity and introduction level; lowering pushes its
 integer value. Decode retains its Numeric result after reload.
-
-`.record-begin &builder options(key=type;...) count` allocates a private
-Symbol-keyed Dictionary with a structural record contract. Schemas have at most
-256 distinct ASCII identifier keys and share the 64-level type-depth limit.
-Types retain nested/source contracts; Void and Dc fields are rejected. Canonical
-text sorts fields by key. Every field is optional, and extra constructor keys
-are permitted. Each `.dictionary-fill` checks a literal Symbol key, the known
-field's value type, and its ordered entry index. `.dictionary-finish` exposes
-the record only after all `count` entries have been filled.
-
-The `options(...)` tag is accepted in signatures, locals, fields, joins, and
-nested containers. Dictionary reads and native `get` with a known literal key
-produce that field type joined with Null; other keys produce Any. Writes and
-native `put` require a declared literal key with a compatible value. Saved IR
-revalidates these contracts, builder ownership, API availability, source
-identities, and constructor callback effects. Lexical casts cannot create a
-record proof. Lowering uses ordinary Dictionary allocation and calls; it adds
-no opcode, wrapper, or DATA framing.
 
 `.byte-array-new` allocates a fresh zero-filled ByteArray. Length must be an
 earlier same-block non-null Number value. Validate API 3.0.0, single-use/block

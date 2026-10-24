@@ -99,8 +99,10 @@ Container elements carry exact identities in `Type::SourceValue` and
 source-aware operands at element boundaries. API availability uses their native
 projection, while assignability and unit resolution retain their full contracts.
 `records` owns optional Symbol-keyed field contracts, saved tags, and nullable
-read results. Record construction shares Dictionary builders; native method
-lookup uses the Dictionary catalogue, with per-key validation in IR checks.
+read results. `record_flow` reconstructs record reference identities and mutable
+field views across CFG edges, shared by source candidates and final IR checks.
+Record construction shares Dictionary builders; native method lookup uses the
+Dictionary catalogue, with per-key construction validation in IR checks.
 `structural` owns finite source interface contracts and their saved tags;
 `tuples` owns positional slot contracts, saved tags, indexed result joins, and
 the derived contracts for slot replacement and append operations;

@@ -69,14 +69,62 @@ fn records_reject_forged_ir_and_preserve_api_and_constructor_effects() {
 #[test]
 fn records_recheck_known_field_values_and_optional_reads() {
     for source in [
+        "using Toybox.Lang; module Options {function wrong() as {:offset as Lang.String} {return {:offset=>\"wrong\"};}} function f(b as Lang.ByteArray) as Lang.Numeric {return b.decodeNumber(Lang.NUMBER_FORMAT_UINT8,Options.wrong());}",
         "function f() as {:n as Toybox.Lang.Number} {return {:n=>\"wrong\"};}",
         "function f(x as {:n as Toybox.Lang.Number}) as Toybox.Lang.Number {return x[:n];}",
-        "function f(x as {:n as Toybox.Lang.Number}) as Void {x[:n]=\"wrong\";}",
-        "function f(x as {:n as Toybox.Lang.Number}) as Void {x.put(:n,\"wrong\");}",
-        "function f(x as {:n as Toybox.Lang.Number}) as Void {x[:other]=1;}",
-        "function f(x as {:n as Toybox.Lang.Number},key as Toybox.Lang.Symbol) as Void {x[key]=1;}",
         "function f(x as {:n as Toybox.Lang.Number}) as {:n as Toybox.Lang.String} {return x;}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");
     }
+}
+
+#[test]
+fn evolving_records_follow_references_and_control_flow() {
+    for source in [
+        r#"typedef Has as interface {var options as {:x as Toybox.Lang.Number};}; function f(owner as Has) as Toybox.Lang.Number or Toybox.Lang.String or Null {owner.options[:x]="changed";return owner.options[:x];}"#,
+        r#"function f() as Toybox.Lang.String or Null {var o={:x=>1};o={:x=>"rebound"};return o[:x];}"#,
+        r#"function f() as Toybox.Lang.Number or Toybox.Lang.String or Null {var o={:x=>1};var flag=true;var other={:x=>2};var selected=flag?o:other;selected[:x]="changed";return o[:x];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.String or Null {var o=flag?{:x=>1}:null;if(o!=null){o[:x]="changed";return o[:x];}return null;}"#,
+        r#"function f() as Toybox.Lang.String or Null {var o={:x=>1};var saved=o[:x];o[:x]="changed";return o[:x];}"#,
+        r#"function f(o as {:x as Toybox.Lang.Number}) as Toybox.Lang.String or Null {o[:x]="changed";return o[:x];}"#,
+        r#"function f() as Toybox.Lang.String or Null {var o={:x=>1};var shared=o;shared[:x]="changed";return o[:x];}"#,
+        r#"function f() as Toybox.Lang.String or Null {var o={:x=>1};o.put(:label,"added");return o[:label];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Toybox.Lang.String or Null {var o={:x=>1};if(flag){o[:x]="changed";}return o[:x];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Toybox.Lang.String or Null {var o={:x=>1};while(flag){o[:x]="changed";}return o[:x];}"#,
+        r#"function f(key as Toybox.Lang.Symbol) as Toybox.Lang.Number or Toybox.Lang.String or Null {var o={:x=>1};o[key]="changed";return o[:x];}"#,
+        r#"function f() as Toybox.Lang.Number or Null {var o={:x=>1};var shared=o;o={:x=>2};shared[:x]="old";return o[:x];}"#,
+        r#"class Box {var o as {:x as Toybox.Lang.Number};function initialize(){self.o={:x=>1};}function f() as Toybox.Lang.String or Null {self.o[:x]="changed";return self.o[:x];}}"#,
+        r#"function f() as Toybox.Lang.String or Null {var child={:x=>1};var o={:child=>child};child[:x]="changed";var c=o[:child];if(c!=null){return c[:x];}return null;}"#,
+    ] {
+        check(source);
+    }
+    for source in [
+        r#"typedef Has as interface {var options as {:x as Toybox.Lang.Number};}; function f(owner as Has) as Toybox.Lang.Number or Null {owner.options[:x]="changed";return owner.options[:x];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Null {var o={:x=>1};var other={:x=>2};var selected=flag?o:other;selected[:x]="changed";return o[:x];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Null {var o=flag?{:x=>1}:null;return o[:x];}"#,
+        r#"function f() as Toybox.Lang.Number or Null {var o={:x=>1};var shared=o;shared[:x]="changed";return o[:x];}"#,
+        r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Null {var o={:x=>1};if(flag){o[:x]="changed";}return o[:x];}"#,
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+    }
+}
+
+#[test]
+fn saved_record_reads_cannot_claim_a_stale_field_contract() {
+    let source = r#"function f() as Toybox.Lang.String or Null {var o={:x=>1};o={:x=>"rebound"};return o[:x];}"#;
+    let unit = check(source);
+    let text = unit.to_ir_text();
+    let forged = text
+        .lines()
+        .map(|line| {
+            if line.starts_with(".read-variable ") {
+                line.replace("options(x=string)", "options(x=integer)")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_ne!(text.trim(), forged.trim());
+    assert!(parse_unit_ir(&forged).is_err());
 }

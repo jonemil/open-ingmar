@@ -343,6 +343,9 @@ pub(crate) fn validate(
             local, value_type, ..
         } = &op.operation
         {
+            if crate::record_flow::has_view(&value_type.api_type()) {
+                continue;
+            }
             let actual = current
                 .get(local)
                 .and_then(|domain| proven(domain, *local, &refinements));
@@ -436,6 +439,24 @@ pub(crate) fn normalize(
         let values = types.contracts();
         let structure = crate::control_flow::prefix(ops);
         let removals = removal_effects(ops, &values);
+        let record_inputs = crate::record_flow::inputs(ops, &parameters, &types.api_types());
+        let mut record_state = crate::record_flow::State::new(&parameters);
+        let records_enabled = crate::record_flow::needed(ops, &parameters);
+        let record_cyclic = if records_enabled {
+            crate::record_flow::cyclic(ops)
+        } else {
+            Default::default()
+        };
+        let record_symbols = ops
+            .iter()
+            .filter_map(|op| {
+                if let Operation::Symbol { result, name } = &op.operation {
+                    Some((*result, name.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
         let incoming = inputs(&structure, ops, &values);
         let facts = crate::type_flow::inputs(&structure, ops);
         let mut current = State::new();
@@ -443,15 +464,43 @@ pub(crate) fn normalize(
         for (at, op) in ops.iter_mut().enumerate() {
             if let Operation::Block { block } = op.operation {
                 current = incoming[&block].clone();
+                record_state = record_inputs[&block].clone();
             }
             crate::type_flow::update(&mut refinements, &facts, &op.operation);
+            let record_ty = if let Operation::VariableRead { local, .. } = op.operation {
+                record_state.local_type(local)
+            } else {
+                None
+            };
+            if records_enabled {
+                record_state.observe(
+                    &op.operation,
+                    &types.api_types(),
+                    &record_symbols,
+                    record_cyclic.contains(&structure.blocks[at]),
+                );
+            }
             if let Operation::VariableRead {
                 local, value_type, ..
             } = &mut op.operation
             {
-                let ty = current
-                    .get(local)
-                    .and_then(|d| proven(d, *local, &refinements))
+                let ty = record_ty
+                    .and_then(|ty| crate::ValueType::from_api_type(&ty))
+                    .map(|ty| {
+                        JoinType::Api(
+                            crate::type_flow::refine(
+                                ty,
+                                crate::type_flow::Place::Local(*local),
+                                &refinements,
+                            )
+                            .api_type(),
+                        )
+                    })
+                    .or_else(|| {
+                        current
+                            .get(local)
+                            .and_then(|d| proven(d, *local, &refinements))
+                    })
                     .ok_or_else(|| IrError {
                         operation: Some(at),
                         message: "cannot infer variable read before assignment".into(),

@@ -3274,7 +3274,7 @@ impl Builder<'_> {
                                 .and_then(construction_type)
                                 // A positional local has an inferred flow view,
                                 // not a declaration fixing its next literal's slots.
-                                .filter(|ty| !matches!(ty, ConstructionType::Tuple(_)))
+                                .filter(|ty| !matches!(ty, ConstructionType::Tuple(_) | ConstructionType::Options(_)))
                         }
                         crate::type_flow::Place::Parameter(index) => {
                             construction_type(&self.calls.parameter_types[index].api_type())

@@ -203,8 +203,8 @@ allowed. Our Symbol-keyed profile uses this contract for ByteArray options.
 SDK 9.2.0 strict probes on fr265 accept returned/nested records, omitted and
 extra fields, and mutation. A read of a declared Number field is Number or Null;
 a dynamic Symbol read is Any. Replacing that field with a String is accepted
-and changes subsequent reads to String or Null. Our stable-field mutation
-profile rejects such type changes pending record-flow inference.
+and changes subsequent reads to String or Null. These writes change a static
+field view without changing the underlying Dictionary representation.
 
 The strict SDK accepts this replacement and return contract:
 
@@ -218,7 +218,7 @@ function replace(o as {:x as Toybox.Lang.Number}) as Toybox.Lang.String or Null 
 [compiler-option-records](../../examples/compiler-option-records/README.md)
 checks annotated/inferred records, nested reads, saved values, class storage,
 `put`/`remove`, and ByteArray conversion. SDK and generated PRGs print the same
-12 expected lines in the simulator. Its full export/reassembly audit has no
+19 expected lines in the simulator. Its full export/reassembly audit has no
 CODE or DATA fallback; record storage requires no new encoding.
 
 [types]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/

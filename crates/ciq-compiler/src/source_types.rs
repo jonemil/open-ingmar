@@ -16,6 +16,8 @@ pub(crate) struct Types {
     dictionaries: BTreeMap<crate::BuilderId, crate::DictionaryType>,
     options: BTreeMap<crate::BuilderId, BTreeMap<String, Type>>,
     origins: crate::source_objects::Origins,
+    records: crate::record_flow::State,
+    symbols: BTreeMap<ValueId, String>,
     removal_captures: crate::local_flow::RemovalCaptures,
     pub(crate) facts: std::collections::BTreeSet<crate::type_flow::Fact>,
 }
@@ -32,6 +34,8 @@ impl Types {
     pub(crate) fn new(parameters: Vec<ParameterType>) -> Self {
         Self {
             parameters: parameters.clone(),
+            records: crate::record_flow::State::new(&parameters),
+            symbols: Default::default(),
             values: BTreeMap::new(),
             locals: BTreeMap::new(),
             variables: Default::default(),
@@ -70,6 +74,25 @@ impl Types {
     /// Record a candidate result using shared operator and native contracts.
     /// Failed resolution leaves validation to the final IR checker.
     pub(crate) fn observe(&mut self, operation: &Operation) {
+        if let Operation::Symbol { result, name } = operation {
+            self.symbols.insert(*result, name.clone());
+        }
+        self.records
+            .observe(operation, &self.values, &self.symbols, false);
+        if self.records.active() {
+            for (value, ty) in &mut self.values {
+                *ty = self.records.value_type(*value, ty);
+            }
+            for (local, ty) in &mut self.locals {
+                if let Some(actual) = self.records.local_type(*local) {
+                    *ty = if crate::unions::alternatives(ty).contains(&Type::Null) {
+                        actual.with_null()
+                    } else {
+                        actual
+                    };
+                }
+            }
+        }
         if let Some(local) = self.removal_captures.observe(operation) {
             if let Some(ty) = crate::tuples::removal_receiver(operation)
                 .and_then(|receiver| self.values.get(&receiver))
@@ -542,6 +565,8 @@ impl Types {
             if ty == Type::Any {
                 self.origins.note_dynamic(result);
             }
+            self.records.note_result(result, &ty);
+            let ty = self.records.value_type(result, &ty);
             self.values.insert(result, ty);
         }
     }
@@ -582,6 +607,9 @@ impl Types {
     pub(crate) fn value_type(&self, value: ValueId) -> Option<&Type> {
         self.values.get(&value)
     }
+    pub(crate) fn api_types(&self) -> BTreeMap<ValueId, Type> {
+        self.values.clone()
+    }
     pub(crate) fn contracts(&self) -> BTreeMap<ValueId, crate::JoinType> {
         self.values
             .keys()
@@ -593,6 +621,11 @@ impl Types {
         operations: &[crate::LocatedOperation],
         block: crate::BlockId,
     ) {
+        if let Some(state) =
+            crate::record_flow::inputs(operations, &self.parameters, &self.values).remove(&block)
+        {
+            self.records = state;
+        }
         if self.variables.is_empty() {
             return;
         }
@@ -609,6 +642,7 @@ impl Types {
     }
 
     pub(crate) fn set_record(&mut self, builder: crate::BuilderId, fields: BTreeMap<String, Type>) {
+        self.records.set_builder(builder, fields.clone());
         self.options.insert(builder, fields);
     }
     /// Select the private builder's final element contract after the first element.

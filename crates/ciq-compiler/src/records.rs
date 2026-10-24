@@ -47,16 +47,6 @@ pub(crate) fn refine_result(
     }
 }
 
-/// Select a stable field contract for mutation. Unknown or dynamic keys need
-/// evolving record-flow support rather than an invented value type.
-pub(crate) fn write_type<'a>(
-    fields: &'a BTreeMap<String, Type>,
-    key: Option<&str>,
-) -> Result<&'a Type, &'static str> {
-    key.and_then(|key| fields.get(key))
-        .ok_or("record writes require a declared literal Symbol key")
-}
-
 pub(crate) fn tag(fields: &BTreeMap<String, Type>) -> String {
     format!(
         "options({})",
