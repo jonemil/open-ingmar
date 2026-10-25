@@ -2,14 +2,17 @@
 
 These pages describe current contracts and intended component boundaries.
 Unsupported or unverified behavior remains explicit; the [plan](../plan.md) owns
-upcoming work. [Architecture](../architecture.md) maps these boundaries to Rust
-crates. Source, IR, and assembly each have one authoritative grammar.
+upcoming work. [Architecture](../architecture.md) defines component boundaries;
+its [implementation map](../architecture.md#implementation-map) points to source
+owners. Source, IR, and assembly each have one authoritative grammar.
 
-- [Monkey C frontend](frontend/README.md): grammar, types, operators, classes,
-  storage, and core Toybox.Lang behavior.
-- [Semantic IR](ir/README.md): serialization, validation, and operation families.
+- [Monkey C frontend](frontend/README.md) and [grammar](frontend/grammar.md):
+  types, operators, classes, storage, and core Toybox.Lang behavior.
+- [Semantic IR](ir/README.md) and [grammar](ir/grammar.md): serialization,
+  validation, and operation families.
 - [VM lowering](lowering/README.md): instruction selection and storage assignment.
-- [Assembly](assembly/README.md): grammar, layout, aliases, and binding.
+- [Assembly](assembly/README.md) and [grammar](assembly/grammar.md): layout,
+  aliases, and binding.
 - [VM bytecode](vm/README.md): encoding and instruction behavior.
 - [SDK declarations and profiles](sdk/README.md): catalogue, availability,
   higher-level module calls, and application callbacks.

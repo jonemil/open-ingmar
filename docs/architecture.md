@@ -1,5 +1,35 @@
 # Architecture
 
+## Implementation map
+
+Use this map when ownership is unclear; search directly when an identifier or
+error message is known. Source filenames below are relative to
+`crates/ciq-compiler/src/`. Follow the contract link for meaning, then search the
+owning files for the definition to read or change.
+
+| Concern | Implementation entry points | Contract |
+|---|---|---|
+| Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
+| Source → IR candidates | [source_ir.rs], [source_types.rs] | [Source semantics] |
+| IR model and body checks | [lib.rs] | [IR validation] |
+| Declarations and unit checks | [unit.rs], [source_fields.rs] | [Declarations] |
+| CFG and frame flow | [control_flow.rs], [local_flow.rs], [type_flow.rs] | [IR control flow] |
+| Field views | [field_flow.rs] | [Storage] |
+| Record identities and views | [records.rs], [record_flow.rs] | [Records] |
+| Native unions and source identity | [unions.rs], [source_union.rs], [source_objects.rs] | [Source identities] |
+| Container shapes | [tuples.rs], [dictionary.rs] | [Types] |
+| Interfaces and Method contracts | [structural.rs], [callbacks.rs] | [Interfaces] |
+| Lexical assertions | [casts.rs] | [Assertions] |
+| Operators | [operators.rs] | [Expressions] |
+| IR text and shared type tags | [ir_text.rs], [type_text.rs] | [IR grammar] |
+| Private container construction | [builders.rs] | [IR containers] |
+| SDK declarations and member profiles | [api.rs], [native.rs] | [SDK contracts] |
+| Pinned VM API identities | [native_bindings.rs] | [SDK contracts] |
+| Literal and Symbol operand binding | [bindings.rs] | [Assembly] |
+| VM instruction selection | [backend.rs] | [Lowering] |
+| Application bootstrap and PRG DATA | [application.rs] | [Application generation] |
+| Shared pipeline tests | [tests/common] | [Validation] |
+
 ## Scope and boundaries
 
 Build an independent Monkey C toolchain for Connect IQ. Keep container formats,
@@ -70,76 +100,45 @@ remain deferred in [the plan](plan.md).
 
 ## Implementation conventions
 
-Within `ciq-compiler`, `parser` and `names` handle source syntax and native-name
-bindings. One declaration parser returns a `ParsedUnit` for each source file;
-typedef collection first captures owner/file environments across the supplied
-files. Targets reuse annotation parsing, with cached expansion and cycle/depth
-checks, before bodies enter semantic IR. Unit compilation collects the parsed
-declarations before call resolution. The isolated-function entry
-selects one global body from that same result, retaining external-call binding
-without unit ownership/signature validation. `source_ir` constructs semantic
-operations. Candidate types and source
-origins help construction but are not validation proofs. `Function` validation
-checks per-body invariants, using `local_flow` to check inferred variable reads
-against possible writes and removal effects at each CFG point and sharing
-narrowing facts with `type_flow`. `unit` adds declaration, signature, field, and
-callback checks. `api` owns declarations, `native` owns executable profiles,
-`native_bindings` owns the pinned VM identities shared by runtime type tests and
-application generation, and `operators` owns operand/result rules. `type_text`
-shares saved-type spellings while retaining each consumer's accepted domain.
-`casts` reuses signature types for lexical assertions; exact source targets
-canonicalize to the source assertion operation, while record views retain
+The declaration parser returns one `ParsedUnit` per source file. Typedef
+collection captures owner/file environments across the supplied files; targets
+reuse annotation parsing with cached expansion and cycle/depth checks. Unit
+compilation resolves declarations before calls. The isolated-function entry
+selects a body from the same parser, retaining external-call binding without
+unit ownership/signature validation. Base-expression and postfix frames keep
+the expression-depth budget stable.
+
+Candidate types and origins guide IR construction but are not validation
+proofs. Body checks establish per-function invariants; unit checks establish
+declaration, signature, field, and callback obligations. API declarations,
+executable member profiles, and pinned VM identities have separate owners.
+Shared type spellings retain each consumer's accepted domain. Exact source
+assertions canonicalize to the source operation; record assertion views retain
 conservative alias links without runtime conversion.
-`unions` normalizes native alternatives and adapts them to supported contracts;
-`source_union` normalizes exact class alternatives and shares boundary matching
-with `tuples`, whose slot traversal retains those identities. `source_objects`
-tracks provenance and defers unresolved class witnesses; `unit` supplies the
-member proofs using ordinary interface declaration checks. Source identities
-remain separate from native API
-projections, which cannot authorize source dispatch or interface witnesses.
-Container elements carry exact identities in `Type::SourceValue` and
-`ArrayElement::Source`; `source_objects` restores origins on reads and supplies
-source-aware operands at element boundaries. API availability uses their native
-projection, while assignability and unit resolution retain their full contracts.
-`records` owns optional Symbol-keyed field contracts, saved tags, and nullable
-read results. `record_flow` reconstructs record reference identities and mutable
-field views across CFG edges, shared by source candidates and final IR checks.
-Record construction shares Dictionary builders; native method lookup uses the
-Dictionary catalogue, with per-key construction validation in IR checks.
-`structural` owns finite source interface contracts and their saved tags;
-`tuples` owns positional slot contracts, saved tags, indexed result joins, and
-the derived contracts for slot replacement and append operations;
-all uncontextual Array literals use this positional model, while expected
-Array contracts select typed construction without first-element inference.
-It also derives native Array element unions when positional shape is lost,
-reversed tuple shapes, slice shapes from checked immediate operands, and the
-erased removal contract. `local_flow` shares direct-variable capture tracking
-with source candidate inference; field flow derives the corresponding property
-effects. These analyses preserve native call results independently of receiver
-views.
-`field_flow` reconstructs method-local field views and captured receiver
-provenance across the CFG. Current-instance fields use field names; structural
-fields use canonical groups of declaration locations, independently of runtime
-owner identity. It solves field/frame-local annotations together;
-`unit` anchors declared field contracts to the enclosing class. Runtime field
-reads remain ordinary property reads rather than cached values.
-`source_fields` shares invariant declaration lookup across exact source-instance
-receivers. Member-operation metadata retains their field contracts until unit
-validation can verify the declaring classes.
-`native` checks declared member use, and `unit` proves source implementations.
-Interface members reuse source-aware parameter/result contracts; API projection
-does not replace exact member identities or authorize source dispatch.
-Container content contracts own structural shapes and share the same witness
-validation; they do not replace interface-valued elements with opaque Object.
-`callbacks` owns fixed Method signatures, saved tags, and binding proofs. Typed
-callback signatures reuse source-aware method contracts; native projection does
-not authorize an invented target signature. Binding and invocation lower through
-the existing Method runtime operations.
-Base-expression and postfix parsing use separate frames so suffix extensions
-preserve the established expression-depth budget.
-`backend` selects VM instructions;
-`application` generates the bounded bootstrap and metadata. Keep these
-responsibilities separate even where they currently share a source file.
+
+Source identities stay separate from native projections, which cannot authorize
+source dispatch or interface witnesses. Container elements retain identities in
+`Type::SourceValue` and `ArrayElement::Source`; reads restore provenance, and unit
+checks prove unresolved class members. Interface and callback contracts reuse
+source-aware parameters/results. A native projection cannot invent a bound
+Method signature; binding and invocation use the existing runtime Method API.
+
+Frame flow shares capture tracking with candidate inference. Field flow solves
+field/frame-local views together and retains captured receiver provenance across
+the CFG. Current-instance fields use names; structural fields use canonical
+groups of declaration locations, independently of runtime owner identity. Unit
+checks anchor declarations; runtime field reads remain ordinary property reads.
+Record flow reconstructs reference identities and mutable field views for both
+source candidates and final checks. Record construction shares Dictionary
+builders and member profiles, with per-key validation in IR checks.
+
+Uncontextual Array literals use positional tuple contracts; expected Array
+contracts select typed construction without first-element inference. Tuple
+operations derive slot replacement/append, reverse/slice, and erased removal
+views. These views do not change native method result contracts. Invariant
+source-field lookup and operation metadata retain declarations until unit
+validation verifies the owning classes. Container/interface shapes retain exact
+witnesses instead of replacing their contents with opaque Object.
 
 - Reuse an existing rule at its owning layer before adding another type/member
   whitelist. Keep context restrictions explicit: a parameter, field, join, and
@@ -203,3 +202,55 @@ inputs, without putting configuration parsing in the frontend or archive
 library.
 [Project-build requirements](specs/build/README.md#planned-project-builds-and-targets) define that intended boundary;
 [the plan](plan.md) owns sequencing.
+
+[parser.rs]: ../crates/ciq-compiler/src/parser.rs
+[names.rs]: ../crates/ciq-compiler/src/names.rs
+[source_ir.rs]: ../crates/ciq-compiler/src/source_ir.rs
+[source_types.rs]: ../crates/ciq-compiler/src/source_types.rs
+[lib.rs]: ../crates/ciq-compiler/src/lib.rs
+[unit.rs]: ../crates/ciq-compiler/src/unit.rs
+[source_fields.rs]: ../crates/ciq-compiler/src/source_fields.rs
+[control_flow.rs]: ../crates/ciq-compiler/src/control_flow.rs
+[local_flow.rs]: ../crates/ciq-compiler/src/local_flow.rs
+[type_flow.rs]: ../crates/ciq-compiler/src/type_flow.rs
+[field_flow.rs]: ../crates/ciq-compiler/src/field_flow.rs
+[record_flow.rs]: ../crates/ciq-compiler/src/record_flow.rs
+[unions.rs]: ../crates/ciq-compiler/src/unions.rs
+[source_union.rs]: ../crates/ciq-compiler/src/source_union.rs
+[source_objects.rs]: ../crates/ciq-compiler/src/source_objects.rs
+[tuples.rs]: ../crates/ciq-compiler/src/tuples.rs
+[dictionary.rs]: ../crates/ciq-compiler/src/dictionary.rs
+[records.rs]: ../crates/ciq-compiler/src/records.rs
+[structural.rs]: ../crates/ciq-compiler/src/structural.rs
+[callbacks.rs]: ../crates/ciq-compiler/src/callbacks.rs
+[casts.rs]: ../crates/ciq-compiler/src/casts.rs
+[operators.rs]: ../crates/ciq-compiler/src/operators.rs
+[ir_text.rs]: ../crates/ciq-compiler/src/ir_text.rs
+[type_text.rs]: ../crates/ciq-compiler/src/type_text.rs
+[builders.rs]: ../crates/ciq-compiler/src/builders.rs
+[api.rs]: ../crates/ciq-compiler/src/api.rs
+[native.rs]: ../crates/ciq-compiler/src/native.rs
+[native_bindings.rs]: ../crates/ciq-compiler/src/native_bindings.rs
+[bindings.rs]: ../crates/ciq-compiler/src/bindings.rs
+[backend.rs]: ../crates/ciq-compiler/src/backend.rs
+[application.rs]: ../crates/ciq-compiler/src/application.rs
+[tests/common]: ../crates/ciq-compiler/tests/common/mod.rs
+[Source grammar]: specs/frontend/grammar.md
+[Source semantics]: specs/frontend/README.md
+[IR validation]: specs/ir/README.md#validation
+[Declarations]: specs/frontend/README.md#declarations-and-name-resolution
+[IR control flow]: specs/ir/README.md#control-flow
+[Storage]: specs/frontend/README.md#instance-fields
+[Source identities]: specs/frontend/README.md#source-class-signatures
+[Types]: specs/frontend/README.md#types-and-nullability
+[Interfaces]: specs/frontend/README.md#structural-interfaces
+[Assertions]: specs/frontend/README.md#lexical-casts
+[Expressions]: specs/frontend/README.md#expressions-and-operators
+[IR grammar]: specs/ir/grammar.md
+[IR containers]: specs/ir/README.md#containers-and-private-construction
+[SDK contracts]: specs/sdk/README.md
+[Assembly]: specs/assembly/README.md
+[Lowering]: specs/lowering/README.md
+[Application generation]: specs/build/README.md#complete-application-generation
+[Validation]: validation.md
+[Records]: specs/frontend/README.md#symbol-keyed-records

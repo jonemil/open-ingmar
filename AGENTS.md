@@ -3,6 +3,8 @@
 - Read [README.md](README.md) and [docs/plan.md](docs/plan.md) before
   substantial work. Reuse context already read. Locate relevant definitions
   with targeted searches, then read narrow excerpts rather than whole files.
+  Use the [implementation map](docs/architecture.md#implementation-map) when
+  ownership is unclear; known identifiers can be searched directly.
 - Follow [docs/research.md](docs/research.md) for investigations and evidence,
   and [docs/architecture.md](docs/architecture.md) for implementation
   boundaries and coding conventions.
