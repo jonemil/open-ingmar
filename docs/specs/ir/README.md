@@ -29,6 +29,9 @@ readers reconstruct the same models rather than defining alternate paths. See
 [architecture](../../architecture.md) and [pipeline
 evidence](../../investigations/compiler-pipeline.md).
 
+Source ambiguity reporting is not serialized in IR. Resuming IR always applies
+mandatory model validation; it does not replay source-only policy diagnostics.
+
 ### Semantic model
 
 Value IDs identify computations; local IDs identify stored state; parameters

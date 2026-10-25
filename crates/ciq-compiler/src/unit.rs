@@ -2557,6 +2557,14 @@ fn compile_sources_context(
     sources: &[&str],
     context: Option<crate::api::ApiContext>,
 ) -> Result<CompilationUnit, SourceDiagnostic> {
+    compile_sources_mapped(sources, context).map(|(unit, _)| unit)
+}
+
+/// Preserve existing body-to-source origins for optional source diagnostics.
+pub(crate) fn compile_sources_mapped(
+    sources: &[&str],
+    context: Option<crate::api::ApiContext>,
+) -> Result<(CompilationUnit, Vec<(usize, usize)>), SourceDiagnostic> {
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
     let mut origins = Vec::new();
@@ -2776,7 +2784,7 @@ fn compile_sources_context(
                 ),
             }
         })?;
-    Ok(unit)
+    Ok((unit, origins))
 }
 
 /// Parse provisional unit text and validate owners and call signatures.

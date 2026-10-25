@@ -35,6 +35,7 @@ language and library work, including exceptions and source inheritance.
 
 Contents:
 
+- [Type-checking policy](#type-checking-policy)
 - [Types and nullability](#types-and-nullability)
 - [Numbers and numeric aliases](#numbers-and-numeric-aliases)
 - [Declarations and name resolution](#declarations-and-name-resolution)
@@ -47,6 +48,34 @@ Contents:
 - [Dictionaries](#dictionaries)
 - [ByteArray](#bytearray)
 - [Structural interfaces](#structural-interfaces)
+
+## Type-checking policy
+
+`compile_sources_with_options` and `compile_function_with_options` take
+`CompileOptions`: optional API context and `TypeCheckLevel`. They return a
+validated artifact with warnings, or a source/policy error without an artifact.
+Existing entry points retain their current behavior, equivalent to Gradual.
+
+- **Gradual** reports definite source errors and permits supported dynamic
+  operations without ambiguity diagnostics.
+- **Informative** additionally reports untyped parameters, unknown
+  operands/receivers, and uncertain typed boundaries as warnings.
+- **Strict** rejects those reported ambiguities.
+
+Boundary analysis distinguishes a proven match, uncertainty (including Any),
+and a proven mismatch. It covers returns, fixed local/parameter storage,
+resolved call arguments, container construction, and indexed access. Source
+locations retain file indices and one-based line/column; untyped-parameter
+messages point to the enclosing function declaration. Inherited SDK callback
+contracts are not treated as omitted annotations. Explicit unchecked casts
+remain assertions rather than runtime checks.
+
+These levels currently apply diagnostics to the existing accepted source
+subset. They do not yet implement the SDK's disabled checking or its acceptance
+of partial union matches in gradual/informative mode. Field-store and
+structural-witness ambiguity coverage also remains incomplete; Strict is not
+yet a guarantee that every source operation has a statically proven type.
+Mandatory IR validation is independent of this reporting policy.
 
 ## Types and nullability
 

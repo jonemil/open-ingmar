@@ -37,8 +37,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support disabled, gradual, informative, and strict type-checking policies;
-  distinguish dynamic operations, ambiguity, and proven type errors.
+- [ ] Complete checked-policy ambiguity analysis at instance/member field stores,
+  control-flow value joins, and source structural/interface witness boundaries;
+  test differing contracts across union receiver candidates.
+- [ ] Accept SDK partial type matches in gradual/informative mode through
+  policy-aware source/IR lowering at calls, returns, storage, and operations;
+  retain strict rejection and mandatory IR/backend invariants.
+- [ ] Implement disabled type checking with dynamic lowering for otherwise
+  mismatched operations; preserve declaration, ABI, API, and format checks.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,
   and value operations: container-guarded aliases such as
   `typedef Tree as Array<Tree>` and interfaces such as

@@ -5,6 +5,37 @@ retained language-guide articles, and Garmin's public API. This review adds no
 simulator evidence; SDK 9.2.0 / `fr265` remains the runtime reference environment.
 The [prioritized checklist][inventory] owns remaining work.
 
+## Type-checking policies
+
+Experimentally observed, 2026-10-25, SDK 9.2.0, `fr265`: functions with untyped
+parameters, an unknown
+receiver call, and a Number-or-String argument passed to a Number parameter
+compile under gradual/informative checking. Informative reports ambiguity when
+compiler warnings are enabled (`-w`); strict rejects these cases. A String
+returned from a Number function fails all three checked modes but compiles with
+checking off. Set the policy through `project.typecheck` or compiler `-l`.
+These are compiler-acceptance probes, not runtime evidence.
+
+Place these functions in an application module and compile with checking set to
+`gradual`, `informative`, or `strict`, with optimization disabled (`-O 0`):
+
+```monkeyc
+function exact(x as Toybox.Lang.Number) as Toybox.Lang.Number { return x; }
+function unknown(x) as Toybox.Lang.Number { return x; }
+function dynamic(x) as Toybox.Lang.Number { return x.size(); }
+function overlap(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {
+    return exact(x);
+}
+// Test separately: rejected by all checked levels, accepted with checking off.
+function bad() as Toybox.Lang.Number { return "wrong"; }
+```
+
+The [public type guide][type-guide] describes False/Maybe/True matches and the
+four policies. The [source contract][checking] states our current limits.
+
+[type-guide]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
+[checking]: ../specs/frontend/README.md#type-checking-policy
+
 ## Public Lang inventory
 
 **Officially documented:** the [Lang index][lang] lists 24 classes, the

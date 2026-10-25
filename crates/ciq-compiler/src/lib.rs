@@ -45,8 +45,13 @@ pub use structural::{StructuralDeclaration, StructuralInterface, StructuralMetho
 mod field_flow;
 mod source_types;
 mod tuples;
+mod type_check;
 mod type_flow;
 mod type_text;
+pub use type_check::{
+    CompileError, CompileOptions, CompileOutput, Severity, TypeCheckLevel, TypeDiagnostic,
+    TypeDiagnosticKind, compile_function_with_options, compile_sources_with_options,
+};
 mod unions;
 mod unit;
 pub use ir_text::{parse_function_ir, parse_function_ir_with_api};

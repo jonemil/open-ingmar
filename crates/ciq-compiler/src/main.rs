@@ -6,6 +6,46 @@ use std::{
     process,
 };
 
+fn policy_result<T>(
+    result: Result<ciq_compiler::CompileOutput<T>, ciq_compiler::CompileError>,
+    paths: &[std::ffi::OsString],
+) -> Result<T, String> {
+    let location = |error: &ciq_compiler::SourceDiagnostic| {
+        format!(
+            "{}:{}",
+            paths[error.source].to_string_lossy(),
+            error.diagnostic
+        )
+    };
+    let diagnostic = |error: &ciq_compiler::TypeDiagnostic| {
+        let d = &error.location.diagnostic;
+        let severity = match error.severity {
+            ciq_compiler::Severity::Warning => "warning",
+            ciq_compiler::Severity::Error => "error",
+        };
+        format!(
+            "{}:{}:{}: {severity}[{:?}]: {}",
+            paths[error.location.source].to_string_lossy(),
+            d.line,
+            d.column,
+            error.kind,
+            d.message
+        )
+    };
+    match result {
+        Ok(report) => {
+            for warning in report.warnings {
+                eprintln!("{}", diagnostic(&warning));
+            }
+            Ok(report.artifact)
+        }
+        Err(ciq_compiler::CompileError::Source(error)) => Err(location(&error)),
+        Err(ciq_compiler::CompileError::TypeChecking(errors)) => {
+            Err(errors.iter().map(diagnostic).collect::<Vec<_>>().join("\n"))
+        }
+    }
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let mut from = "source".to_string();
     let mut emit = "assembly".to_string();
@@ -17,6 +57,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut app_entry = None;
     let mut target_api = None;
     let mut min_api = None;
+    let mut type_check = None;
     let mut args = env::args_os().skip(1);
     let mut options = std::collections::BTreeSet::new();
     while let Some(arg) = args.next() {
@@ -35,6 +76,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             || arg == "--entry"
             || arg == "--target-api"
             || arg == "--min-api"
+            || arg == "--type-check"
         {
             if !options.insert(arg.clone()) {
                 return Err("duplicate pipeline option".into());
@@ -59,6 +101,8 @@ fn run() -> Result<(), Box<dyn Error>> {
                 target_api = Some(value.parse::<ciq_compiler::api::ApiLevel>()?);
             } else if arg == "--min-api" {
                 min_api = Some(value.parse::<ciq_compiler::api::ApiLevel>()?);
+            } else if arg == "--type-check" {
+                type_check = Some(value.parse::<ciq_compiler::TypeCheckLevel>()?);
             } else if arg == "--from" {
                 from = value;
             } else {
@@ -79,12 +123,17 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Err("API checks require source or IR input; assembly has no API contracts".into());
     }
     if paths.len() < 2 || (paths.len() != 2 && (!unit || from != "source")) {
-        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--target-api <major.minor.patch> --min-api <major.minor.patch>] [--app-id <32-hex-digits>] [--entry <global-function|Class.method>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
+        return Err("Usage: ciq-compiler [--unit] [--from source|ir|assembly] [--emit ir|assembly|code|prg] [--target-api <major.minor.patch> --min-api <major.minor.patch>] [--type-check gradual|informative|strict] [--app-id <32-hex-digits>] [--entry <global-function|Class.method>] [--symbols symbol-source.mcasm] [--data data-source.mcasm] <input> [additional-unit-source ...] <new-output>".into());
     }
     if !matches!(from.as_str(), "source" | "ir" | "assembly")
         || !matches!(emit.as_str(), "ir" | "assembly" | "code" | "prg")
     {
         return Err("unsupported pipeline stage".into());
+    }
+    if type_check.is_some() && from != "source" {
+        return Err(
+            "--type-check requires source input; saved IR retains mandatory validation".into(),
+        );
     }
     if from == "assembly" && emit == "ir" {
         return Err("assembly cannot be raised to semantic IR".into());
@@ -124,18 +173,31 @@ fn run() -> Result<(), Box<dyn Error>> {
     let (ir, assembly) = if unit && from != "assembly" {
         let model = if from == "source" {
             let inputs = sources.iter().map(String::as_str).collect::<Vec<_>>();
-            let result = if let Some(context) = context {
-                ciq_compiler::compile_sources_with_api(&inputs, context)
+            if let Some(level) = type_check {
+                policy_result(
+                    ciq_compiler::compile_sources_with_options(
+                        &inputs,
+                        ciq_compiler::CompileOptions {
+                            api: context,
+                            type_check: level,
+                        },
+                    ),
+                    &paths,
+                )?
             } else {
-                ciq_compiler::compile_sources(&inputs)
-            };
-            result.map_err(|error| {
-                format!(
-                    "{}:{}",
-                    paths[error.source].to_string_lossy(),
-                    error.diagnostic
-                )
-            })?
+                let result = if let Some(context) = context {
+                    ciq_compiler::compile_sources_with_api(&inputs, context)
+                } else {
+                    ciq_compiler::compile_sources(&inputs)
+                };
+                result.map_err(|error| {
+                    format!(
+                        "{}:{}",
+                        paths[error.source].to_string_lossy(),
+                        error.diagnostic
+                    )
+                })?
+            }
         } else {
             let result = if let Some(context) = context {
                 ciq_compiler::parse_unit_ir_with_api(source, context)
@@ -157,13 +219,28 @@ fn run() -> Result<(), Box<dyn Error>> {
             )
         }
     } else if from != "assembly" {
-        let function = match (from.as_str(), context) {
-            ("source", Some(context)) => ciq_compiler::compile_function_with_api(source, context),
-            ("source", None) => ciq_compiler::compile_function(source),
-            (_, Some(context)) => ciq_compiler::parse_function_ir_with_api(source, context),
-            (_, None) => ciq_compiler::parse_function_ir(source),
-        }
-        .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?;
+        let function = if let Some(level) = type_check {
+            policy_result(
+                ciq_compiler::compile_function_with_options(
+                    source,
+                    ciq_compiler::CompileOptions {
+                        api: context,
+                        type_check: level,
+                    },
+                ),
+                &paths,
+            )?
+        } else {
+            match (from.as_str(), context) {
+                ("source", Some(context)) => {
+                    ciq_compiler::compile_function_with_api(source, context)
+                }
+                ("source", None) => ciq_compiler::compile_function(source),
+                (_, Some(context)) => ciq_compiler::parse_function_ir_with_api(source, context),
+                (_, None) => ciq_compiler::parse_function_ir(source),
+            }
+            .map_err(|error| format!("{}:{error}", paths[0].to_string_lossy()))?
+        };
         (
             (emit == "ir").then(|| function.to_ir_text()),
             (emit != "ir").then(|| function.lower()),

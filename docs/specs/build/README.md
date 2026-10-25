@@ -34,6 +34,12 @@ assembly or CODE, but cannot be raised to semantic IR. Duplicate options/unknown
 stages are errors. Validate and encode before creating a new output file;
 existing files are never overwritten.
 
+`--type-check gradual|informative|strict` selects source-only
+[ambiguity reporting](../frontend/README.md#type-checking-policy). Informative
+warnings go to stderr with source path, line, column, and category; strict
+failures create no output. The option is rejected for saved IR or assembly.
+Omitting it retains existing behavior. Disabled checking is unsupported.
+
 `--emit code` emits an ordinary CODE payload, **not a complete PRG or
 executable**. Use unit-mode `--emit prg` for an independently generated complete
 application; signing follows generation. For CODE emission, `--symbols

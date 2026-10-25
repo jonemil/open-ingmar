@@ -11,6 +11,7 @@ owning files for the definition to read or change.
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs] | [Source semantics] |
+| Source ambiguity reporting | [type_check.rs] | [Checking policy] |
 | IR model and body checks | [lib.rs] | [IR validation] |
 | Declarations and unit checks | [unit.rs], [source_fields.rs] | [Declarations] |
 | CFG and frame flow | [control_flow.rs], [local_flow.rs], [type_flow.rs] | [IR control flow] |
@@ -254,3 +255,6 @@ library.
 [Application generation]: specs/build/README.md#complete-application-generation
 [Validation]: validation.md
 [Records]: specs/frontend/README.md#symbol-keyed-records
+
+[type_check.rs]: ../crates/ciq-compiler/src/type_check.rs
+[Checking policy]: specs/frontend/README.md#type-checking-policy
