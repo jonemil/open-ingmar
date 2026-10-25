@@ -87,6 +87,9 @@ callback checks. `api` owns declarations, `native` owns executable profiles,
 `native_bindings` owns the pinned VM identities shared by runtime type tests and
 application generation, and `operators` owns operand/result rules. `type_text`
 shares saved-type spellings while retaining each consumer's accepted domain.
+`casts` reuses signature types for lexical assertions; exact source targets
+canonicalize to the source assertion operation, while record views retain
+conservative alias links without runtime conversion.
 `unions` normalizes native alternatives and adapts them to supported contracts;
 `source_union` normalizes exact class alternatives and shares boundary matching
 with `tuples`, whose slot traversal retains those identities. `source_objects`

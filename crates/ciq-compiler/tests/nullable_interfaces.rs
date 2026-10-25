@@ -66,7 +66,6 @@ fn nullable_receivers_require_fresh_storage_proofs() {
         "function f(c as Toybox.Lang.Comparable or Null) as Toybox.Lang.Comparable { return c; }",
         "function f(c as Toybox.Lang.Comparator or Null) as Toybox.Lang.Comparable or Null { return c; }",
         "function f(c as Toybox.Lang.Comparable or Null) { var a=[1]; a.sort(c); }",
-        "function f(o as Toybox.Lang.Object) { return o as Toybox.Lang.Comparable or Null; }",
         "function f(o as Toybox.Lang.Object) { return o instanceof Toybox.Lang.Comparator; }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

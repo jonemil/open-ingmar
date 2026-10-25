@@ -464,7 +464,10 @@ fn emit_non_call(
         | parser::ExpressionKind::GlobalCall { .. }
         | parser::ExpressionKind::OwnerCall { .. }
         | parser::ExpressionKind::Binary { .. } => unreachable!("compound expression dispatched"),
-        parser::ExpressionKind::Cast { operand, target } => {
+        parser::ExpressionKind::Cast {
+            operand,
+            mut target,
+        } => {
             let operand = emit(source, *operand, locals, parameters, operations, calls)?;
             if let Some((name, nullable)) = crate::source_objects::target_contract(&target) {
                 if locals.contains_key(name) || parameters.contains_key(name) {
@@ -483,6 +486,19 @@ fn emit_non_call(
                     nullable,
                 }
             } else {
+                crate::structural::resolve_api(&mut target, &mut |class| {
+                    if locals.contains_key(&class.name) || parameters.contains_key(&class.name) {
+                        return Err(Diagnostic::at(
+                            source,
+                            expression.span.start,
+                            "source cast target is shadowed by a local or parameter",
+                        ));
+                    }
+                    *class = calls.source_class(&class.name).map_err(|message| {
+                        Diagnostic::at(source, expression.span.start, message)
+                    })?;
+                    Ok(())
+                })?;
                 Operation::Cast {
                     result: ValueId(operations.len() as u32),
                     operand,

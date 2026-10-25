@@ -181,8 +181,7 @@ comparison-operation = comparison-directive value-id value-id value-id
 comparison-directive = ".equal" | ".not-equal" | ".less" | ".less-equal"
                      | ".greater" | ".greater-equal"
 predicate-operation = ".instanceof" value-id value-id (class-path | source-tag)
-                    | ".cast" value-id value-id
-                      (cast-tag | source-tag | nullable-source-tag)
+                    | ".cast" value-id value-id cast-tag
                     | ".has" value-id value-id value-id
 sink-operation = (".discard" | ".println" | ".return") value-id
                | ".return-void"
@@ -374,8 +373,7 @@ join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nul
          | source-tag | nullable-source-tag | source-union-tag
          | structural-tag | callback-tag | tuple-tag | record-tag
 local-contract-tag = join-tag | call-result-tag
-cast-tag = scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
-         | numeric-alias-tag | enum-tag | "dictionary"
+cast-tag = parameter-tag
 ```
 
 Union Array elements require supported native element alternatives; Void,
@@ -428,7 +426,8 @@ ordinary source/nullable-source tags. Any absorbs the union. Exact identities
 are retained alongside opaque Object alternatives rather than subsumed.
 Nested union tags, Void, and nullable-source atoms are rejected. These
 tags are admitted in signatures, block values, local contracts, and fields.
-General union casts remain unsupported.
+Casts accept supported value tags, including native/source unions; Void, Null
+alone, and Dc remain excluded.
 
 The contexts deliberately differ. Source casts use `source-tag` or
 `nullable-source-tag` in `predicate-operation`; `instanceof` accepts only the
@@ -471,7 +470,7 @@ token. Key/value domains follow the [source
 contracts](../frontend/README.md#dictionaries), with additional supported
 core/interface/alias domains documented in their semantic pages. Keys exclude
 Null. Typed Dictionary tags work for signatures, user-call results, fields, and
-matching conditional joins; casts do not accept them. Join tags also admit
+matching conditional joins and lexical assertions. Join tags also admit
 `null` and `options(...)`; standalone View/Dc/delegate tags are not join tags.
 A tag's existence in one context does not imply acceptance in another context.
 [Value operations](README.md#values-and-storage) and [container operations](README.md#containers-and-private-construction) own

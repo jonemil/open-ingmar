@@ -277,9 +277,7 @@ native-base = object-type | appbase-type | view-type | delegate-type
 field-type = value-type
 class-target = runtime-class-type | source-class-type
 runtime-class-type = path
-cast-target = cast-named-type | nullable-cast-type "or" "Null"
-cast-named-type = nullable-cast-type | enum-type | dictionary-type | type-alias
-nullable-cast-type = scalar-or-alias | core-reference | source-class-type
+cast-target = value-type
 ```
 
 Paths resolve through the native-name environment; canonical `Toybox` paths need
@@ -334,7 +332,10 @@ contracts, proof obligations, and field accesses.
 Graphics.Dc is accepted as the native View.onUpdate parameter, not as a general
 source value/result contract. Bare Null and either order of native union atoms
 are accepted in signatures and fields. Lexical casts retain their separately
-checked domains; general union signature/field syntax does not extend casts.
+checked executable domains: Void, Null alone, and Graphics.Dc are not targets.
+Other supported value contracts, including containers and unions, share annotation
+syntax. After `as`, an identifier following `or` is a type name; parenthesize the
+cast expression before logical `or` with a variable or call operand.
 Parenthesized type unions remain unsupported. Generic containers preserve
 invariant element domains, with recursive tuple-to-Array adaptation; see
 [type rules](README.md#types-and-nullability) and the container semantic pages.

@@ -311,7 +311,7 @@ fn resolve_signature<E>(
     resolve_result(&mut signature.result, resolve)
 }
 
-fn resolve_api<E>(
+pub(crate) fn resolve_api<E>(
     ty: &mut Type,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {

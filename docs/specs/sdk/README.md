@@ -136,7 +136,9 @@ class identity and native projection follow the
 WeakReference `get()` returns Object or Null and `stillAlive()` returns Boolean;
 both members and their class require API 1.2.0. Opaque Object results retain no
 concrete contract automatically; callers can apply the supported type tests or
-lexical assertions. Parameterized-container recovery remains unsupported.
+lexical assertions, including explicit parameterized-container targets. Such
+assertions trust the caller; they do not recover or verify element types at
+runtime.
 
 ### Availability
 

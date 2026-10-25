@@ -870,11 +870,20 @@ supported target and its API availability; they do not require assignability
 from the operand or a branch proof. This explicit assertion is separate from
 recomputed control-flow facts.
 
-Target tags are `integer`, `long`, `float`, `double`, `boolean`, `char`,
-`string`, `object`, `symbol`, `method`, `weak-reference`, `byte-array`,
-`numeric`, `number-format`, `endian`, and `dictionary`. Supported nullable
-targets use `nullable-` tags. Types and their source obligations follow the
-[source cast contract](../frontend/README.md#lexical-casts).
+Targets reuse the signature parameter tags, including typed containers, tuples,
+`options(...)`, interfaces, callbacks, and native/source unions. Void, Null alone,
+Dc, and unsupported value profiles are rejected. Source identities inside the
+target are checked against unit declarations even if the result is unused. A
+single exact source target canonicalizes to `SourceCast`; general source sets
+remain `Cast` targets with retained `SourceUnion` provenance.
+
+Record assertions establish distinct views of the same reference. They do not
+change prior alias contracts merely by asserting a different shape. Writes
+conservatively update possible aliases, including child records and references
+retained in containers. An opaque assertion erases static contents/source
+identity without inventing a new runtime object. The
+[source assertion contract](../frontend/README.md#lexical-casts) defines caller
+responsibility and source precedence.
 
 [VM lowering](../lowering/README.md#lexical-casts).
 
@@ -1232,7 +1241,8 @@ construction contract. Variable-read metadata must match the independently
 reconstructed, branch-refined heap view; it cannot claim stale field types.
 
 Saved IR also checks builder ownership, API availability, source identities,
-and constructor callback effects. Lexical casts cannot create a record proof.
+and constructor callback effects. Explicit record assertions establish caller-supplied views without checking
+runtime contents.
 Lowering uses ordinary Dictionary allocation and calls; it adds no opcode,
 wrapper, or DATA framing.
 
@@ -1993,7 +2003,8 @@ validation resolves declarations and checks call contracts against their bodies.
 Its runtime representation is the ordinary reference or Null, with no added
 conversion instruction. Nullable source tags also describe field declarations
 and reads, and selects a nullable source assertion in `.cast`. Source tags are
-also exact join contracts, but are not native API cast tags.
+also exact join and assertion contracts, separate from their native API
+projections.
 
 `SourceUnion` stores normalized `SourceClass` identities, native alternatives,
 and nullability. At least one exact class is required on construction;
@@ -2021,7 +2032,8 @@ claim a witness by changing its type tag. Structural interface consumers check
 both retained classes and native alternatives. Unknown multiple callback bodies
 retain conservative initialization/shutdown effects. Direct common source calls
 instead track every exact body as specified above. Field contracts retain these
-same alternatives; general union casts remain unsupported.
+same alternatives; explicit union assertions retain their target identities
+without checking runtime compatibility.
 
 `FieldKind::Value { value_type: ReturnType }` carries field contracts without an
 existing specialized storage form, including general unions and nullable

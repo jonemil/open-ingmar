@@ -37,8 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support lexical `as` assertions for parameterized containers, option
-  records, interfaces, and general unions without adding runtime conversions.
 - [ ] Support disabled, gradual, informative, and strict type-checking policies;
   distinguish dynamic operations, ambiguity, and proven type errors.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,

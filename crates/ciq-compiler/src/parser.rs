@@ -699,6 +699,7 @@ impl<'a> Parser<'a> {
             if self.peek()? == Kind::Word("interface") {
                 self.token()?;
                 self.skip_braces()?;
+                type_start = false;
                 continue;
             }
             match self.token()?.kind {
@@ -1505,7 +1506,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse lexical assertions below unary/postfix and above binary operators.
-    /// Cast targets are qualified supported Lang types, optionally unioned with Null.
+    /// Parse lexical value assertions at cast precedence using annotation syntax.
     fn cast_tail(
         &mut self,
         mut expression: Expression,
@@ -1521,43 +1522,21 @@ impl<'a> Parser<'a> {
             }
             casts += 1;
             let at = self.token()?.span.start;
-            let path = self.path()?;
-            let mut target = if let Some(parameter) = self.alias_parameter(&path, at)? {
-                if let Some(contract) = parameter.source_contract() {
-                    let mut parts = contract
-                        .classes()
-                        .iter()
-                        .map(|class| crate::api::Type::named(&class.name))
-                        .collect::<Vec<_>>();
-                    parts.extend(contract.native().iter().cloned());
+            let parameter = self.type_annotation(at, true)?;
+            let target = if let Some(contract) = parameter.source_contract() {
+                if contract.classes().len() == 1 && contract.native().is_empty() {
+                    let ty = crate::api::Type::named(&contract.classes()[0].name);
                     if contract.nullable() {
-                        parts.push(crate::api::Type::Null);
+                        ty.with_null()
+                    } else {
+                        ty
                     }
-                    crate::unions::normalize(parts)
                 } else {
-                    parameter.api_type()
+                    crate::api::Type::SourceValue(Box::new(contract))
                 }
             } else {
-                let class = self
-                    .names
-                    .type_name(&path)
-                    .map_err(|message| self.error(at, message))?
-                    .unwrap_or(path);
-                crate::api::core()
-                    .type_alias(&class)
-                    .unwrap_or_else(|| crate::api::Type::named(class))
+                parameter.api_type()
             };
-            if self.peek()? == Kind::Word("or") {
-                // Leave logical OR available unless its next token is Null.
-                let saved = self.token()?.span.start;
-                if self.peek()? == Kind::Word("Null") {
-                    self.token()?;
-                    target = target.with_null();
-                } else {
-                    self.offset = saved;
-                    self.lookahead = None;
-                }
-            }
             if crate::casts::type_tag(&target).is_none()
                 && crate::source_objects::target_contract(&target).is_none()
             {
@@ -3187,11 +3166,21 @@ impl Parser<'_> {
     /// Parse `or` alternatives, normalizing native unions without erasing a
     /// source class into its native base. Source and native alternatives retain distinct contracts.
     fn parameter_annotation(&mut self, at: usize) -> Result<crate::ParameterType, Diagnostic> {
+        self.type_annotation(at, false)
+    }
+
+    /// Share value-type syntax between declarations and assertions. In an
+    /// assertion, expression-only tokens after `or` retain logical precedence.
+    fn type_annotation(
+        &mut self,
+        at: usize,
+        assertion: bool,
+    ) -> Result<crate::ParameterType, Diagnostic> {
         if self.type_depth >= 64 {
             return Err(self.error(at, "type annotation exceeds 64 levels"));
         }
         self.type_depth += 1;
-        let result = self.parameter_annotation_inner(at);
+        let result = self.parameter_annotation_inner(at, assertion);
         self.type_depth -= 1;
         result
     }
@@ -3199,6 +3188,7 @@ impl Parser<'_> {
     fn parameter_annotation_inner(
         &mut self,
         at: usize,
+        assertion: bool,
     ) -> Result<crate::ParameterType, Diagnostic> {
         let first = self.parameter_atom()?;
         if self.peek()? != Kind::Word("or") {
@@ -3206,7 +3196,15 @@ impl Parser<'_> {
         }
         let mut parts = vec![first];
         while self.peek()? == Kind::Word("or") {
-            self.token()?;
+            let saved = self.token()?.span.start;
+            if assertion
+                && !matches!(self.peek()?,Kind::Word(word) if !matches!(word,"true"|"false"|"not"|"new"))
+                && !matches!(self.peek()?, Kind::Punctuation('{' | '['))
+            {
+                self.offset = saved;
+                self.lookahead = None;
+                break;
+            }
             if parts.len() >= crate::MAX_PARAMETERS {
                 return Err(self.error(at, "type union exceeds 254 alternatives"));
             }

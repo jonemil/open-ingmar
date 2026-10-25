@@ -505,7 +505,10 @@ impl Types {
                     .constructed_type()
                     .map(|ty| if *nullable { ty.with_null() } else { ty }),
             ),
-            Operation::Cast { result, target, .. } => (*result, Some(target.clone())),
+            Operation::Cast { result, target, .. } => (
+                *result,
+                crate::casts::value_type(target).map(|ty| ty.api_type()),
+            ),
             Operation::SourceInstanceOf { result, .. }
             | Operation::InstanceOf { result, .. }
             | Operation::Has { result, .. } => (*result, Some(Type::named("Toybox.Lang.Boolean"))),

@@ -1132,6 +1132,7 @@ impl CompilationUnit {
                         .operations()
                         .iter()
                         .filter_map(|op| match &op.operation {
+                            Operation::Cast { target, .. } => Some(target.clone()),
                             Operation::LocalDeclare { value_type, .. } => {
                                 Some(value_type.api_type())
                             }

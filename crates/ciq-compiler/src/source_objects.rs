@@ -171,6 +171,13 @@ impl Origins {
                     self.nulls.insert(*result);
                 }
             }
+            Operation::Cast { result, target, .. } => {
+                if let Some(contract) =
+                    crate::unions::result(target.clone()).and_then(|r| r.source_contract())
+                {
+                    self.values.insert(*result, contract);
+                }
+            }
             Operation::SourceCast {
                 result,
                 class,

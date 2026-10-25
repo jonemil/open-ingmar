@@ -633,7 +633,7 @@ Modules containing only typedefs contribute types without executable methods.
 Aliases expand to existing native, container, exact source, or mixed-union
 contracts. They can name parameter/results, fields, container arguments, and
 supported lexical cast targets. Destination restrictions still apply: an alias
-cannot enable unsupported container contents or general union casts. Expansion
+cannot enable unsupported container contents or bypass API requirements. Expansion
 preserves exact source identities and container invariance. Unused declarations
 are checked for unresolved targets and, with an explicit API context, native
 type availability. Alias names are erased before semantic IR construction;
@@ -1104,8 +1104,9 @@ requires its class's verified signature. An opaque native reference can match
 only native alternatives, never an exact source identity. Null requires a
 nullable contract. These checks apply at parameters, returns, fixed storage,
 and explicit block-value edges; saved metadata cannot invent a witness.
-[Field storage](#union-fields) shares these contracts; general union casts
-remain outside this profile.
+[Field storage](#union-fields) shares these contracts. Explicit
+[union assertions](#lexical-casts) retain the asserted alternatives without
+proving runtime compatibility.
 
 Conditional joins and inferred local writes preserve these exact alternatives.
 Direct source `instanceof` tests select a class on the true edge and exclude it
@@ -1786,17 +1787,15 @@ standalone function IR retains that declaration-resolution obligation.
 
 ### Lexical casts
 
-`expression as Lang.Type` explicitly asserts a value's static type. Supported
-targets are Number, Long, Float, Double, Boolean, Char, String, Object, Symbol,
-Method, WeakReference, ByteArray, Numeric, Integer, Decimal, NumberFormat,
-Endian, and opaque Dictionary. Canonical `Toybox.Lang.Type` and Lang module
-aliases are accepted. Number, Long, Float, Double, Boolean, Char, String,
-Symbol, Object, Method, WeakReference, ByteArray, Numeric, Integer, and Decimal
-targets can include `or Null`. Target types still satisfy selected API
-introduction requirements.
-[Source-class targets](#source-class-targets) additionally retain exact identity.
-Imported native names use the same cast profile. Parameterized containers,
-interfaces, general unions, Void, and Null alone remain outside this profile.
+`expression as Type` explicitly asserts a value's static contract. Targets use
+annotation syntax: supported scalar/native references, typed Arrays and
+Dictionaries, tuples, option records, native/structural interfaces, Method
+signatures, source classes, and native/source unions. Typedefs and imported
+names expand normally, retaining nested source identities. Nullable targets
+are accepted; Void, Null alone, Graphics.Dc, and unsupported content shapes
+remain invalid. Targets must satisfy selected API introduction requirements.
+Single source-class targets retain the
+[existing exact source assertion](#source-class-targets).
 
 ```text
 using Toybox.Lang;
@@ -1816,8 +1815,10 @@ Casts bind below unary/member/index operations and above binary arithmetic and
 comparisons. Chains associate left to right and share the 64-level expression
 nesting limit. `o as Lang.Number + 1` asserts the left arithmetic operand;
 negating an Object requires `-(o as Lang.Number)`. Parenthesize a cast before
-member/index access. `or Null` belongs to its target; other `or` expressions use
-ordinary logical precedence. Assertions in conditional arms, staged operands,
+member/index access. An identifier after `or` extends the target type, as in
+`x as Lang.Number or Lang.String`. To combine a cast with a logical variable or
+call, write `(x as Lang.Boolean) or flag`; otherwise `flag` is treated as a type
+name. Expression-only operands such as `false` retain logical precedence. Assertions in conditional arms, staged operands,
 and native/user call arguments preserve existing evaluation and ownership rules.
 A cast does not change a storage declaration or establish a branch/API proof.
 
@@ -3722,8 +3723,11 @@ mutation summary erase mutable field knowledge to Any. A checked call result
 establishes its declared record contract without restoring earlier aliases.
 Construction keeps its
 private builder unexposed until completion. This is conservative intraprocedural
-inference, not an interprocedural alias or method-effect analysis. Lexical casts
-cannot manufacture a record contract. Schemas exceeding the finite field/depth
+inference, not an interprocedural alias or method-effect analysis. An explicit
+record assertion establishes its requested static view without checking the
+runtime contents. Original aliases keep distinct views; later writes through an
+asserted view conservatively update possible aliases, including records retained
+in containers. Schemas exceeding the finite field/depth
 budget lose their field precision to Any rather than retaining a stale type.
 
 ## Structural interfaces
@@ -3895,7 +3899,8 @@ fields](#comparison-interface-fields) with the same write contracts and checked
 initialization. Arrays follow the
 [interface element contract](#comparison-interface-arrays). Dictionaries follow
 their [interface value contract](#comparison-interface-dictionaries). Unchecked
-`as` assertions and interface runtime type targets remain unsupported. A
+Lexical `as` assertions accept these interfaces; interface runtime type targets
+remain unsupported. A
 non-null interface can widen to Object without proving additional members. A
 nullable interface can widen to Object-or-Null; Object requires a non-null
 proof. Ordinary Object casts and concrete type tests retain their existing

@@ -140,7 +140,7 @@ fn object_storage_preserves_context_erasure_and_nullable_snapshot_proofs() {
 }
 
 #[test]
-fn object_storage_does_not_invent_mutable_covariance_or_recover_erased_types() {
+fn object_storage_does_not_invent_covariance_or_implicitly_recover_erased_types() {
     for source in [
         "function f(a as Lang.Array<Lang.Number>) as Lang.Array<Lang.Object> {return a;}",
         "function f(a as Lang.Array<Lang.Object>) as Lang.Array<Lang.Object or Null> {return a;}",
@@ -155,7 +155,6 @@ fn object_storage_does_not_invent_mutable_covariance_or_recover_erased_types() {
         "function f(d as Lang.Dictionary<Lang.String,Lang.Object>) as Void {d.values().add(null);}",
         "function f() as Lang.Array<Lang.Object> {return new[2];}",
         "function f() as Lang.Dictionary<Lang.Object,Lang.Object> {return {};}",
-        "function f(a as Lang.Array<Lang.Object>) as Lang.Array<Lang.Object> {return a as Lang.Array<Lang.Object>;}",
     ] {
         assert!(compile_function(source).is_err(), "{source}");
     }

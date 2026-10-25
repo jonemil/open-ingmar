@@ -2108,6 +2108,25 @@ impl Function {
             })
             .transpose()?;
         for located in &mut operations {
+            if let Operation::Cast {
+                result,
+                operand,
+                target,
+            } = &located.operation
+            {
+                if let Some(contract) =
+                    unions::result(target.clone()).and_then(|ty| ty.source_contract())
+                {
+                    if contract.classes().len() == 1 && contract.native().is_empty() {
+                        located.operation = Operation::SourceCast {
+                            result: *result,
+                            operand: *operand,
+                            class: contract.classes()[0].clone(),
+                            nullable: contract.nullable(),
+                        };
+                    }
+                }
+            }
             if let Operation::ObjectCall { classes, .. }
             | Operation::ObjectCallStatement { classes, .. } = &mut located.operation
             {
@@ -2704,7 +2723,7 @@ impl Function {
                     }
                     types.insert(
                         result,
-                        ValueType::from_api_type(target).expect("supported cast target"),
+                        casts::value_type(target).expect("supported cast target"),
                     );
                     (Some(result), vec![operand])
                 }

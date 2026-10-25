@@ -121,3 +121,21 @@ the displayed value. Retained logs/captures are `sdk.log`, `generated.log`,
 
 [example]: ../../examples/compiler-source-signatures/README.md
 [nullable-example]: ../../examples/compiler-object-tests/README.md
+
+## Structural and union assertions
+
+Reviewed 2026-10-25 with SDK 9.2.0, strict checking, fr265. The public
+[Monkey Types guide](https://developer.garmin.com/connect-iq/monkey-c/monkey-types/)
+states that lexical casts do not change runtime values. Authored SDK probes
+accept typed Arrays, option records, tuples, structural interfaces, native unions,
+and Method signatures as assertion targets. `x as Lang.Boolean or flag` is
+rejected because the SDK resolves `flag` as a type; `(x as Lang.Boolean) or flag`
+is accepted.
+
+The [cast example](../../examples/compiler-casts/README.md) uses API 5.0.0 for
+Comparable. SDK and generated PRGs match all 14 expected lines, including the
+single `once` effect marker. The authored program exercises Dictionary and source
+containers, native/structural interfaces, source unions, callbacks, and mutation
+through an asserted record alias. Saved-stage and complete CODE/DATA reconstruction
+checks pass without new VM instructions or record formats. False assertions
+remain caller responsibility; this experiment does not validate their safety.

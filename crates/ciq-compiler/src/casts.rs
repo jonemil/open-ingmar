@@ -1,40 +1,33 @@
-//! Supported lexical type assertions; no runtime conversion or check.
+//! Lexical value assertions; no runtime conversion or check.
 use crate::{ValueType, api::Type};
+use std::borrow::Cow;
 
-/// Return the saved cast tag for a supported scalar or opaque reference type.
-/// Parameterized containers, source classes, interfaces, and Null alone require
-/// other profiles.
-pub(crate) fn type_tag(ty: &Type) -> Option<&'static str> {
-    if ty == &Type::named("Toybox.Lang.Dictionary") {
-        return Some("dictionary");
-    }
-    let value = ValueType::from_api_type(ty)?;
-    if matches!(
-        value,
-        ValueType::Null
-            | ValueType::Options(_)
-            | ValueType::Array(_)
-            | ValueType::TypedDictionary(_)
-            | ValueType::Object(_)
-            | ValueType::Tuple(_)
-            | ValueType::Interface(_)
-            | ValueType::NullableInterface(_)
-    ) {
+/// Project an asserted contract to the executable value representation, retaining
+/// exact source identities separately through the assertion's saved target.
+pub(crate) fn value_type(ty: &Type) -> Option<ValueType> {
+    if *ty == Type::Null || *ty == Type::Void || *ty == Type::named("Toybox.Graphics.Dc") {
         return None;
     }
-    match crate::joins::type_tag(ty)? {
-        std::borrow::Cow::Borrowed(tag) => Some(tag),
-        std::borrow::Cow::Owned(_) => None,
-    }
+    ValueType::from_api_type(ty).or_else(|| {
+        crate::unions::result(ty.clone()).and_then(|result| crate::call_result_type(result).ok())
+    })
 }
 
-/// Parse a cast target tag, rejecting targets outside the lexical-cast profile.
+/// Print an executable assertion target using shared signature spellings.
+/// Void, Null alone, unresolved classes, and unsupported value shapes are errors.
+pub(crate) fn type_tag(ty: &Type) -> Option<Cow<'static, str>> {
+    value_type(ty)?;
+    let parameter = crate::unions::parameter(ty.clone())?;
+    Some(crate::type_text::parameter_tag(&parameter))
+}
+
+/// Parse a saved assertion without erasing nested or union source identities.
 pub(crate) fn parse_type(tag: &str) -> Option<Type> {
-    let ty = if tag == "dictionary" {
-        Type::named("Toybox.Lang.Dictionary")
-    } else {
-        crate::joins::parse_type(tag)?
-    };
+    let parameter = crate::type_text::parameter(tag).ok()?;
+    let ty = parameter
+        .source_contract()
+        .map(|contract| Type::SourceValue(Box::new(contract)))
+        .unwrap_or_else(|| parameter.api_type());
     type_tag(&ty)?;
     Some(ty)
 }

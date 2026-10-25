@@ -144,6 +144,9 @@ fn nullable_source_casts_preserve_identity_and_require_fresh_non_null_proofs() {
         }
     "#,
     );
+    check(
+        "function f(value as Toybox.Lang.Object) as Token or Null {return value as Null or Token;}",
+    );
     for source in [
         "function f(value as Toybox.Lang.Object or Null) { return (value as Token or Null).value(); }",
         "function f(value as Toybox.Lang.Object or Null) { var t = value as Token or Null; var c = t; if (t != null) { return c.value(); } return 0; }",
@@ -151,7 +154,6 @@ fn nullable_source_casts_preserve_identity_and_require_fresh_non_null_proofs() {
         "function f(value as Toybox.Lang.Object) { var Token = 1; return value as Token or Null; }",
         "function f(value as Toybox.Lang.Object) { return value as Missing or Null; }",
         "class App extends Toybox.Application.AppBase { function f(value as Toybox.Lang.Object) { return value as App or Null; } }",
-        "function f(value as Toybox.Lang.Object) { return value as Null or Token; }",
     ] {
         assert!(compile_sources(&[source, CLASSES]).is_err(), "{source}");
     }

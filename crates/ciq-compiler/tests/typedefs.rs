@@ -102,7 +102,7 @@ fn alias_canonicalization_matches_explicit_types_and_existing_casts() {
         compile_function(
             "typedef T as Toybox.Lang.Number or Toybox.Lang.String; function f(n) {return n as T;}"
         )
-        .is_err()
+        .is_ok()
     );
 }
 

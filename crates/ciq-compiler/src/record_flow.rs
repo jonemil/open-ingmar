@@ -25,6 +25,8 @@ pub(crate) struct State {
     erased: bool,
     block: Option<BlockId>,
     edges: BTreeMap<BlockId, Roots>,
+    aliases: BTreeMap<Root, Roots>,
+    escaped: Roots,
 }
 
 pub(crate) fn has_view(ty: &Type) -> bool {
@@ -124,9 +126,39 @@ impl State {
             }
         }
     }
+    fn linked(&self, roots: &Roots) -> Roots {
+        let mut result = roots.clone();
+        let mut pending = roots.iter().cloned().collect::<Vec<_>>();
+        while let Some(root) = pending.pop() {
+            for next in self.aliases.get(&root).into_iter().flatten() {
+                if result.insert(next.clone()) {
+                    pending.push(next.clone());
+                }
+            }
+        }
+        result
+    }
+    fn link(&mut self, a: &Roots, b: &Roots) {
+        for left in a {
+            for right in b {
+                if left != right {
+                    self.aliases
+                        .entry(left.clone())
+                        .or_default()
+                        .insert(right.clone());
+                    self.aliases
+                        .entry(right.clone())
+                        .or_default()
+                        .insert(left.clone());
+                }
+            }
+        }
+    }
     fn merge(&mut self, other: &Self) {
         merge_refs(&mut self.values, &other.values);
         merge_refs(&mut self.edges, &other.edges);
+        merge_refs(&mut self.aliases, &other.aliases);
+        self.escaped.extend(other.escaped.iter().cloned());
         merge_refs(&mut self.locals, &other.locals);
         merge_refs(&mut self.parameters, &other.parameters);
         merge_refs(&mut self.fields, &other.fields);
@@ -176,11 +208,18 @@ impl State {
                 if schema(&ty).is_some() {
                     if let Some(children) = self.children.get(&(root.clone(), key.clone())) {
                         if let Some(child) = self.view(children, depth + 1) {
-                            ty = if crate::unions::alternatives(&ty).contains(&Type::Null) {
-                                child.with_null()
-                            } else {
-                                child
-                            };
+                            ty = crate::unions::normalize(
+                                crate::unions::alternatives(&ty)
+                                    .iter()
+                                    .map(|part| {
+                                        if matches!(part, Type::Options(_)) {
+                                            child.clone()
+                                        } else {
+                                            (*part).clone()
+                                        }
+                                    })
+                                    .collect(),
+                            );
                         }
                     }
                 }
@@ -274,12 +313,30 @@ impl State {
             );
         }
         let refs = |value: &ValueId| self.values.get(value).cloned().unwrap_or_default();
+        let stored: Vec<ValueId> = match op {
+            Operation::TupleNew { elements, .. } => elements.clone(),
+            Operation::ArrayFillMany { values, .. } => values.clone(),
+            Operation::ArrayFill { value, .. }
+            | Operation::ArrayWrite { value, .. }
+            | Operation::TupleWrite { value, .. }
+            | Operation::TupleAppend { value, .. }
+            | Operation::SelfFieldAssign { value, .. } => vec![*value],
+            Operation::DictionaryFill { entries, .. } => {
+                entries.iter().flat_map(|(k, v)| [*k, *v]).collect()
+            }
+            Operation::DictionaryWrite { value, .. } => vec![*value],
+            _ => vec![],
+        };
+        for value in stored {
+            self.escaped.extend(refs(&value));
+        }
         let mut result = None;
         let mut roots = Roots::new();
         if self.heap.is_empty()
             && !matches!(
                 op,
-                Operation::RecordBegin { .. }
+                Operation::Cast { .. }
+                    | Operation::RecordBegin { .. }
                     | Operation::SelfFieldRead { .. }
                     | Operation::MemberRead { .. }
                     | Operation::GlobalCall { .. }
@@ -291,6 +348,25 @@ impl State {
             return;
         }
         match op {
+            Operation::Cast {
+                result: r,
+                operand,
+                target,
+            } => {
+                result = Some(*r);
+                let previous = refs(operand);
+                let target = crate::casts::value_type(target)
+                    .map(|ty| ty.api_type())
+                    .unwrap_or_else(|| target.clone());
+                if let Some(fields) = schema(&target) {
+                    let root = Root::Value(*r);
+                    self.heap.insert(root.clone(), fields);
+                    roots.insert(root);
+                    self.link(&roots, &previous);
+                } else {
+                    roots = previous;
+                }
+            }
             Operation::Block { block } => self.block = Some(*block),
             Operation::JumpValue {
                 target: block,
@@ -541,7 +617,27 @@ impl State {
                 let child = self.seed(Root::Child(Box::new(parent), key.clone()), &ty);
                 self.children.insert(at.clone(), child);
             }
-            result.extend(self.children[&at].iter().cloned());
+            let own = self.children[&at].clone();
+            let parents = self.linked(&Roots::from([at.0.clone()]));
+            for parent in parents {
+                if parent == at.0 {
+                    continue;
+                }
+                let other = (parent.clone(), key.clone());
+                if !self.children.contains_key(&other) {
+                    let ty = self
+                        .heap
+                        .get(&parent)
+                        .and_then(|fields| fields.get(key))
+                        .cloned()
+                        .unwrap_or(Type::Any);
+                    let child = self.seed(Root::Child(Box::new(parent), key.clone()), &ty);
+                    self.children.insert(other.clone(), child);
+                }
+                let children = self.children[&other].clone();
+                self.link(&own, &children);
+            }
+            result.extend(own);
         }
         let _ = types;
         result
@@ -555,7 +651,8 @@ impl State {
         symbols: &BTreeMap<ValueId, String>,
         weak: bool,
     ) {
-        let roots = self.values.get(&receiver).cloned().unwrap_or_default();
+        let direct = self.values.get(&receiver).cloned().unwrap_or_default();
+        let roots = self.linked(&direct);
         if roots.is_empty() {
             return;
         }
@@ -576,16 +673,22 @@ impl State {
         for root in &roots {
             if let Some(fields) = self.heap.get_mut(root) {
                 if let Some(key) = symbols.get(&key) {
-                    let value = if weak || roots.len() != 1 {
+                    let value = if weak || direct.len() != 1 || !direct.contains(root) {
                         fields
                             .get(key)
                             .map(|old| join(old, &ty))
-                            .unwrap_or_else(|| ty.clone())
+                            .unwrap_or_else(|| {
+                                if matches!(root, Root::Builder(_)) {
+                                    ty.clone()
+                                } else {
+                                    Type::Any
+                                }
+                            })
                     } else {
                         ty.clone()
                     };
                     fields.insert(key.clone(), value);
-                    if weak || roots.len() != 1 {
+                    if weak || direct.len() != 1 || !direct.contains(root) {
                         self.children
                             .entry((root.clone(), key.clone()))
                             .or_default()
@@ -605,9 +708,19 @@ impl State {
         // Independently obtained external references may denote the same object.
         if roots.iter().any(|r| !matches!(r, Root::Builder(_))) {
             for (root, fields) in &mut self.heap {
-                if !roots.contains(root) && !matches!(root, Root::Builder(_)) {
-                    for old in fields.values_mut() {
-                        *old = join(old, &ty);
+                if !roots.contains(root)
+                    && (!matches!(root, Root::Builder(_)) || self.escaped.contains(root))
+                {
+                    if let Some(key) = symbols.get(&key) {
+                        if let Some(old) = fields.get_mut(key) {
+                            *old = join(old, &ty);
+                        } else if matches!(root, Root::Builder(_)) {
+                            fields.insert(key.clone(), ty.clone());
+                        }
+                    } else {
+                        for old in fields.values_mut() {
+                            *old = join(old, &ty);
+                        }
                     }
                 }
             }
@@ -641,6 +754,7 @@ pub(crate) fn needed(ops: &[LocatedOperation], parameters: &[ParameterType]) -> 
     parameters.iter().any(|p| includes(&p.api_type()))
         || ops.iter().any(|op| match &op.operation {
             Operation::RecordBegin { .. } => true,
+            Operation::Cast { target, .. } => includes(target),
             Operation::GlobalCall { result_type, .. }
             | Operation::ModuleCall { result_type, .. }
             | Operation::SelfCall { result_type, .. }

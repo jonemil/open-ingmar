@@ -312,7 +312,7 @@ fn source_comparable_requires_the_exact_member_signature() {
 }
 
 #[test]
-fn interface_contracts_do_not_enable_runtime_tests_or_unchecked_casts() {
+fn interface_names_runtime_tests_and_return_contracts_remain_checked() {
     for source in [
         "import Toybox.Lang; class Comparable { function initialize() {} }",
         "import Toybox.Lang; function f(o as Object) as Toybox.Lang.Number { return o instanceof Comparable; }",
