@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -40,10 +42,7 @@ fn method_arrays_preserve_signatures_construction_and_saved_stages() {
     let text = unit.to_ir_text();
     assert!(text.contains("result=method-array"));
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
-    assert!(
-        parse_unit_ir(&text.replace("result=method-array", "result=nullable-method-array"))
-            .is_err()
-    );
+    assert!(parse_unit_ir(&text.replace("result=method-array", "result=string-array")).is_err());
 }
 
 #[test]
@@ -84,7 +83,10 @@ fn method_array_invariance_and_payload_validation_survive_ir_reload() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Method>,b as Toybox.Lang.Array<Toybox.Lang.Method or Null>) as Void {a.addAll(b);}",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Method>) as Void {a.sort(null);}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "function f() as Toybox.Lang.Array<Toybox.Lang.Method or Null> {return [null];}";
     let f = compile_function(source).unwrap();

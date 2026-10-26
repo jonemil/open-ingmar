@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ArrayConstantValue, ArrayElement, Operation, ReturnType,
     api::{ApiContext, ApiLevel, Type},
@@ -97,7 +99,10 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
             let source = format!(
                 "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) {{ {body} }}"
             );
-            assert!(compile_function(&source).is_err(), "accepted {source}");
+            assert!(
+                checking::compile_function(&source).is_err(),
+                "accepted {source}"
+            );
         }
         for source in [
             format!(
@@ -110,7 +115,10 @@ fn nullable_boolean_char_arrays_keep_element_and_proof_contracts() {
                 "function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{literal}, null]; }}"
             ),
         ] {
-            assert!(compile_function(&source).is_err(), "accepted {source}");
+            assert!(
+                checking::compile_function(&source).is_err(),
+                "accepted {source}"
+            );
         }
     }
 }
@@ -159,7 +167,10 @@ fn reads_require_fresh_scalar_proofs_and_array_elements_remain_invariant() {
         "function f() as Toybox.Lang.Number { var a = [null]; return a[0]; }",
         "function f() { var a = [1, null]; return a[1].hashCode(); }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) { var n = a[0]; if (n != null) { a[0] = null; return n + 1; } return 0; }";
     let f = compile_function(source).unwrap();

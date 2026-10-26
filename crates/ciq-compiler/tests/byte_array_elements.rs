@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ArrayElement, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -55,7 +57,10 @@ fn byte_array_element_nullability_and_class_identity_cannot_be_widened() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.ByteArray or Null>) {if(a[0]!=null){return a[0].size();}return 0;}",
         "function f(n) as Toybox.Lang.Array<Toybox.Lang.ByteArray> {return new[n];}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.ByteArray or Null>) as Void {var b=a[0];if(b!=null){b.size();}}").unwrap();
     assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());

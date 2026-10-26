@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -67,7 +69,7 @@ fn array_contracts_are_invariant_and_reads_preserve_nullable_interfaces() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable or Null>) { if(a[0]!=null) { return a[0].compareTo(1); } else { return 0; } }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>) { return a[0].value(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let source = "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable or Null>) { var value=a[0]; if(value!=null) { return value.compareTo(1); } else { return 0; } }";
     let function = compile_function(source).unwrap();

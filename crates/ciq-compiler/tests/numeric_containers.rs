@@ -224,6 +224,6 @@ fn alias_containers_reject_covariance_and_unsupported_scalar_alternatives() {
         "function f(d as Lang.Dictionary<Lang.Decimal,Lang.Decimal>) as Void {d.put(1.5,1);}",
         "function f(d as Lang.Dictionary<Lang.Numeric,Lang.Numeric>) as Void {d.put('A',1);}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }

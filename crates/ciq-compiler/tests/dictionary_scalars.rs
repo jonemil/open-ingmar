@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, compile_sources, parse_function_ir,
@@ -75,18 +77,21 @@ fn nullable_lookup_requires_storage_proofs_and_mutable_contracts_are_invariant()
                 "d.put(null, null);".to_owned(),
             ] {
                 assert!(
-                    compile_function(&format!("function f(d as {receiver}) {{ {body} }}")).is_err()
+                    checking::compile_function(&format!(
+                        "function f(d as {receiver}) {{ {body} }}"
+                    ))
+                    .is_err()
                 );
             }
         }
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.{ty}>) {{ d.put(\"one\", null); }}"
         );
-        assert!(compile_function(&source).is_err());
+        assert!(checking::compile_function(&source).is_err());
         let source = format!(
             "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.{ty} or Null>) as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return d.values(); }}"
         );
-        assert!(compile_function(&source).is_err());
+        assert!(checking::compile_function(&source).is_err());
         for (parameter, result) in [
             (ty.to_owned(), format!("{ty} or Null")),
             (format!("{ty} or Null"), ty.to_owned()),
@@ -94,7 +99,7 @@ fn nullable_lookup_requires_storage_proofs_and_mutable_contracts_are_invariant()
             let source = format!(
                 "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.{parameter}>) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.{result}> {{ return d; }}"
             );
-            assert!(compile_function(&source).is_err());
+            assert!(checking::compile_function(&source).is_err());
         }
         let source = format!(
             "module D {{ function make() as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.{ty} or Null> {{ return {{\"one\" => {literal}}}; }} function f() {{ return D.make().size(); }} }}"
@@ -103,7 +108,7 @@ fn nullable_lookup_requires_storage_proofs_and_mutable_contracts_are_invariant()
         let text = unit.to_ir_text();
         let edited = text.replace(
             &format!("make result=dictionary(string=>nullable-{tag})"),
-            &format!("make result=dictionary(string=>{tag})"),
+            &format!("make result=dictionary(integer=>nullable-{tag})"),
         );
         assert_ne!(text, edited);
         assert!(parse_unit_ir(&edited).is_err());

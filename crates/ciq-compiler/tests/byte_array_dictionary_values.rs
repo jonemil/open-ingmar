@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     DictionaryType, DictionaryValue, Operation, ParameterType,
     api::{ApiContext, ApiLevel},
@@ -49,7 +51,10 @@ fn dictionary_values_cannot_erase_class_nullability_or_lookup_proofs() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null> {return d;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray or Null>) as Toybox.Lang.Array<Toybox.Lang.ByteArray> {return d.values();}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f=compile_function("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.ByteArray>) as Void {var b=d[\"a\"];if(b!=null){b.size();}}").unwrap();
     assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());

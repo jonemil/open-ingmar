@@ -31,14 +31,36 @@ function overlap(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.N
 function bad() as Toybox.Lang.Number { return "wrong"; }
 ```
 
-Experimentally observed, 2026-10-26: the
-[partial-match specimen](../../examples/compiler-partial-matches/README.md)
-compiles with SDK 9.2.0 gradual checking (`fr265`, minimum API 5.0.0, `-O 0`).
-SDK and independently generated programs produce the same eight expected
-console lines in the simulator. This confirms matching runtime alternatives
-through native/user calls, returns, parameter/instance-field stores, and
-Array/Dictionary/record construction. It does not establish behavior for a
-non-matching runtime alternative or different container reference contracts.
+Experimentally observed, 2026-10-26, SDK 9.2.0, `fr265`, minimum API 5.0.0,
+`-O 0`: overlapping Array parameters compile in gradual/informative mode in
+both directions (`Array<Number>` and `Array<Number or String>`), including
+nested Arrays. Overlapping Dictionary value parameters also compile. Strict
+rejects these cases. `Array<Number>` to `Array<Object>` and `Array<String>` to
+`Array<Number>` fail informative checking; nominal inheritance does not make
+container parameters covariant. These observations distinguish uncertain
+matches from the guide's equivalent-parameter rule for proven matches.
+
+The [partial-match specimen](../../examples/compiler-partial-matches/README.md)
+compiles under informative checking and produces the same 14 expected console
+lines in SDK and independently generated simulator runs. It covers native/user
+calls, returns, parameter/instance-field stores, Array/Dictionary/record
+construction, nested Array views, Dictionary key/value views, and shared
+mutations through narrowed/widened Array aliases. No failing runtime alternative
+was executed; successful matching inputs do not establish that a narrowed view
+is safe after arbitrary writes through another alias.
+
+Separate authored probes show that `A or B` returned as `A` compiles in
+gradual/informative mode and fails strict checking. In contrast, structural
+method results `Number or String` versus `Number`, including a class used as an
+interface implementation, and mutable structural fields with those differing
+contracts fail informative checking. Reproduce by returning the wider shape
+under the narrower annotation in the minimal console scaffold; the
+[boundary tests](../../crates/ciq-compiler/tests/type_checking.rs) retain the
+structural forms. Source-class partial lowering is separate from this evidence.
+
+SDK Dictionary<String, Number-or-String> narrowing also compiled. Our parser
+currently admits established numeric aliases such as Integer in that position,
+with heterogeneous native union domains retained in the Dictionary worklist.
 
 The [public type guide][type-guide] describes False/Maybe/True matches and the
 four policies. The [source contract][checking] states our current limits.

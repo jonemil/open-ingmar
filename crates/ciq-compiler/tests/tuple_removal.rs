@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 
 const PREFIX: &str = r#"
@@ -67,7 +69,10 @@ fn stale_positional_and_typed_array_claims_are_rejected_after_removal() {
         "function f(x as Pair) {x.remove();}",
         "function f(x as Pair) {x.removeAll(1,2);}",
     ] {
-        assert!(compile_sources(&[PREFIX, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[PREFIX, body]).is_err(),
+            "{body}"
+        );
     }
     let unit = check("function f(x as Pair) as Lang.Number {x.remove(1);return x.size();}");
     let text = unit.to_ir_text();

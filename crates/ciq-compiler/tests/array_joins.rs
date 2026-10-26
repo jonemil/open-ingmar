@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -71,14 +73,14 @@ fn joins_preserve_invariance_without_implicit_container_conversion() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number or Null>) as Toybox.Lang.Array<Toybox.Lang.Number or Null> { return true ? a : null; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Comparable>, b as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number> { return true ? a : b; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let text = compile_function(&source("Toybox.Lang.Number or Null"))
         .unwrap()
         .to_ir_text();
     for tag in [
-        "array-number",
-        "array-nullable-char",
+        "array-char",
+        "array-boolean",
         "nullable-array-number",
         "array-array-number",
         "array-dc",

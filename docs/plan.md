@@ -37,10 +37,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Establish SDK partial-match rules for class-containing unions (`A or B`
-  passed/returned as `A`), structural method signatures, and parameterized
-  container references (`Array<Number or String>` as `Array<Number>`); implement
-  accepted boundaries without losing source witnesses or mutable alias rules.
+- [ ] Accept SDK partial source-class matches (`A or B` passed/returned as `A`)
+  at calls, returns, and stores. Retain actual class alternatives for unit
+  witnesses, report uncertainty under informative/strict checking, and preserve
+  exact field/dispatch metadata across native and saved IR.
 - [ ] Probe and support SDK partial operator/index/member-receiver cases:
   Number-or-String subtraction, Number-or-String Array indices, and a union
   whose alternatives do not all expose the invoked member. Preserve API,
@@ -193,6 +193,9 @@ executable profiles.
 - [ ] Preserve exact source-class values through storage, `get`, and `values`.
 - [ ] Support explicit nested key/value parameters and nested Dictionary/Array
   literals; retain inner contracts through lookup, writes, and enumeration.
+- [ ] Support SDK-valid heterogeneous native union key/value annotations, such as
+  `Dictionary<String, Number or String>`; probe key unions and retain Null-key
+  restrictions independently of value unions.
 - [ ] Infer empty, Any-valued, and heterogeneous Dictionary literals without
   immediate context under the language's changing-local/union rules.
 - [ ] Support indexed compound assignment and numeric updates with single

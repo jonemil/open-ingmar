@@ -723,22 +723,25 @@ fn scalar_comparable(actual: &api::Type) -> bool {
     })
 }
 
-/// Accept a runtime value boundary when a native union has at least one
-/// matching alternative. Other alternatives remain possible runtime failures.
-/// This does not relax invariant containers, structural signatures, exact
-/// source identities, receiver profiles, arity, or API availability.
+/// Accept a native value boundary with matching or overlapping contracts.
+/// Container parameters require equality or uncertain union overlap, including
+/// nested containers; nominal inheritance alone does not match them. Other
+/// alternatives remain possible runtime failures. Exact source/structural
+/// witnesses, receiver profiles, arity, and API checks remain independent.
 pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool {
-    fn nominal(ty: &api::Type) -> bool {
+    fn native_contract(ty: &api::Type) -> bool {
         match ty {
-            api::Type::Named(_) | api::Type::Null => true,
-            api::Type::Union(parts) => parts.iter().all(nominal),
+            api::Type::Named(_) | api::Type::Null | api::Type::Any => true,
+            api::Type::Union(parts) => parts.iter().all(native_contract),
+            api::Type::Array(element) => native_contract(element),
+            api::Type::Dictionary { key, value } => native_contract(key) && native_contract(value),
             _ => false,
         }
     }
     accepts(expected, actual)
-        || nominal(expected)
-            && nominal(actual)
-            && matches!(actual, api::Type::Union(parts) if parts.iter().any(|part| accepts(expected, part)))
+        || native_contract(expected)
+            && native_contract(actual)
+            && crate::type_check::compatibility(expected, actual) == crate::type_check::Match::Maybe
 }
 
 /// Check exact types, declared inheritance, verified scalar Comparable witnesses,

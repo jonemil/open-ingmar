@@ -2133,7 +2133,7 @@ impl CompilationUnit {
             .map(|c| crate::api::Type::SourceValue(Box::new(c)))
             .unwrap_or_else(|| function.value_types[&value].api_type());
         // A partial native match carries its actual union through IR. Exact
-        // source/container witnesses still use the full proof below.
+        // source/structural witnesses still use the full proof below.
         if !crate::native::accepts(expected, &actual)
             && crate::native::accepts_boundary(expected, &actual)
         {

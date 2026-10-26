@@ -68,7 +68,8 @@ are excluded from native union atoms; tuple atoms retain nested source slots.
 The [frontend union rules](../frontend/README.md#native-unions) own assignment,
 operation, and narrowing semantics. IR validation recomputes these checks from
 operands and CFG facts; edited result/read metadata cannot invent a type proof.
-Native nominal value boundaries accept overlapping unions under the
+Native value boundaries accept overlapping nominal unions and supported
+Array/Dictionary parameter overlaps under the
 [checking contract](../frontend/README.md#type-checking-policy), retaining the
 actual alternatives and the destination's declaration. These are dynamic
 obligations, not proofs that every alternative fits. Saved IR applies the same
@@ -76,8 +77,10 @@ boundary rules; strict source reporting is not serialized. Canonical headers
 retain an explicit declared result when return-value inference would widen it.
 Both branch edges carry direct class/Null refinements, and storage writes kill
 those facts. Every possible native receiver/operand must support an operation;
-result alternatives are normalized. Container reference unions retain invariant
-content contracts. Fields and lexical casts retain their existing domains.
+result alternatives are normalized. Container parameters use invariant
+equality; partial native union overlaps are dynamic obligations, including
+inside nested Arrays/Dictionaries. Source/structural parameters retain exact
+witness requirements. Fields and lexical casts retain their existing domains.
 
 ### Source interface contracts
 
@@ -453,8 +456,8 @@ when neither side is Any. Uncontextual source literals retain positional
 contracts, including individual Any slots. Unknown-length dynamic-element
 Arrays use saved element tag `any`, signature/call tag `any-array`, and
 join tag `array-any`. Reads produce Any; fills and writes admit values including
-Null. The element contract is invariant: an existing Array<Number> is not an
-Array<Any>. Dynamic-element arrays use ordinary construction/fill operations;
+Null. Array<Number> and Array<Any> remain distinct contracts; crossing between
+them is uncertain under the [checking policy](../frontend/README.md#type-checking-policy). Dynamic-element arrays use ordinary construction/fill operations;
 the per-type scalar constant format does not admit `any` constants. This does
 not introduce Dictionary Any parameters or new source annotation syntax.
 Void calls still cannot produce values, and an Any result
@@ -741,9 +744,10 @@ The [join grammar](grammar.md#type-tags) defines admitted contracts and tags.
 Array tags prefix the element tag with `array-`, such as `array-string` or
 `array-view`. Source contracts use `source(Class@Base)` or
 `nullable-source(Class@Base)`.
-Incoming Arrays must match the invariant element contract exactly; non-null and
-nullable elements do not widen to a common Array type. A union instead retains
-each distinct container contract as an alternative. Array tags describe element
+Incoming Arrays compare by invariant parameter equality; partial native
+parameter overlaps use the [checking policy](../frontend/README.md#type-checking-policy).
+Non-null and nullable elements do not become one equal Array type. A union
+retains each distinct container contract as an alternative. Array tags describe element
 nullability; nullable references use union tags. Availability checks apply to the
 parameter and its incoming values, including Char's API 1.3.0 requirement.
 

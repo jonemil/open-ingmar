@@ -185,7 +185,10 @@ fn inferred_literal_consumers_check_slots_and_keep_explicit_arrays_invariant() {
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.Number>>) as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.Number or Null>> { return x; }",
         "function f(x as Toybox.Lang.Array<[Toybox.Lang.Number]>) as Toybox.Lang.Array<Toybox.Lang.Array<Toybox.Lang.String>> { return x; }",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

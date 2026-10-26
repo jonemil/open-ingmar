@@ -172,7 +172,7 @@ def run(args):
             for name in ("ciq-compiler", "ciq-dis", "ciq-asm", "ciq-package"):
                 shutil.copy2(ROOT / "target" / "debug" / name, binaries / name)
         rust = [
-            ("workspace-tests", "rust.tests", ["cargo", "test", "--locked", "--workspace"]),
+            ("workspace-tests", "rust.tests", ["cargo", "test", "--locked", "--workspace", "--no-fail-fast"]),
             ("clippy", "rust.lint-format", ["cargo", "clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings"]),
             ("format", "rust.lint-format", ["cargo", "fmt", "--all", "--", "--check"]),
         ]

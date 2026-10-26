@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{ArrayElement, compile_sources, parse_unit_ir};
 
 const PREFIX: &str = "using Toybox.Lang; typedef Nulls as Lang.Array<Null>;";
@@ -59,7 +61,10 @@ fn null_only_arrays_reject_non_null_writes_and_invariant_widening() {
         "function f(x as Lang.Array<Lang.Number or Null>) as Nulls {return x;}",
         "function f() as Nulls {return [null,1];}",
     ] {
-        assert!(compile_sources(&[PREFIX, source]).is_err(), "{source}");
+        assert!(
+            checking::compile_sources(&[PREFIX, source]).is_err(),
+            "{source}"
+        );
     }
     let text =
         check("function f() as Lang.Array<Lang.Number or Null>{return [1,null];}").to_ir_text();

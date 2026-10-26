@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -51,10 +53,7 @@ fn weak_container_contracts_survive_saved_stages_and_api_checks() {
     let unit=compile_sources(&["module M {function make(w as Toybox.Lang.WeakReference) as Toybox.Lang.Array<Toybox.Lang.WeakReference>{return [w];}function forward(w as Toybox.Lang.WeakReference) as Toybox.Lang.Array<Toybox.Lang.WeakReference>{return M.make(w);}}"] ).unwrap();
     let text = unit.to_ir_text();
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
-    let edited = text.replace(
-        "result=weak-reference-array",
-        "result=nullable-weak-reference-array",
-    );
+    let edited = text.replace("result=weak-reference-array", "result=string-array");
     assert_ne!(text, edited);
     assert!(parse_unit_ir(&edited).is_err());
 }
@@ -103,7 +102,10 @@ fn weak_container_invariance_and_null_constants_are_rechecked() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.WeakReference>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.WeakReference or Null> {return d;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.WeakReference,Toybox.Lang.Number>) as Void {}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     for source in [
         "function f() as Toybox.Lang.Array<Toybox.Lang.WeakReference or Null> {return [null];}",

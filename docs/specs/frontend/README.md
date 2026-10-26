@@ -72,18 +72,21 @@ messages point to the enclosing function declaration. Inherited SDK callback
 contracts are not treated as omitted annotations. Explicit unchecked casts
 remain assertions rather than runtime checks.
 
-Gradual/informative checking accepts a partially matching native union at
-runtime value boundaries when at least one alternative fits. This applies to
-nominal native classes, scalar types, and Null, including values passed to
-calls, returned, stored, or inserted into containers. The actual union remains
+Gradual/informative checking accepts partially matching native contracts at
+runtime value boundaries. Nominal native unions need a matching alternative;
+Array/Dictionary parameters compare by equality, allowing uncertain overlaps
+inside unions and nested containers. Nominal inheritance alone is not container
+covariance. This applies to values passed to calls, returned, stored, or inserted
+into containers. The actual union remains
 in IR; no cast, conversion, or runtime guard is inserted. Informative reports
 these uncertain boundaries; Strict rejects them. Disjoint contracts remain
 errors at every checked level. A matching alternative does not guarantee that
 the actual runtime value will match.
 
-Disabled checking and partial matches involving source-class witnesses,
-structural/container contracts, or otherwise unsupported operations remain
-outside this profile. Structural matching
+Disabled checking, partial source-class matches, and otherwise unsupported
+operations remain outside this profile. Partial container matching is limited
+to nominal native parameters, Any, Null, unions, and nested Arrays/Dictionaries;
+source, structural, callback, and tuple parameters retain their exact checks. Structural matching
 distinguishes unknown member contracts from missing or incompatible members;
 mutable fields and structural signatures retain their invariant requirements.
 Exact source/interface witnesses are established by unit validation before
@@ -141,10 +144,17 @@ representations. Any absorbs other value alternatives; Void is never a union
 alternative. No subtype subsumption or implicit scalar conversion is performed.
 A native nominal value union may cross a runtime boundary when at least one
 alternative matches under gradual/informative checking. Strict requires all
-alternatives to match. Array and Dictionary reference contracts remain invariant:
-passing an `Array<Number or String>` as `Array<Number>` is rejected. Inserting a
-Number-or-String value into an existing `Array<Number>` is a runtime boundary and
-may report uncertainty; it does not change the Array's declared element type.
+alternatives to match. Container contracts use invariant equality, with partial
+union overlap classified as uncertainty rather than a proven match.
+`Array<Number or String>` and `Array<Number>` can cross a gradual/informative
+boundary in either direction; strict checking rejects that uncertainty.
+`Array<Number>` and `Array<Object>` remain incompatible despite nominal
+inheritance. Matching recurses through supported nested Array/Dictionary
+parameters; one disjoint Dictionary parameter rejects the whole contract.
+These views share the original mutable object. No copy or guard protects a
+narrower view from writes through another alias, so later runtime type errors
+remain possible. Neither the declared contracts nor the actual caller types
+are rewritten by the boundary.
 
 Calls, local writes, returns, and conditional joins preserve native alternatives.
 Each possible receiver must support a member/index operation and accept its
@@ -304,7 +314,9 @@ results, including the zero-iteration path. This stabilizes the stored type
 without enumerating tuple lengths. Subsequent reads require the element union;
 they cannot retain a positional slot proof. Outside loop inference, an Array's
 derived element contract is invariant: later writes/calls must satisfy it, and
-an `Array<Number>` tail does not satisfy an `Array<Number or String>` parameter.
+an `Array<Number>` tail does not prove an `Array<Number or String>` contract.
+Supported native call boundaries may accept this as an uncertain match under
+[gradual/informative checking](#type-checking-policy).
 
 For named receivers, append arguments evaluate before the final receiver read.
 A named local cannot be rebound by argument expressions, so its reference is unchanged; nested
@@ -366,8 +378,10 @@ Tuple receivers also support `size`, `equals`, `hashCode`, `toString`,
 - `slice` returns the selected subtuple when both bounds are immediate Numbers
   or statically Null. Null selects the beginning/end, negative bounds count from
   the end, and out-of-range bounds clip; an inverted range is empty. Dynamic
-  bounds produce `Array<Any>`, which cannot satisfy an invariant typed Array or
-  a positional return annotation. A mutable local initialized with a Number
+  bounds produce `Array<Any>`, which does not prove a typed Array or positional
+  return contract. Native typed Array boundaries may admit the uncertainty
+  under [gradual/informative checking](#type-checking-policy); positional
+  return annotations still require a shape proof. A mutable local initialized with a Number
   does not establish an immediate-bound proof.
 - `indexOf` accepts a search value without restricting it to existing slot
   types and returns Number under the ordinary Array equality/search contract.
@@ -3316,8 +3330,9 @@ Array elements may themselves be parameterized Arrays, supported typed
 Dictionaries, or positional tuples, optionally with Null. For example,
 `Array<Array<Number>>`, `Array<Dictionary<String, Number>>`, and
 `Array<[Number, String]>` preserve the complete inner contract. Existing
-Array references remain invariant at every level; native base projections
-cannot establish an exact source-class identity.
+Array reference parameters compare invariantly at every level. Supported
+native overlaps follow the [checking policy](#type-checking-policy); native
+base projections cannot establish an exact source-class identity.
 
 Expected element types flow recursively into literal construction, including
 empty literals and conditional elements. Inner values retain their own
@@ -3962,7 +3977,7 @@ This does not establish exception safety or callback termination.
 Non-null Arrays support Comparable and Comparator elements, optionally `or
 Null`, from API 5.0.0. Parameter/result annotations use
 `Array<Toybox.Lang.Comparable>` and the corresponding Comparator/nullable forms.
-Array contracts stay invariant: `Array<Number>` cannot widen to
+Under strict checking, Array contracts stay invariant: `Array<Number>` cannot widen to
 `Array<Comparable>`, and non-null element Arrays cannot widen to
 nullable-element Arrays.
 

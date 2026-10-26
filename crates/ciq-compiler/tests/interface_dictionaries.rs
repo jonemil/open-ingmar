@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     DictionaryScalar, Operation,
     api::{ApiContext, ApiLevel},
@@ -68,7 +70,7 @@ fn dictionaries_preserve_invariance_missing_key_null_and_api_requirements() {
                     "compare(1,2)"
                 };
                 let unsafe_read = format!("function f(d as {ty}) {{ return {lookup}.{member}; }}");
-                assert!(compile_function(&unsafe_read).is_err());
+                assert!(checking::compile_function(&unsafe_read).is_err());
                 let guarded = format!(
                     "function f(d as {ty}) {{ var v={lookup}; if(v!=null) {{return v.{member};}} else {{return 0;}} }}"
                 );
@@ -86,7 +88,7 @@ fn dictionaries_preserve_invariance_missing_key_null_and_api_requirements() {
                 let source = format!(
                     "module M {{ function take(d as {ty}) {{return d.size();}} function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,{other}>) {{return M.take(d);}} }}"
                 );
-                assert!(compile_sources(&[&source]).is_err());
+                assert!(checking::compile_sources(&[&source]).is_err());
             }
         }
     }

@@ -7,7 +7,8 @@ use std::{collections::BTreeMap, fmt};
 
 /// Ambiguity reporting for the currently supported checked source profile.
 /// Definite errors and IR invariants remain errors at every level. Disabled
-/// checking and partial source/container/operation profiles remain unsupported.
+/// checking and partial source-class matches remain unsupported. Operations
+/// retain their independently validated executable profiles.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TypeCheckLevel {
     /// Report definite errors without reporting ambiguous types.
@@ -124,6 +125,34 @@ fn invariant(expected: &Type, actual: &Type) -> Match {
         Match::No
     }
 }
+/// Compare container parameters by equality, allowing uncertain union overlap
+/// recursively. Nominal inheritance is not container covariance; structural
+/// fields and method signatures continue to use their own invariant comparison.
+fn container_match(expected: &Type, actual: &Type) -> Match {
+    if crate::structural::same_type(expected, actual) {
+        return Match::Yes;
+    }
+    if *expected == Type::Any || *actual == Type::Any {
+        return Match::Maybe;
+    }
+    match (expected, actual) {
+        (Type::Union(parts), other) | (other, Type::Union(parts)) => {
+            if parts
+                .iter()
+                .any(|part| container_match(part, other) != Match::No)
+            {
+                Match::Maybe
+            } else {
+                Match::No
+            }
+        }
+        (Type::Array(a), Type::Array(b)) => container_match(a, b),
+        (Type::Dictionary { key: a, value: b }, Type::Dictionary { key: c, value: d }) => {
+            all([container_match(a, c), container_match(b, d)])
+        }
+        _ => Match::No,
+    }
+}
 /// Classify native value boundaries without conflating unknown/overlapping
 /// types with disjoint types. Exact class witnesses remain unit obligations.
 pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
@@ -171,17 +200,9 @@ pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
             .slots()
             .iter()
             .map(|slot| compatibility(element, &slot.api_type()))),
-        (Type::Array(a), Type::Array(b)) => {
-            if contains_any(a) || contains_any(b) {
-                Match::Maybe
-            } else if crate::native::accepts(expected, actual) {
-                Match::Yes
-            } else {
-                Match::No
-            }
-        }
+        (Type::Array(a), Type::Array(b)) => container_match(a, b),
         (Type::Dictionary { key: a, value: b }, Type::Dictionary { key: c, value: d }) => {
-            all([invariant(a, c), invariant(b, d)])
+            all([container_match(a, c), container_match(b, d)])
         }
         (Type::Structural(shape), _) => {
             if !crate::native::accepts(&Type::named("Toybox.Lang.Object"), actual) {

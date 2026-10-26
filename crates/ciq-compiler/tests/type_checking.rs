@@ -119,11 +119,11 @@ fn partial_match_application_preserves_declared_results_and_complete_prg() {
 }
 
 #[test]
-fn partial_matches_do_not_authorize_disjoint_or_invariant_contracts() {
+fn partial_matches_do_not_authorize_disjoint_contracts_or_nominal_covariance() {
     for source in [
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Boolean {return x;}",
-        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Array<Toybox.Lang.Number> {return x;}",
-        "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> {return x;}",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Object> {return x;}",
+        "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> {return x;}",
         "class A {} class B {} function f(x as A or B) as A {return x;}",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return x.length();}",
     ] {
@@ -147,6 +147,65 @@ fn partial_matches_do_not_authorize_disjoint_or_invariant_contracts() {
         compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
         Err(CompileError::TypeChecking(_))
     ));
+}
+
+#[test]
+fn overlapping_container_parameters_remain_dynamic_in_both_directions() {
+    let cases = [
+        "using Toybox.Lang; function f(x as Lang.Array<Lang.Number or Lang.String>) as Lang.Array<Lang.Number> {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Array<Lang.Number>) as Lang.Array<Lang.Number or Lang.String> {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Array<Lang.Array<Lang.Number or Lang.String>>) as Lang.Array<Lang.Array<Lang.Number>> {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Dictionary<Lang.String,Lang.Integer>) as Lang.Dictionary<Lang.String,Lang.Number> {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Dictionary<Lang.Number,Lang.String>) as Lang.Dictionary<Lang.Integer,Lang.String> {return x;}",
+        "using Toybox.Lang; function take(x as Lang.Array<Lang.Number>) as Void {} function f(x as Lang.Array<Lang.Number or Lang.String>) as Void {take(x);}",
+        "using Toybox.Lang; class C {var values as Lang.Array<Lang.Number>;function initialize(x as Lang.Array<Lang.Number or Lang.String>){self.values=x;}}",
+        "using Toybox.Lang; function f(a as Lang.Array<Lang.Number>,x as Lang.Array<Lang.Number or Lang.String>) as Void {a=x;}",
+    ];
+    for source in cases {
+        let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Informative))
+            .unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary),
+            "{source}"
+        );
+        assert!(!report.artifact.to_ir_text().contains(".cast "));
+        common::pipeline(report.artifact);
+        assert!(compile_sources_with_options(&[source], options(TypeCheckLevel::Gradual)).is_ok());
+        assert!(
+            matches!(
+                compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
+                Err(CompileError::TypeChecking(_))
+            ),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn structural_signatures_and_disjoint_nested_parameters_remain_invariant() {
+    for source in [
+        "using Toybox.Lang; typedef A as interface {function read() as Lang.Number;}; typedef B as interface {function read() as Lang.Number or Lang.String;}; function f(x as B) as A {return x;}",
+        "using Toybox.Lang; function f(x as interface {var value as Lang.Number or Lang.String;}) as interface {var value as Lang.Number;} {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Array<Lang.Array<Lang.Number>>) as Lang.Array<Lang.Array<Lang.Object>> {return x;}",
+        "using Toybox.Lang; function f(x as Lang.Dictionary<Lang.Number,Lang.Integer>) as Lang.Dictionary<Lang.String,Lang.Number> {return x;}",
+    ] {
+        for level in [
+            TypeCheckLevel::Gradual,
+            TypeCheckLevel::Informative,
+            TypeCheckLevel::Strict,
+        ] {
+            assert!(
+                matches!(
+                    compile_sources_with_options(&[source], options(level)),
+                    Err(CompileError::Source(_))
+                ),
+                "{source}"
+            );
+        }
+    }
 }
 
 #[test]

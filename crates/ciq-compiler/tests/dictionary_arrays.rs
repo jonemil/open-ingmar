@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, parse_function_ir, parse_function_ir_with_api,
@@ -55,7 +57,10 @@ fn enumeration_rejects_erasure_wrong_arity_and_incompatible_results() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null>) as Toybox.Lang.Array<Toybox.Lang.Number> { return d.values(); }",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.String or Null>) { return d.values()[0].length(); }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number>) { return d.keys()[0].length(); }").unwrap();
     assert!(

@@ -141,7 +141,7 @@ fn symbol_containers_do_not_widen_or_invent_scalar_payloads() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Symbol,Toybox.Lang.Symbol>){d.put(1,:alpha);}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Symbol or Null,Toybox.Lang.Number>){return d.size();}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     for operation in [
         ".array-constant %0 symbol 0x00000001",

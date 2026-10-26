@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_sources, parse_unit_ir,
@@ -59,7 +61,7 @@ fn native_profiles_and_literal_slice_proofs_are_rechecked() {
         "function f(x as Pair or Null) {return x.reverse();}",
     ] {
         assert!(
-            compile_sources(&[&format!(
+            checking::compile_sources(&[&format!(
                 "using Toybox.Lang;typedef Pair as [Lang.Number,Lang.String];{body}"
             )])
             .is_err(),

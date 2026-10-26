@@ -11,7 +11,8 @@ python3 scripts/check-workspace.py run --output scratch/workspace-checks/new-run
 ```
 
 Output must be a new directory. Default checks are workspace tests, Clippy, and
-formatting. Select `--audit` for language/binary changes, `--rustdoc` for public
+formatting. Workspace tests collect all failing targets before returning a
+failure verdict. Select `--audit` for language/binary changes, `--rustdoc` for public
 API/docs changes, and `--msrv` when the declared minimum Rust version needs
 checking. MSRV is read from the workspace manifest. The SDK index has the same
 meaning as in the [example audit](#example-toolchain-audit); omit it to use the

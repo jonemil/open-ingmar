@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     ArrayElement, DictionaryKey, DictionaryType, DictionaryValue, ReturnType,
@@ -156,7 +158,7 @@ fn object_storage_does_not_invent_covariance_or_implicitly_recover_erased_types(
         "function f() as Lang.Array<Lang.Object> {return new[2];}",
         "function f() as Lang.Dictionary<Lang.Object,Lang.Object> {return {};}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 

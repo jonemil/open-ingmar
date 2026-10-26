@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::Program;
 use ciq_compiler::{
     ArrayElement, FieldKind, NativeClass,
@@ -103,7 +105,7 @@ fn field_contracts_contextualize_literals_without_container_covariance() {
         let source = format!(
             "class C {{var value as {field};function initialize(v as {argument}){{self.value=v;}}}}"
         );
-        assert!(compile_sources(&[&source]).is_err(), "{source}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
     }
 }
 
@@ -172,7 +174,7 @@ fn field_initialization_and_saved_edits_are_rechecked() {
             &format!("self.get();self.value={initial};"),
         ] {
             let invalid = source.replace(&format!("self.value={initial};"), setup);
-            assert!(compile_sources(&[&invalid]).is_err(), "{invalid}");
+            assert!(checking::compile_sources(&[&invalid]).is_err(), "{invalid}");
         }
         for suffix in ["=null", "or Null", "=1"] {
             if ty == "Lang.Object" && suffix == "or Null" {
@@ -182,12 +184,14 @@ fn field_initialization_and_saved_edits_are_rechecked() {
                 &format!("var value as {ty};"),
                 &format!("var value as {ty} {suffix};"),
             );
-            assert!(compile_sources(&[&invalid]).is_err(), "{invalid}");
+            assert!(checking::compile_sources(&[&invalid]).is_err(), "{invalid}");
         }
     }
     assert!(
-        compile_sources(&["class C {var value as Lang.Dictionary;function initialize(){}}"])
-            .is_err()
+        checking::compile_sources(&[
+            "class C {var value as Lang.Dictionary;function initialize(){}}"
+        ])
+        .is_err()
     );
 }
 
@@ -253,12 +257,12 @@ fn dictionary_joins_preserve_invariance_without_implicit_conversion() {
     assert_ne!(text, edited);
     assert!(ciq_compiler::parse_function_ir(&edited).is_err());
     let invalid = source.replace("return flag?a:b;", "return flag?a:null;");
-    assert!(ciq_compiler::compile_function(&invalid).is_err());
+    assert!(checking::compile_function(&invalid).is_err());
     let invalid = source.replace(
         "b as Lang.Dictionary<Lang.String,Lang.Number>",
         "b as Lang.Dictionary<Lang.String,Lang.Object>",
     );
-    assert!(ciq_compiler::compile_function(&invalid).is_err());
+    assert!(checking::compile_function(&invalid).is_err());
 }
 
 #[test]

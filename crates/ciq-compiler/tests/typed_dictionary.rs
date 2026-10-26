@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     DictionaryKey, DictionaryType, DictionaryValue, Operation, ReturnType, compile_function,
     compile_sources, parse_function_ir, parse_unit_ir,
@@ -69,10 +71,13 @@ fn parameters_calls_and_local_reassignment_keep_invariant_types() {
             "module D {{ function take(d as {NUMBER}) {{ return d.size(); }}
             function pass(d as {other}) {{ return D.take(d); }} }}"
         );
-        assert!(compile_sources(&[&source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[&source]).is_err(),
+            "accepted {source}"
+        );
     }
     let opaque = format!("function f(d as Toybox.Lang.Dictionary) as {NUMBER} {{ return d; }}");
-    assert!(compile_function(&opaque).is_err());
+    assert!(checking::compile_function(&opaque).is_err());
 }
 
 #[test]

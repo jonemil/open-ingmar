@@ -194,7 +194,8 @@ fn dynamic_lengths_and_elements_preserve_checked_container_contracts() {
         "ciq-unit\n.owner global\nciq-ir\n.function use parameters=1 parameter-types=number-array\n.integer %0 0\n.return %0\n.end\n.owner global\nciq-ir\n.function f\n.array-new %0 any\n.call-global %1 use %0\n.return %1\n.end\n",
     ] {
         if text.starts_with("ciq-unit") {
-            assert!(parse_unit_ir(text).is_err());
+            // An unknown element contract may cross a gradual typed boundary.
+            assert!(parse_unit_ir(text).is_ok());
         } else {
             assert!(parse_function_ir(text).is_err());
         }

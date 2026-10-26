@@ -2,7 +2,9 @@
 
 [app.mc](app.mc) passes Number-or-String values through Number arguments,
 results, parameter/field stores, container construction, and a native call.
-Runtime inputs select the matching alternatives. The wider actual types remain
+It also narrows and widens Array views, matches nested Array and Dictionary
+parameters, and checks shared mutations through the original and narrowed
+references. Runtime inputs select matching alternatives. The actual types remain
 in IR; compilation inserts no casts or runtime guards. Other alternatives may
 still fail at runtime. Compare the full console with [expected.txt](expected.txt).
 
@@ -23,5 +25,5 @@ Informative checking reports these boundaries; strict checking rejects them.
 See [checking policies](../../docs/specs/frontend/README.md#type-checking-policy).
 For the SDK reference, copy the [minimal console scaffold](../minimal-console/README.md)
 into ignored scratch storage, replace `source/App.mc` with this source, and set
-`project.typecheck = gradual` in its Jungle file and the manifest minimum API to
+`project.typecheck = informative` in its Jungle file and the manifest minimum API to
 5.0.0. Reference: SDK 9.2.0, `fr265`, optimization disabled.

@@ -100,7 +100,10 @@ fn dictionary_method_invariance_and_constant_validation_survive_saved_ir() {
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Method,Toybox.Lang.Method>) as Toybox.Lang.Dictionary<Toybox.Lang.Method,Toybox.Lang.Method or Null> {return d;}",
         "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Method or Null,Toybox.Lang.Number>) as Void {}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "function f() as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Method or Null> {return {\"empty\"=>null};}";
     let f = compile_function(source).unwrap();
@@ -127,7 +130,7 @@ fn dictionary_method_invariance_and_constant_validation_survive_saved_ir() {
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
     let edited = text.replace(
         "parameter-types=dictionary(method=>method):method",
-        "parameter-types=dictionary(method=>nullable-method):method",
+        "parameter-types=dictionary(string=>method):method",
     );
     assert_ne!(text, edited);
     assert!(parse_unit_ir(&edited).is_err());
