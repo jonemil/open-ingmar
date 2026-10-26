@@ -49,6 +49,7 @@ mod tuples;
 mod type_check;
 mod type_flow;
 mod type_text;
+mod unchecked;
 pub use type_check::{
     CompileError, CompileOptions, CompileOutput, Severity, TypeCheckLevel, TypeDiagnostic,
     TypeDiagnosticKind, compile_function_with_options, compile_sources_with_options,
@@ -5180,7 +5181,7 @@ impl Function {
 /// Use [`compile_sources`] for programs, source-class types, and checked user
 /// calls. Unsupported syntax or invalid function IR produces a diagnostic.
 pub fn compile_function(source: &str) -> Result<Function, Diagnostic> {
-    compile_fragment(source, None)
+    compile_fragment(source, None, false)
 }
 
 /// Compile an isolated function with explicit unguarded API-level checks.
@@ -5191,12 +5192,13 @@ pub fn compile_function_with_api(
     source: &str,
     context: api::ApiContext,
 ) -> Result<Function, Diagnostic> {
-    compile_fragment(source, Some(context))
+    compile_fragment(source, Some(context), false)
 }
 
 fn compile_fragment(
     source: &str,
     context: Option<api::ApiContext>,
+    unchecked: bool,
 ) -> Result<Function, Diagnostic> {
     let aliases = parser::collect_aliases(&[source]).map_err(|error| error.diagnostic)?;
     if let Some(context) = context {
@@ -5214,7 +5216,7 @@ fn compile_fragment(
         ));
     }
     let (_, function) = parsed.functions.into_iter().next().unwrap();
-    source_ir::build(source, function, context)
+    source_ir::build(source, function, context, unchecked)
 }
 
 fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'static str> {

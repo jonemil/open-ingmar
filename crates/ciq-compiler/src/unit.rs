@@ -2646,13 +2646,14 @@ fn compile_sources_context(
     sources: &[&str],
     context: Option<crate::api::ApiContext>,
 ) -> Result<CompilationUnit, SourceDiagnostic> {
-    compile_sources_mapped(sources, context).map(|(unit, _)| unit)
+    compile_sources_mapped(sources, context, false).map(|(unit, _)| unit)
 }
 
 /// Preserve existing body-to-source origins for optional source diagnostics.
 pub(crate) fn compile_sources_mapped(
     sources: &[&str],
     context: Option<crate::api::ApiContext>,
+    unchecked: bool,
 ) -> Result<(CompilationUnit, Vec<(usize, usize)>), SourceDiagnostic> {
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
@@ -2745,6 +2746,7 @@ pub(crate) fn compile_sources_mapped(
         }
     }
     let mut calls = source_ir::CallContext::new();
+    calls.unchecked = unchecked;
     for parsed in &parsed_sources {
         for (module, ast) in &parsed.functions {
             calls.insert(

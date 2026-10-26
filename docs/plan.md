@@ -37,8 +37,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Implement disabled type checking with dynamic lowering for otherwise
-  mismatched operations; preserve declaration, ABI, API, and format checks.
+- [ ] Extend checking off to disjoint member, index, and field receivers:
+  `Number.length()`, indexing a Number, and `C.missing()`/`C.absent` when another
+  declaration provides those selectors. Preserve known signatures, API/ABI,
+  source identities, and field/dispatch metadata checks.
+- [ ] Support checking-off Array/Dictionary literal contents that conflict with
+  their expected contract, such as `["x"]` returned as `Array<Number>` and
+  `{"x" => true}` returned as `Dictionary<Number, Number>`. Preserve actual
+  contents, literal encoding, and builder completion/evaluation order.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,
   and value operations: container-guarded aliases such as
   `typedef Tree as Array<Tree>` and interfaces such as

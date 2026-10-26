@@ -3521,6 +3521,7 @@ pub(crate) fn build(
     source: &str,
     ast: parser::ParsedFunction,
     context: Option<crate::api::ApiContext>,
+    unchecked: bool,
 ) -> Result<Function, Diagnostic> {
     if ast.parameter_types.iter().flatten().any(|ty| {
         matches!(
@@ -3543,7 +3544,9 @@ pub(crate) fn build(
             "source-class annotations require compilation-unit declarations",
         ));
     }
-    build_body(source, ast, None, context, &CallContext::new())
+    let mut calls = CallContext::new();
+    calls.unchecked = unchecked;
+    build_body(source, ast, None, context, &calls)
 }
 
 #[derive(Clone)]
@@ -3555,6 +3558,7 @@ pub(crate) struct CallSignature {
 /// Collected callee contracts and the current body's parameter contracts.
 #[derive(Clone, Default)]
 pub(crate) struct CallContext {
+    pub(crate) unchecked: bool,
     signatures: BTreeMap<(String, String), CallSignature>,
     pub(crate) class_bases: BTreeMap<String, crate::ClassBase>,
     parameter_types: Vec<crate::ParameterType>,
@@ -3817,6 +3821,13 @@ fn build_body(
         if let Operation::LocalRead { result, local } = builder.operations[at].operation {
             builder.operations[at].operation = Operation::LocalTake { result, local };
         }
+    }
+    if calls.unchecked {
+        crate::unchecked::lower(
+            &mut builder.operations,
+            candidate_parameters.clone(),
+            callback.is_some(),
+        );
     }
     let spans: Vec<_> = builder.operations.iter().map(|op| op.span).collect();
     let parameter_types = if let Some(signature) = &callback {

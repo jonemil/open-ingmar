@@ -967,6 +967,12 @@ printing preserve that identity. Booleans are not integer operands. Raw scalar
 constant widths and source-literal restrictions remain separate; see the
 [constant grammar](grammar.md#values-and-storage).
 
+Source checking off may generate ordinary `.cast` operations to Any at value
+boundaries and operator/index operands, or Boolean at a condition. These are
+explicit unchecked assertions, not an IR validation mode. Parsing saved IR still
+checks declarations, result metadata, API availability, frame/stack ownership,
+and evaluation order. See the [source profile](../frontend/README.md#unchecked-lowering).
+
 ## Control flow
 
 Explicit control flow uses block declarations and terminators:

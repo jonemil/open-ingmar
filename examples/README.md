@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-unchecked](compiler-unchecked/README.md): unchecked value boundaries,
+  operators, index keys, and conditions with explicit saved IR assertions.
 - [compiler-partial-operations](compiler-partial-operations/README.md): partial
   operator, index-key, and native member-receiver unions.
 - [compiler-partial-matches](compiler-partial-matches/README.md): gradual native

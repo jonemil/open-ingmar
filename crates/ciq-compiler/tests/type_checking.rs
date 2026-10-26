@@ -580,7 +580,7 @@ fn cli_selects_policy_and_does_not_create_output_on_strict_failure() {
         ("gradual", true),
         ("informative", true),
         ("strict", false),
-        ("off", false),
+        ("off", true),
     ] {
         let output = root.join(format!("{mode}.ir"));
         let result = Command::new(env!("CARGO_BIN_EXE_ciq-compiler"))

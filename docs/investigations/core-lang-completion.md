@@ -74,6 +74,28 @@ four policies. The [source contract][checking] states our current limits.
 [type-guide]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 [checking]: ../specs/frontend/README.md#type-checking-policy
 
+## Checking off
+
+**Experimentally observed:** SDK 9.2.0, fr265, minimum API 5.0.0, `-O 0`,
+`project.typecheck = off` accepts disjoint returns, arguments, field stores,
+operator operands, Array index keys, and Boolean conditions. The
+[unchecked specimen](../../examples/compiler-unchecked/README.md) produces the
+same nine expected lines from SDK and Rust PRGs. Its runtime inputs support the
+operations even when their annotations disagree. Structured reconstruction and
+saved-stage equivalence pass without new CODE/DATA fallback.
+
+The SDK also compiles a wrong-arity source call with checking off. Our current
+ABI profile retains known-call arity errors. Explicit local annotations are
+rejected by the SDK even with checking off.
+
+Further authored compile-only probes accept `x.length()` and `x[0]` for Number
+parameters, `["x"]` returned as `Array<Number>`, and `{"x" => true}` returned as
+`Dictionary<Number, Number>`. `C.missing()` and `C.absent` compile for an empty C
+when another class declares `missing` and `absent`; without those declarations,
+the SDK rejects undefined selectors. These probes identify remaining unchecked
+receiver/construction gaps, not runtime behavior. Current implementation
+contracts are in the [unchecked profile](../specs/frontend/README.md#unchecked-lowering).
+
 ## Partial operators and native receivers
 
 **Observed:** SDK 9.2.0, fr265, API minimum 5.0, `-O 0`, informative

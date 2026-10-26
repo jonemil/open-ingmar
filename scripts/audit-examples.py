@@ -57,6 +57,19 @@ def commands(directory):
     return found
 
 
+def resume_flags(flags):
+    """Keep API/build options while dropping source-only checking policy."""
+    result = []
+    at = 0
+    while at < len(flags):
+        if flags[at] == "--type-check":
+            at += 2
+        else:
+            result.append(flags[at])
+            at += 1
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -177,7 +190,7 @@ def main():
                     base.append(arg)
                     at += 1
             files = [arg for arg in base if arg.endswith(".mc")]
-            flags = [arg for arg in base if arg not in files]
+            flags = resume_flags([arg for arg in base if arg not in files])
             ir = job / "source.ciqir"
             source["ir"] = run("ciq-compiler", [*base, "--emit", "ir", ir], job / "ir.log")
             if source["ir"]["exit"] == 0:
@@ -187,7 +200,7 @@ def main():
                 source["resume"] = run("ciq-compiler", [*flags, "--from", "ir", "--emit", "assembly", ir, resumed], job / "resume.log")
                 source["assembly_identical"] = (source["assembly"]["exit"] == source["resume"]["exit"] == 0 and digest(direct) == digest(resumed))
             if source["compile"]["exit"] == 0 and artifact.suffix == ".prg":
-                prg_flags = [arg for arg in args[:-1] if arg not in files]
+                prg_flags = resume_flags([arg for arg in args[:-1] if arg not in files])
                 resumed_prg = job / "resumed.prg"
                 source["resume_prg"] = run("ciq-compiler", [*prg_flags, "--from", "ir", ir, resumed_prg], job / "resume-prg.log")
                 source["prg_identical"] = source["resume_prg"]["exit"] == 0 and digest(artifact) == digest(resumed_prg)

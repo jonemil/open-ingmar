@@ -5,15 +5,16 @@ use crate::{
 };
 use std::{collections::BTreeMap, fmt};
 
-/// Ambiguity reporting for the currently supported checked source profile.
-/// Definite errors and IR invariants remain errors at every level. Disabled
-/// checking remains unsupported. Operations
-/// retain their independently validated executable profiles.
+/// Select source diagnostics or supported unchecked lowering. Checked modes
+/// retain definite type errors; Off inserts explicit assertions at supported
+/// value uses. Declaration, API, ABI, and IR invariants remain mandatory.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TypeCheckLevel {
     /// Report definite errors without reporting ambiguous types.
     #[default]
     Gradual,
+    /// Lower supported unchecked value uses through explicit IR assertions.
+    Off,
     /// Return ambiguity warnings alongside the validated artifact.
     Informative,
     /// Reject reported ambiguities before exposing an artifact.
@@ -23,22 +24,21 @@ impl std::str::FromStr for TypeCheckLevel {
     type Err = &'static str;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
+            "off" => Ok(Self::Off),
             "gradual" => Ok(Self::Gradual),
             "informative" => Ok(Self::Informative),
             "strict" => Ok(Self::Strict),
-            _ => Err(
-                "type-check level must be gradual, informative, or strict; disabled checking is not implemented",
-            ),
+            _ => Err("type-check level must be off, gradual, informative, or strict"),
         }
     }
 }
 /// Source compilation settings. Existing entry points retain their API/default
-/// behavior; this entry additionally selects ambiguity reporting.
+/// behavior; these settings select diagnostics or supported unchecked lowering.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CompileOptions {
     /// Explicit API availability checks, or the existing default profile.
     pub api: Option<ApiContext>,
-    /// Source ambiguity reporting; mandatory IR validation always applies.
+    /// Source checking/lowering policy; mandatory IR validation always applies.
     pub type_check: TypeCheckLevel,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -773,15 +773,22 @@ fn finish<T>(
     }
 }
 
-/// Compile a declaration unit and report ambiguity under the selected checked
-/// policy. Existing source/IR errors still fail before policy diagnostics.
+/// Compile a unit under the selected source checking/lowering policy.
+/// Unsupported source forms and invalid IR remain errors before diagnostics.
 pub fn compile_sources_with_options(
     sources: &[&str],
     options: CompileOptions,
 ) -> Result<CompileOutput<CompilationUnit>, CompileError> {
-    let (unit, origins) =
-        crate::unit::compile_sources_mapped(sources, options.api).map_err(CompileError::Source)?;
-    if options.type_check == TypeCheckLevel::Gradual {
+    let (unit, origins) = crate::unit::compile_sources_mapped(
+        sources,
+        options.api,
+        options.type_check == TypeCheckLevel::Off,
+    )
+    .map_err(CompileError::Source)?;
+    if matches!(
+        options.type_check,
+        TypeCheckLevel::Gradual | TypeCheckLevel::Off
+    ) {
         return Ok(CompileOutput {
             artifact: unit,
             warnings: vec![],
@@ -848,19 +855,27 @@ pub fn compile_sources_with_options(
     })
 }
 
-/// Compile one global function with checked-policy diagnostics. Unit-only
+/// Compile one global function under the selected source policy. Unit-only
 /// declarations and unresolved-callee limitations match `compile_function`.
 pub fn compile_function_with_options(
     source: &str,
     options: CompileOptions,
 ) -> Result<CompileOutput<Function>, CompileError> {
-    let function = crate::compile_fragment(source, options.api).map_err(|diagnostic| {
+    let function = crate::compile_fragment(
+        source,
+        options.api,
+        options.type_check == TypeCheckLevel::Off,
+    )
+    .map_err(|diagnostic| {
         CompileError::Source(SourceDiagnostic {
             source: 0,
             diagnostic,
         })
     })?;
-    if options.type_check == TypeCheckLevel::Gradual {
+    if matches!(
+        options.type_check,
+        TypeCheckLevel::Gradual | TypeCheckLevel::Off
+    ) {
         return Ok(CompileOutput {
             artifact: function,
             warnings: vec![],

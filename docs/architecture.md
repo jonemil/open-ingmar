@@ -11,7 +11,7 @@ owning files for the definition to read or change.
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |
-| Source → IR candidates | [source_ir.rs], [source_types.rs] | [Source semantics] |
+| Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
 | IR model and body checks | [lib.rs] | [IR validation] |
 | Declarations and unit checks | [unit.rs], [source_fields.rs] | [Declarations] |
@@ -266,3 +266,5 @@ library.
 [Checking policy]: specs/frontend/README.md#type-checking-policy
 
 [source_calls.rs]: ../crates/ciq-compiler/src/source_calls.rs
+
+[unchecked.rs]: ../crates/ciq-compiler/src/unchecked.rs
