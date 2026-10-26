@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, fmt};
 
 /// Ambiguity reporting for the currently supported checked source profile.
 /// Definite errors and IR invariants remain errors at every level. Disabled
-/// checking and partial source-class matches remain unsupported. Operations
+/// checking remains unsupported. Operations
 /// retain their independently validated executable profiles.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TypeCheckLevel {
@@ -131,6 +131,20 @@ fn invariant(expected: &Type, actual: &Type) -> Match {
 fn container_match(expected: &Type, actual: &Type) -> Match {
     if crate::structural::same_type(expected, actual) {
         return Match::Yes;
+    }
+    if let (Type::SourceValue(a), Type::SourceValue(b)) = (expected, actual) {
+        return if a.native().is_empty()
+            && b.native().is_empty()
+            && (a.classes().iter().any(|class| b.classes().contains(class))
+                || a.nullable() && b.nullable())
+        {
+            Match::Maybe
+        } else {
+            Match::No
+        };
+    }
+    if matches!(expected, Type::SourceValue(_)) || matches!(actual, Type::SourceValue(_)) {
+        return Match::No;
     }
     if *expected == Type::Any || *actual == Type::Any {
         return Match::Maybe;
@@ -302,6 +316,34 @@ struct Issue {
     kind: TypeDiagnosticKind,
     message: String,
 }
+fn join_contract(join: &crate::JoinType) -> Type {
+    join.source_contract()
+        .map(|c| Type::SourceValue(Box::new(c)))
+        .unwrap_or_else(|| join.api_type())
+}
+/// Resolve exact class alternatives with the same witnesses used by unit
+/// validation. A projected native base is not an exact source class.
+fn boundary_match(
+    expected: &Type,
+    actual: &Type,
+    unit: Option<&CompilationUnit>,
+    api: Option<ApiContext>,
+) -> Match {
+    if let (Type::SourceValue(expected), Type::SourceValue(actual)) = (expected, actual) {
+        let witness = |class: &crate::SourceClass, ty: &Type| {
+            unit.is_some_and(|u| u.check_source_witness(class, ty, api))
+        };
+        if expected.accepts_with(actual, witness) {
+            Match::Yes
+        } else if expected.accepts_boundary_with(actual, witness) {
+            Match::Maybe
+        } else {
+            Match::No
+        }
+    } else {
+        compatibility(expected, actual)
+    }
+}
 fn inspect(
     function: &Function,
     body: usize,
@@ -309,6 +351,7 @@ fn inspect(
     signatures: &BTreeMap<(String, String), Vec<Type>>,
     inherited: bool,
     unit: Option<&CompilationUnit>,
+    api: Option<ApiContext>,
 ) -> Vec<Issue> {
     let mut issues = Vec::new();
     let mut issue = |operation, kind, message| {
@@ -334,7 +377,18 @@ fn inspect(
             }
         }
     }
-    let ty = |value: &ValueId| function.value_types[value].api_type();
+    let origins = crate::source_objects::Origins::for_function(function)
+        .expect("policy diagnostics require validated source origins");
+    let ty = |value: &ValueId| {
+        if function.value_types[value] == crate::ValueType::Any {
+            Type::Any
+        } else {
+            origins
+                .contract(*value)
+                .map(|c| Type::SourceValue(Box::new(c.clone())))
+                .unwrap_or_else(|| function.value_types[value].api_type())
+        }
+    };
     let mut locals = BTreeMap::new();
     let mut array_builders = BTreeMap::new();
     let mut dictionary_builders = BTreeMap::new();
@@ -409,10 +463,10 @@ fn inspect(
             }
 
             Operation::Return { value } => {
-                boundaries.push((function.return_type().api_type(), *value))
+                boundaries.push((crate::tuples::exact_type(&function.return_type()), *value))
             }
             Operation::JumpValue { target, value } => {
-                boundaries.push((joins[target].api_type(), *value));
+                boundaries.push((join_contract(&joins[target]), *value));
             }
             Operation::SelfFieldAssign { field, value } => {
                 if let Some(field) = unit
@@ -423,7 +477,7 @@ fn inspect(
                     })
                     .and_then(|class| class.fields.iter().find(|f| f.name == *field))
                 {
-                    boundaries.push((field.result_type().api_type(), *value));
+                    boundaries.push((crate::tuples::exact_type(&field.result_type()), *value));
                 }
             }
             Operation::MemberWrite {
@@ -435,17 +489,17 @@ fn inspect(
                 let receiver = ty(receiver);
                 dynamic = receiver == Type::Any;
                 if let Some(expected) = field_type {
-                    boundaries.push((expected.api_type(), *value));
+                    boundaries.push((crate::tuples::exact_type(expected), *value));
                 } else {
                     for receiver in crate::unions::alternatives(&receiver) {
-                        if let Ok(expected) = crate::structural::field_type(receiver, member) {
-                            boundaries.push((expected, *value));
+                        if let Ok(expected) = crate::structural::field_contract(receiver, member) {
+                            boundaries.push((crate::tuples::exact_type(&expected), *value));
                         }
                     }
                 }
             }
             Operation::LocalDeclare { local, value_type } => {
-                locals.insert(*local, value_type.api_type());
+                locals.insert(*local, join_contract(value_type));
             }
             Operation::LocalInitialize { local, value }
             | Operation::LocalAssign { local, value } => {
@@ -454,7 +508,7 @@ fn inspect(
                 }
             }
             Operation::ParameterAssign { index, value } => {
-                boundaries.push((function.parameter_types()[*index].api_type(), *value))
+                boundaries.push((function.parameter_types()[*index].exact_type(), *value))
             }
             Operation::GlobalCall {
                 member, arguments, ..
@@ -602,7 +656,7 @@ fn inspect(
             );
         }
         for (expected, value) in boundaries {
-            if compatibility(&expected, &ty(&value)) == Match::Maybe {
+            if boundary_match(&expected, &ty(&value), unit, api) == Match::Maybe {
                 issue(
                     Some(at),
                     TypeDiagnosticKind::AmbiguousBoundary,
@@ -689,7 +743,7 @@ pub fn compile_sources_with_options(
                 .function
                 .parameter_types()
                 .iter()
-                .map(|p| p.api_type())
+                .map(crate::ParameterType::exact_type)
                 .collect(),
         );
         bodies.push(&declaration.function);
@@ -707,7 +761,7 @@ pub fn compile_sources_with_options(
                 function
                     .parameter_types()
                     .iter()
-                    .map(|p| p.api_type())
+                    .map(crate::ParameterType::exact_type)
                     .collect(),
             );
             bodies.push(function);
@@ -726,6 +780,7 @@ pub fn compile_sources_with_options(
                 &signatures,
                 inherited[at],
                 Some(&unit),
+                options.api,
             )
         })
         .collect();
@@ -755,7 +810,7 @@ pub fn compile_function_with_options(
             warnings: vec![],
         });
     }
-    let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None);
+    let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None, options.api);
     let result = finish(
         (),
         issues,
@@ -777,7 +832,7 @@ mod tests {
     fn typed_join_reports_the_incoming_unknown_edge() {
         let ir = "ciq-ir\n.function f parameters=1 parameter-types=any result=integer\n.block ^0\n.boolean %0 true\n.branch %0 ^1 ^2\n.block ^1\n.parameter %1 0\n.jump-value ^3 %1\n.block ^2\n.integer %2 22\n.jump-value ^3 %2\n.block ^3\n.block-value %3 integer\n.return %3\n.end\n";
         let function = crate::parse_function_ir(ir).unwrap();
-        let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None);
+        let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None, None);
         let boundary: Vec<_> = issues
             .iter()
             .filter(|issue| issue.kind == TypeDiagnosticKind::AmbiguousBoundary)
@@ -789,13 +844,13 @@ mod tests {
         ));
         let typed = ir.replace("parameter-types=any", "parameter-types=integer");
         let function = crate::parse_function_ir(&typed).unwrap();
-        assert!(inspect(&function, 0, "", &BTreeMap::new(), false, None).is_empty());
+        assert!(inspect(&function, 0, "", &BTreeMap::new(), false, None, None).is_empty());
         let dynamic_join = ir
             .replace("result=integer", "result=any")
             .replace("%3 integer", "%3 any");
         let function = crate::parse_function_ir(&dynamic_join).unwrap();
         assert!(
-            !inspect(&function, 0, "", &BTreeMap::new(), false, None)
+            !inspect(&function, 0, "", &BTreeMap::new(), false, None, None)
                 .iter()
                 .any(|i| i.kind == TypeDiagnosticKind::AmbiguousBoundary)
         );

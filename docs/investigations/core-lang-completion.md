@@ -41,13 +41,17 @@ container parameters covariant. These observations distinguish uncertain
 matches from the guide's equivalent-parameter rule for proven matches.
 
 The [partial-match specimen](../../examples/compiler-partial-matches/README.md)
-compiles under informative checking and produces the same 14 expected console
+compiles under informative checking and produces the same 21 expected console
 lines in SDK and independently generated simulator runs. It covers native/user
 calls, returns, parameter/instance-field stores, Array/Dictionary/record
 construction, nested Array views, Dictionary key/value views, and shared
-mutations through narrowed/widened Array aliases. No failing runtime alternative
-was executed; successful matching inputs do not establish that a narrowed view
-is safe after arbitrary writes through another alias.
+mutations through narrowed/widened Array aliases. Source cases also send TokenB
+through a TokenA return, argument, field, record, element store, and Array view.
+TokenB still returns 62 from its own `number()` method through each declared
+TokenA view; TokenA returns 61. Both SDK and generated execution preserve that
+dispatch without a class-changing conversion or rejecting class check at the
+boundary. This does not establish behavior when the actual object lacks the
+invoked member or has an incompatible signature.
 
 Separate authored probes show that `A or B` returned as `A` compiles in
 gradual/informative mode and fails strict checking. In contrast, structural
@@ -56,7 +60,9 @@ interface implementation, and mutable structural fields with those differing
 contracts fail informative checking. Reproduce by returning the wider shape
 under the narrower annotation in the minimal console scaffold; the
 [boundary tests](../../crates/ciq-compiler/tests/type_checking.rs) retain the
-structural forms. Source-class partial lowering is separate from this evidence.
+structural forms. The runtime specimen additionally confirms class-only
+source-element Array overlap; mixed/erased source-element cases remain a
+separate probe in the Array worklist.
 
 SDK Dictionary<String, Number-or-String> narrowing also compiled. Our parser
 currently admits established numeric aliases such as Integer in that position,

@@ -2,7 +2,27 @@ using Toybox.Application;
 using Toybox.Lang;
 using Toybox.System;
 
+class TokenA {
+    function number() as Lang.Number { return 61; }
+}
+class TokenB {
+    function number() as Lang.Number { return 62; }
+}
+class SourceHolder {
+    var item as TokenA;
+    function initialize(x as TokenA or TokenB) { self.item = x; }
+    function read() as TokenA { return self.item; }
+}
+
 module Partial {
+    function source(x as TokenA or TokenB) as TokenA { return x; }
+    function sourceArgument(x as TokenA) as Lang.Number { return x.number(); }
+    function sourceCall(x as TokenA or TokenB) as Lang.Number { return sourceArgument(x); }
+    function sourceArray(x as TokenA or TokenB) as Lang.Array<TokenA> { return [x]; }
+    function sourceWideArray(x as TokenA or TokenB) as Lang.Array<TokenA or TokenB> { return [x]; }
+    function sourceArrayView(x as Lang.Array<TokenA or TokenB>) as Lang.Array<TokenA> { return x; }
+    function sourceRecord(x as TokenA or TokenB) as {:item as TokenA} { return {:item => x}; }
+
     function number(x as Lang.Number or Lang.String) as Lang.Number { return x; }
     function take(x as Lang.Number) as Lang.Number { return x; }
     function call(x as Lang.Number or Lang.String) as Lang.Number { return take(x); }
@@ -64,6 +84,16 @@ class MinimalConsoleApp extends Application.AppBase {
         if (entry != null) { System.println(entry); }
         var keyValue = Partial.narrowKeys(Partial.wideKeys())[54];
         if (keyValue != null) { System.println(keyValue); }
+        var first = new TokenA();
+        var second = new TokenB();
+        System.println(Partial.source(first).number());
+        System.println(Partial.source(second).number());
+        System.println(Partial.sourceCall(second));
+        System.println(new SourceHolder(second).read().number());
+        System.println(Partial.sourceArray(second)[0].number());
+        var sourceItem = Partial.sourceRecord(second)[:item];
+        if (sourceItem != null) { System.println(sourceItem.number()); }
+        System.println(Partial.sourceArrayView(Partial.sourceWideArray(second))[0].number());
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

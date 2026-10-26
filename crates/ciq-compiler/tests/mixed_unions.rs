@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 const CLASSES: &str = "class Token{function initialize(){} function count() as Toybox.Lang.Number{return 7;}} class Marker{function initialize(){}}";
 
@@ -31,7 +33,10 @@ fn erased_native_values_cannot_claim_exact_class_alternatives() {
         "function f(x as Token or Toybox.Lang.String) as Token or Toybox.Lang.String{return null;}",
         "function f(x as Token or Toybox.Lang.String){if(x instanceof Token){x=\"hello\";return x.count();}return 0;}",
     ] {
-        assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[CLASSES, body]).is_err(),
+            "{body}"
+        );
     }
 }
 

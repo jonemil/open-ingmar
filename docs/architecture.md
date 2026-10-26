@@ -117,6 +117,11 @@ Shared type spellings retain each consumer's accepted domain. Exact source
 assertions canonicalize to the source operation; record assertion views retain
 conservative alias links without runtime conversion.
 
+Source/unit validation and policy diagnostics share one CFG-aware source-origin
+replay. Boundary overlap permits uncertainty without rewriting actual class
+alternatives; field and dispatch metadata still require declared-contract
+agreement.
+
 Source identities stay separate from native projections, which cannot authorize
 source dispatch or interface witnesses. Container elements retain identities in
 `Type::SourceValue` and `ArrayElement::Source`; reads restore provenance, and unit

@@ -49,6 +49,27 @@ impl Origins {
             ..Default::default()
         }
     }
+    /// Replay identities and CFG refinements for an already validated function.
+    /// Preserve each operand's actual alternatives independently of destination
+    /// declarations; native projections alone never create source witnesses.
+    pub(crate) fn for_function(function: &crate::Function) -> Result<Self, &'static str> {
+        let mut origins = Self::new(function.parameter_types().to_vec());
+        for (&value, ty) in &function.value_types {
+            origins.note_type(value, ty.api_type());
+            if *ty == crate::ValueType::Any {
+                origins.note_dynamic(value);
+            }
+        }
+        let structure = crate::control_flow::validate(function.operations())
+            .expect("source replay requires a validated CFG");
+        let inputs = crate::type_flow::inputs(&structure, function.operations());
+        let mut facts = Default::default();
+        for located in function.operations() {
+            crate::type_flow::update(&mut facts, &inputs, &located.operation);
+            origins.observe(&located.operation, &facts)?;
+        }
+        Ok(origins)
+    }
     /// Record a value independently checked as Any. It may cross a typed
     /// boundary dynamically without establishing a source-class proof.
     pub(crate) fn note_dynamic(&mut self, value: ValueId) {
@@ -68,8 +89,8 @@ impl Origins {
             .or_else(|| self.refined_values.get(&value).cloned())
     }
     /// Track exact classes through signatures, assertions, calls, and locals.
-    /// Apply the caller's current CFG facts to reads, rejecting writes that
-    /// invalidate an established source-class storage contract.
+    /// Apply CFG facts to reads and the value-boundary policy to writes.
+    /// Independently retained identities anchor later unit/metadata checks.
     pub(crate) fn observe(
         &mut self,
         operation: &Operation,
@@ -460,6 +481,8 @@ impl Origins {
     pub(crate) fn contract(&self, value: ValueId) -> Option<&crate::SourceUnion> {
         self.values.get(&value)
     }
+    /// Check a value boundary without relabeling the operand's actual source
+    /// alternatives. Dynamic values and overlaps are not complete type proofs.
     pub(crate) fn accepts_contract(&self, expected: &crate::SourceUnion, value: ValueId) -> bool {
         self.dynamic.contains(&value)
             || self.deferred_interface(
@@ -470,7 +493,7 @@ impl Origins {
             || self
                 .values
                 .get(&value)
-                .is_some_and(|actual| expected.accepts(actual))
+                .is_some_and(|actual| expected.accepts_boundary(actual))
             || (!self.values.contains_key(&value)
                 && self
                     .native_values

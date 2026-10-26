@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASSES: &str = "class Token { function initialize() {} function value() { return 41; } } class Other { function initialize() {} function value() { return 9; } }";
@@ -79,7 +81,7 @@ fn nullable_source_contracts_reject_erasure_unrelated_classes_and_missing_proofs
         "function f(token as Missing or Null) { return 0; }",
     ] {
         assert!(
-            compile_sources(&[source, prelude, CLASSES]).is_err(),
+            checking::compile_sources(&[source, prelude, CLASSES]).is_err(),
             "{source}"
         );
     }

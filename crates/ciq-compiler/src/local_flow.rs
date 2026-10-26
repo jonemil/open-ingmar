@@ -283,7 +283,7 @@ fn accepts(expected: &JoinType, actual: &JoinType) -> bool {
     if let Some(expected) = expected.source_contract() {
         return actual
             .source_contract()
-            .is_some_and(|actual| expected.accepts_with(&actual, |_, _| false))
+            .is_some_and(|actual| expected.accepts_boundary_with(&actual, |_, _| false))
             || (actual.source_contract().is_none() && expected.accepts_api(&actual.api_type()));
     }
     match (expected, actual) {

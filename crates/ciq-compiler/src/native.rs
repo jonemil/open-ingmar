@@ -80,7 +80,7 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
                 signature
                     .parameters
                     .iter()
-                    .map(ParameterType::api_type)
+                    .map(ParameterType::exact_type)
                     .collect(),
             )
         } else {
@@ -91,7 +91,7 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
         return shape
             .methods
             .get(member)
-            .map(|m| m.parameters.iter().map(ParameterType::api_type).collect())
+            .map(|m| m.parameters.iter().map(ParameterType::exact_type).collect())
             .or_else(|| value_parameters(&api::Type::named("Toybox.Lang.Object"), member));
     }
     if let api::Type::Union(alternatives) = receiver {
@@ -723,18 +723,23 @@ fn scalar_comparable(actual: &api::Type) -> bool {
     })
 }
 
-/// Accept a native value boundary with matching or overlapping contracts.
+/// Accept a value boundary with matching or overlapping contracts.
 /// Container parameters require equality or uncertain union overlap, including
 /// nested containers; nominal inheritance alone does not match them. Other
-/// alternatives remain possible runtime failures. Exact source/structural
-/// witnesses, receiver profiles, arity, and API checks remain independent.
+/// alternatives remain possible runtime failures. Source alternatives retain
+/// exact class identities; units resolve deferred structural witnesses.
+/// Receiver profiles, arity, API, and metadata checks remain independent.
 pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool {
+    if let (api::Type::SourceValue(expected), api::Type::SourceValue(actual)) = (expected, actual) {
+        return expected.accepts_boundary(actual);
+    }
     fn native_contract(ty: &api::Type) -> bool {
         match ty {
             api::Type::Named(_) | api::Type::Null | api::Type::Any => true,
             api::Type::Union(parts) => parts.iter().all(native_contract),
             api::Type::Array(element) => native_contract(element),
             api::Type::Dictionary { key, value } => native_contract(key) && native_contract(value),
+            api::Type::SourceValue(contract) => contract.native().is_empty(),
             _ => false,
         }
     }

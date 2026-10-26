@@ -813,6 +813,13 @@ pub enum ParameterType {
 }
 
 impl ParameterType {
+    /// Retain exact source alternatives for value-boundary matching. Native API
+    /// availability checks use `api_type` and its deliberate base projection.
+    pub(crate) fn exact_type(&self) -> api::Type {
+        self.source_contract()
+            .map(|contract| api::Type::SourceValue(Box::new(contract)))
+            .unwrap_or_else(|| self.api_type())
+    }
     /// Return the API type represented by this supported parameter contract.
     /// Source objects map to their declared native base for API checks; exact
     /// source assignability is checked separately against unit declarations.

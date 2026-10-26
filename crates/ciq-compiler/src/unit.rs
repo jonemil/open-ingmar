@@ -1285,14 +1285,6 @@ impl CompilationUnit {
             }
         }
         for (index, &(owner, function)) in bodies.iter().enumerate() {
-            let mut origins =
-                crate::source_objects::Origins::new(function.parameter_types().to_vec());
-            for (&value, ty) in &function.value_types {
-                origins.note_type(value, ty.api_type());
-                if *ty == crate::ValueType::Any {
-                    origins.note_dynamic(value);
-                }
-            }
             let array_builders = function
                 .operations()
                 .iter()
@@ -1350,18 +1342,8 @@ impl CompilationUnit {
                     None
                 })
                 .collect::<BTreeMap<_, _>>();
-            // Replay all branch proofs from the validated graph. Candidate
-            // prefix inference deliberately computes a narrower set of facts.
-            let structure = crate::control_flow::validate(function.operations())
-                .expect("function already has a validated CFG");
-            let inputs = crate::type_flow::inputs(&structure, function.operations());
-            let mut facts = Default::default();
-            for located in function.operations() {
-                crate::type_flow::update(&mut facts, &inputs, &located.operation);
-                origins
-                    .observe(&located.operation, &facts)
-                    .map_err(|message| fail(Some(index), None, message.into()))?;
-            }
+            let origins = crate::source_objects::Origins::for_function(function)
+                .map_err(|message| fail(Some(index), None, message.into()))?;
             let source_locals = function
                 .operations()
                 .iter()
@@ -2132,9 +2114,18 @@ impl CompilationUnit {
             .cloned()
             .map(|c| crate::api::Type::SourceValue(Box::new(c)))
             .unwrap_or_else(|| function.value_types[&value].api_type());
+        if let crate::api::Type::SourceValue(contract) = expected {
+            if origins.contract(value).is_some()
+                && !crate::tuples::contains(&function.value_types[&value].api_type())
+            {
+                return self.check_source_value(function, origins, value, contract, context);
+            }
+        }
         // A partial native match carries its actual union through IR. Exact
         // source/structural witnesses still use the full proof below.
-        if !crate::native::accepts(expected, &actual)
+        if !matches!(expected, crate::api::Type::SourceValue(_))
+            && !matches!(actual, crate::api::Type::SourceValue(_))
+            && !crate::native::accepts(expected, &actual)
             && crate::native::accepts_boundary(expected, &actual)
         {
             return crate::native::structural_api(expected, &actual, context);
@@ -2155,7 +2146,7 @@ impl CompilationUnit {
 
     /// Resolve a source member witness using the ordinary declaration checks.
     /// Native inherited members retain their API requirements.
-    fn check_source_witness(
+    pub(crate) fn check_source_witness(
         &self,
         class: &crate::SourceClass,
         target: &crate::api::Type,
@@ -2179,8 +2170,9 @@ impl CompilationUnit {
         }
     }
 
-    /// Check a class-containing boundary against actual native alternatives and
-    /// exact identities, resolving every deferred structural interface witness.
+    /// Check a class-containing value boundary using retained identities and
+    /// unit-resolved interface witnesses. Overlap permits uncertainty without
+    /// turning native projections into exact class or interface proofs.
     fn check_source_value(
         &self,
         function: &Function,
@@ -2205,7 +2197,7 @@ impl CompilationUnit {
             for ty in actual.native() {
                 crate::native::structural_api(&expected.native_type(), ty, context)?;
             }
-            expected.accepts_with(actual, |class, ty| {
+            expected.accepts_boundary_with(actual, |class, ty| {
                 self.check_source_witness(class, ty, context)
             })
         } else {

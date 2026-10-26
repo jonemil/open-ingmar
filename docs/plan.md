@@ -37,10 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Accept SDK partial source-class matches (`A or B` passed/returned as `A`)
-  at calls, returns, and stores. Retain actual class alternatives for unit
-  witnesses, report uncertainty under informative/strict checking, and preserve
-  exact field/dispatch metadata across native and saved IR.
 - [ ] Probe and support SDK partial operator/index/member-receiver cases:
   Number-or-String subtraction, Number-or-String Array indices, and a union
   whose alternatives do not all expose the invoked member. Preserve API,
@@ -178,6 +174,10 @@ executable profiles.
 
 ### Array
 
+- [ ] Probe partial source-element views involving mixed or erased contracts:
+  `Array<Token or Number>` as `Array<Token>` and dynamic-element Arrays as
+  source-element Arrays. Implement SDK-accepted cases without substituting
+  native base projections for class evidence.
 - [ ] Support sorting nullable elements through a checked custom comparator,
   after resolving the Comparator signature discrepancy above.
 - [ ] Check multidimensional `new [sizes]` and native Array constructor syntax;

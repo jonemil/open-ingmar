@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{JoinType, Operation, compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASSES: &str = "class Token { function initialize() {} function value() { return 41; } } class Other { function initialize() {} function value() { return 9; } }";
@@ -60,7 +62,10 @@ fn source_join_rejects_mismatched_classes_erasure_and_lost_null_proofs() {
         "function f(flag as Toybox.Lang.Boolean) {var t=flag?new Token():null;if(t!=null){t=null;return t.value();}return 0;}",
         "function f(flag as Toybox.Lang.Boolean,t as Token or Null) {if(t!=null){t=null;var joined=flag?t:new Token();return joined.value();}return 0;}",
     ] {
-        assert!(compile_sources(&[source, CLASSES]).is_err(), "{source}");
+        assert!(
+            checking::compile_sources(&[source, CLASSES]).is_err(),
+            "{source}"
+        );
     }
     checked(
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Object {return flag?(new Token() as Toybox.Lang.Object):(new Other() as Toybox.Lang.Object);}",

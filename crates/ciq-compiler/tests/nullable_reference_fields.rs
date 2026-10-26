@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{FieldKind, compile_sources, parse_unit_ir};
 
 const TOKEN: &str = "class Token { function initialize() {} function value() { return 41; } } class Other { function initialize() {} function value() { return 9; } }";
@@ -66,7 +68,10 @@ fn source_fields_require_snapshot_proofs_and_exact_assignment_classes() {
         let source = format!(
             "class Holder {{ var target as Token or Null; function initialize() {{}} {body} }}"
         );
-        assert!(compile_sources(&[&source, TOKEN]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[&source, TOKEN]).is_err(),
+            "{body}"
+        );
     }
     for field in [
         "var target as Token or Null = new Token();",
@@ -77,7 +82,10 @@ fn source_fields_require_snapshot_proofs_and_exact_assignment_classes() {
         let source = format!(
             "class Holder extends Toybox.Application.AppBase {{ {field} function initialize() {{ AppBase.initialize(); }} }}"
         );
-        assert!(compile_sources(&[&source, TOKEN]).is_err(), "{field}");
+        assert!(
+            checking::compile_sources(&[&source, TOKEN]).is_err(),
+            "{field}"
+        );
     }
 }
 

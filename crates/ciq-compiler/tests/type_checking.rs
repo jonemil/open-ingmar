@@ -124,7 +124,7 @@ fn partial_matches_do_not_authorize_disjoint_contracts_or_nominal_covariance() {
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Boolean {return x;}",
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Object> {return x;}",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> {return x;}",
-        "class A {} class B {} function f(x as A or B) as A {return x;}",
+        "class A {} class B {} class C {} function f(x as A or B) as C {return x;}",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return x.length();}",
     ] {
         for level in [
@@ -205,6 +205,159 @@ fn structural_signatures_and_disjoint_nested_parameters_remain_invariant() {
                 "{source}"
             );
         }
+    }
+}
+
+#[test]
+fn partial_source_boundaries_preserve_actual_class_alternatives() {
+    let prefix = "using Toybox.Lang; class A {function value() as Lang.Number{return 41;}} class B {function other() as Lang.Number{return 42;}} ";
+    for body in [
+        "function f(x as A or B) as A {return x;}",
+        "function take(x as A) as A {return x;} function f(x as A or B) as A {return take(x);}",
+        "module M {function take(x as A) as A {return x;}} function f(x as A or B) as A {return M.take(x);}",
+        "class C {function take(x as A) as A {return x;} function f(x as A or B) as A {return self.take(x);}}",
+        "class C {function take(x as A) as A {return x;}} function f(c as C,x as A or B) as A {return c.take(x);}",
+        "class C {function initialize(x as A){}} function f(x as A or B) as C {return new C(x);}",
+        "function f(x as A,y as A or B) as A {x=y;return x;}",
+        "class C {var item as A;function initialize(x as A or B){self.item=x;}}",
+        "class C {var item as A;function initialize(x as A){self.item=x;}} function f(c as C,x as A or B) as Void {c.item=x;}",
+        "typedef T as interface {var item as A;}; function f(c as T,x as A or B) as Void {c.item=x;}",
+        "function f(a as Lang.Array<A>,x as A or B) as Void {a[0]=x;}",
+        "function f(a as Lang.Array<A>,x as A or B) as Void {a.add(x);}",
+        "function f(x as A or B) as {:item as A} {return {:item=>x};}",
+        "typedef F as Method(x as A) as Void; function f(m as F,x as A or B) as Void {m.invoke(x);}",
+        "typedef T as interface {function take(x as A) as Void;}; function f(t as T,x as A or B) as Void {t.take(x);}",
+        "function f(flag as Lang.Boolean,x as A or B) as A {return flag?x:new A();}",
+        "function f(x as Lang.Array<A or B>) as Lang.Array<A> {return x;}",
+        "function f(x as Lang.Array<A>) as Lang.Array<A or B> {return x;}",
+        "class C {} typedef I as interface {function other() as Lang.Number;}; function f(x as B or C) as A or I {return x;}",
+    ] {
+        let source = format!("{prefix}{body}");
+        let report = compile_sources_with_options(&[&source], options(TypeCheckLevel::Informative))
+            .unwrap_or_else(|e| panic!("{body}: {e}"));
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary),
+            "{body}"
+        );
+        let ir = report.artifact.to_ir_text();
+        assert!(
+            ir.contains("source-union("),
+            "actual alternatives lost: {body}"
+        );
+        assert!(!ir.contains(".cast "), "implicit cast: {body}");
+        common::pipeline(report.artifact);
+        assert!(
+            compile_sources_with_options(&[&source], options(TypeCheckLevel::Gradual))
+                .unwrap()
+                .warnings
+                .is_empty()
+        );
+        assert!(
+            matches!(
+                compile_sources_with_options(&[&source], options(TypeCheckLevel::Strict)),
+                Err(CompileError::TypeChecking(_))
+            ),
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn source_boundary_overlap_does_not_invent_names_bases_or_dispatch_results() {
+    let prefix = "class A {} class B {} class C {} ";
+    for body in [
+        "function f(x as B) as A {return x;}",
+        "function f(x as B or C) as A {return x;}",
+        "function f(x as Toybox.Lang.Object) as A {return x;}",
+        "function f(x as Toybox.Lang.Array<B or C>) as Toybox.Lang.Array<A> {return x;}",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Object>) as Toybox.Lang.Array<A> {return x;}",
+        "typedef I as interface {function missing() as Toybox.Lang.Number;}; function f(x as B or C) as A or I {return x;}",
+    ] {
+        for level in [
+            TypeCheckLevel::Gradual,
+            TypeCheckLevel::Informative,
+            TypeCheckLevel::Strict,
+        ] {
+            assert!(
+                matches!(
+                    compile_sources_with_options(&[&format!("{prefix}{body}")], options(level)),
+                    Err(CompileError::Source(_))
+                ),
+                "{body}"
+            );
+        }
+    }
+    let source = format!(
+        "{prefix} module M {{function make(x as A or B) as A or B {{return x;}}}} function f(x as A or B) as A {{return M.make(x);}}"
+    );
+    let unit = compile_sources(&[&source]).unwrap();
+    let ir = unit.to_ir_text();
+    for edited in [
+        ir.replace("B@Lang.Object", "Missing@Lang.Object"),
+        ir.replace("B@Lang.Object", "B@WatchUi.View"),
+    ] {
+        assert_ne!(edited, ir);
+        assert!(ciq_compiler::parse_unit_ir(&edited).is_err());
+    }
+    let changed_call = ir
+        .lines()
+        .map(|line| {
+            if line.starts_with(".call ") {
+                line.replace(
+                    "result=source-union(source(A@Lang.Object)|source(B@Lang.Object))",
+                    "result=source(A@Lang.Object)",
+                )
+            } else {
+                line.into()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    assert_ne!(changed_call, ir);
+    assert!(ciq_compiler::parse_unit_ir(&changed_call).is_err());
+    let fields = compile_sources(&[&format!("{prefix} class H {{var item as A;function initialize(x as A or B){{self.item=x;}}function read() as A {{return self.item;}}}}")]).unwrap().to_ir_text();
+    let changed_read = fields
+        .lines()
+        .map(|line| {
+            if line.starts_with(".read-self ") {
+                line.replace("source(A@Lang.Object)", "source(B@Lang.Object)")
+            } else {
+                line.into()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    assert_ne!(changed_read, fields);
+    assert!(ciq_compiler::parse_unit_ir(&changed_read).is_err());
+    let arrays = compile_sources(&[&format!(
+        "{prefix} function f(x as Toybox.Lang.Array<A or B>) as Toybox.Lang.Array<A> {{return x;}}"
+    )])
+    .unwrap()
+    .to_ir_text();
+    for edited in [
+        arrays.replace("B@Lang.Object", "Missing@Lang.Object"),
+        arrays.replace("B@Lang.Object", "B@WatchUi.View"),
+    ] {
+        assert_ne!(edited, arrays);
+        assert!(ciq_compiler::parse_unit_ir(&edited).is_err());
+    }
+}
+
+#[test]
+fn source_guards_prove_complete_matches_in_strict_mode() {
+    for source in [
+        "class A {} class B {} function f(x as A or B) as A {if(x instanceof A){return x;}return new A();}",
+        "class A {} function f(x as A or Null) as A {if(x==null){return new A();}return x;}",
+    ] {
+        let report =
+            compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)).unwrap();
+        assert!(report.warnings.is_empty());
+        common::pipeline(report.artifact);
     }
 }
 

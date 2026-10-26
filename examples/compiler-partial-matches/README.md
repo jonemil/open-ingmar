@@ -4,7 +4,9 @@
 results, parameter/field stores, container construction, and a native call.
 It also narrows and widens Array views, matches nested Array and Dictionary
 parameters, and checks shared mutations through the original and narrowed
-references. Runtime inputs select matching alternatives. The actual types remain
+references. Source-class cases pass both TokenA and TokenB through a TokenA
+view; TokenB still dispatches to its own `number()` method through returns,
+fields, records, and arrays. Annotations do not convert the runtime object. The actual types remain
 in IR; compilation inserts no casts or runtime guards. Other alternatives may
 still fail at runtime. Compare the full console with [expected.txt](expected.txt).
 

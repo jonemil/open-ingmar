@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 const CLASSES: &str = "class A extends Toybox.Lang.Object{function initialize(){} function count() as Toybox.Lang.Number{return 7;}} class B extends Toybox.Lang.Object{function initialize(){} function size() as Toybox.Lang.Number{return 9;}}";
 
@@ -34,9 +36,16 @@ fn source_unions_reject_erasure_forgery_and_stale_proofs() {
         "function f(x as A or B){if(x instanceof A){x=new B();return x.count();}return 0;}",
         "module M{function echo(x as A or B){return x;}}function f(x as Toybox.Lang.Object){return M.echo(x);}",
     ] {
-        assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[CLASSES, body]).is_err(),
+            "{body}"
+        );
     }
-    let unit = compile_sources(&[CLASSES, "function f(x as A or B) as A or B{return x;}"]).unwrap();
+    let unit = compile_sources(&[
+        CLASSES,
+        "class C {} function f(x as A or B) as A or B{return x;}",
+    ])
+    .unwrap();
     let text = unit.to_ir_text();
     assert!(text.contains("source-union(source(A@Lang.Object)|source(B@Lang.Object))"));
     for changed in [
@@ -45,7 +54,7 @@ fn source_unions_reject_erasure_forgery_and_stale_proofs() {
         text.replace("source(B@Lang.Object)", "tuple(void)"),
         text.replace(
             "result=source-union(source(A@Lang.Object)|source(B@Lang.Object))",
-            "result=source-union(source(A@Lang.Object)|tuple())",
+            "result=source-union(source(C@Lang.Object)|tuple())",
         ),
     ] {
         assert!(parse_unit_ir(&changed).is_err(), "{changed}");

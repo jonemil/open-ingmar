@@ -79,8 +79,8 @@ Both branch edges carry direct class/Null refinements, and storage writes kill
 those facts. Every possible native receiver/operand must support an operation;
 result alternatives are normalized. Container parameters use invariant
 equality; partial native union overlaps are dynamic obligations, including
-inside nested Arrays/Dictionaries. Source/structural parameters retain exact
-witness requirements. Fields and lexical casts retain their existing domains.
+inside nested Arrays/Dictionaries. Known class-only source parameters can overlap by exact class/Null identity;
+structural contracts retain exact witness requirements. Fields and lexical casts retain their existing domains.
 
 ### Source interface contracts
 
@@ -2032,13 +2032,18 @@ singleton signature, call-result, and local/join metadata just as parsing does.
 Saved text uses `source-union(...)`
 from the [type grammar](grammar.md#type-tags).
 
-Function validation tracks the complete exact set through values and storage,
-checks subset assignability, and refines both class-test edges. API projections
+Function validation tracks retained class sets through operands and storage,
+checks value-boundary overlap separately from proven subset assignability, and
+refines both class-test edges. API projections
 are derived from all retained bases, including after negative-edge narrowing;
 they do not establish exact identity. Unit validation resolves every class/base
 against declarations and every call/result claim against its signature.
-Mixed assignability checks each actual exact class against exact alternatives
-or a valid native alternative, with structural witnesses resolved by the unit.
+Mixed boundaries compare exact classes, native alternatives, and unit-resolved
+structural witnesses. Gradual model validation permits a matching alternative;
+strict source diagnostics require a complete match. Actual operands are not
+relabelled, converted, or guarded. Declared destination views remain distinct
+from the evidence retained at the crossing operation. Field/read/dispatch and
+call-result claims still require exact agreement with their declarations.
 Actual native alternatives can satisfy only native contracts. Fixed local and
 block-edge checks resolve deferred witnesses too; inferred read metadata cannot
 claim a witness by changing its type tag. Structural interface consumers check

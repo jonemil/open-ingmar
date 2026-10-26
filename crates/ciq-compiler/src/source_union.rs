@@ -226,6 +226,39 @@ impl SourceUnion {
                     })
             })
     }
+    /// Accept a runtime boundary with a shared class/Null alternative, native
+    /// overlap, or a unit-established interface witness.
+    /// A native base cannot establish an exact class or structural witness.
+    /// This does not replace `accepts_with` for proven membership checks.
+    pub(crate) fn accepts_boundary_with(
+        &self,
+        actual: &Self,
+        witness: impl Fn(&SourceClass, &Type) -> bool,
+    ) -> bool {
+        (self.nullable && actual.nullable)
+            || actual
+                .native
+                .iter()
+                .any(|ty| crate::native::accepts_boundary(&self.native_type(), ty))
+            || actual.classes.iter().any(|class| {
+                self.classes.contains(class)
+                    || self.native.iter().any(|ty| {
+                        crate::native::accepts(ty, &Type::named(class.base.api_name()))
+                            || witness(class, ty)
+                    })
+            })
+    }
+
+    /// Defer interface witnesses to unit validation at a value boundary.
+    pub(crate) fn accepts_boundary(&self, actual: &Self) -> bool {
+        self.accepts_boundary_with(actual, |_, ty| {
+            crate::structural::contains(ty)
+                || matches!(
+                    crate::ValueType::from_api_type(ty),
+                    Some(crate::ValueType::Interface(_))
+                )
+        })
+    }
     pub(crate) fn merge(&self, other: &Self) -> Option<Self> {
         Self::with_native(
             self.classes.iter().chain(&other.classes).cloned().collect(),

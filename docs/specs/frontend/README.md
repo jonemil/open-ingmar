@@ -83,14 +83,24 @@ these uncertain boundaries; Strict rejects them. Disjoint contracts remain
 errors at every checked level. A matching alternative does not guarantee that
 the actual runtime value will match.
 
-Disabled checking, partial source-class matches, and otherwise unsupported
-operations remain outside this profile. Partial container matching is limited
-to nominal native parameters, Any, Null, unions, and nested Arrays/Dictionaries;
-source, structural, callback, and tuple parameters retain their exact checks. Structural matching
+Source-class value boundaries similarly accept overlapping retained class
+alternatives, native alternatives, or Null under gradual/informative checking.
+Each matching interface alternative needs a unit-established witness. The
+operand retains its actual identities; the destination retains its declared
+view. A `B` object passed through an `A` return is not converted to an `A`.
+Strict rejects uncertainty at that boundary. Known source-element containers
+can also match overlapping class/Null sets, including nested containers.
+
+Disabled checking and otherwise unsupported operations remain outside this
+profile. Partial container matching covers supported native parameters and
+known class-only source sets. Mixed/erased source-element profiles, structural
+signatures, callbacks, and tuple shapes retain their existing exact checks. Structural matching
 distinguishes unknown member contracts from missing or incompatible members;
 mutable fields and structural signatures retain their invariant requirements.
-Exact source/interface witnesses are established by unit validation before
-policy analysis; a native base projection cannot establish those witnesses.
+Unit validation resolves source declarations and matching interface witnesses
+before policy analysis; a native base projection cannot establish an exact
+source identity. Field and dispatch metadata must match their declarations,
+including when an operand crossed an uncertain value boundary.
 Policy diagnostics do not relax these mandatory IR/unit checks. Strict applies
 to the supported profile, including its unchecked explicit assertions.
 
@@ -926,8 +936,9 @@ contracts and prohibits native callback invocation through any receiver. See the
 
 Exact source-class signatures resolve across the whole unit before call
 checking. Every source parameter/result name must designate a constructible
-declared class; arguments and returned references retain that exact identity.
-Native base signatures erase it. Function and call text preserve these contracts
+declared class. Contracts retain those exact names, while boundary operands
+retain their actual alternatives under the [checking policy](#type-checking-policy).
+Native base signatures carry only their native contract. Function and call text preserve these contracts
 with `source(ClassName@Native.Base)` tags; see the
 [source signature profile](#source-class-signatures).
 
@@ -1137,8 +1148,10 @@ runtime proofs from caller assertions. A different source class, Null, or an
 erased native reference cannot satisfy a non-null contract. Native contracts may
 accept a source instance through its base while erasing its exact class identity.
 
-Nullable source contracts accept that exact class, its nullable form, or Null;
-they reject unrelated source classes and erased native references. Parameters,
+Nullable source contracts prove matches for that exact class, its nullable
+form, and Null. Overlapping source unions follow the
+[checking policy](#type-checking-policy); disjoint classes and erased native
+references cannot supply an exact class identity. Parameters,
 declared call results, and local copies retain both class and nullability.
 Source dispatch and non-null source consumers require a non-null proof on the
 read, using the shared [branch rules](#runtime-object-predicates). Checking an
@@ -1148,7 +1161,6 @@ A local initialized from a nullable source value exposes that contract until
 flow establishes a different one. A fresh copy inside a proven branch has a
 non-null contract. Checks refine reads without rewriting storage; assignment
 updates an inferred local's contract, including class identity and nullability.
-Nullable source Array elements remain unsupported.
 
 A class-containing union retains sorted, deduplicated exact class/native-base
 identities alongside supported native alternatives and optional Null. Its
@@ -1158,12 +1170,14 @@ No subtype subsumption removes an exact identity: `Token or Lang.Object` retains
 both the known Token alternative and the opaque Object alternative. Any instead
 absorbs the union under its separate gradual boundary rules.
 
-Each actual alternative must fit the declared contract. An exact class can match
-that identity or an assignable native alternative; a structural interface match
-requires its class's verified signature. An opaque native reference can match
-only native alternatives, never an exact source identity. Null requires a
-nullable contract. These checks apply at parameters, returns, fixed storage,
-and explicit block-value edges; saved metadata cannot invent a witness.
+A proven match requires every actual alternative to fit the contract; a
+runtime boundary may accept an uncertain overlap under the
+[checking policy](#type-checking-policy). Exact classes match by identity or
+an assignable native alternative; interface matches require verified signatures.
+Opaque native references cannot supply source identities. Null proves a match
+only for a nullable destination. Parameters, returns, storage, and block-value
+edges preserve actual alternatives while checking the destination contract;
+saved field/dispatch metadata cannot invent a witness.
 [Field storage](#union-fields) shares these contracts. Explicit
 [union assertions](#lexical-casts) retain the asserted alternatives without
 proving runtime compatibility.
@@ -3306,8 +3320,10 @@ supported Array element types retain their complete contracts. Named typedefs,
 fields, parameters/results, nested Arrays, and tuple shape loss share these
 rules. General inference from unconstrained source literals remains separate.
 
-Existing Array references are invariant: neither a shared native base nor an
-unrelated source class establishes the required element identity. Empty and
+Known source-element Array contracts compare invariantly; overlapping exact
+class/Null sets may cross an uncertain boundary under the
+[checking policy](#type-checking-policy). Neither a shared native base nor an
+unrelated class establishes the required element identity. Empty and
 computed literals acquire their contract from context. Sized allocation requires
 nullable elements; Null-only constants use the existing Null DATA encoding and
 remain independently mutable on each load. A nullable read needs a guarded
@@ -3832,8 +3848,10 @@ API levels. A lexical method name alone imposes no native API introduction:
 a source implementation can define its own method with that name.
 
 Unit validation checks witnesses at arguments, returns, parameter/fixed-local
-writes, field writes, and control-flow joins. Every exact source alternative
-must satisfy a union boundary. An erased Object cannot claim unknown members;
+writes, field writes, and control-flow joins. Every actual alternative must
+satisfy a union for a proven match; an uncertain boundary requires at least one
+matching alternative or established witness under the
+[checking policy](#type-checking-policy). An erased Object cannot claim unknown members;
 Any retains the language's gradual checks. Interface values can be passed to a
 weaker structural contract or Object view when their declarations establish it.
 Nullable interfaces require a non-null proof before member access. Interface
