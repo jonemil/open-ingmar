@@ -64,7 +64,9 @@ Existing entry points retain their current behavior, equivalent to Gradual.
 
 Boundary analysis distinguishes a proven match, uncertainty (including Any),
 and a proven mismatch. It covers returns, fixed local/parameter storage,
-resolved call arguments, container construction, and indexed access. Source
+instance and structural field writes, typed control-flow edges, resolved call
+and constructor arguments, container construction, and indexed access. Calls
+through source unions check each distinct candidate parameter contract. Source
 locations retain file indices and one-based line/column; untyped-parameter
 messages point to the enclosing function declaration. Inherited SDK callback
 contracts are not treated as omitted annotations. Explicit unchecked casts
@@ -72,10 +74,13 @@ remain assertions rather than runtime checks.
 
 These levels currently apply diagnostics to the existing accepted source
 subset. They do not yet implement the SDK's disabled checking or its acceptance
-of partial union matches in gradual/informative mode. Field-store and
-structural-witness ambiguity coverage also remains incomplete; Strict is not
-yet a guarantee that every source operation has a statically proven type.
-Mandatory IR validation is independent of this reporting policy.
+of partial union matches in gradual/informative mode. Structural matching
+distinguishes unknown member contracts from missing or incompatible members;
+mutable fields and structural signatures retain their invariant requirements.
+Exact source/interface witnesses are established by unit validation before
+policy analysis; a native base projection cannot establish those witnesses.
+Policy diagnostics do not relax these mandatory IR/unit checks. Strict applies
+to the supported profile, including its unchecked explicit assertions.
 
 ## Types and nullability
 

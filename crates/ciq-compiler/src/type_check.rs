@@ -113,6 +113,17 @@ fn all(parts: impl IntoIterator<Item = Match>) -> Match {
     }
     result
 }
+/// Mutable fields and structural signatures retain their invariant contracts.
+/// Unknown components make unequal contracts uncertain, not proven matches.
+fn invariant(expected: &Type, actual: &Type) -> Match {
+    if crate::structural::same_type(expected, actual) {
+        Match::Yes
+    } else if contains_any(expected) || contains_any(actual) {
+        Match::Maybe
+    } else {
+        Match::No
+    }
+}
 /// Classify native value boundaries without conflating unknown/overlapping
 /// types with disjoint types. Exact class witnesses remain unit obligations.
 pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
@@ -170,16 +181,36 @@ pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
             }
         }
         (Type::Dictionary { key: a, value: b }, Type::Dictionary { key: c, value: d }) => {
-            let part = |expected: &Type, actual: &Type| {
-                if crate::structural::same_type(expected, actual) {
-                    Match::Yes
-                } else if contains_any(expected) || contains_any(actual) {
-                    Match::Maybe
-                } else {
-                    Match::No
+            all([invariant(a, c), invariant(b, d)])
+        }
+        (Type::Structural(shape), _) => {
+            if !crate::native::accepts(&Type::named("Toybox.Lang.Object"), actual) {
+                return Match::No;
+            }
+            let fields = shape.fields.iter().map(|(name, expected)| {
+                crate::structural::field_type(actual, name)
+                    .map_or(Match::No, |actual| invariant(&expected.api_type(), &actual))
+            });
+            let methods = shape.methods.iter().map(|(name, expected)| {
+                let Some(actual) = crate::structural::method_contract(actual, name) else {
+                    return Match::No;
+                };
+                if expected.parameters.len() != actual.parameters.len() {
+                    return Match::No;
                 }
-            };
-            all([part(a, c), part(b, d)])
+                all(std::iter::once(invariant(
+                    &expected.result.api_type(),
+                    &actual.result.api_type(),
+                ))
+                .chain(
+                    expected
+                        .parameters
+                        .iter()
+                        .zip(&actual.parameters)
+                        .map(|(a, b)| invariant(&a.api_type(), &b.api_type())),
+                ))
+            });
+            all(fields.chain(methods))
         }
         (Type::Options(a), Type::Options(b)) => all(b
             .iter()
@@ -256,6 +287,7 @@ fn inspect(
     owner: &str,
     signatures: &BTreeMap<(String, String), Vec<Type>>,
     inherited: bool,
+    unit: Option<&CompilationUnit>,
 ) -> Vec<Issue> {
     let mut issues = Vec::new();
     let mut issue = |operation, kind, message| {
@@ -286,6 +318,8 @@ fn inspect(
     let mut array_builders = BTreeMap::new();
     let mut dictionary_builders = BTreeMap::new();
     let mut record_builders = BTreeMap::new();
+    let joins = crate::joins::validate(function.operations())
+        .expect("policy diagnostics require validated IR");
     let symbols: BTreeMap<_, _> = function
         .operations()
         .iter()
@@ -355,6 +389,39 @@ fn inspect(
 
             Operation::Return { value } => {
                 boundaries.push((function.return_type().api_type(), *value))
+            }
+            Operation::JumpValue { target, value } => {
+                boundaries.push((joins[target].api_type(), *value));
+            }
+            Operation::SelfFieldAssign { field, value } => {
+                if let Some(field) = unit
+                    .and_then(|unit| {
+                        unit.classes()
+                            .iter()
+                            .find(|c| c.name == owner.trim_end_matches('.'))
+                    })
+                    .and_then(|class| class.fields.iter().find(|f| f.name == *field))
+                {
+                    boundaries.push((field.result_type().api_type(), *value));
+                }
+            }
+            Operation::MemberWrite {
+                receiver,
+                member,
+                value,
+                field_type,
+            } => {
+                let receiver = ty(receiver);
+                dynamic = receiver == Type::Any;
+                if let Some(expected) = field_type {
+                    boundaries.push((expected.api_type(), *value));
+                } else {
+                    for receiver in crate::unions::alternatives(&receiver) {
+                        if let Ok(expected) = crate::structural::field_type(receiver, member) {
+                            boundaries.push((expected, *value));
+                        }
+                    }
+                }
             }
             Operation::LocalDeclare { local, value_type } => {
                 locals.insert(*local, value_type.api_type());
@@ -428,6 +495,13 @@ fn inspect(
                     }
                 }
             }
+            Operation::SourceNew {
+                class, arguments, ..
+            } => {
+                if let Some(parameters) = signatures.get(&(class.clone(), "initialize".into())) {
+                    boundaries.extend(parameters.iter().cloned().zip(arguments.iter().copied()));
+                }
+            }
             Operation::SelfCall {
                 member, arguments, ..
             }
@@ -494,9 +568,9 @@ fn inspect(
                     }
                 }
             }
-            Operation::MemberRead { receiver, .. }
-            | Operation::MemberWrite { receiver, .. }
-            | Operation::Has { receiver, .. } => dynamic = ty(receiver) == Type::Any,
+            Operation::MemberRead { receiver, .. } | Operation::Has { receiver, .. } => {
+                dynamic = ty(receiver) == Type::Any
+            }
             _ => {}
         }
         if dynamic {
@@ -623,7 +697,16 @@ pub fn compile_sources_with_options(
     let issues = bodies
         .iter()
         .enumerate()
-        .flat_map(|(at, function)| inspect(function, at, &owners[at], &signatures, inherited[at]))
+        .flat_map(|(at, function)| {
+            inspect(
+                function,
+                at,
+                &owners[at],
+                &signatures,
+                inherited[at],
+                Some(&unit),
+            )
+        })
         .collect();
     // Body references are needed only while locating diagnostics.
     let result = finish((), issues, &bodies, sources, &origins, options.type_check)?;
@@ -651,7 +734,7 @@ pub fn compile_function_with_options(
             warnings: vec![],
         });
     }
-    let issues = inspect(&function, 0, "", &BTreeMap::new(), false);
+    let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None);
     let result = finish(
         (),
         issues,
@@ -669,6 +752,69 @@ pub fn compile_function_with_options(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn typed_join_reports_the_incoming_unknown_edge() {
+        let ir = "ciq-ir\n.function f parameters=1 parameter-types=any result=integer\n.block ^0\n.boolean %0 true\n.branch %0 ^1 ^2\n.block ^1\n.parameter %1 0\n.jump-value ^3 %1\n.block ^2\n.integer %2 22\n.jump-value ^3 %2\n.block ^3\n.block-value %3 integer\n.return %3\n.end\n";
+        let function = crate::parse_function_ir(ir).unwrap();
+        let issues = inspect(&function, 0, "", &BTreeMap::new(), false, None);
+        let boundary: Vec<_> = issues
+            .iter()
+            .filter(|issue| issue.kind == TypeDiagnosticKind::AmbiguousBoundary)
+            .collect();
+        assert_eq!(boundary.len(), 1);
+        assert!(matches!(
+            function.operations()[boundary[0].operation.unwrap()].operation,
+            Operation::JumpValue { .. }
+        ));
+        let typed = ir.replace("parameter-types=any", "parameter-types=integer");
+        let function = crate::parse_function_ir(&typed).unwrap();
+        assert!(inspect(&function, 0, "", &BTreeMap::new(), false, None).is_empty());
+        let dynamic_join = ir
+            .replace("result=integer", "result=any")
+            .replace("%3 integer", "%3 any");
+        let function = crate::parse_function_ir(&dynamic_join).unwrap();
+        assert!(
+            !inspect(&function, 0, "", &BTreeMap::new(), false, None)
+                .iter()
+                .any(|i| i.kind == TypeDiagnosticKind::AmbiguousBoundary)
+        );
+    }
+
+    #[test]
+    fn structural_matches_keep_unknown_members_distinct_from_missing_members() {
+        let make = |field: crate::ReturnType, result: crate::ReturnType| {
+            Type::Structural(Box::new(crate::StructuralInterface {
+                fields: BTreeMap::from([("value".into(), field)]),
+                methods: BTreeMap::from([(
+                    "read".into(),
+                    crate::StructuralMethod {
+                        parameters: vec![],
+                        result,
+                    },
+                )]),
+                declaration: None,
+            }))
+        };
+        let expected = make(crate::ReturnType::Integer, crate::ReturnType::Integer);
+        let unknown = make(crate::ReturnType::Any, crate::ReturnType::Integer);
+        assert_eq!(compatibility(&expected, &unknown), Match::Maybe);
+        assert_eq!(
+            compatibility(
+                &expected,
+                &make(crate::ReturnType::Any, crate::ReturnType::String)
+            ),
+            Match::No
+        );
+        assert_eq!(compatibility(&expected, &Type::Null), Match::No);
+        assert_eq!(compatibility(&expected, &Type::Any), Match::Maybe);
+        let mut missing = expected.clone();
+        if let Type::Structural(shape) = &mut missing {
+            shape.methods.clear();
+        }
+        assert_eq!(compatibility(&expected, &missing), Match::No);
+        assert_eq!(compatibility(&expected, &expected), Match::Yes);
+    }
+
     #[test]
     fn native_matches_separate_dynamic_overlap_and_disjoint_contracts() {
         let number = Type::named("Toybox.Lang.Number");

@@ -125,6 +125,119 @@ fn strict_typed_application_preserves_native_and_saved_prg_output() {
 }
 
 #[test]
+fn field_stores_and_constructors_report_unknown_values_at_the_write_or_call() {
+    let cases = [
+        "class Box {var value=0;function set(x){self.value=x;}}",
+        "class Box {var value=0;} function f(b as Box,x){b.value=x;}",
+        "typedef T as interface {var value as Toybox.Lang.Number;}; function f(b as T,x){b.value=x;}",
+        "class Box {var value=0;function initialize(x as Toybox.Lang.Number){self.value=x;}} function f(x){return new Box(x);}",
+    ];
+    for source in cases {
+        let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Informative))
+            .unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(
+            report
+                .warnings
+                .iter()
+                .filter(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary)
+                .count(),
+            1,
+            "{source}"
+        );
+        common::pipeline(report.artifact);
+        assert!(
+            matches!(
+                compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
+                Err(CompileError::TypeChecking(_))
+            ),
+            "{source}"
+        );
+    }
+    // A member store needs no declaring unit when its receiver carries the shape.
+    let fragment = "function f(b as interface {var value as Toybox.Lang.Number;},x){b.value=x;}";
+    let report =
+        compile_function_with_options(fragment, options(TypeCheckLevel::Informative)).unwrap();
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary)
+    );
+}
+
+#[test]
+fn union_receivers_check_every_distinct_argument_contract() {
+    let source = "class A {function put(x as Toybox.Lang.Number) as Void {}} class B {function put(x as Toybox.Lang.String) as Void {}} function f(receiver as A or B,x) as Void {receiver.put(x);}";
+    let report =
+        compile_sources_with_options(&[source], options(TypeCheckLevel::Informative)).unwrap();
+    let boundaries: Vec<_> = report
+        .warnings
+        .iter()
+        .filter(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary)
+        .collect();
+    assert_eq!(boundaries.len(), 2);
+    assert!(
+        boundaries
+            .iter()
+            .any(|d| d.location.diagnostic.message.contains("Number"))
+    );
+    assert!(
+        boundaries
+            .iter()
+            .any(|d| d.location.diagnostic.message.contains("String"))
+    );
+    common::pipeline(report.artifact);
+    let shared = source.replace("Toybox.Lang.String", "Toybox.Lang.Number");
+    let report =
+        compile_sources_with_options(&[&shared], options(TypeCheckLevel::Informative)).unwrap();
+    assert_eq!(
+        report
+            .warnings
+            .iter()
+            .filter(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn exact_interface_witnesses_and_typed_stores_remain_proven() {
+    let source = "typedef T as interface {var value as Toybox.Lang.Number;function read() as Toybox.Lang.Number;}; class Box {var value=0;function set(x as Toybox.Lang.Number) as Void {self.value=x;} function read() as Toybox.Lang.Number {return self.value;}} function pass(x as Box) as T {return x;} function f(b as T,x as Toybox.Lang.Number) as Toybox.Lang.Number {b.value=x;return b.read();}";
+    let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)).unwrap();
+    assert!(report.warnings.is_empty());
+    common::pipeline(report.artifact);
+    let bad = source.replace("var value=0;", "var value as Toybox.Lang.String;");
+    for level in [
+        TypeCheckLevel::Gradual,
+        TypeCheckLevel::Informative,
+        TypeCheckLevel::Strict,
+    ] {
+        assert!(matches!(
+            compile_sources_with_options(&[&bad], options(level)),
+            Err(CompileError::Source(_))
+        ));
+    }
+}
+
+#[test]
+fn interface_application_keeps_proven_source_witnesses_through_all_stages() {
+    let source = include_str!("../../../examples/compiler-interfaces/app.mc");
+    let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)).unwrap();
+    assert!(report.warnings.is_empty());
+    let app = ciq_compiler::application::ConsoleApplication {
+        id: [1; 16],
+        entry: "MinimalConsoleApp.onStart".into(),
+    };
+    let checked = common::application(&report.artifact, &app);
+    let default = ciq_compiler::application::build_console_application(
+        &compile_sources(&[source]).unwrap(),
+        &app,
+    )
+    .unwrap();
+    assert_eq!(checked.to_bytes(), default.to_bytes());
+}
+
+#[test]
 fn cli_selects_policy_and_does_not_create_output_on_strict_failure() {
     use std::{
         fs,

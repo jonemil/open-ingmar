@@ -37,9 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Complete checked-policy ambiguity analysis at instance/member field stores,
-  control-flow value joins, and source structural/interface witness boundaries;
-  test differing contracts across union receiver candidates.
 - [ ] Accept SDK partial type matches in gradual/informative mode through
   policy-aware source/IR lowering at calls, returns, storage, and operations;
   retain strict rejection and mandatory IR/backend invariants.
