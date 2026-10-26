@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 
 fn check(source: &str) -> ciq_compiler::CompilationUnit {
@@ -79,7 +81,7 @@ fn stale_field_reads_and_forged_declarations_fail_validation() {
         r#"function f() as Lang.Number {if(self.optional!=null){self.noop();self.optional.add(true);}return 0;}"#,
     ] {
         let source = format!("{PREFIX}{body}}}");
-        assert!(compile_sources(&[&source]).is_err(), "{source}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
     }
     let unit = check(&format!(
         "{PREFIX}function f() as Lang.String {{self.pair[0]=\"changed\";return self.pair[0];}}}}"

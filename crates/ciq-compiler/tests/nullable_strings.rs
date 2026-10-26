@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -69,7 +71,7 @@ fn string_proofs_survive_ir_and_reject_unsafe_consumers() {
         "function f() { var s = \"hello\".substring(\"0\", 2); return 0; }",
         "function f() { var s = \"hello\".substring(0); return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f() { var s = \"hello\".substring(0, 2); if (s == null) { return 0; } return s.length(); }").unwrap();
     let mut operations = f.operations().to_vec();

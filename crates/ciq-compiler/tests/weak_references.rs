@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -55,7 +57,7 @@ fn weak_retrieval_requires_a_saved_non_null_proof_and_preserves_opacity() {
         "return w.get().weak();",
     ] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f(w as Toybox.Lang.WeakReference) as Toybox.Lang.String {{ {body} }}"
             ))
             .is_err(),
@@ -68,11 +70,14 @@ fn weak_retrieval_requires_a_saved_non_null_proof_and_preserves_opacity() {
         "function f(o as Toybox.Lang.Object) { return o.weak(); }",
         "function f() as Toybox.Lang.Object { return null; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function("function f(w as Toybox.Lang.WeakReference) as Toybox.Lang.Object or Null { return w.get(); }").unwrap();
     let text = f.to_ir_text();
-    assert!(parse_function_ir(&text.replace("result=nullable-object", "result=object")).is_err());
+    assert!(parse_function_ir(&text.replace("result=nullable-object", "result=boolean")).is_err());
     assert!(parse_function_ir(&text.replace(" get", " stillAlive")).is_ok()); // Boolean may erase to Object.
     assert!(parse_function_ir(&text.replace(" get", " absent")).is_err());
 }

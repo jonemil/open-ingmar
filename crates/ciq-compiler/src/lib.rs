@@ -2408,7 +2408,10 @@ impl Function {
                     }
                     if !infer_joins
                         && (!source_matches
-                            || !native::accepts(&contract.api_type(), &type_of(value).api_type()))
+                            || !native::accepts_boundary(
+                                &contract.api_type(),
+                                &type_of(value).api_type(),
+                            ))
                     {
                         return Err(fail(
                             "edge value does not match target block parameter type",
@@ -2499,7 +2502,7 @@ impl Function {
                                     value,
                                     type_of(value).api_type(),
                                 );
-                                if !native::accepts(expected, &actual)
+                                if !native::accepts_boundary(expected, &actual)
                                     && !origins.deferred_interface(expected, value)
                                 {
                                     return Err(fail(
@@ -2563,7 +2566,7 @@ impl Function {
                         native::structural_api(&expected, &type_of(value).api_type(), context)
                             .map_err(|e| fail(&e))?;
                     }
-                    if !native::accepts(
+                    if !native::accepts_boundary(
                         &expected,
                         &origins.element_value(&expected, value, type_of(value).api_type()),
                     ) && !origins.deferred_interface(&expected, value)
@@ -2588,7 +2591,7 @@ impl Function {
                         }
                     }
                     if values.iter().any(|v| {
-                        !native::accepts(
+                        !native::accepts_boundary(
                             &expected,
                             &origins.element_value(&expected, *v, type_of(*v).api_type()),
                         ) && !origins.deferred_interface(&expected, *v)
@@ -2929,7 +2932,7 @@ impl Function {
                             native::structural_api(&target, &type_of(value).api_type(), context)
                                 .map_err(|message| fail(&message))?;
                         }
-                        if !native::accepts(&target, &type_of(value).api_type())
+                        if !native::accepts_boundary(&target, &type_of(value).api_type())
                             && !origins.deferred_interface(&target, value)
                         {
                             return Err(fail("field write type mismatch"));
@@ -3512,7 +3515,7 @@ impl Function {
                         native::structural_api(&element, &type_of(value).api_type(), context)
                             .map_err(|e| fail(&e))?;
                     }
-                    if !native::accepts(
+                    if !native::accepts_boundary(
                         &element,
                         &origins.element_value(&element, value, type_of(value).api_type()),
                     ) && !origins.deferred_interface(&element, value)
@@ -3609,7 +3612,7 @@ impl Function {
                         native::structural_api(&target, &type_of(value).api_type(), context)
                             .map_err(|message| fail(&message))?;
                     }
-                    if !native::accepts(&target, &type_of(value).api_type())
+                    if !native::accepts_boundary(&target, &type_of(value).api_type())
                         && !origins.deferred_interface(&target, value)
                     {
                         return Err(fail(
@@ -4018,7 +4021,10 @@ impl Function {
                         let source_witness =
                             origins.deferred_interface(&contract.api_type(), value);
                         if !source_witness
-                            && !native::accepts(&contract.api_type(), &type_of(value).api_type())
+                            && !native::accepts_boundary(
+                                &contract.api_type(),
+                                &type_of(value).api_type(),
+                            )
                         {
                             return Err(fail("return type does not match function contract"));
                         }
@@ -4473,7 +4479,7 @@ impl Function {
         };
         let result = if type_text::explicit_function_result(&self.return_type)
             || (self.return_type != ReturnType::Any && self.return_type != ReturnType::Void
-                && self.operations.iter().any(|op| matches!(op.operation, Operation::Return { value } if self.value_types[&value] == ValueType::Any)))
+                && self.operations.iter().any(|op| matches!(op.operation, Operation::Return { value } if !structural::same_type(&self.return_type.api_type(), &self.value_types[&value].api_type()))))
             || (self.return_type != ReturnType::Void
                 && !self
                     .operations

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Function, LocatedOperation, Operation, ParameterType, ReturnType, ValueId,
     api::{ApiContext, ApiLevel},
@@ -60,7 +62,7 @@ fn conditions_validate_every_operand_and_only_propagate_guaranteed_null_facts() 
         "true | false",
     ] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f() as Toybox.Lang.Number {{ if ({condition}) {{ return 1; }} return 0; }}"
             ))
             .is_err(),
@@ -75,7 +77,7 @@ fn conditions_validate_every_operand_and_only_propagate_guaranteed_null_facts() 
         "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); while (n == null || 1 > n) { break; } return n; }",
         "function f() as Toybox.Lang.Number { var n = \"8\".toNumber(); if (!(n == null) && n > 0) { n = null; return n; } return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     for source in [
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (!(n == null) && n > 0) { return n; } return 0; }",

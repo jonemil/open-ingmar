@@ -18,7 +18,7 @@ fn nullable_signatures_guards_and_edges_survive_saved_ir() {
         let text = function.to_ir_text();
         let changed = text.replace(
             &format!("result=nullable-{}", interface.to_lowercase()),
-            &format!("result={}", interface.to_lowercase()),
+            "result=boolean",
         );
         assert_ne!(text, changed);
         assert!(parse_function_ir(&changed).is_err());

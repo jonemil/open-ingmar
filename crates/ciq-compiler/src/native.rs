@@ -176,7 +176,7 @@ fn signature_call(
             .parameters
             .iter()
             .zip(arguments)
-            .all(|(expected, actual)| accepts(&expected.api_type(), actual))
+            .all(|(expected, actual)| accepts_boundary(&expected.api_type(), actual))
     {
         return Err("call arguments do not match the declared signature".into());
     }
@@ -339,7 +339,7 @@ pub(crate) fn value_call(
                     .parameters
                     .iter()
                     .zip(arguments)
-                    .all(|(expected, actual)| accepts(expected, actual))
+                    .all(|(expected, actual)| accepts_boundary(expected, actual))
             {
                 return Err("interface call arguments do not match the declared signature".into());
             }
@@ -620,7 +620,7 @@ fn check_arguments(
             .parameters
             .get(index)
             .or(signature.variadic.as_ref())
-            .is_some_and(|expected| accepts(expected, actual))
+            .is_some_and(|expected| accepts_boundary(expected, actual))
     }) {
         return Err("native call argument types do not match its API contract".into());
     }
@@ -721,6 +721,24 @@ fn scalar_comparable(actual: &api::Type) -> bool {
                     && required.since <= level
             })
     })
+}
+
+/// Accept a runtime value boundary when a native union has at least one
+/// matching alternative. Other alternatives remain possible runtime failures.
+/// This does not relax invariant containers, structural signatures, exact
+/// source identities, receiver profiles, arity, or API availability.
+pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool {
+    fn nominal(ty: &api::Type) -> bool {
+        match ty {
+            api::Type::Named(_) | api::Type::Null => true,
+            api::Type::Union(parts) => parts.iter().all(nominal),
+            _ => false,
+        }
+    }
+    accepts(expected, actual)
+        || nominal(expected)
+            && nominal(actual)
+            && matches!(actual, api::Type::Union(parts) if parts.iter().any(|part| accepts(expected, part)))
 }
 
 /// Check exact types, declared inheritance, verified scalar Comparable witnesses,
@@ -1033,7 +1051,7 @@ fn module_contract(
         .parameters
         .iter()
         .zip(arguments)
-        .all(|(expected, actual)| accepts(expected, actual))
+        .all(|(expected, actual)| accepts_boundary(expected, actual))
     {
         return Err("native call argument types do not match its API contract".into());
     }

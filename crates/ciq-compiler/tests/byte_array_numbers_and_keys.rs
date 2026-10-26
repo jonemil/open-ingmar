@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     DictionaryKey, DictionaryValue, Operation, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel, Type},
@@ -25,7 +27,7 @@ fn byte_number_calls_keep_numeric_results_options_and_saved_contracts() {
     let f=compile_function("function f(b as Lang.ByteArray) as Lang.Numeric {return b.decodeNumber(Lang.NUMBER_FORMAT_UINT32,{});}").unwrap();
     assert_eq!(f.return_type(), ReturnType::Numeric);
     assert!(
-        parse_function_ir(&f.to_ir_text().replace("result=numeric", "result=integer")).is_err()
+        parse_function_ir(&f.to_ir_text().replace("result=numeric", "result=boolean")).is_err()
     );
     let f = compile_function(
         "function f(n as Lang.Numeric) as Toybox.Lang.Number {if(n instanceof Lang.Number){return n+1;}return 0;}",
@@ -57,7 +59,10 @@ fn byte_numeric_and_option_operands_are_checked_without_emitting_conversions() {
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.NUMBER_FORMAT_FLOAT,{:offset=>null});}",
         "function f(b as Lang.ByteArray) as Void {b.decodeNumber(Lang.NUMBER_FORMAT_FLOAT);}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     // Explicit enum assertions and invalid numeric ranges remain runtime checks.
     for source in [
@@ -115,7 +120,10 @@ fn byte_keys_keep_identity_contracts_enumeration_and_nonnull_proofs() {
         "function f(d as Lang.Dictionary<Lang.ByteArray,Lang.Number>) as Void {d.put([1],1);}",
         "function f(d as Lang.Dictionary<Lang.ByteArray or Null,Lang.Number>) as Void {}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f=compile_function("function f(k as Lang.ByteArray) as Lang.Dictionary<Lang.ByteArray,Lang.Number> {return {k=>1};}").unwrap();
     assert!(

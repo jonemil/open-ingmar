@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Function, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -95,7 +97,7 @@ fn explicit_nullable_results_accept_only_the_declared_alternatives() {
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number { return x; }",
         "function f(x as Null or Toybox.Lang.Number) as Toybox.Lang.Number { return x; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -123,10 +125,13 @@ fn user_arguments_use_union_assignability_and_results_remain_exact() {
         "M.scalar(\"7\".toNumber())",
     ] {
         let source = format!("function start() as Void {{ {expression}; }}");
-        assert!(compile_sources(&[&source, functions]).is_err(), "{source}");
+        assert!(
+            checking::compile_sources(&[&source, functions]).is_err(),
+            "{source}"
+        );
     }
     let source = "function start() as Void { System.println(M.number(7)); }";
-    assert!(compile_sources(&[source, functions]).is_err());
+    assert!(checking::compile_sources(&[source, functions]).is_err());
     // Forward and recursive call declarations preserve nullable results.
     let recursive = "module M { function first(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return M.later(n); } function later(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number or Null { return M.first(n); } }";
     let unit = compile_sources(&[recursive]).unwrap();
@@ -153,7 +158,7 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
         Function::with_signature(
             "f".into(),
             vec![ParameterType::NullableString],
-            ReturnType::String,
+            ReturnType::Boolean,
             f.operations().to_vec()
         )
         .is_err()
@@ -161,7 +166,7 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("result=nullable-string", "result=nullable-integer")
+                .replace("result=nullable-string", "result=integer")
         )
         .is_err()
     );
@@ -176,7 +181,7 @@ fn typed_and_text_construction_enforce_returns_and_guard_proofs() {
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { return x.length(); }",
         "function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } s = null; return s.length(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let guarded = compile_function("function f(x as Toybox.Lang.String or Null) as Toybox.Lang.Number { var s = x; if (s == null) { return 0; } return s.length(); }").unwrap();
     assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
     compile_function, compile_sources, parse_function_ir, parse_unit_ir,
@@ -72,7 +74,7 @@ fn null_guards_narrow_only_the_checked_local_on_the_non_null_path() {
         "function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } while (flag) { n = null; } return n; }",
         "function f() as Toybox.Lang.Number { var n = \"41\".toNumber(); if (n == null) { return 0; } n = true; return n+1; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 

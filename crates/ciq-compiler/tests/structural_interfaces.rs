@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 
 #[test]
@@ -131,14 +133,14 @@ fn source_witnesses_are_checked_on_returns_storage_and_member_arguments() {
         "function use(x as interface {var value as T;}) {x.value=new Bad();}",
     ] {
         let source = format!("{prefix}{body}");
-        assert!(compile_sources(&[&source]).is_err(), "{body}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{body}");
         assert!(
             compile_sources(&[&source.replace("new Bad()", "new Good()")]).is_ok(),
             "{body}"
         );
     }
     let nullable = "typedef T as interface {var value as Toybox.Lang.Number or Null;}; function f(x as T) as Toybox.Lang.Number {if(x.value != null){return x.value;}return 0;}";
-    assert!(compile_sources(&[nullable]).is_err());
+    assert!(checking::compile_sources(&[nullable]).is_err());
     let saved = nullable.replace(
         "if(x.value != null){return x.value;}",
         "var saved=x.value;if(saved != null){return saved;}",

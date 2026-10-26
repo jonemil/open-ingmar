@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -110,14 +112,14 @@ fn object_comparison_checks_keep_null_arity_result_and_api_requirements() {
         "function f(o as Lang.Object){return 2.compareTo(o,o);}",
         "function f(o as Lang.Object){return 2.equals(o)+1;}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let source = "function f(o as Lang.Object){return 2.compareTo(o);}";
     let f = compile_function(source).unwrap();
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("parameter-types=object", "parameter-types=nullable-object")
+                .replace("parameter-types=object", "parameter-types=null")
         )
         .is_err()
     );

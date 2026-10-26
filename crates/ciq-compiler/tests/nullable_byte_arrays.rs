@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -31,7 +33,7 @@ fn nullable_byte_arrays_preserve_signatures_and_local_null_proofs() {
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("result=nullable-byte-array", "result=byte-array")
+                .replace("result=nullable-byte-array", "result=boolean")
         )
         .is_err()
     );
@@ -56,10 +58,13 @@ fn nullable_byte_array_uses_require_current_nonnull_proofs() {
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var present=b!=null;if(present){b.size();}}",
         "function f(b as Toybox.Lang.ByteArray or Null) as Void {var local=b;local=[1];local.decodeNumber();}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let invalid = "module B {function size(b as Toybox.Lang.ByteArray){return b.size();} function f(b as Toybox.Lang.ByteArray or Null){return B.size(b);}}";
-    assert!(compile_sources(&[invalid]).is_err());
+    assert!(checking::compile_sources(&[invalid]).is_err());
     let valid = invalid.replace(
         "return B.size(b);",
         "if(b==null){return 0;}return B.size(b);",

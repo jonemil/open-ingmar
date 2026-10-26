@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 
 fn round_trip(source: &str) -> ciq_compiler::CompilationUnit {
@@ -242,7 +244,10 @@ fn malformed_shapes_indexes_and_unproven_slot_identities_are_rejected() {
         "function f(x as []) { return x; }",
         "function f(x as [Toybox.Graphics.Dc]) { return x; }",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 
@@ -419,7 +424,10 @@ fn shape_loss_rejects_stale_slots_erasure_and_invariant_array_mutation() {
         r#"function f(x as [Toybox.Lang.Number,Toybox.Lang.String], tail as Toybox.Lang.Array<Toybox.Lang.Number>) { x.addAll(tail); x.add(true); }"#,
         r#"function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Number or Toybox.Lang.String> { return x; }"#,
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

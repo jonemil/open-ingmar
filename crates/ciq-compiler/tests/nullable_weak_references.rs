@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -26,7 +28,7 @@ fn nullable_weak_values_preserve_signatures_joins_and_storage_proofs() {
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("result=nullable-weak-reference", "result=weak-reference")
+                .replace("result=nullable-weak-reference", "result=boolean")
         )
         .is_err()
     );
@@ -39,7 +41,10 @@ fn nullable_weak_values_preserve_signatures_joins_and_storage_proofs() {
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {var present=w!=null;if(present){w.get();}}",
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {if(w!=null && w.stillAlive()){w.get().toString();}}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function(
         "function f(w as Toybox.Lang.WeakReference or Null) as Void {if(w!=null){w.get();}}",
@@ -111,7 +116,10 @@ fn weak_fields_and_calls_survive_saved_ir_and_null_metadata() {
         "class C {var w as Toybox.Lang.WeakReference;function initialize(w as Toybox.Lang.WeakReference or Null){self.w=w;}}",
         "class C {var w as Toybox.Lang.WeakReference or Null;function f() as Void {if(self.w!=null){self.w.get();}}}",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

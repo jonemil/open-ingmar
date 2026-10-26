@@ -37,9 +37,14 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Accept SDK partial type matches in gradual/informative mode through
-  policy-aware source/IR lowering at calls, returns, storage, and operations;
-  retain strict rejection and mandatory IR/backend invariants.
+- [ ] Establish SDK partial-match rules for class-containing unions (`A or B`
+  passed/returned as `A`), structural method signatures, and parameterized
+  container references (`Array<Number or String>` as `Array<Number>`); implement
+  accepted boundaries without losing source witnesses or mutable alias rules.
+- [ ] Probe and support SDK partial operator/index/member-receiver cases:
+  Number-or-String subtraction, Number-or-String Array indices, and a union
+  whose alternatives do not all expose the invoked member. Preserve API,
+  arity, stack, and metadata checks; keep strict rejection of uncertainty.
 - [ ] Implement disabled type checking with dynamic lowering for otherwise
   mismatched operations; preserve declaration, ABI, API, and format checks.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ArrayConstantValue, ArrayElement, Operation,
     api::{ApiContext, ApiLevel},
@@ -80,14 +82,17 @@ fn invariant_non_null_string_elements_are_checked_in_source_and_ir() {
         "function f() { var a = [\"one\"]; System.println(a); }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Number> { return [\"one\"]; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.String>, s as Toybox.Lang.String) as Toybox.Lang.String { a[0] = s; return a[0]; }").unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     assert!(
         parse_function_ir(&f.to_ir_text().replace(
             "parameter-types=string-array:string",
-            "parameter-types=string-array:nullable-string"
+            "parameter-types=string-array:boolean"
         ))
         .is_err()
     );

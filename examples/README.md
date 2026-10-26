@@ -5,6 +5,8 @@ their own manifest, Jungle configuration, source, resources, and build
 instructions. These are independently written reference inputs for Garmin's SDK
 and future Rust toolchain experiments.
 
+- [compiler-partial-matches](compiler-partial-matches/README.md): gradual native
+  union matches at call, return, storage, and container-element boundaries.
 - [compiler-casts](compiler-casts/README.md): lexical container, record, interface,
   union, and Method assertions, shared references, and single operand evaluation.
 - [compiler-option-records](compiler-option-records/README.md): optional

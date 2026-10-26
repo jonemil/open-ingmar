@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -83,7 +85,7 @@ fn string_argument_profiles_and_nullable_results_share_ir_validation() {
         "function f() as Toybox.Lang.Number { return \"a\".equals(\"b\") + 1; }",
         "function f() as Void { var n = 7.toNumberWithBase(2); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f =
         compile_function("function f() as Toybox.Lang.Number { return \"a\".compareTo(\"b\"); }")

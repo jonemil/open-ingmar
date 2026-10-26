@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     ArrayElement, DictionaryKey, DictionaryType, DictionaryValue, NumericAlias,
@@ -203,7 +205,7 @@ fn nullable_alias_elements_need_snapshot_proofs_and_allocations_stay_nullable() 
                 "function f() as Lang.Dictionary<Lang.{name} or Null,Lang.{name}> {{return {{}};}}"
             ),
         ] {
-            assert!(compile_function(&source).is_err(), "{source}");
+            assert!(checking::compile_function(&source).is_err(), "{source}");
         }
     }
 }

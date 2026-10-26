@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, compile_sources, parse_function_ir,
@@ -118,7 +120,7 @@ fn nullable_long_proofs_and_joins_survive_saved_ir() {
     let unit = compile_sources(&["module M { function parse() as Toybox.Lang.Long or Null { return \"42\".toLong(); } function f() as Toybox.Lang.Long or Null { return M.parse(); } }"]).unwrap();
     let text = unit.to_ir_text();
     assert_eq!(unit, parse_unit_ir(&text).unwrap());
-    let edited = text.replace("parse result=nullable-long", "parse result=long");
+    let edited = text.replace("parse result=nullable-long", "parse result=boolean");
     assert_ne!(text, edited);
     assert!(parse_unit_ir(&edited).is_err());
 }
@@ -144,6 +146,9 @@ fn nullable_long_and_native_calls_cannot_bypass_contracts() {
         "function f() { var n = \"42\".toLong(16); }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 1; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
 }

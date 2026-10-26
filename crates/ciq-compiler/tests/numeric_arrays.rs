@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
@@ -124,15 +126,15 @@ fn new_array_types_share_nullable_and_invariant_contracts() {
             "a[1l]=a[0];".into(),
         ] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f(a as Toybox.Lang.Array<Toybox.Lang.{ty}>) {{ {body} }}"
                 ))
                 .is_err(),
                 "{ty}: {body}"
             );
         }
-        assert!(compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ return a[0]; }}")).is_err());
-        assert!(compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ var n=a[0]; if(n == null) {{ return {literal}; }} return a[0]; }}")).is_err());
+        assert!(checking::compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ return a[0]; }}")).is_err());
+        assert!(checking::compile_function(&format!("function f(a as Toybox.Lang.Array<Toybox.Lang.{ty} or Null>) as Toybox.Lang.{ty} {{ var n=a[0]; if(n == null) {{ return {literal}; }} return a[0]; }}")).is_err());
         let f=compile_function(&format!("function f() as Toybox.Lang.Array<Toybox.Lang.{ty}> {{ return [{literal} + {literal}]; }}")).unwrap();
         assert!(f.to_ir_text().contains(".array-begin"));
         assert!(!f.to_ir_text().contains(".array-constant"));

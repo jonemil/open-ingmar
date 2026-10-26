@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     parse_function_ir, parse_function_ir_with_api,
@@ -109,7 +111,10 @@ fn source_conditionals_preserve_pipeline_types_and_reject_unsupported_joins() {
         "function f() as Toybox.Lang.Number { return true ? 1 :; }",
         "function f() as Toybox.Lang.Number { var n = \"x\".toNumber(); return n == null ? n + 1 : 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let unit = compile_sources(&[include_str!(
         "../../../examples/compiler-conditionals/app.mc"
@@ -232,7 +237,6 @@ fn guarded_arm_types_are_inferred_from_checked_edges_and_preserved_in_saved_ir()
 
 #[test]
 fn inference_keeps_unproven_or_invalidated_nullable_arms_nullable() {
-    use ciq_compiler::compile_function;
     for source in [
         "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { return b ? n : 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { return n == null ? n : 0; }",
@@ -242,6 +246,9 @@ fn inference_keeps_unproven_or_invalidated_nullable_arms_nullable() {
         "function f(b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var n = \"7\".toNumber(); while (b) { n = null; } return b ? n : 0; }",
         "function f(n as Toybox.Lang.Number or Null, b as Toybox.Lang.Boolean) as Toybox.Lang.Number { var a = [b ? n : 0]; return a[0]; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
 }

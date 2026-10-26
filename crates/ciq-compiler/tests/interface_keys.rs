@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -66,7 +68,7 @@ fn invariant_keys_require_api_five_and_non_null_witnesses() {
             let source = format!(
                 "function f(d as {ty},k as Toybox.Lang.{interface} or Null) {{var result={operation};}}"
             );
-            assert!(compile_function(&source).is_err());
+            assert!(checking::compile_function(&source).is_err());
             let guarded = source.replace(
                 &format!("var result={operation};"),
                 &format!("if(k!=null){{var result={operation};}}"),
@@ -86,10 +88,10 @@ fn invariant_keys_require_api_five_and_non_null_witnesses() {
             let source = format!(
                 "module M {{function take(d as {ty}){{return d.size();}} function f(d as Toybox.Lang.Dictionary<{key},Toybox.Lang.Number>) {{return M.take(d);}}}}"
             );
-            assert!(compile_sources(&[&source]).is_err());
+            assert!(checking::compile_sources(&[&source]).is_err());
         }
         assert!(
-            compile_function(
+            checking::compile_function(
                 &source.replace(&format!("{interface},"), &format!("{interface} or Null,"))
             )
             .is_err()

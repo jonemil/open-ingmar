@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation, ReturnType, ValueId,
     api::{ApiContext, ApiLevel},
@@ -173,7 +175,10 @@ fn source_rounding_literal_syntax_and_promotion_are_explicit() {
         "function f() as Toybox.Lang.Float { var xs = [1.25, 1]; return xs[1]; }",
         "function f() as Void { var xs = {1 => 1.25, 2 => 1.25d}; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
 }
 
@@ -252,7 +257,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
             "while (x == null) { break; } return x;",
         ] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f(x as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} {{ {} }}",
                     body.replace("ZERO", literal)
                 ))
@@ -261,7 +266,7 @@ fn native_profiles_and_nullable_proofs_are_rechecked() {
         }
         for method in ["abs(1)", "format(1)", "toNumber(1)", "compareTo(null)"] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f() as Void {{ System.println({literal}.{method}); }}"
                 ))
                 .is_err()

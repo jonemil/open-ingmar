@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation, compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
@@ -56,7 +58,7 @@ fn parameter_writes_reject_wrong_types_stale_guards_and_bad_indices() {
         "function f(n as Toybox.Lang.Object) as Toybox.Lang.Number { if(n instanceof Toybox.Lang.Number){n=\"bad\"; return n+1;} return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if(n!=null){n++; return n;} return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     for index in ["-1", "+0", "1", "999999999999999999999999999999999"] {
         let text = format!(

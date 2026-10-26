@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -79,7 +81,7 @@ fn object_arguments_widen_only_through_declared_inheritance() {
         "function f() as Toybox.Lang.Number { return 7.equals(7) + 1; }",
         "function f() as Toybox.Lang.Number { return true.abs(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let wrong_user_type = "module M { function number(n as Toybox.Lang.Number) as Toybox.Lang.Number { return n; } function f() as Toybox.Lang.Number { return M.number(true); } }";
     assert!(

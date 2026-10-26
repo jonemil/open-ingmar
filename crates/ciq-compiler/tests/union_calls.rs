@@ -39,7 +39,7 @@ fn every_signature_and_receiver_alternative_must_be_valid() {
     }
     for body in [
         "function f(x as A or B or Null){return x.value(2);}",
-        "function f(x as A or B) as Toybox.Lang.Number{return x.value(2);}",
+        "function f(x as A or B) as Toybox.Lang.Boolean{return x.value(2);}",
         "function f(x as A or B){return x.value(\"bad\");}",
     ] {
         assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");

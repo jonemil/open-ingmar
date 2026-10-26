@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Function, Operation, ValueId,
     api::{ApiContext, ApiLevel},
@@ -81,7 +83,7 @@ fn writes_reject_wrong_types_unproven_nulls_and_nonassignment_targets() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { a[0] = n; return 0; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { n = null; a[0] = n; } return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { a[n] = n; } return 0; }").unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());

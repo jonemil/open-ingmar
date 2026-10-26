@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -64,7 +66,10 @@ fn nullable_method_keys_and_lookup_values_require_fresh_proofs() {
         let source = format!(
             "function f(d as {ty},k as Toybox.Lang.Method or Null,m as Toybox.Lang.Method) as Void {{{action}}}"
         );
-        assert!(compile_function(&source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(&source).is_err(),
+            "accepted {source}"
+        );
         let guarded = format!(
             "function f(d as {ty},k as Toybox.Lang.Method or Null,m as Toybox.Lang.Method) as Void {{if(k!=null){{{action}}}}}"
         );
@@ -83,7 +88,7 @@ fn nullable_method_keys_and_lookup_values_require_fresh_proofs() {
         let repeated = format!(
             "function f(d as {ty},k as Toybox.Lang.Method) as Void {{if(d[k]!=null){{d[k].invoke();}}}}"
         );
-        assert!(compile_function(&repeated).is_err());
+        assert!(checking::compile_function(&repeated).is_err());
     }
 }
 

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 mod common;
 
@@ -63,7 +65,10 @@ fn records_recheck_known_field_values_and_optional_reads() {
         "function f(x as {:n as Toybox.Lang.Number}) as Toybox.Lang.Number {return x[:n];}",
         "function f(x as {:n as Toybox.Lang.Number}) as {:n as Toybox.Lang.String} {return x;}",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 
@@ -94,7 +99,10 @@ fn evolving_records_follow_references_and_control_flow() {
         r#"function f() as Toybox.Lang.Number or Null {var o={:x=>1};var shared=o;shared[:x]="changed";return o[:x];}"#,
         r#"function f(flag as Toybox.Lang.Boolean) as Toybox.Lang.Number or Null {var o={:x=>1};if(flag){o[:x]="changed";}return o[:x];}"#,
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

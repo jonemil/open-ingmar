@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::Program;
 use ciq_compiler::{
     FieldKind, ScalarFieldType,
@@ -130,7 +132,7 @@ fn scalar_fields_require_initialization_and_fresh_snapshot_proofs() {
             "var value as Lang.TYPE or Null;function read() as Lang.TYPE{if(self.value!=null){return self.value;}return null;}",
         ] {
             let source = format!("class C {{{}}}", body.replace("TYPE", name));
-            assert!(compile_sources(&[&source]).is_err(), "{source}");
+            assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
         }
         let source = format!(
             "class C {{var value as Lang.{name} or Null;function read() as Lang.{name} or Null{{var snapshot=self.value;if(snapshot!=null){{self.value=null;return snapshot;}}return null;}}}}"
@@ -150,7 +152,7 @@ fn scalar_fields_require_initialization_and_fresh_snapshot_proofs() {
         let source = format!(
             "class C {{var value as Lang.{name};function initialize(){{self.value={bad};}}}}"
         );
-        assert!(compile_sources(&[&source]).is_err(), "{source}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
     }
 }
 

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -75,7 +77,7 @@ fn boolean_argument_and_result_contracts_are_rechecked_in_ir() {
         "function f() as Toybox.Lang.Number { return true.toString(); }",
         "function f() as Toybox.Lang.Number { if (true.compareTo(false)) { return 1; } return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f =
         compile_function("function f() as Toybox.Lang.Number { return true.compareTo(false); }")

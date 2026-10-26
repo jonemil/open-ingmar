@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
@@ -80,7 +82,7 @@ fn logical_temporaries_recheck_types_initialization_and_do_not_carry_null_proofs
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if ((!(n == null) && true).equals(true)) { return n; } return 0; }",
         "function f() as Toybox.Lang.Number { return -(true && false); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f =
         compile_function("function f() as Toybox.Lang.Boolean { return true && false; }").unwrap();

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -104,7 +106,7 @@ fn fresh_guards_protect_symbol_key_arguments_and_indexed_snapshots() {
         let source = format!(
             "function f(d as {dictionary},k as Toybox.Lang.Symbol or Null) {{{operation}}}"
         );
-        assert!(compile_function(&source).is_err(), "{source}");
+        assert!(checking::compile_function(&source).is_err(), "{source}");
         let guarded = format!(
             "function f(d as {dictionary},k as Toybox.Lang.Symbol or Null) {{if(k!=null){{{operation}}}}}"
         );
@@ -123,7 +125,7 @@ fn fresh_guards_protect_symbol_key_arguments_and_indexed_snapshots() {
         let stale = format!(
             "function f(value as {receiver}) as Toybox.Lang.String {{if({read}!=null){{return {read}.toString();}}return \"missing\";}}"
         );
-        assert!(compile_function(&stale).is_err());
+        assert!(checking::compile_function(&stale).is_err());
     }
 }
 

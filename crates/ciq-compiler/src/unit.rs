@@ -2039,7 +2039,7 @@ impl CompilationUnit {
                                 ));
                             }
                         }
-                        if !crate::native::accepts(
+                        if !crate::native::accepts_boundary(
                             &parameter.api_type(),
                             &function.value_types[argument].api_type(),
                         ) {
@@ -2132,6 +2132,13 @@ impl CompilationUnit {
             .cloned()
             .map(|c| crate::api::Type::SourceValue(Box::new(c)))
             .unwrap_or_else(|| function.value_types[&value].api_type());
+        // A partial native match carries its actual union through IR. Exact
+        // source/container witnesses still use the full proof below.
+        if !crate::native::accepts(expected, &actual)
+            && crate::native::accepts_boundary(expected, &actual)
+        {
+            return crate::native::structural_api(expected, &actual, context);
+        }
         if crate::source_union::matches_type_with(
             expected,
             &actual,

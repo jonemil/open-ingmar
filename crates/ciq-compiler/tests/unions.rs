@@ -32,7 +32,7 @@ fn normalization_is_order_independent_and_calls_check_every_alternative() {
     for source in [
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String){return x.length();}",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String){return x-1;}",
-        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number{return x;}",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Boolean{return x;}",
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String){if(x instanceof Toybox.Lang.Number){x=\"hi\";return x-1;}return 0;}",
         "function f(x as Toybox.Lang.Number or Void){return x;}",
     ] {

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
@@ -86,10 +88,16 @@ fn promotion_does_not_widen_storage_signatures_or_other_operator_profiles() {
         "function f() as Toybox.Lang.Number { if (1l) { return 1; } return 0; }",
         "function f() as Toybox.Lang.Long { return true ? 1l : 2; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Long { if (value == null) { return 0l; } return value + 1l; }";
     let f = compile_function(source).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
-    assert!(compile_function(&source.replace("if (value == null) { return 0l; }", "")).is_err());
+    assert!(
+        checking::compile_function(&source.replace("if (value == null) { return 0l; }", ""))
+            .is_err()
+    );
 }

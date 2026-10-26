@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_assembly::{Item, Program};
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
@@ -77,7 +79,7 @@ fn all_numeric_key_value_contracts_are_invariant_and_nullable_values_survive_ir(
                 format!("d.put(1,{v});"),
                 format!("d[1]={v};"),
             ] {
-                assert!(compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key},Toybox.Lang.{value}>) {{ {body} }}")).is_err(),"{key}, {value}: {body}");
+                assert!(checking::compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.{key},Toybox.Lang.{value}>) {{ {body} }}")).is_err(),"{key}, {value}: {body}");
             }
         }
     }
@@ -95,7 +97,7 @@ fn all_numeric_key_value_contracts_are_invariant_and_nullable_values_survive_ir(
             "return d[1];".into(),
             format!("var n=d[1]; if(n == null) {{ return {v}; }} return d[1];"),
         ] {
-            assert!(compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty}>) as Toybox.Lang.{ty} {{ {body} }}")).is_err());
+            assert!(checking::compile_function(&format!("function f(d as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.{ty}>) as Toybox.Lang.{ty} {{ {body} }}")).is_err());
         }
     }
 }

@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     FieldKind,
     api::{ApiContext, ApiLevel},
@@ -87,7 +89,10 @@ fn byte_array_fields_require_initialization_and_snapshot_null_proofs() {
         "class C {var b as Toybox.Lang.ByteArray or Null;function f() {if(self.b!=null){return self.b[0];}return 0;}}",
         "class C {var b as Toybox.Lang.ByteArray or Null;function f() as Void {self.b=[1];}}",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "class C {var b as Toybox.Lang.ByteArray or Null;function f() {var snapshot=self.b;if(snapshot!=null){self.b=null;return snapshot[0];}return 0;}}";
     let unit = compile_sources(&[source]).unwrap();

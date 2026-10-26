@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{self, ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
@@ -67,7 +69,7 @@ fn variadic_declarations_and_invoke_byte_counts_do_not_weaken_fixed_arity() {
     }
     let args = vec!["1"; 255].join(",");
     assert!(
-        compile_function(&format!(
+        checking::compile_function(&format!(
             "function f(m as Toybox.Lang.Method) {{ m.invoke({args}); return 0; }}"
         ))
         .is_err()
@@ -82,14 +84,17 @@ fn variadic_declarations_and_invoke_byte_counts_do_not_weaken_fixed_arity() {
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.String { return m.invoke().toString(); }",
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Array<Toybox.Lang.Number> { var v=m.invoke(); if(v==null) { return []; } return v; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let text = compile_function(
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Object or Null { return m.invoke(); }",
     )
     .unwrap()
     .to_ir_text();
-    assert!(parse_function_ir(&text.replace("result=nullable-object", "result=object")).is_err());
+    assert!(parse_function_ir(&text.replace("result=nullable-object", "result=boolean")).is_err());
     assert!(parse_function_ir(&text.replace(" invoke", " absent")).is_err());
 }
 

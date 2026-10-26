@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     FieldKind,
     api::{ApiContext, ApiLevel},
@@ -85,7 +87,10 @@ fn method_fields_check_initialization_and_assignment_contracts() {
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method or Null){self.callback=m;}}",
         "class C {var callback as Toybox.Lang.Method; function initialize(m as Toybox.Lang.Method,b as Toybox.Lang.Boolean){if(b){self.callback=m;}else{self.callback=m;}}}",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[source]).is_err(),
+            "accepted {source}"
+        );
     }
     for source in [
         "class C {var callback as Toybox.Lang.Method;function initialize(m as Toybox.Lang.Method){m.invoke();self.callback=m;}}",

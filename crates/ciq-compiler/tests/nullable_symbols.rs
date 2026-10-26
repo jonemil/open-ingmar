@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -39,14 +41,14 @@ fn nullable_symbols_keep_signatures_calls_joins_and_saved_stages() {
     assert_eq!(function.parameter_types(), &[ParameterType::NullableSymbol]);
     let text = function.to_ir_text();
     for edited in [
-        text.replace("result=nullable-symbol", "result=symbol"),
-        text.replace("result=nullable-symbol", "result=nullable-integer"),
+        text.replace("result=nullable-symbol", "result=boolean"),
+        text.replace("result=nullable-symbol", "result=integer"),
     ] {
         assert_ne!(text, edited);
         assert!(parse_function_ir(&edited).is_err());
     }
     let text = unit.to_ir_text();
-    assert!(parse_unit_ir(&text.replace("result=nullable-symbol", "result=symbol")).is_err());
+    assert!(parse_unit_ir(&text.replace("result=nullable-symbol", "result=boolean")).is_err());
     let entry =
         compile_sources(&["function run() as Toybox.Lang.Symbol or Null {return null;}"]).unwrap();
     assert!(
@@ -86,7 +88,7 @@ fn symbol_members_and_selectors_require_fresh_null_proofs() {
         "function f(s as Toybox.Lang.Symbol or Null) {var present=s!=null;if(present){return s.toNumber();}return 0;}",
         "function f(s as Toybox.Lang.Symbol or Null) {var local=:alpha;local=s;return local.toNumber();}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let source =
         "function f(s as Toybox.Lang.Symbol or Null) {if(s!=null){return s.toNumber();}return 0;}";

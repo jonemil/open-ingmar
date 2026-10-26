@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
@@ -137,9 +139,9 @@ fn record_assertions_preserve_identity_and_distinct_static_views() {
         common::pipeline(compile_sources(&[source]).unwrap_or_else(|e| panic!("{source}\n{e}")));
     }
     let stale = r#"function f() as Toybox.Lang.Number or Null {var child={:x=>1};var holders=[child];var viewed=holders as Toybox.Lang.Array<{:x as Toybox.Lang.Number}>;viewed[0][:x]="changed";return child[:x];}"#;
-    assert!(compile_sources(&[stale]).is_err());
+    assert!(checking::compile_sources(&[stale]).is_err());
     let nested = r#"function f() as Toybox.Lang.Number or Null {var child={:x=>1};var outer={:child=>child};var holders=[outer];var viewed=holders as Toybox.Lang.Array<{:child as {:x as Toybox.Lang.Number}}>;var key=:child;viewed[0][key]="changed";var c=outer[:child];if(c!=null){return c[:x];}return 0;}"#;
-    assert!(compile_sources(&[nested]).is_err());
+    assert!(checking::compile_sources(&[nested]).is_err());
 }
 
 #[test]

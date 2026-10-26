@@ -1,8 +1,9 @@
 # Core language coverage review
 
 Reviewed 2026-10-21 against source/IR contracts, declaration/executable code,
-retained language-guide articles, and Garmin's public API. This review adds no
-simulator evidence; SDK 9.2.0 / `fr265` remains the runtime reference environment.
+retained language-guide articles, and Garmin's public API. SDK 9.2.0 / `fr265`
+is the runtime reference environment; individual probes below distinguish
+compiler acceptance from simulator observations.
 The [prioritized checklist][inventory] owns remaining work.
 
 ## Type-checking policies
@@ -29,6 +30,15 @@ function overlap(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.N
 // Test separately: rejected by all checked levels, accepted with checking off.
 function bad() as Toybox.Lang.Number { return "wrong"; }
 ```
+
+Experimentally observed, 2026-10-26: the
+[partial-match specimen](../../examples/compiler-partial-matches/README.md)
+compiles with SDK 9.2.0 gradual checking (`fr265`, minimum API 5.0.0, `-O 0`).
+SDK and independently generated programs produce the same eight expected
+console lines in the simulator. This confirms matching runtime alternatives
+through native/user calls, returns, parameter/instance-field stores, and
+Array/Dictionary/record construction. It does not establish behavior for a
+non-matching runtime alternative or different container reference contracts.
 
 The [public type guide][type-guide] describes False/Maybe/True matches and the
 four policies. The [source contract][checking] states our current limits.

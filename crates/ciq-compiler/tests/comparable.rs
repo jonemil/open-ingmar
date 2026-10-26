@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     api::{ApiContext, ApiLevel, Type},
     compile_function, compile_sources, compile_sources_with_api, parse_function_ir, parse_unit_ir,
@@ -48,11 +50,14 @@ fn scalar_comparable_witnesses_share_api_and_saved_pipeline_checks() {
             "as Toybox.Lang.Comparator { return value; }",
         );
         assert_ne!(changed, source);
-        assert!(compile_sources(&[consumer, &changed]).is_err(), "{ty}");
+        assert!(
+            checking::compile_sources(&[consumer, &changed]).is_err(),
+            "{ty}"
+        );
         let nullable = format!(
             "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.Comparable {{ return value; }}"
         );
-        assert!(compile_function(&nullable).is_err(), "{ty}");
+        assert!(checking::compile_function(&nullable).is_err(), "{ty}");
         let function = compile_function(&format!(
             "function f() as Toybox.Lang.Comparable {{ return {literal}; }}"
         ))

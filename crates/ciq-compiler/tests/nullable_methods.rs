@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -24,7 +26,7 @@ module M {
         assembly,
         ciq_assembly::Program::parse(&assembly.to_text()).unwrap()
     );
-    assert!(parse_unit_ir(&text.replace("result=nullable-method", "result=method")).is_err());
+    assert!(parse_unit_ir(&text.replace("result=nullable-method", "result=boolean")).is_err());
     for source in [
         "function f(m as Toybox.Lang.Method) as Toybox.Lang.Method or Null { return m; }",
         "function f() as Toybox.Lang.Method or Null { return null; }",
@@ -42,14 +44,14 @@ module M {
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("result=nullable-method", "result=method")
+                .replace("result=nullable-method", "result=boolean")
         )
         .is_err()
     );
     assert!(
         parse_function_ir(
             &f.to_ir_text()
-                .replace("result=nullable-method", "result=nullable-symbol")
+                .replace("result=nullable-method", "result=symbol")
         )
         .is_err()
     );
@@ -80,7 +82,10 @@ fn nullable_method_members_need_fresh_storage_proofs() {
         "function f(m as Toybox.Lang.Method or Null,n as Toybox.Lang.Method) as Toybox.Lang.Boolean {return m==n;}",
         "function f(m as Toybox.Lang.Method or Null) as Void {if(m){m.invoke();}}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function(
         "function f(m as Toybox.Lang.Method or Null) as Void {if(m!=null){m.invoke();}}",

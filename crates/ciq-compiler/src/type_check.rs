@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, fmt};
 
 /// Ambiguity reporting for the currently supported checked source profile.
 /// Definite errors and IR invariants remain errors at every level. Disabled
-/// checking and partial-match lowering are not implemented by these levels.
+/// checking and partial source/container/operation profiles remain unsupported.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TypeCheckLevel {
     /// Report definite errors without reporting ambiguous types.

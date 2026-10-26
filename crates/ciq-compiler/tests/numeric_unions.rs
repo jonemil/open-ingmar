@@ -139,11 +139,7 @@ fn alias_operators_use_vm_operations_without_conversions() {
     let source = "function f(a as Lang.Numeric,b as Lang.Numeric) as Lang.Numeric {return a+b;}";
     let f = compile_function(source).unwrap();
     assert!(
-        parse_function_ir(
-            &f.to_ir_text()
-                .replace("result=numeric", "result=integer-union")
-        )
-        .is_err()
+        parse_function_ir(&f.to_ir_text().replace("result=numeric", "result=boolean")).is_err()
     );
 }
 

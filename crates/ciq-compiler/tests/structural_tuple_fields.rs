@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{CompilationUnit, compile_sources, parse_unit_ir};
 
 const DECLARATIONS: &str = r#"
@@ -57,7 +59,10 @@ fn structural_field_views_recheck_null_guards_and_edited_ir() {
         "function f(x as Optional) {x.pair.add(true);}",
         "function f(x as Optional) {if(x.pair!=null){noop();x.pair.add(true);}}",
     ] {
-        assert!(compile_sources(&[DECLARATIONS, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[DECLARATIONS, body]).is_err(),
+            "{body}"
+        );
     }
     for body in [
         "function f(x as Optional) as Lang.Number {if(x.pair!=null){x.pair.add(true);return x.pair.size();}return 0;}",

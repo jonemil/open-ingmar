@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{
     FieldKind, NumericAlias,
     api::{ApiContext, ApiLevel},
@@ -111,7 +113,10 @@ fn numeric_alias_fields_require_complete_initialization_and_snapshot_guards() {
             "var n as Lang.TYPE; function initialize(n as Lang.TYPE){self.n=n;} function f() as Void {self.n=null;}",
         ] {
             let source = format!("class C {{{}}}", body.replace("TYPE", name));
-            assert!(compile_sources(&[&source]).is_err(), "accepted {source}");
+            assert!(
+                checking::compile_sources(&[&source]).is_err(),
+                "accepted {source}"
+            );
         }
         let source = format!(
             "class C {{var n as Lang.{name} or Null;function f() as Lang.{name} or Null {{var snapshot=self.n;if(snapshot!=null){{self.n=null;return snapshot+1;}}return null;}}}}"
@@ -140,7 +145,10 @@ fn numeric_alias_fields_require_complete_initialization_and_snapshot_guards() {
     ] {
         let source =
             format!("class C {{var n as Lang.{name};function initialize(){{self.n={expr};}}}}");
-        assert!(compile_sources(&[&source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[&source]).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

@@ -45,6 +45,111 @@ fn checked_levels_report_dynamic_ambiguity_without_changing_the_program() {
 }
 
 #[test]
+fn partial_native_unions_cross_runtime_boundaries_without_erasure() {
+    let cases = [
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return x;}",
+        "function take(x as Toybox.Lang.Number) as Toybox.Lang.Number {return x;} function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return take(x);}",
+        "module M {function take(x as Toybox.Lang.Number) as Void {}} function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Void {M.take(x);}",
+        "class C {function take(x as Toybox.Lang.Number) as Void {} function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Void {self.take(x);}}",
+        "class C {function take(x as Toybox.Lang.Number) as Void {}} function f(c as C,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {c.take(x);}",
+        "class C {function initialize(x as Toybox.Lang.Number){}} function f(x as Toybox.Lang.Number or Toybox.Lang.String) as C {return new C(x);}",
+        "function f(n as Toybox.Lang.Number,x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {n=x;return n;}",
+        "class C {var n=0;function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Void {self.n=x;}}",
+        "class C {var n=0;} function f(c as C,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {c.n=x;}",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {a[0]=x;}",
+        "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>,x as Toybox.Lang.Number or Toybox.Lang.String) as Void {a.add(x);}",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.String {return \"abc\".substring(x,null);}",
+    ];
+    for source in cases {
+        let report = compile_sources_with_options(&[source], options(TypeCheckLevel::Informative))
+            .unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary),
+            "{source}"
+        );
+        assert!(
+            report.artifact.to_ir_text().contains("union("),
+            "actual union was erased: {source}"
+        );
+        assert!(!report.artifact.to_ir_text().contains(".cast "));
+        common::pipeline(report.artifact);
+        assert!(
+            matches!(
+                compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
+                Err(CompileError::TypeChecking(_))
+            ),
+            "{source}"
+        );
+        assert!(
+            compile_sources_with_options(&[source], options(TypeCheckLevel::Gradual))
+                .unwrap()
+                .warnings
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn partial_match_application_preserves_declared_results_and_complete_prg() {
+    let source = include_str!("../../../examples/compiler-partial-matches/app.mc");
+    let mut settings = options(TypeCheckLevel::Informative);
+    settings.api = Some(ApiContext::new(ApiLevel(5, 2, 0), ApiLevel(5, 0, 0)).unwrap());
+    let report = compile_sources_with_options(&[source], settings).unwrap();
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|d| d.kind == TypeDiagnosticKind::AmbiguousBoundary)
+    );
+    assert!(report.warnings.len() >= 8);
+    common::application(
+        &report.artifact,
+        &ciq_compiler::application::ConsoleApplication {
+            id: 0x67912fb670174936b4f1cb9c9de3fd41u128.to_be_bytes(),
+            entry: "MinimalConsoleApp.onStart".into(),
+        },
+    );
+    assert!(matches!(
+        compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
+        Err(CompileError::TypeChecking(_))
+    ));
+}
+
+#[test]
+fn partial_matches_do_not_authorize_disjoint_or_invariant_contracts() {
+    for source in [
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Boolean {return x;}",
+        "function f(x as Toybox.Lang.Array<Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Array<Toybox.Lang.Number> {return x;}",
+        "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> {return x;}",
+        "class A {} class B {} function f(x as A or B) as A {return x;}",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return x.length();}",
+    ] {
+        for level in [
+            TypeCheckLevel::Gradual,
+            TypeCheckLevel::Informative,
+            TypeCheckLevel::Strict,
+        ] {
+            assert!(
+                matches!(
+                    compile_sources_with_options(&[source], options(level)),
+                    Err(CompileError::Source(_))
+                ),
+                "{source}"
+            );
+        }
+    }
+    let source = "function f(x as Toybox.Lang.Number or Null) as Toybox.Lang.Number {return x;}";
+    assert!(compile_sources_with_options(&[source], options(TypeCheckLevel::Gradual)).is_ok());
+    assert!(matches!(
+        compile_sources_with_options(&[source], options(TypeCheckLevel::Strict)),
+        Err(CompileError::TypeChecking(_))
+    ));
+}
+
+#[test]
 fn source_origins_and_fragment_policy_errors_remain_distinct() {
     let first = "module Other {function unused() as Void {}}";
     let second = "function f(value) as Toybox.Lang.Number {\n return value;\n}";

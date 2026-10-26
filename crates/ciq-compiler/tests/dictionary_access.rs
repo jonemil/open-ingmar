@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 use ciq_mc::Opcode;
 
@@ -162,7 +164,7 @@ fn guarded_nullable_keys_preserve_candidate_lookup_types_without_bypassing_proof
     let f = compile_function(&source).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     let unsafe_source = source.replace("if (key != null)", "if (true)");
-    assert!(compile_function(&unsafe_source).is_err());
+    assert!(checking::compile_function(&unsafe_source).is_err());
     let unsafe_ir = f.to_ir_text().replace(".dictionary-read", ".array-read");
     assert!(parse_function_ir(&unsafe_ir).is_err());
 }

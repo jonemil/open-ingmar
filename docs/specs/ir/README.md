@@ -68,6 +68,12 @@ are excluded from native union atoms; tuple atoms retain nested source slots.
 The [frontend union rules](../frontend/README.md#native-unions) own assignment,
 operation, and narrowing semantics. IR validation recomputes these checks from
 operands and CFG facts; edited result/read metadata cannot invent a type proof.
+Native nominal value boundaries accept overlapping unions under the
+[checking contract](../frontend/README.md#type-checking-policy), retaining the
+actual alternatives and the destination's declaration. These are dynamic
+obligations, not proofs that every alternative fits. Saved IR applies the same
+boundary rules; strict source reporting is not serialized. Canonical headers
+retain an explicit declared result when return-value inference would widen it.
 Both branch edges carry direct class/Null refinements, and storage writes kill
 those facts. Every possible native receiver/operand must support an operation;
 result alternatives are normalized. Container reference unions retain invariant

@@ -72,9 +72,18 @@ messages point to the enclosing function declaration. Inherited SDK callback
 contracts are not treated as omitted annotations. Explicit unchecked casts
 remain assertions rather than runtime checks.
 
-These levels currently apply diagnostics to the existing accepted source
-subset. They do not yet implement the SDK's disabled checking or its acceptance
-of partial union matches in gradual/informative mode. Structural matching
+Gradual/informative checking accepts a partially matching native union at
+runtime value boundaries when at least one alternative fits. This applies to
+nominal native classes, scalar types, and Null, including values passed to
+calls, returned, stored, or inserted into containers. The actual union remains
+in IR; no cast, conversion, or runtime guard is inserted. Informative reports
+these uncertain boundaries; Strict rejects them. Disjoint contracts remain
+errors at every checked level. A matching alternative does not guarantee that
+the actual runtime value will match.
+
+Disabled checking and partial matches involving source-class witnesses,
+structural/container contracts, or otherwise unsupported operations remain
+outside this profile. Structural matching
 distinguishes unknown member contracts from missing or incompatible members;
 mutable fields and structural signatures retain their invariant requirements.
 Exact source/interface witnesses are established by unit validation before
@@ -130,9 +139,12 @@ Normalization flattens alternatives, removes duplicates, and orders them
 consistently. Numeric aliases and existing nullable types retain their established
 representations. Any absorbs other value alternatives; Void is never a union
 alternative. No subtype subsumption or implicit scalar conversion is performed.
-A union admits assignment only when every source alternative fits its contract.
-Array elements and Dictionary keys/values remain invariant: a union of container
-references does not widen their mutable content types.
+A native nominal value union may cross a runtime boundary when at least one
+alternative matches under gradual/informative checking. Strict requires all
+alternatives to match. Array and Dictionary reference contracts remain invariant:
+passing an `Array<Number or String>` as `Array<Number>` is rejected. Inserting a
+Number-or-String value into an existing `Array<Number>` is a runtime boundary and
+may report uncertainty; it does not change the Array's declared element type.
 
 Calls, local writes, returns, and conditional joins preserve native alternatives.
 Each possible receiver must support a member/index operation and accept its
