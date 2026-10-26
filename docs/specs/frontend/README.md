@@ -177,7 +177,7 @@ Native member calls may likewise use a receiver union with missing members,
 including Null. Available signatures must still accept the argument count and
 API context. A partial lookup yields Any unless all matching results are Void;
 missing signatures cannot establish a specific value result. Source-class and
-mixed source/native member dispatch still require complete receiver coverage.
+mixed receivers use the [source dispatch rules](#calls-on-constructed-source-objects).
 Index receivers must all support indexing and require a non-null proof; Array,
 tuple, and ByteArray index keys may partially match Number under the same
 checking policy. API availability is checked for every retained type, including
@@ -1043,23 +1043,28 @@ possible exact classes and native alternatives under the shared
 not establish a source class. Local aliases refer to the same runtime instance;
 reassignment changes only the local reference.
 
-`receiver.method(arguments)` calls a declared method of every possible source
-class in a proven non-null, source-only receiver contract. The receiver may be a
-construction, local/copy, conditional result, or typed source parameter/result.
-Forward declarations and multiple source files are supported. Each class must
-declare the member, and every argument must satisfy every target's arity and
-parameter contract, including exact identities and interface witnesses.
+`receiver.method(arguments)` resolves members across the receiver's retained
+source classes and native alternatives. The receiver may be a construction,
+local/copy, conditional result, or typed source parameter/result, including
+Null. Forward declarations and multiple source files are supported. Declared
+source methods override supported native base members. At least one alternative
+must expose the member; every available signature must accept the argument
+count and its parameter contracts, including exact identities and interface
+witnesses. API and native executable-profile checks remain mandatory.
 
-Value calls use the shared join of all target result contracts, preserving
-native and exact source alternatives without conversion. Every target must
-return a value and have a supported join. Statement calls discard any supported
-result, including mixtures of Void and value-returning methods. Receiver
-evaluation precedes arguments, once each in source order. Contextual container
-literals use a shared concrete parameter contract; other targets may accept Any.
-Conflicting concrete parameter contracts supply no common construction context.
+A complete lookup joins all target result contracts, preserving native and exact
+source alternatives without conversion. A partial lookup yields Any when its
+available targets return values. Known Void targets cannot be used as values;
+statement calls may discard Void/value mixtures. Missing members or Null are
+uncertain runtime failures: Informative warns and Strict rejects them, without
+inserting a guard, cast, or conversion. Receiver evaluation precedes arguments,
+once each in source order. Contextual container literals use available concrete
+parameter contracts; other targets may accept Any. Conflicting concrete
+contracts supply no common construction context.
 
-Unit validation rejects missing methods, wrong argument/result contracts, and
-ordinary calls to native lifecycle callbacks, even through a different receiver.
+Unit validation rejects lookup with no available member, wrong argument/result
+contracts, and ordinary calls to native lifecycle callbacks, even through a
+different receiver.
 Object-rooted classes may resolve supported inherited Object members below.
 Other undeclared native/source inheritance remains unsupported. Source
 inheritance remains unsupported. Field access follows the
@@ -1073,9 +1078,11 @@ its identity for subsequent reads; joins retain the possible exact class set.
 No runtime cast or class-selection branch is emitted for common calls.
 
 [Source-call IR](../ir/README.md#source-construction-and-native-constants) retains
-all possible classes and the joined result contract. Validation reconstructs
-receiver provenance and resolves every target; text metadata cannot omit a
-class, narrow a result, or authorize a native reference as an exact source class.
+all possible source classes, including classes without the member, and the
+resolved result contract. Validation reconstructs native/Null alternatives from
+receiver provenance and checks every available target; text metadata cannot
+omit a class, narrow a result, or authorize a native reference as an exact source
+class.
 Shutdown effects propagate from every possible source body through recursive
 call chains. A required-field initializer cannot call a method that may request
 shutdown until its required fields are initialized.
@@ -1157,7 +1164,8 @@ must retain the declared source class through construction, typed parameters,
 declared results, local copies, positive source-class tests, or explicit source
 assertions. The [source-target contract](#source-class-targets) distinguishes
 runtime proofs from caller assertions. A different source class, Null, or an
-erased native reference cannot satisfy a non-null contract. Native contracts may
+erased native reference cannot prove a non-null source match; partial runtime
+boundaries follow the checking policy. Native contracts may
 accept a source instance through its base while erasing its exact class identity.
 
 Nullable source contracts prove matches for that exact class, its nullable
@@ -1165,8 +1173,9 @@ form, and Null. Overlapping source unions follow the
 [checking policy](#type-checking-policy); disjoint classes and erased native
 references cannot supply an exact class identity. Parameters,
 declared call results, and local copies retain both class and nullability.
-Source dispatch and non-null source consumers require a non-null proof on the
-read, using the shared [branch rules](#runtime-object-predicates). Checking an
+Complete source dispatch and non-null source matches use proofs on the read
+under the shared [branch rules](#runtime-object-predicates). Partial member
+lookup follows the uncertainty policy above. Checking an
 alias does not prove the original storage non-null. Writes invalidate that
 local's proof; joins and loop backedges retain only shared facts.
 A local initialized from a nullable source value exposes that contract until
@@ -1865,8 +1874,9 @@ proof.
 `value as ClassName or Null` asserts the same exact class while retaining Null
 in its contract. It preserves the operand, including Null or a falsely asserted
 runtime class. A local initialized from this assertion retains nullable source
-identity; check that local before dispatch, or use an explicit non-null source
-assertion. This is a caller assertion, not runtime validation or conversion.
+identity. Checking that local establishes complete dispatch; an unchecked call
+uses the partial-lookup policy. An explicit non-null source assertion instead
+claims that proof. This is a caller assertion, not runtime validation or conversion.
 
 Class operands are named declarations, not dynamic class values. The bounded
 profile rejects local/parameter shadowing of a source target. Qualified/nested

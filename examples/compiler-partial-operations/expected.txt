@@ -9,3 +9,13 @@ true
 7
 3
 4
+41
+41
+41
+4
+5
+source
+native
+4
+text
+touched

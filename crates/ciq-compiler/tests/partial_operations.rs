@@ -79,7 +79,7 @@ fn partial_operations_preserve_disjoint_arity_api_and_source_identity_errors() {
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String) {return x.length(1);}",
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Number> or Toybox.Lang.Number) {return x.sort(null);}",
         "class A {} class B {} function f(x as B or Toybox.Lang.Number) as A {return +x;}",
-        "class C {function length() as Toybox.Lang.String{return \"x\";}} function f(x as C or Toybox.Lang.String) {return x.length();}",
+        "class C {function length() as Toybox.Lang.String{return \"x\";}} function f(x as C or Toybox.Lang.String) {return x.length(1);}",
     ] {
         for level in [
             TypeCheckLevel::Gradual,

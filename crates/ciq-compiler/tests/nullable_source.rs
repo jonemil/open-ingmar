@@ -157,7 +157,10 @@ fn nullable_source_casts_preserve_identity_and_require_fresh_non_null_proofs() {
         "function f(value as Toybox.Lang.Object) { return value as Missing or Null; }",
         "class App extends Toybox.Application.AppBase { function f(value as Toybox.Lang.Object) { return value as App or Null; } }",
     ] {
-        assert!(compile_sources(&[source, CLASSES]).is_err(), "{source}");
+        assert!(
+            checking::compile_sources(&[source, CLASSES]).is_err(),
+            "{source}"
+        );
     }
 }
 

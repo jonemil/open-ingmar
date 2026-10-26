@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 const CLASSES: &str = "class A{function initialize(){}function count() as Toybox.Lang.Number{return 7;}}class B{function initialize(){}function count() as Toybox.Lang.Number{return 9;}}";
 #[test]
@@ -27,7 +29,10 @@ fn required_initialization_invariance_and_read_claims_are_enforced() {
         "class Box{var value as A or Toybox.Lang.String or Null;function initialize(){}function read(){return self.value.count();}}",
         "class Box{var value as Toybox.Lang.Array<Toybox.Lang.Number> or Null;function initialize(){}function read(){if(self.value!=null){return self.value[0];}return 0;}}",
     ] {
-        assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[CLASSES, body]).is_err(),
+            "{body}"
+        );
     }
     let unit=compile_sources(&[CLASSES,"class Box{var value as A or B;function initialize(){self.value=new A();}function read() as A or B{return self.value;}}"]).unwrap();
     let text = unit.to_ir_text();

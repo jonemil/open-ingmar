@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_unit_ir};
 const CLASSES: &str = "class A{function initialize(){} function value(x as Toybox.Lang.Number) as Toybox.Lang.Number{return x+1;}function accept(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number{return x.size();}} class B{function initialize(){} function value(x as Toybox.Lang.Number) as Toybox.Lang.String{return x.toString();}function accept(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number{return x.size();}}";
 #[test]
@@ -34,7 +36,8 @@ fn every_signature_and_receiver_alternative_must_be_valid() {
         ),
     ] {
         assert!(
-            compile_sources(&[&classes, "function f(x as A or B){return x.value(2);}"]).is_err()
+            checking::compile_sources(&[&classes, "function f(x as A or B){return x.value(2);}"])
+                .is_err()
         );
     }
     for body in [
@@ -42,7 +45,10 @@ fn every_signature_and_receiver_alternative_must_be_valid() {
         "function f(x as A or B) as Toybox.Lang.Boolean{return x.value(2);}",
         "function f(x as A or B){return x.value(\"bad\");}",
     ] {
-        assert!(compile_sources(&[CLASSES, body]).is_err(), "{body}");
+        assert!(
+            checking::compile_sources(&[CLASSES, body]).is_err(),
+            "{body}"
+        );
     }
     let unit = compile_sources(&[CLASSES, "function f(x as A or B){return x.value(2);}"]).unwrap();
     let text = unit.to_ir_text();

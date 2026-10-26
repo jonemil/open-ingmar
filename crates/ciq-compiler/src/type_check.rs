@@ -554,17 +554,41 @@ fn inspect(
                 }
             }
             Operation::ObjectCall {
+                receiver,
                 classes,
                 member,
                 arguments,
                 ..
             }
             | Operation::ObjectCallStatement {
+                receiver,
                 classes,
                 member,
                 arguments,
                 ..
             } => {
+                if let Some(contract) = origins.contract(*receiver) {
+                    let targets = crate::source_calls::targets(contract, member, |class| {
+                        let declaration = unit?.classes().iter().find(|c| c.name == class.name)?;
+                        let method = declaration.methods.iter().find(|f| f.name() == member)?;
+                        Some(crate::StructuralMethod {
+                            parameters: method.parameter_types().to_vec(),
+                            result: method.return_type(),
+                        })
+                    });
+                    dynamic = targets.missing;
+                    for parameters in targets.parameters(member) {
+                        for boundary in parameters
+                            .into_iter()
+                            .map(|p| p.exact_type())
+                            .zip(arguments.iter().copied())
+                        {
+                            if !boundaries.contains(&boundary) {
+                                boundaries.push(boundary);
+                            }
+                        }
+                    }
+                }
                 for class in classes {
                     if let Some(parameters) = signatures.get(&(class.clone(), member.clone())) {
                         for boundary in parameters.iter().cloned().zip(arguments.iter().copied()) {

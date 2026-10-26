@@ -922,8 +922,9 @@ text is only the save/resume representation.
 `SourceCast` also carries a `nullable` flag. Its saved target is
 `nullable-source(ClassName@Native.Base)` when true, otherwise
 `source(ClassName@Native.Base)`. The nullable form retains the exact identity
-with a nullable native projection; source dispatch requires a non-null proof
-on a later read. It does not narrow other storage or change the runtime value.
+with a nullable native projection. A later non-null proof gives complete source
+dispatch; otherwise member lookup follows the partial-receiver rules. The cast
+does not narrow other storage or change the runtime value.
 `SourceInstanceOf` has no nullable target flag: Null does not match the class.
 
 [VM lowering](../lowering/README.md#source-class-tests-and-casts).
@@ -1983,17 +1984,24 @@ Optional spans follow the existing syntax; omitted result types mean Integer.
 `ObjectCall` and `ObjectCallStatement` carry a `classes: Vec<String>` target
 set, serialized as one whitespace-free `A|B` field (a singleton remains `A`).
 Construction and parsing sort/deduplicate the set and require 1..=254 valid
-names. Receiver provenance must prove exactly that non-null source-only set,
-independently of the claimed names; omitting a possible class is invalid.
+names. Receiver provenance must prove exactly that source-class set,
+independently of the claimed names, including classes without the requested
+member. Omitting a possible class is invalid. Native and Null alternatives
+remain in the receiver contract rather than in this class-name field.
 
-Unit validation resolves every target and checks its arity, parameters, and
-lifecycle-callback restrictions. Arguments must satisfy all signatures. A value
-call's result metadata must equal the shared join of every declared result;
-Void and unsupported joins are rejected. Statement calls define no semantic
-result and permit different result types, including Void/value mixtures.
-Contextual literals use a common concrete parameter contract when all targets
-accept it, including Any parameters. Every possible target contributes shutdown
-effects, including through recursive calls and initializer checks. The target
+Unit validation resolves each class declaration, then checks available source
+and supported native targets for arity, parameters, API availability, and
+lifecycle-callback restrictions. At least one target must exist. Arguments must
+satisfy all available signatures. Complete value lookup requires the shared join
+of all target results; partial lookup requires Any. Known Void targets and
+unsupported joins cannot be used as values. Saved result metadata must match
+that resolution exactly. Source checking policy diagnoses incomplete lookup;
+IR resume does not require a non-null proof for these calls.
+
+Statement calls define no semantic result and permit Void/value mixtures.
+Contextual literals use common available parameter contracts, including Any
+parameters. Every possible source body contributes shutdown effects, including
+through recursive calls and initializer checks. The target
 set adds static obligations, not runtime branching. Both forms preserve one
 receiver evaluation before arguments in source order. Standalone function parsing retains
 declaration-resolution obligations; it does not authorize arbitrary receiver
@@ -2175,9 +2183,10 @@ recomputes native results from catalogue/receiver contracts rather than trusting
 frontend metadata. Native receiver unions may omit a member on some alternatives;
 all available signatures still undergo argument-count and API checks. Partial
 lookup defines Any unless every matching result is Void. No matching member,
-disjoint arguments, and invalid metadata remain errors. Source-class receiver
-profiles retain their complete declaration/dispatch checks. Runtime formatting, conversion ranges, and case mapping
-are not compile-time evaluations.
+disjoint arguments, and invalid metadata remain errors. Calls requiring source
+declaration lookup use `.call-object` and its independently checked receiver
+contract. Runtime formatting, conversion ranges, and case mapping are not
+compile-time evaluations.
 
 Tuple receivers use these same native-call operations. `reverse` derives reversed
 slot contracts, including nested/source slots. For `slice`, validation additionally

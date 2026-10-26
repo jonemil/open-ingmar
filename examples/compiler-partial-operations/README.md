@@ -1,7 +1,8 @@
 # Partial native operations
 
-[app.mc](app.mc) uses Number-or-String operands, Array indices, and native member
-receivers. Matching inputs execute without casts or extra guards. Unary plus
+[app.mc](app.mc) uses Number-or-String operands, Array indices, and native/source
+member receivers. Source dispatch covers missing members, Null, mixed native
+receivers, distinct result contracts, and discarded Void calls. Matching inputs execute without casts or extra guards. Unary plus
 also receives a String, checking that its no-op lowering preserves the value.
 Informative checking reports uncertainty; strict checking rejects it. Other
 runtime alternatives may fail; known disjoint operations remain compile errors.

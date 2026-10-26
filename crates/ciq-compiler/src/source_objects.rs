@@ -163,12 +163,10 @@ impl Origins {
         {
             let actual = self.values.get(receiver);
             if !actual.is_some_and(|c| {
-                !c.nullable
-                    && c.native.is_empty()
-                    && c.classes
-                        .iter()
-                        .map(|c| c.name.as_str())
-                        .eq(classes.iter().map(String::as_str))
+                c.classes
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .eq(classes.iter().map(String::as_str))
             }) {
                 return Err("object call class does not match the receiver's source contract");
             }

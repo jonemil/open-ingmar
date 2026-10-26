@@ -736,14 +736,14 @@ fn emit_call(
         .transpose()?;
     let classes = receiver
         .and_then(|value| {
-            crate::source_objects::contract(operations, value, calls.parameter_types.clone())
-                .filter(|c| c.native().is_empty())
-                .map(|c| {
+            crate::source_objects::contract(operations, value, calls.parameter_types.clone()).map(
+                |c| {
                     c.classes()
                         .iter()
                         .map(|c| c.name.clone())
                         .collect::<Vec<_>>()
-                })
+                },
+            )
         })
         .filter(|classes| {
             classes.iter().any(|class| {
@@ -837,15 +837,22 @@ fn emit_call(
     let result = ValueId(operations.len() as u32);
     Ok(if let Some(receiver) = receiver {
         if let Some(classes) = classes {
-            let mut results = classes.iter().filter_map(|class| {
-                calls
-                    .get(&(class.clone(), member.clone()))
-                    .map(|s| s.result.clone())
-            });
-            let result_type = results
-                .next()
-                .and_then(|first| results.try_fold(first, |a, b| crate::joins::call_result(&a, &b)))
-                .unwrap_or(crate::ReturnType::Void);
+            let contract = crate::source_objects::contract(
+                operations,
+                receiver,
+                calls.parameter_types.clone(),
+            )
+            .expect("source call retains its receiver contract");
+            let targets = calls.member_targets(&contract, &member);
+            // Candidate result selection uses native declarations. Actual arguments,
+            // exact source witnesses, and API availability are checked by the unit.
+            let result_type = targets
+                .result(
+                    &member,
+                    |ty| crate::native::value_parameters(ty, &member).unwrap_or_default(),
+                    None,
+                )
+                .map_err(|message| Diagnostic::at(source, span.start, message))?;
             Operation::ObjectCall {
                 result,
                 result_type,
@@ -2197,40 +2204,30 @@ impl Builder<'_> {
         let parser::ExpressionKind::Temporary(local) = receiver.kind else {
             return Vec::new();
         };
-        if let Some(contract) = self
-            .types
-            .local_contract(local)
-            .filter(|c| c.native().is_empty())
-        {
-            let signatures = contract
-                .classes()
-                .iter()
-                .filter_map(|c| self.calls.get(&(c.name.clone(), member.into())))
-                .collect::<Vec<_>>();
-            if signatures.len() == contract.classes().len() {
-                if let Some(first) = signatures.first() {
-                    return first
-                        .parameters
-                        .iter()
-                        .enumerate()
-                        .map(|(i, first_type)| {
-                            let ty = signatures
-                                .iter()
-                                .filter_map(|s| s.parameters.get(i))
-                                .find(|ty| **ty != crate::ParameterType::Any)
-                                .unwrap_or(first_type);
-                            signatures
-                                .iter()
-                                .all(|s| {
-                                    s.parameters.get(i).is_some_and(|other| {
-                                        other == ty || *other == crate::ParameterType::Any
-                                    })
+        if let Some(contract) = self.types.local_contract(local) {
+            let targets = self.calls.member_targets(contract, member);
+            let signatures = targets.parameters(member);
+            if let Some(first) = signatures.first() {
+                return first
+                    .iter()
+                    .enumerate()
+                    .map(|(i, first_type)| {
+                        let ty = signatures
+                            .iter()
+                            .filter_map(|s| s.get(i))
+                            .find(|ty| **ty != crate::ParameterType::Any)
+                            .unwrap_or(first_type);
+                        signatures
+                            .iter()
+                            .all(|s| {
+                                s.get(i).is_some_and(|other| {
+                                    other == ty || *other == crate::ParameterType::Any
                                 })
-                                .then(|| construction_type(&ty.api_type()))
-                                .flatten()
-                        })
-                        .collect();
-                }
+                            })
+                            .then(|| construction_type(&ty.api_type()))
+                            .flatten()
+                    })
+                    .collect();
             }
         }
         self.types
@@ -3614,6 +3611,19 @@ impl CallContext {
     }
     pub(crate) fn insert(&mut self, key: (String, String), signature: CallSignature) {
         self.signatures.insert(key, signature);
+    }
+    fn member_targets(
+        &self,
+        receiver: &crate::SourceUnion,
+        member: &str,
+    ) -> crate::source_calls::Targets {
+        crate::source_calls::targets(receiver, member, |class| {
+            self.get(&(class.name.clone(), member.into()))
+                .map(|signature| crate::StructuralMethod {
+                    parameters: signature.parameters.clone(),
+                    result: signature.result.clone(),
+                })
+        })
     }
     /// Resolve inherited Object members only when the source class has no override.
     fn inherited_object_member(&self, class: &str, member: &str) -> bool {

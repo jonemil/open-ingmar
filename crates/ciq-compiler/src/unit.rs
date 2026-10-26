@@ -1910,6 +1910,90 @@ impl CompilationUnit {
                     | Operation::SourceNew { arguments, .. } => (arguments, false),
                     _ => continue,
                 };
+                let dispatch = if let Operation::ObjectCall {
+                    receiver, member, ..
+                }
+                | Operation::ObjectCallStatement {
+                    receiver, member, ..
+                } = &located.operation
+                {
+                    let contract = origins
+                        .contract(*receiver)
+                        .expect("validated source receiver");
+                    for class in contract.classes() {
+                        let declaration = self
+                            .classes
+                            .iter()
+                            .find(|c| c.name == class.name && c.base == class.base)
+                            .ok_or_else(|| {
+                                fail(
+                                    Some(index),
+                                    Some(operation),
+                                    "source receiver class and base must match its declaration"
+                                        .into(),
+                                )
+                            })?;
+                        if crate::native::callback(declaration.base, member).is_some() {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                format!(
+                                    "{member} is a native lifecycle callback, not a user-call target"
+                                ),
+                            ));
+                        }
+                    }
+                    let targets = crate::source_calls::targets(contract, member, |class| {
+                        signatures
+                            .get(&(Owner::Class(class.name.as_str()), member.as_str()))
+                            .map(|(parameters, result)| crate::StructuralMethod {
+                                parameters: parameters.to_vec(),
+                                result: result.clone(),
+                            })
+                    });
+                    for native in &targets.native {
+                        for (argument, expected) in arguments.iter().zip(
+                            crate::native::value_parameters(native, member).unwrap_or_default(),
+                        ) {
+                            let expected = crate::unions::result(expected).ok_or_else(|| {
+                                fail(
+                                    Some(index),
+                                    Some(operation),
+                                    "unsupported native parameter contract".into(),
+                                )
+                            })?;
+                            self.check_value_contract(
+                                function, &origins, *argument, &expected, context,
+                            )
+                            .map_err(|message| fail(Some(index), Some(operation), message))?;
+                        }
+                    }
+                    let result = targets
+                        .result(
+                            member,
+                            |native| {
+                                origins.native_arguments(
+                                    native,
+                                    member,
+                                    arguments
+                                        .iter()
+                                        .map(|v| (*v, function.value_types[v].api_type())),
+                                )
+                            },
+                            context,
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), message))?;
+                    if value_call && result == ReturnType::Void {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "source member has no common value result contract".into(),
+                        ));
+                    }
+                    Some(result)
+                } else {
+                    None
+                };
                 let mut joined_result = None;
                 for key in source_callees(owner, &located.operation) {
                     if matches!(
@@ -1924,6 +2008,9 @@ impl CompilationUnit {
                         ));
                     }
                     let Some((parameters, result)) = signatures.get(&key) else {
+                        if dispatch.is_some() {
+                            continue;
+                        }
                         return Err(fail(
                             Some(index),
                             Some(operation),
@@ -2036,7 +2123,7 @@ impl CompilationUnit {
                             ));
                         }
                     }
-                    if value_call {
+                    if value_call && dispatch.is_none() {
                         joined_result = Some(match joined_result {
                             None => result.clone(),
                             Some(previous) => crate::joins::call_result(&previous, result)
@@ -2050,6 +2137,9 @@ impl CompilationUnit {
                                 })?,
                         });
                     }
+                }
+                if value_call && dispatch.is_some() {
+                    joined_result = dispatch;
                 }
                 let expected_result = match &located.operation {
                     Operation::GlobalCall { result_type, .. }

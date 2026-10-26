@@ -150,14 +150,28 @@ pub(crate) fn update(
 /// These are candidate types only; final IR checking uses the validated CFG and
 /// recomputes all facts, including loop backedges and joins.
 pub(crate) fn prefix_inputs(operations: &[LocatedOperation]) -> BTreeMap<BlockId, BTreeSet<Fact>> {
-    // Nullable candidates already use their non-null alternative during source
-    // selection. Only instanceof needs additional class facts before validation.
-    if !operations.iter().any(|op| {
-        matches!(
-            op.operation,
-            Operation::InstanceOf { .. } | Operation::SourceInstanceOf { .. }
-        )
-    }) {
+    // Member result selection depends on both class and null refinements.
+    // Skip CFG analysis only when the prefix cannot establish either fact.
+    let null_test = operations
+        .iter()
+        .any(|op| matches!(op.operation, Operation::Null { .. }))
+        && operations.iter().any(|op| {
+            matches!(
+                op.operation,
+                Operation::Compare {
+                    kind: ComparisonOp::Equal | ComparisonOp::NotEqual,
+                    ..
+                }
+            )
+        });
+    if !null_test
+        && !operations.iter().any(|op| {
+            matches!(
+                op.operation,
+                Operation::InstanceOf { .. } | Operation::SourceInstanceOf { .. }
+            )
+        })
+    {
         return BTreeMap::new();
     }
     inputs(&crate::control_flow::prefix(operations), operations)

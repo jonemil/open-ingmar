@@ -87,14 +87,17 @@ Unary plus preserves its input: informative accepts a Number-or-String operand
 returned as String. The runtime specimen passes String through unchanged.
 The independently authored
 [partial-operations example](../../examples/compiler-partial-operations/README.md)
-produces the same eleven expected console lines from SDK and Rust PRGs.
+produces the same 21 expected console lines from SDK and Rust PRGs, including
+source-only partial lookup, nullable source receivers, source/native mixtures,
+different source result types, and discarded Void calls. Each executed receiver
+provides the member; these runs do not establish the failure behavior of an
+actual missing member or Null receiver.
 Preparation checks saved-stage equivalence and complete structured SDK/generated
 reconstruction; no new opcode or DATA fallback was needed.
 
 Reproduce with the example's SDK configuration and source, then repeat with
-strict checking. Source-class partial member lookup is observed SDK behavior,
-not established support in our current dispatch profile. Current contracts are
-in the [frontend reference](../specs/frontend/README.md#native-unions).
+strict checking. Current contracts are in the
+[frontend reference](../specs/frontend/README.md#native-unions).
 
 ## Public Lang inventory
 

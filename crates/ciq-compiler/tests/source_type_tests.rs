@@ -1,3 +1,5 @@
+#[path = "common/checking.rs"]
+mod checking;
 use ciq_compiler::{compile_sources, parse_function_ir, parse_unit_ir};
 
 const CLASS: &str = "class C { function initialize() {} function value() { return 7; } } class Other { function initialize() {} }";
@@ -46,7 +48,7 @@ fn scoped_proofs_do_not_escape_to_aliases_writes_or_unchecked_paths() {
         "function f(o as Toybox.Lang.Object) { var C=1; return (o as C).value(); }",
         "function f(o as Toybox.Lang.Object, C) as Toybox.Lang.Boolean { return o instanceof C; }",
     ] {
-        assert!(compile_sources(&[body, CLASS]).is_err(), "{body}");
+        assert!(checking::compile_sources(&[body, CLASS]).is_err(), "{body}");
     }
 }
 

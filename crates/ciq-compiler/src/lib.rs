@@ -35,6 +35,7 @@ mod native;
 mod native_bindings;
 mod operators;
 mod parser;
+mod source_calls;
 mod source_fields;
 mod source_ir;
 mod source_objects;
@@ -1369,8 +1370,8 @@ pub enum Operation {
         result: ValueId,
         builder: BuilderId,
     },
-    /// Invoke a source instance method on a receiver with proven constructor
-    /// classes. Unit validation checks ownership and the declared call contract.
+    /// Invoke a member on a receiver retaining exact source classes. Unit
+    /// validation resolves available source/native targets and partial results.
     ObjectCall {
         result: ValueId,
         result_type: ReturnType,
@@ -1379,7 +1380,7 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Invoke a proven source instance method and discard its runtime result.
+    /// Invoke a checked source/native member and discard its runtime result.
     ObjectCallStatement {
         receiver: ValueId,
         classes: Vec<String>,
@@ -2647,10 +2648,12 @@ impl Function {
                         ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
                             | ValueType::Any
                             | ValueType::LangObject
+                            | ValueType::NullableObject
+                            | ValueType::NullableNativeObject(_)
                             | ValueType::Union(_)
                     ) {
                         return Err(fail(
-                            "source object calls require a supported non-null object receiver",
+                            "source object calls require a supported source receiver contract",
                         ));
                     }
                     let result = if let Operation::ObjectCall {

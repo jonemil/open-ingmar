@@ -10,6 +10,7 @@ owning files for the definition to read or change.
 | Concern | Implementation entry points | Contract |
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
+| Source receiver member candidates | [source_calls.rs] | [Source identities] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
 | IR model and body checks | [lib.rs] | [IR validation] |
@@ -263,3 +264,5 @@ library.
 
 [type_check.rs]: ../crates/ciq-compiler/src/type_check.rs
 [Checking policy]: specs/frontend/README.md#type-checking-policy
+
+[source_calls.rs]: ../crates/ciq-compiler/src/source_calls.rs
