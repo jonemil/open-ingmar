@@ -80,12 +80,16 @@ four policies. The [source contract][checking] states our current limits.
 `project.typecheck = off` accepts disjoint returns, arguments, field stores,
 operator operands, Array index keys, and Boolean conditions. The
 [unchecked specimen](../../examples/compiler-unchecked/README.md) produces the
-same 16 expected lines from SDK and Rust PRGs. Its runtime inputs support the
+same 36 expected lines from SDK and Rust PRGs. Its runtime inputs support the
 operations even when their annotations disagree. Receiver cases pass a String
 through Number for `length`, a Cell through Empty for `read` and `value`, and an
 Array through Number for indexed reads/writes. Field updates cover compound and
-conditional RHS evaluation. Structured reconstruction and
-saved-stage equivalence pass without new CODE/DATA fallback.
+conditional RHS evaluation. Literal cases preserve String/Boolean/Double tokens
+inside Number-declared Arrays, Null-only contents, nested Arrays, and actual
+String keys/Boolean values in Number-declared Dictionaries. Computed entry
+markers establish key-before-value and element order; duplicate-key markers
+show both values evaluated before the last replaces the first. Structured
+reconstruction and saved-stage equivalence pass without new CODE/DATA fallback.
 
 The SDK also compiles a wrong-arity source call with checking off. Our current
 ABI profile retains known-call arity errors. Explicit local annotations are
@@ -96,9 +100,9 @@ parameters, `["x"]` returned as `Array<Number>`, and `{"x" => true}` returned as
 `Dictionary<Number, Number>`. `C.missing()` and `C.absent` compile for an empty C
 when another class declares `missing` and `absent`; without those declarations,
 the SDK rejects undefined selectors. Receiver behavior is exercised by the
-specimen above; the mismatched literal probes identify remaining construction
-gaps and have no runtime evidence. Current implementation
-contracts are in the [unchecked profile](../specs/frontend/README.md#unchecked-lowering).
+specimen above, along with the mismatched literal cases. Actual unsupported
+runtime operands/receivers remain outside these successful executions. Current
+implementation contracts are in the [unchecked profile](../specs/frontend/README.md#unchecked-lowering).
 
 ## Partial operators and native receivers
 

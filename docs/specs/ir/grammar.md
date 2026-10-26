@@ -272,9 +272,9 @@ allocation, and option-record restrictions.
 
 Concrete Array constant payloads omit per-value tags: Number/Char use eight hex
 digits after `0x`, Long/Double sixteen, Float eight, Boolean `true|false`,
-String quoted text, and nullable elements also accept `null`. Numeric-alias,
-Object, and interface element categories instead use tagged scalar tokens, as
-Dictionary constants do: `null`, `number 0x<u32>`, `char 0x<u32>`, `long
+String quoted text, and nullable elements also accept `null`. Native unions,
+numeric aliases, Object, and interface element categories use tagged scalar
+tokens, as Dictionary constants do: `null`, `number 0x<u32>`, `char 0x<u32>`, `long
 0x<u64>`, `float 0x<u32>`, `double 0x<u64>`, `boolean true|false`, `string
 "text"`. There is no Symbol, Method, weak-handle, source-reference, or
 nested-container constant token. Validator domains decide which scalar tokens

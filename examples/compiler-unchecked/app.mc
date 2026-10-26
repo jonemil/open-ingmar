@@ -3,6 +3,27 @@ using Toybox.Lang;
 using Toybox.System;
 class Empty {}
 module Checks {
+    function mixedArray() as Lang.Array<Lang.Number> { return [true,"mixed",1.5d]; }
+    function flatArray() as Lang.Array<Lang.Number> { return ["array"]; }
+    function nullArray() as Lang.Array<Lang.Number> { return [null]; }
+    function nestedArray() as Lang.Array<Lang.Number> { return [["nested"]]; }
+    function element(text as Lang.String) as Lang.String { System.println(text); return text; }
+    function runtimeArray() as Lang.Array<Lang.Number> {
+        return [Checks.element("first"), Checks.element("second")];
+    }
+    function flatDictionary() as Lang.Dictionary<Lang.Number,Lang.Number> { return {"flag"=>true}; }
+    function mixedDictionary() as Lang.Dictionary<Lang.Number,Lang.Number> { return {1=>"one","flag"=>false}; }
+    function nullDictionary() as Lang.Dictionary<Lang.Number,Lang.Number> { return {1=>null}; }
+    function key() as Lang.String { System.println("key"); return "flag"; }
+    function flag() as Lang.Boolean { System.println("value"); return true; }
+    function runtimeDictionary() as Lang.Dictionary<Lang.Number,Lang.Number> {
+        return {Checks.key()=>Checks.flag()};
+    }
+    function literal(n as Lang.Number) as Lang.Number { System.println(n); return n; }
+    function duplicateDictionary() as Lang.Dictionary<Lang.Number,Lang.Number> {
+        return {"flag"=>Checks.literal(1),"flag"=>Checks.literal(2)};
+    }
+    function arraySize(xs as Lang.Array<Lang.Number>) as Lang.Number { return xs.size(); }
     function nativeLength(x as Lang.Number) as Lang.Number { return x.length(); }
     function sourceRead(x as Empty) as Lang.Number { return x.read(); }
     function fieldRead(x as Empty) as Lang.Number { return x.value; }
@@ -60,6 +81,21 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Checks.indexedRead(values));
         Checks.indexedWrite(values);
         System.println(Checks.indexedRead(values));
+        System.println(Checks.mixedArray()[0]);
+        System.println(Checks.mixedArray()[1]);
+        System.println(Checks.mixedArray()[2].toLong());
+        System.println(Checks.flatArray()[0]);
+        System.println(Checks.nullArray()[0]);
+        System.println(Checks.nestedArray()[0][0]);
+        System.println(Checks.runtimeArray()[1]);
+        System.println(Checks.flatDictionary()["flag"]);
+        var mixed = Checks.mixedDictionary();
+        System.println(mixed[1]);
+        System.println(mixed["flag"]);
+        System.println(Checks.nullDictionary()[1]);
+        System.println(Checks.runtimeDictionary()["flag"]);
+        System.println(Checks.duplicateDictionary()["flag"]);
+        System.println(Checks.arraySize(["argument"]));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

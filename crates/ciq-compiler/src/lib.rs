@@ -242,6 +242,19 @@ pub enum ArrayElement {
 }
 
 impl ArrayElement {
+    /// Retain explicit scalar token kinds when an element contract spans kinds.
+    pub(crate) fn tagged_constants(&self) -> bool {
+        matches!(
+            self,
+            Self::Interface(_)
+                | Self::NullableInterface(_)
+                | Self::Numeric { .. }
+                | Self::LangObject
+                | Self::NullableObject
+                | Self::Union(_)
+        )
+    }
+
     fn validate(&self) -> Result<(), String> {
         if let Self::Source(contract) = self {
             SourceUnion::with_native(
@@ -4972,14 +4985,7 @@ impl Function {
                     values
                         .iter()
                         .map(|v| {
-                            if matches!(
-                                element_type,
-                                ArrayElement::Interface(_)
-                                    | ArrayElement::NullableInterface(_)
-                                    | ArrayElement::Numeric { .. }
-                                    | ArrayElement::LangObject
-                                    | ArrayElement::NullableObject
-                            ) {
+                            if element_type.tagged_constants() {
                                 format!(" {}", v.text())
                             } else {
                                 match v {

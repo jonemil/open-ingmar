@@ -1429,15 +1429,17 @@ API requirements independently of its Object contract. Reference values use
 private construction, not scalar DATA tokens. Unit/native calls preserve the
 same [Object storage contracts](../frontend/README.md#object-containers).
 
-Numeric alias element tags use tagged scalar tokens to retain each alternative,
-with the same syntax as [Dictionary constants](#dictionary-constants):
+Numeric alias and native-union element tags use tagged scalar tokens to retain
+each alternative, with the same syntax as
+[Dictionary constants](#dictionary-constants):
 
 ```text
 .array-constant %0 numeric number 0x00000001 long 0x0000000000000001 float 0x3f800000 double 0x3ff0000000000000
 .array-constant %1 nullable-integer-union number 0x00000001 null
+.array-constant %2 union(boolean|double|string) boolean true string "mixed" double 0x3ff8000000000000
 ```
 
-Each scalar must satisfy the alias/nullability contract. In particular, Char
+Each scalar must satisfy the element/nullability contract. In particular, Char
 cannot substitute for a numeric token, and integer payloads cannot satisfy
 Decimal. Numeric aliases reuse the supported mixed-scalar DATA framing.
 

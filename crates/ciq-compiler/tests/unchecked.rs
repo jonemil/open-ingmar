@@ -158,6 +158,71 @@ fn unchecked_receiver_erasure_does_not_bypass_metadata_or_initialization() {
 }
 
 #[test]
+fn unchecked_literal_contents_keep_actual_tokens_and_checked_builders() {
+    for source in [
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [\"x\"];}",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [true,\"x\",1.5d];}",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [null];}",
+        "function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [[\"nested\"]];}",
+        "function text() as Toybox.Lang.String {return \"x\";} function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [text(),text()];}",
+        "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {\"x\"=>true};}",
+        "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {1=>\"one\",\"x\"=>false};}",
+        "function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {1=>null};}",
+        "function f() as {:flag as Toybox.Lang.Number}{return {:flag=>\"x\"};}",
+        "function text() as Toybox.Lang.String {return \"x\";} function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {text()=>true};}",
+        "function take(a as Toybox.Lang.Array<Toybox.Lang.Number>){} function f(){take([\"x\"]);}",
+        "class Box {function initialize(a as Toybox.Lang.Array<Toybox.Lang.Number>){}} function f(){return new Box([\"x\"]);}",
+    ] {
+        assert!(compile_sources(&[source]).is_err(), "checked: {source}");
+        let unit = compile_sources_with_options(&[source], off())
+            .unwrap_or_else(|e| panic!("{source}: {e}"))
+            .artifact;
+        common::pipeline(unit);
+    }
+    let source = "class Box {var required as Toybox.Lang.String;function initialize(key){M.take({key=>1});self.required=\"set\";}}";
+    let consumer = "module M {function take(d as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>) as Void {}}";
+    assert!(
+        compile_sources_with_options(&[consumer, source], off())
+            .unwrap_err()
+            .to_string()
+            .contains("shutdown")
+    );
+    let unit = compile_sources_with_options(
+        &["function f() as Toybox.Lang.Array<Toybox.Lang.Number>{return [\"x\"];}"],
+        off(),
+    )
+    .unwrap()
+    .artifact;
+    let text = unit.to_ir_text();
+    let constant = text
+        .lines()
+        .find(|l| l.starts_with(".array-constant "))
+        .unwrap();
+    assert!(constant.contains("string"), "{constant}");
+    let forged = constant.replacen(" string ", " integer ", 1);
+    assert_ne!(constant, forged);
+    assert!(ciq_compiler::parse_unit_ir(&text.replace(constant, &forged)).is_err());
+    let text=compile_sources_with_options(&["function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {\"x\"=>true};}"],off()).unwrap().artifact.to_ir_text();
+    assert!(text.contains("dictionary(string=>boolean)"));
+    assert!(
+        ciq_compiler::parse_unit_ir(&text.replace(
+            "dictionary(string=>boolean)",
+            "dictionary(integer=>integer)"
+        ))
+        .is_err()
+    );
+    let text=compile_sources_with_options(&["function f() as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number>{return {1=>null};}"],off()).unwrap().artifact.to_ir_text();
+    let fill = text
+        .lines()
+        .find(|line| line.starts_with(".dictionary-fill "))
+        .unwrap();
+    let mut fields = fill.split_whitespace().collect::<Vec<_>>();
+    assert_eq!(fields[2], "0");
+    fields[2] = "1";
+    assert!(ciq_compiler::parse_unit_ir(&text.replace(fill, &fields.join(" "))).is_err());
+}
+
+#[test]
 fn unchecked_application_preserves_all_saved_stages() {
     let report = compile_sources_with_options(
         &[include_str!("../../../examples/compiler-unchecked/app.mc")],

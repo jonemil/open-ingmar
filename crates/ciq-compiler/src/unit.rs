@@ -135,7 +135,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
         Operation::ArrayRead{array,..}|Operation::ArrayWrite{array,..} if matches!(function.value_types[array],crate::ValueType::Union(_))=>interface_keys(&function.value_types[array]),
         Operation::DictionaryRead { dictionary, .. }
         | Operation::DictionaryWrite { dictionary, .. } => interface_keys(&function.value_types[dictionary]),
-        Operation::DictionaryFill { builder, .. } => function.operations().iter().any(|located| {
+        Operation::DictionaryFill { builder, entries, .. } => entries.iter().any(|(key,_)| function.value_types[key] == crate::ValueType::Any) || function.operations().iter().any(|located| {
             matches!(located.operation, Operation::DictionaryBegin { builder: id, ref dictionary_type, .. }
                 if id == *builder && matches!(dictionary_type.key, crate::DictionaryKey::Interface(_)))
         }),
@@ -380,23 +380,6 @@ impl NumericAlias {
             (Self::Numeric, false) => "numeric",
             (Self::Numeric, true) => "nullable-numeric",
         }
-    }
-
-    /// Parse a supported alias tag and its nullable alternative.
-    pub(crate) fn parse_tag(tag: &str) -> Option<(Self, bool)> {
-        let (tag, nullable) = tag
-            .strip_prefix("nullable-")
-            .map(|tag| (tag, true))
-            .unwrap_or((tag, false));
-        Some((
-            match tag {
-                "integer-union" => Self::Integer,
-                "decimal" => Self::Decimal,
-                "numeric" => Self::Numeric,
-                _ => return None,
-            },
-            nullable,
-        ))
     }
 
     /// Resolve an exact supported numeric union, including its Null alternative.

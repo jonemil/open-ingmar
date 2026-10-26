@@ -3,7 +3,9 @@
 [app.mc](app.mc) deliberately mismatches annotations at returns, arguments,
 storage, arithmetic operands, index keys/receivers, member/field receivers, and
 conditions. Field cases include reads, writes, compound updates, and a
-conditional RHS. Runtime inputs still support the executed operations. Checking off preserves their actual values;
+conditional RHS. Literal cases cover actual scalar kinds, mixed tokens,
+Null-only contents, nested Arrays, computed entries, and duplicate-key order.
+Runtime inputs still support the executed operations. Checking off preserves their actual values;
 annotations do not cause conversions. Compare [expected.txt](expected.txt).
 
 From the repository root, using new output paths:

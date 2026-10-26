@@ -669,16 +669,9 @@ pub(crate) fn parse_function_ir_context(
                             .ok_or_else(|| {
                                 fail(*at, "constant arrays require supported scalar elements")
                             })?,
-                        values: if crate::NumericAlias::parse_tag(&fields[2]).is_some()
-                            || matches!(
-                                fields[2].as_str(),
-                                "comparable"
-                                    | "nullable-comparable"
-                                    | "comparator"
-                                    | "nullable-comparator"
-                                    | "object"
-                                    | "nullable-object"
-                            ) {
+                        values: if crate::type_text::element(&fields[2])
+                            .is_some_and(|element| element.tagged_constants())
+                        {
                             let mut values = Vec::new();
                             let mut next = 3;
                             while next < width {

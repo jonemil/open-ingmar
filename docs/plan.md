@@ -37,10 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Support checking-off Array/Dictionary literal contents that conflict with
-  their expected contract, such as `["x"]` returned as `Array<Number>` and
-  `{"x" => true}` returned as `Dictionary<Number, Number>`. Preserve actual
-  contents, literal encoding, and builder completion/evaluation order.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,
   and value operations: container-guarded aliases such as
   `typedef Tree as Array<Tree>` and interfaces such as

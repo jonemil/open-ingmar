@@ -137,9 +137,21 @@ Dynamic calls and indexing conservatively count as possible shutdown callbacks
 before required fields have been initialized. Hidden evaluation captures retain
 their types; assertions follow actual definitions rather than operation indices.
 
-This profile does not yet lower mismatched typed Array/Dictionary literal contents. Unsupported source syntax
-also remains unsupported; for example, explicit local-variable annotations are
-invalid even with checking off. The [unchecked example](../../../examples/compiler-unchecked/README.md)
+Typed Array/Dictionary literals may contain values that conflict with their
+expected contract. Compatible constants keep their existing encoding. When
+possible, incompatible scalar constants use a contract inferred from their
+actual tokens; mixed Array scalar kinds retain explicit tags in saved IR.
+Otherwise, runtime builders keep the contextual contract and explicit Any
+assertions on conflicting fills. Known key types, including literal record
+Symbols, retain their provenance. Unknown Dictionary keys count as possible
+callbacks during required-field initialization. Actual values, duplicate-key
+replacement, and left-to-right evaluation remain unchanged. Completion/order
+and raw constant-payload checks are still mandatory. Existing construction
+profiles remain bounded: checking off
+does not invent contracts for otherwise uninferable context-free Dictionaries.
+
+Unsupported source syntax remains unsupported; for example, explicit
+local-variable annotations are invalid even with checking off. The [unchecked example](../../../examples/compiler-unchecked/README.md)
 shows the supported runtime path.
 
 ## Types and nullability

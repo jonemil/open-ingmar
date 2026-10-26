@@ -1525,6 +1525,8 @@ impl Builder<'_> {
         })
     }
 
+    /// Build a Dictionary from validated scalar tokens or ordered runtime fills.
+    /// Unchecked mismatches retain actual constants or use asserted builder fills.
     fn dictionary_literal(
         &mut self,
         entries: Vec<(parser::Expression, parser::Expression)>,
@@ -1565,11 +1567,13 @@ impl Builder<'_> {
                     crate::DictionaryKey::Interface(_) | crate::DictionaryKey::Structural(_)
                 )
             }) {
-                if constants.first().is_some_and(|(first, _)| {
-                    constants.iter().any(|(key, _)| {
-                        std::mem::discriminant(key) != std::mem::discriminant(first)
+                if !self.calls.unchecked
+                    && constants.first().is_some_and(|(first, _)| {
+                        constants.iter().any(|(key, _)| {
+                            std::mem::discriminant(key) != std::mem::discriminant(first)
+                        })
                     })
-                }) {
+                {
                     return Err(Diagnostic::at(
                         self.source,
                         span.start,
@@ -1577,21 +1581,34 @@ impl Builder<'_> {
                     ));
                 }
             } else {
-                let dictionary_type = crate::dictionary::constant_type(&constants, expected)
-                    .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
-                let result = ValueId(self.operations.len() as u32);
-                self.push(
-                    Operation::DictionaryConstant {
-                        result,
-                        dictionary_type,
-                        entries: constants,
-                    },
-                    Some(span),
-                );
-                return Ok(parser::Expression {
-                    kind: parser::ExpressionKind::Joined(result),
-                    span,
-                });
+                let checked = crate::dictionary::constant_type(&constants, expected.clone());
+                let dictionary_type = if self.calls.unchecked {
+                    checked
+                        .ok()
+                        .or_else(|| crate::dictionary::constant_type(&constants, None).ok())
+                } else {
+                    Some(
+                        checked
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?,
+                    )
+                };
+                if let Some(dictionary_type) = dictionary_type {
+                    let result = ValueId(self.operations.len() as u32);
+                    self.push(
+                        Operation::DictionaryConstant {
+                            result,
+                            dictionary_type,
+                            entries: constants,
+                        },
+                        Some(span),
+                    );
+                    return Ok(parser::Expression {
+                        kind: parser::ExpressionKind::Joined(result),
+                        span,
+                    });
+                }
+                // Incompatible flat tokens still use ordinary runtime insertion.
+                // Unchecked fill assertions retain their actual key/value objects.
             }
         }
         let grouped = entries.iter().all(|(key, value)| {
@@ -1677,6 +1694,7 @@ impl Builder<'_> {
     /// branching elements stage values with empty-stack CFG edges. A nullable
     /// expected contract permits Null and the base type without widening an
     /// existing Array reference; its staging locals retain each operand's type.
+    /// Unchecked mismatches retain actual constant types or asserted builder fills.
     fn array_literal(
         &mut self,
         elements: Vec<parser::Expression>,
@@ -1744,18 +1762,30 @@ impl Builder<'_> {
             })
             .collect::<Option<Vec<_>>>();
         if let Some(values) = constant {
-            if values.iter().all(|v| {
-                let actual =
+            let actual_types = values
+                .iter()
+                .map(|v| {
                     v.0.as_ref()
                         .map(|ty| ty.api_type())
-                        .unwrap_or(crate::api::Type::Null);
-                crate::native::accepts(&expected.api_type(), &actual)
-            }) {
+                        .unwrap_or(crate::api::Type::Null)
+                })
+                .collect::<Vec<_>>();
+            let element_type = if actual_types
+                .iter()
+                .all(|actual| crate::native::accepts(&expected.api_type(), actual))
+            {
+                Some(expected.clone())
+            } else if self.calls.unchecked {
+                crate::ArrayElement::from_api_type(&crate::unions::normalize(actual_types))
+            } else {
+                None
+            };
+            if let Some(element_type) = element_type {
                 let result = ValueId(self.operations.len() as u32);
                 self.push(
                     Operation::ArrayConstant {
                         result,
-                        element_type: expected,
+                        element_type,
                         values: values.into_iter().map(|v| v.1).collect(),
                     },
                     Some(span),

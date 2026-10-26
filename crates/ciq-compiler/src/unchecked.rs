@@ -15,6 +15,7 @@ pub(crate) fn lower(
     let mut types = crate::source_types::Types::new(parameters);
     let inputs = crate::type_flow::prefix_inputs(operations);
     let mut fixed = BTreeSet::new();
+    let mut dictionary_keys = BTreeMap::new();
     let mut next = operations
         .iter()
         .filter_map(|op| op.operation.result())
@@ -136,6 +137,36 @@ pub(crate) fn lower(
                     .is_some_and(|(expected, actual)| crate::native::accepts(expected, actual))
                 {
                     assert(key, Type::Any);
+                }
+            }
+            Operation::ArrayFill { value, .. } => assert(value, Type::Any),
+            Operation::ArrayFillMany { values, .. } => {
+                for value in values {
+                    assert(value, Type::Any);
+                }
+            }
+            Operation::DictionaryBegin {
+                builder,
+                dictionary_type,
+                ..
+            } => {
+                dictionary_keys.insert(*builder, dictionary_type.key.api_type());
+            }
+            Operation::RecordBegin { builder, .. } => {
+                dictionary_keys.insert(*builder, Type::named("Toybox.Lang.Symbol"));
+            }
+            Operation::DictionaryFill {
+                builder, entries, ..
+            } => {
+                for (key, value) in entries {
+                    if !dictionary_keys
+                        .get(builder)
+                        .zip(types.value_type(*key))
+                        .is_some_and(|(expected, actual)| crate::native::accepts(expected, actual))
+                    {
+                        assert(key, Type::Any);
+                    }
+                    assert(value, Type::Any);
                 }
             }
             Operation::GlobalCall { arguments, .. }
