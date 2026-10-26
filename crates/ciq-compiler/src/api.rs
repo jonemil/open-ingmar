@@ -548,6 +548,17 @@ impl Catalogue {
         self.modules.get(path)
     }
 
+    /// Report whether a method/function selector has a catalogue declaration.
+    /// This does not establish a receiver, signature, or API availability proof.
+    pub fn has_selector(&self, name: &str) -> bool {
+        self.classes
+            .values()
+            .flat_map(|c| &c.methods)
+            .chain(self.interfaces.values().flat_map(|i| &i.methods))
+            .chain(self.modules.values().flat_map(|m| &m.functions))
+            .any(|method| method.name == name)
+    }
+
     /// Look up a canonical class path without filtering its API availability.
     pub fn class(&self, path: &str) -> Option<&Class> {
         self.classes.get(path)

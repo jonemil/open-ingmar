@@ -1,7 +1,18 @@
 using Toybox.Application;
 using Toybox.Lang;
 using Toybox.System;
+class Empty {}
 module Checks {
+    function nativeLength(x as Lang.Number) as Lang.Number { return x.length(); }
+    function sourceRead(x as Empty) as Lang.Number { return x.read(); }
+    function fieldRead(x as Empty) as Lang.Number { return x.value; }
+    function fieldWrite(x as Empty, value as Lang.Number) as Void { x.value = value; }
+    function fieldStep(x as Empty) as Lang.Number { x.value += 1; return x.value; }
+    function fieldChoice(x as Empty, choose as Lang.Boolean) as Void {
+        x.value = choose ? 43 : 44;
+    }
+    function indexedRead(x as Lang.Number) as Lang.Number { return x[0]; }
+    function indexedWrite(x as Lang.Number) as Void { x[0] = 42; }
     function result() as Lang.Number { return "value"; }
     function subtract(x as Lang.String) as Lang.Number { return x - 1; }
     function negate(x as Lang.String) as Lang.Number { return -x; }
@@ -37,6 +48,18 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Checks.storage());
         System.println(Checks.replace(0));
         System.println(new Cell().read());
+        System.println(Checks.nativeLength("three"));
+        var cell = new Cell();
+        System.println(Checks.sourceRead(cell));
+        System.println(Checks.fieldRead(cell));
+        Checks.fieldWrite(cell, 41);
+        System.println(Checks.fieldStep(cell));
+        Checks.fieldChoice(cell, true);
+        System.println(Checks.fieldRead(cell));
+        var values = [41];
+        System.println(Checks.indexedRead(values));
+        Checks.indexedWrite(values);
+        System.println(Checks.indexedRead(values));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

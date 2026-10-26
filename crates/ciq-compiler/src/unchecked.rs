@@ -4,7 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Insert lexical assertions at unchecked value uses, preserving declarations,
 /// receiver identities, call signatures, and evaluation order. Source emission
-/// allocates result IDs from operation indices; fresh IDs start past that range.
+/// retains value IDs independently of operation positions; fresh assertions use
+/// IDs beyond all existing definitions.
 /// The resulting ordinary IR must pass all function and unit validators.
 pub(crate) fn lower(
     operations: &mut Vec<LocatedOperation>,
@@ -14,9 +15,14 @@ pub(crate) fn lower(
     let mut types = crate::source_types::Types::new(parameters);
     let inputs = crate::type_flow::prefix_inputs(operations);
     let mut fixed = BTreeSet::new();
-    let mut next = operations.len() as u32;
+    let mut next = operations
+        .iter()
+        .filter_map(|op| op.operation.result())
+        .map(|value| value.0)
+        .max()
+        .map_or(0, |max| max + 1);
     let mut output = Vec::new();
-    let mut assertions = BTreeMap::<usize, Vec<LocatedOperation>>::new();
+    let mut assertions = BTreeMap::<ValueId, Vec<LocatedOperation>>::new();
     for mut located in std::mem::take(operations) {
         crate::type_flow::update(&mut types.facts, &inputs, &located.operation);
         types.observe(&located.operation);
@@ -25,7 +31,7 @@ pub(crate) fn lower(
             let result = ValueId(next);
             next += 1;
             assertions
-                .entry(value.0 as usize)
+                .entry(*value)
                 .or_default()
                 .push(LocatedOperation {
                     operation: Operation::Cast {
@@ -73,12 +79,14 @@ pub(crate) fn lower(
             | Operation::ParameterAssign { value, .. }
             | Operation::SelfFieldAssign { value, .. }
             | Operation::MemberWrite { value, .. }
-            | Operation::LocalInitialize { value, .. }
             | Operation::Println { value } => assert(value, Type::Any),
             Operation::LocalDeclare { local, .. } => {
                 fixed.insert(*local);
             }
-            Operation::LocalAssign { local, value } if fixed.contains(local) => {
+            Operation::LocalInitialize { local, value }
+            | Operation::LocalAssign { local, value }
+                if fixed.contains(local) =>
+            {
                 assert(value, Type::Any)
             }
             Operation::Branch { condition, .. } => {
@@ -87,14 +95,24 @@ pub(crate) fn lower(
                     assert(condition, boolean);
                 }
             }
-            Operation::ArrayRead { index, .. } => {
+            Operation::ArrayRead { array, index, .. } => {
+                if !types.value_type(*array).is_some_and(indexable) {
+                    assert(array, Type::Any);
+                }
                 if !types.value_type(*index).is_some_and(|ty| {
                     crate::native::accepts(&Type::named("Toybox.Lang.Number"), ty)
                 }) {
                     assert(index, Type::Any);
                 }
             }
-            Operation::ArrayWrite { index, value, .. } => {
+            Operation::ArrayWrite {
+                array,
+                index,
+                value,
+            } => {
+                if !types.value_type(*array).is_some_and(indexable) {
+                    assert(array, Type::Any);
+                }
                 if !types.value_type(*index).is_some_and(|ty| {
                     crate::native::accepts(&Type::named("Toybox.Lang.Number"), ty)
                 }) {
@@ -146,8 +164,11 @@ pub(crate) fn lower(
             } => {
                 let parameters = types
                     .value_type(*receiver)
-                    .and_then(|ty| crate::native::value_parameters(ty, member))
-                    .unwrap_or_default();
+                    .and_then(|ty| crate::native::value_parameters(ty, member));
+                if parameters.is_none() {
+                    assert(receiver, Type::Any);
+                }
+                let parameters = parameters.unwrap_or_default();
                 for (value, expected) in arguments.iter_mut().zip(parameters) {
                     if !types
                         .value_type(*value)
@@ -181,6 +202,36 @@ pub(crate) fn lower(
             }
             _ => {}
         }
+        if let Operation::MemberRead {
+            receiver,
+            member,
+            field_type: None,
+            view_type,
+            ..
+        } = &mut located.operation
+        {
+            if !types
+                .value_type(*receiver)
+                .is_some_and(|ty| crate::structural::field_contract(ty, member).is_ok())
+            {
+                assert(receiver, field_view(member));
+                *view_type = None;
+            }
+        }
+        if let Operation::MemberWrite {
+            receiver,
+            member,
+            field_type: None,
+            ..
+        } = &mut located.operation
+        {
+            if !types
+                .value_type(*receiver)
+                .is_some_and(|ty| crate::structural::field_contract(ty, member).is_ok())
+            {
+                assert(receiver, field_view(member));
+            }
+        }
         if let Operation::DictionaryWrite { value, .. } = &mut located.operation {
             assert(value, Type::Any);
         }
@@ -188,12 +239,29 @@ pub(crate) fn lower(
     }
     // Assertions are pure but still participate in IR expression order. Place
     // each immediately after its operand rather than after later call arguments.
-    for (at, operation) in output.into_iter().enumerate() {
+    for operation in output {
+        let result = operation.operation.result();
         operations.push(operation);
-        operations.extend(assertions.remove(&at).unwrap_or_default());
+        if let Some(value) = result {
+            operations.extend(assertions.remove(&value).unwrap_or_default());
+        }
     }
     debug_assert!(
         assertions.is_empty(),
-        "source result IDs use operation indices"
+        "assertion operands have source definitions"
     );
+}
+
+/// Recognize checked index receiver profiles independently of their key types.
+fn indexable(ty: &Type) -> bool {
+    crate::unions::index_read(ty, &Type::named("Toybox.Lang.Number")).is_ok()
+}
+
+/// Assert only the requested property, without claiming a source owner or type.
+fn field_view(member: &str) -> Type {
+    Type::Structural(Box::new(crate::StructuralInterface {
+        declaration: None,
+        fields: BTreeMap::from([(member.into(), crate::ReturnType::Any)]),
+        methods: BTreeMap::new(),
+    }))
 }

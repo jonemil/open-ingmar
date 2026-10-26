@@ -1782,6 +1782,99 @@ pub enum Operation {
     ReturnVoid,
 }
 
+impl Operation {
+    /// Return the value defined by this operation, independently of its position.
+    pub(crate) fn result(&self) -> Option<ValueId> {
+        match self {
+            Self::MemberRead { result, .. }
+            | Self::Symbol { result, .. }
+            | Self::DictionaryFinish { result, .. }
+            | Self::DictionaryRead { result, .. }
+            | Self::DictionaryConstant { result, .. }
+            | Self::DictionaryNew { result, .. }
+            | Self::BlockParameter { result, .. }
+            | Self::Step { result, .. }
+            | Self::ArrayConstant { result, .. }
+            | Self::ArrayFinish { result, .. }
+            | Self::ObjectCall { result, .. }
+            | Self::SelfValue { result, .. }
+            | Self::SelfFieldRead { result, .. }
+            | Self::NativeConstant { result, .. }
+            | Self::SourceNew { result, .. }
+            | Self::TupleNew { result, .. }
+            | Self::TupleWrite { result, .. }
+            | Self::TupleAppend { result, .. }
+            | Self::NativeNew { result, .. }
+            | Self::WeakReferenceNew { result, .. }
+            | Self::ArrayNew { result, .. }
+            | Self::ArrayAllocate { result, .. }
+            | Self::ByteArrayConstant { result, .. }
+            | Self::ByteArrayAllocate { result, .. }
+            | Self::ArrayRead { result, .. }
+            | Self::Not { result, .. }
+            | Self::Complement { result, .. }
+            | Self::Positive { result, .. }
+            | Self::Negate { result, .. }
+            | Self::Float { result, .. }
+            | Self::Double { result, .. }
+            | Self::Long { result, .. }
+            | Self::Char { result, .. }
+            | Self::NativeModuleCall { result, .. }
+            | Self::Boolean { result, .. }
+            | Self::Cast { result, .. }
+            | Self::SourceCast { result, .. }
+            | Self::SourceInstanceOf { result, .. }
+            | Self::InstanceOf { result, .. }
+            | Self::Has { result, .. }
+            | Self::Compare { result, .. }
+            | Self::Integer { result, .. }
+            | Self::Null { result, .. }
+            | Self::String { result, .. }
+            | Self::Binary { result, .. }
+            | Self::ParameterRead { result, .. }
+            | Self::GlobalCall { result, .. }
+            | Self::ModuleCall { result, .. }
+            | Self::BindMethod { result, .. }
+            | Self::NativeCall { result, .. }
+            | Self::SelfCall { result, .. }
+            | Self::VariableRead { result, .. }
+            | Self::LocalRead { result, .. }
+            | Self::LocalTake { result, .. } => Some(*result),
+            Self::MemberWrite { .. }
+            | Self::RecordBegin { .. }
+            | Self::DictionaryBegin { .. }
+            | Self::DictionaryFill { .. }
+            | Self::DictionaryWrite { .. }
+            | Self::JumpValue { .. }
+            | Self::ArrayBegin { .. }
+            | Self::ArrayFill { .. }
+            | Self::ArrayFillMany { .. }
+            | Self::ObjectCallStatement { .. }
+            | Self::SelfFieldAssign { .. }
+            | Self::NativeCallStatement { .. }
+            | Self::ByteArrayBegin { .. }
+            | Self::ArrayWrite { .. }
+            | Self::NativeModuleCallStatement { .. }
+            | Self::Block { .. }
+            | Self::Branch { .. }
+            | Self::Jump { .. }
+            | Self::Println { .. }
+            | Self::Discard { .. }
+            | Self::NativeBaseInitialize { .. }
+            | Self::ParameterAssign { .. }
+            | Self::GlobalCallStatement { .. }
+            | Self::ModuleCallStatement { .. }
+            | Self::SelfCallStatement { .. }
+            | Self::LocalVariable { .. }
+            | Self::LocalDeclare { .. }
+            | Self::LocalInitialize { .. }
+            | Self::LocalAssign { .. }
+            | Self::Return { .. }
+            | Self::ReturnVoid => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocatedOperation {
     pub operation: Operation,

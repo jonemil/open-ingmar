@@ -33,6 +33,10 @@ pub(crate) fn targets(
 }
 
 impl Targets {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.source.is_empty() && self.native.is_empty()
+    }
+
     fn add_native(&mut self, ty: Type, member: &str) {
         if crate::native::value_parameters(&ty, member).is_some() {
             self.native.push(ty);

@@ -80,8 +80,11 @@ four policies. The [source contract][checking] states our current limits.
 `project.typecheck = off` accepts disjoint returns, arguments, field stores,
 operator operands, Array index keys, and Boolean conditions. The
 [unchecked specimen](../../examples/compiler-unchecked/README.md) produces the
-same nine expected lines from SDK and Rust PRGs. Its runtime inputs support the
-operations even when their annotations disagree. Structured reconstruction and
+same 16 expected lines from SDK and Rust PRGs. Its runtime inputs support the
+operations even when their annotations disagree. Receiver cases pass a String
+through Number for `length`, a Cell through Empty for `read` and `value`, and an
+Array through Number for indexed reads/writes. Field updates cover compound and
+conditional RHS evaluation. Structured reconstruction and
 saved-stage equivalence pass without new CODE/DATA fallback.
 
 The SDK also compiles a wrong-arity source call with checking off. Our current
@@ -92,8 +95,9 @@ Further authored compile-only probes accept `x.length()` and `x[0]` for Number
 parameters, `["x"]` returned as `Array<Number>`, and `{"x" => true}` returned as
 `Dictionary<Number, Number>`. `C.missing()` and `C.absent` compile for an empty C
 when another class declares `missing` and `absent`; without those declarations,
-the SDK rejects undefined selectors. These probes identify remaining unchecked
-receiver/construction gaps, not runtime behavior. Current implementation
+the SDK rejects undefined selectors. Receiver behavior is exercised by the
+specimen above; the mismatched literal probes identify remaining construction
+gaps and have no runtime evidence. Current implementation
 contracts are in the [unchecked profile](../specs/frontend/README.md#unchecked-lowering).
 
 ## Partial operators and native receivers

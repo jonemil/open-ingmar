@@ -130,6 +130,8 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
         })
     };
     match operation {
+        Operation::ArrayRead { array, .. } | Operation::ArrayWrite { array, .. }
+            if function.value_types[array] == crate::ValueType::Any => true,
         Operation::ArrayRead{array,..}|Operation::ArrayWrite{array,..} if matches!(function.value_types[array],crate::ValueType::Union(_))=>interface_keys(&function.value_types[array]),
         Operation::DictionaryRead { dictionary, .. }
         | Operation::DictionaryWrite { dictionary, .. } => interface_keys(&function.value_types[dictionary]),
@@ -154,7 +156,7 @@ fn erased_callbacks(function: &Function, operation: &Operation) -> bool {
             crate::unions::alternatives(&receiver_type).iter().filter_map(crate::ValueType::from_api_type).any(|ty| {
             matches!(
                 ty,
-                crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_) | crate::ValueType::Structural(_)
+                crate::ValueType::Any | crate::ValueType::Interface(_) | crate::ValueType::NullableInterface(_) | crate::ValueType::Structural(_)
             ) || (member == "sort"
                 && arguments.iter().any(|a| {
                     (crate::source_objects::class(function.operations(), *a, function.parameter_types().to_vec()).is_none()

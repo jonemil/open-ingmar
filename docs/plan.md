@@ -37,10 +37,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Extend checking off to disjoint member, index, and field receivers:
-  `Number.length()`, indexing a Number, and `C.missing()`/`C.absent` when another
-  declaration provides those selectors. Preserve known signatures, API/ABI,
-  source identities, and field/dispatch metadata checks.
 - [ ] Support checking-off Array/Dictionary literal contents that conflict with
   their expected contract, such as `["x"]` returned as `Array<Number>` and
   `{"x" => true}` returned as `Dictionary<Number, Number>`. Preserve actual

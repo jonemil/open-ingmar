@@ -82,6 +82,82 @@ fn unchecked_lowering_keeps_declaration_arity_api_and_stack_errors() {
     );
 }
 #[test]
+fn unchecked_receivers_keep_dynamic_lookup_and_reject_unknown_selectors() {
+    let declarations =
+        "class C {} class D {var absent=1;function missing() as Toybox.Lang.Number {return 41;}}";
+    for body in [
+        "function f(x as Toybox.Lang.Number){return x.length();}",
+        "function f(x as C){return x.missing();}",
+        "function f(x as C){x.missing();}",
+        "function f(x as Toybox.Lang.Number){return x[0];}",
+        "function f(x as Toybox.Lang.Number){x[0]=41;}",
+        "function f(x as C){return x.absent;}",
+        "function f(x as C){var value=x.absent;return value;}",
+        "function f(x as C){x.absent=41;return x.absent;}",
+        "function f(x as C){x.absent+=1;return x.absent;}",
+        "function f(x as C){x.absent=true?41:42;return x.absent;}",
+        "function f(x as D or Null){return x.absent;}",
+    ] {
+        assert!(
+            compile_sources(&[declarations, body]).is_err(),
+            "checked: {body}"
+        );
+        common::pipeline(
+            compile_sources_with_options(&[declarations, body], off())
+                .unwrap_or_else(|e| panic!("{body}: {e}"))
+                .artifact,
+        );
+    }
+    for body in [
+        "function f(x as Toybox.Lang.Number){return x.undefinedMember();}",
+        "function f(x as C){return x.undefinedMember();}",
+        "function f(x as C){return x.undefinedField;}",
+        "function f(x as C){x.undefinedField=1;}",
+    ] {
+        assert!(
+            compile_sources_with_options(&[declarations, body], off()).is_err(),
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn unchecked_receiver_erasure_does_not_bypass_metadata_or_initialization() {
+    let declarations = "class C {} class D {var absent=1;function quit() as Void {System.exit();}}";
+    let early = "class Box {var required as Toybox.Lang.String;function initialize(x as C){x.quit();self.required=\"set\";}}";
+    assert!(
+        compile_sources_with_options(&[declarations, early], off())
+            .unwrap_err()
+            .to_string()
+            .contains("shutdown")
+    );
+    let safe = early.replace(
+        "x.quit();self.required=\"set\";",
+        "self.required=\"set\";x.quit();",
+    );
+    common::pipeline(
+        compile_sources_with_options(&[declarations, &safe], off())
+            .unwrap()
+            .artifact,
+    );
+    let unit = compile_sources_with_options(
+        &[declarations, "function f(x as C){return x.absent;}"],
+        off(),
+    )
+    .unwrap()
+    .artifact;
+    let text = unit.to_ir_text();
+    let read = text
+        .lines()
+        .find(|l| l.starts_with(".member-read "))
+        .unwrap();
+    let forged = read.replace(" absent", " absent field=integer");
+    assert_ne!(read, forged);
+    let error = ciq_compiler::parse_unit_ir(&text.replace(read, &forged)).unwrap_err();
+    assert!(error.to_string().contains("source field access"), "{error}");
+}
+
+#[test]
 fn unchecked_application_preserves_all_saved_stages() {
     let report = compile_sources_with_options(
         &[include_str!("../../../examples/compiler-unchecked/app.mc")],

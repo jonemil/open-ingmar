@@ -109,7 +109,8 @@ to the supported profile, including its unchecked explicit assertions.
 
 Off permits disjoint contracts at returns, declared storage writes, known user
 and native call arguments, numeric/comparison operators, Array/Dictionary index
-keys and writes, printing, and Boolean conditions. IR retains ordinary `.cast`
+keys and writes, disjoint receivers, printing, and Boolean conditions. IR retains
+ordinary `.cast`
 assertions to Any at unchecked uses, or to Boolean for an otherwise non-Boolean
 condition. These assertions emit no conversion, guard, or extra evaluation.
 Actual runtime values must support the executed operation; annotations do not
@@ -120,11 +121,23 @@ known-call arity, native callback ABI/results, initialization, and effect order
 remain validated. Known native arguments that already match retain their types,
 including numeric substring indices on older APIs. Resolved operator results
 and literal keys also retain their types for later API/member checks. Saved IR
-resumes through the ordinary validators without a source checking option; its explicit assertions
-carry the unchecked boundaries. The normal IR operation/frame limits still apply.
+resumes through the ordinary validators without a source checking option; its
+explicit assertions carry the unchecked boundaries. The normal IR operation/frame
+limits still apply.
 
-This profile does not yet lower disjoint member/index/field receivers or
-mismatched typed Array/Dictionary literal contents. Unsupported source syntax
+When the annotated receiver cannot provide a member or support indexing, an Any
+assertion defers lookup to the actual runtime value. Disjoint field access uses
+a structural assertion declaring only the requested field as Any. It claims no
+source class or field offset. Known source fields and available method
+signatures retain their independently checked metadata and API/ABI contracts.
+A selector used on a disjoint annotated receiver must have a source function/field
+or catalogue method/function declaration; it does not establish the eventual
+runtime target.
+Dynamic calls and indexing conservatively count as possible shutdown callbacks
+before required fields have been initialized. Hidden evaluation captures retain
+their types; assertions follow actual definitions rather than operation indices.
+
+This profile does not yet lower mismatched typed Array/Dictionary literal contents. Unsupported source syntax
 also remains unsupported; for example, explicit local-variable annotations are
 invalid even with checking off. The [unchecked example](../../../examples/compiler-unchecked/README.md)
 shows the supported runtime path.
@@ -136,7 +149,8 @@ shows the supported runtime path.
 Omitted ordinary parameter and result annotations select Any. Any includes Null;
 arguments, assignments, and results may cross supported typed boundaries without
 a generated conversion or guard. Operations on unknown receivers/operands defer
-type failures to runtime. Concrete invalid operations remain compile errors.
+type failures to runtime. Concrete invalid operations remain errors under
+checked policies; Off follows the unchecked profile above.
 The [IR dynamic contract](../ir/README.md#dynamic-values) defines these shared
 rules. Annotations accept the
 [value-type domains](grammar.md#type-syntax), resolved through canonical names,

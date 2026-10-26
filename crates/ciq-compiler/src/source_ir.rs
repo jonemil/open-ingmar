@@ -844,6 +844,14 @@ fn emit_call(
             )
             .expect("source call retains its receiver contract");
             let targets = calls.member_targets(&contract, &member);
+            if calls.unchecked && targets.is_empty() && calls.known_selector(&member) {
+                return Ok(Operation::NativeCall {
+                    result,
+                    receiver,
+                    member,
+                    arguments,
+                });
+            }
             // Candidate result selection uses native declarations. Actual arguments,
             // exact source witnesses, and API availability are checked by the unit.
             let result_type = targets
@@ -869,6 +877,24 @@ fn emit_call(
                 signature: Box::new(signature),
             }
         } else {
+            if calls.unchecked {
+                if let Some(ty) = crate::source_types::value_type(
+                    operations,
+                    receiver,
+                    calls.parameter_types.clone(),
+                ) {
+                    if ty != crate::api::Type::Any
+                        && crate::native::value_parameters(&ty, &member).is_none()
+                        && !calls.known_selector(&member)
+                    {
+                        return Err(Diagnostic::at(
+                            source,
+                            span.start,
+                            format!("undefined member selector {member}"),
+                        ));
+                    }
+                }
+            }
             Operation::NativeCall {
                 result,
                 receiver,
@@ -3142,23 +3168,18 @@ impl Builder<'_> {
                         let field_type = self
                             .types
                             .local_contract(local)
-                            .map(|contract| self.calls.declared_source_field(contract, &member))
+                            .map(|contract| self.calls.source_field_contract(contract, &member))
                             .transpose()
-                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?;
+                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?
+                            .flatten();
                         let ty = if let Some(ty) = &field_type {
                             ty.api_type()
                         } else {
-                            crate::structural::field_type(
-                                self.types.local_type(local).ok_or_else(|| {
-                                    Diagnostic::at(
-                                        self.source,
-                                        span.start,
-                                        "unknown field receiver type",
-                                    )
-                                })?,
-                                &member,
-                            )
-                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?
+                            self.calls
+                                .field_value_type(self.types.local_type(local), &member)
+                                .map_err(|message| {
+                                    Diagnostic::at(self.source, span.start, message)
+                                })?
                         };
                         let value =
                             self.snapshot_with_context(value, locals, construction_type(&ty))?;
@@ -3176,17 +3197,11 @@ impl Builder<'_> {
                         let ty = if let Some(ty) = &field_type {
                             ty.api_type()
                         } else {
-                            crate::structural::field_type(
-                                self.types.value_type(receiver).ok_or_else(|| {
-                                    Diagnostic::at(
-                                        self.source,
-                                        span.start,
-                                        "unknown field receiver type",
-                                    )
-                                })?,
-                                &member,
-                            )
-                            .map_err(|message| Diagnostic::at(self.source, span.start, message))?
+                            self.calls
+                                .field_value_type(self.types.value_type(receiver), &member)
+                                .map_err(|message| {
+                                    Diagnostic::at(self.source, span.start, message)
+                                })?
                         };
                         (
                             receiver,
@@ -3572,18 +3587,62 @@ impl CallContext {
     }
     /// Resolve source field metadata from exact receiver identities. Structural
     /// receivers continue to resolve their fields from their expanded shape.
+    fn known_selector(&self, member: &str) -> bool {
+        self.signatures.keys().any(|(_, name)| name == member)
+            || self
+                .source_fields
+                .values()
+                .any(|fields| fields.contains_key(member))
+            || crate::api::core().has_selector(member)
+    }
+
+    fn source_field_contract(
+        &self,
+        receiver: &crate::SourceUnion,
+        member: &str,
+    ) -> Result<Option<crate::ReturnType>, String> {
+        let result = self.declared_source_field(receiver, member);
+        if self.unchecked
+            && (result.is_err() || receiver.nullable() || !receiver.native().is_empty())
+            && self.known_selector(member)
+        {
+            Ok(None)
+        } else {
+            result.map(Some)
+        }
+    }
+
+    fn field_value_type(
+        &self,
+        receiver: Option<&crate::api::Type>,
+        member: &str,
+    ) -> Result<crate::api::Type, String> {
+        let result = receiver
+            .ok_or_else(|| "unknown field receiver type".to_owned())
+            .and_then(|ty| crate::structural::field_type(ty, member));
+        if self.unchecked && result.is_err() && self.known_selector(member) {
+            Ok(crate::api::Type::Any)
+        } else {
+            result
+        }
+    }
+
     fn source_field(
         &self,
         ops: &[LocatedOperation],
         receiver: ValueId,
         member: &str,
     ) -> Result<Option<crate::ReturnType>, String> {
-        let Some(contract) =
+        if let Some(contract) =
             crate::source_objects::contract(ops, receiver, self.parameter_types.clone())
-        else {
-            return Ok(None);
-        };
-        self.declared_source_field(&contract, member).map(Some)
+        {
+            return self.source_field_contract(&contract, member);
+        }
+        if self.unchecked {
+            let ty = crate::source_types::value_type(ops, receiver, self.parameter_types.clone());
+            self.field_value_type(ty.as_ref(), member)?;
+        }
+        Ok(None)
     }
 
     /// Select a declaration for candidate emission. Prefix CFGs may not yet

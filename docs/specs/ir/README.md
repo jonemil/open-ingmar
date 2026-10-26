@@ -968,7 +968,9 @@ constant widths and source-literal restrictions remain separate; see the
 [constant grammar](grammar.md#values-and-storage).
 
 Source checking off may generate ordinary `.cast` operations to Any at value
-boundaries and operator/index operands, or Boolean at a condition. These are
+boundaries, operator/index operands, and disjoint receivers, or Boolean at a
+condition. A disjoint field receiver uses a structural assertion with one Any
+field; subsequent member operations carry no source-field metadata. These are
 explicit unchecked assertions, not an IR validation mode. Parsing saved IR still
 checks declarations, result metadata, API availability, frame/stack ownership,
 and evaluation order. See the [source profile](../frontend/README.md#unchecked-lowering).

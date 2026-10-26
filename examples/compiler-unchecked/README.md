@@ -1,8 +1,9 @@
 # Unchecked value operations
 
 [app.mc](app.mc) deliberately mismatches annotations at returns, arguments,
-storage, arithmetic operands, index keys, and conditions. Runtime inputs still
-support the executed operations. Checking off preserves their actual values;
+storage, arithmetic operands, index keys/receivers, member/field receivers, and
+conditions. Field cases include reads, writes, compound updates, and a
+conditional RHS. Runtime inputs still support the executed operations. Checking off preserves their actual values;
 annotations do not cause conversions. Compare [expected.txt](expected.txt).
 
 From the repository root, using new output paths:
