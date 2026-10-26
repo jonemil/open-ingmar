@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -86,7 +89,7 @@ fn char_operator_profiles_reject_unverified_pairs_and_edited_consumers() {
         "function f(c as Toybox.Lang.Char, n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return c + n; }",
         "function f() as Toybox.Lang.Char { var c = 'A'; c = c + 'B'; return c; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f() as Toybox.Lang.Number { return ('A' + 1).toNumber(); }")
         .unwrap();

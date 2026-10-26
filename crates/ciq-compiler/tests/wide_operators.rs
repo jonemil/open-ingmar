@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
@@ -75,14 +78,14 @@ fn exact_string_accepts_all_numeric_widths_without_proving_non_null() {
             "if (n != \"v\") { return n.toString(); } return \"equal\";",
         ] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f(n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ {body} }}"
                 ))
                 .is_err(),
                 "{ty}: {body}"
             );
         }
-        assert!(compile_function(&format!("function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ return s + n; }}")).is_err());
+        assert!(checking::compile_function(&format!("function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.{ty} or Null) as Toybox.Lang.String {{ return s + n; }}")).is_err());
     }
 }
 
@@ -102,7 +105,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
                 format!("{literal} {operator} 'A'"),
             ] {
                 assert!(
-                    compile_function(&format!(
+                    checking::compile_function(&format!(
                         "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
                     ))
                     .is_err()
@@ -123,7 +126,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
         "'A' == true",
     ] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f() as Void {{ System.println({expression}); }}"
             ))
             .is_err(),
@@ -132,7 +135,7 @@ fn char_addition_equality_and_ordering_have_distinct_profiles() {
     }
     for expression in ["'A' + n", "n < 'A'"] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f(n as Toybox.Lang.Long or Null) as Void {{ System.println({expression}); }}"
             ))
             .is_err()
@@ -193,7 +196,7 @@ fn char_weak_retains_char_and_checks_receiver_availability() {
         "function f() as Toybox.Lang.Char { return 'A'.weak(1); }",
         "function f() as Toybox.Lang.Number { return 'A'.weak(); }",
     ] {
-        assert!(compile_function(source).is_err());
+        assert!(checking::compile_function(source).is_err());
     }
     for expression in ["'A'.weak().toNumber()", "('A'.weak() + 1l).toNumber()"] {
         let f = compile_function(&format!(

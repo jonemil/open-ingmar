@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation, ValueId,
     application::{ConsoleApplication, build_console_application},
@@ -132,10 +135,10 @@ fn catalogue_knowledge_does_not_enable_other_native_calls() {
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var x = n.toString() + 1; return x; }",
         "function f(n as Toybox.Lang.Number) as Toybox.Lang.Number { var x = n.toString(); x = 1; return x.length(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     assert!(
-        compile_sources(&["class C extends Application.AppBase {
+        checking::compile_sources(&["class C extends Application.AppBase {
         function onStart(state) { System.println(state.toString()); } }"])
         .is_err()
     );

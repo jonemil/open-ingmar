@@ -128,5 +128,5 @@ fn nullable_symbol_assertions_preserve_bits_and_require_a_guard_for_use() {
     let guarded = "function f(s as Toybox.Lang.Object or Null) {var value=s as Toybox.Lang.Symbol or Null;if(value!=null){return value.toNumber();}return 0;}";
     assert!(compile_function(guarded).is_ok());
     let unsafe_use = "function f(s as Toybox.Lang.Object or Null) {var value=s as Toybox.Lang.Symbol or Null;return value.toNumber();}";
-    assert!(compile_function(unsafe_use).is_err());
+    assert!(checking::compile_function(unsafe_use).is_err());
 }

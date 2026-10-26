@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ArrayElement, ParameterType, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -74,7 +77,7 @@ fn invariant_element_types_are_rechecked_in_source_and_saved_ir() {
         "function f() as Void { \"A\".toUtf8Array(1); }",
         "function f() as Void { System.println(\"A\".toUtf8Array()); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a[0] - 1; }")
         .unwrap();
@@ -91,7 +94,7 @@ fn invariant_element_types_are_rechecked_in_source_and_saved_ir() {
         .is_err()
     );
     let bad_call = "module M { function count(a as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Number { return a.size(); } } function start() as Toybox.Lang.Number { return M.count(['a']); }";
-    assert!(compile_sources(&[bad_call]).is_err());
+    assert!(checking::compile_sources(&[bad_call]).is_err());
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Number>, n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n == null) { return 0; } return a[n] - 1; }").unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
 }

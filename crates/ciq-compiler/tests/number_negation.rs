@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -69,7 +72,7 @@ fn negation_requires_a_number_and_rechecks_guards_spans_and_effect_order() {
         "function f(n) { return --n; }",
         "function f(n) { return - -n; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f(n) { return -n; }").unwrap();
     let op = f

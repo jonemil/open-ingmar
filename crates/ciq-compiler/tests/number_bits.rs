@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -110,13 +113,14 @@ fn bitwise_operators_require_nonnull_numbers_and_do_not_clamp_counts() {
         for bad in ["true", "'a'", "\"x\"", "null", "[1]"] {
             for expr in [format!("1 {op} {bad}"), format!("{bad} {op} 1")] {
                 assert!(
-                    compile_function(&format!("function f() {{ return {expr}; }}")).is_err(),
+                    checking::compile_function(&format!("function f() {{ return {expr}; }}"))
+                        .is_err(),
                     "{expr}"
                 );
             }
         }
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f(n as Toybox.Lang.Number or Null) {{ return n {op} 1; }}"
             ))
             .is_err()
@@ -125,7 +129,7 @@ fn bitwise_operators_require_nonnull_numbers_and_do_not_clamp_counts() {
         assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
     }
     for bad in ["true", "'a'", "\"x\"", "null", "[1]"] {
-        assert!(compile_function(&format!("function f() {{ return ~{bad}; }}")).is_err());
+        assert!(checking::compile_function(&format!("function f() {{ return ~{bad}; }}")).is_err());
     }
     for count in ["-1", "0", "31", "32", "33", "2147483647", "-2147483648"] {
         for op in ["<<", ">>"] {
@@ -139,7 +143,7 @@ fn bitwise_operators_require_nonnull_numbers_and_do_not_clamp_counts() {
         "function f() { var n = 1; n <<= true; return n; }",
         "function f() { var n = 1; n |= \"x\"; return n; }",
     ] {
-        assert!(compile_function(source).is_err());
+        assert!(checking::compile_function(source).is_err());
     }
 }
 

@@ -407,8 +407,9 @@ operands are rejected. See the
 `.increment` and `.decrement` add or subtract one from a non-null Number, Long,
 Float, Double, or numeric alias. Increment also accepts Char (API 1.3.0); both
 operations preserve the operand type. Typed construction uses `Operation::Step`
-with an `increment` Boolean. Char decrement, other classes, and unproven
-nullable operands are rejected. These are semantic value operations:
+with an `increment` Boolean. Char decrement and wholly unsupported contracts
+are rejected. Partial unions retain supported step results, with uncertainty
+reported by source checking policy. These are semantic value operations:
 capture/read and target write-back remain explicit surrounding operations.
 Source updates themselves are statements and expose no expression result.
 
@@ -932,7 +933,7 @@ Constants and unary/binary operations use the [grammar's value
 directives](grammar.md#values-and-storage). Operands follow the [source operator
 contracts](../frontend/README.md#expressions-and-operators) and
 [numeric-width/alias rules](../frontend/README.md#numbers-and-numeric-aliases); saved result claims
-cannot bypass promotion or non-null requirements. Concrete floating and integer
+cannot bypass promotion or the supported operand contracts. Concrete floating and integer
 classes remain distinct. Binary operations define a new single-use value and
 consume two earlier block-local values; unary operations consume one.
 
@@ -941,8 +942,10 @@ their possible failure requires evaluation-order checking. No constant folding,
 coercion, or inserted exception guard changes that behavior. Integer complement
 retains a distinct unary operation, including repeated complements, rather than
 being rewritten as binary XOR. Its result preserves Number/Long width; floating,
-Char, Boolean, and unproved nullable operands are rejected. Numeric aliases
-require every alternative to satisfy the operator. See
+Char, and Boolean alone are rejected. Union results join supported alternatives;
+no successful alternative is an error. Source checking policy separately diagnoses
+partial support. Unary plus retains the complete input contract and reference
+identity because it emits no VM operation. See
 [lowering](../lowering/README.md#values-and-storage) for concrete instruction selection.
 
 ```text
@@ -1524,7 +1527,8 @@ keeps the separate `.array-new` operation. See
 
 The read result follows the receiver's element type, including native View.
 
-`.array-read` consumes a non-null supported array and non-null Number index, and
+`.array-read` consumes a non-null supported array and an index matching Number
+under the source partial-boundary rules, and
 defines the element type, including nullable scalar elements. Shared validation
 recomputes operand types, null proofs, block-local definitions, one-use rules,
 and evaluation order. No element/result type annotation is trusted. Array
@@ -1545,7 +1549,8 @@ indexing remains unsupported. See the
 ### Array element writes
 
 `.array-write` is a statement with no result. It consumes a non-null supported
-array, non-null Number index, and a value matching its invariant element
+array, an index matching Number under the partial-boundary rules, and a value
+matching its invariant element
 contract. ByteArray and typed Dictionary writes use their checked indexed
 contracts; a union receiver requires a valid write for every alternative. Source View instances project to native View; array
 slots retain no exact source-class identity. Shared validation recomputes these
@@ -2167,8 +2172,11 @@ single-use/block restrictions. Optional source spans use the ordinary syntax.
 Receiver, argument, result, generic-element, and API contracts are the same as
 [the supported native methods](../frontend/README.md#native-value-calls). Validation
 recomputes native results from catalogue/receiver contracts rather than trusting
-frontend metadata. Unknown or unsupported members, receivers, argument counts,
-and types are rejected. Runtime formatting, conversion ranges, and case mapping
+frontend metadata. Native receiver unions may omit a member on some alternatives;
+all available signatures still undergo argument-count and API checks. Partial
+lookup defines Any unless every matching result is Void. No matching member,
+disjoint arguments, and invalid metadata remain errors. Source-class receiver
+profiles retain their complete declaration/dispatch checks. Runtime formatting, conversion ranges, and case mapping
 are not compile-time evaluations.
 
 Tuple receivers use these same native-call operations. `reverse` derives reversed

@@ -134,7 +134,7 @@ fn object_fields_erase_values_but_preserve_nullability() {
         "var value as Lang.Object;function initialize(){self.value=[1];}function get(){return self.value.size();}",
     ] {
         assert!(
-            compile_sources(&[&format!("class C {{{body}}}")]).is_err(),
+            checking::compile_sources(&[&format!("class C {{{body}}}")]).is_err(),
             "{body}"
         );
     }

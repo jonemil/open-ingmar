@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ParameterType,
     application::{ConsoleApplication, build_console_application},
@@ -78,11 +81,11 @@ fn callback_state_cannot_be_used_as_an_integer_or_string() {
             "class C extends Application.AppBase {{
             function onStart(state) {{ {body} }} function take(n) {{}} }}"
         );
-        assert!(compile_sources(&[&source]).is_err(), "{body}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{body}");
     }
     for declaration in ["function onStart() {}", "function onStart(a,b) {}"] {
         let source = format!("class C extends Application.AppBase {{ {declaration} }}");
-        assert!(compile_sources(&[&source]).is_err());
+        assert!(checking::compile_sources(&[&source]).is_err());
     }
     assert!(
         compile_sources(&["class C extends Application.AppBase {

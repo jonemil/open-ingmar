@@ -167,12 +167,21 @@ remain possible. Neither the declared contracts nor the actual caller types
 are rewritten by the boundary.
 
 Calls, local writes, returns, and conditional joins preserve native alternatives.
-Each possible receiver must support a member/index operation and accept its
-arguments. Operators check every possible operand pairing; their result is the
-normalized union of the possible results. Thus Number-or-String supports `+ 1`
-with a Number-or-String result, but not `- 1`. A nullable receiver needs a
-non-null proof before ordinary member/index use. API availability is checked
-for every alternative, including unused signature contracts.
+Operators accept a union when at least one operand combination supports the
+operation; their result joins the supported combinations. Number-or-String
+`- 1` therefore yields Number on normal completion. Unsupported runtime
+alternatives may fail; no guard or conversion is inserted. Informative warns
+when not all combinations work; Strict rejects that uncertainty.
+
+Native member calls may likewise use a receiver union with missing members,
+including Null. Available signatures must still accept the argument count and
+API context. A partial lookup yields Any unless all matching results are Void;
+missing signatures cannot establish a specific value result. Source-class and
+mixed source/native member dispatch still require complete receiver coverage.
+Index receivers must all support indexing and require a non-null proof; Array,
+tuple, and ByteArray index keys may partially match Number under the same
+checking policy. API availability is checked for every retained type, including
+unused signature contracts.
 
 Direct local/parameter `instanceof` tests retain matching alternatives on the
 true edge and exclude covered alternatives on the false edge. Direct Null tests
@@ -215,10 +224,11 @@ the comparison operand, or a check of a different storage identity does not
 narrow the target. Boolean negation chains around the direct comparison reverse
 its edge once per negation; storing the Boolean result loses the proof relation.
 Checking one local or parameter does not narrow aliases, copies, or later
-native-call results. Unchecked nullable values cannot be printed or used as
-non-null operands/receivers. They may be passed to matching nullable parameters
-and returned under matching nullable result contracts. Scalar parameters/results
-still require a non-null value. Fresh parameter reads on the non-null path use
+native-call results. Unchecked nullable values cannot be printed. Native
+operand/member use follows the [partial-union policy](#native-unions); complete
+proofs avoid uncertainty. Nullable values may cross matching runtime boundaries;
+the checking policy diagnoses uncertain non-null contracts. Fresh parameter
+reads on the non-null path use
 the scalar type directly. Parameter writes invalidate facts for that parameter;
 fresh reads need a new proof before non-null or narrowed uses. Local writes
 do not invalidate parameter facts, even when their numeric
@@ -270,7 +280,8 @@ permitted mixed/nullable contents; inferred tuples do not widen existing Arrays.
 Empty tuple annotations, variadic tuple syntax, and Graphics.Dc slots are
 rejected by this profile.
 
-Indexing requires a non-null tuple and a Number index. A direct integer literal
+Indexing requires a non-null tuple and an index matching Number under the
+[checking policy](#native-unions). A direct integer literal
 selects its slot's contract; known negative/out-of-range indexes are errors.
 Other indexes join all possible slot results, preserving exact source-class
 alternatives. Tuple alternatives are checked separately before joining results.
@@ -538,15 +549,14 @@ plus and negation also accept Long expressions, preserving their width.
 Explicit `Toybox.Lang.Long` parameters/results, local copies/reassignment,
 module/instance calls, discarded calls, repeated construction, and
 `System.println` preserve all 64 bits. Long and Number contracts do not
-implicitly convert. Unannotated source returns still require Number; inferred IR
-returns can carry Long.
+implicitly convert. Unannotated source returns expose Any; inferred IR returns can carry Long.
 
 Long/Long and mixed Number/Long pairs support `+`, `-`, `*`, `/`, and `%`.
 Either Long operand makes the result Long; Number/Number keeps Number. Promotion
 belongs to these operators only: arguments, returns, and fixed storage still
 require their declared type. Inferred locals may store a promoted Long result,
 including through compound assignment with Number/Long operands. Nullable numeric
-operands require a non-null proof.
+operands follow the [partial-union policy](#native-unions).
 
 These pairs also support all six numeric comparisons, returning Boolean. Long
 mixing with Char admits equality/inequality and addition returning Char;
@@ -601,8 +611,8 @@ radix. The compiler passes conversion content and bases through without
 validation.
 
 `Long or Null` parameters/results, locals, and conditional joins use the shared
-nullable rules. A direct non-null proof is required before numeric operations,
-printing, or receiver dispatch. Matching Long arms join without conversion;
+nullable rules. Printing requires a non-null proof; numeric operations and native
+receiver dispatch follow the partial-union policy. Matching Long arms join without conversion;
 Number/Long alternatives join as Integer under the shared numeric-alias rules.
 
 Long `toFloat()` and `toDouble()` are available since API 1.0.0, under the
@@ -628,23 +638,25 @@ Null` forms. Locals retain the declared union across assignments of its
 alternatives. A non-null alias cannot receive Null; a nullable alias can. Native
 and saved-IR validation enforce the same contracts.
 
-Arithmetic and comparisons require every possible concrete operand pair to
-support the operation. Existing scalar promotion rules apply to each pair; the
-result is one exact scalar or the narrowest supported numeric alias covering all
-results. For example, Integer + Integer yields Integer, Numeric + Float and
-Integer + Float yield Decimal, and Decimal + Long yields Double. Only Integer
-supports remainder, bitwise operations, shifts, and complement. Unary signs and
-statement updates preserve each non-null alias. Operations lower to the ordinary
-VM instructions without inserting conversions. Alias negation uses Number zero
+Arithmetic and comparisons use the [partial-union rules](#native-unions).
+Existing scalar promotion rules apply to each supported pair; the result is one
+exact scalar or the narrowest supported numeric alias covering its results.
+For example, Integer + Integer yields Integer, Numeric + Float and
+Integer + Float yield Decimal, and Decimal + Long yields Double. Integer
+alternatives support remainder, bitwise operations, shifts, and
+complement. Unary negation and statement updates preserve the supported numeric
+alternatives; unary plus preserves the complete operand contract. Operations
+lower to the ordinary VM instructions without inserting conversions. Alias
+negation uses Number zero
 subtraction, with result width selected by runtime promotion.
 
-Printing accepts non-null numeric aliases. Native member calls must be valid for
-every alternative and retain the normalized result contract, including `toString`,
+Printing accepts non-null numeric aliases. Native member calls follow the shared
+receiver rules and join available result contracts, including `toString`,
 `format`, and numeric conversions. Direct `instanceof Number/Long/Float/Double`
 branches refine fresh alias local/parameter reads under the existing branch
-rules. Nullable aliases require a current non-null proof before arithmetic,
-printing, or member calls. Writes invalidate that proof; a saved Boolean guard
-is not a proof for later reads.
+rules. Nullable operations without a proof may remain uncertain under the
+partial-union policy; printing retains its non-null requirement. Writes invalidate
+proofs; a saved Boolean guard is not a proof for later reads.
 
 Conditional joins infer the narrowest supported numeric alias covering both
 arms, including concrete Number/Long or Float/Double alternatives; adding a
@@ -1614,7 +1626,8 @@ default or use literal `null`; computed defaults are rejected.
 
 Reads/writes preserve the declared reference and nullability. Ordinary Arrays
 cannot satisfy ByteArray fields. Methods and indexed updates accept non-null
-field reads; nullable fields need a guarded local snapshot. Testing one field
+field reads; partial native method lookup follows the shared checking policy,
+while indexing a nullable container still needs a guarded snapshot. Testing one field
 read does not refine another mutable read. A snapshot retains its object after
 the field is replaced or cleared. Fields hold strong references; clearing the
 last strong reference allows an existing weak target to expire.
@@ -1667,7 +1680,8 @@ See the
 [Expression grammar](grammar.md#expressions-and-precedence) owns precedence,
 associativity, prefix/postfix syntax, and grouping. Operators evaluate operands
 once, left to right, under the type/result contracts here. Unary plus preserves
-a checked numeric value without conversion; updates and compound writes follow
+the operand without conversion when its contract contains a numeric alternative;
+updates and compound writes follow
 the [statement rules](#statements-and-control-flow).
 
 Number division truncates toward zero; remainder has the dividend's sign.
@@ -1681,9 +1695,10 @@ evidence](../../investigations/compiler-number-products.md).
 
 Number-only bitwise operators use non-null signed 32-bit bit patterns. Mixed
 Long operations follow the [Long contracts](#long-values). Floating, Char,
-Boolean, String, and nullable operands without a proof are rejected by bitwise
-operations. `>>` is an arithmetic right shift in the tested VM. Complement
-retains a unary IR operation and lowers to `invv`, evaluating its operand once.
+Boolean, and String alone are rejected by bitwise operations. Partial unions
+follow the [shared operator rules](#native-unions). `>>` is an arithmetic right
+shift in the tested VM. Complement retains a unary IR operation and lowers to
+`invv`, evaluating its operand once.
 
 For Number-only shifts, counts are non-null Numbers. Mixed Long shifts follow
 the [Long contracts](#long-values). The compiler passes counts unchanged,
@@ -1693,9 +1708,9 @@ a portable guarantee for other runtimes. See [bitwise
 evidence](../../investigations/compiler-number-bits.md).
 
 Unary plus is retained as a checked identity operation in IR and emits no VM
-instruction. It does not parse text, convert types, or relax null proofs. The
-SDK probe passes other value types through too; non-numeric types remain outside
-our current profile. See [unary-plus
+instruction. It does not parse text or convert types. A partially numeric union
+retains all alternatives and reference identities, including String or Null;
+a wholly non-numeric contract remains outside our profile. See [unary-plus
 evidence](../../investigations/compiler-number-plus.md).
 
 #### Operator contracts
@@ -1731,8 +1746,8 @@ proof for subsequent use. String ordering, subtraction, and other
 object/container operands are unsupported. See the
 [String operator evidence](../../investigations/compiler-string-operators.md) and
 [wider operand evidence](../../investigations/compiler-wide-operators.md).
-Unchecked nullable operands require a non-null proof before numeric use. Result
-contracts remain exact in assignments, calls, and returns. Overflow and invalid
+Unchecked nullable numeric operands and result boundaries follow the
+[checking policy](#native-unions). Overflow and invalid
 Unicode ranges are runtime responsibilities. See the
 [operator evidence](../../investigations/compiler-char-operators.md).
 
@@ -1757,7 +1772,7 @@ preserving its operand type and evaluating it once. Thus `!7` is Number `-8`,
 not Boolean; `!!7` is Number `7`. Value-producing inversion lowers directly to
 `invv`. Boolean condition negation reverses the true/false destinations. Other
 types are rejected without truth-value conversion; numeric results cannot be
-used as Boolean conditions. A nullable Number needs a non-null proof. Postfix
+used as Boolean conditions. Nullable inputs follow the partial-union policy. Postfix
 calls bind first: `!value.equals(1)` inverts the method result, while
 `(!value).equals(1)` calls the method on the inverted value. See the
 [Boolean evidence](../../investigations/compiler-boolean-negation.md) and
@@ -2145,9 +2160,8 @@ targets are bare numeric/Char locals or parameters, explicit `self` numeric/Char
 fields, and supported numeric/Char indexed elements. Storage write-back must
 preserve the field/element contract. Char requires API 1.3.0, as for other Char
 expressions. Grouped local targets, other value/element types, and
-unknown or out-of-scope names are rejected. A nullable operand needs an
-established non-null proof at the read. Existing assignment contracts still
-govern its write.
+unknown or out-of-scope names are rejected. Partially supported operand unions
+follow the shared operator policy; assignment contracts still govern write-back.
 
 Both prefix and postfix forms are statements with identical supported behavior;
 they cannot be arguments, conditions, initializers, return values, or parts of
@@ -2186,9 +2200,8 @@ new coercion, folding, or runtime guard is introduced.
 The read/binary/write sequence uses ordinary IR operations and source spans. A
 RHS needing control-flow staging snapshots the old local before RHS effects;
 hidden locals share the existing frame budget. Plain compounds need no hidden
-slots. A nullable local requires an existing non-null proof for its old read,
-and the write invalidates that proof as ordinary reassignment does. A later
-non-null read needs a fresh check. See [compound
+slots. Partial operand unions follow the shared operator policy. A write
+invalidates prior proofs as ordinary reassignment does. See [compound
 evidence](../../investigations/compiler-compound-locals.md).
 
 ### While loops
@@ -2298,8 +2311,8 @@ and statements before the first label are rejected. See the connected
 A value label tests `selector.equals(caseValue)`, using normal native or source
 method dispatch. This includes String content equality and user overrides;
 `==` is not substituted. Existing `equals` receiver/argument/result and API
-contracts apply. In particular, an unproved nullable receiver is rejected for
-value cases. A Null argument to `equals` is not a null-check proof. Type-only
+contracts apply, including uncertainty diagnostics for a partially supported
+native receiver. A Null argument to `equals` is not a null-check proof. Type-only
 switches can instead use the supported `case instanceof ClassName` targets,
 with the existing runtime class and nullable-operand contracts.
 
@@ -2374,7 +2387,8 @@ continuation after discarded calls. Source class/receiver syntax follows the
 ### Array element writes
 
 `array[index] = value;` replaces an element of a non-null supported array. The
-index must be non-null Number; the value must match the invariant Number, Char,
+index must match Number under the [checking policy](#native-unions); the value
+must match the invariant Number, Char,
 String, or native View element contract. Guarded fresh nullable reads are
 accepted for Number indices and Number/String values. View values may be native
 or source View instances; storing/reading through a View array erases exact
@@ -2446,8 +2460,8 @@ Supported numeric, String, Boolean, Char, Symbol, Array, Dictionary, ByteArray,
 opaque Object, Method, and WeakReference receivers accept `equals(other)` →
 Boolean. Arguments follow the catalogue's Object-or-Null contract, including
 supported source/native objects, comparison interfaces, containers, numeric
-aliases, and nullable forms. Nullable arguments require no proof; nullable
-receivers still require a non-null proof. Container comparison neither requires
+aliases, and nullable forms. Nullable arguments require no proof; partial native
+receivers follow the shared checking policy. Container comparison neither requires
 matching element/key/value contracts nor converts their types. General Object
 storage and recovery retain their existing restrictions.
 
@@ -2547,8 +2561,8 @@ returns Number. Char itself and its conversions require API 1.3.0, including
 when it appears only in a function signature. Typed arguments, returns, local
 initialization/assignment, printing, and chained calls retain the exact Char
 type. Char operators follow the [operator contracts](#operator-contracts);
-nullable Char requires a non-null proof for scalar operators and method
-receivers. Conversion ranges and case/String behavior are runtime obligations;
+nullable Char follows the shared partial-union policy for scalar operators and
+native member receivers. Conversion ranges and case/String behavior are runtime obligations;
 the compiler adds no Unicode scalar-range validation. See the
 [Char group evidence](../../investigations/compiler-char-methods.md).
 
@@ -2556,7 +2570,7 @@ Numeric, String, Boolean, and Char receivers also support zero-argument `weak()`
 since API 1.2.0, with Char receivers additionally requiring 1.3.0. Its effective
 result is the exact receiver type, not WeakReference. It remains an effectful
 native call; the compiler does not replace it with its receiver. Nullable scalar
-receivers require a direct non-null proof before the call. Ordinary references
+receivers follow the shared partial-lookup result and checking rules. Ordinary references
 follow the separate profile below. See the [weak-result
 evidence](../../investigations/compiler-immutable-weak.md).
 
@@ -2692,7 +2706,8 @@ for the same target/member.
 assignment, and conditional joins with Method or Null alternatives. Nullable
 locals retain their declared union when assigned a Method or Null. Equality and
 inequality with literal Null establish proofs for fresh reads of that storage;
-invocation and every Method member require a non-null proof. Writes invalidate
+native invocation/member lookup follows the partial-union checking and result
+rules when no non-null proof exists. Writes invalidate
 local proofs; aliases and stored Boolean tests do not transfer them. Releasing
 the last Method alias also releases its bound receiver. Lexical `as Method or
 Null` is an unchecked type assertion, with no runtime conversion or signature
@@ -2755,7 +2770,8 @@ assignment compatibility. `.invoke` checks argument count/types and returns the
 declared result without an Object cast. A Void callback supports statement
 invocation only. Exact source results retain their identity for later source
 member calls. Callback parameters, returns, fields, local storage, and joins
-retain signatures; `Unary or Null` requires a non-null proof before invocation.
+retain signatures. A proven non-null `Unary` retains its precise invocation
+result; partial native lookup uses the shared uncertain-result rules.
 Use an alias to distinguish callback nullability from a nullable result:
 `Method() as Number or Null` declares a nullable result.
 

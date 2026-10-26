@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
@@ -64,7 +67,7 @@ fn array_reads_recheck_types_guards_and_runtime_index_obligations() {
         "function f() as Toybox.Lang.Number { var a = \"abc\".toCharArray(); a[0] = 2; return 0; }",
         "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { return \"abc\".toCharArray()[n]; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Char { if (n == null) { return 'X'; } return \"abc\".toCharArray()[n]; }").unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());

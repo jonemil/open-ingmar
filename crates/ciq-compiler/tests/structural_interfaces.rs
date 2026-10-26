@@ -296,14 +296,14 @@ fn nullable_source_fields_keep_snapshot_and_union_result_contracts() {
         "return box.choose(false).number();",
         "return box.value.number();",
     );
-    assert!(compile_sources(&[&nullable_read]).is_err());
+    assert!(checking::compile_sources(&[&nullable_read]).is_err());
     let nullable_argument = r#"
         class Token {}
         function use(box as interface {function echo(t as Token) as Token;}, t as Token or Null) {
             return box.echo(t);
         }
     "#;
-    assert!(compile_sources(&[nullable_argument]).is_err());
+    assert!(checking::compile_sources(&[nullable_argument]).is_err());
     let guarded = nullable_argument.replace(
         "return box.echo(t);",
         "if(t!=null){return box.echo(t);}return new Token();",

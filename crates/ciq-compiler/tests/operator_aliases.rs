@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{ReturnType, compile_function, parse_function_ir};
 
 #[test]
@@ -68,7 +71,10 @@ fn number_bang_preserves_number_contract_and_uses_the_existing_inversion_opcode(
         "function f() as Toybox.Lang.Number { return !'a'; }",
         "function f() as Toybox.Lang.Number { return !null; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let boolean =
         compile_function("function f() as Toybox.Lang.Boolean { return !true; }").unwrap();

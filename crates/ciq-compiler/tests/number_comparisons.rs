@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ComparisonOp, Function, Operation,
     application::{ConsoleApplication, build_console_application},
@@ -73,7 +76,7 @@ fn inequality_guards_refine_only_the_correct_live_storage() {
         "if (n != null) { n = \"bad\".toNumber(); return n + 1; } return 0;",
     ] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f() {{ var n = \"17\".toNumber(); {body} }}"
             ))
             .is_err(),
@@ -113,7 +116,7 @@ fn comparisons_reject_unproven_or_incompatible_operands_and_chains() {
     for operator in ["<", "<=", ">=", "!="] {
         for value in ["[1]", "new WatchUi.View()"] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f() as Toybox.Lang.Boolean {{ return 1 {operator} {value}; }}"
                 ))
                 .is_err()
@@ -123,14 +126,14 @@ fn comparisons_reject_unproven_or_incompatible_operands_and_chains() {
     for operator in ["<", "<=", ">="] {
         for value in ["true", "null", "\"1\""] {
             assert!(
-                compile_function(&format!(
+                checking::compile_function(&format!(
                     "function f() as Toybox.Lang.Boolean {{ return {value} {operator} {value}; }}"
                 ))
                 .is_err()
             );
         }
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f() as Toybox.Lang.Boolean {{ return \"17\".toNumber() {operator} 18; }}"
             ))
             .is_err()
@@ -146,7 +149,7 @@ fn comparisons_reject_unproven_or_incompatible_operands_and_chains() {
         "1 !=",
     ] {
         assert!(
-            compile_function(&format!(
+            checking::compile_function(&format!(
                 "function f() as Toybox.Lang.Boolean {{ return {expression}; }}"
             ))
             .is_err()

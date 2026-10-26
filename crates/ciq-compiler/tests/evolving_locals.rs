@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 
 #[test]
@@ -43,7 +46,10 @@ fn flow_read_metadata_is_checked_not_trusted() {
         "function f(b as Toybox.Lang.Boolean){var x=1;while(b){x=\"hi\";System.println(x-1);}return 0;}",
         "function f(){var x=1;x=\"hi\";return x-1;}",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
 }
 

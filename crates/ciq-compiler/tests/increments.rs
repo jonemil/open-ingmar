@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation, ReturnType,
     application::{ConsoleApplication, build_console_application},
@@ -116,7 +119,10 @@ fn updates_reject_unsupported_targets_expression_uses_and_invalid_saved_steps() 
         "function f() { var n = [1]; n[true]++; }",
         "function f() { var n = 1; if (true) { var inner = 2; } inner++; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let text = "ciq-ir\n.function f\n.integer %0 1\n.increment %1 %0\n.return %1\n.end\n";
     let f = parse_function_ir(text).unwrap();

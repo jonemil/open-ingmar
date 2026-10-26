@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ArrayElement, Operation, ReturnType,
     application::{ConsoleApplication, build_console_application},
@@ -68,7 +71,7 @@ fn candidate_types_do_not_authorize_invalid_elements_or_null_uses() {
         "function f() as Void { var n = \"x\".toNumber(); var a = [n]; a[0] + 1; }",
         "function f() as Toybox.Lang.Array<Toybox.Lang.Char> { return [1]; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function("function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Array<Toybox.Lang.Number> { if (n == null) { return [0]; } return [n]; }").unwrap();
     let text = f.to_ir_text();

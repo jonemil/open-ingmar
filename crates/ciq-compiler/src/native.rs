@@ -95,17 +95,17 @@ pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec
             .or_else(|| value_parameters(&api::Type::named("Toybox.Lang.Object"), member));
     }
     if let api::Type::Union(alternatives) = receiver {
-        let first = value_parameters(&alternatives[0], member)?;
-        return alternatives
+        let mut signatures = alternatives
             .iter()
-            .all(|ty| {
-                value_parameters(ty, member).is_some_and(|other| {
-                    other.len() == first.len()
-                        && first
-                            .iter()
-                            .zip(&other)
-                            .all(|(a, b)| crate::structural::same_type(a, b))
-                })
+            .filter_map(|ty| value_parameters(ty, member));
+        let first = signatures.next()?;
+        return signatures
+            .all(|other| {
+                other.len() == first.len()
+                    && first
+                        .iter()
+                        .zip(&other)
+                        .all(|(a, b)| crate::structural::same_type(a, b))
             })
             .then_some(first);
     }
@@ -197,7 +197,18 @@ pub(crate) fn value_call(
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
     if let api::Type::SourceValue(contract) = receiver {
-        return value_call(&contract.api_type(), member, arguments, context);
+        // Source receivers retain their existing complete lookup profile;
+        // native projections cannot stand in for missing source declarations.
+        let projection = contract.api_type();
+        return if let api::Type::Union(parts) = projection {
+            let results = parts
+                .iter()
+                .map(|part| value_call(part, member, arguments, context))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(crate::unions::normalize(results))
+        } else {
+            value_call(&projection, member, arguments, context)
+        };
     }
     if let api::Type::TupleValue(tuple) = receiver {
         tuple.validate()?;
@@ -305,8 +316,17 @@ pub(crate) fn value_call(
     if let api::Type::Union(parts) = receiver {
         let results = parts
             .iter()
+            .filter(|part| value_parameters(part, member).is_some())
             .map(|part| value_call(part, member, arguments, context))
             .collect::<Result<Vec<_>, _>>()?;
+        if results.is_empty() {
+            return Err("no receiver alternative declares the requested member".into());
+        }
+        if results.len() != parts.len() && results.iter().any(|ty| *ty != api::Type::Void) {
+            // An unavailable member's runtime object can have an unmodelled
+            // implementation; do not invent its return type from another part.
+            return Ok(api::Type::Any);
+        }
         return Ok(crate::unions::normalize(results));
     }
     if let api::Type::Named(name) = receiver {

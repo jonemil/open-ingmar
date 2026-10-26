@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     ParameterType, ReturnType,
@@ -95,10 +98,10 @@ fn char_array_contracts_reject_wrong_elements_receivers_and_unsupported_consumer
         "function f() as Toybox.Lang.Number { return \"A\".toCharArray() == \"A\".toCharArray(); }",
         "function f(s as Toybox.Lang.String or Null) as Toybox.Lang.Number { return s.toCharArray().size(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let unit = "module A { function take(a as Toybox.Lang.Array<Toybox.Lang.Char>) as Toybox.Lang.Number { return a.size(); } } function start() as Toybox.Lang.Number { return A.take(1); }";
-    assert!(compile_sources(&[unit]).is_err());
+    assert!(checking::compile_sources(&[unit]).is_err());
     let valid = compile_function("function f(s as Toybox.Lang.String or Null) as Toybox.Lang.Number { if (!(s == null)) { return s.toCharArray().size(); } return 0; }").unwrap();
     assert_eq!(valid, parse_function_ir(&valid.to_ir_text()).unwrap());
     let array_entry = compile_sources(&[

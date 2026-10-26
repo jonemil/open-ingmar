@@ -138,6 +138,9 @@ fn nullable_fields_require_snapshots_and_saved_ir_rechecks_reads() {
         let source = format!(
             "class C {{var callback as Toybox.Lang.Method or Null; function run() as Void {{{body}}}}}"
         );
-        assert!(compile_sources(&[&source]).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_sources(&[&source]).is_err(),
+            "accepted {source}"
+        );
     }
 }

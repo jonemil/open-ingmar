@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Operation, ReturnType, compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
@@ -16,7 +19,9 @@ fn empty_dictionary_values_keep_native_text_and_application_paths_equivalent() {
         compile_sources(&[include_str!("../../../examples/compiler-dictionary/app.mc")]).unwrap();
     let resumed = parse_unit_ir(&unit.to_ir_text()).unwrap();
     let source = include_str!("../../../examples/compiler-dictionary/app.mc");
-    assert!(compile_sources(&[&source.replace("if (state != null)", "if (true)")]).is_err());
+    assert!(
+        checking::compile_sources(&[&source.replace("if (state != null)", "if (true)")]).is_err()
+    );
     assert_eq!(unit, resumed);
     let app = ciq_compiler::application::ConsoleApplication {
         id: [0x45; 16],

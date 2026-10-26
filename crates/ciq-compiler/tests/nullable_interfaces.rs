@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_sources, parse_function_ir, parse_unit_ir,
@@ -59,7 +62,7 @@ fn nullable_receivers_require_fresh_storage_proofs() {
         "var local=c; var old=local; if(local!=null) { return old.compareTo(1); } else { return 0; }",
     ] {
         let source = format!("function f(c as Toybox.Lang.Comparable or Null) {{ {body} }}");
-        assert!(compile_function(&source).is_err(), "{source}");
+        assert!(checking::compile_function(&source).is_err(), "{source}");
     }
     for source in [
         "function f(c as Toybox.Lang.Comparator or Null) { return c.compare(1,2); }",
@@ -68,7 +71,7 @@ fn nullable_receivers_require_fresh_storage_proofs() {
         "function f(c as Toybox.Lang.Comparable or Null) { var a=[1]; a.sort(c); }",
         "function f(o as Toybox.Lang.Object) { return o instanceof Toybox.Lang.Comparator; }",
     ] {
-        assert!(compile_sources(&[source]).is_err(), "{source}");
+        assert!(checking::compile_sources(&[source]).is_err(), "{source}");
     }
     let function = compile_function(
         "function f(c as Toybox.Lang.Comparator or Null) { var a=[1,2]; a.sort(c); }",

@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, compile_sources, parse_function_ir,
@@ -84,7 +87,7 @@ fn dictionary_equality_accepts_bounded_cross_contract_and_nullable_arguments() {
     // receive either method without a non-null proof.
     for body in ["state.hashCode() == state.hashCode()", "state.equals(d)"] {
         let edited = source.replace("d.equals(state)", body);
-        assert!(compile_sources(&[&edited]).is_err());
+        assert!(checking::compile_sources(&[&edited]).is_err());
     }
 }
 

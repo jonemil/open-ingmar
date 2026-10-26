@@ -336,6 +336,7 @@ impl State {
             && !matches!(
                 op,
                 Operation::Cast { .. }
+                    | Operation::Positive { .. }
                     | Operation::RecordBegin { .. }
                     | Operation::SelfFieldRead { .. }
                     | Operation::MemberRead { .. }
@@ -348,6 +349,10 @@ impl State {
             return;
         }
         match op {
+            Operation::Positive { result: r, operand } => {
+                result = Some(*r);
+                roots = refs(operand);
+            }
             Operation::Cast {
                 result: r,
                 operand,

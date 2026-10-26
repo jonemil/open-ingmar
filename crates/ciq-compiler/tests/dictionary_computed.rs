@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Operation, compile_function, compile_sources, parse_function_ir, parse_unit_ir,
 };
@@ -52,7 +55,7 @@ fn conditional_operands_and_scalar_array_producers_preserve_builder_progress() {
     let source = "function f(n as Toybox.Lang.Number or Null) as Toybox.Lang.Number { if (n != null) { var d = {n => n + 1}; return d.size(); } return 0; }";
     let f = compile_function(source).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
-    assert!(compile_function(&source.replace("if (n != null)", "if (true)")).is_err());
+    assert!(checking::compile_function(&source.replace("if (n != null)", "if (true)")).is_err());
     let source = "function f(k as Toybox.Lang.String) as Toybox.Lang.Dictionary<Toybox.Lang.String, Toybox.Lang.Number or Null> { return {k => null}; }";
     let f = compile_function(source).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());

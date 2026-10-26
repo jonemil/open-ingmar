@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel, Type},
     application::{ConsoleApplication, build_console_application},
@@ -67,7 +70,7 @@ fn weak_contracts_reject_nullable_receivers_wrong_arity_and_consumers() {
         "function f() as Toybox.Lang.Boolean { return 1.weak(); }",
         "function f() as Toybox.Lang.Number { if (1.weak()) { return 1; } return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f =
         compile_function("function f() as Toybox.Lang.Number { return 1.weak() + 1; }").unwrap();

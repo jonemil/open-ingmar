@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     FieldKind, InterfaceType,
     api::{ApiContext, ApiLevel},
@@ -143,7 +146,7 @@ fn nullable_field_reads_need_guarded_local_snapshots() {
         "var value=self.value; if(value!=null) { value=null; return value.compareTo(1); } else { return 0; }",
     ] {
         let source = format!("{declaration} function f() {{ {body} }} }}");
-        assert!(compile_sources(&[&source]).is_err(), "{source}");
+        assert!(checking::compile_sources(&[&source]).is_err(), "{source}");
     }
     let source = format!(
         "{declaration} function f() {{ var value=self.value; self.value=null; if(value!=null) {{ return value.compareTo(1); }} else {{ return 0; }} }} }}"

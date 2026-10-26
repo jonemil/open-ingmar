@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     application::{ConsoleApplication, build_console_application},
     compile_function, compile_sources, parse_function_ir, parse_unit_ir,
@@ -133,7 +136,8 @@ fn products_reject_wrong_types_and_malformed_expressions_through_saved_ir() {
         for value in ["true", "null", "'a'", "\"5\"", "[5]", "new WatchUi.View()"] {
             for expression in [format!("5 {op} {value}"), format!("{value} {op} 5")] {
                 assert!(
-                    compile_function(&format!("function f() {{ return {expression}; }}")).is_err(),
+                    checking::compile_function(&format!("function f() {{ return {expression}; }}"))
+                        .is_err(),
                     "{expression}"
                 );
             }
@@ -156,12 +160,17 @@ fn products_reject_wrong_types_and_malformed_expressions_through_saved_ir() {
         }
     }
     for expression in ["5 ** 2", "5 /", "5 %", "5 *= 2", "5 /= 2", "5 %= 2"] {
-        assert!(compile_function(&format!("function f() {{ return {expression}; }}")).is_err());
+        assert!(
+            checking::compile_function(&format!("function f() {{ return {expression}; }}"))
+                .is_err()
+        );
     }
     // Nullability must be proven, rather than accepting the possible Number arm.
     assert!(
-        compile_function("function f(n as Toybox.Lang.String) { return n.toNumber() / 2; }")
-            .is_err()
+        checking::compile_function(
+            "function f(n as Toybox.Lang.String) { return n.toNumber() / 2; }"
+        )
+        .is_err()
     );
     compile_function("function f(n as Toybox.Lang.String) { var value = n.toNumber(); if (value == null) { return 0; } return value / 2; }").unwrap();
 }

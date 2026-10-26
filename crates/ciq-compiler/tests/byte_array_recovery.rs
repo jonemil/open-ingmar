@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Operation,
     api::{ApiContext, ApiLevel},
@@ -66,7 +69,7 @@ fn byte_array_assertions_are_unchecked_and_emit_no_conversion_or_test() {
     let source = "module B {function take(b as Toybox.Lang.ByteArray){return b.size();}function f(o as Toybox.Lang.Object or Null){return B.take(o as Lang.ByteArray);}}";
     let unit = compile_sources(&[source]).unwrap();
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
-    assert!(compile_function("function f(o as Toybox.Lang.Object or Null) {return (o as Lang.ByteArray or Null).size();}").is_err());
+    assert!(checking::compile_function("function f(o as Toybox.Lang.Object or Null) {return (o as Lang.ByteArray or Null).size();}").is_err());
 }
 
 #[test]

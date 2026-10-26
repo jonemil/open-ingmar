@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{Function, compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 
@@ -951,10 +954,7 @@ fn switch_scope_initialization_labels_and_nesting_are_checked() {
         "function f(x as Toybox.Lang.Number) as Toybox.Lang.Number{switch(x){case 0 return 1;default:return 0;}}",
         "function f(n as Toybox.Lang.Object) as Toybox.Lang.Number{switch(n){case instanceof Toybox.Lang.String:System.println(n);case instanceof Toybox.Lang.Number:return n+1;default:return 0;}}",
     ] {
-        assert!(
-            ciq_compiler::compile_sources(&[source]).is_err(),
-            "{source}"
-        );
+        assert!(checking::compile_sources(&[source]).is_err(), "{source}");
     }
     for depth in [64, 65] {
         let source = format!(

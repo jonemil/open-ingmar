@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation, ParameterType,
     api::{ApiContext, ApiLevel},
@@ -42,7 +45,7 @@ fn guards_do_not_prove_other_parameters_aliases_or_unguarded_paths() {
         "function f(x as Toybox.Lang.String or Null) { while (true) { System.println(x); if (x == null) { return 0; } } return 0; }",
         "function f(x as Toybox.Lang.String or Null) { if (x == null) { return 0; } x = null; return x.length(); }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 
@@ -71,5 +74,8 @@ fn edited_parameter_guard_ir_cannot_trust_stale_proofs() {
     *index = 1;
     assert!(Function::with_parameter_types("unsafe".into(), types, different).is_err());
     let same_target = "ciq-ir\n.function f parameters=1 parameter-types=nullable-string\n.block ^0\n.parameter %0 0\n.null %1\n.equal %2 %0 %1\n.branch %2 ^1 ^1\n.block ^1\n.parameter %3 0\n.call-native %4 %3 length\n.return %4\n.end";
-    assert!(parse_function_ir(same_target).is_err());
+    // Gradual calls may lack a null proof, but the read must retain its union.
+    let resumed = parse_function_ir(same_target).unwrap();
+    assert_eq!(resumed, parse_function_ir(&resumed.to_ir_text()).unwrap());
+    assert_eq!(resumed.return_type(), ciq_compiler::ReturnType::Any);
 }

@@ -177,20 +177,20 @@ pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
         let element = match part {
             Type::Options(fields) => crate::records::read(fields, None),
             Type::TupleValue(tuple) => {
-                if !crate::native::accepts(&Type::named("Toybox.Lang.Number"), key) {
+                if !crate::native::accepts_boundary(&Type::named("Toybox.Lang.Number"), key) {
                     return Err("tuple reads require a non-null Number index".into());
                 }
                 tuple.read(None)?.api_type()
             }
             Type::Any => Type::Any,
             Type::Array(element) => {
-                if !crate::native::accepts(&Type::named("Toybox.Lang.Number"), key) {
+                if !crate::native::accepts_boundary(&Type::named("Toybox.Lang.Number"), key) {
                     return Err("array reads require a non-null Number index".into());
                 }
                 (**element).clone()
             }
             Type::Named(name) if name == "Toybox.Lang.ByteArray" => {
-                if !crate::native::accepts(&Type::named("Toybox.Lang.Number"), key) {
+                if !crate::native::accepts_boundary(&Type::named("Toybox.Lang.Number"), key) {
                     return Err("array reads require a non-null Number index".into());
                 }
                 Type::named("Toybox.Lang.Number")
@@ -231,7 +231,7 @@ pub(crate) fn index_write(receiver: &Type, key: &Type, value: &Type) -> Result<(
             }
             _ => return Err("indexed union writes require non-null indexable alternatives".into()),
         };
-        if !crate::native::accepts(&expected, value) {
+        if !crate::native::accepts_boundary(&expected, value) {
             return Err("indexed union write must satisfy every element contract".into());
         }
     }

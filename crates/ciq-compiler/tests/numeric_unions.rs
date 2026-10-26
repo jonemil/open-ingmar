@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ParameterType, ReturnType,
     api::{ApiContext, ApiLevel, Type, core},
@@ -173,7 +176,7 @@ fn nullable_aliases_require_current_proofs_and_preserve_join_contracts() {
         ] {
             let source =
                 format!("function f(n as Lang.{name} or Null) as Lang.{name} or Null {{{body}}}");
-            assert!(compile_function(&source).is_err(), "{source}");
+            assert!(checking::compile_function(&source).is_err(), "{source}");
         }
     }
 }
@@ -191,6 +194,6 @@ fn alias_domains_do_not_admit_null_or_unsupported_concrete_pairs() {
         "function f(a as Lang.Numeric) as Lang.Numeric {var x=a; x=null; return x;}",
         "function f(a as Lang.Decimal) as Lang.Number {return a;}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }

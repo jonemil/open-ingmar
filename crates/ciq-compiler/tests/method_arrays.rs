@@ -64,7 +64,10 @@ fn nullable_indexed_methods_require_local_snapshots() {
         "var saved=a[0];if(saved!=null){saved=null;saved.invoke();}",
     ] {
         let source = format!("function f(a as {ty}) as Void {{{body}}}");
-        assert!(compile_function(&source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(&source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = format!(
         "function f(a as {ty}) as Void {{var saved=a[0];if(saved!=null){{saved.invoke();}}}}"

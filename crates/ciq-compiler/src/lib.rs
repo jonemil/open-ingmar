@@ -3138,7 +3138,7 @@ impl Function {
                         arguments.iter().map(|v| (*v, type_of(*v).api_type())),
                     );
                     let result = native::value_call(
-                        &type_of(receiver).api_type(),
+                        &origins.receiver_type(receiver, type_of(receiver).api_type()),
                         member,
                         &arguments_types,
                         context,
@@ -3419,7 +3419,7 @@ impl Function {
                                 results.push(if let api::Type::Options(fields) = part {
                                     records::read(fields, origins.symbol(index))
                                 } else if let api::Type::TupleValue(tuple) = part {
-                                    if !native::accepts(
+                                    if !native::accepts_boundary(
                                         &api::Type::named("Toybox.Lang.Number"),
                                         &key,
                                     ) {
@@ -3452,8 +3452,10 @@ impl Function {
                     if !matches!(
                         type_of(array),
                         ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
-                    ) && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
-                    {
+                    ) && !native::accepts_boundary(
+                        &api::Type::named("Toybox.Lang.Number"),
+                        &type_of(index).api_type(),
+                    ) {
                         return Err(fail("array reads require a non-null Number index"));
                     }
                     types.insert(result, ValueType::from_api_type(&element).unwrap());
@@ -3514,8 +3516,10 @@ impl Function {
                     if !matches!(
                         type_of(array),
                         ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
-                    ) && !matches!(type_of(index), ValueType::Integer | ValueType::Any)
-                    {
+                    ) && !native::accepts_boundary(
+                        &api::Type::named("Toybox.Lang.Number"),
+                        &type_of(index).api_type(),
+                    ) {
                         return Err(fail("array writes require a non-null Number index"));
                     }
                     if origins.contract(value).is_none() {
@@ -3559,7 +3563,7 @@ impl Function {
                     (Some(result), vec![operand])
                 }
                 Operation::Positive { result, operand } => {
-                    let result_type = operators::sign_result(&type_of(operand).api_type())
+                    let result_type = operators::positive_result(&type_of(operand).api_type())
                         .and_then(|ty| ValueType::from_api_type(&ty))
                         .ok_or_else(|| fail("unary plus requires a non-null numeric value"))?;
                     types.insert(result, result_type);
@@ -3670,7 +3674,7 @@ impl Function {
                         arguments.iter().map(|v| (*v, type_of(*v).api_type())),
                     );
                     let result_type = native::value_call(
-                        &type_of(receiver).api_type(),
+                        &origins.receiver_type(receiver, type_of(receiver).api_type()),
                         member,
                         &argument_types,
                         context,

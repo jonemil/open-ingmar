@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -62,10 +65,10 @@ fn string_profiles_reject_unsupported_pairs_without_narrowing_nullable_operands(
         "function f(s as Toybox.Lang.String or Null, n as Toybox.Lang.Number or Null) as Toybox.Lang.String { return s + n; }",
         "function f() as Toybox.Lang.String { var s = \"a\"; s = 7; return s; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let dictionary = "class App extends Toybox.Application.AppBase { function onStart(state) { System.println(\"state=\" + state); } }";
-    assert!(ciq_compiler::compile_sources(&[dictionary]).is_err());
+    assert!(checking::compile_sources(&[dictionary]).is_err());
     let f = compile_function("function f() as Toybox.Lang.String { return \"a\" + 7; }").unwrap();
     assert!(parse_function_ir(&f.to_ir_text().replace(".add", ".subtract")).is_err());
     let f = compile_function("function f() as Toybox.Lang.Boolean { return \"a\" == 7; }").unwrap();

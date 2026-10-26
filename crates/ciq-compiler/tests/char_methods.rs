@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
@@ -82,7 +85,7 @@ fn char_contracts_are_exact_and_revalidated_in_text() {
         "function f() as Toybox.Lang.Number { return 65.toChar().weak(); }",
         "function f() as Toybox.Lang.Number { return 'A'; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function(
         "function f() as Toybox.Lang.Number { return (65.toChar().toNumber() + 1).abs(); }",

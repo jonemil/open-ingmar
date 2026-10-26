@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::ArrayElement;
 use ciq_compiler::{
     Function, Operation, ParameterType, ReturnType,
@@ -108,7 +111,7 @@ fn discarding_a_result_does_not_bypass_native_contract_or_null_proof_checks() {
         "function f() as Void { 1 + 2; }",
         "function f() as Void { \"abc\".toCharArray()[0]; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let f = compile_function(
         "function f(s as Toybox.Lang.String or Null) as Void { if (!(s == null)) { s.length(); } }",

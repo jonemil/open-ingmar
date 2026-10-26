@@ -85,7 +85,7 @@ fn weak_container_lookups_require_fresh_nullable_snapshots() {
         assert!(parse_function_ir(&f.to_ir_text().replace(".not-equal ", ".equal ")).is_err());
         let unsafe_read =
             format!("function f(a as {ty}) as Void {{if({read}!=null){{{read}.stillAlive();}}}}");
-        assert!(compile_function(&unsafe_read).is_err());
+        assert!(checking::compile_function(&unsafe_read).is_err());
     }
     let source = "function f(d as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.WeakReference or Null>) as Toybox.Lang.Array<Toybox.Lang.WeakReference or Null> {return d.values();}";
     let f = compile_function(source).unwrap();

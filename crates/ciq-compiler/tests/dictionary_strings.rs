@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, parse_function_ir, parse_function_ir_with_api,
@@ -60,7 +63,10 @@ fn string_conversion_requires_a_non_null_dictionary_and_correct_arity() {
         "function f() as Toybox.Lang.String { return null.toString(); }",
         "function f(d as Toybox.Lang.Dictionary) as Toybox.Lang.Number { return d.toString() + 1; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = include_str!("../../../examples/compiler-dictionary/app.mc").replace(
         "if (state != null) { System.println(state.size()); }",
@@ -72,7 +78,6 @@ fn string_conversion_requires_a_non_null_dictionary_and_correct_arity() {
         ciq_compiler::parse_unit_ir(&unit.to_ir_text()).unwrap()
     );
     assert!(
-        ciq_compiler::compile_sources(&[&source.replace("if (state != null)", "if (true)")])
-            .is_err()
+        checking::compile_sources(&[&source.replace("if (state != null)", "if (true)")]).is_err()
     );
 }

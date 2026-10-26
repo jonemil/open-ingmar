@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
@@ -121,7 +124,7 @@ fn assignments_reuse_scalar_contracts_null_proofs_and_target_scope() {
         "function f() as Toybox.Lang.Number { var n = 1; n += (n = 2); return n; }",
         "function f() as Toybox.Lang.Number { var n = 1; n >>>= 2; return n; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 

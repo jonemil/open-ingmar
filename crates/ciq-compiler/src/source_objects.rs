@@ -174,6 +174,14 @@ impl Origins {
             }
         }
         match operation {
+            Operation::Positive { result, operand } => {
+                if let Some(contract) = self.values.get(operand).cloned() {
+                    self.values.insert(*result, contract);
+                }
+                if self.nulls.contains(operand) {
+                    self.nulls.insert(*result);
+                }
+            }
             Operation::LocalVariable { local, value } => {
                 self.variables.insert(*local);
                 self.locals
@@ -480,6 +488,17 @@ impl Origins {
     /// Return retained class alternatives and nullability for unit witnesses.
     pub(crate) fn contract(&self, value: ValueId) -> Option<&crate::SourceUnion> {
         self.values.get(&value)
+    }
+    /// Preserve source provenance when native member lookup would otherwise
+    /// see only a base projection and incorrectly assume a closed native union.
+    pub(crate) fn receiver_type(
+        &self,
+        value: ValueId,
+        projection: crate::api::Type,
+    ) -> crate::api::Type {
+        self.contract(value)
+            .map(|contract| crate::api::Type::SourceValue(Box::new(contract.clone())))
+            .unwrap_or(projection)
     }
     /// Check a value boundary without relabeling the operand's actual source
     /// alternatives. Dynamic values and overlaps are not complete type proofs.

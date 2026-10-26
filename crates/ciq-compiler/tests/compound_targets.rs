@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
@@ -135,7 +138,7 @@ fn indexed_compounds_capture_location_and_read_once() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { return a[0] += 1; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Number>) { a[0][0] += 1; return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
 }
 

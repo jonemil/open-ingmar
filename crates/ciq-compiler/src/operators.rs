@@ -2,34 +2,17 @@
 //! These rules do not enumerate every operator/type combination in Monkey C.
 //! Any operands defer operation/type failures to runtime, retaining Any results
 //! except for comparisons, which produce Boolean.
+//! Partial unions retain results from supported alternatives; complete proofs
+//! are separate so source policy can diagnose possible runtime failures.
 use crate::{BinaryOp, ComparisonOp, api::Type};
 
 /// Resolve Boolean inversion or integer complement without changing its type.
-pub(crate) fn not_result(operand: &Type) -> Option<Type> {
-    if let Type::Union(parts) = operand {
-        return Some(crate::unions::normalize(
-            parts.iter().map(not_result).collect::<Option<Vec<_>>>()?,
-        ));
-    }
-    if *operand == Type::Any {
-        return Some(Type::Any);
-    }
-    if let Some(types) = operand.numeric_alternatives() {
-        return types
-            .iter()
-            .all(|ty| not_result(ty).is_some())
-            .then(|| operand.clone());
-    }
-    (*operand == Type::named("Toybox.Lang.Boolean") || integer(operand)).then(|| operand.clone())
-}
-
-/// Resolve Number/Long complement without widening its width or admitting Null.
-pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
+fn not_proven_result(operand: &Type) -> Option<Type> {
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
                 .iter()
-                .map(complement_result)
+                .map(not_proven_result)
                 .collect::<Option<Vec<_>>>()?,
         ));
     }
@@ -39,17 +22,42 @@ pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
     if let Some(types) = operand.numeric_alternatives() {
         return types
             .iter()
-            .all(|ty| complement_result(ty).is_some())
+            .all(|ty| not_proven_result(ty).is_some())
+            .then(|| operand.clone());
+    }
+    (*operand == Type::named("Toybox.Lang.Boolean") || integer(operand)).then(|| operand.clone())
+}
+
+/// Resolve Number/Long complement without widening its width or admitting Null.
+fn complement_proven_result(operand: &Type) -> Option<Type> {
+    if let Type::Union(parts) = operand {
+        return Some(crate::unions::normalize(
+            parts
+                .iter()
+                .map(complement_proven_result)
+                .collect::<Option<Vec<_>>>()?,
+        ));
+    }
+    if *operand == Type::Any {
+        return Some(Type::Any);
+    }
+    if let Some(types) = operand.numeric_alternatives() {
+        return types
+            .iter()
+            .all(|ty| complement_proven_result(ty).is_some())
             .then(|| operand.clone());
     }
     integer(operand).then(|| operand.clone())
 }
 
 /// Resolve unary signs without changing numeric width or admitting Null.
-pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+fn sign_proven_result(operand: &Type) -> Option<Type> {
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
-            parts.iter().map(sign_result).collect::<Option<Vec<_>>>()?,
+            parts
+                .iter()
+                .map(sign_proven_result)
+                .collect::<Option<Vec<_>>>()?,
         ));
     }
     if *operand == Type::Any {
@@ -71,12 +79,12 @@ fn numeric(ty: &Type) -> bool {
 }
 
 /// Resolve a numeric step or Char increment, preserving the operand type.
-pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+fn step_proven_result(operand: &Type, increment: bool) -> Option<Type> {
     if let Type::Union(parts) = operand {
         return Some(crate::unions::normalize(
             parts
                 .iter()
-                .map(|part| step_result(part, increment))
+                .map(|part| step_proven_result(part, increment))
                 .collect::<Option<Vec<_>>>()?,
         ));
     }
@@ -99,7 +107,7 @@ pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
 /// concatenates supported scalar/null alternatives. Other pairs are rejected.
 /// Numeric aliases require every concrete pair to be valid; results use an
 /// exact scalar or the narrowest supported numeric alias containing them.
-pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::Any);
     }
@@ -107,7 +115,7 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
         let mut results = Vec::new();
         for a in crate::unions::alternatives(left) {
             for b in crate::unions::alternatives(right) {
-                results.push(binary_result(kind, a, b)?);
+                results.push(binary_proven_result(kind, a, b)?);
             }
         }
         return Some(crate::unions::normalize(results));
@@ -188,7 +196,7 @@ pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option
 /// Char pairs with wider numeric types support equality only.
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
-pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::named("Toybox.Lang.Boolean"));
     }
@@ -201,7 +209,7 @@ pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -
     if matches!(left, Type::Union(_)) || matches!(right, Type::Union(_)) {
         for a in crate::unions::alternatives(left) {
             for b in crate::unions::alternatives(right) {
-                comparison_result(kind, a, b)?;
+                comparison_proven_result(kind, a, b)?;
             }
         }
         return Some(Type::named("Toybox.Lang.Boolean"));
@@ -249,6 +257,84 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
     }
 }
 
+/// Enumerate runtime operand alternatives without losing alias members.
+fn variants(ty: &Type) -> Vec<Type> {
+    if let Type::Union(parts) = ty {
+        parts.iter().flat_map(variants).collect()
+    } else if let Some(parts) = ty.numeric_alternatives() {
+        parts.iter().flat_map(variants).collect()
+    } else {
+        vec![ty.clone()]
+    }
+}
+fn successful(results: impl Iterator<Item = Type>) -> Option<Type> {
+    let results: Vec<_> = results.collect();
+    (!results.is_empty()).then(|| crate::unions::normalize(results))
+}
+fn unary_result(operand: &Type, resolve: impl Fn(&Type) -> Option<Type>) -> Option<Type> {
+    successful(variants(operand).iter().filter_map(resolve))
+}
+/// Resolve possible normal-completion results; invalid alternatives may throw
+/// at runtime. No successful alternative remains a checked compilation error.
+pub(crate) fn not_result(operand: &Type) -> Option<Type> {
+    unary_result(operand, not_proven_result)
+}
+/// Resolve integer complement results from supported operand alternatives.
+pub(crate) fn complement_result(operand: &Type) -> Option<Type> {
+    unary_result(operand, complement_proven_result)
+}
+/// Resolve numeric negation results from supported operand alternatives.
+pub(crate) fn sign_result(operand: &Type) -> Option<Type> {
+    unary_result(operand, sign_proven_result)
+}
+/// Unary plus emits no VM operation, so even uncertain alternatives retain
+/// their original value types and identities rather than a filtered result.
+pub(crate) fn positive_result(operand: &Type) -> Option<Type> {
+    sign_result(operand).map(|_| operand.clone())
+}
+/// Resolve numeric updates or Char increment; reject wholly unsupported inputs.
+pub(crate) fn step_result(operand: &Type, increment: bool) -> Option<Type> {
+    unary_result(operand, |part| step_proven_result(part, increment))
+}
+/// Join successful binary results without converting the actual operands.
+pub(crate) fn binary_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Type> {
+    let right = variants(right);
+    successful(variants(left).iter().flat_map(|a| {
+        right
+            .iter()
+            .filter_map(move |b| binary_proven_result(kind, a, b))
+    }))
+}
+/// Resolve Boolean when at least one operand pair supports the comparison.
+pub(crate) fn comparison_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    let right = variants(right);
+    successful(variants(left).iter().flat_map(|a| {
+        right
+            .iter()
+            .filter_map(move |b| comparison_proven_result(kind, a, b))
+    }))
+}
+/// Report partial operation support separately from declared value boundaries.
+/// Callers diagnose Any separately; its runtime domain is intentionally unknown.
+pub(crate) fn unary_ambiguous(operation: &crate::Operation, operand: &Type) -> bool {
+    let proven = match operation {
+        crate::Operation::Not { .. } => not_proven_result(operand),
+        crate::Operation::Complement { .. } => complement_proven_result(operand),
+        crate::Operation::Negate { .. } | crate::Operation::Positive { .. } => {
+            sign_proven_result(operand)
+        }
+        crate::Operation::Step { increment, .. } => step_proven_result(operand, *increment),
+        _ => return false,
+    };
+    proven.is_none()
+}
+pub(crate) fn binary_ambiguous(kind: BinaryOp, left: &Type, right: &Type) -> bool {
+    binary_proven_result(kind, left, right).is_none()
+}
+pub(crate) fn comparison_ambiguous(kind: ComparisonOp, left: &Type, right: &Type) -> bool {
+    comparison_proven_result(kind, left, right).is_none()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,7 +378,7 @@ mod tests {
                     BinaryOp::ShiftLeft,
                     BinaryOp::ShiftRight,
                 ] {
-                    let result = binary_result(op, &lhs, &rhs);
+                    let result = binary_proven_result(op, &lhs, &rhs);
                     let expected = match (op, &left, &right) {
                         (BinaryOp::Add, ValueType::String, other)
                         | (BinaryOp::Add, other, ValueType::String)
@@ -360,7 +446,7 @@ mod tests {
                     ComparisonOp::GreaterEqual,
                     ComparisonOp::NotEqual,
                 ] {
-                    let result = comparison_result(op, &lhs, &rhs);
+                    let result = comparison_proven_result(op, &lhs, &rhs);
                     let null_check =
                         op.is_equality() && (left == ValueType::Null || right == ValueType::Null);
                     let strings = op.is_equality()
@@ -419,9 +505,10 @@ mod tests {
                 }
             }
         }
-        assert!(binary_result(BinaryOp::Add, &Type::Void, &Type::Void).is_none());
+        assert!(binary_proven_result(BinaryOp::Add, &Type::Void, &Type::Void).is_none());
         assert!(
-            comparison_result(ComparisonOp::Equal, &Type::named("Unknown"), &Type::Null).is_none()
+            comparison_proven_result(ComparisonOp::Equal, &Type::named("Unknown"), &Type::Null)
+                .is_none()
         );
     }
 

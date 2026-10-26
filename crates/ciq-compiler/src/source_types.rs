@@ -542,7 +542,13 @@ impl Types {
                     .get(operand)
                     .and_then(|ty| operators::step_result(&candidate(ty), *increment)),
             ),
-            Operation::Negate { result, operand } | Operation::Positive { result, operand } => (
+            Operation::Positive { result, operand } => (
+                *result,
+                self.values
+                    .get(operand)
+                    .and_then(|ty| operators::positive_result(&candidate(ty))),
+            ),
+            Operation::Negate { result, operand } => (
                 *result,
                 self.values
                     .get(operand)

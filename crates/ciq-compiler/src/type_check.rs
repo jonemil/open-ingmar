@@ -183,6 +183,11 @@ pub(crate) fn compatibility(expected: &Type, actual: &Type) -> Match {
     if *actual == Type::Any {
         return Match::Maybe;
     }
+    if let Type::SourceValue(actual) = actual {
+        if !matches!(expected, Type::SourceValue(_) | Type::Structural(_)) {
+            return compatibility(expected, &actual.api_type());
+        }
+    }
     if let Type::Union(parts) = actual {
         let matches = parts
             .iter()
@@ -600,18 +605,45 @@ fn inspect(
             } => {
                 let receiver_type = ty(receiver);
                 dynamic = receiver_type == Type::Any;
-                if let Some(parameters) = crate::native::value_parameters(&receiver_type, member) {
-                    boundaries.extend(parameters.into_iter().zip(arguments.iter().copied()));
+                for part in crate::unions::alternatives(&receiver_type) {
+                    if let Some(parameters) = crate::native::value_parameters(part, member) {
+                        for boundary in parameters.into_iter().zip(arguments.iter().copied()) {
+                            if !boundaries.contains(&boundary) {
+                                boundaries.push(boundary);
+                            }
+                        }
+                    } else {
+                        dynamic = true;
+                    }
                 }
             }
-            Operation::Binary { left, right, .. } | Operation::Compare { left, right, .. } => {
-                dynamic = ty(left) == Type::Any || ty(right) == Type::Any
+            Operation::Binary {
+                kind, left, right, ..
+            } => {
+                let a = function.value_types[left].api_type();
+                let b = function.value_types[right].api_type();
+                dynamic = a == Type::Any
+                    || b == Type::Any
+                    || crate::operators::binary_ambiguous(*kind, &a, &b);
+            }
+            Operation::Compare {
+                kind, left, right, ..
+            } => {
+                let a = function.value_types[left].api_type();
+                let b = function.value_types[right].api_type();
+                dynamic = a == Type::Any
+                    || b == Type::Any
+                    || crate::operators::comparison_ambiguous(*kind, &a, &b);
             }
             Operation::Not { operand, .. }
             | Operation::Negate { operand, .. }
             | Operation::Positive { operand, .. }
             | Operation::Complement { operand, .. }
-            | Operation::Step { operand, .. } => dynamic = ty(operand) == Type::Any,
+            | Operation::Step { operand, .. } => {
+                let operand = function.value_types[operand].api_type();
+                dynamic = operand == Type::Any
+                    || crate::operators::unary_ambiguous(&located.operation, &operand);
+            }
             Operation::ArrayRead { array, index, .. }
             | Operation::ArrayWrite { array, index, .. } => {
                 let receiver = ty(array);
@@ -652,7 +684,7 @@ fn inspect(
             issue(
                 Some(at),
                 TypeDiagnosticKind::AmbiguousOperation,
-                "cannot determine the operand or receiver type".into(),
+                "operand or receiver alternatives do not all support this operation".into(),
             );
         }
         for (expected, value) in boundaries {

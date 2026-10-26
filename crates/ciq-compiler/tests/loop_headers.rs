@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{compile_sources, parse_unit_ir};
 
 #[test]
@@ -36,7 +39,7 @@ fn dead_headers_keep_unit_checks_and_internal_builder_and_branch_proofs() {
         // executable-path facts are deliberately not imported into dead roots.
         "function f(n as Toybox.Lang.Number or Null){var i=0;if(n!=null){for(;i<1;i=n+1){break;}}return i;}",
     ] {
-        assert!(compile_sources(&[bad]).is_err(), "{bad}");
+        assert!(checking::compile_sources(&[bad]).is_err(), "{bad}");
     }
 }
 

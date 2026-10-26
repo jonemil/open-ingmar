@@ -1,8 +1,11 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
     application::{ConsoleApplication, build_console_application},
-    compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
+    compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
 };
 
 #[test]
@@ -117,6 +120,9 @@ fn long_subset_rejects_narrowing_unsupported_operators_and_containers() {
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Long>) as Void { x.add(1); }",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number, Toybox.Lang.Long>) as Void { x.put(1, 1); }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
 }

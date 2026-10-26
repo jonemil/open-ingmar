@@ -125,7 +125,7 @@ fn partial_matches_do_not_authorize_disjoint_contracts_or_nominal_covariance() {
         "function f(x as Toybox.Lang.Array<Toybox.Lang.Number>) as Toybox.Lang.Array<Toybox.Lang.Object> {return x;}",
         "function f(x as Toybox.Lang.Dictionary<Toybox.Lang.Number,Toybox.Lang.Number or Toybox.Lang.String>) as Toybox.Lang.Dictionary<Toybox.Lang.String,Toybox.Lang.Number> {return x;}",
         "class A {} class B {} class C {} function f(x as A or B) as C {return x;}",
-        "function f(x as Toybox.Lang.Number or Toybox.Lang.String) as Toybox.Lang.Number {return x.length();}",
+        "function f(x as Toybox.Lang.Number or Toybox.Lang.Boolean) as Toybox.Lang.Number {return x.length();}",
     ] {
         for level in [
             TypeCheckLevel::Gradual,

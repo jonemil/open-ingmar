@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     Function, Operation,
     api::{ApiContext, ApiLevel},
@@ -99,7 +102,7 @@ fn positive_rejects_wrong_types_missing_proofs_and_unsupported_prefixes() {
         "+!true",
     ] {
         assert!(
-            compile_function(&format!("function f() {{ return {expr}; }}")).is_err(),
+            checking::compile_function(&format!("function f() {{ return {expr}; }}")).is_err(),
             "{expr}"
         );
     }
@@ -109,7 +112,7 @@ fn positive_rejects_wrong_types_missing_proofs_and_unsupported_prefixes() {
         "function f(n as Toybox.Lang.Number or Null) { return +n; }",
         "function f(n as Toybox.Lang.Number or Null) { if (n != null) { n = null; return +n; } return 0; }",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     for source in [
         "function f(n as Toybox.Lang.Number or Null) { if (n != null) { return +n; } return 0; }",

@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 
 #[test]
@@ -36,10 +39,10 @@ fn normalization_is_order_independent_and_calls_check_every_alternative() {
         "function f(x as Toybox.Lang.Number or Toybox.Lang.String){if(x instanceof Toybox.Lang.Number){x=\"hi\";return x-1;}return 0;}",
         "function f(x as Toybox.Lang.Number or Void){return x;}",
     ] {
-        assert!(compile_function(source).is_err(), "{source}");
+        assert!(checking::compile_function(source).is_err(), "{source}");
     }
     let source = "module M{function use(x as Toybox.Lang.Number or Toybox.Lang.String){return x;}}function f(){return M.use(true);}";
-    assert!(compile_sources(&[source]).is_err());
+    assert!(checking::compile_sources(&[source]).is_err());
 }
 
 #[test]

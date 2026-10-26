@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ReturnType,
     api::{ApiContext, ApiLevel},
@@ -98,12 +101,18 @@ fn bitwise_profiles_reject_invalid_counts_truthiness_and_update_expressions() {
         "function f() as Toybox.Lang.Long { var value = 1l; var copy = value--; return copy; }",
         "function f() as Toybox.Lang.Long { return ~null; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let source = "function f(value as Toybox.Lang.Number or Null) as Toybox.Lang.Long { if (value == null) { return 0l; } return 1l << value; }";
     let f = compile_function(source).unwrap();
     let text = f.to_ir_text();
     assert_eq!(f, parse_function_ir(&text).unwrap());
     assert!(parse_function_ir(&text.replace(".equal", ".not-equal")).is_err());
-    assert!(compile_function(&source.replace("if (value == null) { return 0l; }", "")).is_err());
+    assert!(
+        checking::compile_function(&source.replace("if (value == null) { return 0l; }", ""))
+            .is_err()
+    );
 }

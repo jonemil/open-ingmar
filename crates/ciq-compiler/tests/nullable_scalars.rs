@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     api::{ApiContext, ApiLevel},
     compile_function, compile_function_with_api, compile_sources, parse_function_ir, parse_unit_ir,
@@ -55,16 +58,19 @@ fn nullable_scalars_require_proofs_and_preserve_storage_identity() {
             let source = format!(
                 "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} {{ {body} }}"
             );
-            assert!(compile_function(&source).is_err(), "accepted {source}");
+            assert!(
+                checking::compile_function(&source).is_err(),
+                "accepted {source}"
+            );
         }
         let source = format!(
             "function f(p as Toybox.Lang.Boolean) as Toybox.Lang.{ty} {{ var value = p ? {literal} : null; if (value == null) {{ return {literal}; }} value = null; return {consume}; }}"
         );
-        assert!(compile_function(&source).is_err());
+        assert!(checking::compile_function(&source).is_err());
         let source = format!(
             "function f(value as Toybox.Lang.{ty} or Null) as Toybox.Lang.{ty} or Null {{ return 42; }}"
         );
-        assert!(compile_function(&source).is_err());
+        assert!(checking::compile_function(&source).is_err());
     }
 }
 

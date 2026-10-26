@@ -74,6 +74,28 @@ four policies. The [source contract][checking] states our current limits.
 [type-guide]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 [checking]: ../specs/frontend/README.md#type-checking-policy
 
+## Partial operators and native receivers
+
+**Observed:** SDK 9.2.0, fr265, API minimum 5.0, `-O 0`, informative
+checking accepts Number-or-String subtraction, negation, complement, comparison,
+updates, and Array index keys. It also accepts `length()` on Number-or-String
+and String-or-Null, and a source-class union with only one `value()` method.
+Strict (`-l 3`) rejects the uncertain alternatives; informative still rejects
+`length(1)` for the known String signature.
+
+Unary plus preserves its input: informative accepts a Number-or-String operand
+returned as String. The runtime specimen passes String through unchanged.
+The independently authored
+[partial-operations example](../../examples/compiler-partial-operations/README.md)
+produces the same eleven expected console lines from SDK and Rust PRGs.
+Preparation checks saved-stage equivalence and complete structured SDK/generated
+reconstruction; no new opcode or DATA fallback was needed.
+
+Reproduce with the example's SDK configuration and source, then repeat with
+strict checking. Source-class partial member lookup is observed SDK behavior,
+not established support in our current dispatch profile. Current contracts are
+in the [frontend reference](../specs/frontend/README.md#native-unions).
+
 ## Public Lang inventory
 
 **Officially documented:** the [Lang index][lang] lists 24 classes, the

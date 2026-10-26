@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     ArrayConstantValue, ArrayElement, Function, Operation, ReturnType,
     api::{ApiContext, ApiLevel},
@@ -49,7 +52,10 @@ fn boolean_element_contracts_do_not_convert_numbers_or_allow_null() {
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean or Null>) { return !a[0]; }",
         "function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>) as Toybox.Lang.Array<Toybox.Lang.Number> { return a; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let f = compile_function("function f(a as Toybox.Lang.Array<Toybox.Lang.Boolean>, b as Toybox.Lang.Boolean) as Toybox.Lang.Boolean { a[0] = b; return !a[0]; }").unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());

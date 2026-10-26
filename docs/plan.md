@@ -37,10 +37,10 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Probe and support SDK partial operator/index/member-receiver cases:
-  Number-or-String subtraction, Number-or-String Array indices, and a union
-  whose alternatives do not all expose the invoked member. Preserve API,
-  arity, stack, and metadata checks; keep strict rejection of uncertainty.
+- [ ] Support SDK-accepted source-class member calls when only some receiver
+  alternatives declare the member, including source/native mixtures and Null.
+  Preserve exact identities, dispatch/result metadata, API and arity checks;
+  retain strict rejection of uncertainty.
 - [ ] Implement disabled type checking with dynamic lowering for otherwise
   mismatched operations; preserve declaration, ABI, API, and format checks.
 - [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,

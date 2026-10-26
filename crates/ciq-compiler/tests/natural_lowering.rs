@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{compile_function, parse_function_ir};
 use ciq_mc::{Opcode, decode};
 
@@ -44,7 +47,10 @@ fn number_complement_retains_unary_ir_and_direct_instruction_selection() {
         "function f() { return ~null; }",
         "function f(value as Toybox.Lang.Number or Null) { return ~value; }",
     ] {
-        assert!(compile_function(source).is_err(), "accepted {source}");
+        assert!(
+            checking::compile_function(source).is_err(),
+            "accepted {source}"
+        );
     }
     let guarded = compile_function("function f(value as Toybox.Lang.Number or Null) { if (value == null) { return 0; } return ~value; }").unwrap();
     assert_eq!(guarded, parse_function_ir(&guarded.to_ir_text()).unwrap());

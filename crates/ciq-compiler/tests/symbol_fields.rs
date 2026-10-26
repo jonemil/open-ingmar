@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{
     FieldKind, Operation,
     api::{ApiContext, ApiLevel},
@@ -173,5 +176,5 @@ fn nullable_symbol_fields_need_local_snapshots_and_rechecked_ir_types() {
     assert_ne!(text, edited);
     assert!(parse_unit_ir(&edited).is_err());
     let repeated = "class C {var value as Toybox.Lang.Symbol or Null;function initialize(){}function read() as Toybox.Lang.String {if(self.value!=null){return self.value.toString();}return \"missing\";}}";
-    assert!(compile_sources(&[repeated]).is_err());
+    assert!(checking::compile_sources(&[repeated]).is_err());
 }

@@ -1,3 +1,6 @@
+#[path = "common/checking.rs"]
+mod checking;
+
 use ciq_compiler::{compile_function, compile_sources, parse_function_ir, parse_unit_ir};
 
 #[test]
@@ -140,7 +143,7 @@ fn native_binding_and_callback_assignments_match_exact_contracts() {
 #[test]
 fn typed_callbacks_reject_nullable_calls_and_malformed_saved_signatures() {
     let source = "typedef Fn as Method(n as Toybox.Lang.Number) as Toybox.Lang.Number; function f(callback as Fn or Null) as Toybox.Lang.Number {return callback.invoke(1);}";
-    assert!(compile_sources(&[source]).is_err());
+    assert!(checking::compile_sources(&[source]).is_err());
     let function =
         compile_function("function f(callback as Method() as Void) {callback.invoke();}").unwrap();
     let text = function.to_ir_text();
@@ -155,7 +158,9 @@ fn typed_callbacks_reject_nullable_calls_and_malformed_saved_signatures() {
     for _ in 0..100 {
         ty = format!("Method() as {ty}");
     }
-    assert!(compile_function(&format!("function f(callback as {ty}) {{return 0;}}")).is_err());
+    assert!(
+        checking::compile_function(&format!("function f(callback as {ty}) {{return 0;}}")).is_err()
+    );
 }
 
 #[test]
