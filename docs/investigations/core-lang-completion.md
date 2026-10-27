@@ -79,7 +79,7 @@ four policies. The [source contract][checking] states our current limits.
 **Experimentally observed**, 2026-10-27: SDK 9.2.0, `fr265`, minimum API
 5.0.0, strict checking, `-O 0` accepts the
 [recursive-contract specimen](../../examples/compiler-recursive-contracts/README.md).
-SDK and independently generated PRGs both produce its eight expected lines.
+SDK and independently generated PRGs both produce its twelve expected lines.
 The specimen exercises Array/Dictionary recursion, nullable values, interface
 method chaining, and an interface stored in a source field. Structured
 reconstruction succeeds for both programs without CODE/DATA fallback.
@@ -98,8 +98,7 @@ The SDK rejects the Array result as Number and the chained Number result as
 String. The corresponding correctly typed functions compile. This establishes
 retained recursive type information, not the SDK's internal representation.
 
-A separate SDK-accepted class demonstrates a remaining enclosing-receiver
-witness gap in our compiler:
+Both compilers accept a self-returning implementation:
 
 ```monkeyc
 class SelfNode {
@@ -108,11 +107,29 @@ class SelfNode {
 }
 ```
 
-Our compiler rejects the return contract; replacing `self` with `new SelfNode()`
-works. Reproduce against the specimen's typedef and strict scaffold. No SDK
-executables were disassembled or decompiled. The
+The specimen also passes `self` to a function, stores it in a nullable interface
+field and a local, and returns it under an exact source-class annotation. A saved
+interface reference observes a mutation performed through the original Node:
+both subsequent reads report 42. This establishes retained runtime identity,
+separately from successful checking and reconstruction. Reproduce with the
+specimen's current source and strict scaffold. No SDK executables were
+disassembled or decompiled. The
 [source alias contract](../specs/frontend/README.md#type-aliases) owns supported
-behavior; the plan owns the remaining witness work.
+behavior.
+
+In that same scaffold, adding `typedef AppReadable as interface {function
+ownValue() as Lang.Number;};` and these methods to MinimalConsoleApp compiles
+under SDK strict checking:
+
+```monkeyc
+function ownValue() as Lang.Number { return 17; }
+function ownWitness() as AppReadable { return self; }
+```
+
+Our AppBase receiver remains opaque Object and cannot establish this witness.
+This is compiler-acceptance evidence only. The remaining AppBase identity work
+is explicit in the plan; it must not imply source construction of application
+instances.
 
 The same strict SDK scaffold accepts `typedef A as {:next as A}; typedef B as
 {:next as B, :z as Lang.Number}; function f(x as B) as A { return x; }`.

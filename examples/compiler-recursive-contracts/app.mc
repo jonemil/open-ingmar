@@ -27,8 +27,24 @@ module Checks {
     function chain(node as Recursive) as Lang.Number { return node.next().value(); }
 }
 class Node {
-    function next() as Recursive { return new Node(); }
-    function value() as Lang.Number { return 41; }
+    var count as Lang.Number;
+    var cached as Recursive or Null;
+    function initialize() { self.count = 41; }
+    function next() as Recursive { return self; }
+    function value() as Lang.Number { return self.count; }
+    function bump() as Void { self.count += 1; }
+    function asNode() as Node { return self; }
+    function forward() as Lang.Number { return Checks.chain(self); }
+    function remember() as Recursive {
+        self.cached = self;
+        var copy = self;
+        return copy;
+    }
+    function rememberedValue() as Lang.Number {
+        var saved = self.cached;
+        if (saved == null) { return -1; }
+        return saved.value();
+    }
 }
 class Holder {
     var current as Recursive;
@@ -48,6 +64,13 @@ class MinimalConsoleApp extends Application.AppBase {
         System.println(Checks.mapSize(Checks.emptyMap()));
         System.println(Checks.nullableSize(null));
         System.println(Checks.nullableSize([]));
+        var node = new Node();
+        System.println(node.forward());
+        var saved = node.remember();
+        System.println(saved.value());
+        node.asNode().bump();
+        System.println(saved.next().value());
+        System.println(node.rememberedValue());
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

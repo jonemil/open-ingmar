@@ -313,7 +313,13 @@ pub(crate) fn parse_function_ir_context(
             Some(".read-variable") => (Directive::ReadVariable, 4),
             Some(".read" | ".take") => (Directive::Read, 3),
             Some(".symbol") => (Directive::Symbol, 3),
-            Some(".self") => (Directive::SelfValue, 2),
+            Some(".self") => {
+                let width = call_width();
+                if !(2..=3).contains(&width) {
+                    return Err(fail(*at, "self requires a result and optional class"));
+                }
+                (Directive::SelfValue, width)
+            }
             Some(".call") => (
                 Directive::Call,
                 fields.len()
@@ -1215,6 +1221,15 @@ pub(crate) fn parse_function_ir_context(
                 }
                 Directive::SelfValue => Operation::SelfValue {
                     result: parse_value(&fields[1])?,
+                    class: match fields.get(2).filter(|field| !field.starts_with("span=")) {
+                        Some(field) => Some(
+                            field
+                                .strip_prefix("class=")
+                                .and_then(crate::SourceClass::parse)
+                                .ok_or_else(|| fail(*at, "invalid self class"))?,
+                        ),
+                        None => None,
+                    },
                 },
                 Directive::Symbol => Operation::Symbol {
                     result: parse_value(&fields[1])?,

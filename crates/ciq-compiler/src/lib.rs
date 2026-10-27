@@ -1435,9 +1435,11 @@ pub enum Operation {
         member: String,
         arguments: Vec<ValueId>,
     },
-    /// Read the current instance as an opaque Object; requires an instance function.
+    /// Read the current instance, optionally retaining its exact source class.
+    /// Unit validation must anchor the claimed class to the enclosing owner.
     SelfValue {
         result: ValueId,
+        class: Option<SourceClass>,
     },
     /// Read the actual current-instance field under a checked result contract.
     /// Unit validation anchors its declaration and initialization; positional
@@ -3023,11 +3025,20 @@ impl Function {
                     types.insert(result, ValueType::Boolean);
                     (Some(result), vec![])
                 }
-                Operation::SelfValue { result } => {
+                Operation::SelfValue { result, ref class } => {
                     if !instance_method {
                         return Err(fail("self values require an instance receiver"));
                     }
-                    types.insert(result, ValueType::LangObject);
+                    let ty = if let Some(class) = class {
+                        validate_call_names(None, &class.name).map_err(fail)?;
+                        let ty = class.base.constructed_type().ok_or_else(|| {
+                            fail("typed self requires a supported source reference base")
+                        })?;
+                        ValueType::from_api_type(&ty).expect("supported source base")
+                    } else {
+                        ValueType::LangObject
+                    };
+                    types.insert(result, ty);
                     (Some(result), vec![])
                 }
                 Operation::MemberRead {
@@ -4858,7 +4869,14 @@ impl Function {
                 Operation::SelfFieldAssign { ref field, value } => {
                     format!(".assign-self {field} %{}", value.0)
                 }
-                Operation::SelfValue { result } => format!(".self %{}", result.0),
+                Operation::SelfValue { result, ref class } => format!(
+                    ".self %{}{}",
+                    result.0,
+                    class
+                        .as_ref()
+                        .map(|class| format!(" class={class}"))
+                        .unwrap_or_default()
+                ),
                 Operation::Symbol { result, ref name } => format!(".symbol %{} {name}", result.0),
                 Operation::Integer { result, value } => format!(".integer %{} {value}", result.0),
                 Operation::Long { result, value } => format!(".long %{} {value}", result.0),

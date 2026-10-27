@@ -154,7 +154,8 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".double" value-id fixed-bits64
                 | ".char" value-id fixed-bits32
                 | ".boolean" value-id boolean
-                | (".null" | ".self") value-id
+                | ".null" value-id
+                | ".self" value-id ("class=" source-identity)?
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier

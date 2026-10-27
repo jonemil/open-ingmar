@@ -121,6 +121,45 @@ fn recursive_application_retains_source_witnesses_and_binary_stages() {
 mod common;
 
 #[test]
+fn self_witnesses_are_anchored_to_the_enclosing_class() {
+    let source = "typedef R as interface{function next() as R;function value() as Toybox.Lang.Number;};class Node{function next() as R{return self;}function value() as Toybox.Lang.Number{return 41;}}";
+    let other = "class Other{function next() as R{return self;}function value() as Toybox.Lang.Number{return 41;}}";
+    let unit = compile_sources(&[source, other]).unwrap();
+    let text = unit.to_ir_text();
+    assert!(text.contains("class=Node@Lang.Object"), "{text}");
+    common::pipeline(unit);
+    for changed in [
+        text.replace("class=Node@Lang.Object", "class=Other@Lang.Object"),
+        text.replace("class=Node@Lang.Object", "class=Node@WatchUi.View"),
+        text.replace(" class=Node@Lang.Object", ""),
+    ] {
+        assert!(parse_unit_ir(&changed).is_err(), "{changed}");
+    }
+    for bad in [
+        "class Node{function next() as R{return self;}function value() as Toybox.Lang.String{return \"wrong\";}}",
+        "class Other{}class Node{function next() as Other{return self;}}",
+    ] {
+        let declaration = source.split("class Node").next().unwrap();
+        assert!(
+            compile_sources(&[&format!("{declaration}{bad}")]).is_err(),
+            "{bad}"
+        );
+    }
+    for operation in [
+        ".self %0 class=Node@Lang.Object class=Other@Lang.Object",
+        ".self %0 type=object",
+        ".self %0 class=Node@Unknown",
+    ] {
+        let text = format!(
+            "ciq-ir\n.function f receiver=instance result=object\n{operation}\n.return %0\n.end\n"
+        );
+        assert!(ciq_compiler::parse_function_ir(&text).is_err(), "{text}");
+    }
+    let view = "class V extends Toybox.WatchUi.View{function initialize(){View.initialize();}function same() as V{return self;}}";
+    common::pipeline(compile_sources(&[view]).unwrap());
+}
+
+#[test]
 fn nested_dictionary_values_preserve_lookup_and_enumeration_contracts() {
     let source = r#"
         using Toybox.Lang;

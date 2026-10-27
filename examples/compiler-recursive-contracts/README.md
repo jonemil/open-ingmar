@@ -3,7 +3,9 @@
 [app.mc](app.mc) uses recursive Array/Dictionary aliases, nullable values, and a
 structural interface whose method returns the same interface. Recursive edges
 retain their contracts through indexing, construction, calls, fields, and saved
-IR. Compare [expected.txt](expected.txt).
+IR. `self` returns, arguments, and field/local stores keep the same Node instance;
+mutating it changes values read through saved interface references. Compare
+[expected.txt](expected.txt).
 
 From the repository root, using new output paths:
 

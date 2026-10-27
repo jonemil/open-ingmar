@@ -793,10 +793,10 @@ Recursive contracts create no runtime class or typedef metadata. See the
 [example](../../../examples/compiler-recursive-contracts/README.md) and
 [IR representation](../ir/README.md#recursive-contracts).
 
-An explicit source instance can satisfy a recursive interface through its
-declared methods. Returning `self` as that interface still lacks an enclosing
-class witness; the compiler rejects it rather than treating the receiver as an
-arbitrary source class.
+An explicit source instance or a `self` value with retained source identity can
+satisfy a recursive interface through its declared methods. The
+[instance receiver rules](#source-classes) determine when that identity is
+available; a native Object projection alone cannot establish a witness.
 
 ### User calls and owner lookup
 
@@ -1083,7 +1083,17 @@ These restrictions belong to this constrained profile, not the general Monkey C
 language.
 
 `self` is reserved and cannot be rebound. In an instance body it may be a call
-or declared-field receiver, or produce an opaque Object value. Bare member calls
+or declared-field receiver, or produce the current instance value. For the
+supported source-reference bases (Lang.Object, WatchUi.View, and
+WatchUi.BehaviorDelegate), that value retains its enclosing class identity
+through locals, arguments, results, and field stores. Unit checking uses the
+actual class declarations to prove exact-class or structural/native interface
+requirements, including recursive interfaces. Saved metadata cannot replace that
+owner with another class, even when their shapes match. Initialization checks
+still forbid exposing `self`
+before required fields are assigned. AppBase-owned bodies currently retain an
+opaque Object value because exact AppBase source-reference contracts are not
+represented yet. Bare member calls
 and class-name calls remain unsupported. Calls on constructed source objects
 follow the profile below. Module calls from methods retain their existing rules.
 
@@ -2804,8 +2814,9 @@ Source instances support `instance.method(selector)` and instance bodies support
 `self.method(selector)` or bare `method(selector)`. Bare calls resolve to the
 current instance and use the same semantic operations as explicit self calls. A
 declared source member named `method` keeps ordinary source-call priority. Bare
-`self` produces opaque Object and requires an instance body; it does not recover
-a source-class type or concrete callback signature. Existing `self.member(...)`
+`self` requires an instance body and follows the
+[instance identity rules](#source-classes). It does not recover a concrete
+callback signature from an erased Method. Existing `self.member(...)`
 source calls retain checked signatures. Bare `method(...)` requires an instance
 body unless it names a declared module function. For inherited native lookup,
 a local, parameter, or field named `method` prevents implicit lookup.

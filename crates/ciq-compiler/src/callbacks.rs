@@ -125,7 +125,7 @@ pub(crate) fn check_binding(
     let self_receiver = function
         .operations()
         .iter()
-        .any(|op| matches!(op.operation,Operation::SelfValue {result} if result==receiver));
+        .any(|op| matches!(op.operation,Operation::SelfValue {result, ..} if result==receiver));
     let classes = if self_receiver {
         owner.into_iter().map(str::to_owned).collect::<Vec<_>>()
     } else {

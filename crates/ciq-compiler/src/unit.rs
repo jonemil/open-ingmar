@@ -1390,6 +1390,25 @@ impl CompilationUnit {
                 })
                 .collect::<BTreeMap<_, _>>();
             for (operation, located) in function.operations().iter().enumerate() {
+                if let Operation::SelfValue {
+                    class: Some(claimed),
+                    ..
+                } = &located.operation
+                {
+                    let actual = match owner {
+                        Owner::Class(name) => self.classes.iter().find(|class| class.name == name),
+                        _ => None,
+                    };
+                    if !actual.is_some_and(|class| {
+                        class.name == claimed.name && class.base == claimed.base
+                    }) {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "self class does not match its enclosing class".into(),
+                        ));
+                    }
+                }
                 if let Operation::BindMethod {
                     receiver,
                     selector,
@@ -2794,6 +2813,11 @@ pub(crate) fn compile_sources_mapped(
             }
             let mut methods = Vec::new();
             let mut method_calls = calls.clone();
+            method_calls.current_class =
+                class.base.constructed_type().map(|_| crate::SourceClass {
+                    name: class.name.clone(),
+                    base: class.base,
+                });
             method_calls.field_types = class
                 .fields
                 .iter()

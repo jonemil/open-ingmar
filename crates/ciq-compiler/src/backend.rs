@@ -125,7 +125,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::Long { result, .. }
             | Operation::Double { result, .. }
             | Operation::Float { result, .. }
-            | Operation::SelfValue { result }
+            | Operation::SelfValue { result, .. }
             | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
             | Operation::Binary { result, .. }

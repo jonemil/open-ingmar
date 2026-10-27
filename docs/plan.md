@@ -37,10 +37,9 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Prove enclosing-class interface witnesses for `self` used as a result,
-  argument, or stored value, including recursive interface results such as
-  `function next() as Recursive { return self; }`; retain the actual owner
-  rather than asserting an arbitrary source class.
+- [ ] Retain exact `self` identity in AppBase-owned bodies so the application
+  instance can satisfy interface results/arguments/stores. Separate receiver
+  identity from source constructibility; do not thereby permit `new AppClass()`.
 - [ ] Support SDK-accepted recursive option-record width matches, including
   returning `B = {:next as B, :z as Number}` as `A = {:next as A}`. Compare
   recursive field obligations finitely while preserving record identity/views.

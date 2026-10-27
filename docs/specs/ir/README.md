@@ -1921,9 +1921,16 @@ duplicate or unknown fields are rejected. Every instance method requires
 receiver metadata, even without self calls. The receiver is the hidden context,
 not an explicit parameter/value ID.
 
-`.self` defines the current receiver as opaque Object. It requires
-`receiver=instance` and lowers to `getself`. It does not claim an exact source
-class. Reflective `self.method(selector)` uses this value with ordinary
+`.self` defines the current receiver and requires `receiver=instance`. Optional
+`class=Class@Native.Base` metadata retains the exact source identity for the
+supported source-reference bases; without it the value is opaque Object.
+Body validation checks the identity's syntax/base and tracks it through ordinary
+source provenance. Unit validation requires both name and native base to match
+the enclosing class before accepting interface witnesses, stores, or dispatch.
+Standalone method IR leaves that owner obligation unresolved, as it does for
+other source member claims. Metadata cannot change the runtime receiver:
+both forms lower to the same `getself`. Reflective `self.method(selector)` uses
+this value with ordinary
 `.call-native` for erased lookup or `.bind-method` for a resolved typed binding.
 
 Two call directives also require an instance method:

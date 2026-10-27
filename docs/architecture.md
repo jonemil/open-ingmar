@@ -132,6 +132,9 @@ source dispatch or interface witnesses. Container elements retain identities in
 checks prove unresolved class members. Interface and callback contracts reuse
 source-aware parameters/results. A native projection cannot invent a bound
 Method signature; binding and invocation use the existing runtime Method API.
+Source-reference owners also supply `SelfValue` class metadata. Origin replay
+retains that identity; unit validation anchors it to the enclosing declaration
+rather than trusting an arbitrary saved class claim.
 
 Frame flow shares capture tracking with candidate inference. Field flow solves
 field/frame-local views together and retains captured receiver provenance across

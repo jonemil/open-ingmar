@@ -256,7 +256,15 @@ impl Types {
                 (*result, Some(Type::named("Toybox.Lang.Boolean")))
             }
             Operation::String { result, .. } => (*result, Some(Type::named("Toybox.Lang.String"))),
-            Operation::SelfValue { result } => (*result, Some(Type::named("Toybox.Lang.Object"))),
+            Operation::SelfValue { result, class } => (
+                *result,
+                Some(Type::named(
+                    class
+                        .as_ref()
+                        .map(|class| class.base.api_name())
+                        .unwrap_or("Toybox.Lang.Object"),
+                )),
+            ),
             Operation::Null { result } => (*result, Some(Type::Null)),
             Operation::ArrayConstant {
                 result,

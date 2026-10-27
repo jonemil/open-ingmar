@@ -172,6 +172,13 @@ impl Origins {
             }
         }
         match operation {
+            Operation::SelfValue {
+                result,
+                class: Some(class),
+            } => {
+                self.values
+                    .insert(*result, Contract::single(class.clone(), false));
+            }
             Operation::Positive { result, operand } => {
                 if let Some(contract) = self.values.get(operand).cloned() {
                     self.values.insert(*result, contract);

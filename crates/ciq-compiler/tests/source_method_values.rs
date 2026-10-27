@@ -29,7 +29,7 @@ fn source_callbacks_and_self_survive_saved_stages_and_application_generation() {
 }
 
 #[test]
-fn self_requires_a_receiver_and_stays_an_opaque_object() {
+fn self_requires_a_receiver_and_unclaimed_ir_stays_opaque() {
     let text = "ciq-ir\n.function f receiver=instance result=object\n.self %0\n.return %0\n.end\n";
     let f = parse_function_ir(text).unwrap();
     assert_eq!(f, parse_function_ir(&f.to_ir_text()).unwrap());
@@ -43,7 +43,6 @@ fn self_requires_a_receiver_and_stays_an_opaque_object() {
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as Toybox.Lang.Method { return self.method(1); } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as Toybox.Lang.Method { return self.method(:f, :f); } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f(selector as Toybox.Lang.Symbol) { var m=self.method(selector); return m.invoke()+1; } }",
-        "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } function f() as V { return self; } }",
         "class V extends Toybox.WatchUi.View { function initialize() { View.initialize(); } } function f() as Toybox.Lang.Method { var v=new V(); return v.method(1); }",
     ] {
         assert!(compile_sources(&[source]).is_err(), "accepted {source}");

@@ -385,6 +385,7 @@ fn emit_non_call(
         }
         parser::ExpressionKind::SelfValue => Operation::SelfValue {
             result: ValueId(operations.len() as u32),
+            class: calls.current_class.clone(),
         },
         parser::ExpressionKind::Symbol(name) => Operation::Symbol {
             result: ValueId(operations.len() as u32),
@@ -765,7 +766,7 @@ fn emit_call(
         {
             receiver.and_then(|receiver| {
                 let owners = if operations.iter().any(
-                    |op| matches!(op.operation,Operation::SelfValue{result} if result==receiver),
+                    |op| matches!(op.operation,Operation::SelfValue{result, ..} if result==receiver),
                 ) {
                     vec!["self".to_owned()]
                 } else {
@@ -3614,6 +3615,7 @@ pub(crate) struct CallContext {
     pub(crate) field_types: BTreeMap<String, crate::ReturnType>,
     pub(crate) source_fields: BTreeMap<String, BTreeMap<String, crate::ReturnType>>,
     pub(crate) current_module: Option<String>,
+    pub(crate) current_class: Option<crate::SourceClass>,
 }
 impl CallContext {
     pub(crate) fn new() -> Self {
