@@ -3144,6 +3144,9 @@ impl Parser<'_> {
                 .map(crate::ParameterType::TypedDictionary)
                 .unwrap_or(crate::ParameterType::Dictionary),
             "Toybox.WatchUi.View" => crate::ParameterType::Object(crate::NativeClass::View),
+            "Toybox.Application.AppBase" => {
+                crate::ParameterType::Object(crate::NativeClass::AppBase)
+            }
             "Toybox.WatchUi.BehaviorDelegate" => {
                 crate::ParameterType::Object(crate::NativeClass::BehaviorDelegate)
             }

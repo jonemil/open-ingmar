@@ -508,10 +508,11 @@ impl Types {
                 ..
             } => (
                 *result,
-                class
-                    .base
-                    .constructed_type()
-                    .map(|ty| if *nullable { ty.with_null() } else { ty }),
+                Some(if *nullable {
+                    class.base.reference_type().with_null()
+                } else {
+                    class.base.reference_type()
+                }),
             ),
             Operation::Cast { result, target, .. } => (
                 *result,

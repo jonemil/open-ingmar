@@ -79,7 +79,7 @@ four policies. The [source contract][checking] states our current limits.
 **Experimentally observed**, 2026-10-27: SDK 9.2.0, `fr265`, minimum API
 5.0.0, strict checking, `-O 0` accepts the
 [recursive-contract specimen](../../examples/compiler-recursive-contracts/README.md).
-SDK and independently generated PRGs both produce its twelve expected lines.
+SDK and independently generated PRGs both produce its eighteen expected lines.
 The specimen exercises Array/Dictionary recursion, nullable values, interface
 method chaining, and an interface stored in a source field. Structured
 reconstruction succeeds for both programs without CODE/DATA fallback.
@@ -117,19 +117,16 @@ disassembled or decompiled. The
 [source alias contract](../specs/frontend/README.md#type-aliases) owns supported
 behavior.
 
-In that same scaffold, adding `typedef AppReadable as interface {function
-ownValue() as Lang.Number;};` and these methods to MinimalConsoleApp compiles
-under SDK strict checking:
-
-```monkeyc
-function ownValue() as Lang.Number { return 17; }
-function ownWitness() as AppReadable { return self; }
-```
-
-Our AppBase receiver remains opaque Object and cannot establish this witness.
-This is compiler-acceptance evidence only. The remaining AppBase identity work
-is explicit in the plan; it must not imply source construction of application
-instances.
+The application retains its own AppBase instance through an exact class return,
+nullable exact/interface fields, local copies, and a recursive interface
+argument. Its counter starts at 17; mutation through an exact reference makes
+the saved interface and exact references report 18. A native AppBase parameter
+and result erase the source contract; `instanceof MinimalConsoleApp` recovers
+it and reads 18. The same test on a Node reports -1. Both strict SDK compilation
+and both simulator runs accept these paths. This establishes reference and
+class-test behavior, not permission to construct application instances in
+source. Our constructor restriction is checked independently by the
+[contract tests](../../crates/ciq-compiler/tests/recursive_contracts.rs).
 
 The same strict SDK scaffold accepts `typedef A as {:next as A}; typedef B as
 {:next as B, :z as Lang.Number}; function f(x as B) as A { return x; }`.

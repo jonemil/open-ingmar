@@ -324,7 +324,12 @@ impl ClassBase {
     /// Return the API value type produced by supported source construction.
     /// AppBase is created by application startup, not by a source expression.
     pub fn constructed_type(self) -> Option<crate::api::Type> {
-        (self != Self::ApplicationAppBase).then(|| crate::api::Type::named(self.api_name()))
+        (self != Self::ApplicationAppBase).then(|| self.reference_type())
+    }
+    /// Return the native projection of an existing source instance. This does
+    /// not authorize construction; application startup supplies AppBase instances.
+    pub fn reference_type(self) -> crate::api::Type {
+        crate::api::Type::named(self.api_name())
     }
     pub(crate) fn text(self) -> &'static str {
         match self {
@@ -1050,14 +1055,12 @@ impl CompilationUnit {
             }
             for target in &references {
                 if !self.classes.iter().any(|declaration| {
-                    declaration.name == target.name
-                        && declaration.base == target.base
-                        && target.base.constructed_type().is_some()
+                    declaration.name == target.name && declaration.base == target.base
                 }) {
                     return Err(fail(
                         Some(at),
                         None,
-                        "reference field class and native base must match a constructible declaration".into(),
+                        "reference field class and native base must match a declaration".into(),
                     ));
                 }
             }
@@ -1132,16 +1135,16 @@ impl CompilationUnit {
                 }
             }
             for name in source_classes {
-                if !self.classes.iter().any(|class| {
-                    class.name == name.name
-                        && class.base == name.base
-                        && name.base.constructed_type().is_some()
-                }) {
+                if !self
+                    .classes
+                    .iter()
+                    .any(|class| class.name == name.name && class.base == name.base)
+                {
                     return Err(fail(
                         Some(index),
                         None,
                         format!(
-                            "source signature class {name} must match a constructible declaration and native base"
+                            "source signature class {name} must match a declaration and native base"
                         ),
                     ));
                 }
@@ -2713,21 +2716,21 @@ pub(crate) fn compile_sources_mapped(
         .collect::<BTreeMap<_, _>>();
     for (index, parsed) in parsed_sources.iter_mut().enumerate() {
         let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
-            reference.base = bases
-                .get(&reference.name)
-                .copied()
-                .filter(|base| base.constructed_type().is_some())
-                .ok_or_else(|| SourceDiagnostic {
-                    source: index,
-                    diagnostic: Diagnostic::at(
-                        sources[index],
-                        0,
-                        format!(
-                            "source reference {} must resolve to a constructible class",
-                            reference.name
+            reference.base =
+                bases
+                    .get(&reference.name)
+                    .copied()
+                    .ok_or_else(|| SourceDiagnostic {
+                        source: index,
+                        diagnostic: Diagnostic::at(
+                            sources[index],
+                            0,
+                            format!(
+                                "source reference {} must resolve to a declared class",
+                                reference.name
+                            ),
                         ),
-                    ),
-                })?;
+                    })?;
             Ok(())
         };
         for ast in parsed.functions.iter_mut().map(|(_, ast)| ast).chain(
@@ -2813,11 +2816,10 @@ pub(crate) fn compile_sources_mapped(
             }
             let mut methods = Vec::new();
             let mut method_calls = calls.clone();
-            method_calls.current_class =
-                class.base.constructed_type().map(|_| crate::SourceClass {
-                    name: class.name.clone(),
-                    base: class.base,
-                });
+            method_calls.current_class = Some(crate::SourceClass {
+                name: class.name.clone(),
+                base: class.base,
+            });
             method_calls.field_types = class
                 .fields
                 .iter()

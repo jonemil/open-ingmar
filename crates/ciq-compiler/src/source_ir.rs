@@ -3701,7 +3701,6 @@ impl CallContext {
             .class_bases
             .get(name)
             .copied()
-            .filter(|base| base.constructed_type().is_some())
             .ok_or_else(|| format!("unresolved or unsupported source type {name}"))?;
         Ok(crate::SourceClass {
             name: name.into(),

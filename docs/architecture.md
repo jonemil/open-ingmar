@@ -135,6 +135,8 @@ Method signature; binding and invocation use the existing runtime Method API.
 Source-reference owners also supply `SelfValue` class metadata. Origin replay
 retains that identity; unit validation anchors it to the enclosing declaration
 rather than trusting an arbitrary saved class claim.
+Reference projection is separate from construction eligibility, so startup-owned
+AppBase instances use the same source provenance without enabling allocation.
 
 Frame flow shares capture tracking with candidate inference. Field flow solves
 field/frame-local views together and retains captured receiver provenance across

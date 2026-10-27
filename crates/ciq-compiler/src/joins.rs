@@ -12,7 +12,7 @@ pub enum JoinType {
     SourceUnion(crate::SourceUnion),
     /// An API value type; each consumer checks its supported type domains.
     Api(Type),
-    /// An exact constructible source class, optionally admitting Null.
+    /// An exact declared source class, optionally admitting Null.
     Source {
         class: crate::SourceClass,
         nullable: bool,

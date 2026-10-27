@@ -181,7 +181,6 @@ fn root_reference_contracts_reject_erasure_wrong_classes_and_early_exposure() {
     for tag in [
         "source(C)",
         "source(@Lang.Object)",
-        "source(C@Application.AppBase)",
         "source(C@Unknown)",
         "source(C@Lang.Object@WatchUi.View)",
     ] {

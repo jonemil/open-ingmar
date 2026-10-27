@@ -121,6 +121,57 @@ fn recursive_application_retains_source_witnesses_and_binary_stages() {
 mod common;
 
 #[test]
+fn appbase_references_do_not_authorize_construction() {
+    use ciq_compiler::{ClassBase, api::Type};
+    assert_eq!(ClassBase::ApplicationAppBase.constructed_type(), None);
+    assert_eq!(
+        ClassBase::ApplicationAppBase.reference_type(),
+        Type::named("Toybox.Application.AppBase")
+    );
+    let source = r#"
+        typedef Readable as interface {function value() as Toybox.Lang.Number;};
+        class App extends Toybox.Application.AppBase {
+            function initialize(){AppBase.initialize();}
+            function value() as Toybox.Lang.Number{return 17;}
+            function witness() as Readable{return self;}
+            function same() as App{return self;}
+        }
+        function forward(x as App) as App{return x.same();}
+        function nativeProjection(x as Toybox.Application.AppBase) as Toybox.Application.AppBase{return x;}
+        function nullableNative(x as Toybox.Application.AppBase or Null)
+                as Toybox.Application.AppBase or Null{return x;}
+        function maybe(x as App or Null) as Toybox.Lang.Number {
+            if(x==null){return -1;}return x.value();
+        }
+        function test(x as Toybox.Lang.Object) as Toybox.Lang.Boolean {
+            return x instanceof App;
+        }
+        function asserted(x as Toybox.Lang.Object) as App or Null {
+            return x as App or Null;
+        }
+    "#;
+    let unit = compile_sources(&[source]).unwrap();
+    let text = unit.to_ir_text();
+    assert!(text.contains("class=App@Application.AppBase"), "{text}");
+    assert!(text.contains("source(App@Application.AppBase)"), "{text}");
+    common::pipeline(unit);
+    assert!(parse_unit_ir(&text.replace("App@Application.AppBase", "App@Lang.Object")).is_err());
+    for expression in ["new App()", "new Toybox.Application.AppBase()"] {
+        assert!(
+            compile_sources(&[
+                source,
+                &format!("function invalid(){{return {expression};}}")
+            ])
+            .is_err()
+        );
+    }
+    let native = "ciq-ir\n.function f result=app-base\n.new-native %0 Toybox.Application.AppBase\n.return %0\n.end\n";
+    assert!(ciq_compiler::parse_function_ir(native).is_err());
+    let source = "ciq-ir\n.function f result=source(App@Application.AppBase)\n.new-source %0 App Application.AppBase\n.return %0\n.end\n";
+    assert!(ciq_compiler::parse_function_ir(source).is_err());
+}
+
+#[test]
 fn self_witnesses_are_anchored_to_the_enclosing_class() {
     let source = "typedef R as interface{function next() as R;function value() as Toybox.Lang.Number;};class Node{function next() as R{return self;}function value() as Toybox.Lang.Number{return 41;}}";
     let other = "class Other{function next() as R{return self;}function value() as Toybox.Lang.Number{return 41;}}";

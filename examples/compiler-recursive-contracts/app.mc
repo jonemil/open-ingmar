@@ -8,7 +8,19 @@ typedef Recursive as interface {
     function next() as Recursive;
     function value() as Lang.Number;
 };
+typedef AppContract as interface {
+    function ownValue() as Lang.Number;
+    function again() as AppContract;
+};
 module Checks {
+    function eraseApp(app as Application.AppBase) as Application.AppBase { return app; }
+    function actualAppValue(object as Lang.Object) as Lang.Number {
+        if (object instanceof MinimalConsoleApp) { return object.ownValue(); }
+        return -1;
+    }
+    function appValue(app as AppContract) as Lang.Number {
+        return app.again().ownValue();
+    }
     function emptyMap() as Map { return {}; }
     function branchMap(child as Map) as Map { return {"child"=>child}; }
     function mapSize(map as Map) as Lang.Number {
@@ -52,7 +64,28 @@ class Holder {
     function follow() as Lang.Number { return self.current.next().value(); }
 }
 class MinimalConsoleApp extends Application.AppBase {
-    function initialize() { AppBase.initialize(); }
+    var appCount as Lang.Number;
+    var savedApp as MinimalConsoleApp or Null;
+    var savedInterface as AppContract or Null;
+    function initialize() {
+        AppBase.initialize();
+        self.appCount = 17;
+        self.savedApp = self;
+        self.savedInterface = self;
+    }
+    function ownValue() as Lang.Number { return self.appCount; }
+    function again() as AppContract { return self; }
+    function asApp() as MinimalConsoleApp { return self; }
+    function bumpApp() as Void { self.appCount += 1; }
+    function forwardApp() as Lang.Number {
+        var copy = self;
+        return Checks.appValue(copy);
+    }
+    function savedValue() as Lang.Number {
+        var saved = self.savedApp;
+        if (saved == null) { return -1; }
+        return saved.ownValue();
+    }
     function onStart(state) {
         var leaf = Checks.leaf();
         var branch = Checks.branch(leaf);
@@ -71,6 +104,16 @@ class MinimalConsoleApp extends Application.AppBase {
         node.asNode().bump();
         System.println(saved.next().value());
         System.println(node.rememberedValue());
+        System.println(self.forwardApp());
+        var app = self.asApp();
+        app.bumpApp();
+        System.println(Checks.appValue(app));
+        var savedApplication = self.savedInterface;
+        if (savedApplication == null) { System.println(-1); }
+        else { System.println(savedApplication.ownValue()); }
+        System.println(self.savedValue());
+        System.println(Checks.actualAppValue(Checks.eraseApp(self)));
+        System.println(Checks.actualAppValue(new Node()));
         System.exit();
     }
     function getInitialView() { return [new Toybox.WatchUi.View()]; }

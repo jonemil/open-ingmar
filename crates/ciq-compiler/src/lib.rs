@@ -154,6 +154,7 @@ pub enum BinaryOp {
 /// Native class identities supported as non-null object references.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeClass {
+    AppBase,
     View,
     BehaviorDelegate,
     Dc,
@@ -163,13 +164,14 @@ impl NativeClass {
     /// Return this class's canonical API identity, independent of symbol binding.
     pub fn name(self) -> &'static str {
         match self {
+            Self::AppBase => "Toybox.Application.AppBase",
             Self::View => "Toybox.WatchUi.View",
             Self::BehaviorDelegate => "Toybox.WatchUi.BehaviorDelegate",
             Self::Dc => "Toybox.Graphics.Dc",
         }
     }
     fn from_name(name: &str) -> Option<Self> {
-        [Self::View, Self::BehaviorDelegate, Self::Dc]
+        [Self::AppBase, Self::View, Self::BehaviorDelegate, Self::Dc]
             .into_iter()
             .find(|class| class.name() == name)
     }
@@ -575,6 +577,7 @@ impl ArrayElement {
             Self::String => "string",
             Self::NullableString => "nullable-string",
             Self::Object(NativeClass::View) => "view",
+            Self::Object(NativeClass::AppBase) => "app-base",
             Self::Object(NativeClass::Dc) => "dc",
             Self::Object(NativeClass::BehaviorDelegate) => "behavior-delegate",
         };
@@ -609,11 +612,12 @@ impl SourceClass {
     }
 
     /// Parse the saved reference contract `Class@Native.Base`.
-    /// Reject malformed names and bases that cannot be source-constructed.
+    /// Reject malformed names and unsupported source-reference bases.
     pub(crate) fn parse(text: &str) -> Option<Self> {
         let (name, base) = text.split_once('@')?;
         validate_call_names(None, name).ok()?;
         let base = match base {
+            "Application.AppBase" => ClassBase::ApplicationAppBase,
             "Lang.Object" => ClassBase::LangObject,
             "WatchUi.View" => ClassBase::WatchUiView,
             "WatchUi.BehaviorDelegate" => ClassBase::WatchUiBehaviorDelegate,
@@ -1052,7 +1056,7 @@ enum ValueType {
     Object(NativeClass),
     Tuple(TupleType),
     FontDefinition,
-    /// Nullable native projection of an exact source View/delegate contract.
+    /// Nullable native projection of an exact source reference contract.
     NullableNativeObject(NativeClass),
     Array(ArrayElement),
     Null,
@@ -1242,6 +1246,9 @@ impl ValueType {
             api::Type::Null => Some(Self::Null),
             _ if *ty == Self::NullableNativeObject(NativeClass::View).api_type() => {
                 Some(Self::NullableNativeObject(NativeClass::View))
+            }
+            _ if *ty == Self::NullableNativeObject(NativeClass::AppBase).api_type() => {
+                Some(Self::NullableNativeObject(NativeClass::AppBase))
             }
             _ if *ty == Self::NullableNativeObject(NativeClass::BehaviorDelegate).api_type() => {
                 Some(Self::NullableNativeObject(NativeClass::BehaviorDelegate))
@@ -2377,12 +2384,6 @@ impl Function {
                     operation: None,
                     message: message.into(),
                 })?;
-                if class.base.constructed_type().is_none() {
-                    return Err(IrError {
-                        operation: None,
-                        message: "source reference requires a constructible native base".into(),
-                    });
-                }
             }
         }
         if parameter_types.iter().any(|ty| {
@@ -2812,8 +2813,11 @@ impl Function {
                     validate_call_arguments(arguments, &types).map_err(fail)?;
                     if !matches!(
                         type_of(receiver),
-                        ValueType::Object(NativeClass::View | NativeClass::BehaviorDelegate)
-                            | ValueType::Any
+                        ValueType::Object(
+                            NativeClass::AppBase
+                                | NativeClass::View
+                                | NativeClass::BehaviorDelegate
+                        ) | ValueType::Any
                             | ValueType::LangObject
                             | ValueType::NullableObject
                             | ValueType::NullableNativeObject(_)
@@ -2870,11 +2874,6 @@ impl Function {
                         ReturnType::SourceObject(class.clone())
                     })
                     .map_err(fail)?;
-                    if class.base.constructed_type().is_none() {
-                        return Err(fail(
-                            "source type target requires a constructible class base",
-                        ));
-                    }
                     if let Some(context) = context {
                         context
                             .check_class(api::core(), class.base.api_name())
@@ -3031,9 +3030,7 @@ impl Function {
                     }
                     let ty = if let Some(class) = class {
                         validate_call_names(None, &class.name).map_err(fail)?;
-                        let ty = class.base.constructed_type().ok_or_else(|| {
-                            fail("typed self requires a supported source reference base")
-                        })?;
+                        let ty = class.base.reference_type();
                         ValueType::from_api_type(&ty).expect("supported source base")
                     } else {
                         ValueType::LangObject
@@ -5547,13 +5544,10 @@ fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
         ReturnType::SourceObject(class) => {
             validate_call_names(None, class.as_str())?;
             ValueType::from_api_type(&api::Type::named(class.base.api_name()))
-                .ok_or("source reference requires a constructible native base")
+                .ok_or("unsupported source reference projection")
         }
         ReturnType::NullableSourceObject(class) => {
             validate_call_names(None, class.as_str())?;
-            if class.base.constructed_type().is_none() {
-                return Err("source reference requires a constructible native base");
-            }
             ValueType::from_api_type(&api::Type::named(class.base.api_name()).with_null())
                 .ok_or("unsupported nullable source projection")
         }

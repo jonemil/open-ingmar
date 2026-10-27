@@ -113,7 +113,7 @@ fn saved_ir_cannot_forge_nullable_class_or_non_null_proofs() {
     }
     for tag in [
         "nullable-source()",
-        "nullable-source(Token@Application.AppBase)",
+        "nullable-source(Token@Unknown)",
         "nullable-source(Token@Unknown)",
     ] {
         assert!(
@@ -155,7 +155,6 @@ fn nullable_source_casts_preserve_identity_and_require_fresh_non_null_proofs() {
         "function f(value as Toybox.Lang.Object or Null) { var t = value as Token or Null; if (t != null) { t = null; return t.value(); } return 0; }",
         "function f(value as Toybox.Lang.Object) { var Token = 1; return value as Token or Null; }",
         "function f(value as Toybox.Lang.Object) { return value as Missing or Null; }",
-        "class App extends Toybox.Application.AppBase { function f(value as Toybox.Lang.Object) { return value as App or Null; } }",
     ] {
         assert!(
             checking::compile_sources(&[source, CLASSES]).is_err(),

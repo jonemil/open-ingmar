@@ -124,7 +124,7 @@ Typed construction and text reload validate names, member/argument/depth limits,
 and canonical supported types. Mutable fields are invariant and method
 signatures match exactly. Exact source member types, including nullable/mixed
 unions, remain distinct from their native projections. Unit validation resolves
-nested class references against constructible declarations and native bases,
+nested class references against class declarations and native bases,
 including references in otherwise unused field/local contracts.
 
 `.member-read result receiver name` derives a structural field's value type
@@ -1924,6 +1924,9 @@ not an explicit parameter/value ID.
 `.self` defines the current receiver and requires `receiver=instance`. Optional
 `class=Class@Native.Base` metadata retains the exact source identity for the
 supported source-reference bases; without it the value is opaque Object.
+AppBase-owned methods retain their application class with an AppBase native
+projection. `ClassBase::reference_type` describes an existing instance;
+`constructed_type` independently rejects AppBase source construction.
 Body validation checks the identity's syntax/base and tracks it through ordinary
 source provenance. Unit validation requires both name and native base to match
 the enclosing class before accepting interface witnesses, stores, or dispatch.
@@ -2080,7 +2083,7 @@ projections.
 `SourceUnion` stores normalized `SourceClass` identities, native alternatives,
 and nullability. At least one exact class is required on construction;
 `with_native` adds supported native types without turning their projections into
-exact witnesses. Constructors reject malformed names, nonconstructible bases,
+exact witnesses. Constructors reject malformed names, unsupported reference bases,
 unsupported native types, and sets exceeding 254 alternatives including Null.
 The native-only result of narrowing uses the ordinary API contract. Parameters and
 results use `ParameterType::SourceUnion` and `ReturnType::SourceUnion`; joins and

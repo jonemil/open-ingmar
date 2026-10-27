@@ -1010,8 +1010,10 @@ contracts and prohibits native callback invocation through any receiver. See the
 [instance-call profile](#calls-on-constructed-source-objects).
 
 Exact source-class signatures resolve across the whole unit before call
-checking. Every source parameter/result name must designate a constructible
-declared class. Contracts retain those exact names, while boundary operands
+checking. Every source parameter/result name must designate a declared class.
+AppBase instances supplied by application startup can be referenced without
+authorizing source construction. Contracts retain those exact names, while
+boundary operands
 retain their actual alternatives under the [checking policy](#type-checking-policy).
 Native base signatures carry only their native contract. Function and call text preserve these contracts
 with `source(ClassName@Native.Base)` tags; see the
@@ -1084,16 +1086,15 @@ language.
 
 `self` is reserved and cannot be rebound. In an instance body it may be a call
 or declared-field receiver, or produce the current instance value. For the
-supported source-reference bases (Lang.Object, WatchUi.View, and
-WatchUi.BehaviorDelegate), that value retains its enclosing class identity
+supported source-reference bases (Lang.Object, Application.AppBase, WatchUi.View,
+and WatchUi.BehaviorDelegate), that value retains its enclosing class identity
 through locals, arguments, results, and field stores. Unit checking uses the
 actual class declarations to prove exact-class or structural/native interface
 requirements, including recursive interfaces. Saved metadata cannot replace that
 owner with another class, even when their shapes match. Initialization checks
-still forbid exposing `self`
-before required fields are assigned. AppBase-owned bodies currently retain an
-opaque Object value because exact AppBase source-reference contracts are not
-represented yet. Bare member calls
+still forbid exposing `self` before required fields are assigned. Receiver
+identity is independent of construction: an AppBase-owned body retains its
+application class, but `new AppClass()` remains rejected. Bare member calls
 and class-name calls remain unsupported. Calls on constructed source objects
 follow the profile below. Module calls from methods retain their existing rules.
 
@@ -1216,7 +1217,7 @@ binding; no native Object allocation/initialization hook is invoked. See the
 ### Source-class signatures
 
 Ordinary functions and instance methods may annotate parameters and results with
-unqualified constructible source class names joined with `or`, optionally
+unqualified declared source class names joined with `or`, optionally
 including Null:
 
 ```text
@@ -1225,10 +1226,12 @@ function maybe(view as HelloView or Null) as HelloView or Null { return view; }
 function either(value as Token or Marker) as Token or Marker { return value; }
 ```
 
-The name must resolve to a declared Object-, View-, or BehaviorDelegate-derived
-class in the unit, including forward or cross-file declarations. AppBase
-references, arbitrary native classes, Array<ClassName>, aliases, and qualified
-source-class names are unsupported.
+The name must resolve to a declared Object-, AppBase-, View-, or
+BehaviorDelegate-derived class in the unit, including forward or cross-file
+declarations. Exact AppBase references retain the startup-created instance;
+they do not enable source construction. Typedefs and source-class Array elements
+retain their documented contracts. Arbitrary native classes and qualified
+source-class names remain unsupported.
 Native annotations use canonical, qualified-alias, or imported bare names
 through the shared native type environment.
 
@@ -1953,7 +1956,7 @@ claims that proof. This is a caller assertion, not runtime validation or convers
 
 Class operands are named declarations, not dynamic class values. The bounded
 profile rejects local/parameter shadowing of a source target. Qualified/nested
-source names, source inheritance, and AppBase targets remain unsupported.
+source names and source inheritance remain unsupported.
 Unit validation checks target identity and base;
 standalone function IR retains that declaration-resolution obligation.
 

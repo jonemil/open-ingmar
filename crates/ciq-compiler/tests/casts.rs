@@ -78,7 +78,7 @@ fn unsupported_targets_and_newer_api_types_are_rejected() {
         "void",
         "null",
         "array-number",
-        "source(C@Application.AppBase)",
+        "source(C@Unknown)",
         "unknown",
     ] {
         let text =

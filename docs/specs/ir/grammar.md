@@ -315,7 +315,7 @@ call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-sourc
 declared-result-tag = call-result-tag
 common-tag = "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
            | numeric-alias-tag | interface-tag | enum-tag | "dictionary"
-           | dictionary-tag | "view" | "dc" | "behavior-delegate" | structural-tag
+           | dictionary-tag | "app-base" | "view" | "dc" | "behavior-delegate" | structural-tag
            | callback-tag | tuple-tag | record-tag
 record-tag = "options(" record-fields? ")"
 record-fields = record-field-tag (";" record-field-tag)*
@@ -353,7 +353,8 @@ source-union-atom = source-tag | native-parameter-tag
 source-tag = "source(" source-identity ")"
 nullable-source-tag = "nullable-source(" source-identity ")"
 source-identity = identifier "@" source-base
-source-base = "Lang.Object" | "WatchUi.View" | "WatchUi.BehaviorDelegate"
+source-base = "Lang.Object" | "Application.AppBase" | "WatchUi.View"
+            | "WatchUi.BehaviorDelegate"
 element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | "nullable-" other-scalar-tag | core-tag | nullable-core-tag
             | numeric-alias-tag | interface-tag | "view"
@@ -381,7 +382,7 @@ join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nul
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null"
          | source-tag | nullable-source-tag | source-union-tag
-         | structural-tag | callback-tag | tuple-tag | record-tag
+         | structural-tag | callback-tag | tuple-tag | record-tag | "app-base"
          | recursive-tag | recursive-reference-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = parameter-tag
@@ -459,14 +460,16 @@ The spelling `integer` means Number; `integer-union` means Lang.Integer.
 `weak-reference`, `byte-array`, `comparable`, and `comparator`. Each supports a
 `nullable-` form where the consumer allows it. `number-format` and `endian`
 retain enum identity; `dictionary` is opaque. Positional values use `tuple(...)`
-in parameters, results, local contracts, and joins. Native reference tags include `view`,
-`behavior-delegate`, and callback-only `dc`. `nullable-dictionary` also serves ordinary signatures.
+in parameters, results, local contracts, and joins. Native reference tags include
+`app-base`, `view`, `behavior-delegate`, and callback-only `dc`.
+`nullable-dictionary` also serves ordinary signatures.
 
 Exact source tags use `source(ClassName@Native.Base)` or
 `nullable-source(ClassName@Native.Base)` with ASCII class names.
-Bases use `Lang.Object`, `WatchUi.View`, or `WatchUi.BehaviorDelegate` for
-constructible references. AppBase is a declaration/base identity, not a
-constructible ordinary source-reference type. Nullable source tags are accepted
+Bases use `Lang.Object`, `Application.AppBase`, `WatchUi.View`, or
+`WatchUi.BehaviorDelegate`. AppBase references preserve startup-created instances
+without enabling `.new-source` or `.new-native` construction. Nullable source
+tags are accepted
 in parameter, function/call result metadata, and source-reference field
 declarations/reads. Field declarations use the same source tags as signatures.
 Source tags also serve as exact block-value join contracts; they are not native

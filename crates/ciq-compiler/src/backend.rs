@@ -759,9 +759,9 @@ fn expression(
                     continue;
                 }
                 Operation::NativeNew {
-                    class: crate::NativeClass::Dc,
+                    class: crate::NativeClass::Dc | crate::NativeClass::AppBase,
                     ..
-                } => unreachable!("Dc construction is not admitted"),
+                } => unreachable!("native class construction is not admitted"),
                 Operation::TupleAppend {
                     array,
                     value,

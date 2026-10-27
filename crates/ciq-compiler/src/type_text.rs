@@ -7,6 +7,11 @@ use std::borrow::Cow;
 
 // Canonical spellings common to ordinary parameter and call-result contracts.
 const NAMED: &[(&str, ParameterType, ReturnType)] = &[
+    (
+        "app-base",
+        ParameterType::Object(NativeClass::AppBase),
+        ReturnType::Object(NativeClass::AppBase),
+    ),
     ("any", ParameterType::Any, ReturnType::Any),
     ("null", ParameterType::Null, ReturnType::Null),
     ("integer", ParameterType::Integer, ReturnType::Integer),
@@ -658,8 +663,9 @@ mod tests {
             Ok("source(Counter@Lang.Object)".into())
         );
         assert_eq!(
-            function_result("source(Counter@Application.AppBase)"),
-            Err("invalid source reference contract")
+            function_result("source(Counter@Application.AppBase)")
+                .map(|r| result_tag(&r).into_owned()),
+            Ok("source(Counter@Application.AppBase)".into())
         );
         assert_eq!(
             parameter("dictionary(string=>)"),

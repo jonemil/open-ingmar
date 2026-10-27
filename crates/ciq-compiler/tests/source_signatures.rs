@@ -67,7 +67,6 @@ fn source_contracts_do_not_cast_generic_native_or_unrelated_references() {
         "function f() as HelloView { return new OtherView(); }",
         "function f(view as Missing) { return 0; }",
         "function f() as Missing { return new HelloView(); }",
-        "function f(view as MinimalConsoleApp) { return 0; }",
     ] {
         assert!(
             compile_sources(&[body, APP, VIEW, VIEWS, other]).is_err(),

@@ -216,12 +216,13 @@ literal/postfix discrepancy. See [Number literal evidence][numbers].
 
 Class-test targets are the supported runtime classes in Lang (Number, Long,
 Float, Double, Boolean, Char, String, Object, Dictionary, Array, Symbol, Method,
-WeakReference, ByteArray), or an exact constructible source class. Interface
+WeakReference, ByteArray), or an exact declared source class. Interface
 names, enum aliases, Null, and dynamic class values are not runtime class tests.
 Cast targets accept Number, Long, Float, Double, Boolean, Char, String, Object,
 Symbol, Method, WeakReference, ByteArray, Numeric, Integer, Decimal,
-NumberFormat, Endian, opaque Dictionary, or exact constructible source classes.
-Nullable casts accept the scalar/core-reference, numeric-alias, and exact source
+NumberFormat, Endian, opaque Dictionary, AppBase/View/BehaviorDelegate references,
+or exact declared source classes.
+Nullable casts accept the scalar/core-reference, native reference, numeric-alias, and exact source
 forms specified by [cast semantics](README.md#lexical-casts). Parameterized
 containers, general unions, and interfaces remain unsupported. Native spellings
 resolve through the import environment.
@@ -252,7 +253,7 @@ array-element = value-type
 dictionary-key = value-type
 dictionary-value = value-type
 named-value-type = scalar-or-alias | core-reference | interface-type | enum-type
-                 | dictionary-type | view-type | delegate-type | source-class-type
+                 | dictionary-type | appbase-type | view-type | delegate-type | source-class-type
                  | type-alias
 type-alias = path
 scalar-or-alias = scalar-type | numeric-alias-type
@@ -297,7 +298,8 @@ contracts, proof obligations, and field accesses.
 - Enum: Lang.NumberFormat or Lang.Endian.
 - Object, View, delegate, and AppBase type leaves resolve to Lang.Object,
   WatchUi.View, WatchUi.BehaviorDelegate, and Application.AppBase respectively.
-- Source class: an exact constructible source-class name from this unit.
+- Source class: an exact declared source-class name from this unit. AppBase
+  instances can be referenced but cannot be constructed by source expressions.
 - Type alias: a scoped source typedef. Expansion must fit the destination's
   existing value, element, key, field, or cast contract. Alias names are not
   runtime class targets. Guarded recursive uses retain finite contracts;

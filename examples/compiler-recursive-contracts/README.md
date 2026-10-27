@@ -6,6 +6,10 @@ retain their contracts through indexing, construction, calls, fields, and saved
 IR. `self` returns, arguments, and field/local stores keep the same Node instance;
 mutating it changes values read through saved interface references. Compare
 [expected.txt](expected.txt).
+The application also passes and stores its own AppBase instance through native,
+exact source, and recursive interface contracts, then recovers its source type
+after native erasure with `instanceof`. Its startup-created identity survives
+without source construction of the application class.
 
 From the repository root, using new output paths:
 

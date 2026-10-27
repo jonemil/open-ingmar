@@ -77,7 +77,6 @@ fn source_fields_require_snapshot_proofs_and_exact_assignment_classes() {
         "var target as Token or Null = new Token();",
         "var target as Token or Null = (null);",
         "var target as Missing or Null;",
-        "var target as Holder or Null;",
     ] {
         let source = format!(
             "class Holder extends Toybox.Application.AppBase {{ {field} function initialize() {{ AppBase.initialize(); }} }}"

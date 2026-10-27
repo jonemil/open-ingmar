@@ -77,7 +77,7 @@ pub(crate) fn matches_type_with(
 
 impl SourceUnion {
     /// Normalize exact class alternatives, rejecting empty/oversized sets,
-    /// malformed identities, and bases that cannot be source-constructed.
+    /// malformed identities, and unsupported source-reference bases.
     pub fn new(classes: Vec<SourceClass>, nullable: bool) -> Result<Self, &'static str> {
         Self::with_native(classes, Vec::new(), nullable)
     }
