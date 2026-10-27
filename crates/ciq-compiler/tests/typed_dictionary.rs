@@ -121,7 +121,6 @@ fn unsupported_annotations_and_methods_remain_rejected() {
         "Toybox.Lang.Object, Toybox.Lang.Number",
         "Null, Toybox.Lang.Number",
         "Toybox.Lang.String, Toybox.Lang.Boolean or Toybox.Lang.Char",
-        "Toybox.Lang.String, Toybox.Lang.Array<Toybox.Lang.Number>",
         "Toybox.Lang.String, Toybox.Lang.Number or Toybox.Lang.String",
     ] {
         let source = format!(

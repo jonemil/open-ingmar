@@ -20,6 +20,7 @@ owning files for the definition to read or change.
 | Record identities and views | [records.rs], [record_flow.rs] | [Records] |
 | Native unions and source identity | [unions.rs], [source_union.rs], [source_objects.rs] | [Source identities] |
 | Container shapes | [tuples.rs], [dictionary.rs] | [Types] |
+| Recursive type binding and unfolding | [recursive.rs] | [Recursive contracts] |
 | Interfaces and Method contracts | [structural.rs], [callbacks.rs] | [Interfaces] |
 | Lexical assertions | [casts.rs] | [Assertions] |
 | Operators | [operators.rs] | [Expressions] |
@@ -104,7 +105,9 @@ remain deferred in [the plan](plan.md).
 
 The declaration parser returns one `ParsedUnit` per source file. Typedef
 collection captures owner/file environments across the supplied files; targets
-reuse annotation parsing with cached expansion and cycle/depth checks. Unit
+reuse annotation parsing with cached closed terms and guarded recursion/depth
+checks. Recursive types retain finite binders; value operations unfold one
+constructor rather than erasing or repeatedly expanding a cycle. Unit
 compilation resolves declarations before calls. The isolated-function entry
 selects a body from the same parser, retaining external-call binding without
 unit ownership/signature validation. Base-expression and postfix frames keep
@@ -227,6 +230,8 @@ library.
 [source_objects.rs]: ../crates/ciq-compiler/src/source_objects.rs
 [tuples.rs]: ../crates/ciq-compiler/src/tuples.rs
 [dictionary.rs]: ../crates/ciq-compiler/src/dictionary.rs
+[recursive.rs]: ../crates/ciq-compiler/src/recursive.rs
+[Recursive contracts]: specs/ir/README.md#recursive-contracts
 [records.rs]: ../crates/ciq-compiler/src/records.rs
 [structural.rs]: ../crates/ciq-compiler/src/structural.rs
 [callbacks.rs]: ../crates/ciq-compiler/src/callbacks.rs

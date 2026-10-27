@@ -60,7 +60,8 @@ pub(crate) fn refine(
     if facts.contains(&Fact::Null(place)) {
         return crate::ValueType::Null;
     }
-    if let crate::api::Type::Union(parts) = ty.api_type() {
+    let projected = crate::recursive::unfold(&ty.api_type()).unwrap_or_else(|| ty.api_type());
+    if let crate::api::Type::Union(parts) = projected {
         let mut parts = parts;
         for fact in facts {
             match fact {

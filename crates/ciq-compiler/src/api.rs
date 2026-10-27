@@ -100,6 +100,8 @@ impl ApiContext {
     /// all alternatives.
     pub fn check_type(self, catalogue: &Catalogue, ty: &Type) -> Result<(), String> {
         match ty {
+            Type::Recursive(body) => self.check_type(catalogue, body),
+            Type::RecursionRef(_) => Ok(()),
             Type::TupleValue(tuple) => {
                 tuple.validate()?;
                 self.check_class(catalogue, "Toybox.Lang.Array")?;
@@ -217,6 +219,10 @@ impl ApiContext {
 /// Null and Void are distinct from classes, and unions retain their alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
+    /// A finite recursive contract binding reference zero in its body.
+    Recursive(Box<Type>),
+    /// Lexically bound reference; zero denotes the nearest recursive binder.
+    RecursionRef(usize),
     /// Executable positional contract retaining source slot identities.
     /// Declaration tuples below may additionally contain generic API parameters.
     TupleValue(crate::TupleType),
@@ -1468,6 +1474,9 @@ mod tests {
                 }
                 Type::SourceValue(_) => {
                     panic!("core API declarations cannot contain source identities")
+                }
+                Type::Recursive(_) | Type::RecursionRef(_) => {
+                    panic!("core API declarations do not define recursive aliases")
                 }
                 Type::Any | Type::Null | Type::Void => {}
             }

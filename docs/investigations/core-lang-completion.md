@@ -74,6 +74,53 @@ four policies. The [source contract][checking] states our current limits.
 [type-guide]: https://developer.garmin.com/connect-iq/monkey-c/monkey-types/
 [checking]: ../specs/frontend/README.md#type-checking-policy
 
+## Guarded recursive aliases
+
+**Experimentally observed**, 2026-10-27: SDK 9.2.0, `fr265`, minimum API
+5.0.0, strict checking, `-O 0` accepts the
+[recursive-contract specimen](../../examples/compiler-recursive-contracts/README.md).
+SDK and independently generated PRGs both produce its eight expected lines.
+The specimen exercises Array/Dictionary recursion, nullable values, interface
+method chaining, and an interface stored in a source field. Structured
+reconstruction succeeds for both programs without CODE/DATA fallback.
+
+To distinguish typed recursion from Any, add these negative functions to the
+same strict SDK scaffold:
+
+```monkeyc
+function wrongTree(t as Tree) as Lang.Number { return t[0]; }
+function wrongChain(x as Recursive) as Lang.String {
+    return x.next().value();
+}
+```
+
+The SDK rejects the Array result as Number and the chained Number result as
+String. The corresponding correctly typed functions compile. This establishes
+retained recursive type information, not the SDK's internal representation.
+
+A separate SDK-accepted class demonstrates a remaining enclosing-receiver
+witness gap in our compiler:
+
+```monkeyc
+class SelfNode {
+    function next() as Recursive { return self; }
+    function value() as Lang.Number { return 41; }
+}
+```
+
+Our compiler rejects the return contract; replacing `self` with `new SelfNode()`
+works. Reproduce against the specimen's typedef and strict scaffold. No SDK
+executables were disassembled or decompiled. The
+[source alias contract](../specs/frontend/README.md#type-aliases) owns supported
+behavior; the plan owns the remaining witness work.
+
+The same strict SDK scaffold accepts `typedef A as {:next as A}; typedef B as
+{:next as B, :z as Lang.Number}; function f(x as B) as A { return x; }`.
+Our recursive-contract comparison currently rejects this width match. A
+regression test ensures it terminates rather than overflowing while repeatedly
+comparing the `next` fields. This probe establishes compiler acceptance only;
+it does not establish recursive record mutation or runtime alias behavior.
+
 ## Checking off
 
 **Experimentally observed:** SDK 9.2.0, fr265, minimum API 5.0.0, `-O 0`,

@@ -14,6 +14,10 @@ enum ConstructionType {
 
 /// Extract a supported container contract for contextual literal construction.
 fn construction_type(ty: &crate::api::Type) -> Option<ConstructionType> {
+    if let Some(unfolded) = crate::recursive::unfold(ty) {
+        return construction_type(&unfolded);
+    }
+
     match ty {
         crate::api::Type::TupleValue(tuple) => Some(ConstructionType::Tuple(tuple.clone())),
         crate::api::Type::Union(parts) => {

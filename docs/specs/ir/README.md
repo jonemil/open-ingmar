@@ -82,6 +82,31 @@ equality; partial native union overlaps are dynamic obligations, including
 inside nested Arrays/Dictionaries. Known class-only source parameters can overlap by exact class/Null identity;
 structural contracts retain exact witness requirements. Fields and lexical casts retain their existing domains.
 
+### Recursive contracts
+
+`api::Type::Recursive` binds a finite type body; `RecursionRef(n)` selects the
+enclosing binder, with zero denoting the nearest. Parameter, result, and Array
+element wrappers preserve these terms; nested Dictionary values preserve their
+full contract. [Type tags](grammar.md#type-tags) serialize the same representation.
+Alias names do not survive this boundary.
+
+Every complete contract must be closed, each binder must be used, and every
+reference must cross a constructor under the
+[source recursion rules](../frontend/README.md#type-aliases). Validation bounds
+syntax depth at 64 and checks API requirements without infinitely expanding the
+type. Signatures, fields, local/block contracts, and casts use these checks;
+saved metadata cannot introduce an unbound reference.
+
+Value operations unfold one constructor, substituting the closed recursive term
+for bound references in its children. Thus indexing a recursive Array or calling
+a recursive interface method returns another usable closed contract. Structural
+comparison remembers pairs already compared so equivalent recursive shapes can
+be checked finitely. Two recursive contracts require that equality rather than
+recursive record-width or tuple-slot widening; mutable containers retain
+invariant contracts and exact source identities. Null refinement and API checks
+remain applicable. These are
+static contracts, not runtime object cycles or new VM operations.
+
 ### Source interface contracts
 
 `StructuralInterface` contains name-ordered fields with `ReturnType` contracts
@@ -1117,8 +1142,11 @@ their nullable forms. Values also accept `object` and `nullable-object`, with
 the
 [source erasure rules](../frontend/README.md#object-containers).
 Interface value contracts require API 5.0.0; WeakReference requires 1.2.0 and
-ByteArray requires 3.0.0. Other tags, nested ordinary containers, and arbitrary
-heterogeneous unions are rejected. For example:
+ByteArray requires 3.0.0. `DictionaryValue::Nested` also retains Array,
+Dictionary, tuple, and recursive value contracts, including nullable forms.
+Their full type tags survive lookup and writes; nested construction uses private
+builders rather than scalar constants. Container keys and arbitrary
+heterogeneous value unions remain outside this profile. For example:
 
 ```text
 ciq-ir

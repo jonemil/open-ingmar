@@ -781,10 +781,22 @@ to the expanded type.
 
 The current profile permits at most 256 typedef declarations per unit and bounds
 annotation/uncached alias expansion depth at 64. Resolved dependencies are cached;
-sharing an alias does not repeatedly expand its dependency graph. Cycles are
-diagnosed, including container-guarded recursion that the SDK accepts but this
-profile cannot yet represent. The latter limitation is tracked with nested
-container work in the plan.
+sharing a closed alias does not repeatedly expand its dependency graph.
+Guarded recursion retains a finite recursive contract: `typedef Tree as
+Array<Tree>;` and interfaces with methods returning their own alias preserve
+their types through indexing, calls, fields, and saved IR. Mutual aliases work
+under the same rules. Each recursive edge must cross an Array, Dictionary,
+tuple, record, callback, or structural-interface constructor. A union alone is
+not a guard: `typedef A as A or Null;` and direct alias cycles are errors.
+Destination restrictions still apply, including Dictionary key domains.
+Recursive contracts create no runtime class or typedef metadata. See the
+[example](../../../examples/compiler-recursive-contracts/README.md) and
+[IR representation](../ir/README.md#recursive-contracts).
+
+An explicit source instance can satisfy a recursive interface through its
+declared methods. Returning `self` as that interface still lacks an enclosing
+class witness; the compiler rejects it rather than treating the receiver as an
+arbitrary source class.
 
 ### User calls and owner lookup
 
@@ -3454,7 +3466,9 @@ references with invariant erased element contracts. Dictionary values likewise
 accept `Lang.Object` or `Lang.Object or Null` with any supported key contract;
 Object keys remain unsupported. Canonical names, imports, and Lang aliases work
 in signatures and contextual construction. Exact source-class Dictionary values
-and nested Dictionary key/value parameters remain separate requirements.
+and container keys remain separate requirements. Explicit nested Array,
+Dictionary, tuple, and recursive value contracts retain their inner types through
+contextual construction, lookup, and writes; nullable nested values are allowed.
 
 Object slots accept supported scalar classes, numeric aliases, source/native
 objects, comparison interfaces, and container/Method/WeakReference references.
@@ -3671,8 +3685,8 @@ These are intended contracts, not executable support yet. Do not infer key/value
 contracts from later writes or reinterpret an opaque callback Dictionary as a
 typed one.
 
-Null keys and explicit nested parameter contracts need separate rules before
-acceptance. Native reference unions do not change literal content inference. Nested references stored as
+Null keys and container key contracts need separate rules before acceptance.
+Native reference unions do not change literal content inference. Nested references stored as
 [Object values](#object-containers) remain erased. Object `method` follows the
 [bounded Method profile](#method-values-and-invocation);
 ordinary `weak` follows the [bounded reference

@@ -37,12 +37,13 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Inference, unions, and storage
 
-- [ ] Represent SDK-accepted recursive contracts through annotations, saved IR,
-  and value operations: container-guarded aliases such as
-  `typedef Tree as Array<Tree>` and interfaces such as
-  `typedef Recursive as interface { function next() as Recursive; };`.
-  Container recursion requires nested Array/Dictionary contracts below;
-  unguarded alias cycles remain errors.
+- [ ] Prove enclosing-class interface witnesses for `self` used as a result,
+  argument, or stored value, including recursive interface results such as
+  `function next() as Recursive { return self; }`; retain the actual owner
+  rather than asserting an arbitrary source class.
+- [ ] Support SDK-accepted recursive option-record width matches, including
+  returning `B = {:next as B, :z as Number}` as `A = {:next as A}`. Compare
+  recursive field obligations finitely while preserving record identity/views.
 
 ### 2. Declarations, namespaces, and member storage
 
@@ -185,8 +186,8 @@ executable profiles.
 - [ ] Support Null keys if SDK/runtime accepts them; determine typed-key rules
   and missing-value behavior with isolated specimens.
 - [ ] Preserve exact source-class values through storage, `get`, and `values`.
-- [ ] Support explicit nested key/value parameters and nested Dictionary/Array
-  literals; retain inner contracts through lookup, writes, and enumeration.
+- [ ] Support container key parameters and nested Dictionary/Array key literals;
+  retain inner key contracts through lookup, writes, and enumeration.
 - [ ] Support SDK-valid heterogeneous native union key/value annotations, such as
   `Dictionary<String, Number or String>`; probe key unions and retain Null-key
   restrictions independently of value unions.

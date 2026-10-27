@@ -62,6 +62,10 @@ pub(crate) fn constant(
 /// This substitutes container parameters without authorizing the call;
 /// executable support, API availability, and actual arguments are checked later.
 pub(crate) fn value_parameters(receiver: &api::Type, member: &str) -> Option<Vec<api::Type>> {
+    if let Some(unfolded) = crate::recursive::unfold(receiver) {
+        return value_parameters(&unfolded, member);
+    }
+
     if matches!(receiver, api::Type::Options(_)) {
         return value_parameters(
             &api::Type::dictionary(api::Type::named("Toybox.Lang.Symbol"), api::Type::Any),
@@ -196,6 +200,10 @@ pub(crate) fn value_call(
     arguments: &[api::Type],
     context: Option<api::ApiContext>,
 ) -> Result<api::Type, String> {
+    if let Some(unfolded) = crate::recursive::unfold(receiver) {
+        return value_call(&unfolded, member, arguments, context);
+    }
+
     if let api::Type::SourceValue(contract) = receiver {
         // Source receivers retain their existing complete lookup profile;
         // native projections cannot stand in for missing source declarations.
@@ -778,6 +786,21 @@ pub(crate) fn accepts_boundary(expected: &api::Type, actual: &api::Type) -> bool
 /// This positional adaptation also applies inside nested Array element domains.
 /// Any crosses value boundaries dynamically; Void remains separate from values.
 pub(crate) fn accepts(expected: &api::Type, actual: &api::Type) -> bool {
+    // Recursive references preserve invariant contracts. Compare two closed
+    // terms coinductively before unfolding; structural width checks must not
+    // restart the same unequal pair indefinitely through record/tuple fields.
+    if matches!(expected, api::Type::Recursive(_)) && matches!(actual, api::Type::Recursive(_)) {
+        return crate::structural::same_type(expected, actual);
+    }
+    if expected != actual {
+        if let Some(unfolded) = crate::recursive::unfold(expected) {
+            return accepts(&unfolded, actual);
+        }
+        if let Some(unfolded) = crate::recursive::unfold(actual) {
+            return accepts(expected, &unfolded);
+        }
+    }
+
     if let (api::Type::Dictionary { key, value }, api::Type::Options(fields)) = (expected, actual) {
         return accepts(key, &api::Type::named("Toybox.Lang.Symbol"))
             && fields.values().all(|ty| accepts(value, ty));
@@ -928,6 +951,20 @@ pub(crate) fn structural_api(
     actual: &api::Type,
     context: Option<api::ApiContext>,
 ) -> Result<(), String> {
+    if crate::structural::same_type(expected, actual) {
+        if let Some(context) = context {
+            context.check_type(api::core(), expected)?;
+            context.check_type(api::core(), actual)?;
+        }
+        return Ok(());
+    }
+    if let Some(body) = crate::recursive::unfold(expected) {
+        return structural_api(&body, actual, context);
+    }
+    if let Some(body) = crate::recursive::unfold(actual) {
+        return structural_api(expected, &body, context);
+    }
+
     let Some(context) = context else {
         return Ok(());
     };

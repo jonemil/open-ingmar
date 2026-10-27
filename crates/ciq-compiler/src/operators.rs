@@ -197,6 +197,13 @@ fn binary_proven_result(kind: BinaryOp, left: &Type, right: &Type) -> Option<Typ
 /// String equality uses object identity with supported String/numeric/Char/null
 /// alternatives; Boolean mixing and String ordering remain unsupported.
 fn comparison_proven_result(kind: ComparisonOp, left: &Type, right: &Type) -> Option<Type> {
+    if let Some(body) = crate::recursive::unfold(left) {
+        return comparison_proven_result(kind, &body, right);
+    }
+    if let Some(body) = crate::recursive::unfold(right) {
+        return comparison_proven_result(kind, left, &body);
+    }
+
     if *left == Type::Any || *right == Type::Any {
         return Some(Type::named("Toybox.Lang.Boolean"));
     }
@@ -253,7 +260,11 @@ fn string_operand(ty: &Type, boolean: bool) -> bool {
         | Type::Tuple(_)
         | Type::TupleValue(_)
         | Type::Parameter(_) => false,
-        Type::Options(_) | Type::Structural(_) | Type::Callback(_) => false,
+        Type::Recursive(_)
+        | Type::RecursionRef(_)
+        | Type::Options(_)
+        | Type::Structural(_)
+        | Type::Callback(_) => false,
     }
 }
 

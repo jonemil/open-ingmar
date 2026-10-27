@@ -68,6 +68,10 @@ pub(crate) fn normalize(types: Vec<Type>) -> Type {
 
 /// Adapt a normalized native type to a supported parameter contract.
 pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
+    if matches!(ty, Type::Recursive(_) | Type::RecursionRef(_)) {
+        return Some(ParameterType::Recursive(ty));
+    }
+
     if ty == ParameterType::NullableDictionary.api_type() {
         return Some(ParameterType::NullableDictionary);
     }
@@ -98,6 +102,10 @@ pub(crate) fn parameter(ty: Type) -> Option<ParameterType> {
 }
 /// Adapt a normalized native type to a supported result contract.
 pub(crate) fn result(ty: Type) -> Option<ReturnType> {
+    if matches!(ty, Type::Recursive(_) | Type::RecursionRef(_)) {
+        return Some(ReturnType::Recursive(ty));
+    }
+
     if let Some(r) = crate::type_text::named_result(&ty) {
         return Some(r);
     }
@@ -172,6 +180,10 @@ pub(crate) fn printable(ty: &Type) -> bool {
 
 /// Check an index against every possible receiver, joining the read contracts.
 pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
+    if let Some(unfolded) = crate::recursive::unfold(receiver) {
+        return index_read(&unfolded, key);
+    }
+
     let mut results = Vec::new();
     for part in alternatives(receiver) {
         let element = match part {
@@ -207,6 +219,10 @@ pub(crate) fn index_read(receiver: &Type, key: &Type) -> Result<Type, String> {
 
 /// Check a write against every possible receiver without widening its elements.
 pub(crate) fn index_write(receiver: &Type, key: &Type, value: &Type) -> Result<(), String> {
+    if let Some(unfolded) = crate::recursive::unfold(receiver) {
+        return index_write(&unfolded, key, value);
+    }
+
     if matches!(receiver, Type::Options(_)) {
         return crate::native::value_call(receiver, "put", &[key.clone(), value.clone()], None)
             .map(|_| ());

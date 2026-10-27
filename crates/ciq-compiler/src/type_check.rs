@@ -628,6 +628,8 @@ fn inspect(
                 arguments,
             } => {
                 let receiver_type = ty(receiver);
+                let receiver_type =
+                    crate::recursive::unfold(&receiver_type).unwrap_or(receiver_type);
                 dynamic = receiver_type == Type::Any;
                 for part in crate::unions::alternatives(&receiver_type) {
                     if let Some(parameters) = crate::native::value_parameters(part, member) {

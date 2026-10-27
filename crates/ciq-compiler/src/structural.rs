@@ -36,49 +36,94 @@ fn same_alternatives(a: &[Type], b: &[Type]) -> bool {
 /// Compare invariant type shapes without making static flow provenance nominal.
 /// This is equality, not widening or subtype assignability.
 pub(crate) fn same_type(a: &Type, b: &Type) -> bool {
-    if a == b {
-        return true;
+    fn compare(a: &Type, b: &Type, seen: &mut Vec<(Type, Type)>) -> bool {
+        if a == b || seen.iter().any(|(x, y)| x == a && y == b) {
+            return true;
+        }
+        seen.push((a.clone(), b.clone()));
+        if let Some(body) = crate::recursive::unfold(a) {
+            return compare(&body, b, seen);
+        }
+        if let Some(body) = crate::recursive::unfold(b) {
+            return compare(a, &body, seen);
+        }
+        match (a, b) {
+            (Type::SourceValue(a), Type::SourceValue(b)) => {
+                same_result(&a.clone().result(), &b.clone().result())
+            }
+            (Type::Structural(a), Type::Structural(b)) => {
+                a.fields.len() == b.fields.len()
+                    && a.methods.len() == b.methods.len()
+                    && a.fields.iter().all(|(name, ty)| {
+                        b.fields.get(name).is_some_and(|other| {
+                            compare(
+                                &crate::tuples::exact_type(ty),
+                                &crate::tuples::exact_type(other),
+                                seen,
+                            )
+                        })
+                    })
+                    && a.methods.iter().all(|(name, m)| {
+                        b.methods.get(name).is_some_and(|n| {
+                            m.parameters.len() == n.parameters.len()
+                                && m.parameters
+                                    .iter()
+                                    .zip(&n.parameters)
+                                    .all(|(p, q)| compare(&p.exact_type(), &q.exact_type(), seen))
+                                && compare(
+                                    &crate::tuples::exact_type(&m.result),
+                                    &crate::tuples::exact_type(&n.result),
+                                    seen,
+                                )
+                        })
+                    })
+            }
+            (Type::Callback(a), Type::Callback(b)) => {
+                a.parameters.len() == b.parameters.len()
+                    && a.parameters
+                        .iter()
+                        .zip(&b.parameters)
+                        .all(|(p, q)| compare(&p.exact_type(), &q.exact_type(), seen))
+                    && compare(
+                        &crate::tuples::exact_type(&a.result),
+                        &crate::tuples::exact_type(&b.result),
+                        seen,
+                    )
+            }
+            (Type::Array(a), Type::Array(b)) => compare(a, b, seen),
+            (Type::Dictionary { key: a, value: av }, Type::Dictionary { key: b, value: bv }) => {
+                compare(a, b, seen) && compare(av, bv, seen)
+            }
+            (Type::TupleValue(a), Type::TupleValue(b)) => {
+                a.slots.len() == b.slots.len()
+                    && a.slots.iter().zip(&b.slots).all(|(p, q)| {
+                        compare(
+                            &crate::tuples::exact_type(p),
+                            &crate::tuples::exact_type(q),
+                            seen,
+                        )
+                    })
+            }
+            (Type::Tuple(a), Type::Tuple(b)) => {
+                a.len() == b.len() && a.iter().zip(b).all(|(p, q)| compare(p, q, seen))
+            }
+            (Type::Union(a), Type::Union(b)) => {
+                a.iter()
+                    .all(|p| b.iter().any(|q| compare(p, q, &mut seen.clone())))
+                    && b.iter()
+                        .all(|q| a.iter().any(|p| compare(p, q, &mut seen.clone())))
+            }
+            (Type::Union(a), b) => !a.is_empty() && a.iter().all(|a| compare(a, b, seen)),
+            (a, Type::Union(b)) => !b.is_empty() && b.iter().all(|b| compare(a, b, seen)),
+            (Type::Options(a), Type::Options(b)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .all(|(name, p)| b.get(name).is_some_and(|q| compare(p, q, seen)))
+            }
+            _ => false,
+        }
     }
-    match (a, b) {
-        (Type::SourceValue(a), Type::SourceValue(b)) => {
-            same_result(&a.clone().result(), &b.clone().result())
-        }
-        (Type::Structural(a), Type::Structural(b)) => {
-            a.fields.len() == b.fields.len()
-                && a.methods.len() == b.methods.len()
-                && a.fields.iter().all(|(name, ty)| {
-                    b.fields
-                        .get(name)
-                        .is_some_and(|other| same_result(ty, other))
-                })
-                && a.methods.iter().all(|(name, method)| {
-                    b.methods
-                        .get(name)
-                        .is_some_and(|other| method.accepts(other))
-                })
-        }
-        (Type::Callback(a), Type::Callback(b)) => a.accepts(b),
-        (Type::Array(a), Type::Array(b)) => same_type(a, b),
-        (Type::Dictionary { key: a, value: av }, Type::Dictionary { key: b, value: bv }) => {
-            same_type(a, b) && same_type(av, bv)
-        }
-        (Type::TupleValue(a), Type::TupleValue(b)) => {
-            a.slots.len() == b.slots.len()
-                && a.slots.iter().zip(&b.slots).all(|(a, b)| same_result(a, b))
-        }
-        (Type::Tuple(a), Type::Tuple(b)) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_type(a, b))
-        }
-        (Type::Union(a), Type::Union(b)) => same_alternatives(a, b),
-        (Type::Union(a), b) => !a.is_empty() && a.iter().all(|a| same_type(a, b)),
-        (a, Type::Union(b)) => !b.is_empty() && b.iter().all(|b| same_type(a, b)),
-        (Type::Options(a), Type::Options(b)) => {
-            a.len() == b.len()
-                && a.iter()
-                    .all(|(name, ty)| b.get(name).is_some_and(|other| same_type(ty, other)))
-        }
-        _ => false,
-    }
+    compare(a, b, &mut Vec::new())
 }
 
 /// Extract one finite structural contract and its optional Null alternative.
@@ -126,6 +171,7 @@ pub(crate) fn split_pair<'a>(text: &'a str, delimiter: &str) -> Option<(&'a str,
 
 pub(crate) fn contains(ty: &Type) -> bool {
     match ty {
+        Type::Recursive(body) => contains(body),
         Type::Structural(_) => true,
         Type::Union(parts) => parts.iter().any(contains),
         _ => false,
@@ -134,6 +180,10 @@ pub(crate) fn contains(ty: &Type) -> bool {
 
 /// Resolve a structural field without erasing exact source alternatives.
 pub(crate) fn field_contract(receiver: &Type, member: &str) -> Result<ReturnType, String> {
+    if let Some(body) = crate::recursive::unfold(receiver) {
+        return field_contract(&body, member);
+    }
+
     match receiver {
         Type::Structural(shape) => shape
             .fields
@@ -213,7 +263,7 @@ pub(crate) fn resolve_parameter<E>(
         resolve_signature(signature, resolve)?;
     } else if let ParameterType::Structural(shape) = ty {
         shape.resolve_sources(resolve)?;
-    } else if let ParameterType::Union(ty) = ty {
+    } else if let ParameterType::Recursive(ty) | ParameterType::Union(ty) = ty {
         resolve_api(ty, resolve)?;
     } else if let ParameterType::Array(element) = ty {
         resolve_element(element, resolve)?;
@@ -248,7 +298,7 @@ pub(crate) fn resolve_result<E>(
         resolve_signature(signature, resolve)?;
     } else if let ReturnType::Structural(shape) = ty {
         shape.resolve_sources(resolve)?;
-    } else if let ReturnType::Union(ty) = ty {
+    } else if let ReturnType::Recursive(ty) | ReturnType::Union(ty) = ty {
         resolve_api(ty, resolve)?;
     } else if let ReturnType::Array(element) = ty {
         resolve_element(element, resolve)?;
@@ -263,6 +313,9 @@ fn resolve_element<E>(
     element: &mut crate::ArrayElement,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::ArrayElement::Recursive(ty) = element {
+        return resolve_api(ty, resolve);
+    }
     if let crate::ArrayElement::Source(contract) = element {
         for class in &mut contract.classes {
             resolve(class)?;
@@ -286,6 +339,9 @@ fn resolve_dictionary<E>(
     dictionary: &mut crate::DictionaryType,
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
+    if let crate::DictionaryValue::Nested { contract, .. } = &mut dictionary.value {
+        resolve_api(contract, resolve)?;
+    }
     if let crate::DictionaryKey::Callback(signature) = &mut dictionary.key {
         resolve_signature(signature, resolve)?;
     }
@@ -316,6 +372,7 @@ pub(crate) fn resolve_api<E>(
     resolve: &mut impl FnMut(&mut crate::SourceClass) -> Result<(), E>,
 ) -> Result<(), E> {
     match ty {
+        Type::Recursive(body) => resolve_api(body, resolve)?,
         Type::SourceValue(contract) => {
             for class in &mut contract.classes {
                 resolve(class)?;

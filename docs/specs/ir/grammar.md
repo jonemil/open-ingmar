@@ -305,6 +305,9 @@ prefixes concatenate inside the field.
 parameter-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
               | source-union-tag
 native-parameter-tag = common-tag | array-tag | "null" | "nullable-dictionary"
+                     | recursive-tag | recursive-reference-tag
+recursive-tag = "rec(" parameter-tag ")"
+recursive-reference-tag = "ref(" decimal-usize ")"
 union-tag = "union(" native-parameter-tag ("|" native-parameter-tag)+ ")"
 call-result-tag = native-parameter-tag | union-tag | source-tag | nullable-source-tag
                 | source-union-tag
@@ -355,6 +358,7 @@ element-tag = "any" | "null" | "number" | "nullable-number" | other-scalar-tag
             | numeric-alias-tag | interface-tag | "view"
             | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
             | union-tag | nested-element-tag | exact-element-tag
+            | recursive-tag | recursive-reference-tag
 exact-element-tag = "exact(" (source-tag | nullable-source-tag | source-union-tag) ")"
 nested-element-tag = ["nullable-"] "nested(" nested-container-tag ")"
 nested-container-tag = array-tag | dictionary-tag | tuple-tag | record-tag
@@ -367,11 +371,17 @@ dictionary-key-tag = scalar-tag | alias-tag | interface-name-tag
 dictionary-value-tag = scalar-tag | nullable-scalar-tag | core-tag
                      | nullable-core-tag | numeric-alias-tag | interface-tag
                      | structural-tag | nullable-structural-tag | callback-tag | nullable-callback-tag
+                     | nested-dictionary-value-tag
+nested-dictionary-value-tag = nested-dictionary-value
+                            | "union(" nested-dictionary-value "|null)"
+nested-dictionary-value = array-tag | dictionary-tag | tuple-tag
+                        | recursive-tag | recursive-reference-tag
 join-tag = union-tag | "any" | scalar-tag | nullable-scalar-tag | core-tag | nullable-core-tag
          | numeric-alias-tag | interface-tag | enum-tag | dictionary-tag
          | "array-" element-tag | "null"
          | source-tag | nullable-source-tag | source-union-tag
          | structural-tag | callback-tag | tuple-tag | record-tag
+         | recursive-tag | recursive-reference-tag
 local-contract-tag = join-tag | call-result-tag
 cast-tag = parameter-tag
 ```
@@ -379,6 +389,14 @@ cast-tag = parameter-tag
 Union Array elements require supported native element alternatives; Void,
 exact source-class elements, and nested collection elements are not admitted
 through this rule. Known numeric/nullable profiles keep their canonical tags.
+
+`rec(...)` binds references in its body; `ref(0)` selects the nearest enclosing
+`rec`, `ref(1)` the next outer binder. References are legal only within a closed,
+guarded recursive contract, and unused binders are rejected. Constructors and
+unions do not change reference indices. For example, `rec(ref(0)-array)` is the
+contract for an Array whose elements have that same contract. Syntax depth is
+bounded at 64; [recursive validation](README.md#recursive-contracts) defines
+guarding and value operations. These tags are not runtime class identifiers.
 
 A union tag has 2 through 254 alternatives before normalization. Nested union
 tags, top-level source identities, and Void are not native union atoms. Tuple

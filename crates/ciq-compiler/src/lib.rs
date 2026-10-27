@@ -23,6 +23,7 @@ mod control_flow;
 mod dictionary;
 mod record_flow;
 mod records;
+mod recursive;
 pub use bindings::{
     array_bindings, byte_array_bindings, dictionary_bindings, string_bindings, symbol_bindings,
 };
@@ -177,6 +178,8 @@ impl NativeClass {
 /// Supported invariant Array element contracts, independent of VM storage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrayElement {
+    /// A finite recursive contract, unfolded only for the current value operation.
+    Recursive(api::Type),
     /// Exact source classes and optional native/Null alternatives. Mutable
     /// Array assignment retains this invariant contract.
     Source(Box<SourceUnion>),
@@ -256,6 +259,14 @@ impl ArrayElement {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if let Self::Recursive(ty) = self {
+            if !matches!(ty, api::Type::Recursive(_) | api::Type::RecursionRef(_)) {
+                return Err("invalid recursive element wrapper".into());
+            }
+        }
+
+        crate::recursive::validate(&self.api_type())?;
+
         if let Self::Source(contract) = self {
             SourceUnion::with_native(
                 contract.classes.clone(),
@@ -300,6 +311,7 @@ impl ArrayElement {
     /// Return the API element contract, including its Null alternative if present.
     pub fn api_type(&self) -> api::Type {
         let base = api::Type::named(match self {
+            Self::Recursive(ty) => return ty.clone(),
             Self::Source(contract) => return api::Type::SourceValue(contract.clone()),
             Self::Nested { contract, nullable } => {
                 let ty = *contract.clone();
@@ -404,6 +416,10 @@ impl ArrayElement {
     }
 
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if matches!(ty, api::Type::Recursive(_) | api::Type::RecursionRef(_)) {
+            return Some(Self::Recursive(ty.clone()));
+        }
+
         if !structural::type_depth(ty, 1) {
             return None;
         }
@@ -478,6 +494,10 @@ impl ArrayElement {
     }
 
     fn text(&self) -> std::borrow::Cow<'static, str> {
+        if let Self::Recursive(ty) = self {
+            return std::borrow::Cow::Owned(crate::recursive::tag(ty));
+        }
+
         if let Self::Source(contract) = self {
             return format!(
                 "exact({})",
@@ -517,6 +537,7 @@ impl ArrayElement {
             };
         }
         let text = match self {
+            Self::Recursive(_) => unreachable!(),
             Self::Source(_)
             | Self::Nested { .. }
             | Self::Structural { .. }
@@ -658,6 +679,8 @@ impl InterfaceType {
 /// Void functions produce no semantic value; parameter contracts are separate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReturnType {
+    /// A finite recursive contract, unfolded only for the current value operation.
+    Recursive(api::Type),
     /// Structural Symbol-keyed Dictionary; every named field may be absent.
     Options(BTreeMap<String, api::Type>),
     /// A bound Method with a checked fixed argument/result signature.
@@ -743,6 +766,8 @@ pub enum ReturnType {
 /// Supported explicit parameter contracts, independent of VM slot allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterType {
+    /// A finite recursive contract, unfolded only for the current value operation.
+    Recursive(api::Type),
     /// Structural Symbol-keyed Dictionary; every named field may be absent.
     Options(BTreeMap<String, api::Type>),
     /// Positional Array slots, retaining exact source contracts.
@@ -840,6 +865,7 @@ impl ParameterType {
     /// source assignability is checked separately against unit declarations.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Recursive(ty) => ty.clone(),
             Self::Tuple(tuple) => tuple.api_type(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Options(fields) => api::Type::Options(fields.clone()),
@@ -901,6 +927,7 @@ impl ReturnType {
     /// separate source-class return requirement.
     pub fn api_type(&self) -> api::Type {
         match self {
+            Self::Recursive(ty) => ty.clone(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Options(fields) => api::Type::Options(fields.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
@@ -958,6 +985,8 @@ impl ReturnType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ValueType {
+    /// A finite recursive contract, unfolded only for the current value operation.
+    Recursive(api::Type),
     /// A bound Method with a checked fixed argument/result signature.
     Callback(Box<StructuralMethod>),
     Structural(Box<StructuralInterface>),
@@ -1066,6 +1095,7 @@ impl ValueType {
     /// Map a supported value category to its core API type without changing storage.
     fn api_type(&self) -> api::Type {
         match self {
+            Self::Recursive(ty) => ty.clone(),
             Self::Structural(shape) => api::Type::Structural(shape.clone()),
             Self::Options(fields) => api::Type::Options(fields.clone()),
             Self::Callback(signature) => api::Type::Callback(signature.clone()),
@@ -1153,6 +1183,10 @@ impl ValueType {
     /// Adapt an API type to the fixed executable value subset; other types
     /// remain unsupported even if the catalogue contains their declarations.
     fn from_api_type(ty: &api::Type) -> Option<Self> {
+        if matches!(ty, api::Type::Recursive(_) | api::Type::RecursionRef(_)) {
+            return Some(Self::Recursive(ty.clone()));
+        }
+
         if let api::Type::Union(parts) = ty {
             let normalized = crate::unions::normalize(parts.clone());
             if normalized != *ty {
@@ -2126,6 +2160,9 @@ impl Function {
     ) -> Result<Self, IrError> {
         let validate_parameter = |parameter: &ParameterType| -> Result<(), String> {
             match parameter {
+                ParameterType::Recursive(ty) if !matches!(ty, api::Type::Recursive(_)) => {
+                    Err("invalid recursive parameter wrapper".into())
+                }
                 ParameterType::Tuple(tuple) => tuple.validate().map_err(String::from),
                 ParameterType::Options(fields) => records::validate(fields).map_err(String::from),
                 ParameterType::Array(element) => element.validate(),
@@ -2136,13 +2173,24 @@ impl Function {
             }
         };
         for parameter in &parameter_types {
+            recursive::validate(&parameter.exact_type()).map_err(|message| IrError {
+                operation: None,
+                message,
+            })?;
             validate_parameter(parameter).map_err(|message| IrError {
                 operation: None,
                 message,
             })?;
         }
         if let Some(result) = &declared_result {
+            recursive::validate(&result.api_type()).map_err(|message| IrError {
+                operation: None,
+                message,
+            })?;
             let checked = match result {
+                ReturnType::Recursive(ty) if !matches!(ty, api::Type::Recursive(_)) => {
+                    Err("invalid recursive result wrapper".into())
+                }
                 ReturnType::Tuple(tuple) => tuple.validate().map_err(String::from),
                 ReturnType::Options(fields) => records::validate(fields).map_err(String::from),
                 ReturnType::Array(element) => element.validate(),
@@ -2228,6 +2276,16 @@ impl Function {
             })
             .transpose()?;
         for located in &mut operations {
+            if let Operation::BlockParameter { value_type, .. }
+            | Operation::LocalDeclare { value_type, .. }
+            | Operation::VariableRead { value_type, .. } = &located.operation
+            {
+                recursive::validate(&value_type.api_type()).map_err(|message| IrError {
+                    operation: None,
+                    message,
+                })?;
+            }
+
             if let Operation::Cast {
                 result,
                 operand,
@@ -2757,6 +2815,7 @@ impl Function {
                             | ValueType::LangObject
                             | ValueType::NullableObject
                             | ValueType::NullableNativeObject(_)
+                            | ValueType::Recursive(_)
                             | ValueType::Union(_)
                     ) {
                         return Err(fail(
@@ -3513,7 +3572,7 @@ impl Function {
                     index,
                 } => {
                     let element = match type_of(array) {
-                        ValueType::Union(ref ty) => {
+                        ValueType::Recursive(ref ty) | ValueType::Union(ref ty) => {
                             let mut results = Vec::new();
                             for part in unions::alternatives(ty) {
                                 let key = if matches!(part, api::Type::Dictionary { .. }) {
@@ -3561,7 +3620,10 @@ impl Function {
                     };
                     if !matches!(
                         type_of(array),
-                        ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
+                        ValueType::Any
+                            | ValueType::Recursive(_)
+                            | ValueType::Union(_)
+                            | ValueType::Options(_)
                     ) && !native::accepts_boundary(
                         &api::Type::named("Toybox.Lang.Number"),
                         &type_of(index).api_type(),
@@ -3577,7 +3639,7 @@ impl Function {
                     value,
                 } => {
                     let element = match type_of(array) {
-                        ValueType::Union(ref ty) => {
+                        ValueType::Recursive(ref ty) | ValueType::Union(ref ty) => {
                             for part in unions::alternatives(ty) {
                                 let (key, value_type) = if matches!(
                                     part,
@@ -3625,7 +3687,10 @@ impl Function {
                     };
                     if !matches!(
                         type_of(array),
-                        ValueType::Any | ValueType::Union(_) | ValueType::Options(_)
+                        ValueType::Any
+                            | ValueType::Recursive(_)
+                            | ValueType::Union(_)
+                            | ValueType::Options(_)
                     ) && !native::accepts_boundary(
                         &api::Type::named("Toybox.Lang.Number"),
                         &type_of(index).api_type(),
@@ -4160,6 +4225,7 @@ impl Function {
                             ValueType::NullableNumeric => ReturnType::NullableNumeric,
                             ValueType::NullableIntegerAlias => ReturnType::NullableIntegerAlias,
                             ValueType::NullableDecimal => ReturnType::NullableDecimal,
+                            ValueType::Recursive(ref ty) => ReturnType::Recursive(ty.clone()),
                             ValueType::Union(ref ty) => ReturnType::Union(ty.clone()),
                             ValueType::Any => ReturnType::Any,
                             ValueType::Structural(shape) => ReturnType::Structural(shape),
@@ -5347,6 +5413,7 @@ fn validate_call_arguments(
                 ValueType::Tuple(_)
                     | ValueType::Structural(_)
                     | ValueType::Callback(_)
+                    | ValueType::Recursive(_)
                     | ValueType::Union(_)
                     | ValueType::Options(_)
                     | ValueType::Any
@@ -5403,6 +5470,14 @@ fn validate_call_arguments(
 
 fn call_result_type(result: ReturnType) -> Result<ValueType, &'static str> {
     match result {
+        ReturnType::Recursive(ty) => {
+            if !matches!(ty, api::Type::Recursive(_)) {
+                return Err("invalid recursive result wrapper");
+            }
+
+            recursive::validate(&ty).map_err(|_| "invalid recursive result contract")?;
+            Ok(ValueType::Recursive(ty))
+        }
         ReturnType::Options(fields) => {
             records::validate(&fields)?;
             Ok(ValueType::Options(fields))

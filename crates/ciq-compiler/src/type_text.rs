@@ -219,6 +219,12 @@ pub(super) const ARRAY_ELEMENTS: &[ArrayElement] = &[
 
 /// Parse an Array element tag; admissible contents are checked by its consumer.
 pub(super) fn element(tag: &str) -> Option<ArrayElement> {
+    if tag.starts_with("rec(") || tag.starts_with("ref(") {
+        if let ParameterType::Recursive(ty) = parameter(tag).ok()? {
+            return Some(ArrayElement::Recursive(ty));
+        }
+    }
+
     if let Some(body) = tag.strip_prefix("exact(").and_then(|s| s.strip_suffix(')')) {
         crate::structural::split(tag, '\0').ok()?;
         return Some(ArrayElement::Source(Box::new(
@@ -247,6 +253,21 @@ pub(super) fn element(tag: &str) -> Option<ArrayElement> {
 /// Parse the ordinary call-result domain, retaining exact source identities.
 /// Specialized headers, parameters, joins, and casts narrow it separately.
 pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
+    if tag.starts_with("rec(") || tag.starts_with("ref(") {
+        crate::structural::split(tag, '\0')?;
+    }
+
+    if let Some(body) = tag.strip_prefix("rec(").and_then(|s| s.strip_suffix(')')) {
+        return Ok(ReturnType::Recursive(Type::Recursive(Box::new(
+            parameter(body)?.exact_type(),
+        ))));
+    }
+    if let Some(index) = tag.strip_prefix("ref(").and_then(|s| s.strip_suffix(')')) {
+        return Ok(ReturnType::Recursive(Type::RecursionRef(
+            index.parse().map_err(|_| "invalid recursive reference")?,
+        )));
+    }
+
     if tag.starts_with("options(") {
         return crate::records::parse(tag).map(ReturnType::Options);
     }
@@ -346,6 +367,21 @@ pub(super) fn call_result(tag: &str) -> Result<ReturnType, &'static str> {
 /// Parse value parameter metadata, including tuples and nullable Dictionaries.
 /// Void is not a value parameter contract.
 pub(super) fn parameter(tag: &str) -> Result<ParameterType, &'static str> {
+    if tag.starts_with("rec(") || tag.starts_with("ref(") {
+        crate::structural::split(tag, '\0')?;
+    }
+
+    if let Some(body) = tag.strip_prefix("rec(").and_then(|s| s.strip_suffix(')')) {
+        return Ok(ParameterType::Recursive(Type::Recursive(Box::new(
+            parameter(body)?.exact_type(),
+        ))));
+    }
+    if let Some(index) = tag.strip_prefix("ref(").and_then(|s| s.strip_suffix(')')) {
+        return Ok(ParameterType::Recursive(Type::RecursionRef(
+            index.parse().map_err(|_| "invalid recursive reference")?,
+        )));
+    }
+
     if tag == "nullable-dictionary" {
         return Ok(ParameterType::NullableDictionary);
     }
@@ -403,6 +439,10 @@ pub(super) fn function_result(tag: &str) -> Result<ReturnType, &'static str> {
 
 /// Print a call-result tag without adding metadata keys or erasing source identity.
 pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
+    if let ReturnType::Recursive(ty) = ty {
+        return Cow::Owned(crate::recursive::tag(ty));
+    }
+
     if let ReturnType::Options(fields) = ty {
         return Cow::Owned(crate::records::tag(fields));
     }
@@ -429,6 +469,10 @@ pub(super) fn result_tag(ty: &ReturnType) -> Cow<'static, str> {
 
 /// Print parameter metadata using the same spellings as its reader.
 pub(super) fn parameter_tag(ty: &ParameterType) -> Cow<'static, str> {
+    if let ParameterType::Recursive(ty) = ty {
+        return Cow::Owned(crate::recursive::tag(ty));
+    }
+
     if let ParameterType::Options(fields) = ty {
         return Cow::Owned(crate::records::tag(fields));
     }

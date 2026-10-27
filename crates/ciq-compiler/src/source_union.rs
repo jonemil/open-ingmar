@@ -21,6 +21,13 @@ pub(crate) fn matches_type_with(
     source: &impl Fn(&SourceClass, &Type) -> bool,
     native: &impl Fn(&Type, &Type) -> bool,
 ) -> bool {
+    if let Some(body) = crate::recursive::unfold(expected) {
+        return matches_type_with(&body, actual, source, native);
+    }
+    if let Some(body) = crate::recursive::unfold(actual) {
+        return matches_type_with(expected, &body, source, native);
+    }
+
     let class_matches = |target: &Type, class: &SourceClass| {
         if crate::structural::contains(target)
             || matches!(

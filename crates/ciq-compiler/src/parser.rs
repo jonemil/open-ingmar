@@ -640,8 +640,10 @@ impl<'a> Parser<'a> {
         if let Some(ty) = self.aliases.resolved.borrow().get(&key) {
             return Ok(Some(ty.clone()));
         }
-        if self.resolving.contains(&key) {
-            return Err(self.error(at, format!("recursive typedef {key:?}")));
+        if let Some(index) = self.resolving.iter().rposition(|name| name == &key) {
+            return Ok(Some(crate::ParameterType::Recursive(
+                crate::api::Type::RecursionRef(self.resolving.len() - index - 1),
+            )));
         }
         if self.resolving.len() >= 64 {
             return Err(self.error(at, "typedef expansion exceeds 64 levels"));
@@ -657,25 +659,34 @@ impl<'a> Parser<'a> {
         parser.type_depth = self.type_depth;
         let result = (|| {
             let ty = parser.parameter_annotation(alias.target)?;
+            let mut ty = crate::unions::parameter(crate::recursive::bind(ty.exact_type()))
+                .ok_or_else(|| parser.error(alias.target, "unsupported recursive typedef body"))?;
+            if self.resolving.is_empty() {
+                crate::recursive::validate(&ty.exact_type()).map_err(|message| {
+                    parser.error(alias.target, format!("recursive typedef: {message}"))
+                })?;
+            }
             let end = parser.expect(Kind::Punctuation(';'), "';' after typedef")?;
             if end.span.start != alias.end {
                 return Err(parser.error(end.span.start, "invalid typedef target"));
             }
-            if let Some(contract) = ty.source_contract() {
-                for class in contract.classes() {
-                    if !self.aliases.classes.contains(&class.name) {
-                        return Err(parser.error(
-                            alias.target,
-                            format!("unknown typedef target class {:?}", class.name),
-                        ));
-                    }
+            crate::structural::resolve_parameter(&mut ty, &mut |class| {
+                if self.aliases.classes.contains(&class.name) {
+                    Ok(())
+                } else {
+                    Err(parser.error(
+                        alias.target,
+                        format!("unknown typedef target class {:?}", class.name),
+                    ))
                 }
-            }
+            })?;
             Ok(ty)
         })();
         match result {
             Ok(ty) => {
-                self.aliases.resolved.borrow_mut().insert(key, ty.clone());
+                if crate::recursive::validate(&ty.exact_type()).is_ok() {
+                    self.aliases.resolved.borrow_mut().insert(key, ty.clone());
+                }
                 Ok(Some(ty))
             }
             Err(error) => Err(self.error(at, format!("typedef {key:?}: {}", error.message))),

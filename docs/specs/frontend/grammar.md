@@ -300,7 +300,8 @@ contracts, proof obligations, and field accesses.
 - Source class: an exact constructible source-class name from this unit.
 - Type alias: a scoped source typedef. Expansion must fit the destination's
   existing value, element, key, field, or cast contract. Alias names are not
-  runtime class targets. Declaration scope and expansion bounds follow
+  runtime class targets. Guarded recursive uses retain finite contracts;
+  unguarded cycles are errors. Declaration scope and expansion bounds follow
   [type aliases](README.md#type-aliases).
 - Dictionary type by itself denotes an opaque Lang.Dictionary; its parameterized
   form specifies the bounded key/value contracts.

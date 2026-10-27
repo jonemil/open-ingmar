@@ -226,6 +226,11 @@ impl DictionaryKey {
 /// Supported bounded Dictionary value contracts, including explicit nullable values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictionaryValue {
+    /// A retained nested container or recursive reference contract.
+    Nested {
+        contract: Box<Type>,
+        nullable: bool,
+    },
     Callback {
         signature: Box<crate::StructuralMethod>,
         nullable: bool,
@@ -273,7 +278,7 @@ pub enum DictionaryValue {
 }
 
 /// Invariant key/value contracts for a non-null Dictionary reference.
-/// Nested container parameters and arbitrary unions are unsupported.
+/// Nested container values retain their parameters; arbitrary value unions remain bounded.
 /// Object values may hold nested references without retaining their parameters;
 /// numeric typedefs retain their bounded scalar alternatives.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -284,6 +289,8 @@ pub struct DictionaryType {
 
 impl DictionaryType {
     pub(crate) fn validate(&self) -> Result<(), String> {
+        crate::recursive::validate(&self.api_type())?;
+
         if let DictionaryKey::Callback(signature) = &self.key {
             crate::callbacks::validate(signature)?;
         }
@@ -301,8 +308,20 @@ impl DictionaryType {
 
     /// Return the generic API type without erasing either mutable parameter.
     pub fn api_type(&self) -> Type {
+        if let DictionaryValue::Nested { contract, nullable } = &self.value {
+            return Type::dictionary(
+                self.key.api_type(),
+                if *nullable {
+                    (**contract).clone().with_null()
+                } else {
+                    (**contract).clone()
+                },
+            );
+        }
+
         let key = self.key.api_type();
         let (value, nullable) = match &self.value {
+            DictionaryValue::Nested { .. } => unreachable!(),
             DictionaryValue::Callback {
                 signature,
                 nullable,
@@ -398,6 +417,27 @@ impl DictionaryType {
             },
             _ => return None,
         };
+        let (nested, nullable) = match crate::unions::alternatives(value) {
+            [ty, Type::Null] => (ty, true),
+            [ty] => (ty, false),
+            _ => (value.as_ref(), false),
+        };
+        if matches!(
+            nested,
+            Type::Recursive(_)
+                | Type::RecursionRef(_)
+                | Type::Array(_)
+                | Type::Dictionary { .. }
+                | Type::TupleValue(_)
+        ) {
+            return Some(Self {
+                key,
+                value: DictionaryValue::Nested {
+                    contract: Box::new(nested.clone()),
+                    nullable,
+                },
+            });
+        }
         if let Some((alias, nullable)) = crate::NumericAlias::from_api_type(value) {
             return Some(Self {
                 key,
@@ -496,6 +536,18 @@ impl DictionaryType {
     }
 
     fn value_text(&self) -> String {
+        if let DictionaryValue::Nested { contract, nullable } = &self.value {
+            let ty = if *nullable {
+                (**contract).clone().with_null()
+            } else {
+                (**contract).clone()
+            };
+            return crate::type_text::parameter_tag(
+                &crate::unions::parameter(ty).expect("supported nested Dictionary value"),
+            )
+            .into_owned();
+        }
+
         if let DictionaryValue::Callback {
             signature,
             nullable,
@@ -516,7 +568,9 @@ impl DictionaryType {
             };
         }
         let value = match &self.value {
-            DictionaryValue::Structural { .. } | DictionaryValue::Callback { .. } => unreachable!(),
+            DictionaryValue::Nested { .. }
+            | DictionaryValue::Structural { .. }
+            | DictionaryValue::Callback { .. } => unreachable!(),
             DictionaryValue::LangObject => "object",
             DictionaryValue::NullableObject => "nullable-object",
             DictionaryValue::Numeric { alias, nullable } => alias.value_tag(*nullable),

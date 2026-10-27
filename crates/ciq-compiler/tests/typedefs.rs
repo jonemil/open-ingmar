@@ -115,10 +115,6 @@ fn duplicate_unknown_and_cyclic_aliases_fail_even_when_unused() {
             "recursive typedef",
         ),
         (
-            "typedef A as Toybox.Lang.Array<A>; function f() {}",
-            "recursive typedef",
-        ),
-        (
             "typedef A as Missing; function f() {}",
             "unknown typedef target",
         ),

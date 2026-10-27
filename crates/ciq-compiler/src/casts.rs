@@ -5,6 +5,7 @@ use std::borrow::Cow;
 /// Project an asserted contract to the executable value representation, retaining
 /// exact source identities separately through the assertion's saved target.
 pub(crate) fn value_type(ty: &Type) -> Option<ValueType> {
+    crate::recursive::validate(ty).ok()?;
     if *ty == Type::Null || *ty == Type::Void || *ty == Type::named("Toybox.Graphics.Dc") {
         return None;
     }

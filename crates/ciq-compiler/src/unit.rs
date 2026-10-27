@@ -510,6 +510,8 @@ pub enum FieldKind {
 impl FieldKind {
     /// Normalize a field value contract, excluding Void and graphics contexts.
     pub(crate) fn value_contract(ty: ReturnType) -> Option<ReturnType> {
+        crate::recursive::validate(&ty.api_type()).ok()?;
+
         let ty = if let Some(contract) = ty.source_contract() {
             contract.result()
         } else {
@@ -2227,6 +2229,10 @@ impl CompilationUnit {
         target: &crate::api::Type,
         context: Option<crate::api::ApiContext>,
     ) -> bool {
+        if let Some(body) = crate::recursive::unfold(target) {
+            return self.check_source_witness(class, &body, context);
+        }
+
         if let Some(crate::ValueType::Interface(interface)) =
             crate::ValueType::from_api_type(target)
         {
