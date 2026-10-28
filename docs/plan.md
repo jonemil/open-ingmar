@@ -36,15 +36,12 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Add shared global/module `const` storage for String, Long, Double,
-  containers, objects, and runtime expressions. Implement declaration storage,
-  initialization order/cycle diagnostics, and readonly rebinding checks while
-  preserving shared references and mutable container contents.
-- [ ] Resolve forward heap-backed class constant dependencies, including reads
-  of constants on other source classes whose field contracts are inferred later.
-- [ ] Extend the global/module constant expression profile with native API
-  constants retaining enum types, wider numeric operations, comparisons, and
-  logical/conditional expressions; probe accepted forms before implementation.
+- [ ] Resolve forward heap-backed constant dependencies across global, module,
+  and class scopes, including reads of constants on source classes whose field
+  contracts are inferred later.
+- [ ] Extend the global/module immediate expression profile with native API
+  constants retaining enum types, Float binary operations, pure scalar
+  comparisons, and Boolean logical/conditional expressions; probe accepted forms.
 - [ ] Support constant declaration annotations and comma-separated declarations.
 - [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
   lookup, and enum annotations.

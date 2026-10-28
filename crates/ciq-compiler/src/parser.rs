@@ -1,7 +1,7 @@
 /// Classify source keywords independently of the implemented grammar subset.
 /// IR/assembly identifiers have their own rules and do not use this restriction.
 fn reserved_word(name: &str) -> bool {
-    name == crate::unit::FIELD_INITIALIZER
+    (name == crate::unit::FIELD_INITIALIZER || name.starts_with("__ciq_initialize_shared_"))
         || matches!(
             name,
             "alias"
@@ -298,6 +298,10 @@ pub(crate) enum ExpressionKind {
     },
     SelfValue,
     SelfField(String),
+    SharedField {
+        module: Option<String>,
+        field: String,
+    },
     SourceNew {
         class: String,
         arguments: Vec<Expression>,
@@ -471,7 +475,8 @@ impl Expression {
             | E::Double(_)
             | E::Float(_)
             | E::String(_)
-            | E::Local(_) => {}
+            | E::Local(_)
+            | E::SharedField { .. } => {}
         }
     }
 
@@ -742,20 +747,34 @@ impl<'a> Parser<'a> {
             .insert(key, value.clone());
         Ok(value)
     }
-    fn skip_constant(&mut self) -> Result<(), Diagnostic> {
+    fn stored_constant(&mut self) -> Result<Option<ParsedConstant>, Diagnostic> {
         self.expect(Kind::Word("const"), "const")?;
-        let name = self.identifier()?;
-        let Kind::Word(name) = name.kind else {
+        let token = self.identifier()?;
+        let Kind::Word(name) = token.kind else {
             unreachable!()
         };
+        self.expect(Kind::Punctuation('='), "'=' after constant name")?;
+        let initializer = self.expression(0)?;
+        self.expect(Kind::Punctuation(';'), "';' after constant")?;
         let key = self
             .owner
             .as_ref()
             .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
-        self.offset = self.declarations.constants[&key].end + 1;
-        self.lookahead = None;
-        Ok(())
+        if self
+            .declarations
+            .constant_values
+            .borrow()
+            .contains_key(&key)
+        {
+            return Ok(None);
+        }
+        Ok(Some(ParsedConstant {
+            name: name.into(),
+            initializer,
+            span: token.span,
+        }))
     }
+
     fn alias_key(&self, path: &str) -> Option<String> {
         let owned = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
         owned
@@ -1150,6 +1169,17 @@ pub(crate) fn collect_declarations<'a>(
             // name collisions are invalid independently of their initializer.
             if !aliases.owners.contains(key) && !aliases.value_names.contains(key) {
                 continue;
+            }
+        }
+        if result.is_err() && !aliases.owners.contains(key) && !aliases.value_names.contains(key) {
+            let mut expression_parser = Parser::new(declaration.source, aliases.clone());
+            expression_parser.owner = declaration.owner.clone();
+            expression_parser.names = declaration.names.clone();
+            expression_parser.offset = declaration.target;
+            if let Ok(expression) = expression_parser.expression(0) {
+                if crate::constants::storage_expression(&expression) {
+                    continue;
+                }
             }
         }
         result.map_err(|diagnostic| crate::SourceDiagnostic {
@@ -3589,6 +3619,7 @@ impl Parser<'_> {
 }
 
 pub(crate) struct ParsedUnit {
+    pub shared: Vec<(Option<String>, ParsedConstant)>,
     pub functions: Vec<(Option<String>, ParsedFunction)>,
     pub classes: Vec<ParsedClass>,
 }
@@ -3617,6 +3648,7 @@ pub(crate) fn declarations<'a>(
     let mut parser = Parser::new(source, declarations);
     parser.source_index = source_index;
     let mut unit = ParsedUnit {
+        shared: Vec::new(),
         functions: Vec::new(),
         classes: Vec::new(),
     };
@@ -3624,7 +3656,9 @@ pub(crate) fn declarations<'a>(
     parser.imports()?;
     while parser.peek()? != Kind::End {
         if parser.peek()? == Kind::Word("const") {
-            parser.skip_constant()?;
+            if let Some(value) = parser.stored_constant()? {
+                unit.shared.push((None, value));
+            }
             continue;
         }
         if parser.peek()? == Kind::Word("typedef") {
@@ -3698,8 +3732,8 @@ pub(crate) fn declarations<'a>(
                             initializer,
                             span: token.span,
                         });
-                    } else {
-                        parser.skip_constant()?;
+                    } else if let Some(value) = parser.stored_constant()? {
+                        unit.shared.push((Some(name.into()), value));
                     }
                     continue;
                 }

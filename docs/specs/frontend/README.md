@@ -762,15 +762,31 @@ remain mutable. Declarations cannot duplicate constants or collide with
 functions, fields, classes/modules, inherited methods, or constructors in their
 value scope.
 
-Global/module constants support non-heap Number, Float, Boolean, Char, Symbol,
+Global/module immediate constants support Number, Float, Boolean, Char, Symbol,
 and Null values. Initializers accept literals, other supported constants, unary
 numeric `+`/`-`, Boolean `!`, Number `~`, and Number arithmetic, bitwise
 operations, and shifts. Number arithmetic wraps at 32 bits; shifts mask the count
-to five bits. Division/remainder by zero and unsupported initializer forms fail
-even in unused declarations. Shared global/module storage for String, Long,
-Double, containers, objects, and runtime expressions is not implemented.
-Validated global/module constants become ordinary literal expressions before IR
-construction; saved IR retains their values without declaration records.
+to five bits. Division/remainder by zero in this immediate profile is rejected.
+Validated immediate constants become literal expressions before IR construction;
+saved IR retains their values without declaration records.
+
+Initializers requiring storage use one shared binding per global/module owner.
+String, Long, Double, supported containers, source objects, WeakReference,
+Method, and supported typed runtime expressions retain their ordinary field
+contracts. Aliases share references, and repeated reads preserve identity.
+Global storage initializes during startup; module storage initializes on first
+module access. Within an owner, stored declarations initialize in source-file
+and declaration order. Stored constants require compilation-unit mode.
+
+A shared initializer must assign its binding once through a straight-line
+prefix. Reads of incomplete bindings, owner re-entry, and potentially shutting
+down calls are rejected, including dependencies reached through source helpers,
+constructors, and lazy module initialization. Ordinary functions reload their
+lexical owner, so calling a function in the initializing owner is re-entry even
+if it reads no fields. Calls into an independently initialized owner are allowed.
+Forward stored dependencies remain unsupported; immediate forward references
+retain their existing profile. Pure scalar initializer forms outside that
+profile, including native API constants, still require separate support.
 
 All files contribute declarations before resolution. Immediate dependencies
 retain their declaration's owner and native-name environment, including forward
@@ -799,15 +815,15 @@ constructor arguments and calling `initialize()`. Application-owned constants
 also initialize during allocation. Calling user `initialize()` again leaves
 constant bindings intact. Initializers may read earlier initialized constants;
 forward references within the immediate expression profile remain supported.
-Forward heap-field references and direct constant dependency cycles are rejected. The
-current allocation initializer requires a straight-line assignment prefix:
+Forward heap-field references and direct constant dependency cycles are rejected.
+The current allocation initializer requires a straight-line assignment prefix:
 branches, incomplete-field reads, receiver exposure, and calls that may request
 shutdown are rejected until required fields are initialized. Non-null mutable
 fields are still initialized separately by user `initialize()`.
 
 See the [scalar example](../../../examples/compiler-constants/README.md),
 [stored class example](../../../examples/compiler-class-constants/README.md),
-and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+[shared example](../../../examples/compiler-shared-constants/README.md), and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases
 

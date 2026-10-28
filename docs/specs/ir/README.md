@@ -268,6 +268,32 @@ bindings. Text is not mandatory between stages.
 
 ## Compilation units and classes
 
+`SharedConstant` records an optional module owner, a name, and an ordinary field
+value contract. Global ownership is `None` in memory and `$` in saved text.
+`CompilationUnit::with_shared` checks shared declarations with functions and
+classes. Declaration types retain exact source identities and API requirements;
+Void and Graphics.Dc are excluded. Shared slots start as Null in DATA, but source
+reads require completed initialization. A referenced container remains mutable.
+
+Each shared binding requires a reserved ordinary function named
+`__ciq_initialize_shared_<name>` in the same owner, taking no parameters and
+returning Void. The owner hook invokes these functions in declaration order.
+They inherit the hook's receiver instead of looking up the initializing owner.
+Separate functions preserve each source file's diagnostic spans and count toward
+the unit body limit. Explicit calls or known-selector Method bindings to these
+functions are rejected; source identifiers reserve their prefix.
+
+`SharedRead` / `.read-shared` retains the owner, field, and exact declared result
+contract. `SharedAssign` / `.assign-shared` consumes the initializer value and
+may appear only in that binding's reserved initializer. Unit checks require
+exactly one assignment, compatible value/source identities, and no incomplete
+return or branching assignment prefix. Readiness summaries include source
+callees, constructors, comparator callbacks, and lazy module initialization.
+They reject reads before initialization and re-entry into an initializing owner;
+shutdown effects from module initialization also reach class initialization
+checks. Unknown callbacks retain conservative restrictions. Standalone function
+IR leaves these owner/declaration obligations for unit validation.
+
 `ClassDeclaration` records a name, native `ClassBase`, ordered fields, and
 ordered methods. Bases are identities rather than VM import indexes.
 Methods include the frontend's synthesized Object default initializer when

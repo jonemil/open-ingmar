@@ -40,12 +40,22 @@ impl Immediate {
 /// Recognize a declaration-qualified name without treating arbitrary receivers
 /// or calls as namespace lookup. Lexical shadowing is checked by the caller.
 pub(crate) fn path(expression: &Expression) -> Option<String> {
-    match &expression.kind {
-        E::Local(name) => Some(name.clone()),
-        E::SelfField(name) => Some(format!("self.{name}")),
-        E::MemberRead { receiver, member } => Some(format!("{}.{member}", path(receiver)?)),
-        _ => None,
+    let mut expression = expression;
+    let mut members = Vec::new();
+    while let E::MemberRead { receiver, member } = &expression.kind {
+        members.push(member.as_str());
+        expression = receiver;
     }
+    let mut path = match &expression.kind {
+        E::Local(name) => name.clone(),
+        E::SelfField(name) => format!("self.{name}"),
+        _ => return None,
+    };
+    for member in members.into_iter().rev() {
+        path.push('.');
+        path.push_str(member);
+    }
+    Some(path)
 }
 
 /// Evaluate non-heap literals and the supported pure operators. Heap-backed
@@ -108,5 +118,33 @@ pub(crate) fn evaluate(
             "heap-backed values and runtime initializers need declaration storage"
         )
         .into()),
+    }
+}
+
+/// Identify expressions needing shared storage rather than immediate expansion.
+/// Pure unsupported scalar forms remain diagnostics until their profile is added.
+pub(crate) fn storage_expression(expression: &Expression) -> bool {
+    match &expression.kind {
+        E::Integer(_)
+        | E::Float(_)
+        | E::Boolean(_)
+        | E::Char(_)
+        | E::Symbol(_)
+        | E::Null
+        | E::NativeConstant { .. } => false,
+        E::Positive(e) | E::Negate(e) | E::Not(e) | E::Complement(e) => storage_expression(e),
+        E::Binary { left, right, .. }
+        | E::Compare { left, right, .. }
+        | E::Logical { left, right, .. } => storage_expression(left) || storage_expression(right),
+        E::Conditional {
+            condition,
+            when_true,
+            when_false,
+        } => {
+            storage_expression(condition)
+                || storage_expression(when_true)
+                || storage_expression(when_false)
+        }
+        _ => true,
     }
 }

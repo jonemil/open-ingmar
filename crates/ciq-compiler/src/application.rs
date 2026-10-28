@@ -299,7 +299,9 @@ pub fn build_console_application(
     if !source_start && entry.parameter_count() != 0 {
         return Err(error("application entry must have zero parameters"));
     }
-    if instance && entry.name() == "initialize" {
+    if (instance && entry.name() == "initialize")
+        || entry.name().starts_with("__ciq_initialize_shared_")
+    {
         return Err(error("initialize cannot be selected as the startup entry"));
     }
     let modules: BTreeSet<_> = unit
@@ -339,6 +341,7 @@ pub fn build_console_application(
                 .iter()
                 .flat_map(|c| c.methods.iter().map(|f| f.name().to_owned())),
         )
+        .chain(unit.shared_constants().iter().map(|c| c.name.clone()))
         .chain(modules.iter().cloned())
         .chain(unit.classes().iter().map(|class| class.name.clone()))
         .chain(
@@ -422,6 +425,12 @@ pub fn build_console_application(
         for field in &class.fields {
             bindings.insert(format!("__ciq_field_{}", field.name), ids[&field.name]);
         }
+    }
+    for constant in unit.shared_constants() {
+        bindings.insert(
+            format!("__ciq_field_{}", constant.name),
+            ids[&constant.name],
+        );
     }
     let source_initial_view = instance
         && app_class
@@ -508,6 +517,35 @@ pub fn build_console_application(
         ]);
         items.splice(at..=at, initialize);
     }
+    let shared_hook = |module: Option<&str>| {
+        module.map_or_else(
+            || "__ciq_shared_globals".into(),
+            |module| format!("__ciq_shared_module_{}_{}", module.len(), module),
+        )
+    };
+    let shared_owners = unit
+        .shared_constants()
+        .iter()
+        .map(|c| c.module.as_deref())
+        .collect::<BTreeSet<_>>();
+    for module in &shared_owners {
+        items.push(Item::Label(shared_hook(*module)));
+        for constant in unit
+            .shared_constants()
+            .iter()
+            .filter(|c| c.module.as_deref() == *module)
+        {
+            items.extend([
+                instruction(
+                    Opcode::Getselfv,
+                    vec![sym(&format!("__ciq_member_{}", constant.initializer()))],
+                ),
+                instruction(Opcode::Invokemz, vec![]),
+                instruction(Opcode::Popv, vec![]),
+            ]);
+        }
+        items.push(instruction(Opcode::Return, vec![]));
+    }
     items.extend(unit.lower().items().iter().cloned());
     let assembly = Program::new(items).map_err(error)?;
     let labels = assembly.labels().map_err(error)?;
@@ -524,8 +562,23 @@ pub fn build_console_application(
     let mut global_fields = vec![
         field(1, 0x50, 7, Reference::Class("__ciq_data_app".into())),
         field(TOYBOX, 0, 0, Reference::Raw(0)),
-        method(INIT, 0x30, "__ciq_noop"),
+        method(
+            INIT,
+            0x30,
+            if shared_owners.contains(&None) {
+                "__ciq_shared_globals"
+            } else {
+                "__ciq_noop"
+            },
+        ),
     ];
+    for constant in unit
+        .shared_constants()
+        .iter()
+        .filter(|c| c.module.is_none())
+    {
+        global_fields.push(field(ids[&constant.name], 0, 0, Reference::Raw(0)));
+    }
     for d in unit.declarations().iter().filter(|d| d.module.is_none()) {
         global_fields.push(method(ids[d.function.name()], 0x10, &d.code_label()));
     }
@@ -665,7 +718,19 @@ pub fn build_console_application(
         ));
     }
     for module in &modules {
-        let mut fields = vec![method(INIT, 0x30, "__ciq_noop")];
+        let hook = if shared_owners.contains(&Some(module.as_str())) {
+            shared_hook(Some(module))
+        } else {
+            "__ciq_noop".into()
+        };
+        let mut fields = vec![method(INIT, 0x30, &hook)];
+        for constant in unit
+            .shared_constants()
+            .iter()
+            .filter(|c| c.module.as_ref() == Some(module))
+        {
+            fields.push(field(ids[&constant.name], 0, 0, Reference::Raw(0)));
+        }
         for d in unit
             .declarations()
             .iter()

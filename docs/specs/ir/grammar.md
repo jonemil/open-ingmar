@@ -33,7 +33,10 @@ document = function-document | unit-document
 function-document = "ciq-ir" newline function-header newline
                     operation+ ".end" newline
 unit-document = "ciq-unit" newline unit-record+
-unit-record = owner newline function-document | class-record
+unit-record = shared-constant-record | owner newline function-document | class-record
+shared-constant-record = ".shared-constant" shared-owner identifier
+                         call-result-tag newline
+shared-owner = "$" | identifier
 owner = ".owner" "global" | ".owner" "module" identifier
 class-record = ".class" identifier native-base newline
                field-record* function-document+ ".end-class" newline
@@ -47,8 +50,10 @@ next sections. Class records use `field-record` below before their methods.
 
 An owner applies to exactly one following function document. There is no unit
 end directive. Class field records precede all methods; class methods require
-`receiver=instance`. Canonical output places global/module records first, then
-classes, retaining declaration order inside each group. Each nested function is
+`receiver=instance`. Canonical output places shared declarations first, global/module functions next,
+then classes, retaining declaration order inside each group. `$` selects global
+shared storage; an identifier selects a source module. Shared records carry no
+spans, and their contracts exclude Void and Graphics.Dc. Each nested function is
 validated before [unit ownership and call
 checks](README.md#compilation-units-and-classes).
 
@@ -162,7 +167,10 @@ value-operation = ".integer" value-id signed-decimal-i32
                 | ".string" value-id quoted-string
                 | ".symbol" value-id identifier
                 | ".constant" value-id module-name identifier
-storage-operation = ".parameter" value-id decimal-usize
+storage-operation = ".read-shared" value-id shared-owner identifier
+                    "result=" call-result-tag
+                  | ".assign-shared" shared-owner identifier value-id
+                  | ".parameter" value-id decimal-usize
                   | ".assign-parameter" decimal-usize value-id
                   | ".declare-local" local-id local-contract-tag
                   | ".variable" local-id value-id?

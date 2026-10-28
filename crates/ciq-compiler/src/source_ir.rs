@@ -234,7 +234,31 @@ fn emit_member_chain(
         members.push((member, base.span));
         base = *receiver;
     }
-    let mut receiver = emit(source, base, locals, parameters, operations, calls)?;
+    let prefix = if matches!(base.kind, parser::ExpressionKind::Local(_))
+        && !calls.shared_fields.is_empty()
+    {
+        members.last().and_then(|(member, span)| {
+            calls.field_expression(
+                &parser::Expression {
+                    kind: parser::ExpressionKind::MemberRead {
+                        receiver: Box::new(base.clone()),
+                        member: member.clone(),
+                    },
+                    span: *span,
+                },
+                locals,
+                parameters,
+            )
+        })
+    } else {
+        None
+    };
+    let mut receiver = if let Some(prefix) = prefix {
+        members.pop();
+        emit(source, prefix, locals, parameters, operations, calls)?
+    } else {
+        emit(source, base, locals, parameters, operations, calls)?
+    };
     for (member, span) in members.into_iter().rev() {
         let result = ValueId(operations.len() as u32);
         let field_type = calls
@@ -287,6 +311,22 @@ fn emit_non_call(
         parser::ExpressionKind::MemberRead { .. } => {
             unreachable!("member chain dispatched before non-call emission")
         }
+        parser::ExpressionKind::SharedField { module, field } => Operation::SharedRead {
+            result: ValueId(operations.len() as u32),
+            result_type: calls
+                .shared_fields
+                .get(&(module.clone(), field.clone()))
+                .cloned()
+                .ok_or_else(|| {
+                    Diagnostic::at(
+                        source,
+                        expression.span.start,
+                        "shared initializer depends on a later binding or an initialization cycle",
+                    )
+                })?,
+            module,
+            field,
+        },
         parser::ExpressionKind::SelfField(field) => {
             let declared = calls
                 .field_types
@@ -700,7 +740,7 @@ fn emit_call(
             if locals.contains_key(&module)
                 || parameters.contains_key(&module)
                 || calls.constant_named(&module, locals, parameters).is_some()
-                || calls.readonly_fields.contains(&module)
+                || (calls.readonly_fields.contains(&module) || calls.shared_name(&module))
             {
                 (
                     Some(parser::Expression {
@@ -2196,6 +2236,7 @@ impl Builder<'_> {
                 arguments,
             } => {
                 let receiver = if self.calls.readonly_fields.contains(&module)
+                    || self.calls.shared_name(&module)
                     || locals.contains_key(&module)
                     || self.parameters.contains_key(&module)
                     || self
@@ -3213,6 +3254,12 @@ impl Builder<'_> {
                     .calls
                     .constant(target, locals, &self.parameters)
                     .is_some()
+                    || self
+                        .calls
+                        .field_expression(target, locals, &self.parameters)
+                        .is_some_and(|e| {
+                            matches!(e.kind, parser::ExpressionKind::SharedField { .. })
+                        })
                 {
                     return Err(Diagnostic::at(
                         self.source,
@@ -3232,7 +3279,15 @@ impl Builder<'_> {
                     }
                     self.calls.constants.get(&format!("{path}.{member}"))
                 });
-                if constant.is_some() {
+                let stored = crate::constants::path(receiver).is_some_and(|path| {
+                    !locals.contains_key(&path)
+                        && !self.parameters.contains_key(&path)
+                        && self
+                            .calls
+                            .shared_fields
+                            .contains_key(&(Some(path), member.clone()))
+                });
+                if constant.is_some() || stored {
                     return Err(Diagnostic::at(
                         self.source,
                         span.start,
@@ -3243,17 +3298,63 @@ impl Builder<'_> {
             }
             _ => None,
         };
-        if target.as_ref().is_some_and(|target| {
-            self.calls
-                .constant(target, locals, &self.parameters)
-                .is_some()
-        }) {
+        if !self.calls.shared_initializer
+            && target.as_ref().is_some_and(|target| {
+                self.calls
+                    .constant(target, locals, &self.parameters)
+                    .is_some()
+                    || self
+                        .calls
+                        .field_expression(target, locals, &self.parameters)
+                        .is_some_and(|e| {
+                            matches!(e.kind, parser::ExpressionKind::SharedField { .. })
+                        })
+            })
+        {
             return Err(Diagnostic::at(
                 self.source,
                 span.start,
                 "cannot rebind a constant",
             ));
         }
+        Ok(())
+    }
+
+    /// Initialize a declared owner field using its existing construction context.
+    /// Shared writes are emitted only in reserved shared initializer bodies.
+    fn assign_owner_field(
+        &mut self,
+        name: String,
+        value: parser::Expression,
+        span: Span,
+        locals: &BTreeMap<String, LocalId>,
+    ) -> Result<(), Diagnostic> {
+        if self.calls.shared_initializer {
+            let expected = self.calls.shared_fields
+                [&(self.calls.current_module.clone(), name.clone())]
+                .clone();
+            let value =
+                self.value_with_context(value, locals, construction_type(&expected.api_type()))?;
+            self.push(
+                Operation::SharedAssign {
+                    module: self.calls.current_module.clone(),
+                    field: name,
+                    value,
+                },
+                Some(span),
+            );
+            return Ok(());
+        }
+        let expected = self
+            .calls
+            .field_types
+            .get(&name)
+            .and_then(|ty| construction_type(&ty.api_type()));
+        let value = self.value_for_setup_with_context(value, locals, expected)?;
+        self.push(
+            Operation::SelfFieldAssign { field: name, value },
+            Some(span),
+        );
         Ok(())
     }
 
@@ -3396,16 +3497,7 @@ impl Builder<'_> {
                     );
                 }
                 parser::Statement::FieldAssign { name, value, .. } => {
-                    let expected = self
-                        .calls
-                        .field_types
-                        .get(&name)
-                        .and_then(|ty| construction_type(&ty.api_type()));
-                    let value = self.value_for_setup_with_context(value, locals, expected)?;
-                    self.push(
-                        Operation::SelfFieldAssign { field: name, value },
-                        Some(span),
-                    );
+                    self.assign_owner_field(name, value, span, locals)?;
                 }
                 parser::Statement::Local(local) => {
                     if self.parameters.contains_key(&local.name) {
@@ -3569,6 +3661,7 @@ impl Builder<'_> {
                             .constant_named(&module, locals, &self.parameters)
                             .is_some()
                         || self.calls.readonly_fields.contains(&module)
+                        || self.calls.shared_name(&module)
                         || locals.contains_key(&module)
                         || self.parameters.contains_key(&module)
                         || (module == "self"
@@ -3756,6 +3849,9 @@ pub(crate) struct CallSignature {
 /// Collected callee contracts and the current body's parameter contracts.
 #[derive(Clone, Default)]
 pub(crate) struct CallContext {
+    pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
+    pub(crate) shared_initializer: bool,
+    pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,
     pub(crate) readonly_fields: std::collections::BTreeSet<String>,
     pub(crate) constants: std::rc::Rc<BTreeMap<String, crate::constants::Immediate>>,
     pub(crate) unchecked: bool,
@@ -3768,20 +3864,78 @@ pub(crate) struct CallContext {
     pub(crate) current_class: Option<crate::SourceClass>,
 }
 impl CallContext {
+    fn shared_contains(&self, module: Option<&str>, field: &str) -> bool {
+        let key = (module.map(str::to_owned), field.to_owned());
+        self.shared_fields.contains_key(&key) || self.shared_pending.contains(&key)
+    }
+    fn shared_name(&self, name: &str) -> bool {
+        self.shared_contains(self.current_module.as_deref(), name)
+            || self.shared_contains(None, name)
+    }
     fn field_expression(
         &self,
         expression: &parser::Expression,
         locals: &BTreeMap<String, LocalId>,
         parameters: &BTreeMap<String, usize>,
     ) -> Option<parser::Expression> {
-        let parser::ExpressionKind::Local(name) = &expression.kind else {
+        use parser::ExpressionKind as E;
+        if let E::Local(name) = &expression.kind {
+            if locals.contains_key(name) || parameters.contains_key(name) {
+                return None;
+            }
+            if self.readonly_fields.contains(name) {
+                return Some(parser::Expression {
+                    kind: E::SelfField(name.clone()),
+                    span: expression.span,
+                });
+            }
+        }
+        if self.shared_fields.is_empty() && self.shared_pending.is_empty() {
             return None;
+        }
+        let path = crate::constants::path(expression)?;
+        let mut parts = path.split('.');
+        let first = parts.next()?;
+        if first != "self" && (locals.contains_key(first) || parameters.contains_key(first)) {
+            return None;
+        }
+        let (module, field) = if let Some(field) = parts.next() {
+            if first != "self"
+                && (self.readonly_fields.contains(first)
+                    || self.shared_name(first)
+                    || self.constant_named(first, locals, parameters).is_some())
+            {
+                return None;
+            }
+            if parts.next().is_some() {
+                return None;
+            }
+            if first == "self" {
+                if self.current_class.is_some() {
+                    return None;
+                }
+                (self.current_module.clone(), field)
+            } else {
+                (Some(first.to_owned()), field)
+            }
+        } else {
+            let module = self
+                .current_module
+                .clone()
+                .filter(|module| self.shared_contains(Some(module), first));
+            (module, first)
         };
-        (self.readonly_fields.contains(name)
-            && !locals.contains_key(name)
-            && !parameters.contains_key(name))
+        (self
+            .shared_fields
+            .contains_key(&(module.clone(), field.into()))
+            || self
+                .shared_pending
+                .contains(&(module.clone(), field.into())))
         .then(|| parser::Expression {
-            kind: parser::ExpressionKind::SelfField(name.clone()),
+            kind: E::SharedField {
+                module,
+                field: field.into(),
+            },
             span: expression.span,
         })
     }
@@ -3821,6 +3975,14 @@ impl CallContext {
         let path = crate::constants::path(expression)?;
         let first = path.split('.').next()?;
         if first != "self" && (locals.contains_key(first) || parameters.contains_key(first)) {
+            return None;
+        }
+        if path.contains('.')
+            && first != "self"
+            && (self.readonly_fields.contains(first)
+                || self.shared_name(first)
+                || self.constant_named(first, locals, parameters).is_some())
+        {
             return None;
         }
         if path.contains('.') && self.class_bases.contains_key(first) && first != "self" {

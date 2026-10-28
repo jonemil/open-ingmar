@@ -342,7 +342,12 @@ impl Types {
                             .and_then(|ty| crate::structural::field_type(ty, member).ok())
                     }),
             ),
-            Operation::SelfFieldRead {
+            Operation::SharedRead {
+                result,
+                result_type,
+                ..
+            }
+            | Operation::SelfFieldRead {
                 result,
                 result_type,
                 ..

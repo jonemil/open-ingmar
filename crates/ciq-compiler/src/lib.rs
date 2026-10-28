@@ -62,7 +62,7 @@ pub use ir_text::{parse_function_ir, parse_function_ir_with_api};
 pub use joins::JoinType;
 pub use unit::{
     ClassBase, ClassDeclaration, CompilationUnit, FieldKind, FunctionDeclaration, InstanceField,
-    NumericAlias, ScalarFieldType, SourceDiagnostic, UnitError, compile_sources,
+    NumericAlias, ScalarFieldType, SharedConstant, SourceDiagnostic, UnitError, compile_sources,
     compile_sources_with_api, parse_unit_ir, parse_unit_ir_with_api,
 };
 
@@ -1449,6 +1449,21 @@ pub enum Operation {
         result: ValueId,
         class: Option<SourceClass>,
     },
+    /// Read an owner-qualified shared slot. Unit validation checks its declared
+    /// contract; global/module initialization preserves reference identity.
+    SharedRead {
+        result: ValueId,
+        module: Option<String>,
+        field: String,
+        result_type: ReturnType,
+    },
+    /// Initialize a shared binding in its reserved owner's initializer frame.
+    /// Unit validation rejects ordinary rebinding and checks the stored value.
+    SharedAssign {
+        module: Option<String>,
+        field: String,
+        value: ValueId,
+    },
     /// Read the actual current-instance field under a checked result contract.
     /// Unit validation anchors its declaration and initialization; positional
     /// field flow independently verifies any refined result view.
@@ -1864,6 +1879,7 @@ impl Operation {
             | Self::ObjectCall { result, .. }
             | Self::SelfValue { result, .. }
             | Self::SelfFieldRead { result, .. }
+            | Self::SharedRead { result, .. }
             | Self::NativeConstant { result, .. }
             | Self::SourceNew { result, .. }
             | Self::TupleNew { result, .. }
@@ -1916,6 +1932,7 @@ impl Operation {
             | Self::ArrayFillMany { .. }
             | Self::ObjectCallStatement { .. }
             | Self::SelfFieldAssign { .. }
+            | Self::SharedAssign { .. }
             | Self::NativeCallStatement { .. }
             | Self::ByteArrayBegin { .. }
             | Self::ArrayWrite { .. }
@@ -3133,6 +3150,38 @@ impl Function {
                         }
                     }
                     (None, vec![receiver, value])
+                }
+                Operation::SharedRead {
+                    result,
+                    ref module,
+                    ref field,
+                    ref result_type,
+                } => {
+                    if let Some(module) = module {
+                        validate_call_names(None, module).map_err(fail)?;
+                    }
+                    validate_call_names(None, field).map_err(fail)?;
+                    if FieldKind::value_contract(result_type.clone()).is_none() {
+                        return Err(fail("unsupported shared field result contract"));
+                    }
+                    if let Some(context) = context {
+                        context
+                            .check_type(api::core(), &result_type.api_type())
+                            .map_err(|message| fail(&message))?;
+                    }
+                    types.insert(result, call_result_type(result_type.clone()).map_err(fail)?);
+                    (Some(result), vec![])
+                }
+                Operation::SharedAssign {
+                    ref module,
+                    ref field,
+                    value,
+                } => {
+                    if let Some(module) = module {
+                        validate_call_names(None, module).map_err(fail)?;
+                    }
+                    validate_call_names(None, field).map_err(fail)?;
+                    (None, vec![value])
                 }
                 Operation::SelfFieldRead {
                     result,
@@ -4454,6 +4503,8 @@ impl Function {
                     | Operation::MemberRead { .. }
                     | Operation::MemberWrite { .. }
                     | Operation::SelfFieldRead { .. }
+                    | Operation::SharedRead { .. }
+                    | Operation::SharedAssign { .. }
                     | Operation::SelfFieldAssign { .. }
                     | Operation::NativeBaseInitialize { .. }
             )
@@ -4501,6 +4552,7 @@ impl Function {
                     | Operation::LocalAssign { value, .. }
                     | Operation::ParameterAssign { value, .. }
                     | Operation::SelfFieldAssign { value, .. }
+                    | Operation::SharedAssign { value, .. }
                     | Operation::Return { value }
                     | Operation::Println { value }
                     | Operation::Discard { value } => vec![*value],
@@ -4873,6 +4925,26 @@ impl Function {
                         .as_ref()
                         .map(|ty| format!(" field={}", type_text::result_tag(ty)))
                         .unwrap_or_default()
+                ),
+                Operation::SharedRead {
+                    result,
+                    ref module,
+                    ref field,
+                    ref result_type,
+                } => format!(
+                    ".read-shared %{} {} {field} result={}",
+                    result.0,
+                    module.as_deref().unwrap_or("$"),
+                    crate::type_text::result_tag(result_type)
+                ),
+                Operation::SharedAssign {
+                    ref module,
+                    ref field,
+                    value,
+                } => format!(
+                    ".assign-shared {} {field} %{}",
+                    module.as_deref().unwrap_or("$"),
+                    value.0
                 ),
                 Operation::SelfFieldRead {
                     result,
@@ -5426,7 +5498,10 @@ fn compile_fragment(
     }
     let constants = aliases.immediate_constants();
     let parsed = parser::declarations(source, aliases, 0)?;
-    if !parsed.classes.is_empty() || parsed.functions.len() != 1 || parsed.functions[0].0.is_some()
+    if !parsed.shared.is_empty()
+        || !parsed.classes.is_empty()
+        || parsed.functions.len() != 1
+        || parsed.functions[0].0.is_some()
     {
         return Err(Diagnostic::at(
             source,

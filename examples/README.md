@@ -61,6 +61,8 @@ and future Rust toolchain experiments.
   scoped/forward references, receiver effects, and lexical shadowing.
 - [compiler-class-constants](compiler-class-constants/README.md): per-instance
   readonly bindings, heap identity, mutable contents, and allocation order.
+- [compiler-shared-constants](compiler-shared-constants/README.md): global/module
+  shared storage, alias identity, mutable contents, and lazy module startup.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

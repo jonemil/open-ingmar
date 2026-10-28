@@ -39,7 +39,7 @@ fn nullable_native_calls_preserve_complete_app_and_saved_ir() {
             .to_text()
             .contains("getsv @__ciq_native_toNumber\ninvokemz")
     );
-    let symbols = ciq_assembly::Program::parse(".symbol find \"find\" id=0x008000bc\n.symbol number \"toNumber\" id=0x008000a7\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol println \"println\" id=0x00800067\n.symbol format \"format\" id=0x0080009c\n.symbol exit \"exit\" id=0x0080006d\n.symbol abs \"abs\" id=0x008000a6\n.symbol numbers \"globals/Numbers\" id=0x00000001\n.symbol show \"showFind\" id=0x00000002\n.symbol parse \"parseOrZero\" id=0x00000003").unwrap();
+    let symbols = ciq_assembly::Program::parse(".symbol globals \"globals\" id=0x008002e6\n.symbol find \"find\" id=0x008000bc\n.symbol number \"toNumber\" id=0x008000a7\n.symbol system \"Toybox_System\" id=0x00800005\n.symbol println \"println\" id=0x00800067\n.symbol format \"format\" id=0x0080009c\n.symbol exit \"exit\" id=0x0080006d\n.symbol abs \"abs\" id=0x008000a6\n.symbol numbers \"globals/Numbers\" id=0x00000001\n.symbol show \"showFind\" id=0x00000002\n.symbol parse \"parseOrZero\" id=0x00000003").unwrap();
     let bindings = ciq_compiler::symbol_bindings(&assembly, &symbols).unwrap();
     assert_eq!(bindings["__ciq_native_find"], 0x008000bc);
     assert_eq!(bindings["__ciq_native_toNumber"], 0x008000a7);

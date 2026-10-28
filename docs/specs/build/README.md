@@ -168,8 +168,12 @@ Generated lifecycle behavior:
   A void entry is invoked without that print; its VM result is discarded.
 - `getInitialView()` returns a one-element array containing an initialized native
   `WatchUi.View`. This is a blank view; greeting/result output is in the console.
-- Globals and user modules have empty initializer methods. A leading empty
-  bootstrap body occupies CODE offset zero before lifecycle and user code.
+- Globals and user modules without shared storage have empty initializer methods.
+  Shared storage adds Null-initialized slots, reserved initializer method records,
+  and owner hooks that initialize bindings in declaration order. Globals
+  initialize during startup; user modules initialize lazily on first access.
+- A leading empty bootstrap body occupies CODE offset zero before lifecycle and
+  user code.
 
 User functions may print strings/integers, call declared module members, and use
 existing locals/control flow. The [class

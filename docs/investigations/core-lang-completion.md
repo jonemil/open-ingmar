@@ -202,6 +202,29 @@ entry conventions, not inspection of SDK/compiler executables. The
 [constant profile](../specs/frontend/README.md#constants) owns implemented
 contracts and limits.
 
+The [shared-storage specimen](../../examples/compiler-shared-constants/README.md)
+uses the same SDK/target/settings. SDK and generated programs match the expected
+output, including global/module alias mutation and identity, Long/Double,
+ByteArray, source objects, WeakReference, and Method storage.
+
+An SDK counter probe distinguishes startup from lazy initialization:
+`Trace.make(n)` increments a module counter, prints `n`, and returns `[n]`.
+Use it for a global constant (1), a module constant (2), and an application
+constant (3). On entering onStart, the counter is 2; after accessing the module
+constant it is 3. The module's initializer print is captured at first access.
+Startup prints are absent from this console capture, so absence of those lines
+alone does not establish absent initialization.
+
+A second SDK probe replaces the global initializer with `makeGlobal()`, an
+ordinary global helper returning `Trace.make(1)`. It compiles but the simulator
+reports `Circular Dependency Error` in makeGlobal during `<init>`. The authored
+SDK PRG binds ordinary function frames using owner lookup, whereas allocation
+hooks use their existing receiver. Our generated initializers likewise inherit
+the hook receiver; ordinary functions bind their lexical owner. Unit checks
+reject initializer dependencies requiring re-entry into that owner instead of
+producing this runtime failure. This does not establish that every SDK-accepted
+initializer expression is supported.
+
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
 ## Checking off

@@ -76,6 +76,36 @@ fn source_callees<'a>(owner: Owner<'a>, operation: &'a Operation) -> Vec<(Owner<
     }
 }
 
+/// Include allocation-time bodies activated by a module lookup, independently
+/// of the selected member. Same-owner access must not restart initialization.
+fn activation_callees<'a>(
+    owner: Owner<'a>,
+    operation: &'a Operation,
+    bodies: &[(Owner<'a>, &'a Function)],
+) -> Vec<(Owner<'a>, &'a str)> {
+    let mut calls = effect_callees(owner, operation);
+    let module = match operation {
+        Operation::SharedRead {
+            module: Some(module),
+            ..
+        }
+        | Operation::ModuleCall { module, .. }
+        | Operation::ModuleCallStatement { module, .. } => Some(module.as_str()),
+        _ => None,
+    };
+    if let Some(module) = module.filter(|module| owner != Owner::Module(module)) {
+        calls.extend(
+            bodies
+                .iter()
+                .filter(|(o, f)| {
+                    *o == Owner::Module(module) && f.name().starts_with("__ciq_initialize_shared_")
+                })
+                .map(|(owner, f)| (*owner, f.name())),
+        );
+    }
+    calls
+}
+
 fn requests_exit(operation: &Operation) -> bool {
     matches!(operation, Operation::NativeModuleCallStatement { module, member, .. } if module == "Toybox.System" && member == "exit")
 }
@@ -266,7 +296,7 @@ fn exit_callers<'a>(bodies: &[(Owner<'a>, &'a Function)]) -> BTreeSet<(Owner<'a>
             if function.operations().iter().any(|located| {
                 requests_exit(&located.operation)
                     || erased_callbacks(function, &located.operation)
-                    || effect_callees(owner, &located.operation)
+                    || activation_callees(owner, &located.operation, bodies)
                         .iter()
                         .any(|key| exits.contains(key))
                     || comparator_callee(function, &located.operation, bodies)
@@ -773,6 +803,38 @@ impl fmt::Display for UnitError {
 }
 impl std::error::Error for UnitError {}
 
+/// Storage and owner activation required by a source body or lazy initializer.
+#[derive(Clone, Default, PartialEq, Eq)]
+struct SharedReads {
+    fields: BTreeSet<(Option<String>, String)>,
+    owners: BTreeSet<Option<String>>,
+}
+impl SharedReads {
+    fn extend(&mut self, other: &Self) {
+        self.fields.extend(other.fields.iter().cloned());
+        self.owners.extend(other.owners.iter().cloned());
+    }
+}
+
+/// A readonly slot shared by all accesses to a global or module declaration.
+/// The matching reserved function initializes the binding once at owner startup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedConstant {
+    /// None selects globals; Some selects a source module.
+    pub module: Option<String>,
+    /// Identifier within the owner; it must not collide with another value.
+    pub name: String,
+    /// Stored field contract, excluding Void and Graphics.Dc. Referenced contents
+    /// may mutate while the binding remains readonly.
+    pub value_type: ReturnType,
+}
+impl SharedConstant {
+    /// Return the reserved ordinary function invoked by the owner's allocation hook.
+    pub fn initializer(&self) -> String {
+        format!("__ciq_initialize_shared_{}", self.name)
+    }
+}
+
 /// Validated global/module functions and instance classes with checked calls.
 ///
 /// Qualified user calls and source constructors resolve inside the unit.
@@ -784,6 +846,7 @@ impl std::error::Error for UnitError {}
 pub struct CompilationUnit {
     declarations: Vec<FunctionDeclaration>,
     classes: Vec<ClassDeclaration>,
+    shared: Vec<SharedConstant>,
 }
 
 impl CompilationUnit {
@@ -864,8 +927,27 @@ impl CompilationUnit {
     /// Class errors use flattened body indexes after all global/module functions.
     pub fn with_classes(
         declarations: Vec<FunctionDeclaration>,
-        mut classes: Vec<ClassDeclaration>,
+        classes: Vec<ClassDeclaration>,
     ) -> Result<Self, UnitError> {
+        Self::with_shared(declarations, classes, Vec::new())
+    }
+
+    /// Validate shared constants with their owner initializer functions, classes,
+    /// and ordinary declarations. Types, readonly writes, and initialization
+    /// dependencies must agree in native construction and saved IR.
+    pub fn with_shared(
+        declarations: Vec<FunctionDeclaration>,
+        mut classes: Vec<ClassDeclaration>,
+        mut shared: Vec<SharedConstant>,
+    ) -> Result<Self, UnitError> {
+        for constant in &mut shared {
+            constant.value_type = FieldKind::value_contract(constant.value_type.clone())
+                .ok_or_else(|| UnitError {
+                    declaration: None,
+                    operation: None,
+                    message: "unsupported shared constant contract".into(),
+                })?;
+        }
         for class in &mut classes {
             for field in &mut class.fields {
                 if let FieldKind::Value { value_type } = &field.kind {
@@ -891,6 +973,7 @@ impl CompilationUnit {
         let unit = Self {
             declarations,
             classes,
+            shared,
         };
         unit.validate()?;
         Ok(unit)
@@ -1146,6 +1229,7 @@ impl CompilationUnit {
         }
         let mut signatures = BTreeMap::new();
         let exit_callers = exit_callers(&bodies);
+        self.validate_shared(&bodies, context, &exit_callers)?;
         for (index, &(owner, function)) in bodies.iter().enumerate() {
             let mut source_classes = Vec::new();
             let mut collect = |class: &mut crate::SourceClass| {
@@ -1256,7 +1340,7 @@ impl CompilationUnit {
                     if (!pending.is_empty() || !unreadable.is_empty())
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || effect_callees(owner, &located.operation)
+                            || activation_callees(owner, &located.operation, &bodies)
                                 .iter()
                                 .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -1344,7 +1428,7 @@ impl CompilationUnit {
                     if !pending.is_empty()
                         && (requests_exit(&located.operation)
                             || erased_callbacks(function, &located.operation)
-                            || effect_callees(owner, &located.operation)
+                            || activation_callees(owner, &located.operation, &bodies)
                                 .iter()
                                 .any(|key| exit_callers.contains(key))
                             || comparator_callee(function, &located.operation, &bodies)
@@ -1563,7 +1647,9 @@ impl CompilationUnit {
                     }
                 }
                 if let Operation::BindMethod { selector, .. } = &located.operation {
-                    if origins.symbol(*selector) == Some(FIELD_INITIALIZER) {
+                    if origins.symbol(*selector).is_some_and(|name| {
+                        name == FIELD_INITIALIZER || name.starts_with("__ciq_initialize_shared_")
+                    }) {
                         return Err(fail(
                             Some(index),
                             Some(operation),
@@ -2185,7 +2271,7 @@ impl CompilationUnit {
                 };
                 let mut joined_result = None;
                 for key in source_callees(owner, &located.operation) {
-                    if key.1 == FIELD_INITIALIZER {
+                    if key.1 == FIELD_INITIALIZER || key.1.starts_with("__ciq_initialize_shared_") {
                         return Err(fail(
                             Some(index),
                             Some(operation),
@@ -2571,6 +2657,341 @@ impl CompilationUnit {
         Ok(())
     }
 
+    /// Check readonly shared slots, reserved initialization bodies, and the
+    /// readiness of fields reached through source calls or lazy module startup.
+    fn validate_shared(
+        &self,
+        bodies: &[(Owner<'_>, &Function)],
+        context: Option<crate::api::ApiContext>,
+        exits: &BTreeSet<(Owner<'_>, &str)>,
+    ) -> Result<(), UnitError> {
+        let fail = |declaration, operation, message: &str| UnitError {
+            declaration,
+            operation,
+            message: message.into(),
+        };
+        if self.shared.is_empty() {
+            for (index, (_, function)) in bodies.iter().enumerate() {
+                if function.name().starts_with("__ciq_initialize_shared_")
+                    || function.operations().iter().any(|op| {
+                        matches!(
+                            op.operation,
+                            Operation::SharedRead { .. } | Operation::SharedAssign { .. }
+                        )
+                    })
+                {
+                    return Err(fail(
+                        Some(index),
+                        None,
+                        "shared operations require declared shared bindings",
+                    ));
+                }
+            }
+            return Ok(());
+        }
+        let mut fields = BTreeMap::new();
+        let mut initializers = BTreeMap::new();
+        if self.shared.len() > 256 {
+            return Err(fail(None, None, "unit exceeds 256 shared constants"));
+        }
+        for constant in &self.shared {
+            crate::validate_call_names(None, &constant.name)
+                .map_err(|message| fail(None, None, message))?;
+            if let Some(module) = &constant.module {
+                crate::validate_call_names(None, module)
+                    .map_err(|message| fail(None, None, message))?;
+            }
+            if FieldKind::value_contract(constant.value_type.clone()).as_ref()
+                != Some(&constant.value_type)
+            {
+                return Err(fail(
+                    None,
+                    None,
+                    "unsupported or noncanonical shared constant contract",
+                ));
+            }
+            if let Some(context) = context {
+                context
+                    .check_type(crate::api::core(), &constant.value_type.api_type())
+                    .map_err(|message| fail(None, None, &message))?;
+            }
+            let mut retained = constant.value_type.clone();
+            crate::structural::resolve_result(&mut retained, &mut |class| {
+                if self
+                    .classes
+                    .iter()
+                    .any(|c| c.name == class.name && c.base == class.base)
+                {
+                    Ok(())
+                } else {
+                    Err(fail(
+                        None,
+                        None,
+                        "shared source class must match its declaration",
+                    ))
+                }
+            })?;
+            let owner = constant
+                .module
+                .as_deref()
+                .map_or(Owner::Global, Owner::Module);
+            let field = (owner, constant.name.as_str());
+            if fields.insert(field, constant).is_some()
+                || bodies
+                    .iter()
+                    .any(|(o, f)| *o == owner && f.name() == constant.name)
+            {
+                return Err(fail(None, None, "duplicate or conflicting shared constant"));
+            }
+            if constant.module.is_none()
+                && (self.classes.iter().any(|c| c.name == constant.name)
+                    || self
+                        .declarations
+                        .iter()
+                        .any(|d| d.module.as_ref() == Some(&constant.name)))
+            {
+                return Err(fail(
+                    None,
+                    None,
+                    "shared constant conflicts with a class or module",
+                ));
+            }
+            let initializer = constant.initializer();
+            let Some((index, (_, function))) = bodies
+                .iter()
+                .enumerate()
+                .find(|(_, (o, f))| *o == owner && f.name() == initializer)
+            else {
+                return Err(fail(
+                    None,
+                    None,
+                    "shared constant requires its reserved initializer",
+                ));
+            };
+            if function.is_instance_method()
+                || function.parameter_count() != 0
+                || function.return_type() != ReturnType::Void
+            {
+                return Err(fail(
+                    Some(index),
+                    None,
+                    "shared initializer requires no parameters, a global/module owner, and Void",
+                ));
+            }
+            initializers.insert((owner, function.name()), field);
+        }
+        // Function summaries include ordinary callees plus lazy initialization of
+        // other modules. Globals already exist before any module is activated.
+        let callees = |owner, function: &Function, op: &Operation| {
+            let mut targets = activation_callees(owner, op, bodies);
+            if let Some(key) = comparator_callee(function, op, bodies) {
+                targets.push(key);
+            }
+            targets
+                .into_iter()
+                .map(|(owner, name)| (owner.name().to_owned(), name.to_owned()))
+                .collect::<Vec<_>>()
+        };
+        let mut reads = bodies
+            .iter()
+            .map(|(o, f)| {
+                (
+                    (o.name().to_owned(), f.name().to_owned()),
+                    SharedReads::default(),
+                )
+            })
+            .collect::<BTreeMap<_, SharedReads>>();
+        loop {
+            let previous = reads.clone();
+            for (owner, function) in bodies {
+                let summary = reads
+                    .get_mut(&(owner.name().to_owned(), function.name().to_owned()))
+                    .unwrap();
+                if !matches!(owner, Owner::Class(_))
+                    && !function.name().starts_with("__ciq_initialize_shared_")
+                {
+                    summary.owners.insert(match owner {
+                        Owner::Global => None,
+                        Owner::Module(module) => Some((*module).to_owned()),
+                        _ => unreachable!(),
+                    });
+                }
+                for op in function.operations() {
+                    if let Operation::SharedRead { module, field, .. } = &op.operation {
+                        summary.fields.insert((module.clone(), field.clone()));
+                        if module.as_deref().map_or(Owner::Global, Owner::Module) != *owner {
+                            summary.owners.insert(module.clone());
+                        }
+                    }
+                    for target in callees(*owner, function, &op.operation) {
+                        if let Some(extra) = previous.get(&target) {
+                            summary.extend(extra);
+                        }
+                    }
+                }
+            }
+            if reads == previous {
+                break;
+            }
+        }
+        let mut ready = BTreeSet::new();
+        for constant in &self.shared {
+            let owner = constant
+                .module
+                .as_deref()
+                .map_or(Owner::Global, Owner::Module);
+            let name = constant.initializer();
+            let (index, (_, function)) = bodies
+                .iter()
+                .enumerate()
+                .find(|(_, (o, f))| *o == owner && f.name() == name)
+                .unwrap();
+            let mut written = false;
+            for (operation, op) in function.operations().iter().enumerate() {
+                let mut required = SharedReads::default();
+                if let Operation::SharedRead { module, field, .. } = &op.operation {
+                    required.fields.insert((module.clone(), field.clone()));
+                    if module.as_deref().map_or(Owner::Global, Owner::Module) != owner {
+                        required.owners.insert(module.clone());
+                    }
+                }
+                for target in callees(owner, function, &op.operation) {
+                    if let Some(extra) = reads.get(&target) {
+                        required.extend(extra);
+                    }
+                }
+                if required.owners.contains(&constant.module) {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        "shared initialization re-enters its initializing owner",
+                    ));
+                }
+                if required.fields.iter().any(|(module, field)| {
+                    *module == constant.module && !ready.contains(&(module.clone(), field.clone()))
+                }) {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        "shared initializer reads an incomplete binding or initialization cycle",
+                    ));
+                }
+                let pending = self.shared.iter().any(|c| {
+                    c.module == constant.module
+                        && !ready.contains(&(c.module.clone(), c.name.clone()))
+                });
+                if pending
+                    && (requests_exit(&op.operation)
+                        || erased_callbacks(function, &op.operation)
+                        || callees(owner, function, &op.operation).iter().any(|key| {
+                            exits
+                                .iter()
+                                .any(|(owner, name)| owner.name() == key.0 && *name == key.1)
+                        }))
+                {
+                    return Err(fail(
+                        Some(index),
+                        Some(operation),
+                        "initialize shared bindings before calls that may request shutdown",
+                    ));
+                }
+                match &op.operation {
+                    Operation::SharedAssign { module, field, .. } => {
+                        if written || *module != constant.module || *field != constant.name {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "shared initializer must assign its binding exactly once",
+                            ));
+                        }
+                        written = true;
+                        ready.insert((module.clone(), field.clone()));
+                    }
+                    Operation::Branch { .. }
+                    | Operation::Jump { .. }
+                    | Operation::JumpValue { .. }
+                        if !written =>
+                    {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "shared initialization requires a straight-line assignment prefix",
+                        ));
+                    }
+                    Operation::ReturnVoid if !written => {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "shared binding is not initialized",
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for (index, (owner, function)) in bodies.iter().enumerate() {
+            if function.name().starts_with("__ciq_initialize_shared_")
+                && !initializers.contains_key(&(*owner, function.name()))
+            {
+                return Err(fail(
+                    Some(index),
+                    None,
+                    "reserved shared initializer has no binding",
+                ));
+            }
+            let origins =
+                crate::source_objects::Origins::for_function(function).expect("checked function");
+            for (operation, op) in function.operations().iter().enumerate() {
+                match &op.operation {
+                    Operation::SharedRead {
+                        module,
+                        field,
+                        result_type,
+                        ..
+                    } => {
+                        let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                        if fields
+                            .get(&(target, field.as_str()))
+                            .is_none_or(|c| c.value_type != *result_type)
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "shared read must match its declared field contract",
+                            ));
+                        }
+                    }
+                    Operation::SharedAssign {
+                        module,
+                        field,
+                        value,
+                    } => {
+                        let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                        if initializers.get(&(*owner, function.name()))
+                            != Some(&(target, field.as_str()))
+                        {
+                            return Err(fail(
+                                Some(index),
+                                Some(operation),
+                                "cannot rebind a shared constant",
+                            ));
+                        }
+                        self.check_value_contract(
+                            function,
+                            &origins,
+                            *value,
+                            &fields[&(target, field.as_str())].value_type,
+                            context,
+                        )
+                        .map_err(|message| fail(Some(index), Some(operation), &message))?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn check_structural_signature(
         &self,
         class: &str,
@@ -2657,6 +3078,11 @@ impl CompilationUnit {
         Ok(())
     }
 
+    /// Return shared bindings in initialization order within each owner.
+    pub fn shared_constants(&self) -> &[SharedConstant] {
+        &self.shared
+    }
+
     /// Return classes in input-file and class declaration order.
     pub fn classes(&self) -> &[ClassDeclaration] {
         &self.classes
@@ -2678,7 +3104,7 @@ impl CompilationUnit {
             .declarations
             .iter()
             .flat_map(|d| {
-                backend::lower_named(&d.function, &d.code_label())
+                backend::lower_owned(&d.function, &d.code_label(), Some(d.module.as_deref()))
                     .items()
                     .to_vec()
             })
@@ -2699,6 +3125,14 @@ impl CompilationUnit {
     /// base identity without a VM import index. Source filenames are not stored.
     pub fn to_ir_text(&self) -> String {
         let mut text = String::from("ciq-unit\n");
+        for constant in &self.shared {
+            text.push_str(&format!(
+                ".shared-constant {} {} {}\n",
+                constant.module.as_deref().unwrap_or("$"),
+                constant.name,
+                crate::type_text::result_tag(&constant.value_type)
+            ));
+        }
         for d in &self.declarations {
             match &d.module {
                 None => text.push_str(".owner global\n"),
@@ -2984,6 +3418,80 @@ pub(crate) fn compile_sources_mapped(
             }
         }
     }
+    let mut shared = Vec::new();
+    calls.shared_pending = parsed_sources
+        .iter()
+        .flat_map(|parsed| {
+            parsed
+                .shared
+                .iter()
+                .map(|(module, c)| (module.clone(), c.name.clone()))
+        })
+        .collect();
+    for (source_index, parsed) in parsed_sources.iter().enumerate() {
+        for (module, declaration) in &parsed.shared {
+            let source = sources[source_index];
+            let mut owner_calls = calls.clone();
+            owner_calls.current_module = module.clone();
+            let value_type = infer_constant(source, declaration, context, None, &owner_calls)
+                .map_err(|diagnostic| SourceDiagnostic {
+                    source: source_index,
+                    diagnostic,
+                })?;
+            calls.shared_fields.insert(
+                (module.clone(), declaration.name.clone()),
+                value_type.clone(),
+            );
+            calls
+                .shared_pending
+                .remove(&(module.clone(), declaration.name.clone()));
+            shared.push(SharedConstant {
+                module: module.clone(),
+                name: declaration.name.clone(),
+                value_type,
+            });
+        }
+    }
+    for (source_index, parsed) in parsed_sources.iter().enumerate() {
+        for (module, declaration) in &parsed.shared {
+            let source = sources[source_index];
+            let constant = shared
+                .iter()
+                .find(|c| c.module == *module && c.name == declaration.name)
+                .unwrap();
+            let ast = parser::ParsedFunction {
+                name: constant.initializer(),
+                parameters: Vec::new(),
+                parameter_types: Vec::new(),
+                result_type: Some(ReturnType::Void),
+                statements: vec![
+                    parser::Statement::FieldAssign {
+                        name: declaration.name.clone(),
+                        value: declaration.initializer.clone(),
+                        span: declaration.span,
+                    },
+                    parser::Statement::Return {
+                        value: None,
+                        span: declaration.span,
+                    },
+                ],
+                body_span: declaration.span,
+            };
+            let mut owner_calls = calls.clone();
+            owner_calls.current_module = module.clone();
+            owner_calls.shared_initializer = true;
+            let function = source_ir::build_with_calls(source, ast, context, None, &owner_calls)
+                .map_err(|diagnostic| SourceDiagnostic {
+                    source: source_index,
+                    diagnostic,
+                })?;
+            origins.push((source_index, declaration.span.start));
+            declarations.push(FunctionDeclaration {
+                module: module.clone(),
+                function,
+            });
+        }
+    }
     // Infer stored constant contracts before lowering consumers. Allocation
     // initialization uses the same expression compiler and checked field writes.
     for (source_index, parsed) in parsed_sources.iter_mut().enumerate() {
@@ -3009,20 +3517,9 @@ pub(crate) fn compile_sources_mapped(
                 .collect();
             let mut assignments = Vec::new();
             for declaration in &class.constants {
-                let probe = parser::ParsedFunction {
-                    name: FIELD_INITIALIZER.into(),
-                    parameters: Vec::new(),
-                    parameter_types: Vec::new(),
-                    result_type: None,
-                    statements: vec![parser::Statement::Return {
-                        value: Some(declaration.initializer.clone()),
-                        span: declaration.span,
-                    }],
-                    body_span: declaration.span,
-                };
-                let probe = source_ir::build_with_calls(
+                let result = infer_constant(
                     source,
-                    probe,
+                    declaration,
                     context,
                     Some(class.base),
                     &initializer_calls,
@@ -3030,44 +3527,6 @@ pub(crate) fn compile_sources_mapped(
                 .map_err(|diagnostic| SourceDiagnostic {
                     source: source_index,
                     diagnostic,
-                })?;
-                let value = probe
-                    .operations()
-                    .iter()
-                    .find_map(|op| {
-                        if let Operation::Return { value } = op.operation {
-                            Some(value)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap();
-                let origins = crate::source_objects::Origins::for_function(&probe)
-                    .expect("validated constant expression");
-                let mut result = origins
-                    .contract(value)
-                    .cloned()
-                    .map(crate::SourceUnion::result)
-                    .or_else(|| crate::unions::result(probe.value_types[&value].api_type()))
-                    .unwrap();
-                if matches!(result, ReturnType::Tuple(_)) {
-                    result = crate::unions::result(
-                        crate::tuples::array_contract(&[result.api_type()], &[]).map_err(
-                            |message| SourceDiagnostic {
-                                source: source_index,
-                                diagnostic: Diagnostic::at(source, declaration.span.start, message),
-                            },
-                        )?,
-                    )
-                    .unwrap();
-                }
-                let result = FieldKind::value_contract(result).ok_or_else(|| SourceDiagnostic {
-                    source: source_index,
-                    diagnostic: Diagnostic::at(
-                        source,
-                        declaration.span.start,
-                        "unsupported constant field contract",
-                    ),
                 })?;
                 class.fields.push(InstanceField {
                     name: declaration.name.clone(),
@@ -3186,6 +3645,7 @@ pub(crate) fn compile_sources_mapped(
     let unit = CompilationUnit {
         declarations,
         classes,
+        shared,
     };
     unit.validate_context(context)
         .and_then(|()| context.map_or(Ok(()), |context| unit.validate_declaration_api(context)))
@@ -3216,6 +3676,62 @@ pub(crate) fn compile_sources_mapped(
             }
         })?;
     Ok((unit, origins))
+}
+
+/// Infer the stored value with ordinary expression IR before compiling writes.
+/// Array literals retain mutable element contracts rather than positional slots.
+fn infer_constant(
+    source: &str,
+    declaration: &parser::ParsedConstant,
+    context: Option<crate::api::ApiContext>,
+    base: Option<ClassBase>,
+    calls: &source_ir::CallContext,
+) -> Result<ReturnType, Diagnostic> {
+    let probe = parser::ParsedFunction {
+        name: FIELD_INITIALIZER.into(),
+        parameters: Vec::new(),
+        parameter_types: Vec::new(),
+        result_type: None,
+        statements: vec![parser::Statement::Return {
+            value: Some(declaration.initializer.clone()),
+            span: declaration.span,
+        }],
+        body_span: declaration.span,
+    };
+    let probe = source_ir::build_with_calls(source, probe, context, base, calls)?;
+    let value = probe
+        .operations()
+        .iter()
+        .find_map(|op| {
+            if let Operation::Return { value } = op.operation {
+                Some(value)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    let origins = crate::source_objects::Origins::for_function(&probe)
+        .expect("validated constant expression");
+    let mut result = origins
+        .contract(value)
+        .cloned()
+        .map(crate::SourceUnion::result)
+        .or_else(|| crate::unions::result(probe.value_types[&value].api_type()))
+        .unwrap();
+    if matches!(result, ReturnType::Tuple(_)) {
+        result = crate::unions::result(
+            crate::tuples::array_contract(&[result.api_type()], &[])
+                .map_err(|message| Diagnostic::at(source, declaration.span.start, message))?,
+        )
+        .unwrap();
+    }
+    FieldKind::value_contract(result).ok_or_else(|| {
+        Diagnostic::at(
+            source,
+            declaration.span.start,
+            "unsupported constant field contract",
+        )
+    })
 }
 
 /// Parse provisional unit text and validate owners and call signatures.
@@ -3261,6 +3777,7 @@ fn parse_unit_ir_context(
     let mut i = 1;
     let mut declarations = Vec::new();
     let mut classes = Vec::new();
+    let mut shared = Vec::new();
     let mut locations = Vec::new();
     let mut class_locations = Vec::new();
     fn function(
@@ -3292,6 +3809,17 @@ fn parse_unit_ir_context(
             .collect::<Vec<_>>()
             .as_slice()
         {
+            [".shared-constant", owner, name, tag] => {
+                let value_type = crate::type_text::call_result(tag)
+                    .ok()
+                    .and_then(FieldKind::value_contract)
+                    .ok_or_else(|| Diagnostic::at(text, at, "unsupported shared constant type"))?;
+                shared.push(SharedConstant {
+                    module: (*owner != "$").then(|| (*owner).to_owned()),
+                    name: (*name).to_owned(),
+                    value_type,
+                });
+            }
             [".owner", "global"] | [".owner", "module", _] => {
                 let module = (parts.len() == 3).then(|| parts[2].clone());
                 locations.push(at);
@@ -3606,7 +4134,7 @@ fn parse_unit_ir_context(
         }
     }
     locations.extend(class_locations);
-    CompilationUnit::with_classes(declarations, classes)
+    CompilationUnit::with_shared(declarations, classes, shared)
         .and_then(|unit| {
             if let Some(context) = context {
                 unit.validate_declaration_api(context)?;

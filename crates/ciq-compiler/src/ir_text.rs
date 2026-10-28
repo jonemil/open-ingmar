@@ -2,6 +2,8 @@
 /// Several spellings may share a form, such as `.read` and `.take`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Directive {
+    SharedRead,
+    SharedAssign,
     MemberRead,
     MemberWrite,
     Integer,
@@ -246,6 +248,8 @@ pub(crate) fn parse_function_ir_context(
             Some(".call-object") => (Directive::CallObject, call_width()),
             Some(".call-object-discard") => (Directive::CallObjectDiscard, call_width()),
             Some(".integer") => (Directive::Integer, 3),
+            Some(".read-shared") => (Directive::SharedRead, 5),
+            Some(".assign-shared") => (Directive::SharedAssign, 4),
             Some(".read-self") => (Directive::ReadSelf, call_width()),
             Some(".assign-self") => (Directive::AssignSelf, 3),
             Some(".boolean") => (Directive::Boolean, 3),
@@ -579,6 +583,22 @@ pub(crate) fn parse_function_ir_context(
                         declared_type,
                     }
                 }
+                Directive::SharedRead => Operation::SharedRead {
+                    result: parse_value(&fields[1])?,
+                    module: (fields[2] != "$").then(|| fields[2].clone()),
+                    field: fields[3].clone(),
+                    result_type: crate::type_text::call_result(
+                        fields[4]
+                            .strip_prefix("result=")
+                            .ok_or_else(|| fail(*at, "shared reads require result=type"))?,
+                    )
+                    .map_err(|message| fail(*at, message))?,
+                },
+                Directive::SharedAssign => Operation::SharedAssign {
+                    module: (fields[1] != "$").then(|| fields[1].clone()),
+                    field: fields[2].clone(),
+                    value: parse_value(&fields[3])?,
+                },
                 Directive::AssignSelf => Operation::SelfFieldAssign {
                     field: fields[1].clone(),
                     value: parse_value(&fields[2])?,

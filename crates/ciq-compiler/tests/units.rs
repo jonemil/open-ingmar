@@ -12,7 +12,7 @@ fn sources() -> [&'static str; 2] {
     ]
 }
 fn symbols() -> Program {
-    Program::parse(".symbol m \"globals/Numbers\" id=0x02\n.symbol d \"difference\" id=0x80\n.symbol l \"left\" id=0x81\n.symbol r \"right\" id=0x82\n.symbol s \"Toybox_System\" id=0x83\n.symbol p \"println\" id=0x84\n").unwrap()
+    Program::parse(".symbol g \"globals\" id=0x008002e6\n.symbol m \"globals/Numbers\" id=0x02\n.symbol d \"difference\" id=0x80\n.symbol l \"left\" id=0x81\n.symbol r \"right\" id=0x82\n.symbol s \"Toybox_System\" id=0x83\n.symbol p \"println\" id=0x84\n").unwrap()
 }
 
 #[test]

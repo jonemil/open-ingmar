@@ -16,6 +16,18 @@ enum LiteralKey {
     Dictionary(crate::ValueId),
 }
 
+/// Value definitions and the lexical receiver used by owner-relative lowering.
+struct Definitions<'a> {
+    values: BTreeMap<ValueId, &'a Operation>,
+    owner: Option<Option<&'a str>>,
+}
+impl<'a> std::ops::Deref for Definitions<'a> {
+    type Target = BTreeMap<ValueId, &'a Operation>;
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
 /// Lower a validated IR function into a typed VM assembly program.
 ///
 /// Selects instructions and assigns parameter/local frame slots. Assignments
@@ -35,7 +47,20 @@ pub fn lower(function: &Function) -> Program {
 
 /// Lower a function using a unit-unique entry label and internal alias prefix.
 pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
-    let mut definitions = BTreeMap::new();
+    lower_owned(function, label, None)
+}
+
+/// Bind a declared global/module frame to its lexical owner. Instance and
+/// standalone bodies retain their supplied receiver/external binding obligations.
+pub(crate) fn lower_owned<'a>(
+    function: &'a Function,
+    label: &str,
+    owner: Option<Option<&'a str>>,
+) -> Program {
+    let mut definitions = Definitions {
+        values: BTreeMap::new(),
+        owner,
+    };
     let mut literal_aliases = BTreeMap::new();
     let mut literals = Vec::new();
     let mut slots = BTreeMap::new();
@@ -128,6 +153,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::SelfValue { result, .. }
             | Operation::MemberRead { result, .. }
             | Operation::SelfFieldRead { result, .. }
+            | Operation::SharedRead { result, .. }
             | Operation::Binary { result, .. }
             | Operation::Step { result, .. }
             | Operation::Positive { result, .. }
@@ -168,7 +194,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             | Operation::ObjectCall { result, .. }
             | Operation::NativeCall { result, .. }
             | Operation::BindMethod { result, .. } => {
-                definitions.insert(*result, &located.operation);
+                definitions.values.insert(*result, &located.operation);
             }
             Operation::LocalInitialize { local, .. }
             | Operation::LocalDeclare { local, .. }
@@ -207,19 +233,40 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
             ],
         )
     });
+    if let Some(module) = owner.filter(|_| !function.name().starts_with("__ciq_initialize_shared_"))
+    {
+        items.extend([
+            instruction(
+                Opcode::Spush,
+                vec![Operand::Symbol(module.map_or_else(
+                    || "__ciq_source_globals".into(),
+                    |module| format!("__ciq_module_{module}"),
+                ))],
+            ),
+            instruction(Opcode::Getm, vec![]),
+            instruction(Opcode::Lputv, vec![Operand::Bits(0)]),
+        ]);
+    }
     for located in function.operations() {
         match located.operation {
             Operation::SourceBegin {
                 builder, ref class, ..
             } => {
-                items.extend([
+                items.push(if owner == Some(None) {
+                    instruction(
+                        Opcode::Getselfv,
+                        vec![Operand::Symbol(format!("__ciq_class_{class}"))],
+                    )
+                } else {
                     instruction(
                         Opcode::Getmv,
                         vec![
                             Operand::Symbol("__ciq_source_globals".into()),
                             Operand::Symbol(format!("__ciq_class_{class}")),
                         ],
-                    ),
+                    )
+                });
+                items.extend([
                     instruction(Opcode::Newc, vec![]),
                     instruction(Opcode::Lputv, vec![Operand::Bits(builders[&builder])]),
                 ]);
@@ -528,6 +575,26 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
                 items.push(instruction(Opcode::Putv, vec![]));
                 continue;
             }
+            Operation::SharedAssign {
+                ref field, value, ..
+            } => {
+                items.push(instruction(Opcode::Getself, vec![]));
+                items.push(instruction(
+                    Opcode::Spush,
+                    vec![Operand::Symbol(format!("__ciq_field_{field}"))],
+                ));
+                expression(
+                    value,
+                    &definitions,
+                    &slots,
+                    &builders,
+                    &function.value_types,
+                    &literal_aliases,
+                    &mut items,
+                );
+                items.push(instruction(Opcode::Putv, vec![]));
+                continue;
+            }
             Operation::SelfFieldAssign { ref field, value } => {
                 items.push(instruction(Opcode::Getself, vec![]));
                 items.push(instruction(
@@ -712,7 +779,7 @@ pub(crate) fn lower_named(function: &Function, label: &str) -> Program {
 
 fn expression(
     root: ValueId,
-    definitions: &BTreeMap<ValueId, &Operation>,
+    definitions: &Definitions<'_>,
     slots: &BTreeMap<LocalId, u64>,
     builders: &BTreeMap<crate::BuilderId, u64>,
     types: &BTreeMap<ValueId, crate::ValueType>,
@@ -907,6 +974,23 @@ fn expression(
                     tasks.extend([Task::SourceMember(member.clone()), Task::Value(*receiver)]);
                     continue;
                 }
+                Operation::SharedRead { module, field, .. } => {
+                    let field = Operand::Symbol(format!("__ciq_field_{field}"));
+                    if definitions.owner == Some(module.as_deref()) {
+                        (Opcode::Getselfv, vec![field])
+                    } else {
+                        (
+                            Opcode::Getmv,
+                            vec![
+                                Operand::Symbol(module.as_ref().map_or_else(
+                                    || "__ciq_source_globals".into(),
+                                    |module| format!("__ciq_module_{module}"),
+                                )),
+                                field,
+                            ],
+                        )
+                    }
+                }
                 Operation::SelfFieldRead { field, .. } => (
                     Opcode::Getselfv,
                     vec![Operand::Symbol(format!("__ciq_field_{field}"))],
@@ -1006,7 +1090,9 @@ fn expression(
                         Operation::GlobalCall { .. } => CallOwner::Global,
                         _ => CallOwner::Instance,
                     };
-                    let Item::Instruction { opcode, operands } = call_target(owner, member) else {
+                    let Item::Instruction { opcode, operands } =
+                        call_target(owner, member, definitions.owner)
+                    else {
                         unreachable!()
                     };
                     (opcode, operands)
@@ -1181,13 +1267,20 @@ fn expression(
             }
             Task::TupleStore => (Opcode::Aputv, vec![]),
             Task::SourceInstanceOf(class) => {
-                items.push(instruction(
-                    Opcode::Getmv,
-                    vec![
-                        Operand::Symbol("__ciq_source_globals".into()),
-                        Operand::Symbol(format!("__ciq_class_{class}")),
-                    ],
-                ));
+                items.push(if definitions.owner == Some(None) {
+                    instruction(
+                        Opcode::Getselfv,
+                        vec![Operand::Symbol(format!("__ciq_class_{class}"))],
+                    )
+                } else {
+                    instruction(
+                        Opcode::Getmv,
+                        vec![
+                            Operand::Symbol("__ciq_source_globals".into()),
+                            Operand::Symbol(format!("__ciq_class_{class}")),
+                        ],
+                    )
+                });
                 (Opcode::Isa, vec![])
             }
             Task::InstanceOf(class) => {
@@ -1230,9 +1323,13 @@ enum CallOwner<'a> {
     Instance,
 }
 
-fn call_target(owner: CallOwner<'_>, member: &str) -> Item {
+fn call_target(owner: CallOwner<'_>, member: &str, current: Option<Option<&str>>) -> Item {
     let member = Operand::Symbol(format!("__ciq_member_{member}"));
     match owner {
+        CallOwner::Module(module) if current == Some(Some(module)) => {
+            instruction(Opcode::Getselfv, vec![member])
+        }
+        CallOwner::Global if current == Some(None) => instruction(Opcode::Getselfv, vec![member]),
         CallOwner::Module(module) => instruction(
             Opcode::Getmv,
             vec![Operand::Symbol(format!("__ciq_module_{module}")), member],
@@ -1254,12 +1351,12 @@ fn statement_call(
     owner: CallOwner<'_>,
     member: &str,
     arguments: &[ValueId],
-    definitions: &BTreeMap<ValueId, &Operation>,
+    definitions: &Definitions<'_>,
     frame: Frame<'_>,
     literal_aliases: &BTreeMap<LiteralKey, String>,
     items: &mut Vec<Item>,
 ) {
-    items.push(call_target(owner, member));
+    items.push(call_target(owner, member, definitions.owner));
     if !arguments.is_empty() {
         items.push(instruction(Opcode::Frpush, vec![]));
         for value in arguments {

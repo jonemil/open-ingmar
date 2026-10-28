@@ -350,11 +350,17 @@ the [object-call example](../../../examples/compiler-object-calls/README.md) and
 
 ### User module calls
 
-Global calls use `getmv @__ciq_source_globals @__ciq_member_<member>` to select
-the global receiver and member. Bind the owner alias to `globals`. Their
-argument, invocation, and discarded-result sequences match module calls below;
-they do not use the current instance or module receiver. Complete application
-generation already provides global method records from unit declarations.
+Unit lowering binds ordinary global/module frames to their lexical owner with
+`spush <owner>; getm; lputv 0` after the argument-count prologue. Reserved shared
+initializers inherit their hook's receiver and omit this lookup. Standalone
+function lowering leaves ownership external. CODE symbol sources for unit
+lowering must therefore provide `globals` as well as referenced module/member
+names.
+
+Same-owner calls select methods with `getselfv`; other global calls use
+`getmv @__ciq_source_globals @__ciq_member_<member>`. Bind that owner alias to
+`globals`. Complete application generation supplies the corresponding method
+records and owner identities.
 
 Backend lowering selects `getmv @__ciq_module_<module> @__ciq_member_<member>;
 invokemz`, for zero arguments. Nonempty calls additionally use `frpush`,
@@ -378,6 +384,21 @@ to exactly one `Toybox_WatchUi`, class, and `initialize` declaration
 respectively; the class alias is `__ciq_native_BehaviorDelegate` for delegate
 construction. See [constructor
 evidence](../../investigations/compiler-native-views.md).
+
+### Shared storage
+
+A shared read uses `getselfv` in its declared owner and `getmv` from another
+owner. Module lookup triggers lazy initialization; same-owner reads avoid
+reactivating an initializing module. Global source-class lookup during
+construction and `instanceof` likewise uses the current global receiver.
+Shared writes use `getself; spush <field>; <value>; putv` in the checked
+initializer frame. They reuse existing VM operations and field-symbol aliases.
+Readonly bindings are enforced by unit contracts; no readonly VM flag is assumed.
+
+Owner allocation hooks invoke reserved shared initializer methods with
+`getselfv; invokemz; popv` in declaration order, then return. Each initializer
+has an ordinary call frame for temporary storage. Shared slots and these method
+records are materialized by application generation, without an SDK template.
 
 ### Source allocation and initialization
 

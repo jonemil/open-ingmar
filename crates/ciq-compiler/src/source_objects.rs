@@ -265,7 +265,12 @@ impl Origins {
                     self.values.insert(*result, contract);
                 }
             }
-            Operation::SelfFieldRead {
+            Operation::SharedRead {
+                result,
+                result_type,
+                ..
+            }
+            | Operation::SelfFieldRead {
                 result,
                 result_type,
                 ..
