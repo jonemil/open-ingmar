@@ -1,7 +1,7 @@
 use ciq_compiler::{compile_function, compile_sources, parse_unit_ir};
 mod common;
 #[test]
-fn immediate_constants_keep_scope_and_saved_pipeline_values() {
+fn constants_keep_scope_and_saved_pipeline_values() {
     let sources = [
         include_str!("../../../examples/compiler-constants/app.mc"),
         include_str!("../../../examples/compiler-constants/values.mc"),
@@ -14,25 +14,23 @@ fn immediate_constants_keep_scope_and_saved_pipeline_values() {
     common::application(&unit, &options);
     assert_eq!(unit, parse_unit_ir(&unit.to_ir_text()).unwrap());
     common::pipeline(compile_sources(&[sources[1], sources[0]]).unwrap());
-    let fragment = compile_function("const X=40+1;function f(){return X;}").unwrap();
+    let fragment = compile_function("const X=41;function f(){return X;}").unwrap();
     assert_eq!(
         fragment.lower(),
         compile_function("function f(){return 41;}")
             .unwrap()
             .lower()
     );
+    assert!(compile_function("const X=40+1;function f(){return X;}").is_err());
 }
 #[test]
 fn constant_errors_and_rebinding_are_rejected() {
     for source in [
-        "const X=X;function f(){}",
-        "const X=Y;const Y=X;function f(){}",
         "const X=Missing;function f(){}",
         "const X=1;const X=2;function f(){}",
         "const X=1;function X(){}",
         "class X{}const X=1;function f(){}",
         "module M{const X=1;var X;function f(){}}",
-        "const X=1/0;function f(){}",
         "const X=1;function f(){X=2;}",
         "const X=1;function f(){X+=2;}",
         "const X=1;function f(){X++;}",
@@ -56,7 +54,7 @@ fn constant_errors_and_rebinding_are_rejected() {
 }
 
 #[test]
-fn constant_expansion_and_definition_counts_are_bounded() {
+fn constant_counts_are_bounded_and_aliases_do_not_require_recursive_expansion() {
     let mut source = String::new();
     for n in 0..256 {
         source.push_str(&format!("const X{n}={n};"));
@@ -70,5 +68,5 @@ fn constant_expansion_and_definition_counts_are_bounded() {
         chain.push_str(&format!("const X{n}=X{};", n + 1));
     }
     chain.push_str("const X65=1;function f(){return X0;}");
-    assert!(compile_sources(&[&chain]).is_err());
+    common::pipeline(compile_sources(&[&chain]).unwrap());
 }

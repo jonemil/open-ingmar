@@ -105,9 +105,11 @@ remain deferred in [the plan](plan.md).
 ## Implementation conventions
 
 The declaration parser returns one `ParsedUnit` per source file. Shared
-`Declarations` collect typedef and constant environments across files. Immediate
-global/module constants are resolved and cached once before literal IR
-construction. Stored global/module constants retain shared declaration types
+`Declarations` collect typedef and constant environments across files. Direct
+non-heap scalar literals are cached for substitution before IR construction.
+References and operators use ordinary typed initialization rather than a
+separate constant evaluator. Stored global/module constants retain shared
+declaration types
 and reserved initializer bodies. Stored contracts are inferred across all scopes
 before bodies, retrying unresolved dependencies without placeholder types.
 Source initialization separates literal defaults from runtime expression order.

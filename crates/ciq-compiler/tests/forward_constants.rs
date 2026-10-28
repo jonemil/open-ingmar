@@ -27,13 +27,11 @@ fn field_contract_inference_is_independent_of_file_order() {
     common::pipeline(compile_sources(&["const LATE=1;class C{const EARLY=LATE;const LATE=\"class\";function get() as Toybox.Lang.String{return EARLY;}}"]).unwrap());
 }
 #[test]
-fn runtime_reads_and_cycles_are_not_fixed_by_reordering_effects() {
+fn class_readiness_and_allocation_cycles_are_not_fixed_by_reordering_effects() {
     for source in [
         "class C{const A=B;const B=[1];}",
         "class C{const A=B;const B=A;}",
         "class C{const A=B;const B=C;const C=\"late\";}",
-        "const A=B;const B=A;function f(){}",
-        "module M{const A=B;const B=A;}",
         "class C{const A=new D().B;}class D{const B=new C().A;}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");

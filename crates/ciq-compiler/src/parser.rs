@@ -568,7 +568,6 @@ struct Parser<'a> {
     declarations: Rc<Declarations<'a>>,
     owner: Option<String>,
     resolving: Vec<String>,
-    resolving_constants: Vec<String>,
     type_depth: usize,
 }
 
@@ -676,77 +675,10 @@ impl<'a> Parser<'a> {
             declarations,
             owner: None,
             resolving: Vec::new(),
-            resolving_constants: Vec::new(),
             type_depth: 0,
         }
     }
 
-    fn constant_key(&self, path: &str) -> Option<String> {
-        if path
-            .split_once('.')
-            .is_some_and(|(owner, _)| self.declarations.classes.contains(owner))
-        {
-            return None;
-        }
-        let path = path
-            .strip_prefix("self.")
-            .map(|name| self.owner.as_ref().map(|owner| format!("{owner}.{name}")))
-            .unwrap_or_else(|| Some(path.to_owned()))?;
-        self.owner
-            .as_ref()
-            .map(|owner| format!("{owner}.{path}"))
-            .filter(|key| self.declarations.constants.contains_key(key))
-            .or_else(|| {
-                self.declarations
-                    .constants
-                    .contains_key(&path)
-                    .then_some(path)
-            })
-    }
-    fn constant_value(
-        &self,
-        path: &str,
-        at: usize,
-    ) -> Result<crate::constants::Immediate, Diagnostic> {
-        let key = self
-            .constant_key(path)
-            .ok_or_else(|| self.error(at, format!("unknown constant {path:?}")))?;
-        if let Some(value) = self.declarations.constant_values.borrow().get(&key) {
-            return Ok(value.clone());
-        }
-        if self.resolving_constants.contains(&key) {
-            return Err(self.error(at, format!("constant dependency cycle at {key:?}")));
-        }
-        if self.resolving_constants.len() >= 64 {
-            return Err(self.error(at, "constant dependencies exceed 64 levels"));
-        }
-        let declaration = &self.declarations.constants[&key];
-        let mut parser = Self::new(declaration.source, self.declarations.clone());
-        parser.offset = declaration.target;
-        parser.source_index = declaration.source_index;
-        parser.owner = declaration.owner.clone();
-        parser.names = declaration.names.clone();
-        parser.resolving_constants = self.resolving_constants.clone();
-        parser.resolving_constants.push(key.clone());
-        let expression = parser.expression(0)?;
-        if parser
-            .expect(Kind::Punctuation(';'), "';' after constant")?
-            .span
-            .start
-            != declaration.end
-        {
-            return Err(self.error(at, "invalid constant initializer"));
-        }
-        let value = crate::constants::evaluate(&expression, &mut |path, at| {
-            parser.constant_value(path, at).map_err(|e| e.message)
-        })
-        .map_err(|message| self.error(at, message))?;
-        self.declarations
-            .constant_values
-            .borrow_mut()
-            .insert(key, value.clone());
-        Ok(value)
-    }
     fn stored_constant(&mut self) -> Result<Option<ParsedConstant>, Diagnostic> {
         self.expect(Kind::Word("const"), "const")?;
         let token = self.identifier()?;
@@ -1147,84 +1079,38 @@ pub(crate) fn collect_declarations<'a>(
             diagnostic,
         })?;
     }
-    // Resolve which declarations genuinely need runtime storage before trying
-    // immediate evaluation. Pure dependency-limit errors must not fall back to
-    // shared slots merely because another declaration later enters the cache.
-    let mut storage = BTreeSet::new();
-    let mut dependencies = BTreeMap::new();
+    // Only direct non-heap literals can be substituted without changing
+    // initialization order. References and operators need real owner slots,
+    // including expressions whose final value could be computed in advance.
     for (key, declaration) in &aliases.constants {
         let mut parser = Parser::new(declaration.source, aliases.clone());
         parser.owner = declaration.owner.clone();
         parser.names = declaration.names.clone();
         parser.offset = declaration.target;
-        let expression = parser
-            .expression(0)
-            .map_err(|diagnostic| crate::SourceDiagnostic {
-                source: declaration.source_index,
-                diagnostic,
-            })?;
-        if crate::constants::storage_expression(&expression) {
-            storage.insert(key.clone());
-        }
-        let mut referenced = BTreeSet::new();
-        expression.visit(&mut |expression| {
-            if let Some(path) = crate::constants::path(expression) {
-                if let Some(key) = parser.constant_key(&path).or_else(|| {
-                    path.strip_prefix("self.")
-                        .filter(|name| {
-                            parser.owner.is_none() && aliases.constants.contains_key(*name)
-                        })
-                        .map(str::to_owned)
-                }) {
-                    referenced.insert(key);
-                }
+        let result = (|| {
+            if aliases.owners.contains(key) || aliases.value_names.contains(key) {
+                return Err(parser.error(
+                    declaration.name_at,
+                    format!("constant conflicts with value declaration {key:?}"),
+                ));
             }
-        });
-        dependencies.insert(key, referenced);
-    }
-    loop {
-        let count = storage.len();
-        for (key, referenced) in &dependencies {
-            if referenced.iter().any(|name| storage.contains(name)) {
-                storage.insert((*key).clone());
+            let expression = parser.expression(0)?;
+            if parser
+                .expect(Kind::Punctuation(';'), "';' after constant")?
+                .span
+                .start
+                != declaration.end
+            {
+                return Err(parser.error(declaration.name_at, "invalid constant initializer"));
             }
-        }
-        if storage.len() == count {
-            break;
-        }
-    }
-    for (key, declaration) in &aliases.constants {
-        let mut parser = Parser::new(declaration.source, aliases.clone());
-        parser.owner = declaration.owner.clone();
-        let result = if aliases.owners.contains(key) || aliases.value_names.contains(key) {
-            Err(parser.error(
-                declaration.name_at,
-                format!("constant conflicts with value declaration {key:?}"),
-            ))
-        } else if storage.contains(key) {
+            if let Some(value) = crate::constants::literal(&expression) {
+                aliases
+                    .constant_values
+                    .borrow_mut()
+                    .insert(key.clone(), value);
+            }
             Ok(())
-        } else {
-            parser
-                .constant_value(key.rsplit('.').next().unwrap(), declaration.name_at)
-                .map(|_| ())
-        };
-        if declaration
-            .owner
-            .as_ref()
-            .is_some_and(|owner| aliases.classes.contains(owner))
-        {
-            // Stored expressions are checked during field inference, but value
-            // name collisions are invalid independently of their initializer.
-            if !aliases.owners.contains(key) && !aliases.value_names.contains(key) {
-                continue;
-            }
-        }
-        if storage.contains(key)
-            && !aliases.owners.contains(key)
-            && !aliases.value_names.contains(key)
-        {
-            continue;
-        }
+        })();
         result.map_err(|diagnostic| crate::SourceDiagnostic {
             source: declaration.source_index,
             diagnostic,

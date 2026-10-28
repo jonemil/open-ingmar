@@ -57,7 +57,7 @@ and future Rust toolchain experiments.
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
 - [compiler-typedefs](compiler-typedefs/README.md): scoped and cross-file aliases,
   containers, nullable source identities, fields, and casts.
-- [compiler-constants](compiler-constants/README.md): immediate constant bindings,
+- [compiler-constants](compiler-constants/README.md): scalar constant bindings,
   scoped/forward references, receiver effects, and lexical shadowing.
 - [compiler-class-constants](compiler-class-constants/README.md): per-instance
   readonly bindings, heap identity, mutable contents, and allocation order.
@@ -69,6 +69,8 @@ and future Rust toolchain experiments.
   binding reads, retained Null values, and cross-file lazy module initialization.
 - [compiler-constant-defaults](compiler-constant-defaults/README.md): literal
   defaults versus runtime aggregate elements, scalar references, and empty slots.
+- [compiler-scalar-initializers](compiler-scalar-initializers/README.md): ordered
+  arithmetic/comparison initialization, Null alias cycles, and native enum types.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

@@ -145,7 +145,7 @@ belong in the [IR reference](../specs/ir/README.md#recursive-contracts).
 ## Constant bindings and identity
 
 **Experimentally observed**, 2026-10-28, SDK 9.2.0, `fr265`, minimum API
-5.0.0, `-O 0`: the [immediate-constant
+5.0.0, `-O 0`: the [scalar-constant
 specimen](../../examples/compiler-constants/README.md) compiles with the SDK's
 default checking policy. It covers global/module/class declarations,
 forward/cross-file references, lexical shadowing, instance receiver effects,
@@ -279,6 +279,29 @@ prints `4294967289` through `System.println(P.NEG)` in this SDK configuration.
 This differs from the documented signed interpretation of Long. It does not
 establish a general sign-extension rule; generated constants retain their signed
 64-bit source value rather than adopting this isolated SDK result.
+
+The [scalar-initializer specimen](../../examples/compiler-scalar-initializers/README.md)
+uses the same SDK/target/settings. SDK and generated consoles match its 44
+expected lines. In focused SDK probes, early aliases of
+`1+2`, `1.5f+2.25f`, `2<2.5f`, `(true and false) or true`, and `true ? 7:8`
+all observe Null. These calculated scalar declarations are runtime initializers
+at `-O 0`, not literal defaults. The specimen covers arithmetic/comparisons and
+native enum constants using ordinary initializer operations; logical/conditional
+initializers still require the planned control-flow support.
+
+Another SDK probe uses `const EARLY=ALIAS; const ALIAS=LITERAL; const LITERAL=7;`:
+EARLY is Null while ALIAS becomes 7. `const SELF=SELF; const A=B; const B=A;`
+likewise leaves all three values Null. This distinguishes direct slot reads
+from owner-reactivating call cycles. A probe with
+`false && (1/0==0)` and `true ? 1:1/0` compiles and prints false and 1;
+unselected operands must not be eagerly evaluated by a constant evaluator.
+
+A focused SDK probe also establishes activation through a scalar literal:
+`module M { const LITERAL=7; const EFFECT=Trace.make(); }`, where `Trace.make()`
+prints 99 and returns 1. The first `System.println(M.LITERAL)` in `onStart`
+prints 99 then 7. Our direct-literal substitution bypasses owner lookup in this
+case (implementation inspection); preserving these module effects is a separate
+remaining task in the plan.
 
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 

@@ -1,8 +1,8 @@
-# Immediate constants
+# Scalar constants
 
 [app.mc](app.mc) and [values.mc](values.mc) cover forward/cross-file references,
-owner scope, qualified and self references, non-heap literals, pure Number expressions, receiver effects, and lexical
-shadowing. See
+owner scope, qualified and self references, non-heap literals, pure Number
+expressions, receiver effects, and lexical shadowing. See
 [expected.txt](expected.txt) for console output.
 
 From the repository root, using new output paths:

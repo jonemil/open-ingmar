@@ -762,20 +762,24 @@ remain mutable. Declarations cannot duplicate constants or collide with
 functions, fields, classes/modules, inherited methods, or constructors in their
 value scope.
 
-Global/module immediate constants support Number, Float, Boolean, Char, Symbol,
-and Null values. Initializers accept literals, other supported constants, unary
-numeric `+`/`-`, Boolean `!`, Number `~`, and Number arithmetic, bitwise
-operations, and shifts. Number arithmetic wraps at 32 bits; shifts mask the count
-to five bits. Division/remainder by zero in this immediate profile is rejected.
-Validated immediate constants become literal expressions before IR construction;
-saved IR retains their values without declaration records.
+Direct global/module Number, Float, Boolean, Char, Symbol, and Null literals
+become literal expressions before IR construction; saved IR retains their values
+without declaration records. References and operator expressions instead use
+ordered shared initialization, even when their result could be computed in
+advance. They use ordinary expression typing and VM operations, including
+Number/Float arithmetic, scalar comparisons, Boolean inversion, bitwise
+operations, and shifts. Division/remainder failures remain runtime behavior.
+Native API constant initializers retain their declared types and availability
+requirements; NumberFormat and Endian aliases are not interchangeable Numbers.
 
 Initializers requiring storage use one shared binding per global/module owner.
 String, Long, Double, supported containers, source objects, WeakReference,
 Method, and supported typed runtime expressions retain their ordinary field
 contracts. Aliases share references, and repeated reads preserve identity.
 Global storage initializes during startup; module storage initializes on first
-module access. Literal defaults initialize before runtime expressions. Within
+owner lookup. Substituted module scalar literals currently bypass this lookup
+and its initialization effects. Literal defaults initialize before runtime
+expressions. Within
 those phases, source-file and declaration order are retained. Stored constants
 require compilation-unit mode.
 
@@ -799,9 +803,11 @@ before a runtime binding's assignment produces its default Null, with a concrete
 Null contract. Saving or passing that value preserves Null after the later
 binding initializes; it does not create a live alias to the slot. Reads after
 assignment use the completed binding contract. Reads through another owner
-activate that owner and use its initialized contract. Pure
-scalar initializer forms outside the immediate profile, including native API
-constants, still require separate support.
+activate that owner and use its initialized contract. Direct self-reads and
+same-owner alias cycles can therefore capture Null without reactivating the
+owner. Initializers requiring expression branches, including logical
+short-circuit and conditional expressions, remain outside the current
+straight-line profile.
 
 All files contribute declarations before resolution. Stored contracts are
 resolved across global, module, and class scopes before initializer bodies or
@@ -811,13 +817,14 @@ retries blocked dependencies after progress, and reports an unresolved or cyclic
 dependency rather than supplying a placeholder type. This type-resolution order
 does not authorize reordering runtime effects.
 
-Immediate dependencies
-retain their declaration's owner and native-name environment, including forward
+Initializers retain their declaration's owner and native-name environment,
+including forward
 and cross-file references. Bare names select the owner's constant before a
 global constant; locals and parameters shadow those names. Module constants
 support `Module.NAME` and owner-relative `self.NAME`. The unit permits 256
-constants and an immediate dependency depth of 64; cycles and missing
-dependencies fail. API checks include unused declarations.
+constants; references do not require recursive compile-time expansion. Missing
+names and unresolved type dependencies fail. API checks include unused
+declarations.
 
 Class constants use per-instance fields for both immediate and heap-backed
 values. Initializers may produce String, Long, Double, supported containers,
@@ -838,8 +845,8 @@ expressions in declaration order, before evaluating user constructor arguments
 and calling `initialize()`. Application-owned constants
 also initialize during allocation. Calling user `initialize()` again leaves
 constant bindings intact. Initializers may read earlier initialized constants;
-forward scalar literal references and the immediate expression profile remain
-supported. A forward alias through another runtime alias is not a literal
+forward scalar literal references remain supported. A forward alias through
+another runtime alias is not a literal
 default. Class Array/ByteArray forward reads remain rejected, matching the SDK's
 class readiness check; literal storage availability alone does not relax it.
 Uninitialized reads and constant dependency cycles fail.
@@ -853,7 +860,8 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [shared example](../../../examples/compiler-shared-constants/README.md),
 [forward example](../../../examples/compiler-forward-constants/README.md),
 [Null snapshot example](../../../examples/compiler-null-snapshots/README.md),
-[default eligibility example](../../../examples/compiler-constant-defaults/README.md), and
+[default eligibility example](../../../examples/compiler-constant-defaults/README.md),
+[scalar initializer example](../../../examples/compiler-scalar-initializers/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases
