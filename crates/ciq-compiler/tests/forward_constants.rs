@@ -35,9 +35,6 @@ fn runtime_reads_and_cycles_are_not_fixed_by_reordering_effects() {
         "const A=B;const B=A;function f(){}",
         "module M{const A=B;const B=A;}",
         "class C{const A=new D().B;}class D{const B=new C().A;}",
-        "const A=B;const B={:value=>1};function f(){}",
-        "const A=B;const B=[[1]];function f(){}",
-        "module T{function make() as Toybox.Lang.Array<Toybox.Lang.Number>{return [1];}} const A=B;const B=T.make();function f(){}",
     ] {
         assert!(compile_sources(&[source]).is_err(), "{source}");
     }
@@ -48,10 +45,12 @@ fn immediate_array_elements_are_literal_defaults_without_crossing_stored_shadows
     common::pipeline(
         compile_sources(&["const A=B;const B=[-1,1+2];function f(){return A;}"]).unwrap(),
     );
-    assert!(
-        compile_sources(&[
-            "const X=1;module M{const A=B;const B=[X];const X=\"stored\";}function f(){}"
-        ])
-        .is_err()
-    );
+    let unit = compile_sources(&[
+        "const X=1;module M{const A=B;const B=[X];const X=\"stored\";}function f(){}",
+    ])
+    .unwrap();
+    // The stored module String shadows global X, so B is evaluated at runtime;
+    // A snapshots B's initial Null rather than a literal Array default.
+    assert!(unit.to_ir_text().contains(".shared-constant M A null"));
+    common::pipeline(unit);
 }

@@ -247,6 +247,15 @@ not establish identical SDK storage layout or support for every constant
 expression; the [source contract](../specs/frontend/README.md#constants) defines
 the implemented default profile.
 
+The [Null snapshot specimen](../../examples/compiler-null-snapshots/README.md)
+uses the same SDK/target/settings, with a reopened module in a second file.
+SDK and generated programs match its 19 expected console lines.
+Direct global/module forward reads of computed values, Dictionaries, and nested
+Arrays observe Null; reads after assignment observe the completed values.
+Its saved Array element, nullable argument, and comparison distinguish captured
+Null from a live alias to the later slot. The module's initializer prints expose
+declaration order at first access. Class readiness restrictions are unchanged.
+
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 
 ## Checking off

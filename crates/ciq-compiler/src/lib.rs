@@ -1449,8 +1449,10 @@ pub enum Operation {
         result: ValueId,
         class: Option<SourceClass>,
     },
-    /// Read an owner-qualified shared slot. Unit validation checks its declared
-    /// contract; global/module initialization preserves reference identity.
+    /// Read an owner-qualified shared slot under a checked result view.
+    /// Before assignment, same-owner initializer reads produce Null. Other reads
+    /// use the completed declaration contract; unit validation checks readiness.
+    /// Reads retain their VM lookup and reference identity.
     SharedRead {
         result: ValueId,
         module: Option<String>,

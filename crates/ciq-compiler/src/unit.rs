@@ -2817,8 +2817,20 @@ impl CompilationUnit {
                     });
                 }
                 for op in function.operations() {
-                    if let Operation::SharedRead { module, field, .. } = &op.operation {
-                        summary.fields.insert((module.clone(), field.clone()));
+                    if let Operation::SharedRead {
+                        module,
+                        field,
+                        result_type,
+                        ..
+                    } = &op.operation
+                    {
+                        let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                        let snapshot = initializers.contains_key(&(*owner, function.name()))
+                            && target == *owner
+                            && *result_type == ReturnType::Null;
+                        if !snapshot {
+                            summary.fields.insert((module.clone(), field.clone()));
+                        }
                         if module.as_deref().map_or(Owner::Global, Owner::Module) != *owner {
                             summary.owners.insert(module.clone());
                         }
@@ -2849,9 +2861,39 @@ impl CompilationUnit {
             let mut written = false;
             for (operation, op) in function.operations().iter().enumerate() {
                 let mut required = SharedReads::default();
-                if let Operation::SharedRead { module, field, .. } = &op.operation {
-                    required.fields.insert((module.clone(), field.clone()));
-                    if module.as_deref().map_or(Owner::Global, Owner::Module) != owner {
+                if let Operation::SharedRead {
+                    module,
+                    field,
+                    result_type,
+                    ..
+                } = &op.operation
+                {
+                    let target = module.as_deref().map_or(Owner::Global, Owner::Module);
+                    let declaration = fields.get(&(target, field.as_str())).ok_or_else(|| {
+                        fail(
+                            Some(index),
+                            Some(operation),
+                            "shared read requires a declared binding",
+                        )
+                    })?;
+                    let snapshot =
+                        target == owner && !ready.contains(&(module.clone(), field.clone()));
+                    let expected = if snapshot {
+                        &ReturnType::Null
+                    } else {
+                        &declaration.value_type
+                    };
+                    if result_type != expected {
+                        return Err(fail(
+                            Some(index),
+                            Some(operation),
+                            "shared initializer read must match its current slot state",
+                        ));
+                    }
+                    if !snapshot {
+                        required.fields.insert((module.clone(), field.clone()));
+                    }
+                    if target != owner {
                         required.owners.insert(module.clone());
                     }
                 }
@@ -2949,6 +2991,9 @@ impl CompilationUnit {
                         result_type,
                         ..
                     } => {
+                        if initializers.contains_key(&(*owner, function.name())) {
+                            continue;
+                        }
                         let target = module.as_deref().map_or(Owner::Global, Owner::Module);
                         if fields
                             .get(&(target, field.as_str()))
@@ -3432,23 +3477,7 @@ pub(crate) fn compile_sources_mapped(
     }
     // Literal defaults precede runtime initializers, as DATA defaults do in SDK
     // output. Preserve runtime expression order; do not topologically move calls.
-    let mut shared_order = Vec::new();
-    let owners = shared
-        .iter()
-        .map(|c| c.module.as_deref())
-        .collect::<BTreeSet<_>>();
-    for module in owners {
-        let constants = parsed_sources
-            .iter()
-            .flat_map(|unit| &unit.shared)
-            .filter(|(owner, _)| owner.as_deref() == module)
-            .map(|(_, value)| value)
-            .collect::<Vec<_>>();
-        let owner = module.map_or(Owner::Global, Owner::Module);
-        for index in constant_initialization_order(owner, &constants, &calls) {
-            shared_order.push((module.map(str::to_owned), constants[index].name.clone()));
-        }
-    }
+    let shared_order = shared_initialization_order(&parsed_sources, &calls);
     shared.sort_by_key(|constant| {
         shared_order
             .iter()
@@ -3483,6 +3512,8 @@ pub(crate) fn compile_sources_mapped(
             let mut owner_calls = calls.clone();
             owner_calls.current_module = module.clone();
             owner_calls.shared_initializer = true;
+            owner_calls.shared_snapshots =
+                uninitialized_shared(&shared_order, module.as_deref(), &declaration.name);
             let function = source_ir::build_with_calls(source, ast, context, None, &owner_calls)
                 .map_err(|diagnostic| SourceDiagnostic {
                     source: source_index,
@@ -3653,6 +3684,46 @@ pub(crate) fn compile_sources_mapped(
     Ok((unit, origins))
 }
 
+/// Return explicit binding order for every shared owner, independent of types.
+fn shared_initialization_order(
+    parsed: &[parser::ParsedUnit],
+    calls: &source_ir::CallContext,
+) -> Vec<(Option<String>, String)> {
+    let mut order = Vec::new();
+    let owners = parsed
+        .iter()
+        .flat_map(|unit| unit.shared.iter().map(|(module, _)| module.as_deref()))
+        .collect::<BTreeSet<_>>();
+    for module in owners {
+        let constants = parsed
+            .iter()
+            .flat_map(|unit| &unit.shared)
+            .filter(|(owner, _)| owner.as_deref() == module)
+            .map(|(_, value)| value)
+            .collect::<Vec<_>>();
+        let owner = module.map_or(Owner::Global, Owner::Module);
+        for index in constant_initialization_order(owner, &constants, calls) {
+            order.push((module.map(str::to_owned), constants[index].name.clone()));
+        }
+    }
+    order
+}
+
+/// Identify same-owner slots still containing their Null DATA default at entry
+/// to this binding's initializer, including the binding being initialized.
+fn uninitialized_shared(
+    order: &[(Option<String>, String)],
+    module: Option<&str>,
+    name: &str,
+) -> BTreeSet<(Option<String>, String)> {
+    order
+        .iter()
+        .skip_while(|(owner, field)| owner.as_deref() != module || field != name)
+        .filter(|(owner, _)| owner.as_deref() == module)
+        .cloned()
+        .collect()
+}
+
 /// Place literal defaults before runtime expressions. Alias assignments, calls,
 /// and other runtime initializers retain declaration order.
 /// Class aggregate forward reads remain subject to the SDK's readiness rule.
@@ -3780,12 +3851,21 @@ fn infer_stored_constants(
             );
         }
     }
+    let shared_order = shared_initialization_order(parsed, calls);
     while !pending.is_empty() {
         let count = pending.len();
         let mut unresolved = Vec::new();
         let mut first_error = None;
         for (source, owner, declaration) in pending {
             let mut owner_calls = calls.clone();
+            if !matches!(owner, Owner::Class(_)) {
+                let module = match owner {
+                    Owner::Module(module) => Some(module),
+                    _ => None,
+                };
+                owner_calls.shared_snapshots =
+                    uninitialized_shared(&shared_order, module, &declaration.name);
+            }
             let base = match owner {
                 Owner::Global => None,
                 Owner::Module(module) => {

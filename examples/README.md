@@ -65,6 +65,8 @@ and future Rust toolchain experiments.
   shared storage, alias identity, mutable contents, and lazy module startup.
 - [compiler-forward-constants](compiler-forward-constants/README.md): later
   literal defaults, cross-class contracts, and preserved runtime initializer order.
+- [compiler-null-snapshots](compiler-null-snapshots/README.md): forward runtime
+  binding reads, retained Null values, and cross-file lazy module initialization.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

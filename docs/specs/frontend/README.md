@@ -780,8 +780,8 @@ those phases, source-file and declaration order are retained. Stored constants
 require compilation-unit mode.
 
 A shared initializer must assign its binding once through a straight-line
-prefix. Reads of incomplete bindings, owner re-entry, and potentially shutting
-down calls are rejected, including dependencies reached through source helpers,
+prefix. Owner re-entry and potentially shutting down calls are rejected,
+including dependencies reached through source helpers,
 constructors, and lazy module initialization. Ordinary functions reload their
 lexical owner, so calling a function in the initializing owner is re-entry even
 if it reads no fields. Calls into an independently initialized owner are allowed.
@@ -789,8 +789,12 @@ Forward aliases to later String/Long/Double literal defaults are supported.
 Global/module flat Array and ByteArray literals also provide defaults, including
 supported immediate scalar expressions in their elements. References to stored
 values inside aggregate literals are runtime expressions. Dictionary literals,
-nested Arrays, and calls are not literal defaults. Forward reads that would
-observe default Null remain rejected by the current readiness profile. Pure
+nested Arrays, and calls are not literal defaults. A direct same-owner read
+before a runtime binding's assignment produces its default Null, with a concrete
+Null contract. Saving or passing that value preserves Null after the later
+binding initializes; it does not create a live alias to the slot. Reads after
+assignment use the completed binding contract. Reads through another owner
+activate that owner and use its initialized contract. Pure
 scalar initializer forms outside the immediate profile, including native API
 constants, still require separate support.
 
@@ -842,7 +846,9 @@ fields are still initialized separately by user `initialize()`.
 See the [scalar example](../../../examples/compiler-constants/README.md),
 [stored class example](../../../examples/compiler-class-constants/README.md),
 [shared example](../../../examples/compiler-shared-constants/README.md),
-[forward example](../../../examples/compiler-forward-constants/README.md), and [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+[forward example](../../../examples/compiler-forward-constants/README.md),
+[Null snapshot example](../../../examples/compiler-null-snapshots/README.md), and
+[evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases
 

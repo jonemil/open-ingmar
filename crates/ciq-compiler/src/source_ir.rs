@@ -313,7 +313,13 @@ fn emit_non_call(
         }
         parser::ExpressionKind::SharedField { module, field } => Operation::SharedRead {
             result: ValueId(operations.len() as u32),
-            result_type: calls
+            result_type: if calls
+                .shared_snapshots
+                .contains(&(module.clone(), field.clone()))
+            {
+                crate::ReturnType::Null
+            } else {
+                calls
                 .shared_fields
                 .get(&(module.clone(), field.clone()))
                 .cloned()
@@ -323,7 +329,8 @@ fn emit_non_call(
                         expression.span.start,
                         "shared initializer depends on a later binding or an initialization cycle",
                     )
-                })?,
+                })?
+            },
             module,
             field,
         },
@@ -3856,6 +3863,7 @@ pub(crate) struct CallSignature {
 /// Collected callee contracts and the current body's parameter contracts.
 #[derive(Clone, Default)]
 pub(crate) struct CallContext {
+    pub(crate) shared_snapshots: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_pending: std::collections::BTreeSet<(Option<String>, String)>,
     pub(crate) shared_initializer: bool,
     pub(crate) shared_fields: BTreeMap<(Option<String>, String), crate::ReturnType>,

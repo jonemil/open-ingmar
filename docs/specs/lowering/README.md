@@ -393,6 +393,8 @@ reactivating an initializing module. Global source-class lookup during
 construction and `instanceof` likewise uses the current global receiver.
 Shared writes use `getself; spush <field>; <value>; putv` in the checked
 initializer frame. They reuse existing VM operations and field-symbol aliases.
+Pre-assignment Null snapshots retain the same lookup instructions; their checked
+IR result view does not replace the read with a literal or change VM encoding.
 Readonly bindings are enforced by unit contracts; no readonly VM flag is assumed.
 
 Owner allocation hooks invoke reserved shared initializer methods with

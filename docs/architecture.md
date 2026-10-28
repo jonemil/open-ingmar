@@ -110,9 +110,11 @@ global/module constants are resolved and cached once before literal IR
 construction. Stored global/module constants retain shared declaration types
 and reserved initializer bodies. Stored contracts are inferred across all scopes
 before bodies, retrying unresolved dependencies without placeholder types.
-Source initialization separates literal defaults from runtime expression order;
-unit checks summarize reads and owner activation across calls. Class constants retain readonly field contracts and a
-checked allocation initializer. Source construction uses private allocation/completion
+Source initialization separates literal defaults from runtime expression order.
+The same order determines pre-assignment Null views during type inference and
+body construction; unit validation rechecks those views and summarizes reads
+and owner activation across calls. Class constants retain readonly field
+contracts and a checked allocation initializer. Source construction uses private allocation/completion
 builders to preserve allocation before user argument effects.
 Typedef targets reuse annotation parsing with cached closed terms and guarded
 recursion/depth checks. Recursive types retain finite binders; value operations unfold one

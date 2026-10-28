@@ -288,13 +288,19 @@ Separate functions preserve each source file's diagnostic spans and count toward
 the unit body limit. Explicit calls or known-selector Method bindings to these
 functions are rejected; source identifiers reserve their prefix.
 
-`SharedRead` / `.read-shared` retains the owner, field, and exact declared result
-contract. `SharedAssign` / `.assign-shared` consumes the initializer value and
+`SharedRead` / `.read-shared` retains the owner, field, and checked result view.
+Ordinary reads use the exact declared contract. In a reserved shared initializer,
+a same-owner read before the target's assignment must use `result=null`;
+later reads and reads activating another owner use the declared contract.
+Unit validation derives this state from explicit initializer/operation order,
+rejecting forged views and undeclared targets. The read remains a field lookup,
+not a replacement Null literal.
+`SharedAssign` / `.assign-shared` consumes the initializer value and
 may appear only in that binding's reserved initializer. Unit checks require
 exactly one assignment, compatible value/source identities, and no incomplete
 return or branching assignment prefix. Readiness summaries include source
 callees, constructors, comparator callbacks, and lazy module initialization.
-They reject reads before initialization and re-entry into an initializing owner;
+They permit checked same-owner Null snapshots and reject owner re-entry;
 shutdown effects from module initialization also reach class initialization
 checks. Unknown callbacks retain conservative restrictions. Standalone function
 IR leaves these owner/declaration obligations for unit validation.
