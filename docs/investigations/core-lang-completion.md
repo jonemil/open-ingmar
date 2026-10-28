@@ -142,6 +142,53 @@ checks; the tests also retain API requirements and invalidate stale field proofs
 after a write through an asserted view. Current matching and heap-view rules
 belong in the [IR reference](../specs/ir/README.md#recursive-contracts).
 
+## Constant bindings and identity
+
+**Experimentally observed**, 2026-10-28, SDK 9.2.0, `fr265`, minimum API
+5.0.0, `-O 0`: the [immediate-constant
+specimen](../../examples/compiler-constants/README.md) compiles with the SDK's
+default checking policy. It covers global/module/class declarations,
+forward/cross-file references, lexical shadowing, instance receiver effects,
+non-heap literal types, and Number constant operations. The overflow case retains
+Number type and prints -2147483648. Structured reconstruction checks both
+SDK/generated PRGs without CODE/DATA fallback. Both simulator runs produce the
+same 16 expected lines, including the factory's 44 exactly once before its
+constant member value.
+
+A separate authored SDK probe establishes storage behavior for heap values:
+
+```monkeyc
+const ITEMS = [1];
+module C { const BAG = [2]; function get() { return BAG; } }
+class Box { const ARRAY = [3]; const TEXT = "member"; }
+```
+
+In `onStart`, assigning `ITEMS[0]=5` then reading it prints 5; assigning
+`C.BAG[0]=6` then reading `C.get()[0]` prints 6. For two Box instances `a` and
+`b`, changing `a.ARRAY[0]=7` leaves `b.ARRAY[0]` at 3. `a.TEXT == a.TEXT` prints
+true, while `a.TEXT == b.TEXT` prints false. A global String constant compared
+with itself prints true. Repeat in the minimal console scaffold with SDK
+checking defaults and the ordinary simulator runner. These observations rule
+out reconstructing heap-backed constants on each access or sharing class
+constant storage across instances.
+The SDK also accepts `return self.BAG;` in the module getter; this is an
+owner-relative lookup rather than an instance of the source Box class.
+
+The SDK rejects `Counter.OFFSET` when OFFSET is a class constant; an instance
+receiver is required. The current specimen uses a factory call whose printed 44
+must occur once before its constant member value is printed. The public
+[language reference][constant-reference] likewise places constants at module or
+class level, excludes function-local declarations, and permits mutation of
+constant Array contents. Its type table marks String, Long, and Double as heap
+values. The retained readable snapshot is
+`scratch/official-docs/language-reference-module.readable.txt`.
+
+Our [constant profile](../specs/frontend/README.md#constants) supports immediate
+values; heap storage and remaining initializer forms are explicit plan items.
+SDK/compiler executables were not inspected.
+
+[constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
+
 ## Checking off
 
 **Experimentally observed:** SDK 9.2.0, fr265, minimum API 5.0.0, `-O 0`,

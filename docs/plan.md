@@ -36,8 +36,15 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Parse `const` declarations and bind constant references; reject rebinding
-  while allowing mutation of referenced containers.
+- [ ] Add storage-backed `const` initialization for String, Long, Double,
+  containers, objects, and runtime initializer expressions. Preserve shared
+  global/module values and per-instance class values; reject rebinding while
+  permitting container mutation. Resolve instance unions with differing constant
+  values through their actual owners. Pull shared declaration storage and
+  initialization prerequisites forward from global/module fields below.
+- [ ] Probe and implement remaining constant-initializer forms: native API
+  constants with retained enum types, wider numeric operations, comparison,
+  logical/conditional expressions, annotations, and comma-separated declarations.
 - [ ] Parse named/anonymous `enum` declarations, implicit/explicit values, member
   lookup, and enum annotations.
 - [ ] Support global and module `var` fields, typed/untyped defaults, reads, and

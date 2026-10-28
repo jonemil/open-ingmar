@@ -2672,7 +2672,7 @@ pub(crate) fn compile_sources_mapped(
     let mut classes = Vec::new();
     let mut origins = Vec::new();
     let mut class_origins = Vec::new();
-    let aliases = parser::collect_aliases(sources)?;
+    let aliases = parser::collect_declarations(sources)?;
     if let Some(context) = context {
         aliases.validate_api(context)?;
     }
@@ -2714,6 +2714,7 @@ pub(crate) fn compile_sources_mapped(
         .flat_map(|p| p.classes.iter())
         .map(|class| (class.name.clone(), class.base))
         .collect::<BTreeMap<_, _>>();
+    aliases.validate_constant_members(&bases)?;
     for (index, parsed) in parsed_sources.iter_mut().enumerate() {
         let mut resolve = |reference: &mut crate::SourceClass| -> Result<(), SourceDiagnostic> {
             reference.base =
@@ -2759,6 +2760,7 @@ pub(crate) fn compile_sources_mapped(
         }
     }
     let mut calls = source_ir::CallContext::new();
+    calls.constants = aliases.immediate_constants();
     calls.unchecked = unchecked;
     for parsed in &parsed_sources {
         for (module, ast) in &parsed.functions {

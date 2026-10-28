@@ -57,6 +57,8 @@ and future Rust toolchain experiments.
   Integer, and Decimal arithmetic, nullable guards, and runtime promotion.
 - [compiler-typedefs](compiler-typedefs/README.md): scoped and cross-file aliases,
   containers, nullable source identities, fields, and casts.
+- [compiler-constants](compiler-constants/README.md): immediate constant bindings,
+  scoped/forward references, receiver effects, and lexical shadowing.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural

@@ -753,6 +753,42 @@ widening is introduced. See the
 
 ## Declarations and name resolution
 
+### Constants
+
+`const NAME = expression;` declares an immutable binding at global, module, or
+class scope. Function-local constants are rejected. The implemented profile
+covers non-heap Number, Float, Boolean, Char, Symbol, and Null values. Supported
+initializers are literals, other supported constants, unary numeric `+`/`-`,
+Boolean `!`, Number `~`, and Number arithmetic, bitwise operations, and shifts.
+Number arithmetic wraps at 32 bits; shifts mask the count to five bits. Division
+or remainder by zero is rejected. Other initializer expressions, including
+String, Long, Double, allocation, native API constants, and calls, require
+separate support and are diagnosed even in unused declarations.
+
+All files contribute declarations before resolution. Forward/cross-file
+references retain their declaration's owner and native-name environment. Bare
+names select the current owner's constant before a global constant; locals and
+parameters shadow those value names. Module constants support `Module.NAME`.
+Within the module body, immediate constant lookup also supports `self.NAME`.
+Class constants require `self.NAME`, a bare owner reference, or a proven source
+instance; `Class.NAME` is rejected. Instance receiver effects are evaluated once
+even when the member value becomes a literal. Source-class union alternatives
+must provide the same immediate value; differing values require runtime storage.
+
+Declarations cannot duplicate constants or collide with functions, fields,
+classes/modules, inherited methods, or constructors in their value scope.
+Assignments, compound assignments, and updates cannot rebind a constant.
+The unit permits 256 constants and a dependency depth of 64; cycles and missing
+dependencies fail. API checks include unused declarations, including Char's
+introduction requirement.
+
+Validated immediate constants become ordinary literal expressions before IR
+construction; saved IR retains values rather than source constant names or
+binding declarations. This does not authorize repeated allocation of heap-backed
+constant values. Their storage and initialization remain in the plan. See the
+[example](../../../examples/compiler-constants/README.md) and
+[evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
+
 ### Type aliases
 
 `typedef Name as Type;` declares a type alias at global, module, or class scope.

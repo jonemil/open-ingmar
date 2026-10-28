@@ -556,13 +556,14 @@ struct Parser<'a> {
     expressions: usize,
     names: crate::names::Names,
     native_base: Option<crate::ClassBase>,
-    aliases: Rc<Aliases<'a>>,
+    declarations: Rc<Declarations<'a>>,
     owner: Option<String>,
     resolving: Vec<String>,
+    resolving_constants: Vec<String>,
     type_depth: usize,
 }
 
-struct Alias<'a> {
+struct DeclarationText<'a> {
     source: &'a str,
     source_index: usize,
     name_at: usize,
@@ -573,19 +574,50 @@ struct Alias<'a> {
 }
 
 #[derive(Default)]
-pub(crate) struct Aliases<'a> {
-    declarations: BTreeMap<String, Alias<'a>>,
+pub(crate) struct Declarations<'a> {
+    constants: BTreeMap<String, DeclarationText<'a>>,
+    value_names: BTreeSet<String>,
+    constant_values: RefCell<BTreeMap<String, crate::constants::Immediate>>,
+
+    aliases: BTreeMap<String, DeclarationText<'a>>,
     classes: BTreeSet<String>,
     owners: BTreeSet<String>,
     resolved: RefCell<BTreeMap<String, crate::ParameterType>>,
 }
 
-impl Aliases<'_> {
+impl Declarations<'_> {
+    pub(crate) fn immediate_constants(&self) -> Rc<BTreeMap<String, crate::constants::Immediate>> {
+        Rc::new(self.constant_values.borrow().clone())
+    }
+
+    pub(crate) fn validate_constant_members(
+        &self,
+        bases: &BTreeMap<String, crate::ClassBase>,
+    ) -> Result<(), crate::SourceDiagnostic> {
+        for (key, declaration) in &self.constants {
+            if let Some((owner, name)) = key.split_once('.') {
+                if bases.get(owner).is_some_and(|base| {
+                    name == "initialize"
+                        || crate::api::core().method(base.api_name(), name).is_some()
+                }) {
+                    return Err(crate::SourceDiagnostic {
+                        source: declaration.source_index,
+                        diagnostic: Diagnostic::at(
+                            declaration.source,
+                            declaration.name_at,
+                            "constant conflicts with an inherited method or constructor",
+                        ),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn validate_api(
         &self,
         context: crate::api::ApiContext,
     ) -> Result<(), crate::SourceDiagnostic> {
-        for (key, alias) in &self.declarations {
+        for (key, alias) in &self.aliases {
             let ty = self.resolved.borrow()[key].api_type();
             context
                 .check_type(crate::api::core(), &ty)
@@ -594,12 +626,23 @@ impl Aliases<'_> {
                     diagnostic: Diagnostic::at(alias.source, alias.name_at, message),
                 })?;
         }
+        for (key, declaration) in &self.constants {
+            context
+                .check_type(
+                    crate::api::core(),
+                    &self.constant_values.borrow()[key].api_type(),
+                )
+                .map_err(|message| crate::SourceDiagnostic {
+                    source: declaration.source_index,
+                    diagnostic: Diagnostic::at(declaration.source, declaration.name_at, message),
+                })?;
+        }
         Ok(())
     }
 }
 
 impl<'a> Parser<'a> {
-    fn new(source: &'a str, aliases: Rc<Aliases<'a>>) -> Self {
+    fn new(source: &'a str, declarations: Rc<Declarations<'a>>) -> Self {
         Self {
             source,
             source_index: 0,
@@ -608,20 +651,101 @@ impl<'a> Parser<'a> {
             expressions: 0,
             names: crate::names::Names::default(),
             native_base: None,
-            aliases,
+            declarations,
             owner: None,
             resolving: Vec::new(),
+            resolving_constants: Vec::new(),
             type_depth: 0,
         }
     }
 
+    fn constant_key(&self, path: &str) -> Option<String> {
+        if path
+            .split_once('.')
+            .is_some_and(|(owner, _)| self.declarations.classes.contains(owner))
+        {
+            return None;
+        }
+        let path = path
+            .strip_prefix("self.")
+            .map(|name| self.owner.as_ref().map(|owner| format!("{owner}.{name}")))
+            .unwrap_or_else(|| Some(path.to_owned()))?;
+        self.owner
+            .as_ref()
+            .map(|owner| format!("{owner}.{path}"))
+            .filter(|key| self.declarations.constants.contains_key(key))
+            .or_else(|| {
+                self.declarations
+                    .constants
+                    .contains_key(&path)
+                    .then_some(path)
+            })
+    }
+    fn constant_value(
+        &self,
+        path: &str,
+        at: usize,
+    ) -> Result<crate::constants::Immediate, Diagnostic> {
+        let key = self
+            .constant_key(path)
+            .ok_or_else(|| self.error(at, format!("unknown constant {path:?}")))?;
+        if let Some(value) = self.declarations.constant_values.borrow().get(&key) {
+            return Ok(value.clone());
+        }
+        if self.resolving_constants.contains(&key) {
+            return Err(self.error(at, format!("constant dependency cycle at {key:?}")));
+        }
+        if self.resolving_constants.len() >= 64 {
+            return Err(self.error(at, "constant dependencies exceed 64 levels"));
+        }
+        let declaration = &self.declarations.constants[&key];
+        let mut parser = Self::new(declaration.source, self.declarations.clone());
+        parser.offset = declaration.target;
+        parser.source_index = declaration.source_index;
+        parser.owner = declaration.owner.clone();
+        parser.names = declaration.names.clone();
+        parser.resolving_constants = self.resolving_constants.clone();
+        parser.resolving_constants.push(key.clone());
+        let expression = parser.expression(0)?;
+        if parser
+            .expect(Kind::Punctuation(';'), "';' after constant")?
+            .span
+            .start
+            != declaration.end
+        {
+            return Err(self.error(at, "invalid constant initializer"));
+        }
+        let value = crate::constants::evaluate(&expression, &mut |path, at| {
+            parser.constant_value(path, at).map_err(|e| e.message)
+        })
+        .map_err(|message| self.error(at, message))?;
+        self.declarations
+            .constant_values
+            .borrow_mut()
+            .insert(key, value.clone());
+        Ok(value)
+    }
+    fn skip_constant(&mut self) -> Result<(), Diagnostic> {
+        self.expect(Kind::Word("const"), "const")?;
+        let name = self.identifier()?;
+        let Kind::Word(name) = name.kind else {
+            unreachable!()
+        };
+        let key = self
+            .owner
+            .as_ref()
+            .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}"));
+        self.offset = self.declarations.constants[&key].end + 1;
+        self.lookahead = None;
+        Ok(())
+    }
     fn alias_key(&self, path: &str) -> Option<String> {
         let owned = self.owner.as_ref().map(|owner| format!("{owner}.{path}"));
         owned
-            .filter(|key| self.aliases.declarations.contains_key(key))
+            .filter(|key| self.declarations.aliases.contains_key(key))
             .or_else(|| {
-                self.aliases
-                    .declarations
+                self.declarations
+                    .aliases
                     .contains_key(path)
                     .then(|| path.into())
             })
@@ -637,7 +761,7 @@ impl<'a> Parser<'a> {
         let Some(key) = self.alias_key(path) else {
             return Ok(None);
         };
-        if let Some(ty) = self.aliases.resolved.borrow().get(&key) {
+        if let Some(ty) = self.declarations.resolved.borrow().get(&key) {
             return Ok(Some(ty.clone()));
         }
         if let Some(index) = self.resolving.iter().rposition(|name| name == &key) {
@@ -648,8 +772,8 @@ impl<'a> Parser<'a> {
         if self.resolving.len() >= 64 {
             return Err(self.error(at, "typedef expansion exceeds 64 levels"));
         }
-        let alias = &self.aliases.declarations[&key];
-        let mut parser = Self::new(alias.source, self.aliases.clone());
+        let alias = &self.declarations.aliases[&key];
+        let mut parser = Self::new(alias.source, self.declarations.clone());
         parser.source_index = alias.source_index;
         parser.offset = alias.target;
         parser.names = alias.names.clone();
@@ -671,7 +795,7 @@ impl<'a> Parser<'a> {
                 return Err(parser.error(end.span.start, "invalid typedef target"));
             }
             crate::structural::resolve_parameter(&mut ty, &mut |class| {
-                if self.aliases.classes.contains(&class.name) {
+                if self.declarations.classes.contains(&class.name) {
                     Ok(())
                 } else {
                     Err(parser.error(
@@ -685,7 +809,10 @@ impl<'a> Parser<'a> {
         match result {
             Ok(ty) => {
                 if crate::recursive::validate(&ty.exact_type()).is_ok() {
-                    self.aliases.resolved.borrow_mut().insert(key, ty.clone());
+                    self.declarations
+                        .resolved
+                        .borrow_mut()
+                        .insert(key, ty.clone());
                 }
                 Ok(Some(ty))
             }
@@ -756,19 +883,19 @@ impl<'a> Parser<'a> {
         // Collection already checked the full target, including nested member
         // semicolons. Advance past its declaration terminator, not the first ';'.
         let key = self.alias_key(name).expect("collected typedef");
-        self.offset = self.aliases.declarations[&key].end + 1;
+        self.offset = self.declarations.aliases[&key].end + 1;
         self.lookahead = None;
         Ok(())
     }
 }
 
-/// Collect typedef targets across files before parsing annotations and bodies.
-/// Capture declaration environments, reject duplicate/cyclic aliases, and check
-/// even unused targets. Function bodies are parsed only by the ordinary parser.
-pub(crate) fn collect_aliases<'a>(
+/// Collect typedefs and scalar constants before parsing annotations and bodies.
+/// Capture declaration environments, reject duplicates and invalid dependencies,
+/// and validate unused declarations. Function bodies are parsed only by the ordinary parser.
+pub(crate) fn collect_declarations<'a>(
     sources: &[&'a str],
-) -> Result<Rc<Aliases<'a>>, crate::SourceDiagnostic> {
-    let mut aliases = Aliases::default();
+) -> Result<Rc<Declarations<'a>>, crate::SourceDiagnostic> {
+    let mut aliases = Declarations::default();
     for (source_index, source) in sources.iter().enumerate() {
         let mut parser = Parser::new(source, Rc::default());
         parser.source_index = source_index;
@@ -777,6 +904,73 @@ pub(crate) fn collect_aliases<'a>(
             let mut outer_names = None;
             while parser.peek()? != Kind::End {
                 match parser.peek()? {
+                    Kind::Word("const") => {
+                        parser.token()?;
+                        let name = parser.identifier()?;
+                        parser.reject_binding(&name)?;
+                        let Kind::Word(name_text) = name.kind else {
+                            unreachable!()
+                        };
+                        let key = parser.owner.as_ref().map_or_else(
+                            || name_text.to_owned(),
+                            |owner| format!("{owner}.{name_text}"),
+                        );
+                        parser.expect(Kind::Punctuation('='), "'=' after constant name")?;
+                        let target = parser.offset;
+                        let mut depth = 0usize;
+                        let end = loop {
+                            let token = parser.token()?;
+                            match token.kind {
+                                Kind::Punctuation(';') if depth == 0 => break token.span.start,
+                                Kind::Punctuation('(' | '[' | '{') => {
+                                    depth += 1;
+                                    if depth > 64 {
+                                        return Err(parser.error(
+                                            token.span.start,
+                                            "constant initializer exceeds 64 levels",
+                                        ));
+                                    }
+                                }
+                                Kind::Punctuation(')' | ']' | '}') => {
+                                    depth = depth.checked_sub(1).ok_or_else(|| {
+                                        parser.error(
+                                            token.span.start,
+                                            "unbalanced constant initializer",
+                                        )
+                                    })?;
+                                }
+                                Kind::End => {
+                                    return Err(
+                                        parser.error(target, "unterminated constant initializer")
+                                    );
+                                }
+                                _ => {}
+                            }
+                        };
+                        if aliases.constants.len() >= 256 {
+                            return Err(parser
+                                .error(name.span.start, "unit exceeds 256 constant declarations"));
+                        }
+                        if aliases
+                            .constants
+                            .insert(
+                                key.clone(),
+                                DeclarationText {
+                                    source,
+                                    source_index,
+                                    name_at: name.span.start,
+                                    target,
+                                    end,
+                                    names: parser.names.clone(),
+                                    owner: parser.owner.clone(),
+                                },
+                            )
+                            .is_some()
+                        {
+                            return Err(parser
+                                .error(name.span.start, format!("duplicate constant {key:?}")));
+                        }
+                    }
                     Kind::Word("typedef") => {
                         parser.token()?;
                         let name = parser.identifier()?;
@@ -809,15 +1003,15 @@ pub(crate) fn collect_aliases<'a>(
                                 _ => {}
                             }
                         };
-                        if aliases.declarations.len() >= 256 {
+                        if aliases.aliases.len() >= 256 {
                             return Err(parser
                                 .error(name.span.start, "unit exceeds 256 typedef declarations"));
                         }
                         if aliases
-                            .declarations
+                            .aliases
                             .insert(
                                 key.clone(),
-                                Alias {
+                                DeclarationText {
                                     source,
                                     source_index,
                                     name_at: name.span.start,
@@ -860,9 +1054,31 @@ pub(crate) fn collect_aliases<'a>(
                         parser.names = outer_names.take().unwrap();
                     }
                     Kind::Word("function") => {
+                        parser.token()?;
+                        let name = parser.identifier()?;
+                        let Kind::Word(name) = name.kind else {
+                            unreachable!()
+                        };
+                        aliases.value_names.insert(
+                            parser
+                                .owner
+                                .as_ref()
+                                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}")),
+                        );
                         parser.skip_body()?;
                     }
                     Kind::Word("var") if parser.owner.is_some() => {
+                        parser.token()?;
+                        let name = parser.identifier()?;
+                        let Kind::Word(name) = name.kind else {
+                            unreachable!()
+                        };
+                        aliases.value_names.insert(
+                            parser
+                                .owner
+                                .as_ref()
+                                .map_or_else(|| name.to_owned(), |owner| format!("{owner}.{name}")),
+                        );
                         // The main parser checks the supported field syntax.
                         while parser.token()?.kind != Kind::Punctuation(';') {
                             if parser.offset >= source.len() {
@@ -881,7 +1097,7 @@ pub(crate) fn collect_aliases<'a>(
         })?;
     }
     let aliases = Rc::new(aliases);
-    for (key, alias) in &aliases.declarations {
+    for (key, alias) in &aliases.aliases {
         let mut parser = Parser::new(alias.source, aliases.clone());
         parser.source_index = alias.source_index;
         parser.owner = alias.owner.clone();
@@ -892,6 +1108,24 @@ pub(crate) fn collect_aliases<'a>(
         };
         result.map_err(|diagnostic| crate::SourceDiagnostic {
             source: alias.source_index,
+            diagnostic,
+        })?;
+    }
+    for (key, declaration) in &aliases.constants {
+        let mut parser = Parser::new(declaration.source, aliases.clone());
+        parser.owner = declaration.owner.clone();
+        let result = if aliases.owners.contains(key) || aliases.value_names.contains(key) {
+            Err(parser.error(
+                declaration.name_at,
+                format!("constant conflicts with value declaration {key:?}"),
+            ))
+        } else {
+            parser
+                .constant_value(key.rsplit('.').next().unwrap(), declaration.name_at)
+                .map(|_| ())
+        };
+        result.map_err(|diagnostic| crate::SourceDiagnostic {
+            source: declaration.source_index,
             diagnostic,
         })?;
     }
@@ -3343,10 +3577,10 @@ pub(crate) struct ParsedClass {
 /// VM instructions. Both fragment and compilation-unit inputs use this parser.
 pub(crate) fn declarations<'a>(
     source: &'a str,
-    aliases: Rc<Aliases<'a>>,
+    declarations: Rc<Declarations<'a>>,
     source_index: usize,
 ) -> Result<ParsedUnit, Diagnostic> {
-    let mut parser = Parser::new(source, aliases);
+    let mut parser = Parser::new(source, declarations);
     parser.source_index = source_index;
     let mut unit = ParsedUnit {
         functions: Vec::new(),
@@ -3355,6 +3589,10 @@ pub(crate) fn declarations<'a>(
     let mut count = 0;
     parser.imports()?;
     while parser.peek()? != Kind::End {
+        if parser.peek()? == Kind::Word("const") {
+            parser.skip_constant()?;
+            continue;
+        }
         if parser.peek()? == Kind::Word("typedef") {
             parser.skip_typedef()?;
             continue;
@@ -3402,6 +3640,10 @@ pub(crate) fn declarations<'a>(
             let mut methods = Vec::new();
             let mut fields = Vec::new();
             while parser.peek()? != Kind::Punctuation('}') {
+                if parser.peek()? == Kind::Word("const") {
+                    parser.skip_constant()?;
+                    continue;
+                }
                 if parser.peek()? == Kind::Word("typedef") {
                     parser.skip_typedef()?;
                     continue;
@@ -3492,14 +3734,20 @@ pub(crate) fn declarations<'a>(
             parser.names = outer_names;
             parser.owner = None;
             parser.native_base = None;
-            let has_aliases = parser
-                .aliases
+            let has_constants = parser
                 .declarations
+                .constants
+                .keys()
+                .any(|key| key.starts_with(&format!("{name}.")));
+            let has_aliases = parser
+                .declarations
+                .aliases
                 .keys()
                 .any(|key| key.starts_with(&format!("{name}.")));
             if methods.is_empty()
                 && class_base != Some(crate::ClassBase::LangObject)
                 && !has_aliases
+                && !has_constants
             {
                 return Err(parser.error(token.span.start, "empty modules/classes are unsupported"));
             }

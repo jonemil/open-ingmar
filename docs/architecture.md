@@ -10,6 +10,7 @@ owning files for the definition to read or change.
 | Concern | Implementation entry points | Contract |
 |---|---|---|
 | Source syntax and names | [parser.rs], [names.rs] | [Source grammar] |
+| Immediate constant evaluation | [constants.rs], [parser.rs], [source_ir.rs] | [Constants] |
 | Source receiver member candidates | [source_calls.rs] | [Source identities] |
 | Source → IR candidates | [source_ir.rs], [source_types.rs], [unchecked.rs] | [Source semantics] |
 | Source ambiguity reporting | [type_check.rs] | [Checking policy] |
@@ -103,16 +104,19 @@ remain deferred in [the plan](plan.md).
 
 ## Implementation conventions
 
-The declaration parser returns one `ParsedUnit` per source file. Typedef
-collection captures owner/file environments across the supplied files; targets
-reuse annotation parsing with cached closed terms and guarded recursion/depth
-checks. Recursive types retain finite binders; value operations unfold one
+The declaration parser returns one `ParsedUnit` per source file. Shared
+`Declarations` collect typedef and constant environments across files. Immediate
+constants are resolved and cached once, with lexical lookup and rebinding checks
+before literal IR construction. Heap-backed values require declaration storage.
+Typedef targets reuse annotation parsing with cached closed terms and guarded
+recursion/depth checks. Recursive types retain finite binders; value operations unfold one
 constructor rather than erasing or repeatedly expanding a cycle. Contract
 matching shares proof-path recursion guards across native, tuple/record,
 source-identity, and API witness checks; record heap views unfold lazily and stop
-at repeated roots. Unit compilation resolves declarations before calls. The isolated-function entry
-selects a body from the same parser, retaining external-call binding without
-unit ownership/signature validation. Base-expression and postfix frames keep
+at repeated roots. Unit compilation resolves declarations before calls. The
+isolated-function entry selects a body from the same parser, retaining
+external-call binding without unit ownership/signature validation.
+Base-expression and postfix frames keep
 the expression-depth budget stable.
 
 Candidate types and origins guide IR construction but are not validation
@@ -221,6 +225,8 @@ library.
 [the plan](plan.md) owns sequencing.
 
 [parser.rs]: ../crates/ciq-compiler/src/parser.rs
+[constants.rs]: ../crates/ciq-compiler/src/constants.rs
+[Constants]: specs/frontend/README.md#constants
 [names.rs]: ../crates/ciq-compiler/src/names.rs
 [source_ir.rs]: ../crates/ciq-compiler/src/source_ir.rs
 [source_types.rs]: ../crates/ciq-compiler/src/source_types.rs

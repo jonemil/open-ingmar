@@ -19,6 +19,7 @@ mod bindings;
 mod builders;
 mod callbacks;
 mod casts;
+mod constants;
 mod control_flow;
 mod dictionary;
 mod record_flow;
@@ -5380,12 +5381,13 @@ fn compile_fragment(
     context: Option<api::ApiContext>,
     unchecked: bool,
 ) -> Result<Function, Diagnostic> {
-    let aliases = parser::collect_aliases(&[source]).map_err(|error| error.diagnostic)?;
+    let aliases = parser::collect_declarations(&[source]).map_err(|error| error.diagnostic)?;
     if let Some(context) = context {
         aliases
             .validate_api(context)
             .map_err(|error| error.diagnostic)?;
     }
+    let constants = aliases.immediate_constants();
     let parsed = parser::declarations(source, aliases, 0)?;
     if !parsed.classes.is_empty() || parsed.functions.len() != 1 || parsed.functions[0].0.is_some()
     {
@@ -5396,7 +5398,7 @@ fn compile_fragment(
         ));
     }
     let (_, function) = parsed.functions.into_iter().next().unwrap();
-    source_ir::build(source, function, context, unchecked)
+    source_ir::build(source, function, context, unchecked, constants)
 }
 
 fn validate_call_names(module: Option<&str>, member: &str) -> Result<(), &'static str> {

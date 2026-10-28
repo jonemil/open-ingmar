@@ -27,11 +27,12 @@ establish availability, assignability, or executable API support.
 ```text
 source-input = source-file
 source-file = native-declaration* declaration*
-declaration = function | module | class | typedef
+declaration = function | module | class | typedef | constant
 typedef = "typedef" identifier "as" value-type ";"
-module = "module" identifier "{" native-declaration* (function | typedef)+ "}"
+constant = "const" identifier "=" expression ";"
+module = "module" identifier "{" native-declaration* (function | typedef | constant)+ "}"
 class = "class" identifier ("extends" native-base)?
-        "{" native-declaration* (field | function | typedef)* "}"
+        "{" native-declaration* (field | function | typedef | constant)* "}"
 native-declaration = "using" native-module ("as" identifier)? ";"
                    | "import" native-module ";"
 native-module = "Toybox" "." ("Application" | "System" | "WatchUi"
@@ -46,6 +47,11 @@ inferred-field-default = number-literal | "-" number-literal | symbol-literal
                        | "(" inferred-field-default ")"
 field-default = "null" | symbol-literal | "(" field-default ")"
 ```
+
+`constant` uses the expression rules below; its initializer must satisfy the
+[immediate constant profile](README.md#constants). Constants are declarations,
+not function statements. Evaluation restrictions do not create a second
+expression grammar.
 
 `source-file` consumes the complete input. `function` is shared by global
 functions, module functions, and class methods. Its `block` expands in
