@@ -299,9 +299,13 @@ unselected operands must not be eagerly evaluated by a constant evaluator.
 A focused SDK probe also establishes activation through a scalar literal:
 `module M { const LITERAL=7; const EFFECT=Trace.make(); }`, where `Trace.make()`
 prints 99 and returns 1. The first `System.println(M.LITERAL)` in `onStart`
-prints 99 then 7. Our direct-literal substitution bypasses owner lookup in this
-case (implementation inspection); preserving these module effects is a separate
-remaining task in the plan.
+prints 99 then 7. The
+[module-literal specimen](../../examples/compiler-module-literals/README.md)
+extends this check to Number, Float, Boolean, Char, Symbol, and Null, repeated
+reads, another module's initializer, startup access, and class allocation through
+a reopened cross-file module. SDK and generated programs match its 23 expected
+console lines. Scalar members use the ordinary shared lookup so
+module effects and owner activation checks remain visible to the toolchain.
 
 [constant-reference]: https://developer.garmin.com/connect-iq/reference-guides/monkey-c-reference/
 

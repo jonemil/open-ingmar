@@ -762,7 +762,7 @@ remain mutable. Declarations cannot duplicate constants or collide with
 functions, fields, classes/modules, inherited methods, or constructors in their
 value scope.
 
-Direct global/module Number, Float, Boolean, Char, Symbol, and Null literals
+Direct global Number, Float, Boolean, Char, Symbol, and Null literals
 become literal expressions before IR construction; saved IR retains their values
 without declaration records. References and operator expressions instead use
 ordered shared initialization, even when their result could be computed in
@@ -772,15 +772,16 @@ operations, and shifts. Division/remainder failures remain runtime behavior.
 Native API constant initializers retain their declared types and availability
 requirements; NumberFormat and Endian aliases are not interchangeable Numbers.
 
-Initializers requiring storage use one shared binding per global/module owner.
+Each stored global/module constant has one shared binding in its owner.
+Module constants always use shared storage, including scalar literals: reading
+a literal member must activate the module and run its other initializers.
 String, Long, Double, supported containers, source objects, WeakReference,
 Method, and supported typed runtime expressions retain their ordinary field
 contracts. Aliases share references, and repeated reads preserve identity.
 Global storage initializes during startup; module storage initializes on first
-owner lookup. Substituted module scalar literals currently bypass this lookup
-and its initialization effects. Literal defaults initialize before runtime
-expressions. Within
-those phases, source-file and declaration order are retained. Stored constants
+owner lookup. Same-owner reads use the current receiver without reactivation.
+Literal defaults initialize before runtime expressions. Within those phases,
+source-file and declaration order are retained. Stored constants
 require compilation-unit mode.
 
 A shared initializer must assign its binding once through a straight-line
@@ -861,7 +862,8 @@ See the [scalar example](../../../examples/compiler-constants/README.md),
 [forward example](../../../examples/compiler-forward-constants/README.md),
 [Null snapshot example](../../../examples/compiler-null-snapshots/README.md),
 [default eligibility example](../../../examples/compiler-constant-defaults/README.md),
-[scalar initializer example](../../../examples/compiler-scalar-initializers/README.md), and
+[scalar initializer example](../../../examples/compiler-scalar-initializers/README.md),
+[module activation example](../../../examples/compiler-module-literals/README.md), and
 [evidence](../../investigations/core-lang-completion.md#constant-bindings-and-identity).
 
 ### Type aliases

@@ -36,8 +36,6 @@ implemented contracts; investigations retain evidence, not another backlog.
 
 ### 1. Declarations, namespaces, and member storage
 
-- [ ] Preserve lazy module activation when accessing direct scalar literal
-  constants; literal substitution currently bypasses other module initializers.
 - [ ] Support Boolean logical/conditional and other control-flow-producing
   global/module initializers, preserving short-circuit evaluation:
   stage merged values before shared writes and prove assignment exactly once

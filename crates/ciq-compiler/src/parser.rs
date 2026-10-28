@@ -1079,9 +1079,9 @@ pub(crate) fn collect_declarations<'a>(
             diagnostic,
         })?;
     }
-    // Only direct non-heap literals can be substituted without changing
-    // initialization order. References and operators need real owner slots,
-    // including expressions whose final value could be computed in advance.
+    // Cache direct non-heap global/class literals. Module members always need
+    // shared storage: even a scalar literal read must activate its owner and
+    // run other initializers. References/operators likewise retain real slots.
     for (key, declaration) in &aliases.constants {
         let mut parser = Parser::new(declaration.source, aliases.clone());
         parser.owner = declaration.owner.clone();
@@ -1103,11 +1103,17 @@ pub(crate) fn collect_declarations<'a>(
             {
                 return Err(parser.error(declaration.name_at, "invalid constant initializer"));
             }
-            if let Some(value) = crate::constants::literal(&expression) {
-                aliases
-                    .constant_values
-                    .borrow_mut()
-                    .insert(key.clone(), value);
+            if declaration
+                .owner
+                .as_ref()
+                .is_none_or(|owner| aliases.classes.contains(owner))
+            {
+                if let Some(value) = crate::constants::literal(&expression) {
+                    aliases
+                        .constant_values
+                        .borrow_mut()
+                        .insert(key.clone(), value);
+                }
             }
             Ok(())
         })();

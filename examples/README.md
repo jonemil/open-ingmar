@@ -71,6 +71,8 @@ and future Rust toolchain experiments.
   defaults versus runtime aggregate elements, scalar references, and empty slots.
 - [compiler-scalar-initializers](compiler-scalar-initializers/README.md): ordered
   arithmetic/comparison initialization, Null alias cycles, and native enum types.
+- [compiler-module-literals](compiler-module-literals/README.md): lazy module
+  activation through scalar literals, same-owner defaults, and cross-file reads.
 - [compiler-recursive-contracts](compiler-recursive-contracts/README.md): guarded
   aliases, recursive interface calls, nested containers, and field witnesses.
 - [compiler-interfaces](compiler-interfaces/README.md): named/anonymous structural
